@@ -168,6 +168,70 @@ export interface SharedWorkspaceConfig {
   accessMode?: 'ReadWriteOnce' | 'ReadWriteMany' | 'ReadOnlyMany'
 }
 
+export type CloudWorkloadBackend = 'agent-sandbox' | 'deployment'
+
+export type SandboxBackupDriver = 'volumeSnapshot' | 'restic'
+
+export type SandboxWarmPoolUpdateStrategy = 'OnReplenish' | 'Recreate'
+
+export interface AgentSandboxStateConfig {
+  /** Enable the per-agent OpenClaw state PVC. Defaults to true for agent-sandbox. */
+  enabled?: boolean
+  /** PVC size for /home/openclaw/.openclaw. */
+  size?: string
+  /** Storage class name (empty for cluster default). */
+  storageClassName?: string
+  /** Access mode for the state PVC. */
+  accessMode?: 'ReadWriteOnce' | 'ReadWriteMany' | 'ReadOnlyMany'
+}
+
+export interface AgentSandboxLifecycleConfig {
+  /** Enable Cloud-side automatic pause after idleSeconds. */
+  autoPause?: boolean
+  /** Idle duration before automatic pause. */
+  idleSeconds?: number & tags.Type<'uint32'>
+  /** Create a backup before pause. */
+  backupBeforePause?: boolean
+  /** agent-sandbox shutdown policy. */
+  shutdownPolicy?: 'Delete' | 'Retain'
+}
+
+export interface AgentSandboxBackupConfig {
+  /** Enable state backup. */
+  enabled?: boolean
+  /** Preferred backup driver. */
+  driver?: SandboxBackupDriver
+  /** Optional schedule expression interpreted by the Cloud control plane. */
+  schedule?: string
+  /** Number of backups to retain. */
+  retention?: number & tags.Type<'uint32'>
+}
+
+export interface AgentSandboxWarmPoolConfig {
+  /**
+   * Enable SandboxWarmPool. Disabled by default because current per-agent
+   * Secret/env injection is not compatible with warm-pool adoption.
+   */
+  enabled?: boolean
+  /** Number of prewarmed sandboxes. */
+  replicas?: number & tags.Type<'uint32'>
+  /** Warm-pool update strategy. */
+  updateStrategy?: SandboxWarmPoolUpdateStrategy
+}
+
+export interface AgentSandboxConfig {
+  /** RuntimeClass used by sandbox pods. Defaults to gvisor. */
+  runtimeClassName?: string
+  /** Per-agent OpenClaw state volume config. */
+  state?: AgentSandboxStateConfig
+  /** Pause/resume lifecycle config. */
+  lifecycle?: AgentSandboxLifecycleConfig
+  /** Backup/restore config. */
+  backup?: AgentSandboxBackupConfig
+  /** Warm pool config. */
+  warmPool?: AgentSandboxWarmPoolConfig
+}
+
 /**
  * Agent-level configuration that can extend a base config.
  */
@@ -284,6 +348,9 @@ export interface AgentDeployment {
    */
   networking?: AgentNetworking
 
+  /** agent-sandbox backend options. */
+  sandbox?: AgentSandboxConfig
+
   /**
    * Agent configuration version (semver).
    * Recorded in K8s Deployment annotations for rollback tracking.
@@ -300,6 +367,10 @@ export interface AgentDeployment {
 export interface DeploymentsConfig {
   /** K8s namespace */
   namespace?: string
+  /** Kubernetes workload backend. Defaults to agent-sandbox for new deployments. */
+  backend?: CloudWorkloadBackend
+  /** Default agent-sandbox options inherited by agents. */
+  sandbox?: AgentSandboxConfig
   /** Agent deployments */
   agents: AgentDeployment[]
 }

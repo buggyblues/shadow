@@ -1488,6 +1488,18 @@
     "listingClosed": "Closed",
     "totalOnlineTime": "Total Online Time"
   },
+  "appCenter": {
+    "proxyBySubdomain": "Access through subdomain proxy (supports absolute paths, SSE, and WebSocket)",
+    "cloudAutoResume": "Wake Cloud Buddy on app traffic",
+    "cloudAutoResumeDescription": "When this app is opened or proxied, Shadow resumes the linked Cloud sandbox before forwarding traffic.",
+    "cloudAutoResumeTargetsLabel": "Buddy user IDs (optional)",
+    "cloudAutoResumeTargetsPlaceholder": "uuid-1, uuid-2",
+    "cloudAutoResumeTargetsHint": "Leave empty to infer Buddy members from the app channel. Add IDs when the app should wake a specific Cloud Buddy.",
+    "cloudRuntimeStartingTitle": "Starting Cloud runtime",
+    "cloudRuntimeStartingDescription": "The linked Buddy sandbox may need a moment to resume before this app responds.",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen"
+  },
   "serverHome": {
     "welcome": "Welcome to",
     "publicBadge": "Public Server",

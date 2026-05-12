@@ -55,6 +55,23 @@ export const deploymentLogs = sqliteTable('deployment_logs', {
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 })
 
+export const deploymentBackups = sqliteTable('deployment_backups', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  deploymentId: integer('deployment_id').references(() => deployments.id, { onDelete: 'cascade' }),
+  namespace: text('namespace').notNull(),
+  agentId: text('agent_id').notNull(),
+  sandboxName: text('sandbox_name'),
+  pvcName: text('pvc_name').notNull(),
+  driver: text('driver').notNull(),
+  snapshotName: text('snapshot_name'),
+  objectKey: text('object_key'),
+  status: text('status').notNull().default('pending'),
+  error: text('error'),
+  expiresAt: text('expires_at'),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').default(sql`(datetime('now'))`),
+})
+
 // ── Activity Log ─────────────────────────────────────────────────────────────
 
 export const activities = sqliteTable('activities', {
@@ -109,6 +126,8 @@ export type Deployment = typeof deployments.$inferSelect
 export type NewDeployment = typeof deployments.$inferInsert
 export type DeploymentLog = typeof deploymentLogs.$inferSelect
 export type NewDeploymentLog = typeof deploymentLogs.$inferInsert
+export type DeploymentBackup = typeof deploymentBackups.$inferSelect
+export type NewDeploymentBackup = typeof deploymentBackups.$inferInsert
 export type Activity = typeof activities.$inferSelect
 export type NewActivity = typeof activities.$inferInsert
 export type EnvVar = typeof envVars.$inferSelect

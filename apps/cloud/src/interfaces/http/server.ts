@@ -17,6 +17,7 @@ import type { Hono } from 'hono'
 import { ActivityDao } from '../../dao/activity.dao.js'
 import { ConfigDao } from '../../dao/config.dao.js'
 import { DeploymentDao } from '../../dao/deployment.dao.js'
+import { DeploymentBackupDao } from '../../dao/deployment-backup.dao.js'
 import { DeploymentLogDao } from '../../dao/deployment-log.dao.js'
 import { EnvGroupDao } from '../../dao/env-group.dao.js'
 import { EnvVarDao } from '../../dao/envvar.dao.js'
@@ -38,6 +39,7 @@ function createHandlerContext(container: ServiceContainer, namespaces: string[])
   const configDao = new ConfigDao(db)
   const secretDao = new SecretDao(db)
   const deploymentDao = new DeploymentDao(db)
+  const deploymentBackupDao = new DeploymentBackupDao(db)
   const deploymentLogDao = new DeploymentLogDao(db)
   const activityDao = new ActivityDao(db)
   const envVarDao = new EnvVarDao(db)
@@ -68,6 +70,7 @@ function createHandlerContext(container: ServiceContainer, namespaces: string[])
     configDao,
     secretDao,
     deploymentDao,
+    deploymentBackupDao,
     deploymentLogDao,
     activityDao,
     envVarDao,

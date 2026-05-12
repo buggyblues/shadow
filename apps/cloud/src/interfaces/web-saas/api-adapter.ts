@@ -10,7 +10,13 @@
  */
 
 import type { CloudApiClient } from '@shadowob/cloud-ui/lib/api-context'
-import { BASE, type ResourceTier, type SaasDeployment, saasApi } from './api'
+import {
+  BASE,
+  type ResourceTier,
+  type SaasDeployment,
+  type SaasDeploymentBackup,
+  saasApi,
+} from './api'
 
 type WalletApiExtension = {
   wallet: {
@@ -41,6 +47,9 @@ type ModelProxyApiExtension = {
 
 type Deployment = Awaited<ReturnType<CloudApiClient['deployments']['list']>>[number]
 type Pod = Awaited<ReturnType<CloudApiClient['deployments']['pods']>>[number]
+type DeploymentBackup = Awaited<
+  ReturnType<CloudApiClient['deployments']['backups']>
+>['backups'][number]
 type EnvVarListEntry = Awaited<ReturnType<CloudApiClient['env']['list']>>['envVars'][number]
 type TemplateCategoryId =
   | 'devops'
@@ -65,6 +74,8 @@ const VISIBLE_DEPLOYMENT_STATUSES = new Set<SaasDeployment['status']>([
   'deploying',
   'cancelling',
   'deployed',
+  'paused',
+  'resuming',
   'destroying',
 ])
 
@@ -151,7 +162,34 @@ function getDeploymentAgentEntries(
   ]
 }
 
+function deploymentRuntimeState(row: SaasDeployment): NonNullable<Deployment['runtimeState']> {
+  if (row.status === 'deployed') return 'running'
+  if (row.status === 'paused') return 'paused'
+  if (row.status === 'resuming' || row.status === 'deploying' || row.status === 'pending') {
+    return 'resuming'
+  }
+  if (row.status === 'failed' || row.status === 'destroying' || row.status === 'destroyed') {
+    return 'failed'
+  }
+  return 'unknown'
+}
+
+function deploymentWorkloadKind(row: SaasDeployment): Deployment['workloadKind'] {
+  const deployments = row.configSnapshot?.deployments
+  if (
+    deployments &&
+    typeof deployments === 'object' &&
+    !Array.isArray(deployments) &&
+    (deployments as { backend?: unknown }).backend === 'deployment'
+  ) {
+    return 'deployment'
+  }
+  return 'agent-sandbox'
+}
+
 function expandDeploymentRows(deployment: SaasDeployment): Deployment[] {
+  const runtimeState = deploymentRuntimeState(deployment)
+  const workloadKind = deploymentWorkloadKind(deployment)
   return getDeploymentAgentEntries(deployment).map((agent) => ({
     name: agent.name,
     namespace: deployment.namespace,
@@ -162,13 +200,45 @@ function expandDeploymentRows(deployment: SaasDeployment): Deployment[] {
     upToDate: String(agent.replicas),
     available: deployment.status === 'deployed' ? String(agent.replicas) : '0',
     age: deployment.createdAt,
+    status: deployment.status,
+    workloadKind,
+    runtimeState,
+    sandboxName: workloadKind === 'agent-sandbox' ? agent.name : undefined,
+    serviceFQDN:
+      workloadKind === 'agent-sandbox'
+        ? `${agent.name}-svc.${deployment.namespace}.svc.cluster.local`
+        : undefined,
+    statePvc: workloadKind === 'agent-sandbox' ? `openclaw-data-${agent.name}` : undefined,
+    pausedAt: deployment.status === 'paused' ? deployment.updatedAt : undefined,
+    lastActiveAt: deployment.lastActiveAt ?? deployment.updatedAt,
   }))
+}
+
+function toDeploymentBackup(row: SaasDeploymentBackup): DeploymentBackup {
+  return {
+    id: row.id,
+    deploymentId: row.deploymentId,
+    namespace: row.namespace,
+    agentId: row.agentId,
+    sandboxName: row.sandboxName,
+    pvcName: row.pvcName,
+    driver: row.driver,
+    snapshotName: row.snapshotName,
+    objectKey: row.objectKey,
+    status: row.status,
+    phase: row.phase,
+    error: row.error,
+    expiresAt: row.expiresAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }
 }
 
 function isActiveDeployment(row: SaasDeployment): boolean {
   return (
     row.status === 'pending' ||
     row.status === 'deploying' ||
+    row.status === 'resuming' ||
     row.status === 'cancelling' ||
     row.status === 'destroying'
   )
@@ -583,6 +653,112 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
         limit,
       })
     },
+    pause: async (namespace: string, id: string) => {
+      const deployment = await resolveDeploymentByNamespace(namespace)
+      if (!deployment) throw new Error(`Deployment namespace not found: ${namespace}`)
+      const response = await saasApi.deployments.pause(deployment.id, { agentId: id })
+      deploymentCacheById.set(response.deployment.id, response.deployment)
+      deploymentCacheByNamespace.set(response.deployment.namespace, response.deployment)
+      return {
+        ok: response.ok,
+        name: id,
+        namespace,
+        runtimeState: deploymentRuntimeState(response.deployment),
+      }
+    },
+    resume: async (namespace: string, id: string) => {
+      const deployment = await resolveDeploymentByNamespace(namespace)
+      if (!deployment) throw new Error(`Deployment namespace not found: ${namespace}`)
+      const response = await saasApi.deployments.resume(deployment.id, { agentId: id })
+      deploymentCacheById.set(response.deployment.id, response.deployment)
+      deploymentCacheByNamespace.set(response.deployment.namespace, response.deployment)
+      return {
+        ok: response.ok,
+        name: id,
+        namespace,
+        runtimeState: deploymentRuntimeState(response.deployment),
+      }
+    },
+    backups: async (namespace: string, id: string) => {
+      const deployment = await resolveDeploymentByNamespace(namespace)
+      if (!deployment) return { namespace, agent: id, backups: [] }
+      const response = await saasApi.deployments.backups(deployment.id, { agentId: id })
+      return {
+        namespace,
+        agent: id,
+        backups: response.backups.map(toDeploymentBackup),
+      }
+    },
+    createBackup: async (
+      namespace: string,
+      id: string,
+      body?: { driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number },
+    ) => {
+      const deployment = await resolveDeploymentByNamespace(namespace)
+      if (!deployment) throw new Error(`Deployment namespace not found: ${namespace}`)
+      const response = await saasApi.deployments.createBackup(deployment.id, {
+        agentId: id,
+        driver: body?.driver,
+        retentionDays: body?.retentionDays,
+      })
+      return {
+        ok: response.ok,
+        backup: toDeploymentBackup(response.backup),
+      }
+    },
+    restore: async (namespace: string, id: string, body?: { backupId?: string }) => {
+      const deployment = await resolveDeploymentByNamespace(namespace)
+      if (!deployment) throw new Error(`Deployment namespace not found: ${namespace}`)
+      const response = await saasApi.deployments.restore(deployment.id, {
+        agentId: id,
+        backupId: body?.backupId,
+      })
+      deploymentCacheById.set(response.deployment.id, response.deployment)
+      deploymentCacheByNamespace.set(response.deployment.namespace, response.deployment)
+      return {
+        ok: response.ok,
+        backup: toDeploymentBackup(response.backup),
+        runtimeState: deploymentRuntimeState(response.deployment),
+      }
+    },
+    manifest: async (namespace: string) => {
+      const deployment = await resolveDeploymentByNamespace(namespace)
+      if (!deployment) {
+        return {
+          deploymentId: null,
+          namespace,
+          name: namespace,
+          templateSlug: null,
+          template: null,
+          manifest: null,
+          drift: {
+            status: 'unlinked' as const,
+            templateAvailable: false,
+            templateChanged: false,
+            deployedTemplateHash: null,
+            currentTemplateHash: null,
+            configHash: null,
+          },
+          configSnapshot: null,
+        }
+      }
+      return saasApi.deployments.manifest(deployment.id)
+    },
+    syncTemplate: async (
+      namespace: string,
+      body?: {
+        name?: string
+        description?: string
+        content?: Record<string, unknown>
+        tags?: string[]
+        category?: string
+        baseCost?: number
+      },
+    ) => {
+      const deployment = await resolveDeploymentByNamespace(namespace)
+      if (!deployment) throw new Error(`Deployment namespace not found: ${namespace}`)
+      return saasApi.deployments.syncTemplate(deployment.id, body)
+    },
     env: {
       list: async (namespace: string, mode: 'effective' | 'scoped' = 'effective') => {
         const [deployment, globalEnv] = await Promise.all([
@@ -664,8 +840,17 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
       return toDeployTaskItem(deployment, rows)
     },
     streamUrl: (id: number | string) => saasApi.deployments.logsUrl(String(id)),
-    redeploy: async (id: number | string) => {
-      const deployment = await saasApi.deployments.redeploy(String(id))
+    redeploy: async (
+      id: number | string,
+      options?: {
+        mode?: 'snapshot' | 'template'
+        templateSlug?: string
+        configSnapshot?: Record<string, unknown>
+        envVars?: Record<string, string>
+        runtimeContext?: { locale?: string; timezone?: string }
+      },
+    ) => {
+      const deployment = await saasApi.deployments.redeploy(String(id), options)
       deploymentCacheById.set(deployment.id, deployment)
       deploymentCacheByNamespace.set(deployment.namespace, deployment)
       return new Response(JSON.stringify({ id: deployment.id, ok: true }), {
@@ -673,8 +858,17 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
         headers: { 'Content-Type': 'application/json' },
       })
     },
-    redeployToTaskId: async (id: number | string) => {
-      const deployment = await saasApi.deployments.redeploy(String(id))
+    redeployToTaskId: async (
+      id: number | string,
+      options?: {
+        mode?: 'snapshot' | 'template'
+        templateSlug?: string
+        configSnapshot?: Record<string, unknown>
+        envVars?: Record<string, string>
+        runtimeContext?: { locale?: string; timezone?: string }
+      },
+    ) => {
+      const deployment = await saasApi.deployments.redeploy(String(id), options)
       deploymentCacheById.set(deployment.id, deployment)
       deploymentCacheByNamespace.set(deployment.namespace, deployment)
       return deployment.id

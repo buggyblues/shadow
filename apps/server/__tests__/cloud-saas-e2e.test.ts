@@ -13,6 +13,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
+import * as cloudRuntime from '@shadowob/cloud'
 import {
   attachCloudSaasProvisionState,
   CLOUD_SAAS_RUNTIME_KEY,
@@ -35,6 +36,41 @@ import { createCloudSaasHandler } from '../src/handlers/cloud-saas.handler'
 import { processCloudDeploymentQueueOnce } from '../src/lib/cloud-deployment-processor'
 import { signAccessToken, signAgentToken } from '../src/lib/jwt'
 import { closeRedisClient } from '../src/lib/redis'
+
+const cloudRuntimeMocks = vi.hoisted(() => ({
+  applyKubernetesManifestAsync: vi.fn(async () => undefined),
+  createVolumeSnapshotBackupAsync: vi.fn(async () => undefined),
+  deleteKubernetesResourceAsync: vi.fn(async () => undefined),
+  execInPodAsync: vi.fn(async () => ({
+    exitCode: 0,
+    stdout: Buffer.from('fake-archive').toString('base64'),
+    stderr: '',
+  })),
+  execInPodWithInputAsync: vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '' })),
+  getPvcVolumeSnapshotCapability: vi.fn(async () => ({
+    storageClassName: 'standard',
+    provisioner: 'rancher.io/local-path',
+    isCsi: false,
+    volumeSnapshotClassName: null,
+  })),
+  isPvcBackedByCsiProvisioner: vi.fn(async () => false),
+  isVolumeSnapshotApiAvailable: vi.fn(async () => false),
+  listPodsAsync: vi.fn(async () => []),
+  restorePvcFromVolumeSnapshot: vi.fn(async () => undefined),
+  scaleAgentSandboxAsync: vi.fn(async () => undefined),
+  waitForAgentSandboxPaused: vi.fn(async () => undefined),
+  waitForAgentSandboxReady: vi.fn(async () => undefined),
+  waitForPodReadyAsync: vi.fn(async () => undefined),
+  waitForVolumeSnapshotReady: vi.fn(async () => undefined),
+}))
+
+vi.mock('@shadowob/cloud', async () => {
+  const actual = await vi.importActual<typeof import('@shadowob/cloud')>('@shadowob/cloud')
+  return {
+    ...actual,
+    ...cloudRuntimeMocks,
+  }
+})
 
 process.env.KMS_MASTER_KEY = process.env.KMS_MASTER_KEY ?? 'a'.repeat(64)
 process.env.REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:16379'
@@ -123,6 +159,45 @@ async function req(method: string, path: string, body?: unknown, authToken = tok
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
+}
+
+async function waitForDeploymentStatus(id: string, expectedStatus: string, timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs
+  let latest: { status: string; errorMessage?: string | null } | null = null
+
+  while (Date.now() < deadline) {
+    const detailRes = await req('GET', `/api/cloud-saas/deployments/${id}`)
+    if (detailRes.status !== 200) {
+      throw new Error(`Failed to fetch deployment ${id}: ${detailRes.status}`)
+    }
+    latest = (await detailRes.json()) as { status: string; errorMessage?: string | null }
+    if (latest.status === expectedStatus) return latest
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+
+  throw new Error(
+    `Timed out waiting for deployment ${id} to become ${expectedStatus}; latest=${latest?.status ?? 'unknown'}`,
+  )
+}
+
+async function waitForBackupStatus(backupId: string, expectedStatus: string, timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs
+  let latest: string | null = null
+
+  while (Date.now() < deadline) {
+    const [backup] = await db
+      .select({ status: schema.cloudDeploymentBackups.status })
+      .from(schema.cloudDeploymentBackups)
+      .where(eq(schema.cloudDeploymentBackups.id, backupId))
+      .limit(1)
+    latest = backup?.status ?? null
+    if (latest === expectedStatus) return
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+
+  throw new Error(
+    `Timed out waiting for backup ${backupId} to become ${expectedStatus}; latest=${latest ?? 'unknown'}`,
+  )
 }
 
 function jsonModelResponse(body: unknown) {
@@ -706,6 +781,41 @@ describe('Cloud SaaS — deployment listing', () => {
         .catch(() => {})
     }
   })
+
+  it('keeps latest failed runtime deployments visible for diagnosis', async () => {
+    const namespace = uniqueName('e2e-list-failed-visible')
+    try {
+      await db.insert(schema.cloudDeployments).values({
+        userId,
+        namespace,
+        name: `${namespace}-agent`,
+        status: 'failed',
+        errorMessage: 'orphaned-by-cluster',
+        agentCount: 1,
+        configSnapshot: makeConfigSnapshot('failed-runtime-secret'),
+        createdAt: new Date('2099-01-03T00:00:00.000Z'),
+        updatedAt: new Date('2099-01-03T00:00:00.000Z'),
+      })
+
+      const res = await req('GET', '/api/cloud-saas/deployments?limit=100&offset=0')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Array<{
+        namespace: string
+        status: string
+        errorMessage?: string | null
+      }>
+      expect(body.find((row) => row.namespace === namespace)).toMatchObject({
+        namespace,
+        status: 'failed',
+        errorMessage: 'orphaned-by-cluster',
+      })
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
 })
 
 describe('Cloud SaaS — deployment state consistency', () => {
@@ -1180,7 +1290,11 @@ describe('Cloud SaaS — deployment state consistency', () => {
         ok: boolean
         status: string
       }
-      expect(cancelDestroy).toMatchObject({ ok: true, status: 'failed' })
+      expect(cancelDestroy.ok).toBe(true)
+      expect(['cancelling', 'failed']).toContain(cancelDestroy.status)
+
+      const cancelledDestroy = await waitForDeploymentStatus(destroyBody.taskId, 'failed')
+      expect(cancelledDestroy.errorMessage).toBe('cancelled by user')
 
       const redeployRes = await req('POST', `/api/cloud-saas/deployments/${current!.id}/redeploy`)
       expect(redeployRes.status).toBe(201)
@@ -1454,6 +1568,367 @@ describe('Cloud SaaS — create a community template', () => {
 })
 
 describe('Cloud SaaS — deployment + billing', () => {
+  it('POST /api/cloud-saas/deployments/:id/backups falls back to object archive when PVC is not CSI-backed', async () => {
+    const namespace = uniqueName('e2e-backup-pvc-driver-ns')
+    vi.mocked(cloudRuntime.isVolumeSnapshotApiAvailable).mockResolvedValueOnce(true)
+    vi.mocked(cloudRuntime.getPvcVolumeSnapshotCapability).mockResolvedValueOnce({
+      storageClassName: 'standard',
+      provisioner: 'rancher.io/local-path',
+      isCsi: false,
+      volumeSnapshotClassName: null,
+    })
+    const putObjectSpy = vi
+      .spyOn(container.resolve('mediaService'), 'putPrivateObject')
+      .mockResolvedValueOnce()
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: 'agent-1',
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('backup-pvc-driver-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 1,
+          saasMode: true,
+        })
+        .returning()
+
+      const res = await req('POST', `/api/cloud-saas/deployments/${deployment!.id}/backups`, {})
+      expect(res.status).toBe(202)
+      const body = (await res.json()) as {
+        ok: boolean
+        backup: { id: string; driver: string; pvcName: string; objectKey: string | null }
+      }
+      expect(body.ok).toBe(true)
+      expect(body.backup.driver).toBe('restic')
+      expect(body.backup.pvcName).toBe('openclaw-data-agent-1')
+      expect(body.backup.objectKey).toContain(`/agent-1/`)
+      expect(cloudRuntime.isVolumeSnapshotApiAvailable).toHaveBeenCalled()
+      expect(cloudRuntime.getPvcVolumeSnapshotCapability).toHaveBeenCalledWith(
+        expect.objectContaining({
+          namespace,
+          pvcName: 'openclaw-data-agent-1',
+        }),
+      )
+      await waitForBackupStatus(body.backup.id, 'succeeded')
+    } finally {
+      putObjectSpy.mockRestore()
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/backups rejects explicit VolumeSnapshot when PVC is not CSI-backed', async () => {
+    const namespace = uniqueName('e2e-backup-snapshot-pvc-ns')
+    vi.mocked(cloudRuntime.isVolumeSnapshotApiAvailable).mockResolvedValueOnce(true)
+    vi.mocked(cloudRuntime.getPvcVolumeSnapshotCapability).mockResolvedValueOnce({
+      storageClassName: 'standard',
+      provisioner: 'rancher.io/local-path',
+      isCsi: false,
+      volumeSnapshotClassName: null,
+    })
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: 'agent-1',
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('backup-snapshot-pvc-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 1,
+          saasMode: true,
+        })
+        .returning()
+
+      const res = await req('POST', `/api/cloud-saas/deployments/${deployment!.id}/backups`, {
+        driver: 'volumeSnapshot',
+      })
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as { ok: boolean; error: string }
+      expect(body).toEqual({
+        ok: false,
+        error:
+          'PVC "openclaw-data-agent-1" is not backed by a CSI StorageClass that supports VolumeSnapshot',
+      })
+      expect(cloudRuntime.isVolumeSnapshotApiAvailable).toHaveBeenCalled()
+      expect(cloudRuntime.getPvcVolumeSnapshotCapability).toHaveBeenCalledWith(
+        expect.objectContaining({
+          namespace,
+          pvcName: 'openclaw-data-agent-1',
+        }),
+      )
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/backups passes the resolved VolumeSnapshotClass to snapshot creation', async () => {
+    const namespace = uniqueName('e2e-backup-snapshot-class-ns')
+    vi.mocked(cloudRuntime.isVolumeSnapshotApiAvailable).mockResolvedValueOnce(true)
+    vi.mocked(cloudRuntime.getPvcVolumeSnapshotCapability).mockResolvedValueOnce({
+      storageClassName: 'csi-hostpath-sc',
+      provisioner: 'hostpath.csi.k8s.io',
+      isCsi: true,
+      volumeSnapshotClassName: 'csi-hostpath-snapclass',
+    })
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: 'agent-1',
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('backup-snapshot-class-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 1,
+          saasMode: true,
+        })
+        .returning()
+
+      const res = await req('POST', `/api/cloud-saas/deployments/${deployment!.id}/backups`, {})
+      expect(res.status).toBe(202)
+      const body = (await res.json()) as {
+        ok: boolean
+        backup: { id: string; driver: string; snapshotName: string | null }
+      }
+      expect(body.ok).toBe(true)
+      expect(body.backup.driver).toBe('volumeSnapshot')
+      await waitForBackupStatus(body.backup.id, 'succeeded')
+      expect(cloudRuntime.createVolumeSnapshotBackupAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          namespace,
+          pvcName: 'openclaw-data-agent-1',
+          snapshotName: body.backup.snapshotName,
+          volumeSnapshotClassName: 'csi-hostpath-snapclass',
+        }),
+      )
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/restore rejects historical deployment instances', async () => {
+    const namespace = uniqueName('e2e-restore-history-ns')
+    const now = new Date()
+
+    try {
+      const [historical] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent-old`,
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('restore-history-old-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 1,
+          saasMode: true,
+          createdAt: new Date(now.getTime() - 60_000),
+          updatedAt: new Date(now.getTime() - 60_000),
+        })
+        .returning()
+      await db.insert(schema.cloudDeployments).values({
+        userId,
+        namespace,
+        name: `${namespace}-agent-current`,
+        status: 'deployed',
+        agentCount: 1,
+        configSnapshot: makeConfigSnapshot('restore-history-current-secret'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        monthlyCost: 0,
+        hourlyCost: 1,
+        saasMode: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      const res = await req('POST', `/api/cloud-saas/deployments/${historical!.id}/restore`, {})
+      expect(res.status).toBe(409)
+      const body = (await res.json()) as { ok: boolean; error: string }
+      expect(body).toEqual({
+        ok: false,
+        error: 'Cannot restore a historical deployment instance',
+      })
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/restore rejects active deployment states', async () => {
+    const namespace = uniqueName('e2e-restore-active-ns')
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'resuming',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('restore-active-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 1,
+          saasMode: true,
+        })
+        .returning()
+
+      const res = await req('POST', `/api/cloud-saas/deployments/${deployment!.id}/restore`, {})
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as { ok: boolean; error: string }
+      expect(body).toEqual({
+        ok: false,
+        error: 'Cannot restore deployment in status "resuming"',
+      })
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/restore rejects non-succeeded backups', async () => {
+    const namespace = uniqueName('e2e-restore-backup-status-ns')
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: 'agent-1',
+          status: 'paused',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('restore-backup-status-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 1,
+          saasMode: true,
+        })
+        .returning()
+      const [backup] = await db
+        .insert(schema.cloudDeploymentBackups)
+        .values({
+          userId,
+          deploymentId: deployment!.id,
+          namespace,
+          agentId: 'agent-1',
+          sandboxName: 'agent-1',
+          pvcName: 'openclaw-data-agent-1',
+          driver: 'restic',
+          objectKey: 'backups/test-running.tar.gz',
+          status: 'running',
+        })
+        .returning()
+
+      const res = await req('POST', `/api/cloud-saas/deployments/${deployment!.id}/restore`, {
+        backupId: backup!.id,
+      })
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as { ok: boolean; error: string }
+      expect(body).toEqual({
+        ok: false,
+        error: 'Cannot restore backup in status "running"',
+      })
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/restore returns 409 when a namespace operation is locked', async () => {
+    const namespace = uniqueName('e2e-restore-lock-ns')
+    const deploymentDao = container.resolve('cloudDeploymentDao')
+    const lockSpy = vi.spyOn(deploymentDao, 'tryAcquireOperationLock').mockResolvedValueOnce(false)
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: 'agent-1',
+          status: 'paused',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('restore-lock-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 1,
+          saasMode: true,
+        })
+        .returning()
+      const [backup] = await db
+        .insert(schema.cloudDeploymentBackups)
+        .values({
+          userId,
+          deploymentId: deployment!.id,
+          namespace,
+          agentId: 'agent-1',
+          sandboxName: 'agent-1',
+          pvcName: 'openclaw-data-agent-1',
+          driver: 'restic',
+          objectKey: 'backups/test-lock.tar.gz',
+          status: 'succeeded',
+        })
+        .returning()
+
+      const res = await req('POST', `/api/cloud-saas/deployments/${deployment!.id}/restore`, {
+        backupId: backup!.id,
+      })
+      expect(res.status).toBe(409)
+      const body = (await res.json()) as { ok: boolean; error: string }
+      expect(body).toEqual({
+        ok: false,
+        error: 'Another deployment operation is already running in this namespace',
+      })
+    } finally {
+      lockSpy.mockRestore()
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
   it('POST /api/cloud-saas/deployments injects Shadow runtime defaults and saved global env vars', async () => {
     const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
     const previousShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL

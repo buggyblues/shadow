@@ -1,5 +1,6 @@
 import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
+import { triggerCloudDeploymentAutoResumeForApp } from '../lib/cloud-deployment-autoresume'
 import { logger } from '../lib/logger'
 
 /**
@@ -31,6 +32,13 @@ export function setupAppGateway(io: SocketIOServer, container: AppContainer): vo
             return
           }
           await socket.join(`channel:${app.channelId}`)
+          triggerCloudDeploymentAutoResumeForApp({
+            container,
+            app,
+            reason: 'app websocket join',
+            includeChannelBotMembers: true,
+            logContext: { userId, appId, channelId: app.channelId },
+          })
           logger.info({ userId, appId, channelId: app.channelId }, 'Joined app room')
           if (typeof ack === 'function') ack({ ok: true, channelId: app.channelId })
         } catch (err) {
@@ -61,6 +69,13 @@ export function setupAppGateway(io: SocketIOServer, container: AppContainer): vo
         const appDao = container.resolve('appDao')
         const app = await appDao.findById(data.appId)
         if (!app?.channelId) return
+        triggerCloudDeploymentAutoResumeForApp({
+          container,
+          app,
+          reason: 'app websocket broadcast',
+          includeChannelBotMembers: true,
+          logContext: { userId, appId: data.appId, channelId: app.channelId },
+        })
 
         // Broadcast to all sockets in the channel room except sender
         socket.to(`channel:${app.channelId}`).emit('app:broadcast', {

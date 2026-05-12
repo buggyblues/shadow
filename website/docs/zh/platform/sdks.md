@@ -118,3 +118,101 @@ with ShadowClient("https://shadowob.com", "token") as client:
     for server in servers:
         print(server["name"])
 ```
+
+## Cloud 部署运行时
+
+两个 SDK 都提供了管理 Cloud 部署生命周期的方法：暂停、恢复、备份和还原。
+
+### 暂停与恢复
+
+暂停运行中的部署以释放计算资源，同时保留 PVC 状态：
+
+:::code-group
+
+```ts [TypeScript]
+// 暂停已部署的 agent-sandbox
+const result = await client.pauseCloudDeployment('deployment-id', { agentId: 'strategy-buddy' })
+console.log(result.status) // 'paused'
+
+// 恢复已暂停的部署
+const resumed = await client.resumeCloudDeployment('deployment-id', { agentId: 'strategy-buddy' })
+console.log(resumed.status) // 'deployed'
+```
+
+```python [Python]
+# 暂停已部署的 agent-sandbox
+result = client.pause_cloud_deployment("deployment-id", agent_id="strategy-buddy")
+print(result["status"])  # 'paused'
+
+# 恢复已暂停的部署
+resumed = client.resume_cloud_deployment("deployment-id", agent_id="strategy-buddy")
+print(resumed["status"])  # 'deployed'
+```
+
+:::
+
+### 备份
+
+列出已有备份、创建新备份，以及从备份还原：
+
+:::code-group
+
+```ts [TypeScript]
+// 列出部署的备份
+const { backups } = await client.listCloudDeploymentBackups('deployment-id')
+
+// 创建 VolumeSnapshot 备份
+const created = await client.createCloudDeploymentBackup('deployment-id', {
+  agentId: 'strategy-buddy',
+  driver: 'volumeSnapshot',
+  retentionDays: 30,
+})
+console.log(created.backup.id)
+
+// 创建对象（restic）备份
+const objectBackup = await client.createCloudDeploymentBackup('deployment-id', {
+  agentId: 'strategy-buddy',
+  driver: 'restic',
+})
+
+// 从备份还原（暂停 → 恢复 PVC → 启动）
+const restored = await client.restoreCloudDeploymentBackup('deployment-id', {
+  agentId: 'strategy-buddy',
+  backupId: '<backup-id>',
+})
+console.log(restored.status) // 'resuming'
+```
+
+```python [Python]
+# 列出部署的备份
+result = client.list_cloud_deployment_backups("deployment-id")
+backups = result["backups"]
+
+# 创建 VolumeSnapshot 备份
+created = client.create_cloud_deployment_backup("deployment-id",
+    agent_id="strategy-buddy",
+    driver="volumeSnapshot",
+    retention_days=30,
+)
+print(created["backup"]["id"])
+
+# 创建对象（restic）备份
+object_backup = client.create_cloud_deployment_backup("deployment-id",
+    agent_id="strategy-buddy",
+    driver="restic",
+)
+
+# 从备份还原（暂停 → 恢复 PVC → 启动）
+restored = client.restore_cloud_deployment_backup("deployment-id",
+    agent_id="strategy-buddy",
+    backup_id="<backup-id>",
+)
+print(restored["status"])  # 'resuming'
+```
+
+:::
+
+### 相关类型
+
+- **TypeScript**: `ShadowCloudDeploymentStatus`、`ShadowCloudDeploymentRuntimeResponse`、`ShadowCloudDeploymentBackup`
+- **Python**: `ShadowCloudDeploymentBackup` (dataclass)

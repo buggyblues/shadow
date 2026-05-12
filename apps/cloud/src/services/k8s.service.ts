@@ -17,6 +17,7 @@ import {
 } from '../clients/kind-client.js'
 import {
   type CommandResult,
+  createVolumeSnapshotBackup,
   type DeploymentStatus,
   deleteNamespace,
   execInPod,
@@ -24,12 +25,22 @@ import {
   getManagedNamespaces,
   getPods,
   type PodStatus,
+  pauseAgentSandbox,
   readLogs,
+  resumeAgentSandbox,
   rolloutRestartAll,
   rolloutUndoAll,
+  scaleAgentSandbox,
   scaleDeployment,
   streamLogs,
 } from '../clients/kubectl-client.js'
+import {
+  createVolumeSnapshotBackupAsync,
+  restorePvcFromVolumeSnapshot,
+  waitForAgentSandboxPaused,
+  waitForAgentSandboxReady,
+  waitForVolumeSnapshotReady,
+} from '../clients/kubectl-runtime.js'
 import {
   deployStack,
   destroyStack,
@@ -126,6 +137,71 @@ export class K8sService {
 
   scaleDeployment(namespace: string, name: string, replicas: number): void {
     scaleDeployment(namespace, name, replicas)
+  }
+
+  scaleAgentSandbox(namespace: string, name: string, replicas: number): void {
+    scaleAgentSandbox(namespace, name, replicas)
+  }
+
+  pauseAgentSandbox(namespace: string, name: string): void {
+    pauseAgentSandbox(namespace, name)
+  }
+
+  resumeAgentSandbox(namespace: string, name: string): void {
+    resumeAgentSandbox(namespace, name)
+  }
+
+  createVolumeSnapshotBackup(options: {
+    namespace: string
+    snapshotName: string
+    pvcName: string
+    volumeSnapshotClassName?: string
+  }): void {
+    createVolumeSnapshotBackup(options)
+  }
+
+  async createVolumeSnapshotBackupAndWait(options: {
+    namespace: string
+    snapshotName: string
+    pvcName: string
+    volumeSnapshotClassName?: string
+    timeoutMs?: number
+  }): Promise<void> {
+    await createVolumeSnapshotBackupAsync(options)
+    await waitForVolumeSnapshotReady({
+      namespace: options.namespace,
+      snapshotName: options.snapshotName,
+      timeoutMs: options.timeoutMs,
+    })
+  }
+
+  async waitForAgentSandboxReady(options: {
+    namespace: string
+    agentName: string
+    kubeconfig?: string
+    timeoutMs?: number
+    intervalMs?: number
+  }) {
+    return waitForAgentSandboxReady(options)
+  }
+
+  async waitForAgentSandboxPaused(options: {
+    namespace: string
+    agentName: string
+    kubeconfig?: string
+    timeoutMs?: number
+    intervalMs?: number
+  }) {
+    return waitForAgentSandboxPaused(options)
+  }
+
+  async restorePvcFromVolumeSnapshot(options: {
+    namespace: string
+    pvcName: string
+    snapshotName: string
+    timeoutMs?: number
+  }): Promise<void> {
+    await restorePvcFromVolumeSnapshot(options)
   }
 
   /**

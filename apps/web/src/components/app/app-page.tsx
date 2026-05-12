@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { joinApp, leaveApp } from '../../lib/socket'
 import { useAppStore } from '../../stores/app.store'
@@ -227,6 +228,100 @@ function nameToColor(name: string): string {
   return `hsl(${hue}, 60%, 65%)`
 }
 
+function asSettingsRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function stringArraySetting(value: unknown): string[] {
+  if (typeof value === 'string') return [value]
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+}
+
+function parseCloudAutoResumeTargets(value: string): string[] {
+  return uniqueNonEmpty(value.split(/[\s,;]+/g))
+}
+
+function collectCloudAutoResumeTargets(settings: Record<string, unknown> | null): string[] {
+  if (!settings) return []
+  const cloudAutoResume = asSettingsRecord(settings.cloudAutoResume)
+  const cloudDeployment = asSettingsRecord(settings.cloudDeployment)
+  const cloud = asSettingsRecord(settings.cloud)
+  return uniqueNonEmpty([
+    ...stringArraySetting(settings.cloudAutoResumeUserIds),
+    ...stringArraySetting(settings.cloudAutoResumeBuddyUserIds),
+    ...stringArraySetting(cloudAutoResume?.userIds),
+    ...stringArraySetting(cloudAutoResume?.buddyUserIds),
+    ...stringArraySetting(cloudDeployment?.userIds),
+    ...stringArraySetting(cloudDeployment?.buddyUserIds),
+    ...stringArraySetting(cloud?.userIds),
+    ...stringArraySetting(cloud?.buddyUserIds),
+  ])
+}
+
+function isCloudAutoResumeEnabled(settings: Record<string, unknown> | null): boolean {
+  if (!settings) return false
+  if (settings.cloudAutoResume === true || settings.cloudAutoResumeInferChannelBots === true) {
+    return true
+  }
+  const cloudAutoResume = asSettingsRecord(settings.cloudAutoResume)
+  return (
+    cloudAutoResume?.enabled === true ||
+    cloudAutoResume?.inferChannelBots === true ||
+    collectCloudAutoResumeTargets(settings).length > 0
+  )
+}
+
+function buildUrlAppSettings(input: {
+  base: Record<string, unknown> | null
+  proxyEnabled: boolean
+  cloudAutoResumeEnabled: boolean
+  cloudAutoResumeTargets: string
+}) {
+  const settings: Record<string, unknown> = {
+    ...(input.base ?? {}),
+    proxyEnabled: input.proxyEnabled,
+  }
+  if (input.cloudAutoResumeEnabled) {
+    const existingCloudAutoResume = asSettingsRecord(settings.cloudAutoResume) ?? {}
+    settings.cloudAutoResume = {
+      ...existingCloudAutoResume,
+      enabled: true,
+      inferChannelBots: true,
+    }
+    const targetIds = parseCloudAutoResumeTargets(input.cloudAutoResumeTargets)
+    if (targetIds.length > 0) {
+      settings.cloudAutoResumeBuddyUserIds = targetIds
+    } else {
+      delete settings.cloudAutoResumeBuddyUserIds
+    }
+    return settings
+  }
+
+  delete settings.cloudAutoResumeUserIds
+  delete settings.cloudAutoResumeBuddyUserIds
+  delete settings.cloudAutoResumeInferChannelBots
+  const existingCloudAutoResume = asSettingsRecord(settings.cloudAutoResume)
+  if (existingCloudAutoResume) {
+    const rest = { ...existingCloudAutoResume }
+    delete rest.enabled
+    delete rest.inferChannelBots
+    if (Object.keys(rest).length > 0) {
+      settings.cloudAutoResume = rest
+    } else {
+      delete settings.cloudAutoResume
+    }
+  } else {
+    delete settings.cloudAutoResume
+  }
+  return settings
+}
+
 function AppIcon({
   app,
   onOpen,
@@ -374,7 +469,9 @@ function AppViewer({
   serverId: string
   onBack: () => void
 }) {
+  const { t } = useTranslation()
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [frameLoading, setFrameLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
@@ -400,7 +497,12 @@ function AppViewer({
     if (!currentApp) return ''
     if (currentApp.sourceType === 'url') {
       const proxyEnabled = currentApp.settings?.proxyEnabled === true
-      if (!proxyEnabled) return currentApp.sourceUrl
+      const cloudAutoResumeEnabled = isCloudAutoResumeEnabled(currentApp.settings)
+      if (!proxyEnabled) {
+        return cloudAutoResumeEnabled
+          ? `/api/servers/${serverId}/apps/${currentApp.id}/serve/`
+          : currentApp.sourceUrl
+      }
 
       const configuredSuffix = (
         import.meta.env.VITE_APP_PROXY_HOST_SUFFIX as string | undefined
@@ -433,11 +535,13 @@ function AppViewer({
     // Serve zip/html content through the server extraction endpoint
     return `/api/servers/${serverId}/apps/${currentApp.id}/serve/`
   }, [currentApp, serverId])
+  const appUrl = resolveAppUrl()
+  const cloudAutoResumeActive =
+    currentApp?.sourceType === 'url' && isCloudAutoResumeEnabled(currentApp.settings)
 
   const openInNewWindow = useCallback(() => {
-    const url = resolveAppUrl()
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
-  }, [resolveAppUrl])
+    if (appUrl) window.open(appUrl, '_blank', 'noopener,noreferrer')
+  }, [appUrl])
 
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return
@@ -457,6 +561,10 @@ function AppViewer({
     document.addEventListener('fullscreenchange', handler)
     return () => document.removeEventListener('fullscreenchange', handler)
   }, [])
+
+  useEffect(() => {
+    setFrameLoading(true)
+  }, [appUrl])
 
   if (!currentApp) {
     return (
@@ -488,7 +596,7 @@ function AppViewer({
           type="button"
           onClick={toggleFullscreen}
           className="w-8 h-8 rounded-xl bg-bg-tertiary/50 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition-all shadow-inner"
-          title={isFullscreen ? '退出全屏' : '全屏'}
+          title={isFullscreen ? t('appCenter.exitFullscreen') : t('appCenter.fullscreen')}
         >
           {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
         </button>
@@ -496,19 +604,39 @@ function AppViewer({
           type="button"
           onClick={openInNewWindow}
           className="p-1 text-text-muted hover:text-text-primary transition"
-          title="在新窗口打开"
+          title={t('serverHome.openNewWindow')}
         >
           <ExternalLink size={14} />
         </button>
       </div>
-      <iframe
-        ref={iframeRef}
-        src={resolveAppUrl()}
-        title={currentApp.name}
-        className="flex-1 w-full border-0"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-        allow="fullscreen; clipboard-write"
-      />
+      <div className="relative flex-1 min-h-0">
+        {cloudAutoResumeActive && frameLoading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-primary/80 backdrop-blur-sm">
+            <div className="rounded-3xl border border-border-subtle bg-bg-secondary/90 px-5 py-4 shadow-2xl">
+              <div className="flex items-center gap-3">
+                <Loader2 size={18} className="animate-spin text-primary" />
+                <div>
+                  <p className="text-sm font-black text-text-primary">
+                    {t('appCenter.cloudRuntimeStartingTitle')}
+                  </p>
+                  <p className="mt-1 max-w-[320px] text-xs text-text-muted">
+                    {t('appCenter.cloudRuntimeStartingDescription')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        <iframe
+          ref={iframeRef}
+          src={appUrl}
+          title={currentApp.name}
+          className="h-full w-full border-0"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+          allow="fullscreen; clipboard-write"
+          onLoad={() => setFrameLoading(false)}
+        />
+      </div>
     </div>
   )
 }
@@ -526,8 +654,10 @@ function CreateEditOverlay({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useTranslation()
   const { publishFileId, publishFileName, setPublishFile } = useAppStore()
   const isEdit = !!editingApp
+  const initialCloudAutoResumeTargets = collectCloudAutoResumeTargets(editingApp?.settings ?? null)
 
   const [name, setName] = useState(editingApp?.name ?? '')
   const [slug, setSlug] = useState(editingApp?.slug ?? '')
@@ -538,6 +668,12 @@ function CreateEditOverlay({
   )
   const [sourceUrl, setSourceUrl] = useState(editingApp?.sourceUrl ?? '')
   const [proxyEnabled, setProxyEnabled] = useState(editingApp?.settings?.proxyEnabled === true)
+  const [cloudAutoResumeEnabled, setCloudAutoResumeEnabled] = useState(
+    isCloudAutoResumeEnabled(editingApp?.settings ?? null),
+  )
+  const [cloudAutoResumeTargets, setCloudAutoResumeTargets] = useState(
+    initialCloudAutoResumeTargets.join(', '),
+  )
   const [version, setVersion] = useState(editingApp?.version ?? '')
   const [isHomepage, setIsHomepage] = useState(editingApp?.isHomepage ?? false)
   const [isUploading, setIsUploading] = useState(false)
@@ -644,7 +780,14 @@ function CreateEditOverlay({
         sourceType,
         sourceUrl: finalSourceUrl || undefined,
         settings:
-          sourceType === 'url' ? { ...(editingApp?.settings ?? {}), proxyEnabled } : undefined,
+          sourceType === 'url'
+            ? buildUrlAppSettings({
+                base: editingApp?.settings ?? null,
+                proxyEnabled,
+                cloudAutoResumeEnabled,
+                cloudAutoResumeTargets,
+              })
+            : undefined,
         version: version || undefined,
         isHomepage,
       })
@@ -680,7 +823,15 @@ function CreateEditOverlay({
       iconUrl: iconUrl || undefined,
       sourceType,
       sourceUrl: finalSourceUrl,
-      settings: sourceType === 'url' ? { proxyEnabled } : undefined,
+      settings:
+        sourceType === 'url'
+          ? buildUrlAppSettings({
+              base: null,
+              proxyEnabled,
+              cloudAutoResumeEnabled,
+              cloudAutoResumeTargets,
+            })
+          : undefined,
       version: version || undefined,
       isHomepage,
       status: 'active',
@@ -854,9 +1005,44 @@ function CreateEditOverlay({
                   className="rounded-lg border-border-subtle"
                 />
                 <span className="text-xs text-text-secondary">
-                  通过子域名代理访问（支持绝对路径、SSE、WebSocket）
+                  {t('appCenter.proxyBySubdomain')}
                 </span>
               </label>
+              <div className="mt-3 rounded-2xl border border-border-subtle bg-bg-tertiary/40 p-3">
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={cloudAutoResumeEnabled}
+                    onChange={(e) => setCloudAutoResumeEnabled(e.target.checked)}
+                    className="mt-0.5 rounded-lg border-border-subtle"
+                  />
+                  <span>
+                    <span className="block text-xs font-bold text-text-secondary">
+                      {t('appCenter.cloudAutoResume')}
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-text-muted">
+                      {t('appCenter.cloudAutoResumeDescription')}
+                    </span>
+                  </span>
+                </label>
+                {cloudAutoResumeEnabled && (
+                  <div className="mt-3">
+                    <label className="block text-[10px] font-black uppercase tracking-[0.18em] text-text-muted mb-2">
+                      {t('appCenter.cloudAutoResumeTargetsLabel')}
+                    </label>
+                    <input
+                      type="text"
+                      value={cloudAutoResumeTargets}
+                      onChange={(e) => setCloudAutoResumeTargets(e.target.value)}
+                      className="w-full rounded-xl border border-border-subtle bg-bg-primary/60 px-3 py-2 text-xs font-bold text-text-primary outline-none transition-all focus:border-primary/40 focus:ring-4 focus:ring-primary/10"
+                      placeholder={t('appCenter.cloudAutoResumeTargetsPlaceholder')}
+                    />
+                    <p className="mt-2 text-[11px] leading-relaxed text-text-muted">
+                      {t('appCenter.cloudAutoResumeTargetsHint')}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-2">

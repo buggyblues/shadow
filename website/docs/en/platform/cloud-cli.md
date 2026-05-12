@@ -59,6 +59,35 @@ export SHADOW_USER_TOKEN="..."
 | `shadowob-cloud dashboard` | Open the Cloud dashboard. |
 | `shadowob-cloud serve` | Start the API server and dashboard. |
 | `shadowob-cloud generate manifests` | Export Kubernetes manifests without applying them. |
+| `shadowob-cloud sandbox status` | List agent-sandbox workloads and their current state. |
+| `shadowob-cloud sandbox pause <agent>` | Pause an agent-sandbox workload by scaling to 0. |
+| `shadowob-cloud sandbox resume <agent>` | Resume a paused agent-sandbox workload. |
+| `shadowob-cloud sandbox backup <agent>` | Create a VolumeSnapshot backup for an agent-sandbox state PVC. |
+| `shadowob-cloud sandbox restore <agent>` | Resume a sandbox after PVC restore completes. |
+
+## Agent-Sandbox Lifecycle
+
+Agent-sandbox workloads support pause/resume and state backup/restore directly from the CLI:
+
+```bash
+# Pause an agent to free compute while keeping PVC state
+shadowob-cloud sandbox pause strategy-buddy
+
+# Resume later; the agent rebuilds context from its saved state
+shadowob-cloud sandbox resume strategy-buddy
+
+# Create a VolumeSnapshot backup of the state PVC
+shadowob-cloud sandbox backup strategy-buddy --snapshot-class csi-hostpath-snapclass
+
+# After restoring a PVC externally, hand off to the sandbox
+shadowob-cloud sandbox restore strategy-buddy --backup-id <backup-id>
+```
+
+The `sandbox status` command shows every agent-sandbox workload with its runtime state, ready count, and state PVC name.
+
+```bash
+shadowob-cloud sandbox status -n my-namespace
+```
 
 ## Bare-Server Clusters
 

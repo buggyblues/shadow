@@ -71,6 +71,26 @@ export function runMigrations(db: CloudDatabase) {
   `)
 
   db.run(/*sql*/ `
+    CREATE TABLE IF NOT EXISTS deployment_backups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      deployment_id INTEGER,
+      namespace TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      sandbox_name TEXT,
+      pvc_name TEXT NOT NULL,
+      driver TEXT NOT NULL,
+      snapshot_name TEXT,
+      object_key TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      error TEXT,
+      expires_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (deployment_id) REFERENCES deployments(id) ON DELETE CASCADE
+    )
+  `)
+
+  db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS activities (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       type TEXT NOT NULL,
@@ -120,6 +140,9 @@ export function runMigrations(db: CloudDatabase) {
 
   db.run(
     /*sql*/ `CREATE INDEX IF NOT EXISTS idx_deployment_logs_deployment_id ON deployment_logs(deployment_id, id)`,
+  )
+  db.run(
+    /*sql*/ `CREATE INDEX IF NOT EXISTS idx_deployment_backups_agent ON deployment_backups(namespace, agent_id, id)`,
   )
   db.run(/*sql*/ `INSERT OR IGNORE INTO env_groups (name) VALUES ('default')`)
 

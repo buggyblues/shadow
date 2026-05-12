@@ -133,3 +133,101 @@ The Python SDK uses `snake_case` method names that map 1-to-1 to the TypeScript 
 | `sendFriendRequest()` | `send_friend_request()` |
 | `browseListings()` | `browse_listings()` |
 | `createProduct()` | `create_product()` |
+
+## Cloud Deployment Runtime
+
+Both SDKs expose methods for managing Cloud deployment lifecycle: pause, resume, backup, and restore.
+
+### Pause & Resume
+
+Pause a running deployment to free compute while retaining PVC state:
+
+:::code-group
+
+```ts [TypeScript]
+// Pause a deployed agent-sandbox
+const result = await client.pauseCloudDeployment('deployment-id', { agentId: 'strategy-buddy' })
+console.log(result.status) // 'paused'
+
+// Resume a paused deployment
+const resumed = await client.resumeCloudDeployment('deployment-id', { agentId: 'strategy-buddy' })
+console.log(resumed.status) // 'deployed'
+```
+
+```python [Python]
+# Pause a deployed agent-sandbox
+result = client.pause_cloud_deployment("deployment-id", agent_id="strategy-buddy")
+print(result["status"])  # 'paused'
+
+# Resume a paused deployment
+resumed = client.resume_cloud_deployment("deployment-id", agent_id="strategy-buddy")
+print(resumed["status"])  # 'deployed'
+```
+
+:::
+
+### Backups
+
+List existing backups, create new ones, and restore from a backup:
+
+:::code-group
+
+```ts [TypeScript]
+// List backups for a deployment
+const { backups } = await client.listCloudDeploymentBackups('deployment-id')
+
+// Create a VolumeSnapshot backup
+const created = await client.createCloudDeploymentBackup('deployment-id', {
+  agentId: 'strategy-buddy',
+  driver: 'volumeSnapshot',
+  retentionDays: 30,
+})
+console.log(created.backup.id)
+
+// Create an object (restic) backup
+const objectBackup = await client.createCloudDeploymentBackup('deployment-id', {
+  agentId: 'strategy-buddy',
+  driver: 'restic',
+})
+
+// Restore from a backup (pauses → restores PVC → resumes)
+const restored = await client.restoreCloudDeploymentBackup('deployment-id', {
+  agentId: 'strategy-buddy',
+  backupId: '<backup-id>',
+})
+console.log(restored.status) // 'resuming'
+```
+
+```python [Python]
+# List backups for a deployment
+result = client.list_cloud_deployment_backups("deployment-id")
+backups = result["backups"]
+
+# Create a VolumeSnapshot backup
+created = client.create_cloud_deployment_backup("deployment-id",
+    agent_id="strategy-buddy",
+    driver="volumeSnapshot",
+    retention_days=30,
+)
+print(created["backup"]["id"])
+
+# Create an object (restic) backup
+object_backup = client.create_cloud_deployment_backup("deployment-id",
+    agent_id="strategy-buddy",
+    driver="restic",
+)
+
+# Restore from a backup (pauses → restores PVC → resumes)
+restored = client.restore_cloud_deployment_backup("deployment-id",
+    agent_id="strategy-buddy",
+    backup_id="<backup-id>",
+)
+print(restored["status"])  # 'resuming'
+```
+
+:::
+
+### Related Types
+
+- **TypeScript**: `ShadowCloudDeploymentStatus`, `ShadowCloudDeploymentRuntimeResponse`, `ShadowCloudDeploymentBackup`
+- **Python**: `ShadowCloudDeploymentBackup` (dataclass)

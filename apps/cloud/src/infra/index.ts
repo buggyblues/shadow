@@ -2,7 +2,7 @@
  * Pulumi program — deploys K8s resources from resolved cloud config.
  */
 
-import type * as pulumi from '@pulumi/pulumi'
+import * as pulumi from '@pulumi/pulumi'
 import type { CloudConfig } from '../config/schema.js'
 import {
   type DeploymentRuntimeContext,
@@ -10,31 +10,27 @@ import {
   runtimeContextEnv,
 } from '../utils/runtime-context.js'
 import { createAgentDeployment } from './agent-deployment.js'
+import { buildAgentPodSpec } from './agent-pod.js'
+import {
+  assertAgentSandboxCompatible,
+  buildAgentSandboxClaimManifest,
+  buildAgentSandboxTemplateManifest,
+  createAgentSandbox,
+  resolveAgentSandboxConfig,
+} from './agent-sandbox.js'
 import { createConfigResources } from './config-resources.js'
 import {
-  baseEnvVars,
-  baseVolumeMounts,
-  baseVolumes,
   DEFAULT_IMAGES,
   DEFAULT_OPENCLAW_RUNNER_IMAGE,
-  DEFAULT_RESOURCES,
   HEALTH_PORT,
   healthPortForRuntime,
   PULUMI_MANAGED_ANNOTATIONS,
   PULUMI_SKIP_AWAIT_ANNOTATIONS,
-  probesForRuntime,
 } from './constants.js'
-import { dedupeEnvVars } from './env-vars.js'
 import { stableHash } from './hash.js'
-import { resolveImagePullPolicy } from './image-pull-policy.js'
 import { createNetworking } from './networking.js'
-import { collectPluginK8sArtifacts } from './plugin-k8s.js'
 import { buildAgentRuntimePackage } from './runtime-package.js'
-import {
-  buildContainerSecurityContext,
-  buildNetworkPolicy,
-  buildSecurityContext,
-} from './security.js'
+import { buildNetworkPolicy, buildSecurityContext } from './security.js'
 import { createSharedResources } from './shared.js'
 
 export interface InfraOptions {
@@ -55,6 +51,10 @@ export interface InfraOptions {
    * and 'Always' for other mutable registry tags.
    */
   imagePullPolicy?: 'Always' | 'IfNotPresent' | 'Never'
+}
+
+function workloadBackend(config: CloudConfig): 'agent-sandbox' | 'deployment' {
+  return config.deployments?.backend ?? 'agent-sandbox'
 }
 
 /**
@@ -126,34 +126,61 @@ export function createInfraProgram(options: InfraOptions) {
         resourceOptions: namespaceResourceOptions,
       })
 
-      // Deployment — must wait for namespace to exist
-      const deployment = createAgentDeployment({
-        agentName,
-        agent,
-        namespace,
-        namespaceName: namespace,
-        config,
-        configMapName: configRes.configMapName,
-        secretName: configRes.secretName,
-        extraEnv: runtimePackage.plainEnv,
-        provider,
-        imagePullPolicy,
-        sharedWorkspacePvcName,
-        sharedWorkspaceMountPath,
-        skillsInstallDir,
-        podTemplateAnnotations: {
-          'shadowob.cloud/runtime-package-hash': runtimePackageHash,
-          'shadowob.cloud/runner-image': image,
-        },
-        resourceOptions: {
-          dependsOn: [
-            shared.namespace,
-            ...(shared.workspacePvc ? [shared.workspacePvc] : []),
-            configRes.configMap,
-            configRes.secret,
-          ],
-        },
-      })
+      const baseDependsOn = [
+        shared.namespace,
+        ...(shared.workspacePvc ? [shared.workspacePvc] : []),
+        configRes.configMap,
+        configRes.secret,
+      ]
+      const podTemplateAnnotations = {
+        'shadowob.cloud/runtime-package-hash': runtimePackageHash,
+        'shadowob.cloud/runner-image': image,
+      }
+
+      let workloadName: pulumi.Output<string>
+      if (workloadBackend(config) === 'agent-sandbox') {
+        const sandbox = createAgentSandbox({
+          agentName,
+          agent,
+          namespace,
+          namespaceName: namespace,
+          config,
+          configMapName: configRes.configMapName,
+          secretName: configRes.secretName,
+          extraEnv: runtimePackage.plainEnv,
+          provider,
+          imagePullPolicy,
+          sharedWorkspacePvcName,
+          sharedWorkspaceMountPath,
+          skillsInstallDir,
+          podTemplateAnnotations,
+          resourceOptions: { dependsOn: baseDependsOn },
+        })
+        workloadName = sandbox.sandboxClaim.metadata.name
+        outputs[`${agentName}-sandbox-claim-name`] = sandbox.sandboxClaim.metadata.name
+        outputs[`${agentName}-sandbox-template-name`] = sandbox.sandboxTemplate.metadata.name
+        outputs[`${agentName}-state-pvc`] = pulumi.output(`openclaw-data-${agentName}`)
+      } else {
+        const deployment = createAgentDeployment({
+          agentName,
+          agent,
+          namespace,
+          namespaceName: namespace,
+          config,
+          configMapName: configRes.configMapName,
+          secretName: configRes.secretName,
+          extraEnv: runtimePackage.plainEnv,
+          provider,
+          imagePullPolicy,
+          sharedWorkspacePvcName,
+          sharedWorkspaceMountPath,
+          skillsInstallDir,
+          podTemplateAnnotations,
+          resourceOptions: { dependsOn: baseDependsOn },
+        })
+        workloadName = deployment.deployment.metadata.name
+        outputs[`${agentName}-deployment-name`] = deployment.deployment.metadata.name
+      }
 
       // Service (for health check endpoint)
       const networking = createNetworking({
@@ -167,7 +194,7 @@ export function createInfraProgram(options: InfraOptions) {
 
       // Export service cluster IP for resource retrieval
       outputs[`${agentName}-service-ip`] = networking.service.spec.clusterIP
-      outputs[`${agentName}-deployment-name`] = deployment.deployment.metadata.name
+      outputs[`${agentName}-workload-name`] = workloadName
     }
 
     return outputs
@@ -283,40 +310,38 @@ export function buildManifests(options: InfraOptions) {
       stringData: runtimePackage.secretData,
     })
 
-    // Deployment
     const image = agent.image ?? DEFAULT_IMAGES[agent.runtime] ?? DEFAULT_OPENCLAW_RUNNER_IMAGE
-    const resolvedImagePullPolicy = resolveImagePullPolicy(imagePullPolicy, image)
     const runtimePackageHash = stableHash({
       configData: runtimePackage.configData,
       secretData: runtimePackage.secretData,
       image,
     })
     const healthPort = healthPortForRuntime(agent.runtime)
-    const { livenessProbe, readinessProbe, startupProbe } = probesForRuntime(agent.runtime)
-
-    // Build volume mounts and volumes from shared constants
-    const volumeMounts: Array<Record<string, unknown>> = baseVolumeMounts()
-    const volumes: Array<Record<string, unknown>> = baseVolumes(`${agentName}-config`)
-    let initContainers: Array<Record<string, unknown>> = []
-
-    // Shared workspace PVC
-    if (hasSharedWorkspace) {
-      volumeMounts.push({ name: 'shared-workspace', mountPath: sharedMountPath })
-      volumes.push({
-        name: 'shared-workspace',
-        persistentVolumeClaim: { claimName: 'shared-workspace' },
-      })
+    const podTemplateAnnotations = {
+      'shadowob.cloud/runtime-package-hash': runtimePackageHash,
+      'shadowob.cloud/runner-image': image,
     }
+    const sandboxConfig = resolveAgentSandboxConfig(config, agent)
+    const pod = buildAgentPodSpec({
+      agentName,
+      agent,
+      namespace,
+      config,
+      configMapName: `${agentName}-config`,
+      secretName: `${agentName}-secrets`,
+      extraEnv: runtimePackage.plainEnv,
+      imagePullPolicy,
+      sharedWorkspacePvcName: hasSharedWorkspace ? 'shared-workspace' : undefined,
+      sharedWorkspaceMountPath: sharedMountPath,
+      skillsInstallDir,
+      podTemplateAnnotations,
+      openclawDataVolume:
+        workloadBackend(config) === 'agent-sandbox' && sandboxConfig.state.enabled
+          ? 'volumeClaimTemplate'
+          : 'emptyDir',
+    })
 
-    // Skills directory
-    if (skillsInstallDir) {
-      volumeMounts.push({ name: 'skills', mountPath: skillsInstallDir })
-      volumes.push({ name: 'skills', emptyDir: {} })
-    }
-
-    // Collect K8s artifacts from all plugins (init containers, volumes, env vars, labels)
-    const pluginK8s = collectPluginK8sArtifacts(agent, config, namespace)
-    for (const configMap of pluginK8s.configMaps) {
+    for (const configMap of pod.pluginArtifacts.configMaps) {
       manifests.push({
         apiVersion: 'v1',
         kind: 'ConfigMap',
@@ -332,93 +357,64 @@ export function buildManifests(options: InfraOptions) {
         data: configMap.data,
       })
     }
-    for (const vol of pluginK8s.volumes) {
-      volumes.push({ name: vol.name, ...vol.spec })
-    }
-    for (const vm of pluginK8s.volumeMounts) {
-      volumeMounts.push(vm as unknown as Record<string, unknown>)
-    }
-    initContainers = pluginK8s.initContainers as unknown as Array<Record<string, unknown>>
 
-    const envList = [
-      ...baseEnvVars(agentName, agent.runtime),
-      ...Object.entries(runtimePackage.plainEnv).map(([name, value]) => ({ name, value })),
-      ...pluginK8s.envVars,
-    ]
-    if (hasSharedWorkspace) {
-      envList.push({ name: 'SHARED_WORKSPACE_PATH', value: sharedMountPath })
-    }
-    if (skillsInstallDir) {
-      envList.push({ name: 'SKILLS_DIR', value: skillsInstallDir })
-    }
-
-    manifests.push({
-      apiVersion: 'apps/v1',
-      kind: 'Deployment',
-      metadata: {
-        name: agentName,
-        namespace,
-        labels: { app: 'shadowob-cloud', agent: agentName, runtime: agent.runtime },
-        annotations: {
-          ...PULUMI_MANAGED_ANNOTATIONS,
-          ...(agent.version
-            ? {
-                'shadowob-cloud/agent-version': agent.version,
-                'shadowob-cloud/deployed-at': new Date().toISOString(),
-                ...(agent.changelog ? { 'shadowob-cloud/changelog': agent.changelog } : {}),
-              }
-            : {}),
+    if (workloadBackend(config) === 'agent-sandbox') {
+      assertAgentSandboxCompatible(config, agent)
+      manifests.push(
+        buildAgentSandboxTemplateManifest({
+          agentName,
+          namespace,
+          agent,
+          sandbox: sandboxConfig,
+          pod,
+        }),
+      )
+      manifests.push(
+        buildAgentSandboxClaimManifest({
+          agentName,
+          namespace,
+          agent,
+          sandbox: sandboxConfig,
+        }),
+      )
+    } else {
+      manifests.push({
+        apiVersion: 'apps/v1',
+        kind: 'Deployment',
+        metadata: {
+          name: agentName,
+          namespace,
+          labels: { app: 'shadowob-cloud', agent: agentName, runtime: agent.runtime },
+          annotations: {
+            ...PULUMI_MANAGED_ANNOTATIONS,
+            ...(agent.version
+              ? {
+                  'shadowob-cloud/agent-version': agent.version,
+                  'shadowob-cloud/deployed-at': new Date().toISOString(),
+                  ...(agent.changelog ? { 'shadowob-cloud/changelog': agent.changelog } : {}),
+                }
+              : {}),
+          },
         },
-      },
-      spec: {
-        replicas: agent.replicas ?? 1,
-        selector: { matchLabels: { app: 'shadowob-cloud', agent: agentName } },
-        template: {
-          metadata: {
-            labels: { app: 'shadowob-cloud', agent: agentName, runtime: agent.runtime },
-            annotations: {
-              'shadowob.cloud/runtime-package-hash': runtimePackageHash,
-              'shadowob.cloud/runner-image': image,
-              ...pluginK8s.annotations,
+        spec: {
+          replicas: agent.replicas ?? 1,
+          selector: { matchLabels: { app: 'shadowob-cloud', agent: agentName } },
+          template: {
+            metadata: {
+              labels: { app: 'shadowob-cloud', agent: agentName, runtime: agent.runtime },
+              annotations: pod.annotations,
+            },
+            spec: {
+              securityContext: buildSecurityContext(),
+              containers: pod.containers,
+              volumes: pod.volumes,
+              ...(pod.initContainers.length > 0 ? { initContainers: pod.initContainers } : {}),
+              restartPolicy: 'Always',
             },
           },
-          spec: {
-            securityContext: buildSecurityContext(),
-            containers: [
-              {
-                name: agent.runtime,
-                image,
-                imagePullPolicy: resolvedImagePullPolicy,
-                ports: [{ containerPort: healthPort, name: 'health' }],
-                env: dedupeEnvVars(envList),
-                envFrom: [{ secretRef: { name: `${agentName}-secrets` } }],
-                volumeMounts,
-                resources: agent.resources ?? DEFAULT_RESOURCES,
-                securityContext: buildContainerSecurityContext(),
-                livenessProbe,
-                readinessProbe,
-                startupProbe,
-              },
-              // Plugin-contributed helper containers (e.g. gitagent git-pull loop)
-              ...pluginK8s.sidecars.map((sc) => ({
-                name: sc.name,
-                image: sc.image,
-                imagePullPolicy: sc.imagePullPolicy,
-                command: sc.command,
-                args: sc.args,
-                env: sc.env ? dedupeEnvVars(sc.env) : undefined,
-                volumeMounts: sc.volumeMounts,
-                resources: sc.resources,
-                securityContext: sc.securityContext,
-              })),
-            ],
-            volumes,
-            ...(initContainers.length > 0 ? { initContainers } : {}),
-            restartPolicy: 'Always',
-          },
         },
-      },
-    })
+      })
+    }
 
     // Service
     manifests.push({

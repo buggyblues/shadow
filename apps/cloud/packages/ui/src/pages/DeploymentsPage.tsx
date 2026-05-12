@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Layers,
   Loader2,
+  Pause,
   RefreshCw,
   Rocket,
   Terminal,
@@ -45,13 +46,24 @@ interface NamespaceGroup {
   deployments: Deployment[]
   readyCount: number
   totalCount: number
+  pausedCount: number
+  resumingCount: number
+  sandboxCount: number
   latestTask?: DeployTaskListItem
 }
 
 function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'deployed' || status === 'destroyed') return 'success'
   if (status === 'failed') return 'danger'
-  if (status === 'running' || status === 'deploying' || status === 'destroying') return 'info'
+  if (
+    status === 'running' ||
+    status === 'paused' ||
+    status === 'resuming' ||
+    status === 'deploying' ||
+    status === 'destroying'
+  ) {
+    return 'info'
+  }
   if (status === 'pending' || status === 'cancelling') return 'warning'
   return 'neutral'
 }
@@ -59,11 +71,21 @@ function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | '
 // ── Deployment Row ────────────────────────────────────────────────────────────
 
 function DeploymentRow({ dep }: { dep: Deployment }) {
+  const { t } = useTranslation()
   const ready = isDeploymentReady(dep.ready)
+  const runtimeState = dep.runtimeState ?? (ready ? 'running' : 'unknown')
+  const dotStatus =
+    runtimeState === 'paused'
+      ? 'info'
+      : runtimeState === 'failed'
+        ? 'error'
+        : ready
+          ? 'success'
+          : 'warning'
 
   return (
     <DashboardListRow
-      leading={<StatusDot status={ready ? 'success' : 'warning'} />}
+      leading={<StatusDot status={dotStatus} />}
       main={
         <Link
           to="/deployments/$namespace"
@@ -73,11 +95,46 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
           {dep.name}
         </Link>
       }
-      sub={getAge(dep.age)}
+      sub={
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
+          <span>{getAge(dep.age)}</span>
+          {dep.workloadKind === 'agent-sandbox' && (
+            <Badge variant="neutral" size="xs">
+              agent-sandbox
+            </Badge>
+          )}
+          {dep.sandboxName && (
+            <span className="max-w-[220px] truncate rounded-full border border-border-subtle bg-bg-secondary px-2 py-0.5 font-mono text-[11px] text-text-muted">
+              {t('deployments.sandboxShort')}: {dep.sandboxName}
+            </span>
+          )}
+          {dep.statePvc && (
+            <span className="max-w-[220px] truncate rounded-full border border-border-subtle bg-bg-secondary px-2 py-0.5 font-mono text-[11px] text-text-muted">
+              {dep.statePvc}
+            </span>
+          )}
+        </span>
+      }
       trailing={
         <div className="flex items-center gap-3">
+          {dep.workloadKind === 'agent-sandbox' && (
+            <Badge
+              variant={
+                runtimeState === 'running'
+                  ? 'success'
+                  : runtimeState === 'paused'
+                    ? 'info'
+                    : runtimeState === 'failed'
+                      ? 'danger'
+                      : 'warning'
+              }
+              size="sm"
+            >
+              {t(`deployments.runtimeState.${runtimeState}`)}
+            </Badge>
+          )}
           <StatusBadge
-            dotStatus={ready ? 'success' : 'warning'}
+            dotStatus={dotStatus}
             badgeVariant={ready ? 'success' : 'warning'}
             badgeText={dep.ready}
           />
@@ -136,10 +193,25 @@ function NamespaceCard({
                 </span>
               )}
             </div>
-            <div className="mt-1 inline-flex items-center gap-2 text-xs">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-full border border-border-subtle bg-bg-secondary px-2 py-0.5 text-text-subtle">
                 {readyLabel}
               </span>
+              {group.sandboxCount > 0 && (
+                <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary">
+                  {t('deployments.agentSandboxCount', { count: group.sandboxCount })}
+                </span>
+              )}
+              {group.pausedCount > 0 && (
+                <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-warning">
+                  {t('deployments.pausedCount', { count: group.pausedCount })}
+                </span>
+              )}
+              {group.resumingCount > 0 && (
+                <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary">
+                  {t('deployments.resumingCount', { count: group.resumingCount })}
+                </span>
+              )}
               <span className="text-text-muted">
                 {group.totalCount} {pluralize(group.totalCount, 'deployment')}
               </span>
@@ -293,9 +365,17 @@ export function DeploymentsPage() {
     queryFn: api.deployments.list,
     // Fast-poll while any deployment row is mid-transition; slow otherwise.
     refetchInterval: (q) => {
-      const rows = (q.state.data as Array<{ ready?: string; available?: string }>) ?? []
+      const rows =
+        (q.state.data as Array<{
+          ready?: string
+          available?: string
+          runtimeState?: Deployment['runtimeState']
+        }>) ?? []
       const transitioning = rows.some(
-        (r) => (r.ready && !r.ready.startsWith('1/')) || r.available === '0',
+        (r) =>
+          r.runtimeState === 'resuming' ||
+          (r.runtimeState !== 'paused' &&
+            ((r.ready && !r.ready.startsWith('1/')) || r.available === '0')),
       )
       return transitioning ? 3_000 : 30_000
     },
@@ -389,6 +469,9 @@ export function DeploymentsPage() {
       deployments: deps,
       readyCount: deps.filter((deployment) => isDeploymentReady(deployment.ready)).length,
       totalCount: deps.length,
+      pausedCount: deps.filter((deployment) => deployment.runtimeState === 'paused').length,
+      resumingCount: deps.filter((deployment) => deployment.runtimeState === 'resuming').length,
+      sandboxCount: deps.filter((deployment) => deployment.workloadKind === 'agent-sandbox').length,
       latestTask: tasksByNamespace.get(namespace),
     }))
 
@@ -408,6 +491,9 @@ export function DeploymentsPage() {
   const total = visibleDeployments.length
   const ready = visibleDeployments.filter((deployment) =>
     isDeploymentReady(deployment.ready),
+  ).length
+  const paused = visibleDeployments.filter(
+    (deployment) => deployment.runtimeState === 'paused',
   ).length
   const namespaceCount = groups.length
   const runningTasks = tasks.filter((t) => t.active || t.task.status === 'running').length
@@ -449,7 +535,7 @@ export function DeploymentsPage() {
       }
       headerContent={
         <>
-          <StatsGrid className="mb-4 grid-cols-2 md:grid-cols-4 xl:grid-cols-5">
+          <StatsGrid className="mb-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
             <MetricCardWrapper>
               <MetricCardContent
                 label={t('clusters.totalDeployments')}
@@ -466,6 +552,15 @@ export function DeploymentsPage() {
                 icon={<CheckCircle size={13} />}
                 iconClassName="text-success"
                 valueClassName="text-success"
+              />
+            </MetricCardWrapper>
+            <MetricCardWrapper>
+              <MetricCardContent
+                label={t('deployments.pausedDeployments')}
+                value={paused}
+                icon={<Pause size={13} />}
+                iconClassName={paused > 0 ? 'text-warning' : 'text-text-muted'}
+                valueClassName={paused > 0 ? 'text-warning' : 'text-text-muted'}
               />
             </MetricCardWrapper>
             <MetricCardWrapper>
@@ -501,7 +596,7 @@ export function DeploymentsPage() {
           </StatsGrid>
           <div className="flex items-center justify-between gap-3">
             <Tabs value={activeTab} onChange={setActiveTab}>
-              <DashboardTabsList tabs={tabs} />
+              <DashboardTabsList tabs={tabs} activeId={activeTab} onSelect={setActiveTab} />
             </Tabs>
             {activeTab === 'infrastructure' && (
               <Search

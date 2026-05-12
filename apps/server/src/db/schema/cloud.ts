@@ -21,6 +21,8 @@ export const cloudDeploymentStatusEnum = pgEnum('cloud_deployment_status', [
   'pending',
   'deploying',
   'deployed',
+  'paused',
+  'resuming',
   'failed',
   'destroying',
   'destroyed',
@@ -138,6 +140,7 @@ export const cloudDeployments = pgTable(
     monthlyCost: integer('monthly_cost'),
     hourlyCost: integer('hourly_cost').default(1).notNull(),
     lastHourlyBilledAt: timestamp('last_hourly_billed_at', { withTimezone: true }),
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }).defaultNow().notNull(),
     saasMode: boolean('saas_mode').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -146,6 +149,49 @@ export const cloudDeployments = pgTable(
     cloudDeploymentsUserIdIdx: index('cloud_deployments_user_id_idx').on(t.userId),
     cloudDeploymentsStatusIdx: index('cloud_deployments_status_idx').on(t.status),
     cloudDeploymentsSaasModeIdx: index('cloud_deployments_saas_mode_idx').on(t.saasMode),
+  }),
+)
+
+/**
+ * Persistent state backup records for agent-sandbox deployments.
+ *
+ * The control plane records requested backups here. The backing artifact may
+ * be a CSI VolumeSnapshot or an object-store artifact created by restic/kopia.
+ */
+export const cloudDeploymentBackups = pgTable(
+  'cloud_deployment_backups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deploymentId: uuid('deployment_id')
+      .notNull()
+      .references(() => cloudDeployments.id, { onDelete: 'cascade' }),
+    namespace: varchar('namespace', { length: 255 }).notNull(),
+    agentId: varchar('agent_id', { length: 255 }).notNull(),
+    sandboxName: varchar('sandbox_name', { length: 255 }),
+    pvcName: varchar('pvc_name', { length: 255 }).notNull(),
+    driver: varchar('driver', { length: 32 }).default('volumeSnapshot').notNull(),
+    snapshotName: varchar('snapshot_name', { length: 255 }),
+    objectKey: text('object_key'),
+    status: varchar('status', { length: 32 }).default('pending').notNull(),
+    phase: varchar('phase', { length: 64 }).default('queued').notNull(),
+    error: text('error'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudDeploymentBackupsDeploymentIdIdx: index('cloud_deployment_backups_deployment_id_idx').on(
+      t.deploymentId,
+    ),
+    cloudDeploymentBackupsUserIdIdx: index('cloud_deployment_backups_user_id_idx').on(t.userId),
+    cloudDeploymentBackupsAgentIdx: index('cloud_deployment_backups_agent_idx').on(
+      t.namespace,
+      t.agentId,
+      t.createdAt,
+    ),
   }),
 )
 

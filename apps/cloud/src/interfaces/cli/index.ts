@@ -23,6 +23,7 @@ import { createInitCommand } from './init.command.js'
 import { createLogsCommand } from './logs.command.js'
 import { createOnboardCommand } from './onboard.command.js'
 import { createProvisionCommand } from './provision.command.js'
+import { createSandboxCommand } from './sandbox.command.js'
 import { createScaleCommand } from './scale.command.js'
 import { createServeCommand } from './serve.command.js'
 import { createStatusCommand } from './status.command.js'
@@ -63,6 +64,7 @@ export function createCLI(container: ServiceContainer): Command {
   program.addCommand(createStatusCommand(container))
   program.addCommand(createLogsCommand(container))
   program.addCommand(createScaleCommand(container))
+  program.addCommand(createSandboxCommand(container))
   program.addCommand(createInitCommand(container))
   program.addCommand(createServeCommand(container))
   program.addCommand(createConsoleCommand(container))

@@ -1386,7 +1386,7 @@ export function MonitoringPage() {
           </StatsGrid>
 
           <Tabs value={activeTab} onChange={setActiveTab}>
-            <DashboardTabsList tabs={tabs} />
+            <DashboardTabsList tabs={tabs} activeId={activeTab} onSelect={setActiveTab} />
           </Tabs>
         </div>
       }

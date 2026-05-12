@@ -1,25 +1,38 @@
-import { randomUUID } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
 import {
+  applyKubernetesManifestAsync,
   applyRuntimeEnvRefPolicy,
   attachCloudSaasProvisionState,
   CLOUD_SAAS_RUNTIME_KEY,
   collectRuntimeEnvFields,
   collectRuntimeEnvRefPolicy,
   collectRuntimeEnvRequirements,
+  createVolumeSnapshotBackupAsync,
+  deleteKubernetesResourceAsync,
   deleteNamespace,
+  execInPodAsync,
+  execInPodWithInputAsync,
   extractCloudSaasRuntime,
   extractRequiredEnvVars,
+  getPvcVolumeSnapshotCapability,
+  isVolumeSnapshotApiAvailable,
   listManagedNamespaces,
   listPodsAsync,
   listProviderCatalogs,
   loadCloudConfigSchema,
   prepareCloudSaasConfigSnapshot,
   readPodLogsAsync,
+  restorePvcFromVolumeSnapshot,
   sanitizeCloudSaasDeployment,
+  scaleAgentSandboxAsync,
   spawnPodLogStream,
   summarizeCloudConfigValidation,
   validateCloudSaasConfigSnapshot,
+  waitForAgentSandboxPaused,
+  waitForAgentSandboxReady,
+  waitForPodReadyAsync,
+  waitForVolumeSnapshotReady,
 } from '@shadowob/cloud'
 import { and, desc, eq, ne, sql } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
@@ -79,6 +92,7 @@ const RESERVED_RUNTIME_ENV_KEYS = new Set([
 ])
 
 const DEFAULT_DIY_CLOUD_DAILY_LIMIT = 24
+const DEPLOYMENT_MANIFEST_SCHEMA_VERSION = 1
 
 function isReservedRuntimeEnvKey(name: string): boolean {
   return RESERVED_RUNTIME_ENV_KEYS.has(name)
@@ -110,6 +124,289 @@ type CloudStoreModelProviderMode = 'official' | 'custom'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function stableJsonStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJsonStringify(item)).join(',')}]`
+  }
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJsonStringify(value[key])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+function sha256Hex(value: unknown): string {
+  return createHash('sha256').update(stableJsonStringify(value)).digest('hex')
+}
+
+function shortHash(value: unknown): string {
+  return sha256Hex(value).slice(0, 16)
+}
+
+function toIsoString(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString()
+  }
+  return null
+}
+
+type DeploymentManifestMetadata = {
+  schemaVersion: number
+  revision: number
+  manifestId: string
+  source: 'create' | 'snapshot-redeploy' | 'template-redeploy' | 'template-sync'
+  generatedAt: string
+  configHash: string
+  manifestHash: string
+  templateSlug: string | null
+  templateId: string | null
+  templateName: string | null
+  templateSource: string | null
+  templateReviewStatus: string | null
+  templateUpdatedAt: string | null
+  templateContentHash: string | null
+}
+
+function deploymentRuntimeRecord(configSnapshot: unknown): Record<string, unknown> | null {
+  if (!isRecord(configSnapshot)) return null
+  const runtime = configSnapshot[CLOUD_SAAS_RUNTIME_KEY]
+  return isRecord(runtime) ? runtime : null
+}
+
+function readDeploymentManifestMetadata(
+  configSnapshot: unknown,
+): DeploymentManifestMetadata | null {
+  const manifest = deploymentRuntimeRecord(configSnapshot)?.manifest
+  if (!isRecord(manifest)) return null
+  if (manifest.schemaVersion !== DEPLOYMENT_MANIFEST_SCHEMA_VERSION) return null
+  if (typeof manifest.revision !== 'number' || !Number.isFinite(manifest.revision)) return null
+  if (typeof manifest.manifestId !== 'string') return null
+  if (typeof manifest.configHash !== 'string') return null
+  if (typeof manifest.manifestHash !== 'string') return null
+  return {
+    schemaVersion: DEPLOYMENT_MANIFEST_SCHEMA_VERSION,
+    revision: manifest.revision,
+    manifestId: manifest.manifestId,
+    source:
+      manifest.source === 'snapshot-redeploy' ||
+      manifest.source === 'template-redeploy' ||
+      manifest.source === 'template-sync'
+        ? manifest.source
+        : 'create',
+    generatedAt: typeof manifest.generatedAt === 'string' ? manifest.generatedAt : '',
+    configHash: manifest.configHash,
+    manifestHash: manifest.manifestHash,
+    templateSlug: typeof manifest.templateSlug === 'string' ? manifest.templateSlug : null,
+    templateId: typeof manifest.templateId === 'string' ? manifest.templateId : null,
+    templateName: typeof manifest.templateName === 'string' ? manifest.templateName : null,
+    templateSource: typeof manifest.templateSource === 'string' ? manifest.templateSource : null,
+    templateReviewStatus:
+      typeof manifest.templateReviewStatus === 'string' ? manifest.templateReviewStatus : null,
+    templateUpdatedAt:
+      typeof manifest.templateUpdatedAt === 'string' ? manifest.templateUpdatedAt : null,
+    templateContentHash:
+      typeof manifest.templateContentHash === 'string' ? manifest.templateContentHash : null,
+  }
+}
+
+function readNonEmptyString(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function inferTemplateSlugFromConfigSnapshot(configSnapshot: unknown): string | null {
+  const manifest = readDeploymentManifestMetadata(configSnapshot)
+  if (manifest?.templateSlug) return manifest.templateSlug
+
+  const runtime = extractCloudSaasRuntime(configSnapshot)
+  const snapshot = runtime.configSnapshot ?? (isRecord(configSnapshot) ? configSnapshot : null)
+  if (!snapshot) return null
+
+  const metadata = isRecord(snapshot.metadata) ? snapshot.metadata : null
+  const direct =
+    readNonEmptyString(snapshot, 'templateSlug') ??
+    readNonEmptyString(snapshot, 'template') ??
+    readNonEmptyString(metadata ?? {}, 'templateSlug') ??
+    readNonEmptyString(metadata ?? {}, 'template') ??
+    readNonEmptyString(metadata ?? {}, 'sourceTemplateSlug')
+  if (direct) return direct
+
+  // The CloudConfig schema treats `name` as the stable config/template slug.
+  // Older deployments created before manifest metadata used this field as the
+  // only durable link back to the catalog template.
+  return readNonEmptyString(snapshot, 'name')
+}
+
+function uniqueNonEmptyStrings(values: Array<string | null | undefined>): string[] {
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    const normalized = value?.trim()
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    result.push(normalized)
+  }
+  return result
+}
+
+function deploymentTemplateSlugCandidates(deployment: {
+  namespace: string
+  name: string
+  templateSlug?: string | null
+  configSnapshot?: unknown
+}): string[] {
+  return uniqueNonEmptyStrings([
+    deployment.templateSlug,
+    inferTemplateSlugFromConfigSnapshot(deployment.configSnapshot),
+    deployment.name,
+    deployment.namespace,
+  ])
+}
+
+function configSnapshotWithoutRuntime(configSnapshot: Record<string, unknown>) {
+  const snapshot = { ...configSnapshot }
+  delete snapshot[CLOUD_SAAS_RUNTIME_KEY]
+  return snapshot
+}
+
+function attachDeploymentManifestMetadata(
+  configSnapshot: unknown,
+  options: {
+    template?: CloudTemplateRecord | null
+    source: DeploymentManifestMetadata['source']
+    previous?: DeploymentManifestMetadata | null
+  },
+): Record<string, unknown> {
+  const validated = validateCloudSaasConfigSnapshot(configSnapshot)
+  const runtime = deploymentRuntimeRecord(validated)
+  const cleanConfig = configSnapshotWithoutRuntime(validated)
+  const configHash = shortHash(cleanConfig)
+  const templateContentHash = options.template ? shortHash(options.template.content) : null
+  const revision = Math.max(1, (options.previous?.revision ?? 0) + 1)
+  const generatedAt = new Date().toISOString()
+  const manifestPayload = {
+    schemaVersion: DEPLOYMENT_MANIFEST_SCHEMA_VERSION,
+    revision,
+    source: options.source,
+    generatedAt,
+    configHash,
+    templateSlug: options.template?.slug ?? options.previous?.templateSlug ?? null,
+    templateId: options.template?.id ?? options.previous?.templateId ?? null,
+    templateName: options.template?.name ?? options.previous?.templateName ?? null,
+    templateSource: options.template?.source ?? options.previous?.templateSource ?? null,
+    templateReviewStatus:
+      options.template?.reviewStatus ?? options.previous?.templateReviewStatus ?? null,
+    templateUpdatedAt: options.template
+      ? toIsoString(options.template.updatedAt)
+      : (options.previous?.templateUpdatedAt ?? null),
+    templateContentHash: templateContentHash ?? options.previous?.templateContentHash ?? null,
+  }
+  const manifestHash = shortHash(manifestPayload)
+  const manifest: DeploymentManifestMetadata = {
+    ...manifestPayload,
+    manifestId: `manifest-${manifestHash}`,
+    manifestHash,
+  }
+
+  return {
+    ...validated,
+    [CLOUD_SAAS_RUNTIME_KEY]: {
+      ...(runtime ?? {}),
+      manifest,
+    },
+  }
+}
+
+function buildTemplateView(template: CloudTemplateRecord | null, userId: string) {
+  if (!template) return null
+  const ownedByUser = isTemplateOwnedByUser(template, userId)
+  return {
+    id: template.id,
+    slug: template.slug,
+    name: template.name,
+    description: template.description,
+    source: template.source,
+    reviewStatus: template.reviewStatus,
+    updatedAt: toIsoString(template.updatedAt),
+    ownedByUser,
+    editable:
+      ownedByUser &&
+      template.source === 'community' &&
+      template.reviewStatus !== 'approved' &&
+      template.reviewStatus !== 'pending',
+    contentHash: shortHash(template.content),
+  }
+}
+
+function buildDeploymentManifestResponse(options: {
+  deployment: {
+    id: string
+    namespace: string
+    name: string
+    templateSlug?: string | null
+    configSnapshot?: unknown
+  }
+  template: CloudTemplateRecord | null
+  userId: string
+}) {
+  const manifest = readDeploymentManifestMetadata(options.deployment.configSnapshot)
+  const linkedTemplateSlug =
+    options.deployment.templateSlug ??
+    manifest?.templateSlug ??
+    inferTemplateSlugFromConfigSnapshot(options.deployment.configSnapshot)
+  const templateView = buildTemplateView(options.template, options.userId)
+  const currentTemplateHash = templateView?.contentHash ?? null
+  const deployedTemplateHash = manifest?.templateContentHash ?? null
+  const templateChanged = Boolean(
+    currentTemplateHash && deployedTemplateHash && currentTemplateHash !== deployedTemplateHash,
+  )
+  const templateAvailable = Boolean(options.template)
+  const driftStatus = !linkedTemplateSlug
+    ? 'unlinked'
+    : !manifest
+      ? 'unknown'
+      : !templateAvailable
+        ? 'missing-template'
+        : templateChanged
+          ? 'template-updated'
+          : 'up-to-date'
+
+  return {
+    deploymentId: options.deployment.id,
+    namespace: options.deployment.namespace,
+    name: options.deployment.name,
+    templateSlug: linkedTemplateSlug,
+    template: templateView,
+    manifest,
+    drift: {
+      status: driftStatus,
+      templateAvailable,
+      templateChanged,
+      deployedTemplateHash,
+      currentTemplateHash,
+      configHash: manifest?.configHash ?? null,
+    },
+    configSnapshot: sanitizeCloudSaasDeployment({
+      configSnapshot: options.deployment.configSnapshot,
+    }).configSnapshot,
+  }
+}
+
+function slugifyTemplateSlug(value: string): string {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || `template-${randomUUID().slice(0, 8)}`
+  )
 }
 
 const PROVISION_STATE_SECRET_KEY_RE =
@@ -149,6 +446,58 @@ const deploymentRuntimeContextSchema = z
     timezone: z.string().optional(),
   })
   .optional()
+
+const deploymentAgentOperationSchema = z
+  .object({
+    agentId: z.string().min(1).max(255).optional(),
+  })
+  .optional()
+
+const deploymentBackupCreateSchema = z
+  .object({
+    agentId: z.string().min(1).max(255).optional(),
+    driver: z.enum(['volumeSnapshot', 'restic']).optional(),
+    retentionDays: z.number().int().min(1).max(365).optional(),
+  })
+  .optional()
+
+const deploymentRestoreSchema = z
+  .object({
+    agentId: z.string().min(1).max(255).optional(),
+    backupId: z.string().min(1).max(255).optional(),
+  })
+  .optional()
+
+const deploymentRedeploySchema = z
+  .object({
+    mode: z.enum(['snapshot', 'template']).optional(),
+    templateSlug: z.string().min(1).max(255).optional(),
+    configSnapshot: z.record(z.unknown()).optional(),
+    envVars: z.record(z.string()).optional(),
+    runtimeContext: deploymentRuntimeContextSchema,
+  })
+  .optional()
+
+const deploymentTemplateSyncSchema = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    description: z.string().max(2000).optional(),
+    content: z.record(z.unknown()).optional(),
+    tags: z.array(z.string().max(64)).max(20).optional(),
+    category: z.string().max(64).optional(),
+    baseCost: z.number().int().min(0).optional(),
+  })
+  .optional()
+
+function runCloudRuntimeOperation(
+  container: AppContainer,
+  meta: Record<string, unknown>,
+  operation: () => Promise<void>,
+) {
+  void operation().catch((err) => {
+    container.resolve('logger').error({ err, ...meta }, 'Cloud runtime operation failed')
+  })
+}
 
 const diyCloudGenerateSchema = z
   .object({
@@ -1019,16 +1368,23 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function isTerminalDeploymentStatus(status: string): boolean {
-  return status === 'deployed' || status === 'failed' || status === 'destroyed'
+  return (
+    status === 'deployed' || status === 'paused' || status === 'failed' || status === 'destroyed'
+  )
 }
 
-function isVisibleDeploymentStatus(status: string): boolean {
+function isVisibleDeploymentStatus(status: string, errorMessage?: string | null): boolean {
   return (
     status === 'pending' ||
     status === 'deploying' ||
     status === 'cancelling' ||
     status === 'deployed' ||
-    status === 'destroying'
+    status === 'paused' ||
+    status === 'resuming' ||
+    status === 'destroying' ||
+    (status === 'failed' &&
+      errorMessage !== 'cancelled by user' &&
+      errorMessage !== 'superseded-by-newer-deployment')
   )
 }
 
@@ -1036,6 +1392,7 @@ function isActiveDeploymentStatus(status: string): boolean {
   return (
     status === 'pending' ||
     status === 'deploying' ||
+    status === 'resuming' ||
     status === 'cancelling' ||
     status === 'destroying'
   )
@@ -1075,6 +1432,425 @@ function findBlockingDeployment<T extends BlockingDeploymentRow>(
   )
 }
 
+function resolveDeploymentAgentId(
+  deployment: { name: string; configSnapshot?: unknown },
+  requestedAgentId?: string,
+): string {
+  if (requestedAgentId?.trim()) return requestedAgentId.trim()
+  if (isRecord(deployment.configSnapshot)) {
+    const deployments = deployment.configSnapshot.deployments
+    if (isRecord(deployments) && Array.isArray(deployments.agents)) {
+      const first = deployments.agents.find(
+        (agent) => isRecord(agent) && typeof agent.id === 'string',
+      )
+      if (isRecord(first) && typeof first.id === 'string' && first.id.trim()) {
+        return first.id.trim()
+      }
+    }
+  }
+  return deployment.name
+}
+
+function statePvcNameForAgent(agentId: string): string {
+  return `openclaw-data-${agentId}`
+}
+
+function expiresAtFromRetentionDays(retentionDays?: number): Date | null {
+  if (!retentionDays) return null
+  return new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000)
+}
+
+async function resolveDeploymentKubeconfig(
+  container: AppContainer,
+  deployment: { clusterId?: string | null },
+): Promise<string | undefined> {
+  if (!deployment.clusterId) return undefined
+  const cluster = await container.resolve('cloudClusterDao').findByIdOnly(deployment.clusterId)
+  if (!cluster?.kubeconfigEncrypted) return undefined
+  return decrypt(cluster.kubeconfigEncrypted)
+}
+
+const CLOUD_BACKUP_STATE_DIR = '/home/openclaw/.openclaw'
+const CLOUD_BACKUP_HELPER_IMAGE = process.env.CLOUD_BACKUP_HELPER_IMAGE ?? 'busybox:1.36'
+const CLOUD_BACKUP_ENCRYPTION_MAGIC = Buffer.from('SHADOWOB-BACKUP-AESGCM-v1\n')
+
+type CloudBackupDeployment = {
+  namespace: string
+  clusterId?: string | null
+}
+
+type CloudBackupRecord = {
+  id: string
+  namespace: string
+  agentId: string
+  pvcName: string
+  objectKey: string | null
+}
+
+type CloudBackupPhase =
+  | 'object-storing'
+  | 'restoring-pausing'
+  | 'restoring-pvc'
+  | 'restoring-resuming'
+  | 'restore-failed'
+  | 'completed'
+
+type ObjectStoreBackupResult = {
+  archiveBytes: number
+  storedBytes: number
+  encrypted: boolean
+  source: 'running-pod' | 'helper-pod'
+}
+
+function backupHelperPodName(backupId: string, purpose: 'backup' | 'restore') {
+  const suffix = backupId
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase()
+    .slice(0, 10)
+  return `shadow-${purpose}-${suffix}`
+}
+
+function objectBackupKey(deploymentId: string, agentId: string, stamp: string) {
+  const safeAgent = agentId
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `backups/cloud/${deploymentId}/${safeAgent}/${stamp}.tar.gz`
+}
+
+function resolveObjectBackupEncryptionKey(): Buffer | null {
+  const raw = process.env.CLOUD_BACKUP_OBJECT_ENCRYPTION_KEY?.trim()
+  if (!raw) {
+    if (process.env.CLOUD_BACKUP_OBJECT_ENCRYPTION_REQUIRED === 'true') {
+      throw new Error('CLOUD_BACKUP_OBJECT_ENCRYPTION_KEY is required for object backups')
+    }
+    return null
+  }
+
+  const key = /^[a-f0-9]{64}$/i.test(raw) ? Buffer.from(raw, 'hex') : Buffer.from(raw, 'base64')
+  if (key.byteLength !== 32) {
+    throw new Error('CLOUD_BACKUP_OBJECT_ENCRYPTION_KEY must be 32 bytes encoded as base64 or hex')
+  }
+  return key
+}
+
+function startsWithBuffer(value: Buffer, prefix: Buffer): boolean {
+  return (
+    value.byteLength >= prefix.byteLength && value.subarray(0, prefix.byteLength).equals(prefix)
+  )
+}
+
+function encryptObjectBackupArchive(archive: Buffer): Buffer {
+  const key = resolveObjectBackupEncryptionKey()
+  if (!key) return archive
+
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const ciphertext = Buffer.concat([cipher.update(archive), cipher.final()])
+  const tag = cipher.getAuthTag()
+  const metadata = Buffer.from(
+    JSON.stringify({
+      alg: 'aes-256-gcm',
+      iv: iv.toString('base64'),
+      tag: tag.toString('base64'),
+    }),
+  )
+  return Buffer.concat([CLOUD_BACKUP_ENCRYPTION_MAGIC, metadata, Buffer.from('\n'), ciphertext])
+}
+
+function decryptObjectBackupArchiveIfNeeded(archive: Buffer): Buffer {
+  if (!startsWithBuffer(archive, CLOUD_BACKUP_ENCRYPTION_MAGIC)) return archive
+  const metaStart = CLOUD_BACKUP_ENCRYPTION_MAGIC.byteLength
+  const metaEnd = archive.indexOf('\n', metaStart)
+  if (metaEnd <= metaStart) throw new Error('Encrypted backup archive metadata is malformed')
+
+  const metadata = JSON.parse(archive.subarray(metaStart, metaEnd).toString('utf8')) as {
+    alg?: string
+    iv?: string
+    tag?: string
+  }
+  if (metadata.alg !== 'aes-256-gcm' || !metadata.iv || !metadata.tag) {
+    throw new Error('Encrypted backup archive metadata is unsupported')
+  }
+  const key = resolveObjectBackupEncryptionKey()
+  if (!key) throw new Error('Object backup is encrypted but no decryption key is configured')
+
+  const iv = Buffer.from(metadata.iv, 'base64')
+  const tag = Buffer.from(metadata.tag, 'base64')
+  if (iv.byteLength !== 12 || tag.byteLength !== 16) {
+    throw new Error('Encrypted backup archive metadata has invalid key material')
+  }
+  const decipher = createDecipheriv('aes-256-gcm', key, iv)
+  decipher.setAuthTag(tag)
+  const ciphertext = archive.subarray(metaEnd + 1)
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()])
+}
+
+async function createStatePvcHelperPod(options: {
+  namespace: string
+  podName: string
+  pvcName: string
+  kubeconfig?: string
+}) {
+  await deleteStatePvcHelperPod(options)
+  await applyKubernetesManifestAsync(
+    {
+      apiVersion: 'v1',
+      kind: 'Pod',
+      metadata: {
+        name: options.podName,
+        namespace: options.namespace,
+        labels: {
+          app: 'shadowob-cloud',
+          'shadowob.cloud/backup-helper': 'true',
+        },
+      },
+      spec: {
+        restartPolicy: 'Never',
+        automountServiceAccountToken: false,
+        securityContext: {
+          runAsUser: 1000,
+          runAsGroup: 1000,
+          fsGroup: 1000,
+          seccompProfile: { type: 'RuntimeDefault' },
+        },
+        containers: [
+          {
+            name: 'archive',
+            image: CLOUD_BACKUP_HELPER_IMAGE,
+            imagePullPolicy: 'IfNotPresent',
+            command: ['sh', '-c', 'trap : TERM INT; sleep 3600 & wait'],
+            securityContext: {
+              allowPrivilegeEscalation: false,
+              capabilities: { drop: ['ALL'] },
+            },
+            volumeMounts: [{ name: 'state', mountPath: '/state' }],
+          },
+        ],
+        volumes: [
+          {
+            name: 'state',
+            persistentVolumeClaim: { claimName: options.pvcName },
+          },
+        ],
+      },
+    },
+    options.kubeconfig,
+    30_000,
+  )
+  await waitForPodReadyAsync({
+    namespace: options.namespace,
+    pod: options.podName,
+    kubeconfig: options.kubeconfig,
+    timeoutMs: 90_000,
+  })
+}
+
+async function deleteStatePvcHelperPod(options: {
+  namespace: string
+  podName: string
+  kubeconfig?: string
+}) {
+  await deleteKubernetesResourceAsync({
+    namespace: options.namespace,
+    kind: 'pod',
+    name: options.podName,
+    kubeconfig: options.kubeconfig,
+    timeoutMs: 30_000,
+  }).catch(() => {})
+}
+
+async function findRunningAgentPod(options: {
+  namespace: string
+  agentId: string
+  kubeconfig?: string
+}) {
+  const pods = await listPodsAsync(options.namespace, options.kubeconfig).catch(() => [])
+  return (
+    pods.find((pod) => pod.name === options.agentId && pod.status === 'Running') ??
+    pods.find((pod) => pod.name.includes(options.agentId) && pod.status === 'Running') ??
+    null
+  )
+}
+
+async function readStateArchiveFromPod(options: {
+  namespace: string
+  podName: string
+  path: string
+  container?: string
+  kubeconfig?: string
+}) {
+  const result = await execInPodAsync({
+    namespace: options.namespace,
+    pod: options.podName,
+    container: options.container,
+    kubeconfig: options.kubeconfig,
+    timeout: 180_000,
+    command: [
+      'sh',
+      '-lc',
+      `mkdir -p ${options.path} && cd ${options.path} && tar -czf - . | base64 | tr -d '\\n'`,
+    ],
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.trim() || 'Failed to archive state PVC')
+  }
+  const encoded = result.stdout.trim()
+  if (!encoded) throw new Error('State archive was empty')
+  return Buffer.from(encoded, 'base64')
+}
+
+async function writeStateArchiveToPod(options: {
+  namespace: string
+  podName: string
+  archive: Buffer
+  kubeconfig?: string
+}) {
+  const result = await execInPodWithInputAsync({
+    namespace: options.namespace,
+    pod: options.podName,
+    kubeconfig: options.kubeconfig,
+    timeout: 180_000,
+    input: options.archive.toString('base64'),
+    command: [
+      'sh',
+      '-lc',
+      'set -e; mkdir -p /state; rm -rf /state/* /state/.[!.]* /state/..?* 2>/dev/null || true; base64 -d | tar -xzf - -C /state',
+    ],
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.trim() || 'Failed to restore state PVC archive')
+  }
+}
+
+async function putObjectArchive(options: {
+  container: AppContainer
+  objectKey: string
+  archive: Buffer
+}): Promise<{ storedBytes: number; encrypted: boolean }> {
+  const object = encryptObjectBackupArchive(options.archive)
+  await options.container
+    .resolve('mediaService')
+    .putPrivateObject(
+      options.objectKey,
+      object,
+      object === options.archive ? 'application/gzip' : 'application/octet-stream',
+    )
+  return { storedBytes: object.byteLength, encrypted: object !== options.archive }
+}
+
+async function createObjectStoreBackup(options: {
+  container: AppContainer
+  deployment: CloudBackupDeployment
+  backup: CloudBackupRecord
+  kubeconfig?: string
+  onPhase?: (phase: CloudBackupPhase) => Promise<void>
+}): Promise<ObjectStoreBackupResult> {
+  if (!options.backup.objectKey) throw new Error('Object backup key is missing')
+
+  const runningPod = await findRunningAgentPod({
+    namespace: options.deployment.namespace,
+    agentId: options.backup.agentId,
+    kubeconfig: options.kubeconfig,
+  })
+  if (runningPod) {
+    try {
+      const archive = await readStateArchiveFromPod({
+        namespace: options.deployment.namespace,
+        podName: runningPod.name,
+        path: CLOUD_BACKUP_STATE_DIR,
+        container: 'openclaw',
+        kubeconfig: options.kubeconfig,
+      })
+      await options.onPhase?.('object-storing')
+      const stored = await putObjectArchive({
+        container: options.container,
+        objectKey: options.backup.objectKey,
+        archive,
+      })
+      return { archiveBytes: archive.byteLength, ...stored, source: 'running-pod' }
+    } catch (err) {
+      options.container.resolve('logger').warn(
+        {
+          err,
+          namespace: options.deployment.namespace,
+          backupId: options.backup.id,
+          agentId: options.backup.agentId,
+          podName: runningPod.name,
+        },
+        'Falling back to backup helper pod after running pod archive failed',
+      )
+    }
+  }
+
+  const helperPod = backupHelperPodName(options.backup.id, 'backup')
+  await createStatePvcHelperPod({
+    namespace: options.deployment.namespace,
+    podName: helperPod,
+    pvcName: options.backup.pvcName,
+    kubeconfig: options.kubeconfig,
+  })
+
+  try {
+    const archive = await readStateArchiveFromPod({
+      namespace: options.deployment.namespace,
+      podName: helperPod,
+      path: '/state',
+      kubeconfig: options.kubeconfig,
+    })
+    await options.onPhase?.('object-storing')
+    const stored = await putObjectArchive({
+      container: options.container,
+      objectKey: options.backup.objectKey,
+      archive,
+    })
+    return { archiveBytes: archive.byteLength, ...stored, source: 'helper-pod' }
+  } finally {
+    await deleteStatePvcHelperPod({
+      namespace: options.deployment.namespace,
+      podName: helperPod,
+      kubeconfig: options.kubeconfig,
+    })
+  }
+}
+
+async function restoreObjectStoreBackup(options: {
+  container: AppContainer
+  deployment: CloudBackupDeployment
+  backup: CloudBackupRecord
+  kubeconfig?: string
+}): Promise<{ archiveBytes: number }> {
+  if (!options.backup.objectKey) throw new Error('Object backup key is missing')
+  const storedArchive = await options.container
+    .resolve('mediaService')
+    .getPrivateObjectBuffer(options.backup.objectKey)
+  if (!storedArchive) throw new Error('Object backup artifact is missing from storage')
+  const archive = decryptObjectBackupArchiveIfNeeded(storedArchive)
+
+  const helperPod = backupHelperPodName(options.backup.id, 'restore')
+  await createStatePvcHelperPod({
+    namespace: options.deployment.namespace,
+    podName: helperPod,
+    pvcName: options.backup.pvcName,
+    kubeconfig: options.kubeconfig,
+  })
+  try {
+    await writeStateArchiveToPod({
+      namespace: options.deployment.namespace,
+      podName: helperPod,
+      archive,
+      kubeconfig: options.kubeconfig,
+    })
+    return { archiveBytes: archive.byteLength }
+  } finally {
+    await deleteStatePvcHelperPod({
+      namespace: options.deployment.namespace,
+      podName: helperPod,
+      kubeconfig: options.kubeconfig,
+    })
+  }
+}
+
 function sanitizeCloudSaasDeploymentWithBlocker<
   T extends Parameters<typeof sanitizeCloudSaasDeployment>[0] & BlockingDeploymentRow,
 >(deployment: T, rows: T[]) {
@@ -1100,13 +1876,14 @@ function newestVisibleDeploymentsByNamespace<
   T extends {
     namespace: string
     status: string
+    errorMessage?: string | null
     updatedAt?: Date | null
     createdAt?: Date | null
   },
 >(rows: T[]): T[] {
   const byNamespace = new Map<string, T>()
   for (const row of rows) {
-    if (!isVisibleDeploymentStatus(row.status)) continue
+    if (!isVisibleDeploymentStatus(row.status, row.errorMessage)) continue
     const existing = byNamespace.get(row.namespace)
     const rowTime = deploymentCreatedTime(row)
     const existingTime = existing ? deploymentCreatedTime(existing) : 0
@@ -1123,6 +1900,43 @@ function newestVisibleDeploymentsByNamespace<
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function createSseStreamWriter(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  signal: AbortSignal,
+) {
+  const encoder = new TextEncoder()
+  let closed = false
+
+  const close = () => {
+    if (closed) return
+    closed = true
+    try {
+      controller.close()
+    } catch {
+      /* already closed */
+    }
+  }
+
+  signal.addEventListener('abort', close, { once: true })
+
+  return {
+    close,
+    isClosed: () => closed || signal.aborted,
+    send: (data: unknown, event?: string) => {
+      if (closed || signal.aborted) return false
+      try {
+        controller.enqueue(
+          encoder.encode(`${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(data)}\n\n`),
+        )
+        return true
+      } catch {
+        closed = true
+        return false
+      }
+    },
+  }
 }
 
 function publicDiyStreamError(err: unknown) {
@@ -2272,6 +3086,488 @@ export function createCloudSaasHandler(container: AppContainer) {
     return c.json(summary)
   })
 
+  h.post(
+    '/deployments/:id/pause',
+    zValidator('json', deploymentAgentOperationSchema),
+    async (c) => {
+      const user = c.get('user') as { userId: string }
+      const id = c.req.param('id')
+      const input = c.req.valid('json') ?? {}
+      const dao = container.resolve('cloudDeploymentDao')
+      const deployment = await dao.findById(id, user.userId)
+      if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+
+      const current = await dao.findLatestCurrentInNamespace({
+        userId: user.userId,
+        clusterId: deployment.clusterId,
+        namespace: deployment.namespace,
+      })
+      if (!current || current.id !== deployment.id) {
+        return c.json({ ok: false, error: 'Cannot pause a historical deployment instance' }, 409)
+      }
+      if (deployment.status === 'paused') {
+        return c.json({
+          ok: true,
+          status: 'paused',
+          deployment: sanitizeCloudSaasDeployment(deployment),
+        })
+      }
+      if (deployment.status !== 'deployed' && deployment.status !== 'resuming') {
+        return c.json(
+          { ok: false, error: `Cannot pause deployment in status "${deployment.status}"` },
+          422,
+        )
+      }
+
+      const agentId = resolveDeploymentAgentId(deployment, input.agentId)
+      const operationLockAcquired = await dao.tryAcquireOperationLock(deployment)
+      if (!operationLockAcquired) {
+        return c.json(
+          { ok: false, error: 'Another deployment operation is already running in this namespace' },
+          409,
+        )
+      }
+      try {
+        await dao.appendLog(id, `[pause] User requested pause for agent "${agentId}"`, 'info')
+        const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+        await scaleAgentSandboxAsync(deployment.namespace, agentId, 0, kubeconfig)
+        await waitForAgentSandboxPaused({
+          namespace: deployment.namespace,
+          agentName: agentId,
+          kubeconfig,
+          timeoutMs: 120_000,
+        })
+        const updated = await dao.updateStatus(id, 'paused')
+        await container.resolve('cloudActivityDao').log({
+          userId: user.userId,
+          type: 'scale',
+          namespace: deployment.namespace,
+          meta: { deploymentId: id, operation: 'pause', agentId },
+        })
+
+        return c.json({
+          ok: true,
+          status: 'paused',
+          deployment: sanitizeCloudSaasDeployment(updated ?? deployment),
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        await dao.appendLog(id, `[pause] Failed: ${message}`, 'error')
+        return c.json({ ok: false, error: message }, 502)
+      } finally {
+        await dao.releaseOperationLock(deployment).catch(() => {})
+      }
+    },
+  )
+
+  h.post(
+    '/deployments/:id/resume',
+    zValidator('json', deploymentAgentOperationSchema),
+    async (c) => {
+      const user = c.get('user') as { userId: string }
+      const id = c.req.param('id')
+      const input = c.req.valid('json') ?? {}
+      const dao = container.resolve('cloudDeploymentDao')
+      const deployment = await dao.findById(id, user.userId)
+      if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+
+      const current = await dao.findLatestCurrentInNamespace({
+        userId: user.userId,
+        clusterId: deployment.clusterId,
+        namespace: deployment.namespace,
+      })
+      if (!current || current.id !== deployment.id) {
+        return c.json({ ok: false, error: 'Cannot resume a historical deployment instance' }, 409)
+      }
+      if (deployment.status !== 'paused' && deployment.status !== 'resuming') {
+        return c.json(
+          { ok: false, error: `Cannot resume deployment in status "${deployment.status}"` },
+          422,
+        )
+      }
+
+      const agentId = resolveDeploymentAgentId(deployment, input.agentId)
+      const operationLockAcquired = await dao.tryAcquireOperationLock(deployment)
+      if (!operationLockAcquired) {
+        return c.json(
+          { ok: false, error: 'Another deployment operation is already running in this namespace' },
+          409,
+        )
+      }
+      try {
+        await dao.updateStatus(id, 'resuming')
+        await dao.appendLog(id, `[resume] User requested resume for agent "${agentId}"`, 'info')
+        const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+        await scaleAgentSandboxAsync(deployment.namespace, agentId, 1, kubeconfig)
+        await waitForAgentSandboxReady({
+          namespace: deployment.namespace,
+          agentName: agentId,
+          kubeconfig,
+          timeoutMs: 180_000,
+        })
+        const updated = await dao.updateStatus(id, 'deployed')
+        await container.resolve('cloudActivityDao').log({
+          userId: user.userId,
+          type: 'scale',
+          namespace: deployment.namespace,
+          meta: { deploymentId: id, operation: 'resume', agentId },
+        })
+
+        return c.json({
+          ok: true,
+          status: 'deployed',
+          deployment: sanitizeCloudSaasDeployment(updated ?? deployment),
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        await dao.appendLog(id, `[resume] Failed: ${message}`, 'error')
+        await dao.updateStatus(id, 'failed', message)
+        return c.json({ ok: false, error: message }, 502)
+      } finally {
+        await dao.releaseOperationLock(deployment).catch(() => {})
+      }
+    },
+  )
+
+  h.get('/deployments/:id/backups', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const agentId = c.req.query('agentId')
+    const deployment = await container.resolve('cloudDeploymentDao').findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+
+    const backups = await container.resolve('cloudDeploymentBackupDao').listByDeployment({
+      userId: user.userId,
+      deploymentId: id,
+      agentId,
+    })
+    return c.json({ deploymentId: id, backups })
+  })
+
+  h.post(
+    '/deployments/:id/backups',
+    zValidator('json', deploymentBackupCreateSchema),
+    async (c) => {
+      const user = c.get('user') as { userId: string }
+      const id = c.req.param('id')
+      const input = c.req.valid('json') ?? {}
+      const deploymentDao = container.resolve('cloudDeploymentDao')
+      const deployment = await deploymentDao.findById(id, user.userId)
+      if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+      if (deployment.status !== 'deployed' && deployment.status !== 'paused') {
+        return c.json(
+          { ok: false, error: `Cannot back up deployment in status "${deployment.status}"` },
+          422,
+        )
+      }
+
+      const agentId = resolveDeploymentAgentId(deployment, input.agentId)
+      const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+      const pvcName = statePvcNameForAgent(agentId)
+      const snapshotApiAvailable = await isVolumeSnapshotApiAvailable({ kubeconfig }).catch(
+        () => false,
+      )
+      const snapshotCapability = snapshotApiAvailable
+        ? await getPvcVolumeSnapshotCapability({
+            namespace: deployment.namespace,
+            pvcName,
+            kubeconfig,
+          }).catch(() => null)
+        : null
+      const volumeSnapshotClassName = snapshotCapability
+        ? snapshotCapability.volumeSnapshotClassName
+        : null
+      if (input.driver === 'volumeSnapshot' && !volumeSnapshotClassName) {
+        return c.json(
+          {
+            ok: false,
+            error: snapshotApiAvailable
+              ? snapshotCapability?.isCsi
+                ? `PVC "${pvcName}" does not have a matching VolumeSnapshotClass for provisioner "${snapshotCapability.provisioner}"`
+                : `PVC "${pvcName}" is not backed by a CSI StorageClass that supports VolumeSnapshot`
+              : 'VolumeSnapshot API is not available on this cluster. Install the CSI snapshot CRDs/controller or use a restic/kopia backup driver.',
+          },
+          422,
+        )
+      }
+      const driver = input.driver ?? (volumeSnapshotClassName ? 'volumeSnapshot' : 'restic')
+      const snapshotFallbackReason = !snapshotApiAvailable
+        ? 'VolumeSnapshot API is unavailable'
+        : !snapshotCapability?.isCsi
+          ? `PVC "${pvcName}" is not backed by a CSI StorageClass`
+          : !volumeSnapshotClassName
+            ? `PVC "${pvcName}" does not have a matching VolumeSnapshotClass for provisioner "${snapshotCapability.provisioner}"`
+            : null
+
+      const operationLockAcquired = await deploymentDao.tryAcquireOperationLock(deployment)
+      if (!operationLockAcquired) {
+        return c.json(
+          { ok: false, error: 'Another deployment operation is already running in this namespace' },
+          409,
+        )
+      }
+
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const artifactBase = `${deployment.namespace}-${agentId}-${stamp}`
+        .toLowerCase()
+        .replace(/[^a-z0-9.-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 63)
+      const backupDao = container.resolve('cloudDeploymentBackupDao')
+      const backup = await backupDao
+        .create({
+          userId: user.userId,
+          deploymentId: id,
+          namespace: deployment.namespace,
+          agentId,
+          sandboxName: agentId,
+          pvcName,
+          driver,
+          snapshotName: driver === 'volumeSnapshot' ? artifactBase : null,
+          objectKey: driver === 'restic' ? objectBackupKey(id, agentId, stamp) : null,
+          status: 'running',
+          phase: 'queued',
+          expiresAt: expiresAtFromRetentionDays(input.retentionDays),
+        })
+        .catch(async (err) => {
+          await deploymentDao.releaseOperationLock(deployment).catch(() => {})
+          throw err
+        })
+      if (!backup) {
+        await deploymentDao.releaseOperationLock(deployment).catch(() => {})
+        return c.json({ ok: false, error: 'Failed to create backup record' }, 500)
+      }
+      try {
+        await deploymentDao.appendLog(
+          id,
+          `[backup] Queued ${driver} backup ${backup.id} for agent "${agentId}"${
+            driver === 'restic' && snapshotFallbackReason
+              ? ` because ${snapshotFallbackReason}`
+              : ''
+          }`,
+          'info',
+        )
+        await container.resolve('cloudActivityDao').log({
+          userId: user.userId,
+          type: 'scale',
+          namespace: deployment.namespace,
+          meta: { deploymentId: id, operation: 'backup', backupId: backup.id, agentId, driver },
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        await backupDao.updateStatus(backup.id, 'failed', message).catch(() => {})
+        await deploymentDao.releaseOperationLock(deployment).catch(() => {})
+        throw err
+      }
+
+      runCloudRuntimeOperation(
+        container,
+        { deploymentId: id, backupId: backup.id, operation: 'backup' },
+        async () => {
+          try {
+            if (driver === 'volumeSnapshot') {
+              if (!backup.snapshotName) throw new Error('VolumeSnapshot name is missing')
+              await backupDao.updatePhase(backup.id, 'snapshot-creating')
+              await createVolumeSnapshotBackupAsync({
+                namespace: deployment.namespace,
+                snapshotName: backup.snapshotName,
+                pvcName: backup.pvcName,
+                volumeSnapshotClassName: volumeSnapshotClassName ?? undefined,
+                kubeconfig,
+              })
+              await backupDao.updatePhase(backup.id, 'snapshot-waiting')
+              await waitForVolumeSnapshotReady({
+                namespace: deployment.namespace,
+                snapshotName: backup.snapshotName,
+                kubeconfig,
+                timeoutMs: 180_000,
+              })
+            } else {
+              await backupDao.updatePhase(backup.id, 'object-archiving')
+              const result = await createObjectStoreBackup({
+                container,
+                deployment,
+                backup,
+                kubeconfig,
+                onPhase: async (phase) => {
+                  await backupDao.updatePhase(backup.id, phase)
+                },
+              })
+              await deploymentDao.appendLog(
+                id,
+                `[backup] Archived ${result.archiveBytes} bytes from ${result.source} for agent "${agentId}" (stored=${result.storedBytes} bytes, encrypted=${result.encrypted ? 'yes' : 'no'})`,
+                'info',
+              )
+            }
+            await backupDao.updateStatus(backup.id, 'succeeded')
+            await deploymentDao.appendLog(
+              id,
+              driver === 'volumeSnapshot'
+                ? `[backup] VolumeSnapshot ${backup.snapshotName} is ready for agent "${agentId}"`
+                : `[backup] Object archive ${backup.objectKey} is ready for agent "${agentId}"`,
+              'info',
+            )
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            await backupDao.updateStatus(backup.id, 'failed', message)
+            await deploymentDao.appendLog(id, `[backup] Failed: ${message}`, 'error')
+          } finally {
+            await deploymentDao.releaseOperationLock(deployment).catch(() => {})
+          }
+        },
+      )
+
+      return c.json({ ok: true, backup }, 202)
+    },
+  )
+
+  h.post('/deployments/:id/restore', zValidator('json', deploymentRestoreSchema), async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const input = c.req.valid('json') ?? {}
+    const deploymentDao = container.resolve('cloudDeploymentDao')
+    const deployment = await deploymentDao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    const current = await deploymentDao.findLatestCurrentInNamespace({
+      userId: user.userId,
+      clusterId: deployment.clusterId,
+      namespace: deployment.namespace,
+    })
+    if (!current || current.id !== deployment.id) {
+      return c.json({ ok: false, error: 'Cannot restore a historical deployment instance' }, 409)
+    }
+    if (
+      deployment.status !== 'deployed' &&
+      deployment.status !== 'paused' &&
+      deployment.status !== 'failed'
+    ) {
+      return c.json(
+        { ok: false, error: `Cannot restore deployment in status "${deployment.status}"` },
+        422,
+      )
+    }
+
+    const backupDao = container.resolve('cloudDeploymentBackupDao')
+    const agentId = resolveDeploymentAgentId(deployment, input.agentId)
+    const backup = input.backupId
+      ? await backupDao.findById(input.backupId, user.userId)
+      : (await backupDao.listByDeployment({ userId: user.userId, deploymentId: id, agentId }))[0]
+    if (!backup || backup.deploymentId !== id) {
+      return c.json({ ok: false, error: 'Backup not found' }, 404)
+    }
+    if (backup.status !== 'succeeded') {
+      return c.json({ ok: false, error: `Cannot restore backup in status "${backup.status}"` }, 422)
+    }
+    if (backup.driver === 'volumeSnapshot' && !backup.snapshotName) {
+      return c.json({ ok: false, error: 'VolumeSnapshot backup is missing snapshotName' }, 422)
+    }
+    if (backup.driver === 'restic' && !backup.objectKey) {
+      return c.json({ ok: false, error: 'Object backup is missing objectKey' }, 422)
+    }
+    if (backup.driver !== 'volumeSnapshot' && backup.driver !== 'restic') {
+      return c.json({ ok: false, error: `Unsupported backup driver "${backup.driver}"` }, 422)
+    }
+
+    const operationLockAcquired = await deploymentDao.tryAcquireOperationLock(deployment)
+    if (!operationLockAcquired) {
+      return c.json(
+        { ok: false, error: 'Another deployment operation is already running in this namespace' },
+        409,
+      )
+    }
+
+    const resuming = await (async () => {
+      try {
+        await deploymentDao.appendLog(
+          id,
+          `[restore] User requested restore from backup ${backup.id} for agent "${backup.agentId}"`,
+          'info',
+        )
+        await container.resolve('cloudActivityDao').log({
+          userId: user.userId,
+          type: 'scale',
+          namespace: deployment.namespace,
+          meta: { deploymentId: id, operation: 'restore', backupId: backup.id, agentId },
+        })
+        return await deploymentDao.updateStatus(id, 'resuming')
+      } catch (err) {
+        await deploymentDao.releaseOperationLock(deployment).catch(() => {})
+        throw err
+      }
+    })()
+    runCloudRuntimeOperation(
+      container,
+      { deploymentId: id, backupId: backup.id, operation: 'restore' },
+      async () => {
+        try {
+          const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+          await backupDao.updatePhase(backup.id, 'restoring-pausing')
+          await scaleAgentSandboxAsync(deployment.namespace, backup.agentId, 0, kubeconfig)
+          await waitForAgentSandboxPaused({
+            namespace: deployment.namespace,
+            agentName: backup.agentId,
+            kubeconfig,
+            timeoutMs: 120_000,
+          })
+          await backupDao.updatePhase(backup.id, 'restoring-pvc')
+          if (backup.driver === 'volumeSnapshot') {
+            await restorePvcFromVolumeSnapshot({
+              namespace: deployment.namespace,
+              pvcName: backup.pvcName,
+              snapshotName: backup.snapshotName as string,
+              kubeconfig,
+              timeoutMs: 180_000,
+            })
+          } else {
+            const result = await restoreObjectStoreBackup({
+              container,
+              deployment,
+              backup,
+              kubeconfig,
+            })
+            await deploymentDao.appendLog(
+              id,
+              `[restore] Restored object archive ${backup.objectKey} (${result.archiveBytes} bytes) into PVC ${backup.pvcName}`,
+              'info',
+            )
+          }
+          await backupDao.updatePhase(backup.id, 'restoring-resuming')
+          await scaleAgentSandboxAsync(deployment.namespace, backup.agentId, 1, kubeconfig)
+          await waitForAgentSandboxReady({
+            namespace: deployment.namespace,
+            agentName: backup.agentId,
+            kubeconfig,
+            timeoutMs: 180_000,
+          })
+          await backupDao.updatePhase(backup.id, 'completed')
+          await deploymentDao.updateStatus(id, 'deployed')
+          await deploymentDao.appendLog(
+            id,
+            `[restore] Restored backup ${backup.id} for agent "${backup.agentId}"`,
+            'info',
+          )
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          await deploymentDao.appendLog(id, `[restore] Failed: ${message}`, 'error')
+          await deploymentDao.updateStatus(id, 'failed', message)
+          await backupDao.updatePhase(backup.id, 'restore-failed').catch(() => {})
+        } finally {
+          await deploymentDao.releaseOperationLock(deployment).catch(() => {})
+        }
+      },
+    )
+
+    return c.json(
+      {
+        ok: true,
+        backup,
+        status: 'resuming',
+        deployment: sanitizeCloudSaasDeployment(resuming ?? deployment),
+      },
+      202,
+    )
+  })
+
   /**
    * POST /api/cloud-saas/deployments
    * Create a new SaaS deployment. Runtime usage is billed by the worker.
@@ -2344,6 +3640,10 @@ export function createCloudSaasHandler(container: AppContainer) {
           runtimeEnvVars,
           input.runtimeContext,
         )
+        storedConfigSnapshot = attachDeploymentManifestMetadata(storedConfigSnapshot, {
+          template,
+          source: 'create',
+        })
       } catch (err) {
         const status =
           typeof (err as { status?: number }).status === 'number'
@@ -2508,6 +3808,181 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
     },
   )
+
+  /**
+   * GET /api/cloud-saas/deployments/:id/manifest
+   * Return the template link and deployed manifest metadata for a deployment.
+   */
+  h.get('/deployments/:id/manifest', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const dao = container.resolve('cloudDeploymentDao')
+    const deployment = await dao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+
+    const templateDao = container.resolve('cloudTemplateDao')
+    let linkedTemplateSlug: string | null = deploymentTemplateSlugCandidates(deployment)[0] ?? null
+    let template: CloudTemplateRecord | null = null
+    for (const candidate of deploymentTemplateSlugCandidates(deployment)) {
+      const found = await templateDao.findBySlug(candidate)
+      if (found && canUseTemplate(found, user.userId)) {
+        linkedTemplateSlug = candidate
+        template = found
+        break
+      }
+    }
+
+    return c.json(
+      buildDeploymentManifestResponse({
+        deployment: { ...deployment, templateSlug: linkedTemplateSlug },
+        template,
+        userId: user.userId,
+      }),
+    )
+  })
+
+  /**
+   * POST /api/cloud-saas/deployments/:id/template
+   * Save the deployed config snapshot as an editable template. Owned draft or
+   * rejected templates are updated in place; official, approved, or pending
+   * templates are forked to keep public catalog history immutable.
+   */
+  h.post('/deployments/:id/template', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const parsed = deploymentTemplateSyncSchema.safeParse(await c.req.json().catch(() => undefined))
+    if (!parsed.success) {
+      return c.json({ ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid request' }, 422)
+    }
+
+    const dao = container.resolve('cloudDeploymentDao')
+    const deployment = await dao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    if (!deployment.configSnapshot || typeof deployment.configSnapshot !== 'object') {
+      return c.json({ ok: false, error: 'Deployment has no config snapshot' }, 422)
+    }
+
+    const runtime = extractCloudSaasRuntime(deployment.configSnapshot)
+    const sourceContent = parsed.data?.content ?? runtime.configSnapshot
+    if (!sourceContent || !isRecord(sourceContent)) {
+      return c.json({ ok: false, error: 'Deployment has no deployable config snapshot' }, 422)
+    }
+
+    let content: Record<string, unknown>
+    try {
+      content = validateTemplateContentForWrite(sourceContent)
+    } catch (err) {
+      const status = (err as { status?: 413 | 422 }).status ?? 422
+      return c.json({ ok: false, error: (err as Error).message }, status)
+    }
+
+    const db = container.resolve('db')
+    const templateDao = container.resolve('cloudTemplateDao')
+    let linkedTemplateSlug: string | null = deploymentTemplateSlugCandidates(deployment)[0] ?? null
+    let currentTemplate: CloudTemplateRecord | null = null
+    for (const candidate of deploymentTemplateSlugCandidates(deployment)) {
+      const found = await templateDao.findBySlug(candidate)
+      if (found && canUseTemplate(found, user.userId)) {
+        linkedTemplateSlug = candidate
+        currentTemplate = found
+        break
+      }
+    }
+    const canUpdateInPlace =
+      currentTemplate &&
+      isTemplateOwnedByUser(currentTemplate, user.userId) &&
+      currentTemplate.source === 'community' &&
+      currentTemplate.reviewStatus !== 'approved' &&
+      currentTemplate.reviewStatus !== 'pending'
+
+    let template: CloudTemplateRecord | null = null
+    let action: 'updated' | 'forked'
+    if (canUpdateInPlace && currentTemplate) {
+      const [updated] = await db
+        .update(cloudTemplates)
+        .set({
+          name: parsed.data?.name ?? currentTemplate.name,
+          description:
+            parsed.data?.description !== undefined
+              ? parsed.data.description
+              : currentTemplate.description,
+          content,
+          ...(parsed.data?.tags !== undefined && { tags: parsed.data.tags }),
+          ...(parsed.data?.category !== undefined && { category: parsed.data.category }),
+          ...(parsed.data?.baseCost !== undefined && { baseCost: parsed.data.baseCost }),
+          updatedAt: new Date(),
+        })
+        .where(eq(cloudTemplates.id, currentTemplate.id))
+        .returning()
+      template = updated ?? currentTemplate
+      action = 'updated'
+    } else {
+      const baseSlug = slugifyTemplateSlug(
+        parsed.data?.name ?? linkedTemplateSlug ?? `${deployment.namespace}-${deployment.name}`,
+      )
+      let slug = baseSlug
+      for (let i = 2; await templateDao.findBySlug(slug); i += 1) {
+        slug = `${baseSlug}-${i}`
+      }
+
+      const [created] = await db
+        .insert(cloudTemplates)
+        .values({
+          slug,
+          name: parsed.data?.name ?? currentTemplate?.name ?? deployment.name,
+          description:
+            parsed.data?.description ??
+            currentTemplate?.description ??
+            `Editable template forked from deployment ${deployment.namespace}`,
+          content,
+          tags: parsed.data?.tags ?? currentTemplate?.tags ?? [],
+          source: 'community',
+          reviewStatus: 'draft',
+          submittedByUserId: user.userId,
+          authorId: user.userId,
+          category: parsed.data?.category ?? currentTemplate?.category ?? null,
+          baseCost: parsed.data?.baseCost ?? currentTemplate?.baseCost ?? null,
+        })
+        .returning()
+      template = created ?? null
+      action = 'forked'
+    }
+
+    if (!template) return c.json({ ok: false, error: 'Failed to save template' }, 500)
+
+    const previousManifest = readDeploymentManifestMetadata(deployment.configSnapshot)
+    const nextSnapshot = attachDeploymentManifestMetadata(deployment.configSnapshot, {
+      template,
+      source: 'template-sync',
+      previous: previousManifest,
+    })
+    await dao.updateConfigSnapshot(deployment.id, nextSnapshot)
+    if (deployment.templateSlug !== template.slug) {
+      await db
+        .update(cloudDeployments)
+        .set({ templateSlug: template.slug, updatedAt: new Date() })
+        .where(eq(cloudDeployments.id, deployment.id))
+    }
+
+    const activityDao = container.resolve('cloudActivityDao')
+    await activityDao.log({
+      userId: user.userId,
+      type: 'template_update',
+      namespace: deployment.namespace,
+      meta: { slug: template.slug, deploymentId: deployment.id, action },
+    })
+
+    return c.json({
+      ok: true,
+      action,
+      template,
+      manifest: buildDeploymentManifestResponse({
+        deployment: { ...deployment, templateSlug: template.slug, configSnapshot: nextSnapshot },
+        template,
+        userId: user.userId,
+      }),
+    })
+  })
 
   /**
    * DELETE /api/cloud-saas/deployments/:id
@@ -2695,6 +4170,16 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.post('/deployments/:id/redeploy', async (c) => {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
+    const parsedRedeploy = deploymentRedeploySchema.safeParse(
+      await c.req.json().catch(() => undefined),
+    )
+    if (!parsedRedeploy.success) {
+      return c.json(
+        { ok: false, error: parsedRedeploy.error.issues[0]?.message ?? 'Invalid request' },
+        422,
+      )
+    }
+    const redeployInput = parsedRedeploy.data ?? {}
     const dao = container.resolve('cloudDeploymentDao')
     const deployment = await dao.findById(id, user.userId)
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
@@ -2749,6 +4234,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
 
       const redeployEnvVars = { ...runtime.envVars }
+      Object.assign(redeployEnvVars, redeployInput.envVars ?? {})
       delete redeployEnvVars.SHADOW_USER_TOKEN
       delete redeployEnvVars.SHADOW_SERVER_URL
       delete redeployEnvVars.SHADOW_AGENT_SERVER_URL
@@ -2756,23 +4242,81 @@ export function createCloudSaasHandler(container: AppContainer) {
       for (const key of OFFICIAL_MODEL_PROXY_ENV_KEYS) delete redeployEnvVars[key]
 
       let configSnapshot: Record<string, unknown>
+      let templateForManifest: CloudTemplateRecord | null = null
+      const currentTemplateSlug =
+        currentDeployment.templateSlug ??
+        inferTemplateSlugFromConfigSnapshot(currentDeployment.configSnapshot) ??
+        inferTemplateSlugFromConfigSnapshot(deployment.configSnapshot)
+      let nextTemplateSlug = currentTemplateSlug
       try {
+        const templateDao = container.resolve('cloudTemplateDao')
+        const requestedTemplateSlug = redeployInput.templateSlug ?? currentTemplateSlug
+        nextTemplateSlug = requestedTemplateSlug ?? null
+        const useTemplate =
+          redeployInput.mode === 'template' ||
+          Boolean(redeployInput.templateSlug) ||
+          Boolean(redeployInput.configSnapshot)
+        let baseConfigSnapshot: Record<string, unknown>
+        if (redeployInput.configSnapshot) {
+          baseConfigSnapshot = validateTemplateContentForWrite(redeployInput.configSnapshot)
+          if (requestedTemplateSlug) {
+            const found = await templateDao.findBySlug(requestedTemplateSlug)
+            templateForManifest = found && canUseTemplate(found, user.userId) ? found : null
+          }
+        } else if (useTemplate) {
+          if (!requestedTemplateSlug) {
+            return c.json({ ok: false, error: 'Deployment has no linked template' }, 422)
+          }
+          const template = await templateDao.findBySlug(requestedTemplateSlug)
+          if (!template || !canUseTemplate(template, user.userId)) {
+            return c.json({ ok: false, error: 'Template not found or not approved' }, 404)
+          }
+          if (!isDeployableTemplateContent(template.content)) {
+            return c.json({ ok: false, error: 'Template is not deployable' }, 422)
+          }
+          templateForManifest = template
+          baseConfigSnapshot = applySafeDeploymentPreferences(
+            validateCloudSaasConfigSnapshot(template.content),
+            runtime.configSnapshot,
+          )
+          assertCloudTemplatePolicy(baseConfigSnapshot)
+        } else {
+          baseConfigSnapshot = runtime.configSnapshot
+          if (requestedTemplateSlug) {
+            const found = await templateDao.findBySlug(requestedTemplateSlug)
+            templateForManifest = found && canUseTemplate(found, user.userId) ? found : null
+          }
+        }
+
+        const allowedEnvKeys = new Set(await collectRuntimeEnvRequirements(baseConfigSnapshot))
+        const illegalEnvKey = Object.keys(redeployInput.envVars ?? {}).find(
+          (key) => isReservedRuntimeEnvKey(key) || !allowedEnvKeys.has(key),
+        )
+        if (illegalEnvKey) {
+          const reservedHint = RESERVED_RUNTIME_ENV_KEYS.has(illegalEnvKey)
+            ? 'reserved runtime env var'
+            : 'env var not declared by template'
+          return c.json({ ok: false, error: `Rejected ${reservedHint}: ${illegalEnvKey}` }, 422)
+        }
+
         const runtimeEnvVars = await resolveCreateRuntimeEnvVars(
           user.userId,
           redeployEnvVars,
-          runtime.configSnapshot,
+          baseConfigSnapshot,
           c.req.header('authorization'),
           requestOrigin(c),
           {
-            templateSlug: currentDeployment.templateSlug,
+            templateSlug: requestedTemplateSlug,
             namespace: currentDeployment.namespace,
-            modelProviderMode: readCloudStoreModelProviderMode(currentDeployment.configSnapshot),
+            modelProviderMode:
+              readCloudStoreModelProviderMode(redeployInput.configSnapshot) ??
+              readCloudStoreModelProviderMode(currentDeployment.configSnapshot),
           },
         )
         configSnapshot = prepareCloudSaasConfigSnapshot(
-          runtime.configSnapshot,
+          baseConfigSnapshot,
           runtimeEnvVars,
-          runtime.context,
+          redeployInput.runtimeContext ?? runtime.context,
         )
         if (runtime.provisionState) {
           const sanitizedProvisionState = sanitizeLegacyProvisionState(
@@ -2780,6 +4324,11 @@ export function createCloudSaasHandler(container: AppContainer) {
           ) as Parameters<typeof attachCloudSaasProvisionState>[1]
           configSnapshot = attachCloudSaasProvisionState(configSnapshot, sanitizedProvisionState)
         }
+        configSnapshot = attachDeploymentManifestMetadata(configSnapshot, {
+          template: templateForManifest,
+          source: useTemplate ? 'template-redeploy' : 'snapshot-redeploy',
+          previous: readDeploymentManifestMetadata(deployment.configSnapshot),
+        })
       } catch (err) {
         const status =
           typeof (err as { status?: number }).status === 'number'
@@ -2810,7 +4359,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       const [updated] = await db
         .update(cloudDeployments)
         .set({
-          templateSlug: deployment.templateSlug,
+          templateSlug: nextTemplateSlug,
           resourceTier: deployment.resourceTier,
           monthlyCost: deployment.monthlyCost,
           hourlyCost: deployment.hourlyCost,
@@ -2835,7 +4384,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         meta: {
           deploymentId: next.id,
           redeployFrom: deployment.id,
-          templateSlug: deployment.templateSlug,
+          templateSlug: nextTemplateSlug,
           resourceTier: deployment.resourceTier,
         },
       })
@@ -2860,20 +4409,16 @@ export function createCloudSaasHandler(container: AppContainer) {
     return c.body(
       new ReadableStream({
         async start(controller) {
-          const enc = new TextEncoder()
-          const send = (data: unknown, event?: string) =>
-            controller.enqueue(
-              enc.encode(`${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(data)}\n\n`),
-            )
+          const stream = createSseStreamWriter(controller, c.req.raw.signal)
 
           let sentCount = 0
           let lastStatus: string | null = null
 
           try {
-            while (!c.req.raw.signal.aborted) {
+            while (!stream.isClosed()) {
               const logs = await dao.getLogs(id)
               for (const log of logs.slice(sentCount)) {
-                send(
+                stream.send(
                   {
                     level: log.level,
                     message: log.message,
@@ -2886,17 +4431,17 @@ export function createCloudSaasHandler(container: AppContainer) {
 
               const current = await dao.findById(id, user.userId)
               if (!current) {
-                send({ error: 'Deployment not found' }, 'error')
+                stream.send({ error: 'Deployment not found' }, 'error')
                 break
               }
 
               if (current.status !== lastStatus) {
                 lastStatus = current.status
-                send({ status: current.status }, 'status')
+                stream.send({ status: current.status }, 'status')
               }
 
               if (isTerminalDeploymentStatus(current.status)) {
-                send(
+                stream.send(
                   {
                     status: current.status,
                     error: current.errorMessage,
@@ -2909,18 +4454,14 @@ export function createCloudSaasHandler(container: AppContainer) {
               await delay(1000)
             }
           } catch (err) {
-            send(
+            stream.send(
               {
                 error: err instanceof Error ? err.message : 'Failed to stream deployment logs',
               },
               'error',
             )
           } finally {
-            try {
-              controller.close()
-            } catch {
-              /* already closed */
-            }
+            stream.close()
           }
         },
       }),
@@ -3183,11 +4724,7 @@ export function createCloudSaasHandler(container: AppContainer) {
     return c.body(
       new ReadableStream({
         start(controller) {
-          const enc = new TextEncoder()
-          const send = (payload: unknown, event?: string) =>
-            controller.enqueue(
-              enc.encode(`${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(payload)}\n\n`),
-            )
+          const stream = createSseStreamWriter(controller, c.req.raw.signal)
 
           const { proc, cleanup } = spawnPodLogStream({
             namespace: deployment.namespace,
@@ -3208,7 +4745,7 @@ export function createCloudSaasHandler(container: AppContainer) {
             for (const line of lines) {
               if (line.length > 0) {
                 stdoutLines += 1
-                send({ stream: 'stdout', line })
+                stream.send({ stream: 'stdout', line })
               }
             }
           })
@@ -3216,7 +4753,7 @@ export function createCloudSaasHandler(container: AppContainer) {
             stderrText += chunk.toString('utf-8')
           })
           proc.on('close', async (code) => {
-            if (stdoutLines === 0 && code !== 0) {
+            if (!stream.isClosed() && stdoutLines === 0 && code !== 0) {
               try {
                 const snapshot = await readPodLogsAsync({
                   namespace: deployment.namespace,
@@ -3228,10 +4765,10 @@ export function createCloudSaasHandler(container: AppContainer) {
                   timeout: 5_000,
                 })
                 for (const line of snapshot.split('\n').filter(Boolean)) {
-                  send({ stream: 'stdout', line })
+                  stream.send({ stream: 'stdout', line })
                 }
               } catch {
-                send(
+                stream.send(
                   {
                     stream: 'stderr',
                     line: stderrText.trim() || 'i18n:deployments.liveLogsUnavailableTransport',
@@ -3239,31 +4776,33 @@ export function createCloudSaasHandler(container: AppContainer) {
                   'warning',
                 )
               }
-            } else if (stderrText.trim()) {
-              send({ stream: 'stderr', line: stderrText.trim() }, 'warning')
+            } else if (!stream.isClosed() && stderrText.trim()) {
+              stream.send({ stream: 'stderr', line: stderrText.trim() }, 'warning')
             }
-            send({ exitCode: code ?? 0 }, 'end')
+            stream.send({ exitCode: code ?? 0 }, 'end')
             cleanup()
-            controller.close()
+            stream.close()
           })
           proc.on('error', (err) => {
-            send({ error: err.message }, 'error')
+            stream.send({ error: err.message }, 'error')
             cleanup()
-            try {
-              controller.close()
-            } catch {
-              /* already closed */
-            }
+            stream.close()
           })
 
           // Abort handling: when client disconnects, kill kubectl.
-          c.req.raw.signal.addEventListener('abort', () => {
-            try {
-              proc.kill('SIGTERM')
-            } catch {
-              /* ignore */
-            }
-          })
+          c.req.raw.signal.addEventListener(
+            'abort',
+            () => {
+              cleanup()
+              stream.close()
+              try {
+                proc.kill('SIGTERM')
+              } catch {
+                /* ignore */
+              }
+            },
+            { once: true },
+          )
         },
       }),
       200,

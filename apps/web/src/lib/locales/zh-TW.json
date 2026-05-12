@@ -1505,6 +1505,18 @@
     "relistClaw": "重新上架",
     "relistSuccess": "Claw 已重新上架"
   },
+  "appCenter": {
+    "proxyBySubdomain": "透過子網域代理存取（支援絕對路徑、SSE 和 WebSocket）",
+    "cloudAutoResume": "應用存取時喚醒 Cloud Buddy",
+    "cloudAutoResumeDescription": "當此應用被開啟或透過代理存取時，Shadow 會先恢復關聯的 Cloud sandbox，再轉發流量。",
+    "cloudAutoResumeTargetsLabel": "Buddy 使用者 ID（可選）",
+    "cloudAutoResumeTargetsPlaceholder": "uuid-1, uuid-2",
+    "cloudAutoResumeTargetsHint": "留空時會從應用頻道成員推斷 Buddy；需要喚醒指定 Cloud Buddy 時可填寫 ID。",
+    "cloudRuntimeStartingTitle": "正在啟動 Cloud 執行環境",
+    "cloudRuntimeStartingDescription": "關聯的 Buddy sandbox 可能需要一點時間恢復，之後應用才會回應。",
+    "fullscreen": "全螢幕",
+    "exitFullscreen": "退出全螢幕"
+  },
   "friends": {
     "title": "好友",
     "sectionSocial": "社交",

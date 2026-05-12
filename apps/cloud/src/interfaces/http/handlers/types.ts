@@ -5,6 +5,7 @@
 import type { ActivityDao } from '../../../dao/activity.dao.js'
 import type { ConfigDao } from '../../../dao/config.dao.js'
 import type { DeploymentDao } from '../../../dao/deployment.dao.js'
+import type { DeploymentBackupDao } from '../../../dao/deployment-backup.dao.js'
 import type { DeploymentLogDao } from '../../../dao/deployment-log.dao.js'
 import type { EnvGroupDao } from '../../../dao/env-group.dao.js'
 import type { EnvVarDao } from '../../../dao/envvar.dao.js'
@@ -17,6 +18,7 @@ export interface HandlerContext {
   configDao: ConfigDao
   secretDao: SecretDao
   deploymentDao: DeploymentDao
+  deploymentBackupDao: DeploymentBackupDao
   deploymentLogDao: DeploymentLogDao
   activityDao: ActivityDao
   envVarDao: EnvVarDao

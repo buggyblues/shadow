@@ -26,6 +26,31 @@ export interface K8sExecResult {
   exitCode: number
 }
 
+export type AgentSandboxRuntimeState = 'running' | 'paused' | 'resuming' | 'failed' | 'unknown'
+
+export interface AgentSandboxStatus {
+  name: string
+  sandboxName: string
+  replicas: number
+  ready: boolean
+  runtimeState: AgentSandboxRuntimeState
+}
+
+export interface VolumeSnapshotReadyStatus {
+  ready: boolean
+  error?: string
+}
+
+function volumeSnapshotApiAvailableFromOutput(output: string): boolean {
+  return output
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .some(
+      (resource) =>
+        resource === 'volumesnapshots' || resource === 'volumesnapshots.snapshot.storage.k8s.io',
+    )
+}
+
 function isContainerizedRuntime(): boolean {
   return process.env.SHADOW_CONTAINERIZED === '1' || existsSync('/.dockerenv')
 }
@@ -48,6 +73,10 @@ function getHostLocalKubeconfigPaths(): string[] {
 function isHostLocalKubeconfigPath(candidate: string | undefined): boolean {
   if (!candidate) return false
   return getHostLocalKubeconfigPaths().includes(candidate)
+}
+
+function extractCurrentContext(kubeconfigYaml: string): string | undefined {
+  return kubeconfigYaml.match(/current-context:\s*(\S+)/)?.[1]
 }
 
 function resolveAmbientKubeconfig():
@@ -95,7 +124,11 @@ function createTempKubeconfig(
   writeFileSync(path, rewritten, { mode: 0o600 })
 
   const args = ['--kubeconfig', path]
-  if (includeAmbientContext && process.env.KUBECONFIG_CONTEXT?.trim()) {
+  if (
+    includeAmbientContext &&
+    !extractCurrentContext(rewritten) &&
+    process.env.KUBECONFIG_CONTEXT?.trim()
+  ) {
     args.push('--context', process.env.KUBECONFIG_CONTEXT.trim())
   }
 
@@ -203,8 +236,536 @@ function execKubectlAsync(args: string[], kubeconfig?: string, timeout = 3_000):
   )
 }
 
-function isNamespaceNotFound(error: unknown): boolean {
+function applyManifest(
+  manifest: Record<string, unknown>,
+  kubeconfig?: string,
+  timeout = 30_000,
+): void {
+  withKubeconfig(kubeconfig, (kubeArgs) => {
+    const result = spawnSync('kubectl', [...kubeArgs, 'apply', '-f', '-'], {
+      input: JSON.stringify(manifest),
+      encoding: 'utf-8',
+      timeout,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    if ((result.status ?? 1) !== 0) {
+      throw new Error(result.stderr || result.stdout || 'kubectl apply failed')
+    }
+  })
+}
+
+function isKubernetesNotFound(error: unknown): boolean {
   return error instanceof Error && /not found/i.test(error.message)
+}
+
+function isNamespaceNotFound(error: unknown): boolean {
+  return isKubernetesNotFound(error)
+}
+
+function conditionStatus(
+  conditions: Array<Record<string, unknown>> | undefined,
+  type: string,
+): string | undefined {
+  return conditions?.find((condition) => condition.type === type)?.status as string | undefined
+}
+
+function sandboxNameFromStatusRef(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.length > 0) return value
+  if (!value || typeof value !== 'object') return undefined
+  const name = (value as { name?: unknown }).name
+  return typeof name === 'string' && name.length > 0 ? name : undefined
+}
+
+export async function resolveSandboxNameAsync(
+  namespace: string,
+  agentName: string,
+  kubeconfig?: string,
+): Promise<string> {
+  try {
+    const output = await execKubectlAsync(
+      ['-n', namespace, 'get', 'sandboxclaim', agentName, '-o', 'json'],
+      kubeconfig,
+      10_000,
+    )
+    const claim = JSON.parse(output) as Record<string, unknown>
+    const status = (claim.status ?? {}) as Record<string, unknown>
+    const metadata = (claim.metadata ?? {}) as Record<string, unknown>
+    const annotations = (metadata.annotations ?? {}) as Record<string, string>
+    return (
+      sandboxNameFromStatusRef(status.sandboxName) ??
+      sandboxNameFromStatusRef(status.sandbox) ??
+      annotations['agents.x-k8s.io/sandbox'] ??
+      agentName
+    )
+  } catch {
+    return agentName
+  }
+}
+
+export async function getAgentSandboxStatusAsync(
+  namespace: string,
+  agentName: string,
+  kubeconfig?: string,
+): Promise<AgentSandboxStatus> {
+  const sandboxName = await resolveSandboxNameAsync(namespace, agentName, kubeconfig)
+  const output = await execKubectlAsync(
+    ['-n', namespace, 'get', 'sandbox', sandboxName, '-o', 'json'],
+    kubeconfig,
+    10_000,
+  )
+  const sandbox = JSON.parse(output) as Record<string, unknown>
+  const spec = (sandbox.spec ?? {}) as Record<string, unknown>
+  const status = (sandbox.status ?? {}) as Record<string, unknown>
+  const replicas = (spec.replicas as number | undefined) ?? 1
+  const ready = conditionStatus(status.conditions as Array<Record<string, unknown>>, 'Ready')
+  const runtimeState: AgentSandboxRuntimeState =
+    replicas === 0
+      ? 'paused'
+      : ready === 'True'
+        ? 'running'
+        : ready === 'False'
+          ? 'resuming'
+          : 'unknown'
+
+  return {
+    name: agentName,
+    sandboxName,
+    replicas,
+    ready: ready === 'True',
+    runtimeState,
+  }
+}
+
+async function getPodReadyState(
+  namespace: string,
+  podName: string,
+  kubeconfig?: string,
+): Promise<'absent' | 'terminating' | 'ready' | 'not-ready'> {
+  try {
+    const output = await execKubectlAsync(
+      ['-n', namespace, 'get', 'pod', podName, '-o', 'json'],
+      kubeconfig,
+      10_000,
+    )
+    const pod = JSON.parse(output) as Record<string, unknown>
+    const metadata = (pod.metadata ?? {}) as Record<string, unknown>
+    if (metadata.deletionTimestamp) return 'terminating'
+
+    const status = (pod.status ?? {}) as Record<string, unknown>
+    const phase = status.phase
+    const ready = conditionStatus(status.conditions as Array<Record<string, unknown>>, 'Ready')
+    return phase === 'Running' && ready === 'True' ? 'ready' : 'not-ready'
+  } catch (error) {
+    if (isKubernetesNotFound(error)) return 'absent'
+    throw error
+  }
+}
+
+export async function scaleAgentSandboxAsync(
+  namespace: string,
+  agentName: string,
+  replicas: 0 | 1,
+  kubeconfig?: string,
+): Promise<void> {
+  const sandboxName = await resolveSandboxNameAsync(namespace, agentName, kubeconfig)
+  await execKubectlAsync(
+    [
+      '-n',
+      namespace,
+      'patch',
+      'sandbox',
+      sandboxName,
+      '--type=merge',
+      '-p',
+      JSON.stringify({ spec: { replicas } }),
+    ],
+    kubeconfig,
+    30_000,
+  )
+}
+
+export async function waitForAgentSandboxReady(options: {
+  namespace: string
+  agentName: string
+  kubeconfig?: string
+  timeoutMs?: number
+  intervalMs?: number
+}): Promise<AgentSandboxStatus> {
+  const timeoutMs = options.timeoutMs ?? 180_000
+  const intervalMs = options.intervalMs ?? 2_000
+  const startedAt = Date.now()
+  let lastStatus: AgentSandboxStatus | null = null
+
+  while (Date.now() - startedAt < timeoutMs) {
+    lastStatus = await getAgentSandboxStatusAsync(
+      options.namespace,
+      options.agentName,
+      options.kubeconfig,
+    )
+    if (lastStatus.runtimeState === 'running') {
+      const podState = await getPodReadyState(
+        options.namespace,
+        lastStatus.sandboxName,
+        options.kubeconfig,
+      )
+      if (podState === 'ready') return lastStatus
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+
+  throw new Error(
+    `Timed out waiting for Sandbox "${lastStatus?.sandboxName ?? options.agentName}" to become Ready`,
+  )
+}
+
+export async function waitForAgentSandboxPaused(options: {
+  namespace: string
+  agentName: string
+  kubeconfig?: string
+  timeoutMs?: number
+  intervalMs?: number
+}): Promise<AgentSandboxStatus> {
+  const timeoutMs = options.timeoutMs ?? 120_000
+  const intervalMs = options.intervalMs ?? 2_000
+  const startedAt = Date.now()
+  let lastStatus: AgentSandboxStatus | null = null
+
+  while (Date.now() - startedAt < timeoutMs) {
+    lastStatus = await getAgentSandboxStatusAsync(
+      options.namespace,
+      options.agentName,
+      options.kubeconfig,
+    )
+    if (lastStatus.runtimeState === 'paused') {
+      const podState = await getPodReadyState(
+        options.namespace,
+        lastStatus.sandboxName,
+        options.kubeconfig,
+      )
+      if (podState === 'absent') return lastStatus
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+
+  throw new Error(
+    `Timed out waiting for Sandbox "${lastStatus?.sandboxName ?? options.agentName}" to pause`,
+  )
+}
+
+export async function createVolumeSnapshotBackupAsync(options: {
+  namespace: string
+  snapshotName: string
+  pvcName: string
+  volumeSnapshotClassName?: string
+  kubeconfig?: string
+}): Promise<void> {
+  await assertVolumeSnapshotApiAvailable(options.kubeconfig)
+
+  const spec: Record<string, unknown> = {
+    source: { persistentVolumeClaimName: options.pvcName },
+  }
+  if (options.volumeSnapshotClassName) {
+    spec.volumeSnapshotClassName = options.volumeSnapshotClassName
+  }
+
+  applyManifest(
+    {
+      apiVersion: 'snapshot.storage.k8s.io/v1',
+      kind: 'VolumeSnapshot',
+      metadata: {
+        name: options.snapshotName,
+        namespace: options.namespace,
+        labels: {
+          app: 'shadowob-cloud',
+          'shadowob.cloud/backup-driver': 'volumeSnapshot',
+        },
+      },
+      spec,
+    },
+    options.kubeconfig,
+  )
+}
+
+export async function isVolumeSnapshotApiAvailable(options?: {
+  kubeconfig?: string
+}): Promise<boolean> {
+  const output = await execKubectlAsync(
+    ['api-resources', '--api-group', 'snapshot.storage.k8s.io', '-o', 'name'],
+    options?.kubeconfig,
+    10_000,
+  )
+  return volumeSnapshotApiAvailableFromOutput(output)
+}
+
+export type PvcVolumeSnapshotCapability = {
+  storageClassName: string | null
+  provisioner: string | null
+  isCsi: boolean
+  volumeSnapshotClassName: string | null
+}
+
+function isCsiProvisioner(provisioner: string): boolean {
+  return /(^|[./-])csi([./-]|$)/i.test(provisioner)
+}
+
+async function getPvcStorageProvisioner(options: {
+  namespace: string
+  pvcName: string
+  kubeconfig?: string
+}): Promise<{
+  storageClassName: string | null
+  provisioner: string | null
+  isCsi: boolean
+}> {
+  const pvcOutput = await execKubectlAsync(
+    ['-n', options.namespace, 'get', 'pvc', options.pvcName, '-o', 'json'],
+    options.kubeconfig,
+    10_000,
+  )
+  const pvc = JSON.parse(pvcOutput) as Record<string, unknown>
+  const spec = (pvc.spec ?? {}) as Record<string, unknown>
+  const storageClassName =
+    typeof spec.storageClassName === 'string' && spec.storageClassName.trim()
+      ? spec.storageClassName.trim()
+      : null
+  if (!storageClassName) {
+    return { storageClassName: null, provisioner: null, isCsi: false }
+  }
+
+  const storageClassOutput = await execKubectlAsync(
+    ['get', 'storageclass', storageClassName, '-o', 'json'],
+    options.kubeconfig,
+    10_000,
+  )
+  const storageClass = JSON.parse(storageClassOutput) as Record<string, unknown>
+  const provisioner = String(storageClass.provisioner ?? '')
+  return { storageClassName, provisioner, isCsi: isCsiProvisioner(provisioner) }
+}
+
+export async function isPvcBackedByCsiProvisioner(options: {
+  namespace: string
+  pvcName: string
+  kubeconfig?: string
+}): Promise<boolean> {
+  return (await getPvcStorageProvisioner(options)).isCsi
+}
+
+export async function getPvcVolumeSnapshotCapability(options: {
+  namespace: string
+  pvcName: string
+  kubeconfig?: string
+}): Promise<PvcVolumeSnapshotCapability> {
+  const storage = await getPvcStorageProvisioner(options)
+  if (!storage.isCsi || !storage.provisioner) {
+    return { ...storage, volumeSnapshotClassName: null }
+  }
+
+  const snapshotClassesOutput = await execKubectlAsync(
+    ['get', 'volumesnapshotclass', '-o', 'json'],
+    options.kubeconfig,
+    10_000,
+  )
+  const snapshotClasses = JSON.parse(snapshotClassesOutput) as {
+    items?: Array<{
+      driver?: unknown
+      metadata?: { name?: unknown; annotations?: Record<string, unknown> }
+    }>
+  }
+  const matchingClasses = (snapshotClasses.items ?? []).filter(
+    (item) => item.driver === storage.provisioner && typeof item.metadata?.name === 'string',
+  )
+  const defaultClass = matchingClasses.find(
+    (item) =>
+      item.metadata?.annotations?.['snapshot.storage.kubernetes.io/is-default-class'] === 'true',
+  )
+  const singleMatchingClass = matchingClasses.length === 1 ? matchingClasses[0] : null
+  const selectedClass = defaultClass ?? singleMatchingClass
+
+  return {
+    ...storage,
+    volumeSnapshotClassName:
+      typeof selectedClass?.metadata?.name === 'string' ? selectedClass.metadata.name : null,
+  }
+}
+
+export async function resolveVolumeSnapshotClassForPvc(options: {
+  namespace: string
+  pvcName: string
+  kubeconfig?: string
+}): Promise<string | null> {
+  return (await getPvcVolumeSnapshotCapability(options)).volumeSnapshotClassName
+}
+
+async function assertVolumeSnapshotApiAvailable(kubeconfig?: string): Promise<void> {
+  if (await isVolumeSnapshotApiAvailable({ kubeconfig })) return
+  throw new Error(
+    'VolumeSnapshot API is not available on this cluster. Install the CSI snapshot CRDs/controller or use a restic/kopia backup driver.',
+  )
+}
+
+export async function getVolumeSnapshotReadyStatus(options: {
+  namespace: string
+  snapshotName: string
+  kubeconfig?: string
+}): Promise<VolumeSnapshotReadyStatus> {
+  const output = await execKubectlAsync(
+    ['-n', options.namespace, 'get', 'volumesnapshot', options.snapshotName, '-o', 'json'],
+    options.kubeconfig,
+    10_000,
+  )
+  const snapshot = JSON.parse(output) as Record<string, unknown>
+  const status = (snapshot.status ?? {}) as Record<string, unknown>
+  return {
+    ready: status.readyToUse === true,
+    error:
+      (status.error as { message?: string } | undefined)?.message ??
+      (status.errorMessage as string | undefined),
+  }
+}
+
+export async function waitForVolumeSnapshotReady(options: {
+  namespace: string
+  snapshotName: string
+  kubeconfig?: string
+  timeoutMs?: number
+  intervalMs?: number
+}): Promise<VolumeSnapshotReadyStatus> {
+  const timeoutMs = options.timeoutMs ?? 180_000
+  const intervalMs = options.intervalMs ?? 2_000
+  const startedAt = Date.now()
+  let lastStatus: VolumeSnapshotReadyStatus = { ready: false }
+
+  while (Date.now() - startedAt < timeoutMs) {
+    lastStatus = await getVolumeSnapshotReadyStatus(options)
+    if (lastStatus.ready) return lastStatus
+    if (lastStatus.error) throw new Error(lastStatus.error)
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+
+  throw new Error(`Timed out waiting for VolumeSnapshot "${options.snapshotName}" to be ready`)
+}
+
+async function readPvcRestoreSpec(options: {
+  namespace: string
+  pvcName: string
+  kubeconfig?: string
+}): Promise<{
+  accessModes: string[]
+  storage: string
+  storageClassName?: string
+}> {
+  const output = await execKubectlAsync(
+    ['-n', options.namespace, 'get', 'pvc', options.pvcName, '-o', 'json'],
+    options.kubeconfig,
+    10_000,
+  )
+  const pvc = JSON.parse(output) as Record<string, unknown>
+  const spec = (pvc.spec ?? {}) as Record<string, unknown>
+  const resources = (spec.resources ?? {}) as Record<string, unknown>
+  const requests = (resources.requests ?? {}) as Record<string, unknown>
+  return {
+    accessModes: Array.isArray(spec.accessModes)
+      ? spec.accessModes.map((mode) => String(mode))
+      : ['ReadWriteOnce'],
+    storage: typeof requests.storage === 'string' ? requests.storage : '5Gi',
+    ...(typeof spec.storageClassName === 'string'
+      ? { storageClassName: spec.storageClassName }
+      : {}),
+  }
+}
+
+async function waitForPvcBound(options: {
+  namespace: string
+  pvcName: string
+  kubeconfig?: string
+  timeoutMs?: number
+  intervalMs?: number
+}): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 180_000
+  const intervalMs = options.intervalMs ?? 2_000
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const output = await execKubectlAsync(
+      ['-n', options.namespace, 'get', 'pvc', options.pvcName, '-o', 'json'],
+      options.kubeconfig,
+      10_000,
+    )
+    const pvc = JSON.parse(output) as Record<string, unknown>
+    const status = (pvc.status ?? {}) as Record<string, unknown>
+    if (status.phase === 'Bound') return
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+
+  throw new Error(`Timed out waiting for PVC "${options.pvcName}" to bind`)
+}
+
+export async function restorePvcFromVolumeSnapshot(options: {
+  namespace: string
+  pvcName: string
+  snapshotName: string
+  kubeconfig?: string
+  accessModes?: string[]
+  storage?: string
+  storageClassName?: string
+  timeoutMs?: number
+}): Promise<void> {
+  await assertVolumeSnapshotApiAvailable(options.kubeconfig)
+
+  const existing = await readPvcRestoreSpec(options).catch(() => null)
+  const accessModes = options.accessModes ?? existing?.accessModes ?? ['ReadWriteOnce']
+  const storage = options.storage ?? existing?.storage ?? '5Gi'
+  const storageClassName = options.storageClassName ?? existing?.storageClassName
+
+  await execKubectlAsync(
+    [
+      '-n',
+      options.namespace,
+      'delete',
+      'pvc',
+      options.pvcName,
+      '--ignore-not-found=true',
+      '--wait=true',
+      '--timeout=90s',
+    ],
+    options.kubeconfig,
+    120_000,
+  )
+
+  const spec: Record<string, unknown> = {
+    accessModes,
+    resources: { requests: { storage } },
+    dataSource: {
+      name: options.snapshotName,
+      kind: 'VolumeSnapshot',
+      apiGroup: 'snapshot.storage.k8s.io',
+    },
+  }
+  if (storageClassName) spec.storageClassName = storageClassName
+
+  applyManifest(
+    {
+      apiVersion: 'v1',
+      kind: 'PersistentVolumeClaim',
+      metadata: {
+        name: options.pvcName,
+        namespace: options.namespace,
+        labels: {
+          app: 'shadowob-cloud',
+          'shadowob.cloud/restored-from-snapshot': options.snapshotName,
+        },
+      },
+      spec,
+    },
+    options.kubeconfig,
+  )
+
+  await waitForPvcBound({
+    namespace: options.namespace,
+    pvcName: options.pvcName,
+    kubeconfig: options.kubeconfig,
+    timeoutMs: options.timeoutMs,
+  })
 }
 
 export function listPods(namespace: string, kubeconfig?: string): K8sPodSummary[] {
@@ -402,6 +963,114 @@ export function execInPodAsync(opts: {
           })
         })
       }),
+  )
+}
+
+export function execInPodWithInputAsync(opts: {
+  namespace: string
+  pod: string
+  command: string[]
+  input: Buffer | string
+  container?: string
+  kubeconfig?: string
+  timeout?: number
+}): Promise<K8sExecResult> {
+  return withKubeconfigAsync(
+    opts.kubeconfig,
+    (kubeArgs) =>
+      new Promise((resolve) => {
+        const args = [...kubeArgs, '-n', opts.namespace, 'exec', '-i', opts.pod]
+        if (opts.container) args.push('-c', opts.container)
+        args.push('--', ...opts.command)
+
+        const proc = spawn('kubectl', args, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+        let stdout = ''
+        let stderr = ''
+        let timedOut = false
+        const timeout = opts.timeout ?? 60_000
+        const timer = setTimeout(() => {
+          timedOut = true
+          proc.kill('SIGTERM')
+        }, timeout)
+
+        proc.stdout?.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString('utf-8')
+        })
+        proc.stderr?.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString('utf-8')
+        })
+        proc.on('error', (err) => {
+          clearTimeout(timer)
+          resolve({
+            stdout,
+            stderr: stderr || err.message,
+            exitCode: 1,
+          })
+        })
+        proc.on('close', (code) => {
+          clearTimeout(timer)
+          resolve({
+            stdout,
+            stderr,
+            exitCode: timedOut ? 124 : (code ?? 1),
+          })
+        })
+
+        proc.stdin?.end(opts.input)
+      }),
+  )
+}
+
+export async function applyKubernetesManifestAsync(
+  manifest: Record<string, unknown>,
+  kubeconfig?: string,
+  timeout = 30_000,
+): Promise<void> {
+  applyManifest(manifest, kubeconfig, timeout)
+}
+
+export async function deleteKubernetesResourceAsync(options: {
+  namespace: string
+  kind: string
+  name: string
+  kubeconfig?: string
+  timeoutMs?: number
+}): Promise<void> {
+  await execKubectlAsync(
+    [
+      '-n',
+      options.namespace,
+      'delete',
+      options.kind,
+      options.name,
+      '--ignore-not-found=true',
+      '--wait=true',
+      `--timeout=${Math.ceil((options.timeoutMs ?? 30_000) / 1000)}s`,
+    ],
+    options.kubeconfig,
+    (options.timeoutMs ?? 30_000) + 5_000,
+  )
+}
+
+export async function waitForPodReadyAsync(options: {
+  namespace: string
+  pod: string
+  kubeconfig?: string
+  timeoutMs?: number
+}): Promise<void> {
+  await execKubectlAsync(
+    [
+      '-n',
+      options.namespace,
+      'wait',
+      `pod/${options.pod}`,
+      '--for=condition=Ready',
+      `--timeout=${Math.ceil((options.timeoutMs ?? 60_000) / 1000)}s`,
+    ],
+    options.kubeconfig,
+    (options.timeoutMs ?? 60_000) + 5_000,
   )
 }
 

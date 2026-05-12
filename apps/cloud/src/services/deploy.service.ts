@@ -5,7 +5,7 @@
  * This is the primary service for deploying agents to Kubernetes.
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { loadKubeconfigPath } from '../cluster/kubeconfig.js'
 import type { CloudConfig } from '../config/schema.js'
@@ -89,6 +89,24 @@ export interface DestroyOptions {
   isCancelled?: () => boolean
 }
 
+function deploymentReadyTimeoutMs(): number {
+  const raw = Number(process.env.CLOUD_DEPLOYMENT_READY_TIMEOUT_MS)
+  return Number.isFinite(raw) && raw > 0 ? raw : 20 * 60_000
+}
+
+function isAgentSandboxBackend(config: CloudConfig): boolean {
+  return (config.deployments?.backend ?? 'agent-sandbox') === 'agent-sandbox'
+}
+
+function readKubeconfigForRuntimeWait(kubeConfigPath?: string): string | undefined {
+  if (!kubeConfigPath) return undefined
+  try {
+    return readFileSync(kubeConfigPath, 'utf8')
+  } catch {
+    return undefined
+  }
+}
+
 function resolveStackName(namespace: string, stack?: string): string {
   return stack ?? `dev-${namespace}`
 }
@@ -152,9 +170,26 @@ async function ensureBuiltInPluginsLoaded(): Promise<void> {
   }
 }
 
+function readKubeconfigCurrentContext(kubeConfigPath: string | undefined): string | undefined {
+  if (!kubeConfigPath) return undefined
+  try {
+    return readFileSync(kubeConfigPath, 'utf8').match(/current-context:\s*(\S+)/)?.[1]
+  } catch {
+    return undefined
+  }
+}
+
 function summarizeK8sTarget(options: DeployOptions, kubeConfigPath: string | undefined): string {
   const cluster = options.cluster ?? 'ambient'
-  const context = options.k8sContext ?? process.env.KUBECONFIG_CONTEXT ?? 'rancher-desktop'
+  const envContext = process.env.KUBECONFIG_CONTEXT?.trim()
+  const currentContext = readKubeconfigCurrentContext(kubeConfigPath)
+  const context =
+    options.k8sContext ??
+    (currentContext && envContext && envContext !== currentContext
+      ? `${currentContext} (mounted current-context; env KUBECONFIG_CONTEXT=${envContext} ignored)`
+      : currentContext) ??
+    envContext ??
+    'rancher-desktop'
   const kubeconfig = kubeConfigPath ?? process.env.KUBECONFIG ?? '~/.kube/config'
   return `Kubernetes target: cluster=${cluster} context=${context} kubeconfig=${kubeconfig}`
 }
@@ -466,6 +501,28 @@ export class DeployService {
         agentCount: agents.length,
         config: resolved,
         provisionState: currentProvisionState ?? undefined,
+      }
+    }
+
+    if (isAgentSandboxBackend(resolved)) {
+      const readyTimeoutMs = deploymentReadyTimeoutMs()
+      const waitKubeconfig = readKubeconfigForRuntimeWait(kubeConfigPath)
+      this.logger.step('Waiting for agent-sandbox workloads to become Ready...')
+      emit('Waiting for agent-sandbox workloads to become Ready...\n')
+      for (const agent of agents) {
+        if (options.isCancelled?.()) {
+          throw new Error('Deployment cancelled before workload readiness')
+        }
+        this.logger.info(`Waiting for Sandbox "${agent.id}" in namespace "${namespace}"`)
+        emit(`Waiting for Sandbox "${agent.id}" in namespace "${namespace}"\n`)
+        await this.k8s.waitForAgentSandboxReady({
+          namespace,
+          agentName: agent.id,
+          kubeconfig: waitKubeconfig,
+          timeoutMs: readyTimeoutMs,
+        })
+        this.logger.info(`Sandbox "${agent.id}" is Ready`)
+        emit(`Sandbox "${agent.id}" is Ready\n`)
       }
     }
 

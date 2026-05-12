@@ -1,12 +1,20 @@
-import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or } from 'drizzle-orm'
 import { type Database, workerLockClient } from '../db'
 import { cloudDeploymentLogs, cloudDeployments } from '../db/schema'
 
-const ACTIVE_OPERATION_STATUSES = ['pending', 'deploying', 'destroying', 'cancelling'] as const
+const ACTIVE_OPERATION_STATUSES = [
+  'pending',
+  'deploying',
+  'destroying',
+  'cancelling',
+  'resuming',
+] as const
 const CURRENT_INSTANCE_STATUSES = [
   'pending',
   'deploying',
   'deployed',
+  'paused',
+  'resuming',
   'destroying',
   'cancelling',
 ] as const
@@ -112,6 +120,10 @@ export class CloudDeploymentDao {
     return this.db.select().from(cloudDeployments).where(eq(cloudDeployments.status, 'deployed'))
   }
 
+  async listPaused() {
+    return this.db.select().from(cloudDeployments).where(eq(cloudDeployments.status, 'paused'))
+  }
+
   async listHourlyBillable() {
     return this.db
       .select()
@@ -140,6 +152,14 @@ export class CloudDeploymentDao {
           ),
         ),
       )
+      .orderBy(desc(cloudDeployments.updatedAt))
+  }
+
+  async listResumingUpdatedBefore(cutoff: Date) {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(and(eq(cloudDeployments.status, 'resuming'), lt(cloudDeployments.updatedAt, cutoff)))
       .orderBy(desc(cloudDeployments.updatedAt))
   }
 
@@ -298,16 +318,30 @@ export class CloudDeploymentDao {
       | 'pending'
       | 'deploying'
       | 'deployed'
+      | 'paused'
+      | 'resuming'
       | 'failed'
       | 'destroying'
       | 'destroyed'
       | 'cancelling',
     errorMessage?: string | null,
   ) {
+    const now = new Date()
+    const activityPatch =
+      status === 'deployed' || status === 'resuming' ? { lastActiveAt: now } : {}
     const result = await this.db
       .update(cloudDeployments)
-      .set({ status, errorMessage: errorMessage ?? null, updatedAt: new Date() })
+      .set({ status, errorMessage: errorMessage ?? null, updatedAt: now, ...activityPatch })
       .where(eq(cloudDeployments.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async failIfStatus(id: string, status: CloudDeploymentStatus, errorMessage: string) {
+    const result = await this.db
+      .update(cloudDeployments)
+      .set({ status: 'failed' as CloudDeploymentStatus, errorMessage, updatedAt: new Date() })
+      .where(and(eq(cloudDeployments.id, id), eq(cloudDeployments.status, status)))
       .returning()
     return result[0] ?? null
   }
@@ -320,8 +354,18 @@ export class CloudDeploymentDao {
         agentCount,
         errorMessage: null,
         lastHourlyBilledAt,
+        lastActiveAt: lastHourlyBilledAt,
         updatedAt: new Date(),
       })
+      .where(eq(cloudDeployments.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async recordActivity(id: string, at = new Date()) {
+    const result = await this.db
+      .update(cloudDeployments)
+      .set({ lastActiveAt: at, updatedAt: new Date() })
       .where(eq(cloudDeployments.id, id))
       .returning()
     return result[0] ?? null

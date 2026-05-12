@@ -1456,6 +1456,127 @@ class ShadowClient:
     def cancel_diy_cloud_run(self, run_id: str) -> dict[str, Any]:
         return self._post(f"/api/cloud-saas/diy/runs/{run_id}/cancel")
 
+    # ── Cloud SaaS Deployment Runtime ─────────────────────────────────
+
+    def get_cloud_deployment_manifest(self, deployment_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-saas/deployments/{deployment_id}/manifest")
+
+    def sync_cloud_deployment_template(
+        self,
+        deployment_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        content: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+        category: str | None = None,
+        base_cost: int | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if name is not None:
+            payload["name"] = name
+        if description is not None:
+            payload["description"] = description
+        if content is not None:
+            payload["content"] = content
+        if tags is not None:
+            payload["tags"] = tags
+        if category is not None:
+            payload["category"] = category
+        if base_cost is not None:
+            payload["baseCost"] = base_cost
+        return self._post(
+            f"/api/cloud-saas/deployments/{deployment_id}/template", json=payload
+        )
+
+    def redeploy_cloud_deployment(
+        self,
+        deployment_id: str,
+        *,
+        mode: str | None = None,
+        template_slug: str | None = None,
+        config_snapshot: dict[str, Any] | None = None,
+        env_vars: dict[str, str] | None = None,
+        runtime_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if mode is not None:
+            payload["mode"] = mode
+        if template_slug is not None:
+            payload["templateSlug"] = template_slug
+        if config_snapshot is not None:
+            payload["configSnapshot"] = config_snapshot
+        if env_vars is not None:
+            payload["envVars"] = env_vars
+        if runtime_context is not None:
+            payload["runtimeContext"] = runtime_context
+        return self._post(
+            f"/api/cloud-saas/deployments/{deployment_id}/redeploy", json=payload
+        )
+
+    def pause_cloud_deployment(
+        self, deployment_id: str, *, agent_id: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if agent_id is not None:
+            payload["agentId"] = agent_id
+        return self._post(
+            f"/api/cloud-saas/deployments/{deployment_id}/pause", json=payload
+        )
+
+    def resume_cloud_deployment(
+        self, deployment_id: str, *, agent_id: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if agent_id is not None:
+            payload["agentId"] = agent_id
+        return self._post(
+            f"/api/cloud-saas/deployments/{deployment_id}/resume", json=payload
+        )
+
+    def list_cloud_deployment_backups(
+        self, deployment_id: str, *, agent_id: str | None = None
+    ) -> dict[str, Any]:
+        params = {"agentId": agent_id} if agent_id is not None else None
+        return self._get(
+            f"/api/cloud-saas/deployments/{deployment_id}/backups", params=params
+        )
+
+    def create_cloud_deployment_backup(
+        self,
+        deployment_id: str,
+        *,
+        agent_id: str | None = None,
+        driver: str | None = None,
+        retention_days: int | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if agent_id is not None:
+            payload["agentId"] = agent_id
+        if driver is not None:
+            payload["driver"] = driver
+        if retention_days is not None:
+            payload["retentionDays"] = retention_days
+        return self._post(
+            f"/api/cloud-saas/deployments/{deployment_id}/backups", json=payload
+        )
+
+    def restore_cloud_deployment_backup(
+        self,
+        deployment_id: str,
+        *,
+        agent_id: str | None = None,
+        backup_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if agent_id is not None:
+            payload["agentId"] = agent_id
+        if backup_id is not None:
+            payload["backupId"] = backup_id
+        return self._post(
+            f"/api/cloud-saas/deployments/{deployment_id}/restore", json=payload
+        )
+
     # ── Cloud SaaS Provider Gateway ────────────────────────────────────
 
     def list_cloud_provider_catalogs(self) -> dict[str, Any]:

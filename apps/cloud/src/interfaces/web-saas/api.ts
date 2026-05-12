@@ -16,15 +16,32 @@ function getAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+async function buildApiError(res: Response, method: string, path: string): Promise<Error> {
+  let detail = ''
+  try {
+    const body = (await res.clone().json()) as { error?: unknown; message?: unknown }
+    const value = body.error ?? body.message
+    if (typeof value === 'string') detail = value
+  } catch {
+    detail = await res
+      .clone()
+      .text()
+      .catch(() => '')
+  }
+
+  const suffix = detail.trim() ? `: ${detail.trim()}` : ''
+  return new Error(`${method} ${path} failed: ${res.status}${suffix}`)
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { headers: getAuthHeaders() })
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
+  if (!res.ok) throw await buildApiError(res, 'GET', path)
   return res.json() as Promise<T>
 }
 
 async function getRoot<T>(path: string): Promise<T> {
   const res = await fetch(path, { headers: getAuthHeaders() })
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
+  if (!res.ok) throw await buildApiError(res, 'GET', path)
   return res.json() as Promise<T>
 }
 
@@ -34,7 +51,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`)
+  if (!res.ok) throw await buildApiError(res, 'POST', path)
   return res.json() as Promise<T>
 }
 
@@ -44,7 +61,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`)
+  if (!res.ok) throw await buildApiError(res, 'PUT', path)
   return res.json() as Promise<T>
 }
 
@@ -53,7 +70,7 @@ async function del<T>(path: string): Promise<T> {
     method: 'DELETE',
     headers: getAuthHeaders(),
   })
-  if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`)
+  if (!res.ok) throw await buildApiError(res, 'DELETE', path)
   return res.json() as Promise<T>
 }
 
@@ -91,6 +108,8 @@ export interface SaasDeployment {
     | 'deploying'
     | 'cancelling'
     | 'deployed'
+    | 'paused'
+    | 'resuming'
     | 'failed'
     | 'destroying'
     | 'destroyed'
@@ -102,6 +121,7 @@ export interface SaasDeployment {
   monthlyCost: number | null
   hourlyCost: number
   lastHourlyBilledAt: string | null
+  lastActiveAt: string
   saasMode: boolean
   shadowServerId?: string | null
   createdAt: string
@@ -113,6 +133,83 @@ export interface SaasDeployment {
     createdAt: string | null
     updatedAt: string | null
   } | null
+}
+
+export interface SaasDeploymentManifest {
+  deploymentId: string
+  namespace: string
+  name: string
+  templateSlug: string | null
+  template: {
+    id: string
+    slug: string
+    name: string
+    description: string | null
+    source: string
+    reviewStatus: string
+    updatedAt: string | null
+    ownedByUser: boolean
+    editable: boolean
+    contentHash: string | null
+  } | null
+  manifest: {
+    schemaVersion: number
+    revision: number
+    manifestId: string
+    source: string
+    generatedAt: string | null
+    configHash: string | null
+    manifestHash: string | null
+    templateSlug: string | null
+    templateId: string | null
+    templateName: string | null
+    templateSource: string | null
+    templateReviewStatus: string | null
+    templateUpdatedAt: string | null
+    templateContentHash: string | null
+  } | null
+  drift: {
+    status: 'up-to-date' | 'template-updated' | 'missing-template' | 'unlinked' | 'unknown'
+    templateAvailable: boolean
+    templateChanged: boolean
+    deployedTemplateHash: string | null
+    currentTemplateHash: string | null
+    configHash: string | null
+  }
+  configSnapshot: Record<string, unknown> | null
+}
+
+export interface SaasDeploymentTemplateSyncResult {
+  ok: boolean
+  action: 'updated' | 'forked'
+  template: SaasTemplate
+  manifest: SaasDeploymentManifest
+}
+
+export interface SaasRedeployOptions {
+  mode?: 'snapshot' | 'template'
+  templateSlug?: string
+  configSnapshot?: Record<string, unknown>
+  envVars?: Record<string, string>
+  runtimeContext?: { locale?: string; timezone?: string }
+}
+
+export interface SaasDeploymentBackup {
+  id: string
+  deploymentId: string
+  namespace: string
+  agentId: string
+  sandboxName: string | null
+  pvcName: string
+  driver: 'volumeSnapshot' | 'restic' | string
+  snapshotName: string | null
+  objectKey: string | null
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'expired' | string
+  phase: string
+  error: string | null
+  expiresAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface SaasEnvVar {
@@ -328,8 +425,58 @@ export const saasApi = {
       del<{ ok: boolean; taskId?: string; status?: SaasDeployment['status'] }>(
         `/deployments/${encodeURIComponent(id)}`,
       ),
-    redeploy: (id: string) =>
-      post<SaasDeployment>(`/deployments/${encodeURIComponent(id)}/redeploy`, {}),
+    pause: (id: string, body?: { agentId?: string }) =>
+      post<{ ok: boolean; status: SaasDeployment['status']; deployment: SaasDeployment }>(
+        `/deployments/${encodeURIComponent(id)}/pause`,
+        body ?? {},
+      ),
+    resume: (id: string, body?: { agentId?: string }) =>
+      post<{ ok: boolean; status: SaasDeployment['status']; deployment: SaasDeployment }>(
+        `/deployments/${encodeURIComponent(id)}/resume`,
+        body ?? {},
+      ),
+    backups: (id: string, params?: { agentId?: string }) => {
+      const qs = new URLSearchParams()
+      if (params?.agentId) qs.set('agentId', params.agentId)
+      const query = qs.toString()
+      return get<{ deploymentId: string; backups: SaasDeploymentBackup[] }>(
+        `/deployments/${encodeURIComponent(id)}/backups${query ? `?${query}` : ''}`,
+      )
+    },
+    createBackup: (
+      id: string,
+      body?: { agentId?: string; driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number },
+    ) =>
+      post<{ ok: boolean; backup: SaasDeploymentBackup }>(
+        `/deployments/${encodeURIComponent(id)}/backups`,
+        body ?? {},
+      ),
+    restore: (id: string, body?: { agentId?: string; backupId?: string }) =>
+      post<{
+        ok: boolean
+        backup: SaasDeploymentBackup
+        status: SaasDeployment['status']
+        deployment: SaasDeployment
+      }>(`/deployments/${encodeURIComponent(id)}/restore`, body ?? {}),
+    manifest: (id: string) =>
+      get<SaasDeploymentManifest>(`/deployments/${encodeURIComponent(id)}/manifest`),
+    syncTemplate: (
+      id: string,
+      body?: {
+        name?: string
+        description?: string
+        content?: Record<string, unknown>
+        tags?: string[]
+        category?: string
+        baseCost?: number
+      },
+    ) =>
+      post<SaasDeploymentTemplateSyncResult>(
+        `/deployments/${encodeURIComponent(id)}/template`,
+        body ?? {},
+      ),
+    redeploy: (id: string, options?: SaasRedeployOptions) =>
+      post<SaasDeployment>(`/deployments/${encodeURIComponent(id)}/redeploy`, options ?? {}),
     costs: () => get<CostOverviewSummary>('/deployments/costs'),
     namespaceCosts: (id: string) =>
       get<NamespaceCostSummary>(`/deployments/${encodeURIComponent(id)}/costs`),

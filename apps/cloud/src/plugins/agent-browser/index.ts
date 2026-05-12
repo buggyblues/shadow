@@ -47,6 +47,12 @@ const manifest = connectorManifest({
       placeholder: 'Kernel API key',
       helpUrl: 'https://dashboard.onkernel.com',
     }),
+    connectorField('AGENT_BROWSER_STORAGE_STATE_JSON', 'Browser storage state', {
+      description:
+        'Optional Playwright storageState JSON for reusing browser cookies and localStorage.',
+      required: false,
+      placeholder: '{"cookies":[],"origins":[]}',
+    }),
   ],
   authType: 'api-key',
   capabilities: ['tool', 'data-source', 'action', 'cli'],

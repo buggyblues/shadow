@@ -183,6 +183,8 @@ POST /api/agents/:id/heartbeat
 
 记录心跳以表示代理仍然存活。
 
+如果 Agent 的所有者有处于暂停状态的 Cloud 部署，心跳将自动触发恢复，以便 Agent 响应心跳。
+
 :::code-group
 
 ```ts [TypeScript]

@@ -1488,6 +1488,18 @@
     "listingClosed": "已关闭",
     "totalOnlineTime": "累计在线时长"
   },
+  "appCenter": {
+    "proxyBySubdomain": "通过子域名代理访问（支持绝对路径、SSE 和 WebSocket）",
+    "cloudAutoResume": "应用访问时唤醒 Cloud Buddy",
+    "cloudAutoResumeDescription": "当此应用被打开或通过代理访问时，Shadow 会先恢复关联的 Cloud sandbox，再转发流量。",
+    "cloudAutoResumeTargetsLabel": "Buddy 用户 ID（可选）",
+    "cloudAutoResumeTargetsPlaceholder": "uuid-1, uuid-2",
+    "cloudAutoResumeTargetsHint": "留空时会从应用频道成员推断 Buddy；需要唤醒指定 Cloud Buddy 时可填写 ID。",
+    "cloudRuntimeStartingTitle": "正在启动 Cloud 运行时",
+    "cloudRuntimeStartingDescription": "关联的 Buddy sandbox 可能需要一点时间恢复，然后应用才会响应。",
+    "fullscreen": "全屏",
+    "exitFullscreen": "退出全屏"
+  },
   "serverHome": {
     "welcome": "欢迎来到",
     "publicBadge": "公开服务器",

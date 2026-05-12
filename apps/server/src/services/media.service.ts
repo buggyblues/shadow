@@ -185,6 +185,65 @@ export class MediaService {
     return this.minioClient.presignedGetObject(bucketName, key, 3600)
   }
 
+  async putPrivateObject(
+    key: string,
+    file: Buffer,
+    contentType = 'application/octet-stream',
+  ): Promise<{ contentRef: string; size: number }> {
+    if (!this.minioClient) {
+      throw Object.assign(new Error('File storage not available'), { status: 503 })
+    }
+    const normalizedKey = key.replace(/^\/+/, '')
+    if (!normalizedKey || normalizedKey.includes('..')) {
+      throw Object.assign(new Error('Invalid object key'), { status: 400 })
+    }
+
+    const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
+    await this.minioClient.putObject(bucketName, normalizedKey, file, file.length, {
+      'Content-Type': contentType,
+    })
+    return { contentRef: `/${bucketName}/${normalizedKey}`, size: file.length }
+  }
+
+  async getPrivateObjectBuffer(keyOrContentRef: string): Promise<Buffer | null> {
+    if (!this.minioClient) return null
+    const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
+    const prefix = `/${bucketName}/`
+    const key = keyOrContentRef.startsWith(prefix)
+      ? keyOrContentRef.slice(prefix.length)
+      : keyOrContentRef.replace(/^\/+/, '')
+    if (!key || key.includes('..')) return null
+
+    try {
+      const stream = await this.minioClient.getObject(bucketName, key)
+      const chunks: Buffer[] = []
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk))
+      }
+      return Buffer.concat(chunks)
+    } catch {
+      return null
+    }
+  }
+
+  async deletePrivateObject(keyOrContentRef: string): Promise<boolean> {
+    if (!this.minioClient) return false
+    const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
+    const prefix = `/${bucketName}/`
+    const key = keyOrContentRef.startsWith(prefix)
+      ? keyOrContentRef.slice(prefix.length)
+      : keyOrContentRef.replace(/^\/+/, '')
+    if (!key || key.includes('..')) return false
+
+    try {
+      await this.minioClient.removeObject(bucketName, key)
+      return true
+    } catch (err) {
+      this.deps.logger.warn({ err, key }, 'Failed to delete private media object')
+      return false
+    }
+  }
+
   normalizeMediaUrl(mediaUrl: string | null | undefined): string | null {
     if (!mediaUrl) return null
     return parseSignedMediaContentRef(mediaUrl) ?? mediaUrl

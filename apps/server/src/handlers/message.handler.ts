@@ -2,6 +2,7 @@ import { zValidator } from '@hono/zod-validator'
 import type { MessageMention } from '@shadowob/shared'
 import { Hono } from 'hono'
 import type { AppContainer } from '../container'
+import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deployment-autoresume'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
   createThreadSchema,
@@ -203,6 +204,15 @@ export function createMessageHandler(container: AppContainer) {
         content: preparedInput.content,
       })
       const message = await messageService.send(channelId, user.userId, preparedInput)
+      const messageMentions = Array.isArray(message.metadata?.mentions)
+        ? (message.metadata.mentions as MessageMention[])
+        : []
+      triggerCloudDeploymentAutoResumeForMentions({
+        container,
+        mentions: messageMentions,
+        reason: 'message mention',
+        logContext: { channelId },
+      })
 
       // Emit WS event so all connected clients (including bots) see the message
       try {
@@ -257,16 +267,13 @@ export function createMessageHandler(container: AppContainer) {
 
       try {
         const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
-        const mentions = Array.isArray(message.metadata?.mentions)
-          ? (message.metadata.mentions as MessageMention[])
-          : []
         await mentionService.createMentionNotifications({
           messageId: message.id,
           channelId,
           authorId: user.userId,
           authorName: senderName,
           content: message.content,
-          mentions,
+          mentions: messageMentions,
         })
       } catch {
         /* notification push is non-critical */
@@ -567,6 +574,15 @@ export function createMessageHandler(container: AppContainer) {
       mentions: preparedInput.mentions,
       metadata: normalizedMetadata,
     })
+    const messageMentions = Array.isArray(message.metadata?.mentions)
+      ? (message.metadata.mentions as MessageMention[])
+      : []
+    triggerCloudDeploymentAutoResumeForMentions({
+      container,
+      mentions: messageMentions,
+      reason: 'thread message mention',
+      logContext: { threadId: id, channelId: thread.channelId },
+    })
     const messageId = message.id
     const messageContent = message.content ?? preparedInput.content
     if (!messageId) {
@@ -607,16 +623,13 @@ export function createMessageHandler(container: AppContainer) {
 
     try {
       const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
-      const mentions = Array.isArray(message.metadata?.mentions)
-        ? (message.metadata.mentions as MessageMention[])
-        : []
       await mentionService.createMentionNotifications({
         messageId,
         channelId: thread.channelId,
         authorId: user.userId,
         authorName: senderName,
         content: messageContent,
-        mentions,
+        mentions: messageMentions,
       })
     } catch {
       /* thread mention notification is non-critical */

@@ -173,7 +173,6 @@ function LogsTab({ namespace, id }: { namespace: string; id: string }) {
     URL.revokeObjectURL(url)
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on every new line batch
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight
@@ -848,7 +847,7 @@ export function DeploymentDetailPage() {
           </div>
 
           <Tabs value={activeTab} onChange={setActiveTab}>
-            <DashboardTabsList tabs={tabs} />
+            <DashboardTabsList tabs={tabs} activeId={activeTab} onSelect={setActiveTab} />
           </Tabs>
         </>
       }
