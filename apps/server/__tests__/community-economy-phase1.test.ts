@@ -4,7 +4,7 @@ import { ProductService } from '../src/services/product.service'
 describe('Community economy phase 1 catalog invariants', () => {
   it('updates existing SKUs, inserts new SKUs, and soft-deactivates omitted SKUs', async () => {
     const productDao = {
-      update: vi.fn(async () => ({ id: 'product-1' })),
+      updateByShopIdAndId: vi.fn(async () => ({ id: 'product-1' })),
       findById: vi.fn(async () => ({ id: 'product-1', shopId: 'shop-1' })),
     }
     const productMediaDao = {
@@ -42,7 +42,8 @@ describe('Community economy phase 1 catalog invariants', () => {
 
   it('archives products instead of physically deleting them', async () => {
     const productDao = {
-      delete: vi.fn(async () => undefined),
+      findById: vi.fn(async () => ({ id: 'product-1', shopId: 'shop-1' })),
+      deleteByShopIdAndId: vi.fn(async () => undefined),
     }
     const service = new ProductService({
       productDao: productDao as any,
@@ -52,7 +53,7 @@ describe('Community economy phase 1 catalog invariants', () => {
 
     await service.deleteProduct('product-1')
 
-    expect(productDao.delete).toHaveBeenCalledWith('product-1')
+    expect(productDao.deleteByShopIdAndId).toHaveBeenCalledWith('shop-1', 'product-1')
   })
 })
 

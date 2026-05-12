@@ -28,6 +28,7 @@ function createMockAgentDao(overrides = {}) {
     updateStatus: vi.fn(),
     updateConfig: vi.fn(),
     delete: vi.fn(),
+    deleteByUserIdAndId: vi.fn(),
     createBotUser: vi.fn(),
     ...overrides,
   }
@@ -536,6 +537,7 @@ describe('AgentService', () => {
       const agent = {
         id: 'agent-1',
         userId: 'bot-user-1',
+        ownerId: 'owner-1',
         status: 'running',
       }
 
@@ -566,7 +568,7 @@ describe('AgentService', () => {
       const agentDao = createMockAgentDao({
         findById: vi.fn().mockResolvedValue(agent),
         updateStatus: vi.fn().mockResolvedValue({ ...agent, status: 'stopped' }),
-        delete: vi.fn(),
+        deleteByUserIdAndId: vi.fn(),
       })
       const userDao = createMockUserDao()
       const logger = createMockLogger()
@@ -579,7 +581,8 @@ describe('AgentService', () => {
 
       await service.delete('agent-1')
       expect(agentDao.updateStatus).toHaveBeenCalledWith('agent-1', 'stopped')
-      expect(agentDao.delete).toHaveBeenCalledWith('agent-1')
+      expect(agentDao.deleteByUserIdAndId).toHaveBeenCalledWith('owner-1', 'agent-1')
+      expect(userDao.delete).toHaveBeenCalledWith('bot-user-1')
     })
   })
 })

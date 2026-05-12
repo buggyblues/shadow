@@ -4,17 +4,21 @@ import { ModelProxyService } from '../src/services/model-proxy.service'
 
 describe('ModelProxyService', () => {
   const previousEnv: Record<string, string | undefined> = {}
-  const walletService = {
+  const ledgerService = {
     debit: vi.fn(),
-    refund: vi.fn(),
+    credit: vi.fn(),
     settleReservedMicros: vi.fn(),
+  }
+  const safeHttpClient = {
+    fetch: vi.fn(),
   }
   const userDao = {
     findById: vi.fn(),
   }
   const service = new ModelProxyService({
-    walletService: walletService as never,
+    ledgerService: ledgerService as never,
     userDao: userDao as never,
+    safeHttpClient: safeHttpClient as never,
   })
 
   beforeEach(() => {
@@ -45,7 +49,7 @@ describe('ModelProxyService', () => {
     process.env.JWT_SECRET = 'model-proxy-test-secret'
     process.env.SHADOW_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
     process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-key'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://example.com/v1'
     process.env.SHADOW_MODEL_PROXY_SHRIMP_PER_CNY = '20'
     process.env.SHADOW_MODEL_PROXY_SHRIMP_MICROS_PER_COIN = '1000000'
     process.env.SHADOW_MODEL_PROXY_INPUT_CACHE_HIT_CNY_PER_MILLION = '0.02'
@@ -59,13 +63,14 @@ describe('ModelProxyService', () => {
     delete process.env.SHADOW_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP
     delete process.env.SHADOW_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP
     userDao.findById.mockResolvedValue({ id: 'user-1' })
-    walletService.debit.mockResolvedValue(998)
-    walletService.refund.mockResolvedValue(999)
-    walletService.settleReservedMicros.mockResolvedValue({
+    ledgerService.debit.mockResolvedValue(998)
+    ledgerService.credit.mockResolvedValue(999)
+    ledgerService.settleReservedMicros.mockResolvedValue({
       chargedAmount: 0,
       pendingMicros: 20_000,
       balanceAfter: 999,
     })
+    safeHttpClient.fetch.mockImplementation(async (url, init) => fetch(url, init))
   })
 
   afterEach(() => {
@@ -148,7 +153,7 @@ describe('ModelProxyService', () => {
     expect(response.status).toBe(200)
     const fetchMock = vi.mocked(fetch)
     const [, init] = fetchMock.mock.calls[0]!
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://model.example/v1/chat/completions')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://example.com/v1/chat/completions')
     expect(init?.headers).toMatchObject({
       Authorization: 'Bearer official-upstream-key',
     })
@@ -156,14 +161,16 @@ describe('ModelProxyService', () => {
       model: 'deepseek-v4-flash',
       messages: [{ role: 'user', content: 'hello' }],
     })
-    expect(walletService.debit).toHaveBeenCalledWith(
-      'user-1',
-      1,
-      expect.any(String),
-      'model_proxy',
-      'Official model usage reserve (deepseek-v4-flash)',
+    expect(ledgerService.debit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        amount: 1,
+        type: 'purchase',
+        referenceType: 'model_proxy',
+        note: 'Official model usage reserve (deepseek-v4-flash)',
+      }),
     )
-    expect(walletService.settleReservedMicros).toHaveBeenCalledWith(
+    expect(ledgerService.settleReservedMicros).toHaveBeenCalledWith(
       'user-1',
       40_000,
       1,
@@ -176,7 +183,7 @@ describe('ModelProxyService', () => {
 
   it('returns a recharge chat completion before calling upstream when balance is insufficient', async () => {
     const token = signModelProxyToken({ userId: 'user-1', namespace: 'play-bmad' })
-    walletService.debit.mockRejectedValueOnce(
+    ledgerService.debit.mockRejectedValueOnce(
       Object.assign(new Error('Insufficient balance'), {
         status: 402,
         code: 'WALLET_INSUFFICIENT_BALANCE',
@@ -239,14 +246,16 @@ describe('ModelProxyService', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(walletService.debit).toHaveBeenCalledWith(
-      'user-1',
-      2,
-      expect.any(String),
-      'model_proxy',
-      'Official model usage reserve (deepseek-v4-flash)',
+    expect(ledgerService.debit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        amount: 2,
+        type: 'purchase',
+        referenceType: 'model_proxy',
+        note: 'Official model usage reserve (deepseek-v4-flash)',
+      }),
     )
-    expect(walletService.settleReservedMicros).toHaveBeenCalledWith(
+    expect(ledgerService.settleReservedMicros).toHaveBeenCalledWith(
       'user-1',
       2_000_000,
       2,
@@ -288,7 +297,7 @@ describe('ModelProxyService', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(walletService.settleReservedMicros).toHaveBeenCalledWith(
+    expect(ledgerService.settleReservedMicros).toHaveBeenCalledWith(
       'user-1',
       400_000,
       1,
@@ -327,12 +336,14 @@ describe('ModelProxyService', () => {
     expect(response.status).toBe(503)
     expect(text).toContain('MODEL_PROXY_PROVIDER_AUTH_FAILED')
     expect(text).not.toContain('72ea')
-    expect(walletService.refund).toHaveBeenCalledWith(
-      'user-1',
-      1,
-      expect.any(String),
-      'model_proxy',
-      'Official model usage refund (deepseek-v4-flash)',
+    expect(ledgerService.credit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        amount: 1,
+        type: 'refund',
+        referenceType: 'model_proxy',
+        note: 'Official model usage refund (deepseek-v4-flash)',
+      }),
     )
   })
 
@@ -366,12 +377,14 @@ describe('ModelProxyService', () => {
     expect(text).toContain('Official model provider is busy')
     expect(text).not.toContain('official-prod')
     expect(text).not.toContain('provider_quota_exceeded')
-    expect(walletService.refund).toHaveBeenCalledWith(
-      'user-1',
-      1,
-      expect.any(String),
-      'model_proxy',
-      'Official model usage refund (deepseek-v4-flash)',
+    expect(ledgerService.credit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        amount: 1,
+        type: 'refund',
+        referenceType: 'model_proxy',
+        note: 'Official model usage refund (deepseek-v4-flash)',
+      }),
     )
   })
 
@@ -414,7 +427,7 @@ describe('ModelProxyService', () => {
 
     expect(response.status).toBe(503)
     expect(body.error.code).toBe('MODEL_PROXY_PROVIDER_UNCONFIGURED')
-    expect(walletService.debit).not.toHaveBeenCalled()
+    expect(ledgerService.debit).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
   })
 })
