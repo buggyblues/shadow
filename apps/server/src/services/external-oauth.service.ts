@@ -1,6 +1,7 @@
 import { hash } from 'bcryptjs'
 import type { OAuthAccountDao } from '../dao/oauth-account.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { randomFixedDigits } from '../lib/id'
 import { type JwtPayload, signAccessToken, signRefreshToken } from '../lib/jwt'
 import type { MembershipService } from './membership.service'
@@ -60,6 +61,7 @@ export class ExternalOAuthService {
       userDao: UserDao
       membershipService: MembershipService
       taskCenterService: TaskCenterService
+      safeHttpClient: SafeHttpClient
     },
   ) {}
 
@@ -98,7 +100,7 @@ export class ExternalOAuthService {
     const callbackUrl = `${OAUTH_BASE_URL}/api/auth/oauth/${provider}/callback`
 
     // Exchange code for token
-    const tokenRes = await fetch(config.tokenUrl, {
+    const tokenRes = await this.deps.safeHttpClient.fetch(config.tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -178,7 +180,7 @@ export class ExternalOAuthService {
       throw Object.assign(new Error('Google OAuth not configured'), { status: 501 })
     }
 
-    const tokenInfoRes = await fetch(
+    const tokenInfoRes = await this.deps.safeHttpClient.fetch(
       `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
     )
     if (!tokenInfoRes.ok) {
@@ -221,7 +223,7 @@ export class ExternalOAuthService {
   private async fetchProfile(provider: string, accessToken: string): Promise<OAuthProfile> {
     const config = getProviderConfig(provider)
 
-    const res = await fetch(config.profileUrl, {
+    const res = await this.deps.safeHttpClient.fetch(config.profileUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
@@ -264,7 +266,7 @@ export class ExternalOAuthService {
   }
 
   private async fetchGitHubEmail(accessToken: string): Promise<string | null> {
-    const res = await fetch('https://api.github.com/user/emails', {
+    const res = await this.deps.safeHttpClient.fetch('https://api.github.com/user/emails', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',

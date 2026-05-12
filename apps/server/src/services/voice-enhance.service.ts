@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { logger } from '../lib/logger'
 
 /**
@@ -92,7 +93,7 @@ const PROVIDER_CONFIGS: Record<string, { baseUrl: string; defaultModel: string }
 export class VoiceEnhanceService {
   private config: VoiceEnhanceConfig | null = null
 
-  constructor() {
+  constructor(private deps: { safeHttpClient: SafeHttpClient }) {
     this.loadConfigFromEnv()
   }
 
@@ -295,7 +296,7 @@ Respond in JSON format:
       switch (provider) {
         case 'openai':
         case 'custom':
-          response = await fetch(`${finalBaseUrl}/chat/completions`, {
+          response = await this.deps.safeHttpClient.fetch(`${finalBaseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -317,7 +318,7 @@ Respond in JSON format:
           break
 
         case 'anthropic':
-          response = await fetch(`${finalBaseUrl}/messages`, {
+          response = await this.deps.safeHttpClient.fetch(`${finalBaseUrl}/messages`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -341,29 +342,32 @@ Respond in JSON format:
           break
 
         case 'alibaba':
-          response = await fetch(`${finalBaseUrl}/services/aigc/text-generation/generation`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
+          response = await this.deps.safeHttpClient.fetch(
+            `${finalBaseUrl}/services/aigc/text-generation/generation`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: finalModel,
+                input: {
+                  messages: [
+                    { role: 'system', content: JSON.parse(promptData).system },
+                    { role: 'user', content: JSON.parse(promptData).user },
+                  ],
+                },
+                parameters: {
+                  temperature,
+                  max_tokens: maxTokens,
+                  result_format: 'json',
+                },
+              }),
+              redirect: 'manual',
+              signal: controller.signal,
             },
-            body: JSON.stringify({
-              model: finalModel,
-              input: {
-                messages: [
-                  { role: 'system', content: JSON.parse(promptData).system },
-                  { role: 'user', content: JSON.parse(promptData).user },
-                ],
-              },
-              parameters: {
-                temperature,
-                max_tokens: maxTokens,
-                result_format: 'json',
-              },
-            }),
-            redirect: 'manual',
-            signal: controller.signal,
-          })
+          )
           break
 
         default:

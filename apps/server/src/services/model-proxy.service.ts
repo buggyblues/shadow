@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { UserDao } from '../dao/user.dao'
+import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { logger } from '../lib/logger'
 import { isModelProxyToken, verifyModelProxyToken } from '../lib/model-proxy-token'
 import type { WalletService } from './wallet.service'
@@ -464,6 +465,7 @@ export class ModelProxyService {
     private deps: {
       walletService: WalletService
       userDao: UserDao
+      safeHttpClient: SafeHttpClient
     },
   ) {}
 
@@ -644,7 +646,7 @@ export class ModelProxyService {
     const upstreamBody = buildUpstreamBody(body, model)
     let response: Response
     try {
-      response = await fetch(`${upstream.baseUrl}/chat/completions`, {
+      response = await this.deps.safeHttpClient.fetch(`${upstream.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           Accept: body.stream === true ? 'text/event-stream' : 'application/json',

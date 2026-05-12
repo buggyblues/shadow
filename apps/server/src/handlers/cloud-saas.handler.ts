@@ -16,15 +16,11 @@ import {
   extractRequiredEnvVars,
   getPvcVolumeSnapshotCapability,
   isVolumeSnapshotApiAvailable,
-  listPodsAsync,
   listProviderCatalogs,
   loadCloudConfigSchema,
   prepareCloudSaasConfigSnapshot,
-  readPodLogsAsync,
-  restorePvcFromVolumeSnapshot,
   sanitizeCloudSaasDeployment,
   scaleAgentSandboxAsync,
-  spawnPodLogStream,
   summarizeCloudConfigValidation,
   validateCloudSaasConfigSnapshot,
   waitForAgentSandboxPaused,
@@ -37,6 +33,7 @@ import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { cloudDeployments, cloudTemplates } from '../db/schema'
+import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { requestCloudDeploymentCancellation } from '../lib/cloud-deployment-processor'
 import { extractShadowProvisionTarget } from '../lib/cloud-shadow-target'
 import { validateJsonLimits } from '../lib/json-limits'
@@ -924,6 +921,7 @@ function validateProviderProfileConfigForSave(
 }
 
 async function testProviderConnection(
+  safeHttpClient: SafeHttpClient,
   provider: ProviderCatalogView,
   values: Map<string, string>,
   config: Record<string, unknown>,
@@ -968,7 +966,11 @@ async function testProviderConnection(
       headers.Authorization = `Bearer ${apiKey.value}`
     }
 
-    const response = await fetch(url, { headers, redirect: 'manual', signal: controller.signal })
+    const response = await safeHttpClient.fetch(url, {
+      headers,
+      redirect: 'manual',
+      signal: controller.signal,
+    })
     if (response.ok) {
       return {
         ok: true,
@@ -981,7 +983,15 @@ async function testProviderConnection(
     if (response.status === 404) {
       const model = normalizeProviderProfileModels(config)[0]?.id
       if (model) {
-        return await testProviderModelRequest(provider, baseUrl, apiKey, config, model, checkedAt)
+        return await testProviderModelRequest(
+          safeHttpClient,
+          provider,
+          baseUrl,
+          apiKey,
+          config,
+          model,
+          checkedAt,
+        )
       }
     }
     return {
@@ -1004,6 +1014,7 @@ async function testProviderConnection(
 }
 
 async function testProviderModelRequest(
+  safeHttpClient: SafeHttpClient,
   provider: ProviderCatalogView,
   baseUrl: string,
   apiKey: { key: string; value: string },
@@ -1055,7 +1066,7 @@ async function testProviderModelRequest(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8_000)
   try {
-    const response = await fetch(url, {
+    const response = await safeHttpClient.fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -1101,6 +1112,7 @@ function providerProfileApiFormat(
 }
 
 async function discoverProviderProfileModels(
+  safeHttpClient: SafeHttpClient,
   provider: ProviderCatalogView,
   values: Map<string, string>,
   config: Record<string, unknown>,
@@ -1147,7 +1159,11 @@ async function discoverProviderProfileModels(
       }
     }
 
-    const response = await fetch(url, { headers, redirect: 'manual', signal: controller.signal })
+    const response = await safeHttpClient.fetch(url, {
+      headers,
+      redirect: 'manual',
+      signal: controller.signal,
+    })
     if (!response.ok) {
       await response.text().catch(() => '')
       return {
@@ -1662,8 +1678,16 @@ async function findRunningAgentPod(options: {
   namespace: string
   agentId: string
   kubeconfig?: string
+  kubernetesOpsGateway: {
+    listPods: (
+      namespace: string,
+      kubeconfig?: string,
+    ) => Promise<Array<{ name: string; status: string }>>
+  }
 }) {
-  const pods = await listPodsAsync(options.namespace, options.kubeconfig).catch(() => [])
+  const pods = await options.kubernetesOpsGateway
+    .listPods(options.namespace, options.kubeconfig)
+    .catch(() => [])
   return (
     pods.find((pod) => pod.name === options.agentId && pod.status === 'Running') ??
     pods.find((pod) => pod.name.includes(options.agentId) && pod.status === 'Running') ??
@@ -1750,6 +1774,7 @@ async function createObjectStoreBackup(options: {
     namespace: options.deployment.namespace,
     agentId: options.backup.agentId,
     kubeconfig: options.kubeconfig,
+    kubernetesOpsGateway: options.container.resolve('kubernetesOpsGateway'),
   })
   if (runningPod) {
     try {
@@ -3516,7 +3541,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           })
           await backupDao.updatePhase(backup.id, 'restoring-pvc')
           if (backup.driver === 'volumeSnapshot') {
-            await restorePvcFromVolumeSnapshot({
+            await container.resolve('kubernetesOpsGateway').restorePvcFromSnapshot({
               namespace: deployment.namespace,
               pvcName: backup.pvcName,
               snapshotName: backup.snapshotName as string,
@@ -4570,7 +4595,8 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     if (agentParam || podParam) {
       const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
-      const pods = await listPodsAsync(deployment.namespace, kubeconfig)
+      const k8sGateway = container.resolve('kubernetesOpsGateway')
+      const pods = await k8sGateway.listPods(deployment.namespace, kubeconfig)
       let podName = podParam
       if (!podName && agentParam) {
         podName = pods.find((pod) => pod.name.includes(agentParam))?.name
@@ -4586,24 +4612,26 @@ export function createCloudSaasHandler(container: AppContainer) {
       try {
         const requestedTail = page * limit
         const allLines = (
-          await readPodLogsAsync({
-            namespace: deployment.namespace,
-            pod: podName,
-            container: 'openclaw',
-            tail: requestedTail,
-            timestamps: true,
-            kubeconfig,
-            timeout: 5_000,
-          }).catch(() =>
-            readPodLogsAsync({
+          await k8sGateway
+            .readPodLogs({
               namespace: deployment.namespace,
               pod: podName,
+              container: 'openclaw',
               tail: requestedTail,
               timestamps: true,
               kubeconfig,
               timeout: 5_000,
-            }),
-          )
+            })
+            .catch(() =>
+              k8sGateway.readPodLogs({
+                namespace: deployment.namespace,
+                pod: podName,
+                tail: requestedTail,
+                timestamps: true,
+                kubeconfig,
+                timeout: 5_000,
+              }),
+            )
         )
           .split('\n')
           .map((line) => line.trimEnd())
@@ -4689,7 +4717,9 @@ export function createCloudSaasHandler(container: AppContainer) {
     const deployment = await dao.findById(id, user.userId)
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
-    const pods = await listPodsAsync(deployment.namespace, kubeconfig)
+    const pods = await container
+      .resolve('kubernetesOpsGateway')
+      .listPods(deployment.namespace, kubeconfig)
     return c.json({ pods })
   })
 
@@ -4715,7 +4745,8 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     // If no pod is specified, pick the first running pod in the namespace.
     let pod: string | undefined = podParam
-    const pods = await listPodsAsync(deployment.namespace, kubeconfig)
+    const k8sGateway = container.resolve('kubernetesOpsGateway')
+    const pods = await k8sGateway.listPods(deployment.namespace, kubeconfig)
     if (!pod && agentParam) {
       pod = pods.find((item) => item.name.includes(agentParam))?.name ?? undefined
     }
@@ -4731,7 +4762,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         start(controller) {
           const stream = createSseStreamWriter(controller, c.req.raw.signal)
 
-          const { proc, cleanup } = spawnPodLogStream({
+          const { proc, cleanup } = k8sGateway.streamPodLogs({
             namespace: deployment.namespace,
             pod: pod as string,
             container: containerParam ?? 'openclaw',
@@ -4760,7 +4791,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           proc.on('close', async (code) => {
             if (!stream.isClosed() && stdoutLines === 0 && code !== 0) {
               try {
-                const snapshot = await readPodLogsAsync({
+                const snapshot = await k8sGateway.readPodLogs({
                   namespace: deployment.namespace,
                   pod: pod as string,
                   container: containerParam ?? 'openclaw',
@@ -5221,7 +5252,8 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!provider) return c.json({ ok: false, error: 'Unknown provider' }, 422)
 
     const config = parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson))
-    return c.json(await testProviderConnection(provider, values, config))
+    const safeHttpClient = container.resolve('safeHttpClient')
+    return c.json(await testProviderConnection(safeHttpClient, provider, values, config))
   })
 
   /**
@@ -5252,7 +5284,8 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!provider) return c.json({ ok: false, error: 'Unknown provider' }, 422)
 
     const config = parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson))
-    const result = await discoverProviderProfileModels(provider, values, config)
+    const safeHttpClient = container.resolve('safeHttpClient')
+    const result = await discoverProviderProfileModels(safeHttpClient, provider, values, config)
     if (!result.ok) return c.json(result, result.status && result.status >= 400 ? 502 : 200)
 
     const nextConfig = {

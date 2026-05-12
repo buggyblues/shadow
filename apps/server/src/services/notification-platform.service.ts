@@ -1,5 +1,6 @@
 import type { NotificationChannel, NotificationDao } from '../dao/notification.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { logger } from '../lib/logger'
 import type { NotificationItem } from './notification.service'
 import type { NotificationDeliveryService } from './notification-delivery.service'
@@ -57,6 +58,7 @@ export class NotificationPlatformService {
       notificationDao: NotificationDao
       notificationDeliveryService: NotificationDeliveryService
       userDao: UserDao
+      safeHttpClient: SafeHttpClient
     },
   ) {}
 
@@ -184,7 +186,7 @@ export class NotificationPlatformService {
       data: payload,
       sound: 'default',
     }))
-    const res = await fetch('https://exp.host/--/api/v2/push/send', {
+    const res = await this.deps.safeHttpClient.fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(messages),
@@ -198,7 +200,7 @@ export class NotificationPlatformService {
     const user = await this.deps.userDao.findById(userId)
     if (!user?.email) return
     if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
-      const res = await fetch('https://api.resend.com/emails', {
+      const res = await this.deps.safeHttpClient.fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
@@ -226,7 +228,7 @@ export class NotificationPlatformService {
       logger.debug({ envName }, 'Notification delivery webhook not configured')
       return
     }
-    const res = await fetch(url, {
+    const res = await this.deps.safeHttpClient.fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
