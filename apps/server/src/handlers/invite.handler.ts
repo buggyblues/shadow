@@ -1,14 +1,17 @@
+import { randomBytes } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 
 function generateCode(length = 8): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = randomBytes(length)
   let code = ''
   for (let i = 0; i < length; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length))
+    code += chars.charAt(bytes[i]! % chars.length)
   }
   return code
 }
@@ -20,9 +23,10 @@ export function createInviteHandler(container: AppContainer) {
 
   // List current user's invite codes (with usage info)
   handler.get('/', async (c) => {
-    const user = c.get('user') as { userId: string }
-    const inviteCodeDao = container.resolve('inviteCodeDao')
-    const codes = await inviteCodeDao.findByCreator(user.userId)
+    const inviteUseCase = container.resolve('inviteUseCase')
+    const codes = await inviteUseCase.findMyCodes({
+      ctx: createActorContext(c.get('actor')),
+    })
     return c.json(codes)
   })
 
@@ -37,16 +41,16 @@ export function createInviteHandler(container: AppContainer) {
       }),
     ),
     async (c) => {
-      const inviteCodeDao = container.resolve('inviteCodeDao')
+      const inviteUseCase = container.resolve('inviteUseCase')
       const membershipService = container.resolve('membershipService')
       const user = c.get('user') as { userId: string }
       const { count, note } = c.req.valid('json')
       await membershipService.requireMember(user.userId, 'invite:create')
       const codes = []
       for (let i = 0; i < count; i++) {
-        const code = await inviteCodeDao.create({
+        const code = await inviteUseCase.createCode({
+          ctx: createActorContext(c.get('actor')),
           code: generateCode(),
-          createdBy: user.userId,
           note,
         })
         codes.push(code)
@@ -57,35 +61,47 @@ export function createInviteHandler(container: AppContainer) {
 
   // Deactivate own invite code
   handler.patch('/:id/deactivate', async (c) => {
-    const inviteCodeDao = container.resolve('inviteCodeDao')
+    const inviteUseCase = container.resolve('inviteUseCase')
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
 
     // Verify ownership
-    const codes = await inviteCodeDao.findByCreator(user.userId, 1000, 0)
-    const owned = codes.find((code) => code.id === id)
+    const codes = await inviteUseCase.findMyCodes({
+      ctx: createActorContext(c.get('actor')),
+      limit: 1000,
+    })
+    const owned = codes.find((code: { id: string }) => code.id === id)
     if (!owned) {
       return c.json({ ok: false, error: 'Not found or not owned' }, 404)
     }
 
-    const code = await inviteCodeDao.deactivate(id)
+    const code = await inviteUseCase.deactivateCode({
+      ctx: createActorContext(c.get('actor')),
+      id,
+    })
     return c.json(code)
   })
 
   // Delete own invite code
   handler.delete('/:id', async (c) => {
-    const inviteCodeDao = container.resolve('inviteCodeDao')
+    const inviteUseCase = container.resolve('inviteUseCase')
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
 
     // Verify ownership
-    const codes = await inviteCodeDao.findByCreator(user.userId, 1000, 0)
-    const owned = codes.find((code) => code.id === id)
+    const codes = await inviteUseCase.findMyCodes({
+      ctx: createActorContext(c.get('actor')),
+      limit: 1000,
+    })
+    const owned = codes.find((code: { id: string }) => code.id === id)
     if (!owned) {
       return c.json({ ok: false, error: 'Not found or not owned' }, 404)
     }
 
-    await inviteCodeDao.delete(id)
+    await inviteUseCase.deleteCode({
+      ctx: createActorContext(c.get('actor')),
+      id,
+    })
     return c.json({ ok: true })
   })
 

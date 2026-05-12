@@ -302,7 +302,7 @@ export class MessageService {
       throw Object.assign(new Error('Can only edit your own messages'), { status: 403 })
     }
 
-    const updated = await this.deps.messageDao.update(id, input.content)
+    const updated = await this.deps.messageDao.updateById(id, userId, input.content)
 
     // Attach author info and attachments for broadcasting
     const user = await this.deps.userDao.findById(userId)
@@ -332,7 +332,7 @@ export class MessageService {
       throw Object.assign(new Error('Can only delete your own messages'), { status: 403 })
     }
 
-    await this.deps.messageDao.delete(id)
+    await this.deps.messageDao.deleteById(id, userId)
     return message
   }
 
@@ -342,7 +342,7 @@ export class MessageService {
     if (!message) {
       throw Object.assign(new Error('Message not found'), { status: 404 })
     }
-    await this.deps.messageDao.delete(id)
+    await this.deps.messageDao.deleteById(id, message.authorId)
     return message
   }
 

@@ -217,144 +217,23 @@ export function createAuthHandler(container: AppContainer) {
 
   // GET /api/auth/users/:id — public user profile (limited fields)
   authHandler.get('/users/:id', authMiddleware, async (c) => {
-    const userDao = container.resolve('userDao')
-    const agentDao = container.resolve('agentDao')
-    const mediaService = container.resolve('mediaService')
+    const authUseCase = container.resolve('authUseCase')
+    const actor = c.get('actor')
     const id = c.req.param('id')
     if (!id) {
       return c.json({ ok: false, error: 'Missing user id' }, 400)
     }
-    const user = await userDao.findById(id)
-    if (!user) return c.json({ ok: false, error: 'User not found' }, 404)
-
-    // If the user is a bot, also return agent info + owner profile
-    let agent = null
-    let ownerProfile: {
-      id: string
-      username: string
-      displayName: string
-      avatarUrl: string | null
-    } | null = null
-    if (user.isBot) {
-      agent = await agentDao.findByUserId(user.id)
-      if (agent?.ownerId) {
-        const owner = await userDao.findById(agent.ownerId)
-        if (owner) {
-          ownerProfile = {
-            id: owner.id,
-            username: owner.username,
-            displayName: owner.displayName ?? owner.username,
-            avatarUrl: await resolveSignedMediaUrl(mediaService, owner.avatarUrl),
-          }
-        }
-      }
-    }
-
-    // If the user is a regular user, return their owned agents
-    let ownedAgents: Array<{
-      id: string
-      userId: string
-      status: string
-      totalOnlineSeconds: number
-      botUser?: {
-        id: string
-        username: string
-        displayName: string
-        avatarUrl: string | null
-      }
-    }> = []
-    if (!user.isBot) {
-      const agents = await agentDao.findByOwnerId(user.id)
-      ownedAgents = await Promise.all(
-        agents.map(async (a) => {
-          const botUser = await userDao.findById(a.userId)
-          return {
-            id: a.id,
-            userId: a.userId,
-            status: a.status,
-            totalOnlineSeconds: a.totalOnlineSeconds ?? 0,
-            botUser: botUser
-              ? {
-                  id: botUser.id,
-                  username: botUser.username,
-                  displayName: botUser.displayName ?? botUser.username,
-                  avatarUrl: await resolveSignedMediaUrl(mediaService, botUser.avatarUrl),
-                }
-              : undefined,
-          }
-        }),
-      )
-    }
-
-    const status = await resolveLiveUserStatus(user.id, user.status)
-    return c.json({
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName ?? user.username,
-      avatarUrl: await resolveSignedMediaUrl(mediaService, user.avatarUrl),
-      isBot: user.isBot,
-      status,
-      createdAt: user.createdAt,
-      agent: agent
-        ? {
-            id: agent.id,
-            ownerId: agent.ownerId,
-            status: agent.status,
-            totalOnlineSeconds: agent.totalOnlineSeconds ?? 0,
-            config: {
-              description: (agent.config as Record<string, unknown>)?.description,
-            },
-          }
-        : undefined,
-      ownerProfile,
-      ownedAgents,
-    })
+    const result = await authUseCase.getUserPublicProfile(actor, id)
+    if (!result) return c.json({ ok: false, error: 'User not found' }, 404)
+    return c.json(result)
   })
 
   // GET /api/auth/dashboard — aggregated user stats for dashboard page
   authHandler.get('/dashboard', authMiddleware, async (c) => {
-    const user = c.get('user') as { userId: string }
-    const userId = user.userId
-    const serverDao = container.resolve('serverDao')
-    const agentDao = container.resolve('agentDao')
-    const walletService = container.resolve('walletService')
-    const taskCenterService = container.resolve('taskCenterService')
-    const userDao = container.resolve('userDao')
-
-    // Parallel queries for performance
-    const [userServers, agents, wallet, taskCenter, referral, userInfo] = await Promise.all([
-      serverDao.findByUserId(userId),
-      agentDao.findByOwnerId(userId),
-      walletService.getOrCreateWallet(userId).catch(() => ({ balance: 0 })),
-      taskCenterService.getTaskCenter(userId).catch(() => ({
-        summary: { totalTasks: 0, claimableTasks: 0, completedTasks: 0 },
-      })),
-      taskCenterService
-        .getReferralSummary(userId)
-        .catch(() => ({ successfulInvites: 0, totalInviteRewards: 0 })),
-      userDao.findById(userId),
-    ])
-
-    const serversOwned = userServers.filter(
-      (s: { member: { role: string } }) => s.member.role === 'owner',
-    ).length
-    const serversJoined = userServers.length
-
-    // Buddy total online time
-    const totalBuddyOnlineSeconds = agents.reduce((sum, a) => sum + (a.totalOnlineSeconds ?? 0), 0)
-
-    return c.json({
-      serversOwned,
-      serversJoined,
-      buddyCount: agents.length,
-      buddyOnlineHours: Math.round(totalBuddyOnlineSeconds / 3600),
-      walletBalance: wallet.balance ?? 0,
-      tasksCompleted: taskCenter.summary?.completedTasks ?? 0,
-      tasksTotal: taskCenter.summary?.totalTasks ?? 0,
-      referralCount: referral.successfulInvites ?? 0,
-      referralRewards: referral.totalInviteRewards ?? 0,
-      memberSince: userInfo?.createdAt ?? null,
-    })
+    const authUseCase = container.resolve('authUseCase')
+    const actor = c.get('actor')
+    const result = await authUseCase.getDashboard(actor)
+    return c.json(result)
   })
 
   // POST /api/auth/disconnect — beacon-based disconnect on page close

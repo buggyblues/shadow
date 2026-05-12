@@ -107,6 +107,13 @@ export class InviteCodeDao {
     await this.db.delete(inviteCodes).where(eq(inviteCodes.id, id))
   }
 
+  /** Scoped delete by serverId and code value */
+  async deleteByServerIdAndCode(serverId: string, code: string) {
+    await this.db
+      .delete(inviteCodes)
+      .where(and(eq(inviteCodes.createdBy, serverId), eq(inviteCodes.code, code)))
+  }
+
   /** Find all invite codes created by a specific user, with used-by user info */
   async findByCreator(userId: string, limit = 50, offset = 0) {
     const usedByUser = {

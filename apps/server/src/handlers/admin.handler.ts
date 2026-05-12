@@ -4,9 +4,11 @@ import { and, eq, gte, isNotNull, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
+import type { ServerDao } from '../dao/server.dao'
 import { channels, cloudTemplates, inviteCodes, messages, users } from '../db/schema'
 import { resolveCloudTemplatesDir } from '../lib/cloud-templates'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 import { updateServerSchema } from '../validators/server.schema'
 
 function generateCode(length = 8): string {
@@ -29,9 +31,12 @@ export function createAdminHandler(container: AppContainer) {
   // Admin-only middleware: check isAdmin on the authenticated user
   adminHandler.use('*', async (c, next) => {
     const user = c.get('user') as { userId: string }
-    const userDao = container.resolve('userDao')
-    const dbUser = await userDao.findById(user.userId)
-    if (!dbUser || !dbUser.isAdmin) {
+    const adminUseCase = container.resolve('adminUseCase')
+    const result = await adminUseCase.getUserById({
+      ctx: createActorContext(c.get('actor')),
+      userId: user.userId,
+    })
+    if (!result || !(result as { isAdmin?: boolean }).isAdmin) {
       return c.json({ ok: false, error: 'Forbidden: admin access required' }, 403)
     }
     await next()
@@ -206,10 +211,14 @@ export function createAdminHandler(container: AppContainer) {
 
   // ── Invite Codes ──────────────────────────────────
   adminHandler.get('/invite-codes', async (c) => {
-    const inviteCodeDao = container.resolve('inviteCodeDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const limit = Number(c.req.query('limit') ?? '50')
     const offset = Number(c.req.query('offset') ?? '0')
-    const codes = await inviteCodeDao.findAll(limit, offset)
+    const codes = await adminUseCase.getInviteCodes({
+      ctx: createActorContext(c.get('actor')),
+      limit,
+      offset,
+    })
     return c.json(codes)
   })
 
@@ -223,42 +232,47 @@ export function createAdminHandler(container: AppContainer) {
       }),
     ),
     async (c) => {
-      const inviteCodeDao = container.resolve('inviteCodeDao')
-      const user = c.get('user') as { userId: string }
+      const adminUseCase = container.resolve('adminUseCase')
       const { count, note } = c.req.valid('json')
-      const codes = []
-      for (let i = 0; i < count; i++) {
-        const code = await inviteCodeDao.create({
-          code: generateCode(),
-          createdBy: user.userId,
-          note,
-        })
-        codes.push(code)
-      }
+      const codes = await adminUseCase.createInviteCodes({
+        ctx: createActorContext(c.get('actor')),
+        count,
+        note,
+      })
       return c.json(codes, 201)
     },
   )
 
   adminHandler.delete('/invite-codes/:id', async (c) => {
-    const inviteCodeDao = container.resolve('inviteCodeDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const id = c.req.param('id')
-    await inviteCodeDao.delete(id)
+    await adminUseCase.deleteInviteCode({
+      ctx: createActorContext(c.get('actor')),
+      id,
+    })
     return c.json({ ok: true })
   })
 
   adminHandler.patch('/invite-codes/:id/deactivate', async (c) => {
-    const inviteCodeDao = container.resolve('inviteCodeDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const id = c.req.param('id')
-    const code = await inviteCodeDao.deactivate(id)
+    const code = await adminUseCase.deactivateInviteCode({
+      ctx: createActorContext(c.get('actor')),
+      id,
+    })
     return c.json(code)
   })
 
   // ── Users ─────────────────────────────────────────
   adminHandler.get('/users', async (c) => {
-    const userDao = container.resolve('userDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const limit = Number(c.req.query('limit') ?? '50')
     const offset = Number(c.req.query('offset') ?? '0')
-    const users = await userDao.findAll(limit, offset)
+    const users = await adminUseCase.getUsers({
+      ctx: createActorContext(c.get('actor')),
+      limit,
+      offset,
+    })
     return c.json(
       users.map((u: Record<string, unknown>) => ({
         id: u.id,
@@ -283,98 +297,132 @@ export function createAdminHandler(container: AppContainer) {
       }),
     ),
     async (c) => {
-      const userDao = container.resolve('userDao')
+      const adminUseCase = container.resolve('adminUseCase')
       const id = c.req.param('id')
       const input = c.req.valid('json')
-      const user = await userDao.update(id, input)
+      const user = await adminUseCase.updateUser({
+        ctx: createActorContext(c.get('actor')),
+        userId: id,
+        data: input,
+      })
       return c.json(user)
     },
   )
 
   adminHandler.delete('/users/:id', async (c) => {
-    const userDao = container.resolve('userDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const id = c.req.param('id')
-    await userDao.update(id, { displayName: '[deleted]' })
+    await adminUseCase.deleteUser({
+      ctx: createActorContext(c.get('actor')),
+      userId: id,
+    })
     return c.json({ ok: true })
   })
 
   // ── Servers ───────────────────────────────────────
   adminHandler.get('/servers', async (c) => {
-    const serverDao = container.resolve('serverDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const limit = Number(c.req.query('limit') ?? '50')
     const offset = Number(c.req.query('offset') ?? '0')
-    const servers = await serverDao.findAll(limit, offset)
+    const servers = await adminUseCase.getServers({
+      ctx: createActorContext(c.get('actor')),
+      limit,
+      offset,
+    })
     return c.json(servers)
   })
 
   // Server detail — get a single server by ID
   adminHandler.get('/servers/:id', async (c) => {
-    const serverDao = container.resolve('serverDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const id = c.req.param('id')
-    const server = await serverDao.findById(id)
-    if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
-    return c.json(server)
+    const result = await adminUseCase.getServer({
+      ctx: createActorContext(c.get('actor')),
+      serverId: id,
+    })
+    if (!result.ok) return c.json({ ok: false, error: result.error }, 404)
+    return c.json(result.server)
   })
 
   // Channels for a specific server
   adminHandler.get('/servers/:id/channels', async (c) => {
-    const channelDao = container.resolve('channelDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const serverId = c.req.param('id')
-    const chs = await channelDao.findByServerId(serverId)
+    const chs = await adminUseCase.getServerChannels({
+      ctx: createActorContext(c.get('actor')),
+      serverId,
+    })
     return c.json(chs)
   })
 
   // Messages for a specific channel (admin)
   adminHandler.get('/servers/:serverId/channels/:channelId/messages', async (c) => {
-    const messageDao = container.resolve('messageDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const channelId = c.req.param('channelId')
     const limit = Number(c.req.query('limit') ?? '50')
     const cursor = c.req.query('cursor')
-    const msgs = await messageDao.findByChannelId(channelId, limit, cursor)
+    const msgs = await adminUseCase.getChannelMessages({
+      ctx: createActorContext(c.get('actor')),
+      channelId,
+      limit,
+      cursor,
+    })
     return c.json(msgs)
   })
 
   // Update server settings (admin)
   adminHandler.patch('/servers/:id', zValidator('json', updateServerSchema), async (c) => {
-    const serverDao = container.resolve('serverDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const id = c.req.param('id')
     const input = c.req.valid('json')
-    const server = await serverDao.findById(id)
-    if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
-    const updated = await serverDao.update(id, input as Parameters<typeof serverDao.update>[1])
-    return c.json(updated)
+    const result = await adminUseCase.updateServer({
+      ctx: createActorContext(c.get('actor')),
+      serverId: id,
+      data: input as Parameters<ServerDao['update']>[1],
+    })
+    if (!result.ok) return c.json({ ok: false, error: result.error }, 404)
+    return c.json(result.server)
   })
 
   adminHandler.delete('/servers/:id', async (c) => {
-    const serverDao = container.resolve('serverDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const id = c.req.param('id')
-    await serverDao.delete(id)
+    await adminUseCase.deleteServer({
+      ctx: createActorContext(c.get('actor')),
+      serverId: id,
+    })
     return c.json({ ok: true })
   })
 
   // ── Messages ──────────────────────────────────────
   adminHandler.delete('/messages/:id', async (c) => {
-    const messageDao = container.resolve('messageDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const id = c.req.param('id')
-    await messageDao.delete(id)
+    await adminUseCase.deleteMessage({
+      ctx: createActorContext(c.get('actor')),
+      messageId: id,
+    })
     return c.json({ ok: true })
   })
 
   // ── Channels ──────────────────────────────────────
   adminHandler.get('/channels', async (c) => {
-    const channelDao = container.resolve('channelDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const serverId = c.req.query('serverId')
-    if (serverId) {
-      const channels = await channelDao.findByServerId(serverId)
-      return c.json(channels)
-    }
-    return c.json([])
+    const channels = await adminUseCase.getChannels({
+      ctx: createActorContext(c.get('actor')),
+      serverId: serverId ?? undefined,
+    })
+    return c.json(channels)
   })
 
   adminHandler.delete('/channels/:id', async (c) => {
-    const channelDao = container.resolve('channelDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const id = c.req.param('id')
-    await channelDao.delete(id)
+    await adminUseCase.deleteChannel({
+      ctx: createActorContext(c.get('actor')),
+      channelId: id,
+    })
     return c.json({ ok: true })
   })
 
@@ -386,8 +434,11 @@ export function createAdminHandler(container: AppContainer) {
     const enriched = await Promise.all(
       allAgents.map(async (agent: { id: string; ownerId: string }) => {
         const full = await agentService.getById(agent.id)
-        const userDao = container.resolve('userDao')
-        const owner = await userDao.findById(agent.ownerId)
+        const adminUseCase = container.resolve('adminUseCase')
+        const owner = await adminUseCase.getUserById({
+          ctx: createActorContext(c.get('actor')),
+          userId: agent.ownerId,
+        })
         return {
           ...full,
           owner: owner
@@ -408,23 +459,25 @@ export function createAdminHandler(container: AppContainer) {
 
   // ── Password Change Logs ───────────────────────────
   adminHandler.get('/password-logs', async (c) => {
-    const passwordChangeLogDao = container.resolve('passwordChangeLogDao')
-    const userDao = container.resolve('userDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const limit = Number(c.req.query('limit') ?? '50')
     const offset = Number(c.req.query('offset') ?? '0')
     const userId = c.req.query('userId')
 
-    let logs: Awaited<ReturnType<typeof passwordChangeLogDao.findByUserId>>
-    if (userId) {
-      logs = await passwordChangeLogDao.findByUserId(userId, limit, offset)
-    } else {
-      logs = await passwordChangeLogDao.findAll(limit, offset)
-    }
+    const logs = await adminUseCase.getPasswordLogs({
+      ctx: createActorContext(c.get('actor')),
+      limit,
+      offset,
+      userId: userId ?? undefined,
+    })
 
     // Enrich with user info
     const enriched = await Promise.all(
       logs.map(async (log: { userId: string }) => {
-        const user = await userDao.findById(log.userId)
+        const user = await adminUseCase.getUserById({
+          ctx: createActorContext(c.get('actor')),
+          userId: log.userId,
+        })
         return {
           ...log,
           user: user
@@ -443,12 +496,13 @@ export function createAdminHandler(container: AppContainer) {
   })
 
   adminHandler.get('/password-logs/count', async (c) => {
-    const passwordChangeLogDao = container.resolve('passwordChangeLogDao')
+    const adminUseCase = container.resolve('adminUseCase')
     const userId = c.req.query('userId')
-    const count = userId
-      ? await passwordChangeLogDao.countByUserId(userId)
-      : await passwordChangeLogDao.count()
-    return c.json({ count })
+    const result = await adminUseCase.getPasswordLogCount({
+      ctx: createActorContext(c.get('actor')),
+      userId: userId ?? undefined,
+    })
+    return c.json(result)
   })
 
   // ── Cloud Template Review ─────────────────────────────────────────────────

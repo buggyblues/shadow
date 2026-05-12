@@ -27,13 +27,13 @@ export function createConfigHandler(container: AppContainer) {
   const adminApp = new Hono()
   adminApp.use('*', authMiddleware)
   adminApp.use('*', async (c, next) => {
-    const user = c.get('user') as { userId: string }
-    const userDao = container.resolve('userDao')
-    const dbUser = await userDao.findById(user.userId)
-    if (!dbUser?.isAdmin) {
+    const actor = c.get('actor')
+    try {
+      await container.resolve('accessService').requirePlatformAdmin(actor)
+      await next()
+    } catch {
       return c.json({ ok: false, error: 'Forbidden: admin access required' }, 403)
     }
-    await next()
   })
 
   // ── Schema CRUD ───────────────────────────────────────────────────────────

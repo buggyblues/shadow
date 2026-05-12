@@ -8,7 +8,7 @@ import type {
 } from '../dao/rental-contract.dao'
 import type { UserDao } from '../dao/user.dao'
 import { type Actor, actorHasScope } from '../security/actor'
-import type { WalletService } from './wallet.service'
+import type { LedgerService } from './ledger.service'
 
 /* ──────────────── Pricing Constants ──────────────── */
 
@@ -55,7 +55,7 @@ export class RentalService {
       rentalContractDao: RentalContractDao
       rentalUsageDao: RentalUsageDao
       rentalViolationDao: RentalViolationDao
-      walletService: WalletService
+      ledgerService: LedgerService
       agentDao: AgentDao
       userDao: UserDao
     },
@@ -240,7 +240,7 @@ export class RentalService {
     if (activeContract) {
       throw Object.assign(new Error('Cannot delete listing with active rental'), { status: 400 })
     }
-    await this.deps.clawListingDao.delete(id)
+    await this.deps.clawListingDao.deleteByUserIdAndId(ownerId, id)
   }
 
   /* ═══════════════ Contract Signing ═══════════════ */
@@ -328,13 +328,14 @@ export class RentalService {
 
     // Deduct deposit from tenant if configured
     if (listing.depositAmount > 0) {
-      await this.deps.walletService.debit(
-        tenantId,
-        listing.depositAmount,
-        contract.id,
-        'rental_deposit',
-        `租赁押金 - 合同 ${contractNo}`,
-      )
+      await this.deps.ledgerService.debit({
+        userId: tenantId,
+        amount: listing.depositAmount,
+        type: 'purchase',
+        referenceId: contract.id,
+        referenceType: 'rental_deposit',
+        note: `租赁押金 - 合同 ${contractNo}`,
+      })
     }
 
     // For v2 pricing, charge the first day's base daily fee immediately
@@ -344,22 +345,24 @@ export class RentalService {
       const firstDayPlatformFee = Math.ceil((firstDayCost * DEFAULT_PLATFORM_FEE_BPS) / 10000)
       const firstDayTotal = firstDayCost + firstDayPlatformFee
 
-      await this.deps.walletService.debit(
-        tenantId,
-        firstDayTotal,
-        contract.id,
-        'rental_usage',
-        `OpenClaw 基础租赁费（首日）- 合同 ${contractNo}`,
-      )
+      await this.deps.ledgerService.debit({
+        userId: tenantId,
+        amount: firstDayTotal,
+        type: 'purchase',
+        referenceId: contract.id,
+        referenceType: 'rental_usage',
+        note: `OpenClaw 基础租赁费（首日）- 合同 ${contractNo}`,
+      })
 
       const ownerPayout = firstDayCost // platform fee is NOT paid to owner
-      await this.deps.walletService.settle(
-        listing.ownerId,
-        ownerPayout,
-        contract.id,
-        'rental_usage',
-        `OpenClaw 出租收入（首日）- 合同 ${contractNo}`,
-      )
+      await this.deps.ledgerService.credit({
+        userId: listing.ownerId,
+        amount: ownerPayout,
+        type: 'settlement',
+        referenceId: contract.id,
+        referenceType: 'rental_usage',
+        note: `OpenClaw 出租收入（首日）- 合同 ${contractNo}`,
+      })
 
       await this.deps.rentalUsageDao.create({
         contractId: contract.id,
@@ -438,13 +441,14 @@ export class RentalService {
 
     // Refund unused deposit to tenant
     if (contract.depositAmount > 0) {
-      await this.deps.walletService.refund(
-        contract.tenantId,
-        contract.depositAmount,
-        contract.id,
-        'rental_deposit',
-        `退还租赁押金 - 合同 ${contract.contractNo}`,
-      )
+      await this.deps.ledgerService.credit({
+        userId: contract.tenantId,
+        amount: contract.depositAmount,
+        type: 'refund',
+        referenceId: contract.id,
+        referenceType: 'rental_deposit',
+        note: `退还租赁押金 - 合同 ${contract.contractNo}`,
+      })
     }
 
     // Delist the listing so it doesn't reappear on the marketplace
@@ -529,24 +533,26 @@ export class RentalService {
     })
 
     // Debit tenant wallet
-    await this.deps.walletService.debit(
-      contract.tenantId,
-      totalCost,
-      contractId,
-      'rental_usage',
-      `OpenClaw 使用费 - 合同 ${contract.contractNo}`,
-    )
+    await this.deps.ledgerService.debit({
+      userId: contract.tenantId,
+      amount: totalCost,
+      type: 'purchase',
+      referenceId: contractId,
+      referenceType: 'rental_usage',
+      note: `OpenClaw 使用费 - 合同 ${contract.contractNo}`,
+    })
 
     // Credit owner (minus platform fee)
     const ownerPayout = totalCost - platformFee
     if (usage) {
-      await this.deps.walletService.settle(
-        contract.ownerId,
-        ownerPayout,
-        usage.id,
-        'rental_usage',
-        `OpenClaw 出租收入 - 合同 ${contract.contractNo}`,
-      )
+      await this.deps.ledgerService.credit({
+        userId: contract.ownerId,
+        amount: ownerPayout,
+        type: 'settlement',
+        referenceId: usage.id,
+        referenceType: 'rental_usage',
+        note: `OpenClaw 出租收入 - 合同 ${contract.contractNo}`,
+      })
     }
 
     // Update running total
@@ -597,21 +603,23 @@ export class RentalService {
     // If owner self-use violation, charge penalty from deposit
     if (data.violationType === 'owner_self_use' && contract.depositAmount > 0) {
       try {
-        await this.deps.walletService.debit(
-          contract.ownerId,
-          contract.depositAmount,
-          contract.id,
-          'rental_penalty',
-          `违约金 - 合同 ${contract.contractNo}`,
-        )
+        await this.deps.ledgerService.debit({
+          userId: contract.ownerId,
+          amount: contract.depositAmount,
+          type: 'purchase',
+          referenceId: contract.id,
+          referenceType: 'rental_penalty',
+          note: `违约金 - 合同 ${contract.contractNo}`,
+        })
         // Pay penalty to tenant
-        await this.deps.walletService.refund(
-          contract.tenantId,
-          contract.depositAmount,
-          contract.id,
-          'rental_penalty',
-          `违约赔偿 - 合同 ${contract.contractNo}`,
-        )
+        await this.deps.ledgerService.credit({
+          userId: contract.tenantId,
+          amount: contract.depositAmount,
+          type: 'refund',
+          referenceId: contract.id,
+          referenceType: 'rental_penalty',
+          note: `违约赔偿 - 合同 ${contract.contractNo}`,
+        })
         await this.deps.rentalViolationDao.resolve(violation!.id)
       } catch (_) {
         // Log but don't block — penalty enforcement may be manual
@@ -698,13 +706,14 @@ export class RentalService {
       try {
         // Refund unused deposit to tenant
         if (contract.depositAmount > 0) {
-          await this.deps.walletService.refund(
-            contract.tenantId,
-            contract.depositAmount,
-            contract.id,
-            'rental_deposit',
-            `退还租赁押金（合同到期）- 合同 ${contract.contractNo}`,
-          )
+          await this.deps.ledgerService.credit({
+            userId: contract.tenantId,
+            amount: contract.depositAmount,
+            type: 'refund',
+            referenceId: contract.id,
+            referenceType: 'rental_deposit',
+            note: `退还租赁押金（合同到期）- 合同 ${contract.contractNo}`,
+          })
         }
 
         // Delist the listing so it doesn't reappear on the marketplace
@@ -813,23 +822,25 @@ export class RentalService {
       totalCost,
     })
 
-    await this.deps.walletService.debit(
-      contract.tenantId,
-      totalCost,
-      contract.id,
-      'rental_usage',
-      `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
-    )
+    await this.deps.ledgerService.debit({
+      userId: contract.tenantId,
+      amount: totalCost,
+      type: 'purchase',
+      referenceId: contract.id,
+      referenceType: 'rental_usage',
+      note: `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
+    })
 
     const ownerPayout = totalCost - platformFee
     if (ownerPayout > 0 && usage) {
-      await this.deps.walletService.settle(
-        contract.ownerId,
-        ownerPayout,
-        usage.id,
-        'rental_usage',
-        `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
-      )
+      await this.deps.ledgerService.credit({
+        userId: contract.ownerId,
+        amount: ownerPayout,
+        type: 'settlement',
+        referenceId: usage.id,
+        referenceType: 'rental_usage',
+        note: `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
+      })
     }
 
     await this.deps.rentalContractDao.addCost(contract.id, totalCost)
@@ -898,24 +909,26 @@ export class RentalService {
     })
 
     // Debit tenant
-    await this.deps.walletService.debit(
-      contract.tenantId,
-      totalCost,
-      contract.id,
-      'rental_usage',
-      `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
-    )
+    await this.deps.ledgerService.debit({
+      userId: contract.tenantId,
+      amount: totalCost,
+      type: 'purchase',
+      referenceId: contract.id,
+      referenceType: 'rental_usage',
+      note: `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
+    })
 
     // Credit owner (minus platform fee)
     const ownerPayout = totalCost - platformFee
     if (ownerPayout > 0 && usage) {
-      await this.deps.walletService.settle(
-        contract.ownerId,
-        ownerPayout,
-        usage.id,
-        'rental_usage',
-        `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
-      )
+      await this.deps.ledgerService.credit({
+        userId: contract.ownerId,
+        amount: ownerPayout,
+        type: 'settlement',
+        referenceId: usage.id,
+        referenceType: 'rental_usage',
+        note: `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
+      })
     }
 
     // Update running total and billing checkpoints

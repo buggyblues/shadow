@@ -253,8 +253,11 @@ export class ClawListingDao {
       .where(eq(clawListings.id, id))
   }
 
-  async delete(id: string) {
-    await this.db.delete(clawListings).where(eq(clawListings.id, id))
+  /** Scoped delete by userId (owner) and listing id */
+  async deleteByUserIdAndId(userId: string, id: string) {
+    await this.db
+      .delete(clawListings)
+      .where(and(eq(clawListings.id, id), eq(clawListings.ownerId, userId)))
   }
 
   /** Find active (listed) listings that reference any of the given agent IDs */

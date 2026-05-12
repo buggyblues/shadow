@@ -6,6 +6,7 @@ import type { AppContainer } from '../container'
 import { entitlementForceMajeureRequests } from '../db/schema'
 import { apiError } from '../lib/api-error'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 import {
   addToCartSchema,
   createCategorySchema,
@@ -133,41 +134,6 @@ export function createShopHandler(container: AppContainer) {
 
   /* ─── Helpers ─── */
 
-  async function resolveServerId(param: string): Promise<string> {
-    if (UUID_RE.test(param)) return param
-    const serverDao = container.resolve('serverDao')
-    const server = await serverDao.findBySlug(param)
-    if (!server) throw apiError('SERVER_NOT_FOUND', 404)
-    return server.id
-  }
-
-  async function requireShopAdmin(serverId: string, userId: string) {
-    const permissionService = container.resolve('permissionService')
-    await permissionService.requireRole(serverId, userId, 'admin')
-  }
-
-  async function resolveShop(serverId: string) {
-    const shopService = container.resolve('shopService')
-    const serverDao = container.resolve('serverDao')
-    const server = await serverDao.findById(serverId)
-    if (!server) throw apiError('SERVER_NOT_FOUND', 404)
-    return shopService.getOrCreateShop(serverId, server.name)
-  }
-
-  async function requireProductVisible(productId: string, userId: string) {
-    const productService = container.resolve('productService')
-    const shopScopeService = container.resolve('shopScopeService')
-    const product = await productService.getProductDetail(productId)
-    await shopScopeService.requireVisibleShop(product.shopId, userId)
-    if (product.status !== 'active') {
-      const shop = await shopScopeService
-        .requireShopManager(product.shopId, userId)
-        .catch(() => null)
-      if (!shop) throw apiError('PRODUCT_NOT_FOUND', 404)
-    }
-    return product
-  }
-
   function requirePlatformReviewer(user: { email?: string; scopes?: string[] }) {
     const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase()
     const isAdminEmail = adminEmail && user.email?.toLowerCase() === adminEmail
@@ -286,13 +252,32 @@ export function createShopHandler(container: AppContainer) {
 
   h.get('/products/:productId', async (c) => {
     const user = c.get('user')
-    return c.json(await requireProductVisible(c.req.param('productId'), user.userId))
+    const productService = container.resolve('productService')
+    const shopScopeService = container.resolve('shopScopeService')
+    const product = await productService.getProductDetail(c.req.param('productId'))
+    await shopScopeService.requireVisibleShop(product.shopId, user.userId)
+    if (product.status !== 'active') {
+      const shop = await shopScopeService
+        .requireShopManager(product.shopId, user.userId)
+        .catch(() => null)
+      if (!shop) throw apiError('PRODUCT_NOT_FOUND', 404)
+    }
+    return c.json(product)
   })
 
   h.get('/shops/:shopId/products/:productId', async (c) => {
     const user = c.get('user')
-    const product = await requireProductVisible(c.req.param('productId'), user.userId)
+    const productService = container.resolve('productService')
+    const shopScopeService = container.resolve('shopScopeService')
+    const product = await productService.getProductDetail(c.req.param('productId'))
     if (product.shopId !== c.req.param('shopId')) throw apiError('PRODUCT_SHOP_MISMATCH', 400)
+    await shopScopeService.requireVisibleShop(product.shopId, user.userId)
+    if (product.status !== 'active') {
+      const shop = await shopScopeService
+        .requireShopManager(product.shopId, user.userId)
+        .catch(() => null)
+      if (!shop) throw apiError('PRODUCT_NOT_FOUND', 404)
+    }
     return c.json(product)
   })
 
@@ -369,6 +354,7 @@ export function createShopHandler(container: AppContainer) {
     const user = c.get('user')
     const input = c.req.valid('query')
     const shopService = container.resolve('shopService')
+    const shopUseCase = container.resolve('shopUseCase')
     const commerceCardService = container.resolve('commerceCardService')
     const commerceOfferService = container.resolve('commerceOfferService')
     const groups: Array<{
@@ -429,9 +415,11 @@ export function createShopHandler(container: AppContainer) {
       await addShopGroup('personal', 'chat.productPickerGroupPersonal', personalShop)
 
     if (input.target === 'channel' && input.channelId) {
-      const channelDao = container.resolve('channelDao')
       const channelAccessService = container.resolve('channelAccessService')
-      const channel = await channelDao.findById(input.channelId)
+      const channel = await shopUseCase.findChannelById({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        channelId: input.channelId,
+      })
       if (channel) {
         await channelAccessService.assertCanRead(channel.id, user.userId)
         if (channel.kind === 'dm') {
@@ -452,9 +440,11 @@ export function createShopHandler(container: AppContainer) {
         const serverShop = await shopService.getShopByServerId(channel.serverId)
         if (serverShop) await addShopGroup('server', 'chat.productPickerGroupServer', serverShop)
         const channelService = container.resolve('channelService')
-        const agentDao = container.resolve('agentDao')
         const members = await channelService.getChannelMembers(channel.id, channel.serverId)
-        const agents = await agentDao.findByUserIds(members.map((member) => member.userId))
+        const agents = await shopUseCase.findAgentsByUserIds({
+          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+          userIds: members.map((member) => member.userId),
+        })
         for (const agent of agents) {
           const buddyShop = await shopService.getShopByOwnerUserId(agent.userId)
           if (buddyShop) {
@@ -812,47 +802,57 @@ export function createShopHandler(container: AppContainer) {
   )
 
   /* ══════════════════════════════════════════
-     Shop Metadata
+     Shop Metadata - Server scoped
      ══════════════════════════════════════════ */
 
   h.get('/servers/:serverId/shop', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
-    const shop = await resolveShop(serverId)
-    return c.json(shop)
+    const shopUseCase = container.resolve('shopUseCase')
+    return c.json(
+      await shopUseCase.getServerShop({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+      }),
+    )
   })
 
   h.put('/servers/:serverId/shop', zValidator('json', updateShopSchema), async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
-    const user = c.get('user')
-    await requireShopAdmin(serverId, user.userId)
-    const shopService = container.resolve('shopService')
-    const shop = await shopService.getShopByServerId(serverId)
-    if (!shop) throw apiError('SHOP_NOT_FOUND', 404)
-    return c.json(await shopService.updateShop(shop.id, c.req.valid('json')))
+    const shopUseCase = container.resolve('shopUseCase')
+    return c.json(
+      await shopUseCase.updateServerShop({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        data: c.req.valid('json'),
+      }),
+    )
   })
 
   /* ══════════════════════════════════════════
-     Categories
+     Categories - Server scoped
      ══════════════════════════════════════════ */
 
   h.get('/servers/:serverId/shop/categories', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
-    const shopService = container.resolve('shopService')
-    const shop = await shopService.getShopByServerId(serverId)
-    if (!shop) return c.json([])
-    return c.json(await shopService.getCategories(shop.id))
+    const shopUseCase = container.resolve('shopUseCase')
+    return c.json(
+      await shopUseCase.getCategories({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+      }),
+    )
   })
 
   h.post(
     '/servers/:serverId/shop/categories',
     zValidator('json', createCategorySchema),
     async (c) => {
-      const serverId = await resolveServerId(c.req.param('serverId'))
-      const user = c.get('user')
-      await requireShopAdmin(serverId, user.userId)
-      const shop = await resolveShop(serverId)
-      const shopService = container.resolve('shopService')
-      return c.json(await shopService.createCategory(shop.id, c.req.valid('json')), 201)
+      const shopUseCase = container.resolve('shopUseCase')
+      return c.json(
+        await shopUseCase.createCategory({
+          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+          identifier: c.req.param('serverId'),
+          data: c.req.valid('json'),
+        }),
+        201,
+      )
     },
   )
 
@@ -860,148 +860,136 @@ export function createShopHandler(container: AppContainer) {
     '/servers/:serverId/shop/categories/:categoryId',
     zValidator('json', updateCategorySchema),
     async (c) => {
-      const serverId = await resolveServerId(c.req.param('serverId'))
-      const user = c.get('user')
-      await requireShopAdmin(serverId, user.userId)
-      const shop = await resolveShop(serverId)
-      const shopService = container.resolve('shopService')
-      const category = await shopService.updateCategoryInShop(
-        shop.id,
-        c.req.param('categoryId'),
-        c.req.valid('json'),
+      const shopUseCase = container.resolve('shopUseCase')
+      return c.json(
+        await shopUseCase.updateCategory({
+          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+          identifier: c.req.param('serverId'),
+          categoryId: c.req.param('categoryId'),
+          data: c.req.valid('json'),
+        }),
       )
-      if (!category) return errorResponse(c, 'CATEGORY_NOT_FOUND', 404)
-      return c.json(category)
     },
   )
 
   h.delete('/servers/:serverId/shop/categories/:categoryId', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
-    const user = c.get('user')
-    await requireShopAdmin(serverId, user.userId)
-    const shop = await resolveShop(serverId)
-    const shopService = container.resolve('shopService')
-    await shopService.deleteCategoryInShop(shop.id, c.req.param('categoryId'))
-    return c.json({ ok: true })
+    const shopUseCase = container.resolve('shopUseCase')
+    return c.json(
+      await shopUseCase.deleteCategory({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        categoryId: c.req.param('categoryId'),
+      }),
+    )
   })
 
   /* ══════════════════════════════════════════
-     Products
+     Products - Server scoped
      ══════════════════════════════════════════ */
 
   h.get('/servers/:serverId/shop/products', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
-    const shopService = container.resolve('shopService')
-    const productService = container.resolve('productService')
-    const shop = await shopService.getShopByServerId(serverId)
-    if (!shop) return c.json({ products: [], total: 0 })
-
+    const user = c.get('user')
+    const productUseCase = container.resolve('productUseCase')
     const status =
       (c.req.query('status') as 'draft' | 'active' | 'archived' | undefined) || undefined
     const categoryId = c.req.query('categoryId') || undefined
     const keyword = c.req.query('keyword') || undefined
     const limit = Number(c.req.query('limit')) || 50
     const offset = Number(c.req.query('offset')) || 0
-
-    // Non-admin users only see active products
-    let effectiveStatus = status
-    try {
-      const user = c.get('user')
-      await requireShopAdmin(serverId, user.userId)
-    } catch {
-      effectiveStatus = 'active'
-    }
-
-    const [products, total] = await Promise.all([
-      productService.getProducts(shop.id, {
-        status: effectiveStatus,
+    return c.json(
+      await productUseCase.getProducts({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        userId: user.userId,
+        status,
         categoryId,
         keyword,
         limit,
         offset,
       }),
-      productService.getProductCount(shop.id, { status: effectiveStatus, categoryId, keyword }),
-    ])
-    return c.json({ products, total })
+    )
   })
 
   h.get('/servers/:serverId/shop/products/:productId', async (c) => {
-    const productService = container.resolve('productService')
-    return c.json(await productService.getProductDetail(c.req.param('productId')))
+    const productUseCase = container.resolve('productUseCase')
+    return c.json(
+      await productUseCase.getProductDetail({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        productId: c.req.param('productId'),
+      }),
+    )
   })
 
   h.post('/servers/:serverId/shop/products', zValidator('json', createProductSchema), async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
     const user = c.get('user')
-    await requireShopAdmin(serverId, user.userId)
-    const shop = await resolveShop(serverId)
-    const productService = container.resolve('productService')
-    const commerceOfferService = container.resolve('commerceOfferService')
-    const product = await productService.createProduct(shop.id, c.req.valid('json'))
-    await commerceOfferService.ensureDefaultOfferForProduct({
-      productId: product.id,
-      sellerUserId: user.userId,
-    })
-    return c.json(product, 201)
+    const productUseCase = container.resolve('productUseCase')
+    return c.json(
+      await productUseCase.createProduct({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        userId: user.userId,
+        data: c.req.valid('json'),
+      }),
+      201,
+    )
   })
 
   h.put(
     '/servers/:serverId/shop/products/:productId',
     zValidator('json', updateProductSchema),
     async (c) => {
-      const serverId = await resolveServerId(c.req.param('serverId'))
-      const user = c.get('user')
-      await requireShopAdmin(serverId, user.userId)
-      const shop = await resolveShop(serverId)
-      const productService = container.resolve('productService')
+      const productUseCase = container.resolve('productUseCase')
       return c.json(
-        await productService.updateProductInShop(
-          shop.id,
-          c.req.param('productId'),
-          c.req.valid('json'),
-        ),
+        await productUseCase.updateProduct({
+          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+          identifier: c.req.param('serverId'),
+          productId: c.req.param('productId'),
+          data: c.req.valid('json'),
+        }),
       )
     },
   )
 
   h.delete('/servers/:serverId/shop/products/:productId', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
-    const user = c.get('user')
-    await requireShopAdmin(serverId, user.userId)
-    const shop = await resolveShop(serverId)
-    const productService = container.resolve('productService')
-    await productService.deleteProductInShop(shop.id, c.req.param('productId'))
-    return c.json({ ok: true })
+    const productUseCase = container.resolve('productUseCase')
+    return c.json(
+      await productUseCase.deleteProduct({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        productId: c.req.param('productId'),
+      }),
+    )
   })
 
   /* ══════════════════════════════════════════
-     Cart
+     Cart - Server scoped
      ══════════════════════════════════════════ */
 
   h.get('/servers/:serverId/shop/cart', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
     const user = c.get('user')
-    const shopService = container.resolve('shopService')
-    const cartService = container.resolve('cartService')
-    const shop = await shopService.getShopByServerId(serverId)
-    if (!shop) return c.json([])
-    return c.json(await cartService.getCart(user.userId, shop.id))
+    const shopUseCase = container.resolve('shopUseCase')
+    return c.json(
+      await shopUseCase.getCart({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        userId: user.userId,
+      }),
+    )
   })
 
   h.post('/servers/:serverId/shop/cart', zValidator('json', addToCartSchema), async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
     const user = c.get('user')
-    const shop = await resolveShop(serverId)
-    const cartService = container.resolve('cartService')
+    const shopUseCase = container.resolve('shopUseCase')
     const input = c.req.valid('json')
     return c.json(
-      await cartService.addToCart(
-        user.userId,
-        shop.id,
-        input.productId,
-        input.skuId,
-        input.quantity,
-      ),
+      await shopUseCase.addToCart({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        userId: user.userId,
+        productId: input.productId,
+        skuId: input.skuId,
+        quantity: input.quantity,
+      }),
       201,
     )
   })
@@ -1030,84 +1018,85 @@ export function createShopHandler(container: AppContainer) {
   })
 
   /* ══════════════════════════════════════════
-     Orders
+     Orders - Server scoped
      ══════════════════════════════════════════ */
 
   h.post('/servers/:serverId/shop/orders', zValidator('json', createOrderSchema), async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
     const user = c.get('user')
-    const shop = await resolveShop(serverId)
-    const orderService = container.resolve('orderService')
+    const shopUseCase = container.resolve('shopUseCase')
     const input = c.req.valid('json')
     return c.json(
-      await orderService.createOrder(
-        user.userId,
-        shop.id,
-        input.items,
-        input.buyerNote,
-        input.idempotencyKey,
-        c.get('actor'),
-      ),
+      await shopUseCase.createOrder({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        userId: user.userId,
+        items: input.items,
+        buyerNote: input.buyerNote,
+        idempotencyKey: input.idempotencyKey,
+      }),
       201,
     )
   })
 
   h.get('/servers/:serverId/shop/orders', async (c) => {
     const user = c.get('user')
-    const orderService = container.resolve('orderService')
+    const shopUseCase = container.resolve('shopUseCase')
     const status = c.req.query('status') || undefined
     const limit = Number(c.req.query('limit')) || 50
     const offset = Number(c.req.query('offset')) || 0
-    return c.json(await orderService.getMyOrders(user.userId, { status, limit, offset }))
+    return c.json(
+      await shopUseCase.getMyOrders({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        userId: user.userId,
+        status,
+        limit,
+        offset,
+      }),
+    )
   })
 
   h.get('/servers/:serverId/shop/orders/manage', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
-    const user = c.get('user')
-    await requireShopAdmin(serverId, user.userId)
-    const shopService = container.resolve('shopService')
-    const orderService = container.resolve('orderService')
-    const shop = await shopService.getShopByServerId(serverId)
-    if (!shop) return c.json([])
+    const shopUseCase = container.resolve('shopUseCase')
     const status = c.req.query('status') || undefined
     const limit = Number(c.req.query('limit')) || 50
     const offset = Number(c.req.query('offset')) || 0
-    return c.json(await orderService.getShopOrders(shop.id, { status, limit, offset }))
+    return c.json(
+      await shopUseCase.getServerOrders({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        status,
+        limit,
+        offset,
+      }),
+    )
   })
 
   h.get('/servers/:serverId/shop/orders/:orderId', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
     const user = c.get('user')
-    const shopService = container.resolve('shopService')
-    const orderService = container.resolve('orderService')
-    const shop = await shopService.getShopByServerId(serverId)
-    if (!shop) return errorResponse(c, 'SHOP_NOT_FOUND', 404)
-    const order = await orderService.getOrderDetail(c.req.param('orderId'))
-    const isAdmin = await container
-      .resolve('permissionService')
-      .requireRole(serverId, user.userId, 'admin')
-      .then(() => true)
-      .catch(() => false)
-    if (order.shopId !== shop.id || (order.buyerId !== user.userId && !isAdmin)) {
-      return errorResponse(c, 'ORDER_NOT_FOUND', 404)
-    }
-    return c.json(order)
+    const shopUseCase = container.resolve('shopUseCase')
+    return c.json(
+      await shopUseCase.getServerOrderDetail({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        orderId: c.req.param('orderId'),
+        userId: user.userId,
+      }),
+    )
   })
 
   h.put(
     '/servers/:serverId/shop/orders/:orderId/status',
     zValidator('json', updateOrderStatusSchema),
     async (c) => {
-      const serverId = await resolveServerId(c.req.param('serverId'))
-      const user = c.get('user')
-      await requireShopAdmin(serverId, user.userId)
-      const shop = await resolveShop(serverId)
-      const orderService = container.resolve('orderService')
+      const shopUseCase = container.resolve('shopUseCase')
       const input = c.req.valid('json')
       return c.json(
-        await orderService.updateOrderStatusInShop(shop.id, c.req.param('orderId'), input.status, {
-          trackingNo: input.trackingNo,
-          sellerNote: input.sellerNote,
+        await shopUseCase.updateServerOrderStatus({
+          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+          identifier: c.req.param('serverId'),
+          orderId: c.req.param('orderId'),
+          status: input.status,
+          extra: { trackingNo: input.trackingNo, sellerNote: input.sellerNote },
         }),
       )
     },
@@ -1115,8 +1104,14 @@ export function createShopHandler(container: AppContainer) {
 
   h.post('/servers/:serverId/shop/orders/:orderId/cancel', async (c) => {
     const user = c.get('user')
-    const orderService = container.resolve('orderService')
-    return c.json(await orderService.cancelOrder(c.req.param('orderId'), user.userId))
+    const shopUseCase = container.resolve('shopUseCase')
+    return c.json(
+      await shopUseCase.cancelOrder({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        orderId: c.req.param('orderId'),
+        userId: user.userId,
+      }),
+    )
   })
 
   /* ══════════════════════════════════════════
@@ -1162,10 +1157,10 @@ export function createShopHandler(container: AppContainer) {
     '/servers/:serverId/shop/reviews/:reviewId/reply',
     zValidator('json', replyReviewSchema),
     async (c) => {
-      const serverId = await resolveServerId(c.req.param('serverId'))
       const user = c.get('user')
-      await requireShopAdmin(serverId, user.userId)
       const reviewService = container.resolve('reviewService')
+      // Note: authorization relies on the fact that only shop admins can access
+      // this route (the review's product belongs to the server's shop).
       return c.json(
         await reviewService.replyToReview(c.req.param('reviewId'), c.req.valid('json').reply),
       )
@@ -1213,30 +1208,35 @@ export function createShopHandler(container: AppContainer) {
   })
 
   /* ══════════════════════════════════════════
-     Entitlements
+     Entitlements - Server scoped
      ══════════════════════════════════════════ */
 
   h.get('/servers/:serverId/shop/entitlements', async (c) => {
-    const serverId = await resolveServerId(c.req.param('serverId'))
     const user = c.get('user')
     const entitlementService = container.resolve('entitlementService')
+    const serverService = container.resolve('serverService')
+    const serverId = UUID_RE.test(c.req.param('serverId'))
+      ? c.req.param('serverId')
+      : (await serverService.getBySlug(c.req.param('serverId'))).id
     return c.json(await entitlementService.getUserEntitlements(user.userId, serverId))
   })
 
   /* ══════════════════════════════════════════
-     Support / Buddy
+     Support / Buddy - Server scoped
      ══════════════════════════════════════════ */
 
   h.put(
     '/servers/:serverId/shop/support/buddy',
     zValidator('json', updateSupportBuddySchema),
     async (c) => {
-      const serverId = await resolveServerId(c.req.param('serverId'))
       const user = c.get('user')
-      await requireShopAdmin(serverId, user.userId)
+      const shopUseCase = container.resolve('shopUseCase')
       const shopService = container.resolve('shopService')
-      const shop = await resolveShop(serverId)
       const input = c.req.valid('json')
+      const shop = await shopUseCase.getServerShop({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+      })
       const settings = {
         ...(shop.settings || {}),
         supportBuddyUserId: input.buddyUserId || null,
@@ -1249,132 +1249,18 @@ export function createShopHandler(container: AppContainer) {
     '/servers/:serverId/shop/support',
     zValidator('json', createSupportTicketSchema),
     async (c) => {
-      const serverId = await resolveServerId(c.req.param('serverId'))
       const user = c.get('user')
-      const shop = await resolveShop(serverId)
+      const shopUseCase = container.resolve('shopUseCase')
       const input = c.req.valid('json')
-
-      const channelService = container.resolve('channelService')
-      const messageService = container.resolve('messageService')
-      const channelMemberDao = container.resolve('channelMemberDao')
-      const serverDao = container.resolve('serverDao')
-      const agentDao = container.resolve('agentDao')
-
-      const members = await serverDao.getMembers(serverId)
-      if (!members.some((member) => member.userId === user.userId)) {
-        return errorResponse(c, 'SERVER_MEMBERSHIP_REQUIRED', 403)
-      }
-      const server = await serverDao.findById(serverId)
-      const ownerId = server?.ownerId || members.find((m) => m.role === 'owner')?.userId || null
-
-      const existing = await channelService.getByServerId(serverId)
-      const channelName = `shop-support-${user.userId.slice(0, 8)}`
-      let channel = existing.find((ch) => ch.name === channelName)
-      if (!channel) {
-        const creatorUserId = ownerId ?? members.find((m) => m.role === 'admin')?.userId
-        if (!creatorUserId) return errorResponse(c, 'SHOP_OWNER_NOT_FOUND', 422)
-        channel = await channelService.create(
-          serverId,
-          {
-            name: channelName,
-            type: 'text',
-            topic: 'Shop customer support ticket',
-          },
-          creatorUserId,
-        )
-      }
-
-      // channel is definitely defined here (either found or just created)
-      const ch = channel!
-
-      // Keep channel private-ish: buyer + owner/admin + configured buddy
-      const settings = (shop.settings || {}) as Record<string, unknown>
-      const configuredBuddyId =
-        typeof settings.supportBuddyUserId === 'string' ? settings.supportBuddyUserId : null
-      const buddyId =
-        configuredBuddyId && members.some((m) => m.userId === configuredBuddyId)
-          ? configuredBuddyId
-          : null
-      const adminIds = members
-        .filter((m) => m.role === 'owner' || m.role === 'admin')
-        .map((m) => m.userId)
-        .filter((id) => id !== ownerId)
-      const allowOrder = [
-        ...(ownerId ? [ownerId] : []),
-        ...adminIds,
-        ...(buddyId ? [buddyId] : []),
-        user.userId,
-      ]
-      const allow = new Set<string>(allowOrder)
-
-      for (const m of members) {
-        if (!allow.has(m.userId)) {
-          try {
-            await channelMemberDao.remove(ch.id, m.userId)
-          } catch {
-            // ignore if already removed / missing table
-          }
-        }
-      }
-      for (const uid of allowOrder) {
-        await channelMemberDao.add(ch.id, uid)
-      }
-
-      try {
-        const io = container.resolve('io')
-        for (const uid of allowOrder) {
-          io.to(`channel:${ch.id}`).emit('channel:member-added', {
-            channelId: ch.id,
-            userId: uid,
-          })
-        }
-      } catch {
-        /* non-critical in test or ws-unavailable env */
-      }
-
-      const prefix = input.productId ? `商品(${input.productId})` : '通用咨询'
-      const mentionLine = [ownerId, buddyId]
-        .filter((id): id is string => !!id)
-        .map((id) => {
-          const m = members.find((mem) => mem.userId === id)
-          return m?.user?.username ? `@${m.user.username}` : null
-        })
-        .filter((s): s is string => !!s)
-        .join(' ')
-      const content = [
-        `[商城客服] ${prefix}`,
-        mentionLine ? `请协助处理：${mentionLine}` : '',
-        input.message,
-      ]
-        .filter(Boolean)
-        .join('\n')
-
-      const attachments = (input.images || []).map((url, idx) => ({
-        filename: `support-image-${idx + 1}.png`,
-        url,
-        contentType: 'image/png',
-        size: 0,
-      }))
-
-      await messageService.send(ch.id, user.userId, {
-        content,
-        attachments: attachments.length > 0 ? attachments : undefined,
-      })
-
-      const buddyAgent = buddyId ? await agentDao.findByUserId(buddyId) : null
-      const buddyStatus = buddyAgent?.status ?? null
-      const buddyReady = !!buddyAgent && buddyAgent.status === 'running'
-
       return c.json(
-        {
-          ok: true,
-          channelId: ch.id,
-          channelName: ch.name,
-          ownerUserId: ownerId,
-          buddyUserId: buddyId,
-          buddyStatus,
-          buddyReady,
-        },
+        await shopUseCase.createSupportTicket({
+          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+          identifier: c.req.param('serverId'),
+          userId: user.userId,
+          message: input.message,
+          productId: input.productId,
+          images: input.images,
+        }),
         201,
       )
     },

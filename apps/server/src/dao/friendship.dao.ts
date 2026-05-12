@@ -43,11 +43,6 @@ export class FriendshipDao {
     return result[0] ?? null
   }
 
-  /** Delete a friendship (reject, cancel, or unfriend) */
-  async delete(id: string) {
-    await this.db.delete(friendships).where(eq(friendships.id, id))
-  }
-
   /** Get all accepted friends for a user */
   async getFriends(userId: string) {
     return this.db
@@ -67,6 +62,18 @@ export class FriendshipDao {
       .select()
       .from(friendships)
       .where(and(eq(friendships.addresseeId, userId), eq(friendships.status, 'pending')))
+  }
+
+  /** Scoped delete by userId and friendship id */
+  async deleteByUserIdAndId(userId: string, id: string) {
+    await this.db
+      .delete(friendships)
+      .where(
+        and(
+          eq(friendships.id, id),
+          or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId)),
+        ),
+      )
   }
 
   /** Get pending requests sent by a user */

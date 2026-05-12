@@ -41,7 +41,6 @@ export function createMediaHandler(container: AppContainer) {
   mediaHandler.post('/upload', authMiddleware, async (c) => {
     const mediaService = container.resolve('mediaService')
     const messageDao = container.resolve('messageDao')
-    const userDao = container.resolve('userDao')
     const body = await c.req.parseBody()
     const file = body.file
 
@@ -87,6 +86,7 @@ export function createMediaHandler(container: AppContainer) {
 
       // Broadcast message update so realtime clients can render newly attached media
       try {
+        const userDao = container.resolve('userDao')
         const io = container.resolve('io')
         const author = await userDao.findById(channelMessage.authorId)
         const attachments = await messageDao.getAttachments(messageId)

@@ -81,6 +81,14 @@ export class OAuthAppDao {
     await this.db.delete(oauthApps).where(eq(oauthApps.id, id))
   }
 
+  async deleteByUserIdAndClientId(userId: string, clientId: string) {
+    const result = await this.db
+      .delete(oauthApps)
+      .where(and(eq(oauthApps.userId, userId), eq(oauthApps.clientId, clientId)))
+      .returning()
+    return result[0] ?? null
+  }
+
   // --- Authorization Codes ---
 
   async createAuthorizationCode(data: {

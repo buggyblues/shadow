@@ -71,8 +71,12 @@ export class ApiTokenDao {
     return result[0] ?? null
   }
 
-  async delete(id: string, userId: string) {
-    await this.db.delete(apiTokens).where(and(eq(apiTokens.id, id), eq(apiTokens.userId, userId)))
+  async deleteByUserIdAndId(userId: string, id: string) {
+    const result = await this.db
+      .delete(apiTokens)
+      .where(and(eq(apiTokens.id, id), eq(apiTokens.userId, userId)))
+      .returning()
+    return result[0] ?? null
   }
 
   async updateLastUsed(id: string) {

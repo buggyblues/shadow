@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 
 const updatePreferenceSchema = z.object({
   strategy: z.enum(['all', 'mention_only', 'none']).optional(),
@@ -133,31 +134,37 @@ export function createNotificationHandler(container: AppContainer) {
   )
 
   notificationHandler.get('/channel-preferences', async (c) => {
-    const notificationDao = container.resolve('notificationDao')
-    const user = c.get('user')
-    return c.json(await notificationDao.getChannelPreferences(user.userId))
+    const notificationUseCase = container.resolve('notificationUseCase')
+    return c.json(
+      await notificationUseCase.getChannelPreferences({
+        ctx: createActorContext(c.get('actor')),
+      }),
+    )
   })
 
   notificationHandler.patch(
     '/channel-preferences',
     zValidator('json', updateChannelPreferenceSchema),
     async (c) => {
-      const notificationDao = container.resolve('notificationDao')
-      const user = c.get('user')
+      const notificationUseCase = container.resolve('notificationUseCase')
       const input = c.req.valid('json')
       return c.json(
-        await notificationDao.upsertChannelPreference({ userId: user.userId, ...input }),
+        await notificationUseCase.upsertChannelPreference({
+          ctx: createActorContext(c.get('actor')),
+          kind: input.kind,
+          channel: input.channel,
+          enabled: input.enabled,
+        }),
       )
     },
   )
 
   notificationHandler.post('/push-tokens', zValidator('json', pushTokenSchema), async (c) => {
-    const notificationDao = container.resolve('notificationDao')
-    const user = c.get('user')
+    const notificationUseCase = container.resolve('notificationUseCase')
     const input = c.req.valid('json')
     return c.json(
-      await notificationDao.upsertPushToken({
-        userId: user.userId,
+      await notificationUseCase.upsertPushToken({
+        ctx: createActorContext(c.get('actor')),
         platform: input.platform,
         token: input.token,
         deviceName: input.deviceName,
@@ -167,9 +174,11 @@ export function createNotificationHandler(container: AppContainer) {
   })
 
   notificationHandler.delete('/push-tokens/:idOrToken', async (c) => {
-    const notificationDao = container.resolve('notificationDao')
-    const user = c.get('user')
-    await notificationDao.deactivatePushToken(user.userId, c.req.param('idOrToken'))
+    const notificationUseCase = container.resolve('notificationUseCase')
+    await notificationUseCase.deactivatePushToken({
+      ctx: createActorContext(c.get('actor')),
+      idOrToken: c.req.param('idOrToken'),
+    })
     return c.json({ ok: true })
   })
 
@@ -177,12 +186,11 @@ export function createNotificationHandler(container: AppContainer) {
     '/web-push-subscriptions',
     zValidator('json', webPushSubscriptionSchema),
     async (c) => {
-      const notificationDao = container.resolve('notificationDao')
-      const user = c.get('user')
+      const notificationUseCase = container.resolve('notificationUseCase')
       const input = c.req.valid('json')
       return c.json(
-        await notificationDao.upsertWebPushSubscription({
-          userId: user.userId,
+        await notificationUseCase.upsertWebPushSubscription({
+          ctx: createActorContext(c.get('actor')),
           endpoint: input.endpoint,
           p256dh: input.keys.p256dh,
           auth: input.keys.auth,
@@ -194,9 +202,11 @@ export function createNotificationHandler(container: AppContainer) {
   )
 
   notificationHandler.delete('/web-push-subscriptions/:idOrEndpoint', async (c) => {
-    const notificationDao = container.resolve('notificationDao')
-    const user = c.get('user')
-    await notificationDao.deactivateWebPushSubscription(user.userId, c.req.param('idOrEndpoint'))
+    const notificationUseCase = container.resolve('notificationUseCase')
+    await notificationUseCase.deactivateWebPushSubscription({
+      ctx: createActorContext(c.get('actor')),
+      idOrEndpoint: c.req.param('idOrEndpoint'),
+    })
     return c.json({ ok: true })
   })
 

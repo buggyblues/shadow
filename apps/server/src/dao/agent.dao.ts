@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agents, users } from '../db/schema'
 
@@ -112,8 +112,11 @@ export class AgentDao {
     return result[0] ?? null
   }
 
-  async delete(id: string) {
-    await this.db.delete(agents).where(eq(agents.id, id))
+  /** Scoped delete by userId (owner) and agent id */
+  async deleteByUserIdAndId(userId: string, id: string) {
+    await this.db
+      .delete(agents)
+      .where(and(eq(agents.id, id), eq(agents.ownerId, userId)))
   }
 
   /** 创建 Agent 关联的 bot user，username冲突时自动加随机短缀 */

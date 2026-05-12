@@ -1,4 +1,4 @@
-import { and, eq, inArray, not } from 'drizzle-orm'
+import { and, desc, eq, inArray, ne, not } from 'drizzle-orm'
 import type { Database } from '../db'
 import { cloudTemplates } from '../db/schema'
 
@@ -121,6 +121,89 @@ export class CloudTemplateDao {
       })
       .where(eq(cloudTemplates.id, id))
       .returning()
+    return result[0] ?? null
+  }
+
+  async createCommunity(data: {
+    slug: string
+    name: string
+    description?: string | null
+    content: unknown
+    tags: string[]
+    source: 'official' | 'community'
+    reviewStatus: 'draft' | 'pending' | 'approved' | 'rejected'
+    submittedByUserId: string
+    authorId: string
+    category?: string | null
+    baseCost?: number | null
+  }) {
+    const result = await this.db
+      .insert(cloudTemplates)
+      .values({
+        slug: data.slug,
+        name: data.name,
+        description: data.description,
+        content: data.content as Record<string, unknown>,
+        tags: data.tags,
+        source: data.source,
+        reviewStatus: data.reviewStatus,
+        submittedByUserId: data.submittedByUserId,
+        authorId: data.authorId,
+        category: data.category ?? null,
+        baseCost: data.baseCost ?? null,
+      })
+      .returning()
+    return result[0] ?? null
+  }
+
+  async updateBySlug(
+    slug: string,
+    data: {
+      name?: string
+      description?: string | null
+      content?: Record<string, unknown>
+      tags?: string[]
+      category?: string | null
+      baseCost?: number | null
+    },
+  ) {
+    const result = await this.db
+      .update(cloudTemplates)
+      .set({
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.content !== undefined && { content: data.content as Record<string, unknown> }),
+        ...(data.tags !== undefined && { tags: data.tags }),
+        ...(data.category !== undefined && { category: data.category }),
+        ...(data.baseCost !== undefined && { baseCost: data.baseCost }),
+        updatedAt: new Date(),
+      })
+      .where(eq(cloudTemplates.slug, slug))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async deleteBySlug(slug: string) {
+    await this.db.delete(cloudTemplates).where(eq(cloudTemplates.slug, slug))
+  }
+
+  async listByAuthorId(authorId: string) {
+    return this.db
+      .select()
+      .from(cloudTemplates)
+      .where(and(eq(cloudTemplates.authorId, authorId), ne(cloudTemplates.source, 'official')))
+      .orderBy(desc(cloudTemplates.updatedAt))
+      .limit(100)
+  }
+
+  async findBySlugForAuthor(slug: string, authorId: string) {
+    const result = await this.db
+      .select()
+      .from(cloudTemplates)
+      .where(
+        and(eq(cloudTemplates.slug, slug), eq(cloudTemplates.authorId, authorId), ne(cloudTemplates.source, 'official')),
+      )
+      .limit(1)
     return result[0] ?? null
   }
 }

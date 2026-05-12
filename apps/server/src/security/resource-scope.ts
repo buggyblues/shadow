@@ -10,8 +10,17 @@ export type ResourceKind =
   | 'wallet'
   | 'rental-contract'
   | 'agent'
+  | 'channel'
+  | 'user'
+  | 'message'
+  | 'inviteCode'
+  | 'backup'
+  | 'envvar'
+  | 'cluster'
+  | 'config'
+  | 'profileComment'
 
-export type ScopeKind = 'platform' | 'server' | 'shop' | 'workspace' | 'user' | 'deployment'
+export type ScopeKind = 'platform' | 'server' | 'shop' | 'workspace' | 'user' | 'deployment' | 'channel'
 
 export type ResourceRef = {
   kind: ResourceKind
@@ -38,4 +47,5 @@ export const RESOURCE_SCOPE_PARENT: Partial<Record<ResourceKind, ScopeKind[]>> =
   wallet: ['user'],
   'rental-contract': ['user', 'server'],
   agent: ['user', 'server'],
+  channel: ['server', 'user'],
 }

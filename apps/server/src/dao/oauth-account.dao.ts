@@ -40,4 +40,12 @@ export class OAuthAccountDao {
   async delete(id: string) {
     await this.db.delete(oauthAccounts).where(eq(oauthAccounts.id, id))
   }
+
+  async deleteByUserIdAndProvider(userId: string, provider: string) {
+    const result = await this.db
+      .delete(oauthAccounts)
+      .where(and(eq(oauthAccounts.userId, userId), eq(oauthAccounts.provider, provider)))
+      .returning()
+    return result[0] ?? null
+  }
 }

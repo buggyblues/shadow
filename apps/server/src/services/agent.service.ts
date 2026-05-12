@@ -394,7 +394,7 @@ export class AgentService {
     }
 
     // Delete the agent record first (cascade deletes agent_policies)
-    await this.deps.agentDao.delete(id)
+    await this.deps.agentDao.deleteByUserIdAndId(agent.ownerId, id)
 
     // Delete the bot user — cascade removes members entries from all servers
     await this.deps.userDao.delete(agent.userId)

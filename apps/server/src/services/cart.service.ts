@@ -73,14 +73,14 @@ export class CartService {
 
   async updateCartItemQuantity(itemId: string, userId: string, quantity: number) {
     if (quantity <= 0) {
-      await this.deps.cartDao.delete(itemId, userId)
+      await this.deps.cartDao.deleteByUserIdAndId(userId, itemId)
       return null
     }
     return this.deps.cartDao.updateQuantity(itemId, userId, quantity)
   }
 
   async removeFromCart(itemId: string, userId: string) {
-    return this.deps.cartDao.delete(itemId, userId)
+    return this.deps.cartDao.deleteByUserIdAndId(userId, itemId)
   }
 
   async clearCart(userId: string, shopId: string) {

@@ -111,7 +111,19 @@ import { TipService } from './services/tip.service'
 import { VoiceEnhanceService } from './services/voice-enhance.service'
 import { WalletService } from './services/wallet.service'
 import { WorkspaceService } from './services/workspace.service'
+import { AdminUseCase } from './usecases/admin.usecase'
+import { ApiTokenUseCase } from './usecases/api-token.usecase'
 import { AppUseCase } from './usecases/app.usecase'
+import { AuthUseCase } from './usecases/auth.usecase'
+import { ChannelUseCase } from './usecases/channel.usecase'
+import { ServerUseCase } from './usecases/server.usecase'
+import { CloudUseCase } from './usecases/cloud.usecase'
+import { CloudSaasUseCase } from './usecases/cloud-saas.usecase'
+import { InviteUseCase } from './usecases/invite.usecase'
+import { ProductUseCase } from './usecases/product.usecase'
+import { ShopUseCase } from './usecases/shop.usecase'
+import { NotificationUseCase } from './usecases/notification.usecase'
+import { ProfileCommentUseCase } from './usecases/profile-comment.usecase'
 
 export interface Cradle {
   // Infrastructure
@@ -127,6 +139,18 @@ export interface Cradle {
   mediaAccessGateway: MediaAccessGateway
   commandGateway: CommandGateway
   appUseCase: AppUseCase
+  cloudUseCase: CloudUseCase
+  cloudSaasUseCase: CloudSaasUseCase
+  adminUseCase: AdminUseCase
+  notificationUseCase: NotificationUseCase
+  inviteUseCase: InviteUseCase
+  profileCommentUseCase: ProfileCommentUseCase
+  authUseCase: AuthUseCase
+  apiTokenUseCase: ApiTokenUseCase
+  channelUseCase: ChannelUseCase
+  serverUseCase: ServerUseCase
+  shopUseCase: ShopUseCase
+  productUseCase: ProductUseCase
 
   // DAOs
   userDao: UserDao
@@ -275,6 +299,18 @@ export function createAppContainer(db: Database): AppContainer {
     mediaAccessGateway: asClass(MediaAccessGateway).singleton(),
     commandGateway: asClass(CommandGateway).singleton(),
     appUseCase: asClass(AppUseCase).singleton(),
+    cloudUseCase: asClass(CloudUseCase).singleton(),
+    cloudSaasUseCase: asClass(CloudSaasUseCase).singleton(),
+    adminUseCase: asClass(AdminUseCase).singleton(),
+    notificationUseCase: asClass(NotificationUseCase).singleton(),
+    inviteUseCase: asClass(InviteUseCase).singleton(),
+    profileCommentUseCase: asClass(ProfileCommentUseCase).singleton(),
+    authUseCase: asClass(AuthUseCase).singleton(),
+    apiTokenUseCase: asClass(ApiTokenUseCase).singleton(),
+    channelUseCase: asClass(ChannelUseCase).singleton(),
+    serverUseCase: asClass(ServerUseCase).singleton(),
+    shopUseCase: asClass(ShopUseCase).singleton(),
+    productUseCase: asClass(ProductUseCase).singleton(),
 
     // DAOs
     userDao: asClass(UserDao).singleton(),
