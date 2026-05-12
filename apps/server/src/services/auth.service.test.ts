@@ -4,6 +4,7 @@ import type { AgentDao } from '../dao/agent.dao'
 import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { PasswordChangeLogDao } from '../dao/password-change-log.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { SafeHttpClient } from '../gateways/safe-http-client'
 import type { TaskCenterService } from '../services/task-center.service'
 import { AuthService } from './auth.service'
 import type { MembershipService } from './membership.service'
@@ -121,6 +122,9 @@ describe('AuthService', () => {
       taskCenterService: mockTaskCenterService,
       passwordChangeLogDao: mockPasswordChangeLogDao,
       membershipService: mockMembershipService,
+      safeHttpClient: {
+        fetch: vi.fn().mockResolvedValue({ ok: true }),
+      } as unknown as SafeHttpClient,
     })
   })
 

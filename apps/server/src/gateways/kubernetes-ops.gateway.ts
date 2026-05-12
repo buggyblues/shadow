@@ -1,4 +1,12 @@
-import { deleteNamespace, listManagedNamespaces } from '@shadowob/cloud'
+import type { spawn } from 'node:child_process'
+import {
+  deleteNamespace,
+  listManagedNamespaces,
+  listPodsAsync,
+  readPodLogsAsync,
+  restorePvcFromVolumeSnapshot,
+  spawnPodLogStream,
+} from '@shadowob/cloud'
 import type { Logger } from 'pino'
 import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { AccessService } from '../security/access.service'
@@ -60,5 +68,45 @@ export class KubernetesOpsGateway {
       'info',
     )
     return created
+  }
+
+  listPods(namespace: string, kubeconfig?: string) {
+    return listPodsAsync(namespace, kubeconfig)
+  }
+
+  readPodLogs(opts: {
+    namespace: string
+    pod: string
+    container?: string
+    tail?: number
+    timestamps?: boolean
+    kubeconfig?: string
+    timeout?: number
+  }) {
+    return readPodLogsAsync(opts)
+  }
+
+  restorePvcFromSnapshot(opts: {
+    namespace: string
+    pvcName: string
+    snapshotName: string
+    kubeconfig?: string
+    accessModes?: string[]
+    storage?: string
+    storageClassName?: string
+    timeoutMs?: number
+  }) {
+    return restorePvcFromVolumeSnapshot(opts)
+  }
+
+  streamPodLogs(opts: {
+    namespace: string
+    pod: string
+    container?: string
+    follow?: boolean
+    tail?: number
+    kubeconfig?: string
+  }): { proc: ReturnType<typeof spawn>; cleanup: () => void } {
+    return spawnPodLogStream(opts)
   }
 }

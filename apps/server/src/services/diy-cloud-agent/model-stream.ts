@@ -11,6 +11,7 @@ import {
   type ToolCall,
   type Usage,
 } from '@earendil-works/pi-ai'
+import { SafeHttpClient } from '../../gateways/safe-http-client'
 import { logger } from '../../lib/logger'
 import { DEFAULT_GENERATOR_MODEL } from './config'
 import { firstNonEmptyEnv } from './utils'
@@ -559,87 +560,97 @@ async function readStreamingResponse(
   })
 }
 
-export const diyCloudOpenAiStream: StreamFn = (model, context, options) => {
-  const stream = createAssistantMessageEventStream()
-  void (async () => {
-    const baseUrl = model.baseUrl || generatorBaseUrl()
-    const apiKey = options?.apiKey || generatorApiKey()
-    if (!baseUrl || !apiKey) {
-      stream.push({
-        type: 'error',
-        reason: 'error',
-        error: errorMessage(model, 'DIY Cloud model provider is not configured'),
-      })
-      return
-    }
+export function createDiyCloudOpenAiStream(safeHttpClient: SafeHttpClient): StreamFn {
+  return (model, context, options) => {
+    const stream = createAssistantMessageEventStream()
+    void (async () => {
+      const baseUrl = model.baseUrl || generatorBaseUrl()
+      const apiKey = options?.apiKey || generatorApiKey()
+      if (!baseUrl || !apiKey) {
+        stream.push({
+          type: 'error',
+          reason: 'error',
+          error: errorMessage(model, 'DIY Cloud model provider is not configured'),
+        })
+        return
+      }
 
-    try {
-      const tools = convertTools(context)
-      const jsonOnly = shouldRequestJsonObject(context, tools.length)
-      const payload = {
-        model: model.id,
-        temperature: 0.18,
-        stream: true,
-        stream_options: { include_usage: true },
-        messages: [
-          ...(context.systemPrompt
-            ? [{ role: 'system' as const, content: context.systemPrompt }]
-            : []),
-          ...convertMessages(context.messages),
-        ],
-        ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
-        ...(jsonOnly ? { response_format: { type: 'json_object' } } : {}),
-      }
-      const requestUrl = chatCompletionsUrl(baseUrl)
-      const requestInit = (body: unknown): RequestInit => ({
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        signal: options?.signal,
-        body: JSON.stringify(body),
-      })
-      let response = await fetch(requestUrl, requestInit(payload))
-      if (!response.ok && jsonOnly && (response.status === 400 || response.status === 422)) {
-        const fallbackPayload = { ...payload }
-        delete (fallbackPayload as { response_format?: unknown }).response_format
-        response = await fetch(requestUrl, requestInit(fallbackPayload))
-      }
-      if (!response.ok) {
-        const providerError = await readProviderError(response)
-        logger.warn(
-          {
-            status: response.status,
-            providerError,
+      try {
+        const tools = convertTools(context)
+        const jsonOnly = shouldRequestJsonObject(context, tools.length)
+        const payload = {
+          model: model.id,
+          temperature: 0.18,
+          stream: true,
+          stream_options: { include_usage: true },
+          messages: [
+            ...(context.systemPrompt
+              ? [{ role: 'system' as const, content: context.systemPrompt }]
+              : []),
+            ...convertMessages(context.messages),
+          ],
+          ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+          ...(jsonOnly ? { response_format: { type: 'json_object' } } : {}),
+        }
+        const requestUrl = chatCompletionsUrl(baseUrl)
+        const requestInit = (body: unknown): RequestInit => ({
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
           },
-          'DIY Cloud model provider rejected request',
-        )
-        throw Object.assign(
-          new Error(`DIY Cloud model request failed with HTTP ${response.status}`),
-          {
-            status: 502,
-            code: 'DIY_CLOUD_MODEL_REQUEST_FAILED',
-          },
-        )
+          signal: options?.signal,
+          body: JSON.stringify(body),
+        })
+        let response = await safeHttpClient.fetch(requestUrl, requestInit(payload), {
+          maxRedirects: 0,
+        })
+        if (!response.ok && jsonOnly && (response.status === 400 || response.status === 422)) {
+          const fallbackPayload = { ...payload }
+          delete (fallbackPayload as { response_format?: unknown }).response_format
+          response = await safeHttpClient.fetch(requestUrl, requestInit(fallbackPayload), {
+            maxRedirects: 0,
+          })
+        }
+        if (!response.ok) {
+          const providerError = await readProviderError(response)
+          logger.warn(
+            {
+              status: response.status,
+              providerError,
+            },
+            'DIY Cloud model provider rejected request',
+          )
+          throw Object.assign(
+            new Error(`DIY Cloud model request failed with HTTP ${response.status}`),
+            {
+              status: 502,
+              code: 'DIY_CLOUD_MODEL_REQUEST_FAILED',
+            },
+          )
+        }
+        const contentType = response.headers.get('content-type') ?? ''
+        if (contentType.includes('application/json')) {
+          await readJsonResponse(response, stream, model)
+        } else {
+          await readStreamingResponse(response, stream, model)
+        }
+      } catch (err) {
+        const aborted =
+          err instanceof DOMException && err.name === 'AbortError'
+            ? true
+            : options?.signal?.aborted === true
+        stream.push({
+          type: 'error',
+          reason: aborted ? 'aborted' : 'error',
+          error: errorMessage(model, err, aborted),
+        })
       }
-      const contentType = response.headers.get('content-type') ?? ''
-      if (contentType.includes('application/json')) {
-        await readJsonResponse(response, stream, model)
-      } else {
-        await readStreamingResponse(response, stream, model)
-      }
-    } catch (err) {
-      const aborted =
-        err instanceof DOMException && err.name === 'AbortError'
-          ? true
-          : options?.signal?.aborted === true
-      stream.push({
-        type: 'error',
-        reason: aborted ? 'aborted' : 'error',
-        error: errorMessage(model, err, aborted),
-      })
-    }
-  })()
-  return stream
+    })()
+    return stream
+  }
 }
+
+export const diyCloudOpenAiStream: StreamFn = createDiyCloudOpenAiStream(
+  new SafeHttpClient({ logger }),
+)

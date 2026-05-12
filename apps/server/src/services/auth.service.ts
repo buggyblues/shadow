@@ -6,6 +6,7 @@ import type { AgentDao } from '../dao/agent.dao'
 import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { PasswordChangeLogDao } from '../dao/password-change-log.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { randomFixedDigits } from '../lib/id'
 import { signAccessToken, signRefreshToken, verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
@@ -80,6 +81,7 @@ export class AuthService {
       taskCenterService: TaskCenterService
       passwordChangeLogDao: PasswordChangeLogDao
       membershipService: MembershipService
+      safeHttpClient: SafeHttpClient
     },
   ) {}
 
@@ -455,7 +457,7 @@ export class AuthService {
   private async deliverEmailOtp(email: string, code: string, locale?: string) {
     const webhookUrl = process.env.EMAIL_OTP_WEBHOOK_URL
     if (webhookUrl) {
-      const res = await fetch(webhookUrl, {
+      const res = await this.deps.safeHttpClient.fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: email, code, locale }),
