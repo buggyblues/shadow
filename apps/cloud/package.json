@@ -99,7 +99,7 @@
     "@standard-schema/spec": "^1.1.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^22.15.21",
+    "@types/node": "^25.6.2",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.6",
     "@typia/unplugin": "^12.0.1",

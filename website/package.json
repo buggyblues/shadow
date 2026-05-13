@@ -21,7 +21,7 @@
     "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/canvas-confetti": "^1.9.0",
-    "@types/node": "^22",
+    "@types/node": "^25",
     "tailwindcss": "^4.2.4"
   }
 }
