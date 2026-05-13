@@ -4,7 +4,7 @@
 # from source. The app image defaults match .github/workflows/publish-prod-images.yml.
 #
 # Usage:
-#   docker compose -f docker-compose.prod.yml pull server web
+#   docker compose -f docker-compose.prod.yml pull server web admin
 #   docker compose -f docker-compose.prod.yml up -d
 #
 # ⚠️  All sensitive values MUST be provided via a .env file.
@@ -107,6 +107,15 @@ services:
     restart: unless-stopped
     ports:
       - '3000:3000'
+    depends_on:
+      - server
+
+  admin:
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-admin:${SHADOW_IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
     depends_on:
       - server
 
