@@ -32,6 +32,8 @@ Examples:
   $0
   $0 opencli
   $0 opencli github --command 'opencli --version && gh --version'
+  SHADOW_PLUGIN_TEST_OPTIONS_CLAUDE_PLUGIN='{"marketplaces":[{"repo":"anthropics/financial-services","plugins":["pitch-agent"]}]}' \
+    $0 claude-plugin --image node:22-bookworm --no-shell --command 'test -f /claude-plugins/.shadow/plugins.json'
   $0 clean
 USAGE
 }

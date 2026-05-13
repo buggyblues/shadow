@@ -195,6 +195,7 @@ describe('loadAllPlugins', () => {
       'baidu-smartprogram',
       'browserbase',
       'canva',
+      'claude-plugin',
       'cloudflare',
       'cnb',
       'coze',

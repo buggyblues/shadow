@@ -1,5 +1,5 @@
 import { readdir } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { PluginDefinition, PluginK8sResult } from '../src/plugins/types.js'
 
@@ -42,40 +42,62 @@ async function loadPlugin(pluginId: string): Promise<PluginDefinition> {
   }
 }
 
+function pluginTestOptions(pluginId: string): Record<string, unknown> | undefined {
+  const specificKey = `SHADOW_PLUGIN_TEST_OPTIONS_${pluginId
+    .replace(/[^A-Za-z0-9]/gu, '_')
+    .toUpperCase()}`
+  const raw = process.env[specificKey] ?? process.env.SHADOW_PLUGIN_TEST_OPTIONS
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch (error) {
+    console.error(`Invalid JSON in ${specificKey}/SHADOW_PLUGIN_TEST_OPTIONS`)
+    if (process.env.DEBUG_PLUGIN_TEST_SCRIPT === '1') console.error(error)
+    process.exit(2)
+  }
+  return undefined
+}
+
 function buildK8s(plugin: PluginDefinition, pluginId: string): PluginK8sResult | undefined {
-  return plugin.k8s?.buildK8s(
-    {
-      id: 'plugin-test-agent',
-      name: 'Plugin Test Agent',
-      runtime: 'openclaw',
-      use: [{ plugin: pluginId }],
-      configuration: {},
-    },
-    {
-      agent: {
-        id: 'plugin-test-agent',
-        name: 'Plugin Test Agent',
-        runtime: 'openclaw',
-        configuration: {},
-      },
-      config: {
-        version: '1',
-        namespace: 'plugin-test',
-        use: [],
-        deployments: { agents: [] },
-      },
+  const options = pluginTestOptions(pluginId)
+  const agent = {
+    id: 'plugin-test-agent',
+    name: 'Plugin Test Agent',
+    runtime: 'openclaw',
+    use: [{ plugin: pluginId, ...(options ? { options } : {}) }],
+    configuration: {},
+  } as const
+  return plugin.k8s?.buildK8s(agent, {
+    agent,
+    config: {
+      version: '1',
       namespace: 'plugin-test',
+      use: [],
+      deployments: { agents: [agent] },
     },
-  )
+    namespace: 'plugin-test',
+  })
 }
 
 function installCommand(pluginId: string, result: PluginK8sResult | undefined) {
   const initContainer = result?.initContainers?.[0]
   const command = initContainer?.command
-  if (!Array.isArray(command) || command[0] !== 'sh' || command[1] !== '-lc') {
-    return ''
+  if (!Array.isArray(command)) return ''
+
+  const shell = String(command[0] ?? '')
+  if ((shell === 'sh' || shell === '/bin/sh') && command[1] === '-lc') {
+    return String(command[2] ?? '')
   }
-  return String(command[2] ?? '')
+
+  if (shell !== 'sh' && shell !== '/bin/sh') return ''
+  const scriptPath = typeof command[1] === 'string' ? command[1] : ''
+  if (!scriptPath) return ''
+  const scriptName = basename(scriptPath)
+  const configMap = result?.configMaps?.find((item) => item.data?.[scriptName])
+  return configMap?.data?.[scriptName] ?? ''
 }
 
 function copyMappings(result: PluginK8sResult | undefined) {

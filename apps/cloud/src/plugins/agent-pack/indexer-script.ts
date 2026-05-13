@@ -243,8 +243,22 @@ function frontmatterInteraction(data) {
   })
 }
 
-function derivePackId(path) {
+function derivePackId(path, mountPath) {
+  const mountParts = mountPath.split('/').filter(Boolean)
   const parts = path.split('/').filter(Boolean)
+  if (mountParts.length > 0) {
+    for (let i = 0; i <= parts.length - mountParts.length - 1; i++) {
+      let matches = true
+      for (let j = 0; j < mountParts.length; j++) {
+        if (parts[i + j] !== mountParts[j]) {
+          matches = false
+          break
+        }
+      }
+      if (matches && parts[i + mountParts.length]) return parts[i + mountParts.length]
+    }
+  }
+
   const idx = parts.lastIndexOf('agent-packs')
   if (idx >= 0 && parts[idx + 1]) return parts[idx + 1]
   return undefined
@@ -607,7 +621,7 @@ function readSlashCommand(path, fallbackName, options) {
   const { data, body } = parseFrontmatter(text)
   const name = normalizeSlashCommandName(data.name ?? fallbackName)
   if (!name) return null
-  const packId = derivePackId(path)
+  const packId = derivePackId(path, options.mountPath)
   const aliases = parseFrontmatterList(data.aliases)
     .map(normalizeSlashCommandName)
     .filter(Boolean)
@@ -706,6 +720,7 @@ const options = {
   generateScriptSkills,
   maxScriptCommandsPerPack,
   rules,
+  mountPath,
 }
 generateScriptSkillWrappers(mountPath, options)
 
