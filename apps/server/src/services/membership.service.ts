@@ -28,6 +28,8 @@ export interface MembershipSnapshot {
   capabilities: MembershipCapability[]
 }
 
+const BASE_AUTHENTICATED_CAPABILITIES: MembershipCapability[] = ['server:create']
+
 export const MEMBERSHIP_TIERS = {
   visitor: {
     id: 'visitor',
@@ -39,13 +41,7 @@ export const MEMBERSHIP_TIERS = {
     id: 'member',
     level: 10,
     label: 'Member',
-    capabilities: [
-      'cloud:deploy',
-      'cloud:diy_generate',
-      'server:create',
-      'invite:create',
-      'oauth_app:create',
-    ],
+    capabilities: ['cloud:deploy', 'cloud:diy_generate', 'invite:create', 'oauth_app:create'],
   },
 } satisfies Record<string, MembershipTier>
 
@@ -74,7 +70,7 @@ export class MembershipService {
       isMember,
       memberSince: usedInvite?.usedAt ?? (user.isAdmin ? user.createdAt : null),
       inviteCodeId: usedInvite?.id ?? null,
-      capabilities: [...tier.capabilities],
+      capabilities: [...new Set([...BASE_AUTHENTICATED_CAPABILITIES, ...tier.capabilities])],
     }
   }
 

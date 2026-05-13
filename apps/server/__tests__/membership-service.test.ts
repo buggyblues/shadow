@@ -33,7 +33,7 @@ describe('MembershipService', () => {
     expect(result.level).toBe(0)
     expect(result.tier.id).toBe('visitor')
     expect(result.isMember).toBe(false)
-    expect(result.capabilities).toEqual([])
+    expect(result.capabilities).toEqual(['server:create'])
   })
 
   it('grants member capabilities after invite redemption', async () => {
@@ -61,5 +61,12 @@ describe('MembershipService', () => {
       status: 403,
       code: 'INVITE_REQUIRED',
     })
+  })
+
+  it('allows visitors to create servers without an invite code', async () => {
+    const result = await service.requireMember('user-1', 'server:create')
+
+    expect(result.status).toBe('visitor')
+    expect(result.capabilities).toContain('server:create')
   })
 })
