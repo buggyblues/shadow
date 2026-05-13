@@ -121,5 +121,8 @@ services:
 
 volumes:
   pgdata:
+    name: ${SHADOW_POSTGRES_VOLUME:-shadow_pgdata}
   redisdata:
+    name: ${SHADOW_REDIS_VOLUME:-shadow_redisdata}
   miniodata:
+    name: ${SHADOW_MINIO_VOLUME:-shadow_miniodata}
