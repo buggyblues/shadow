@@ -31,7 +31,7 @@ interface FriendUser {
 
 interface FriendEntry {
   friendshipId: string
-  source: 'friend' | 'owned_agent' | 'rented_agent'
+  source: 'friend' | 'owned_agent'
   user: FriendUser
   createdAt: string
 }
@@ -41,7 +41,6 @@ export default function ServerInviteScreen() {
   const { t } = useTranslation()
   const colors = useColors()
   const _queryClient = useQueryClient()
-  // biome-ignore lint/suspicious/noExplicitAny: invite code shape varies
   const [codes, setCodes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -87,7 +86,6 @@ export default function ServerInviteScreen() {
 
   const fetchCodes = useCallback(async () => {
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: invite code shape varies
       const data = await fetchApi<any[]>('/api/invite-codes')
       setCodes(data)
     } catch {}

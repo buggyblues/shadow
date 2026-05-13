@@ -1,18 +1,22 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
-import { fontSize, useColors } from '../../theme'
+import { StyleSheet, View } from 'react-native'
+import { AppScreen, AppText, Spinner } from '../ui'
 
 interface LoadingScreenProps {
   message?: string
 }
 
 export function LoadingScreen({ message }: LoadingScreenProps) {
-  const colors = useColors()
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ActivityIndicator size="large" color={colors.primary} />
-      {message && <Text style={[styles.text, { color: colors.textSecondary }]}>{message}</Text>}
-    </View>
+    <AppScreen>
+      <View style={styles.container}>
+        <Spinner size="large" />
+        {message && (
+          <AppText variant="body" tone="secondary" style={styles.text}>
+            {message}
+          </AppText>
+        )}
+      </View>
+    </AppScreen>
   )
 }
 
@@ -24,6 +28,5 @@ const styles = StyleSheet.create({
   },
   text: {
     marginTop: 12,
-    fontSize: fontSize.md,
   },
 })

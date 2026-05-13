@@ -1,22 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, Search, UserPlus, X } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  FlatList,
-  Modal,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import Reanimated, { FadeInRight } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../src/components/common/avatar'
-import { EmptyState } from '../../src/components/common/empty-state'
+import { AppScreen, CardPressable, EmptyState, Indicator, TextField } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
@@ -32,9 +23,9 @@ interface FriendUser {
 
 interface FriendEntry {
   friendshipId: string
-  source: 'friend' | 'owned_agent' | 'rented_agent'
+  source: 'friend' | 'owned_agent'
   user: FriendUser
-  agentStatus?: 'available' | 'listed' | 'rented_out'
+  agentStatus?: 'available'
   createdAt: string
 }
 
@@ -125,15 +116,8 @@ export default function FriendsScreen() {
     setRefreshing(false)
   }
 
-  const statusColors: Record<string, string> = {
-    online: '#23a559',
-    idle: '#f59e0b',
-    dnd: '#ed4245',
-    offline: '#747f8d',
-  }
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <AppScreen>
       <View
         style={[
           styles.navBar,
@@ -155,11 +139,9 @@ export default function FriendsScreen() {
         <View style={styles.navSpacer} />
       </View>
 
-      <Pressable
-        style={[
-          styles.utilityRow,
-          { borderBottomColor: colors.border, backgroundColor: colors.surface },
-        ]}
+      <CardPressable
+        variant="glassPanel"
+        style={styles.utilityRow}
         onPress={() => router.push('/(main)/friends/new-friends' as never)}
       >
         <View style={styles.utilityLeft}>
@@ -178,24 +160,23 @@ export default function FriendsScreen() {
           )}
           <ChevronRight size={16} color={colors.textMuted} />
         </View>
-      </Pressable>
+      </CardPressable>
 
-      <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
-        <View style={[styles.searchBox, { backgroundColor: colors.inputBackground }]}>
-          <Search size={16} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={t('friends.searchPlaceholder', '搜索好友...')}
-            placeholderTextColor={colors.textMuted}
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={() => setSearchQuery('')} hitSlop={10}>
-              <X size={16} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </View>
+      <View style={styles.searchWrap}>
+        <TextField
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder={t('friends.searchPlaceholder', '搜索好友...')}
+          left={<Search size={16} color={colors.textMuted} />}
+          right={
+            searchQuery.length > 0 ? (
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={10}>
+                <X size={16} color={colors.textMuted} />
+              </Pressable>
+            ) : null
+          }
+          style={styles.searchBox}
+        />
       </View>
 
       <FlatList
@@ -211,14 +192,9 @@ export default function FriendsScreen() {
         contentContainerStyle={styles.listContent}
         renderItem={({ item, index }) => (
           <Reanimated.View entering={FadeInRight.delay(index * 20).springify()}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.rowCard,
-                {
-                  borderBottomColor: colors.border,
-                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
-                },
-              ]}
+            <CardPressable
+              variant="surface"
+              style={styles.rowCard}
               onPress={() => openDirectChannel(item.user.id)}
               onLongPress={() => {
                 setMenuTarget(item)
@@ -231,14 +207,10 @@ export default function FriendsScreen() {
                   size={46}
                   userId={item.user.id}
                 />
-                <View
-                  style={[
-                    styles.statusDot,
-                    {
-                      backgroundColor: statusColors[item.user.status] ?? statusColors.offline,
-                      borderColor: colors.surface,
-                    },
-                  ]}
+                <Indicator
+                  status={item.user.status}
+                  size="md"
+                  style={[styles.statusDot, { borderColor: colors.surface }]}
                 />
               </View>
               <View style={styles.rowInfo}>
@@ -250,12 +222,12 @@ export default function FriendsScreen() {
                 </Text>
               </View>
               <ChevronRight size={16} color={colors.textMuted} />
-            </Pressable>
+            </CardPressable>
           </Reanimated.View>
         )}
         ListEmptyComponent={
           <EmptyState
-            icon="👋"
+            icon={UserPlus}
             title={t('friends.noFriends', '还没有好友')}
             description={t('friends.noFriendsHint', '先去“新的朋友”添加好友')}
           />
@@ -315,7 +287,7 @@ export default function FriendsScreen() {
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </AppScreen>
   )
 }
 
@@ -335,12 +307,12 @@ const styles = StyleSheet.create({
   navTitle: { fontSize: fontSize.lg, fontWeight: '800' },
   navSpacer: { width: 32, height: 32 },
   utilityRow: {
+    margin: spacing.md,
+    marginBottom: 0,
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
   },
   utilityLeft: { gap: 3 },
   utilityTitle: { fontSize: fontSize.md, fontWeight: '700' },
@@ -357,24 +329,13 @@ const styles = StyleSheet.create({
   },
   tabBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   searchWrap: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  searchBox: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-    gap: spacing.xs,
-  },
-  searchInput: { flex: 1, fontSize: fontSize.sm, paddingVertical: 0 },
-  listContent: { paddingBottom: 120 },
+  searchBox: {},
+  listContent: { paddingHorizontal: spacing.md, paddingBottom: 120, gap: spacing.sm },
   rowCard: {
     minHeight: 70,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
     gap: spacing.md,
-    borderBottomWidth: 1,
   },
   avatarWrap: { position: 'relative' },
   statusDot: {

@@ -1,7 +1,16 @@
+import { KeyRound } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
+import {
+  AppText,
+  BackgroundSurface,
+  Button,
+  GlassPanel,
+  MenuItem,
+  TextField,
+} from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
@@ -99,40 +108,44 @@ export default function AccountSettingsScreen() {
     }) ?? []
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <BackgroundSurface style={styles.container}>
       <SettingsHeader title={t('settings.tabAccount')} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        <Text style={[styles.groupTitle, { color: colors.textMuted }]}>
+        <AppText variant="label" tone="secondary" style={styles.groupTitle}>
           {t('settings.tabAccount').toUpperCase()}
-        </Text>
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <View style={[styles.row, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>
+        </AppText>
+        <GlassPanel style={styles.card}>
+          <View style={[styles.row, { borderBottomColor: colors.glassLine }]}>
+            <AppText variant="label" tone="secondary" style={styles.label}>
               {t('settings.emailLabel')}
-            </Text>
-            <Text style={{ color: colors.text, fontSize: fontSize.sm }}>{user.email}</Text>
+            </AppText>
+            <AppText variant="label">{user.email}</AppText>
           </View>
-          <View style={[styles.row, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>
+          <View style={[styles.row, { borderBottomColor: colors.glassLine }]}>
+            <AppText variant="label" tone="secondary" style={styles.label}>
               {t('settings.usernameLabel')}
-            </Text>
-            <Text style={{ color: colors.text, fontSize: fontSize.sm }}>@{user.username}</Text>
+            </AppText>
+            <AppText variant="label">@{user.username}</AppText>
           </View>
-          <View style={[styles.row, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>
+          <View style={[styles.row, { borderBottomColor: colors.glassLine }]}>
+            <AppText variant="label" tone="secondary" style={styles.label}>
               {t('settings.membershipStatusLabel')}
-            </Text>
-            <Text style={{ color: membership?.isMember ? colors.success : colors.textMuted }}>
+            </AppText>
+            <AppText
+              variant="label"
+              style={{ color: membership?.isMember ? colors.success : colors.textMuted }}
+            >
               {`${tierLabel} · ${t('settings.membershipLevelLabel', { level: membership?.level ?? 0 })}`}
-            </Text>
+            </AppText>
           </View>
-          <View style={[styles.row, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>
+          <View style={[styles.row, { borderBottomColor: colors.glassLine }]}>
+            <AppText variant="label" tone="secondary" style={styles.label}>
               {t('settings.membershipCapabilitiesLabel')}
-            </Text>
-            <Text
+            </AppText>
+            <AppText
+              variant="label"
+              tone="secondary"
               style={{
-                color: colors.textMuted,
                 fontSize: fontSize.xs,
                 flex: 1,
                 textAlign: 'right',
@@ -141,88 +154,82 @@ export default function AccountSettingsScreen() {
               {capabilityLabels.length
                 ? capabilityLabels.join(', ')
                 : t('settings.membershipNoCapabilities')}
-            </Text>
+            </AppText>
           </View>
           <View style={[styles.row, { borderBottomWidth: 0 }]}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>
+            <AppText variant="label" tone="secondary" style={styles.label}>
               {t('settings.userIdLabel')}
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: 'monospace' }}>
+            </AppText>
+            <AppText
+              variant="label"
+              tone="secondary"
+              style={{ fontSize: 10, fontFamily: 'monospace' }}
+            >
               {user.id}
-            </Text>
+            </AppText>
           </View>
-        </View>
+        </GlassPanel>
 
         {!membership?.isMember ? (
-          <View style={[styles.card, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.label, { color: colors.text, marginBottom: spacing.sm }]}>
+          <GlassPanel style={styles.card}>
+            <AppText variant="label" style={[styles.label, { marginBottom: spacing.sm }]}>
               {t('settings.membershipRedeemTitle')}
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                  color: colors.text,
-                },
-              ]}
+            </AppText>
+            <TextField
               value={inviteCode}
               onChangeText={setInviteCode}
               placeholder={t('settings.membershipRedeemPlaceholder')}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
               editable={!inviteLoading}
             />
             {inviteError ? (
-              <Text style={{ color: colors.error, fontSize: fontSize.xs }}>{inviteError}</Text>
+              <AppText variant="label" tone="danger">
+                {inviteError}
+              </AppText>
             ) : inviteSuccess ? (
-              <Text style={{ color: colors.success, fontSize: fontSize.xs }}>
+              <AppText variant="label" tone="success">
                 {t('settings.membershipRedeemedSuccess')}
-              </Text>
+              </AppText>
             ) : (
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+              <AppText variant="label" tone="secondary">
                 {t('settings.membershipVisitorHint')}
-              </Text>
+              </AppText>
             )}
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: inviteLoading || !inviteCode.trim() ? 0.6 : 1,
-                },
-              ]}
+            <Button
+              variant="primary"
+              size="md"
               onPress={handleRedeemInvite}
               disabled={inviteLoading || !inviteCode.trim()}
+              loading={inviteLoading}
             >
-              <Text style={styles.actionButtonText}>{t('settings.membershipRedeemAction')}</Text>
-            </TouchableOpacity>
-          </View>
+              {t('settings.membershipRedeemAction')}
+            </Button>
+          </GlassPanel>
         ) : null}
 
         {/* Change Password Section */}
-        <Text style={[styles.groupTitle, { color: colors.textMuted }]}>
+        <AppText variant="label" tone="secondary" style={styles.groupTitle}>
           {t('settings.security').toUpperCase()}
-        </Text>
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        </AppText>
+        <GlassPanel style={styles.card}>
           {!showPasswordForm ? (
-            <TouchableOpacity
-              style={[styles.row, { borderBottomWidth: 0 }]}
+            <MenuItem
+              icon={KeyRound}
+              title={t('settings.changePassword')}
+              subtitle={t('settings.changePasswordDesc')}
+              tone="primary"
               onPress={() => setShowPasswordForm(true)}
-            >
-              <Text style={[styles.label, { color: colors.textMuted }]}>
-                {t('settings.changePassword')}
-              </Text>
-              <Text style={{ color: colors.primary, fontSize: fontSize.sm }}>
-                {t('settings.tapToChange')}
-              </Text>
-            </TouchableOpacity>
+              right={
+                <AppText variant="label" tone="primary">
+                  {t('settings.tapToChange')}
+                </AppText>
+              }
+            />
           ) : (
             <View style={styles.passwordForm}>
-              <Text style={[styles.label, { color: colors.text, marginBottom: spacing.sm }]}>
+              <AppText variant="label" style={[styles.label, { marginBottom: spacing.sm }]}>
                 {t('settings.changePasswordTitle')}
-              </Text>
+              </AppText>
 
               {passwordSuccess && (
                 <View
@@ -231,9 +238,9 @@ export default function AccountSettingsScreen() {
                     { backgroundColor: `${colors.success}20`, borderColor: colors.success },
                   ]}
                 >
-                  <Text style={{ color: colors.success, fontSize: fontSize.sm }}>
+                  <AppText variant="label" tone="success">
                     {t('settings.passwordChangedSuccess')}
-                  </Text>
+                  </AppText>
                 </View>
               )}
 
@@ -244,45 +251,30 @@ export default function AccountSettingsScreen() {
                     { backgroundColor: `${colors.error}20`, borderColor: colors.error },
                   ]}
                 >
-                  <Text style={{ color: colors.error, fontSize: fontSize.sm }}>
+                  <AppText variant="label" tone="danger">
                     {passwordError}
-                  </Text>
+                  </AppText>
                 </View>
               )}
 
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
+              <TextField
                 placeholder={t('settings.oldPasswordPlaceholder')}
-                placeholderTextColor={colors.textMuted}
                 secureTextEntry
                 value={passwordForm.oldPassword}
                 onChangeText={(text) => setPasswordForm({ ...passwordForm, oldPassword: text })}
                 editable={!passwordLoading}
               />
 
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
+              <TextField
                 placeholder={t('settings.newPasswordPlaceholder')}
-                placeholderTextColor={colors.textMuted}
                 secureTextEntry
                 value={passwordForm.newPassword}
                 onChangeText={(text) => setPasswordForm({ ...passwordForm, newPassword: text })}
                 editable={!passwordLoading}
               />
 
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
+              <TextField
                 placeholder={t('settings.confirmPasswordPlaceholder')}
-                placeholderTextColor={colors.textMuted}
                 secureTextEntry
                 value={passwordForm.confirmPassword}
                 onChangeText={(text) => setPasswordForm({ ...passwordForm, confirmPassword: text })}
@@ -290,8 +282,9 @@ export default function AccountSettingsScreen() {
               />
 
               <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}
+                <Button
+                  variant="glass"
+                  size="sm"
                   onPress={() => {
                     setShowPasswordForm(false)
                     setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
@@ -299,23 +292,23 @@ export default function AccountSettingsScreen() {
                   }}
                   disabled={passwordLoading}
                 >
-                  <Text style={{ color: colors.textMuted }}>{t('common.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.button, styles.submitButton, { backgroundColor: colors.primary }]}
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
                   onPress={handleChangePassword}
                   disabled={passwordLoading}
+                  loading={passwordLoading}
                 >
-                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>
-                    {passwordLoading ? t('settings.changingPassword') : t('settings.submit')}
-                  </Text>
-                </TouchableOpacity>
+                  {t('settings.submit')}
+                </Button>
               </View>
             </View>
           )}
-        </View>
+        </GlassPanel>
       </ScrollView>
-    </View>
+    </BackgroundSurface>
   )
 }
 
@@ -345,13 +338,7 @@ const styles = StyleSheet.create({
   },
   passwordForm: {
     padding: spacing.lg,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: 12,
-    marginBottom: spacing.sm,
-    fontSize: fontSize.sm,
+    gap: spacing.sm,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -359,27 +346,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  button: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-  },
-  actionButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    paddingVertical: 12,
-    marginTop: spacing.sm,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-  },
-  cancelButton: {
-    borderWidth: 1,
-  },
-  submitButton: {},
   messageBox: {
     borderWidth: 1,
     borderRadius: radius.md,

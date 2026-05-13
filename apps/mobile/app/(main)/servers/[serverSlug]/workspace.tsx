@@ -33,17 +33,26 @@ import {
   Alert,
   FlatList,
   Linking,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { EmptyState } from '../../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import {
+  AppText,
+  BackgroundSurface,
+  Button,
+  GlassHeader,
+  GlassPanel,
+  MenuItem,
+  MetricCard,
+  Sheet,
+  TextField,
+} from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
@@ -464,17 +473,16 @@ export default function WorkspaceScreen() {
   if (isLoading) return <LoadingScreen />
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <BackgroundSurface style={styles.container}>
       {/* ── Toolbar ──────────────────────────────── */}
-      <View
-        style={[
-          styles.toolbar,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
+      <GlassHeader style={styles.toolbar}>
         {/* Back button when deep */}
         {folderPath.length > 1 && (
-          <Pressable
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={ArrowLeft}
+            iconColor={colors.text}
             onPress={() => {
               const prev = folderPath[folderPath.length - 2]
               if (prev) {
@@ -482,9 +490,7 @@ export default function WorkspaceScreen() {
               }
             }}
             style={styles.toolBtn}
-          >
-            <ArrowLeft size={18} color={colors.text} />
-          </Pressable>
+          />
         )}
 
         {/* Breadcrumbs */}
@@ -516,107 +522,99 @@ export default function WorkspaceScreen() {
 
         {/* Actions */}
         <View style={styles.toolbarActions}>
-          <Pressable
+          <Button
+            variant={actionMode === 'search' ? 'primary' : 'ghost'}
+            size="icon"
+            icon={Search}
+            iconColor={actionMode === 'search' ? undefined : colors.textMuted}
             onPress={() => setActionMode(actionMode === 'search' ? 'none' : 'search')}
             style={styles.toolBtn}
-          >
-            <Search size={18} color={actionMode === 'search' ? colors.primary : colors.textMuted} />
-          </Pressable>
-          <Pressable
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={FolderPlus}
+            iconColor={colors.textMuted}
             onPress={() => {
               setActionMode('create-folder')
               setInputValue('')
             }}
             style={styles.toolBtn}
-          >
-            <FolderPlus size={18} color={colors.textMuted} />
-          </Pressable>
-          <Pressable
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={FilePlus}
+            iconColor={colors.textMuted}
             onPress={() => {
               setActionMode('create-file')
               setInputValue('')
             }}
             style={styles.toolBtn}
-          >
-            <FilePlus size={18} color={colors.textMuted} />
-          </Pressable>
-          <Pressable onPress={handleUpload} style={styles.toolBtn}>
-            <Upload size={18} color={colors.textMuted} />
-          </Pressable>
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={Upload}
+            iconColor={colors.textMuted}
+            onPress={handleUpload}
+            style={styles.toolBtn}
+          />
           {clipboard && (
-            <Pressable onPress={() => pasteMutation.mutate()} style={styles.toolBtn}>
-              <Clipboard size={18} color={colors.primary} />
-            </Pressable>
+            <Button
+              variant="primary"
+              size="icon"
+              icon={Clipboard}
+              onPress={() => pasteMutation.mutate()}
+              style={styles.toolBtn}
+            />
           )}
         </View>
-      </View>
+      </GlassHeader>
 
       {/* ── Stats row ─────────────────────────────── */}
       {stats && (
-        <View
-          style={[
-            styles.statsRow,
-            { backgroundColor: colors.surface, borderBottomColor: colors.border },
-          ]}
-        >
-          <View style={styles.statChip}>
-            <Folder size={12} color={colors.primary} />
-            <Text style={[styles.statText, { color: colors.textMuted }]}>{stats.folderCount}</Text>
-          </View>
-          <View style={styles.statChip}>
-            <File size={12} color={colors.primary} />
-            <Text style={[styles.statText, { color: colors.textMuted }]}>{stats.fileCount}</Text>
-          </View>
+        <View style={styles.statsRow}>
+          <MetricCard label={t('workspace.folders')} value={stats.folderCount} icon={Folder} />
+          <MetricCard label={t('workspace.files')} value={stats.fileCount} icon={File} />
         </View>
       )}
 
       {/* ── Search bar ────────────────────────────── */}
       {actionMode === 'search' && (
-        <View
-          style={[
-            styles.searchBar,
-            { backgroundColor: colors.surface, borderBottomColor: colors.border },
-          ]}
-        >
-          <Search size={16} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
+        <GlassPanel style={styles.searchBar}>
+          <TextField
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={t('workspace.searchPlaceholder')}
-            placeholderTextColor={colors.textMuted}
+            icon={Search}
             autoFocus
+            right={
+              searchQuery.length > 0 ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  icon={X}
+                  iconSize={16}
+                  iconColor={colors.textMuted}
+                  onPress={() => setSearchQuery('')}
+                />
+              ) : null
+            }
           />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={() => setSearchQuery('')}>
-              <X size={16} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </View>
+        </GlassPanel>
       )}
 
       {/* ── Inline create/rename bar ──────────────── */}
       {(actionMode === 'create-folder' ||
         actionMode === 'create-file' ||
         actionMode === 'rename') && (
-        <View
-          style={[
-            styles.inlineBar,
-            { backgroundColor: colors.surface, borderBottomColor: colors.border },
-          ]}
-        >
+        <GlassHeader style={styles.inlineBar}>
           {actionMode === 'create-folder' && <FolderPlus size={16} color={colors.primary} />}
           {actionMode === 'create-file' && <FilePlus size={16} color={colors.primary} />}
           {actionMode === 'rename' && <Pencil size={16} color={colors.primary} />}
-          <TextInput
-            style={[
-              styles.inlineInput,
-              {
-                color: colors.text,
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-              },
-            ]}
+          <TextField
+            containerStyle={styles.inlineField}
             value={inputValue}
             onChangeText={setInputValue}
             placeholder={
@@ -626,7 +624,6 @@ export default function WorkspaceScreen() {
                   ? t('workspace.fileName')
                   : t('workspace.newName')
             }
-            placeholderTextColor={colors.textMuted}
             autoFocus
             onSubmitEditing={() => {
               const trimmed = inputValue.trim()
@@ -637,7 +634,11 @@ export default function WorkspaceScreen() {
                 renameMutation.mutate({ node: selectedNode, name: trimmed })
             }}
           />
-          <Pressable
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={Check}
+            iconColor={colors.primary}
             onPress={() => {
               const trimmed = inputValue.trim()
               if (!trimmed) return
@@ -647,26 +648,26 @@ export default function WorkspaceScreen() {
                 renameMutation.mutate({ node: selectedNode, name: trimmed })
             }}
             style={styles.toolBtn}
-          >
-            <Check size={18} color={colors.primary} />
-          </Pressable>
-          <Pressable
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={X}
+            iconColor={colors.textMuted}
             onPress={() => {
               setActionMode('none')
               setInputValue('')
               setSelectedNode(null)
             }}
             style={styles.toolBtn}
-          >
-            <X size={18} color={colors.textMuted} />
-          </Pressable>
-        </View>
+          />
+        </GlassHeader>
       )}
 
       {/* ── File list ─────────────────────────────── */}
       {displayNodes.length === 0 ? (
         <EmptyState
-          icon="📁"
+          icon={Folder}
           title={actionMode === 'search' ? t('workspace.noResults') : t('workspace.empty')}
         />
       ) : (
@@ -683,233 +684,180 @@ export default function WorkspaceScreen() {
           }
           renderItem={({ item }) => {
             const FileIcon = item.kind === 'dir' ? Folder : getFileIcon(item)
-            const iconColor = item.kind === 'dir' ? '#f0b132' : colors.textMuted
             return (
-              <Pressable
-                style={[styles.nodeRow, { backgroundColor: colors.surface }]}
+              <MenuItem
+                icon={FileIcon}
+                tone={item.kind === 'dir' ? 'warning' : 'muted'}
+                title={item.name}
+                subtitle={
+                  item.kind === 'file'
+                    ? `${formatSize(item.sizeBytes)}${item.mime ? ` · ${item.mime.split('/')[1] ?? item.mime}` : ''}`
+                    : undefined
+                }
                 onPress={() => handleNodePress(item)}
                 onLongPress={() => openNodeActions(item)}
-              >
-                <FileIcon size={20} color={iconColor} />
-                <View style={styles.nodeInfo}>
-                  <Text style={[styles.nodeName, { color: colors.text }]} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  {item.kind === 'file' && (
-                    <Text style={[styles.nodeMeta, { color: colors.textMuted }]}>
-                      {formatSize(item.sizeBytes)}
-                      {item.mime ? ` · ${item.mime.split('/')[1] ?? item.mime}` : ''}
-                    </Text>
-                  )}
-                </View>
-                {item.kind === 'dir' && <ChevronRight size={16} color={colors.textMuted} />}
-                {server?.id && item.kind === 'file' && isImageFile(item) && (
-                  <WorkspaceThumbnail serverId={server.id} node={item} />
-                )}
-                <Pressable onPress={() => openNodeActions(item)} style={styles.moreBtn}>
-                  <MoreHorizontal size={16} color={colors.textMuted} />
-                </Pressable>
-              </Pressable>
+                right={
+                  <View style={styles.nodeRight}>
+                    {item.kind === 'dir' && <ChevronRight size={16} color={colors.textMuted} />}
+                    {server?.id && item.kind === 'file' && isImageFile(item) && (
+                      <WorkspaceThumbnail serverId={server.id} node={item} />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      icon={MoreHorizontal}
+                      iconSize={16}
+                      iconColor={colors.textMuted}
+                      onPress={() => openNodeActions(item)}
+                      style={styles.moreBtn}
+                    />
+                  </View>
+                }
+              />
             )
           }}
         />
       )}
 
       {/* ── Node actions bottom sheet ──────────────── */}
-      <Modal visible={showNodeActions} transparent animationType="slide">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowNodeActions(false)}>
-          <View
-            style={[styles.actionSheet, { backgroundColor: colors.surface }]}
-            onStartShouldSetResponder={() => true}
-          >
-            {selectedNode && (
-              <>
-                <View style={styles.actionSheetHeader}>
-                  {selectedNode.kind === 'dir' ? (
-                    <Folder size={20} color="#f0b132" />
-                  ) : (
-                    <File size={20} color={colors.textMuted} />
-                  )}
-                  <Text style={[styles.actionSheetTitle, { color: colors.text }]} numberOfLines={1}>
-                    {selectedNode.name}
-                  </Text>
-                </View>
-
-                {/* Rename */}
-                <Pressable
-                  style={styles.actionItem}
-                  onPress={() => {
-                    setShowNodeActions(false)
-                    setInputValue(selectedNode.name)
-                    setActionMode('rename')
-                  }}
-                >
-                  <Pencil size={18} color={colors.textSecondary} />
-                  <Text style={[styles.actionItemText, { color: colors.text }]}>
-                    {t('workspace.rename')}
-                  </Text>
-                </Pressable>
-
-                {/* Copy */}
-                <Pressable
-                  style={styles.actionItem}
-                  onPress={() => {
-                    setClipboard({ node: selectedNode, mode: 'copy' })
-                    setShowNodeActions(false)
-                    showToast(t('common.copied'), 'success')
-                  }}
-                >
-                  <Copy size={18} color={colors.textSecondary} />
-                  <Text style={[styles.actionItemText, { color: colors.text }]}>
-                    {t('workspace.copy')}
-                  </Text>
-                </Pressable>
-
-                {/* Cut */}
-                <Pressable
-                  style={styles.actionItem}
-                  onPress={() => {
-                    setClipboard({ node: selectedNode, mode: 'cut' })
-                    setShowNodeActions(false)
-                    showToast(t('workspace.cut'), 'success')
-                  }}
-                >
-                  <Copy size={18} color={colors.textSecondary} />
-                  <Text style={[styles.actionItemText, { color: colors.text }]}>
-                    {t('workspace.cut')}
-                  </Text>
-                </Pressable>
-
-                {/* Download (files only) */}
-                {selectedNode.kind === 'file' && hasResolvableFileUrl(selectedNode) && (
-                  <Pressable
-                    style={styles.actionItem}
-                    onPress={() => {
-                      openFileUrl(selectedNode, 'attachment')
-                      setShowNodeActions(false)
-                    }}
-                  >
-                    <Download size={18} color={colors.textSecondary} />
-                    <Text style={[styles.actionItemText, { color: colors.text }]}>
-                      {t('workspace.download')}
-                    </Text>
-                  </Pressable>
-                )}
-
-                {/* Preview (files only) */}
-                {selectedNode.kind === 'file' && (
-                  <Pressable
-                    style={styles.actionItem}
-                    onPress={() => {
-                      setPreviewNode(selectedNode)
-                      setShowNodeActions(false)
-                    }}
-                  >
-                    <Eye size={18} color={colors.textSecondary} />
-                    <Text style={[styles.actionItemText, { color: colors.text }]}>
-                      {t('workspace.preview')}
-                    </Text>
-                  </Pressable>
-                )}
-
-                {/* Delete */}
-                <Pressable style={styles.actionItem} onPress={() => handleDelete(selectedNode)}>
-                  <Trash2 size={18} color="#f23f43" />
-                  <Text style={[styles.actionItemText, { color: '#f23f43' }]}>
-                    {t('common.delete')}
-                  </Text>
-                </Pressable>
-              </>
+      <Sheet
+        visible={showNodeActions}
+        onClose={() => setShowNodeActions(false)}
+        title={selectedNode?.name}
+      >
+        {selectedNode && (
+          <>
+            <MenuItem
+              icon={Pencil}
+              title={t('workspace.rename')}
+              onPress={() => {
+                setShowNodeActions(false)
+                setInputValue(selectedNode.name)
+                setActionMode('rename')
+              }}
+            />
+            <MenuItem
+              icon={Copy}
+              title={t('workspace.copy')}
+              onPress={() => {
+                setClipboard({ node: selectedNode, mode: 'copy' })
+                setShowNodeActions(false)
+                showToast(t('common.copied'), 'success')
+              }}
+            />
+            <MenuItem
+              icon={Copy}
+              title={t('workspace.cut')}
+              onPress={() => {
+                setClipboard({ node: selectedNode, mode: 'cut' })
+                setShowNodeActions(false)
+                showToast(t('workspace.cut'), 'success')
+              }}
+            />
+            {selectedNode.kind === 'file' && hasResolvableFileUrl(selectedNode) && (
+              <MenuItem
+                icon={Download}
+                title={t('workspace.download')}
+                onPress={() => {
+                  openFileUrl(selectedNode, 'attachment')
+                  setShowNodeActions(false)
+                }}
+              />
             )}
-          </View>
-        </Pressable>
-      </Modal>
+            {selectedNode.kind === 'file' && (
+              <MenuItem
+                icon={Eye}
+                title={t('workspace.preview')}
+                onPress={() => {
+                  setPreviewNode(selectedNode)
+                  setShowNodeActions(false)
+                }}
+              />
+            )}
+            <MenuItem
+              icon={Trash2}
+              tone="danger"
+              title={t('common.delete')}
+              onPress={() => handleDelete(selectedNode)}
+            />
+          </>
+        )}
+      </Sheet>
 
       {/* ── File preview modal ────────────────────── */}
-      <Modal visible={!!previewNode} transparent animationType="slide">
-        <Pressable style={styles.modalOverlay} onPress={() => setPreviewNode(null)}>
-          <View
-            style={[styles.previewSheet, { backgroundColor: colors.surface }]}
-            onStartShouldSetResponder={() => true}
-          >
-            {previewNode && (
-              <>
-                <View style={styles.previewHeader}>
-                  <Text style={[styles.previewTitle, { color: colors.text }]} numberOfLines={1}>
-                    {previewNode.name}
-                  </Text>
-                  <Pressable onPress={() => setPreviewNode(null)}>
-                    <X size={22} color={colors.textMuted} />
-                  </Pressable>
-                </View>
-
-                <ScrollView contentContainerStyle={styles.previewBody}>
-                  {isImageFile(previewNode) && previewImageUrl ? (
-                    <Image
-                      source={{ uri: previewImageUrl }}
-                      style={styles.previewImage}
-                      contentFit="contain"
-                    />
-                  ) : (
-                    <View style={styles.previewPlaceholder}>
-                      <FileText size={48} color={colors.textMuted} />
-                      <Text style={[styles.previewTextInfo, { color: colors.textSecondary }]}>
-                        {previewNode.mime ?? t('workspace.unknownType')}
-                      </Text>
-                      <Text style={[styles.previewTextInfo, { color: colors.textMuted }]}>
-                        {formatSize(previewNode.sizeBytes)}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* File info table */}
-                  <View style={[styles.infoTable, { borderTopColor: colors.border }]}>
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-                        {t('workspace.size')}
-                      </Text>
-                      <Text style={{ color: colors.text }}>
-                        {formatSize(previewNode.sizeBytes)}
-                      </Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-                        {t('workspace.type')}
-                      </Text>
-                      <Text style={{ color: colors.text }}>{previewNode.mime ?? '—'}</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-                        {t('workspace.path')}
-                      </Text>
-                      <Text
-                        style={{ color: colors.text, flex: 1, textAlign: 'right' }}
-                        numberOfLines={2}
-                      >
-                        {previewNode.path ?? '—'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Download button */}
-                  {hasResolvableFileUrl(previewNode) && (
-                    <Pressable
-                      style={[styles.downloadBtn, { backgroundColor: colors.primary }]}
-                      onPress={() => openFileUrl(previewNode, 'attachment')}
-                    >
-                      <Download size={16} color="#fff" />
-                      <Text style={{ color: '#fff', fontWeight: '700' }}>
-                        {t('workspace.download')}
-                      </Text>
-                    </Pressable>
-                  )}
-                </ScrollView>
-              </>
+      <Sheet
+        visible={!!previewNode}
+        onClose={() => setPreviewNode(null)}
+        title={previewNode?.name}
+        action={
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={X}
+            iconColor={colors.textMuted}
+            onPress={() => setPreviewNode(null)}
+          />
+        }
+      >
+        {previewNode && (
+          <ScrollView contentContainerStyle={styles.previewBody}>
+            {isImageFile(previewNode) && previewImageUrl ? (
+              <Image
+                source={{ uri: previewImageUrl }}
+                style={styles.previewImage}
+                contentFit="contain"
+              />
+            ) : (
+              <View style={styles.previewPlaceholder}>
+                <FileText size={48} color={colors.textMuted} />
+                <AppText tone="secondary" style={styles.previewTextInfo}>
+                  {previewNode.mime ?? t('workspace.unknownType')}
+                </AppText>
+                <AppText variant="label" tone="secondary" style={styles.previewTextInfo}>
+                  {formatSize(previewNode.sizeBytes)}
+                </AppText>
+              </View>
             )}
-          </View>
-        </Pressable>
-      </Modal>
-    </View>
+
+            {/* File info table */}
+            <GlassPanel style={styles.infoTable}>
+              <View style={styles.infoRow}>
+                <AppText variant="label" tone="secondary">
+                  {t('workspace.size')}
+                </AppText>
+                <AppText>{formatSize(previewNode.sizeBytes)}</AppText>
+              </View>
+              <View style={styles.infoRow}>
+                <AppText variant="label" tone="secondary">
+                  {t('workspace.type')}
+                </AppText>
+                <AppText>{previewNode.mime ?? '—'}</AppText>
+              </View>
+              <View style={styles.infoRow}>
+                <AppText variant="label" tone="secondary">
+                  {t('workspace.path')}
+                </AppText>
+                <AppText style={styles.infoValue} numberOfLines={2}>
+                  {previewNode.path ?? '—'}
+                </AppText>
+              </View>
+            </GlassPanel>
+
+            {/* Download button */}
+            {hasResolvableFileUrl(previewNode) && (
+              <Button
+                variant="primary"
+                size="md"
+                icon={Download}
+                onPress={() => openFileUrl(previewNode, 'attachment')}
+              >
+                {t('workspace.download')}
+              </Button>
+            )}
+          </ScrollView>
+        )}
+      </Sheet>
+    </BackgroundSurface>
   )
 }
 
@@ -923,7 +871,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
-    borderBottomWidth: 1,
   },
   breadcrumbs: {
     flexDirection: 'row',
@@ -943,23 +890,15 @@ const styles = StyleSheet.create({
   // Stats
   statsRow: {
     flexDirection: 'row',
-    gap: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 1,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
-  statChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statText: { fontSize: fontSize.xs, fontWeight: '600' },
   // Search
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
+    margin: spacing.md,
+    marginBottom: spacing.sm,
   },
-  searchInput: { flex: 1, fontSize: fontSize.md },
   // Inline create/rename
   inlineBar: {
     flexDirection: 'row',
@@ -967,86 +906,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
-    borderBottomWidth: 1,
   },
-  inlineInput: {
+  inlineField: {
     flex: 1,
-    height: 36,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.sm,
-    borderWidth: 1,
   },
   // List
   list: { padding: spacing.sm, gap: 3 },
-  nodeRow: {
+  nodeRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
+    gap: spacing.xs,
   },
-  nodeInfo: { flex: 1 },
-  nodeName: { fontSize: fontSize.md, fontWeight: '500' },
-  nodeMeta: { fontSize: fontSize.xs, marginTop: 1 },
   thumbnail: {
     width: 32,
     height: 32,
     borderRadius: radius.sm,
   },
-  moreBtn: { padding: spacing.xs },
-  // Action sheet
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  actionSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: spacing['3xl'],
-  },
-  actionSheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.xl,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-  },
-  actionSheetTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    flex: 1,
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-  },
-  actionItemText: {
-    fontSize: fontSize.md,
-    fontWeight: '500',
+  moreBtn: {
+    width: 36,
+    height: 36,
   },
   // Preview
-  previewSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '85%',
-  },
-  previewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.xl,
-  },
-  previewTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: spacing.md,
-  },
   previewBody: {
-    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
     paddingBottom: spacing['3xl'],
   },
   previewImage: {
@@ -1064,8 +946,6 @@ const styles = StyleSheet.create({
   },
   infoTable: {
     marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: 1,
     gap: spacing.md,
   },
   infoRow: {
@@ -1073,17 +953,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  downloadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    height: 44,
-    borderRadius: radius.lg,
-    marginTop: spacing.xl,
+  infoValue: {
+    flex: 1,
+    textAlign: 'right',
   },
 })

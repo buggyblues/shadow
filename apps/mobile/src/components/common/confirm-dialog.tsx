@@ -1,5 +1,5 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import { StyleSheet } from 'react-native'
+import { Button, Dialog } from '../ui'
 
 interface ConfirmDialogProps {
   visible: boolean
@@ -22,76 +22,33 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const colors = useColors()
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.dialog, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-          <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
-          <View style={styles.actions}>
-            <Pressable
-              style={[styles.button, { backgroundColor: colors.surface }]}
-              onPress={onCancel}
-            >
-              <Text style={[styles.buttonText, { color: colors.textSecondary }]}>
-                {cancelLabel}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.button,
-                { backgroundColor: destructive ? colors.error : colors.primary },
-              ]}
-              onPress={onConfirm}
-            >
-              <Text style={[styles.buttonText, { color: '#fff' }]}>{confirmLabel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
+    <Dialog
+      visible={visible}
+      onClose={onCancel}
+      title={title}
+      description={message}
+      actions={
+        <>
+          <Button variant="glass" size="md" style={styles.action} onPress={onCancel}>
+            {cancelLabel}
+          </Button>
+          <Button
+            variant={destructive ? 'danger' : 'primary'}
+            size="md"
+            style={styles.action}
+            onPress={onConfirm}
+          >
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    />
   )
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  action: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  dialog: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: radius.lg,
-    padding: spacing['2xl'],
-    borderWidth: 1,
-  },
-  title: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-  },
-  message: {
-    fontSize: fontSize.md,
-    lineHeight: 22,
-    marginBottom: spacing['2xl'],
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  button: {
-    flex: 1,
-    height: 42,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
   },
 })

@@ -1,32 +1,43 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Flame, Hash, MessageCircle, Search, Server, Users, Zap } from 'lucide-react-native'
+import {
+  Flame,
+  Hash,
+  MessageCircle,
+  Search,
+  Server,
+  Sparkles,
+  Users,
+  X,
+  Zap,
+} from 'lucide-react-native'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
-import { EmptyState } from '../../src/components/common/empty-state'
+  AppScreen,
+  Button,
+  EmptyState,
+  GlassCard,
+  GlassPressable,
+  IconBubble,
+  IconButton,
+  SegmentedControl,
+  TextField,
+} from '../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
 
-type FeedItemType = 'server' | 'channel' | 'rental'
-type FilterType = 'all' | 'servers' | 'channels' | 'rentals'
+type FeedItemType = 'server' | 'channel'
+type FilterType = 'all' | 'servers' | 'channels'
 
 interface FeedItem {
   id: string
   type: FeedItemType
   heatScore: number
-  data: ServerData | ChannelData | RentalData
+  data: ServerData | ChannelData
 }
 
 interface ServerData {
@@ -57,34 +68,6 @@ interface ChannelData {
   lastMessage: {
     content: string
     createdAt: string
-  } | null
-}
-
-interface RentalData {
-  contractId: string
-  contractNo: string
-  startedAt: string
-  expiresAt: string | null
-  listing: {
-    id: string
-    title: string
-    description: string | null
-    deviceTier: string | null
-    osType: string | null
-    hourlyRate: number
-    tags: string[] | null
-  } | null
-  tenant: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-  } | null
-  agent: {
-    id: string
-    name: string
-    status: string
-    lastHeartbeat: string | null
   } | null
 }
 
@@ -167,8 +150,10 @@ export default function DiscoverScreen() {
   })
 
   const allItems = useMemo(() => {
-    if (isSearching) return searchResults?.items || []
-    return feedData?.pages.flatMap((page) => page.items) || []
+    const items = isSearching
+      ? searchResults?.items || []
+      : feedData?.pages.flatMap((page) => page.items) || []
+    return items.filter((item) => item.type === 'server' || item.type === 'channel')
   }, [feedData, searchResults, isSearching])
 
   const handleSearch = () => {
@@ -240,19 +225,12 @@ export default function DiscoverScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <AppScreen>
       {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
+      <GlassCard style={styles.header}>
         {/* Title */}
         <View style={styles.titleRow}>
-          <View style={[styles.iconContainer, { backgroundColor: colors.primary }]}>
-            <Flame size={20} color="#fff" />
-          </View>
+          <IconBubble icon={Flame} tone="primary" size={20} style={styles.iconContainer} />
           <View>
             <Text style={[styles.title, { color: colors.text }]}>{t('discover.title')}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -262,60 +240,42 @@ export default function DiscoverScreen() {
         </View>
 
         {/* Search */}
-        <View style={[styles.searchBox, { backgroundColor: colors.inputBackground }]}>
-          <Search size={18} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
-            placeholder={t('discover.searchPlaceholder')}
-            placeholderTextColor={colors.textMuted}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={clearSearch}>
-              <Text style={{ color: colors.textMuted, fontSize: 18 }}>×</Text>
-            </Pressable>
-          )}
-        </View>
+        <TextField
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onSubmitEditing={handleSearch}
+          placeholder={t('discover.searchPlaceholder')}
+          returnKeyType="search"
+          left={<Search size={18} color={colors.textMuted} />}
+          right={
+            searchQuery.length > 0 ? (
+              <IconButton
+                icon={X}
+                variant="ghost"
+                iconColor={colors.textMuted}
+                iconSize={18}
+                style={styles.clearButton}
+                onPress={clearSearch}
+              />
+            ) : null
+          }
+          style={styles.searchBox}
+        />
 
         {/* Filter Tabs */}
-        <View style={styles.filterContainer}>
-          {[
+        <SegmentedControl
+          value={activeFilter}
+          options={[
             { key: 'all', label: t('discover.filters.all'), icon: Flame },
             { key: 'servers', label: t('discover.filters.servers'), icon: Server },
             { key: 'channels', label: t('discover.filters.channels'), icon: Hash },
-            { key: 'rentals', label: t('discover.filters.rentals'), icon: Zap },
-          ].map(({ key, label, icon: Icon }) => (
-            <Pressable
-              key={key}
-              style={[
-                styles.filterButton,
-                {
-                  backgroundColor: activeFilter === key ? colors.primary : colors.background,
-                },
-              ]}
-              onPress={() => {
-                setActiveFilter(key as FilterType)
-                setIsSearching(false)
-              }}
-            >
-              <Icon size={12} color={activeFilter === key ? '#fff' : colors.textMuted} />
-              <Text
-                style={{
-                  color: activeFilter === key ? '#fff' : colors.textSecondary,
-                  fontSize: fontSize.xs,
-                  fontWeight: '600',
-                  marginLeft: 4,
-                }}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+          ].map(({ key, label, icon }) => ({ value: key as FilterType, label, icon }))}
+          onChange={(value) => {
+            setActiveFilter(value)
+            setIsSearching(false)
+          }}
+        />
+      </GlassCard>
 
       {/* Content */}
       {isLoading ? (
@@ -324,7 +284,7 @@ export default function DiscoverScreen() {
         </View>
       ) : allItems.length === 0 ? (
         <EmptyState
-          icon={isSearching ? '🔍' : '✨'}
+          icon={isSearching ? Search : Sparkles}
           title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
         />
       ) : (
@@ -341,7 +301,7 @@ export default function DiscoverScreen() {
           ListFooterComponent={renderFooter}
         />
       )}
-    </View>
+    </AppScreen>
   )
 }
 
@@ -375,8 +335,8 @@ function FeedCard({
     const isJoined = joinedServerIds.has(server.id)
 
     return (
-      <Pressable
-        style={[styles.card, { backgroundColor: colors.surface }]}
+      <GlassPressable
+        style={styles.card}
         onPress={() => {
           if (isJoined) {
             router.push(`/(main)/servers/${server.slug ?? server.id}`)
@@ -398,7 +358,7 @@ function FeedCard({
               </View>
             )}
             {server.isPublic && (
-              <View style={styles.publicBadge}>
+              <View style={[styles.publicBadge, { backgroundColor: colors.success }]}>
                 <Flame size={10} color="#fff" />
               </View>
             )}
@@ -410,20 +370,24 @@ function FeedCard({
                 {server.name}
               </Text>
               {isJoined ? (
-                <Pressable
-                  style={[styles.actionButton, { backgroundColor: '#22c55e' }]}
+                <Button
+                  variant="glass"
+                  size="xs"
+                  style={styles.actionButton}
                   onPress={() => router.push(`/(main)/servers/${server.slug ?? server.id}`)}
                 >
-                  <Text style={styles.actionButtonText}>{t('discover.enterButton')}</Text>
-                </Pressable>
+                  {t('discover.enterButton')}
+                </Button>
               ) : (
-                <Pressable
-                  style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                <Button
+                  variant="primary"
+                  size="xs"
+                  style={styles.actionButton}
                   onPress={() => joinMutation.mutate({ inviteCode: server.inviteCode })}
                   disabled={joinMutation.isPending}
                 >
-                  <Text style={styles.actionButtonText}>{t('discover.joinButton')}</Text>
-                </Pressable>
+                  {t('discover.joinButton')}
+                </Button>
               )}
             </View>
 
@@ -451,7 +415,7 @@ function FeedCard({
             )}
           </View>
         </View>
-      </Pressable>
+      </GlassPressable>
     )
   }
 
@@ -460,8 +424,8 @@ function FeedCard({
     const isJoined = joinedServerIds.has(channel.server.id)
 
     return (
-      <Pressable
-        style={[styles.card, { backgroundColor: colors.surface }]}
+      <GlassPressable
+        style={styles.card}
         onPress={() => {
           if (isJoined) {
             router.push(
@@ -509,7 +473,7 @@ function FeedCard({
             )}
 
             {channel.lastMessage && (
-              <View style={[styles.lastMessageBox, { backgroundColor: colors.background }]}>
+              <View style={[styles.lastMessageBox, { backgroundColor: colors.inputBackground }]}>
                 <Text
                   style={[styles.lastMessageText, { color: colors.textSecondary }]}
                   numberOfLines={2}
@@ -539,111 +503,7 @@ function FeedCard({
             </View>
           </View>
         </View>
-      </Pressable>
-    )
-  }
-
-  if (item.type === 'rental') {
-    const rental = item.data as RentalData
-
-    return (
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.rentalIconContainer, { backgroundColor: colors.primary + '20' }]}>
-            <Text style={{ fontSize: 24 }}>🤖</Text>
-          </View>
-
-          <View style={styles.cardContent}>
-            <View style={styles.cardTitleRow}>
-              <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                {rental.listing?.title || t('discover.unknownListing')}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                {formatTimeAgo(rental.startedAt)}
-              </Text>
-            </View>
-
-            <Text style={[styles.agentName, { color: colors.textSecondary }]}>
-              {rental.agent?.name || t('discover.unknownAgent')}
-            </Text>
-
-            {rental.listing?.description && (
-              <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
-                {rental.listing.description}
-              </Text>
-            )}
-
-            <View style={styles.tagsRow}>
-              {rental.listing?.deviceTier && (
-                <View style={[styles.tag, { backgroundColor: colors.background }]}>
-                  <Text style={{ color: colors.textSecondary, fontSize: fontSize.xs }}>
-                    {rental.listing.deviceTier}
-                  </Text>
-                </View>
-              )}
-              {rental.listing?.osType && (
-                <View style={[styles.tag, { backgroundColor: colors.background }]}>
-                  <Text style={{ color: colors.textSecondary, fontSize: fontSize.xs }}>
-                    {rental.listing.osType}
-                  </Text>
-                </View>
-              )}
-              {rental.agent?.status && (
-                <View
-                  style={[
-                    styles.tag,
-                    {
-                      backgroundColor:
-                        rental.agent.status === 'online'
-                          ? '#22c55e20'
-                          : rental.agent.status === 'error'
-                            ? '#ef444420'
-                            : colors.background,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color:
-                        rental.agent.status === 'online'
-                          ? '#22c55e'
-                          : rental.agent.status === 'error'
-                            ? '#ef4444'
-                            : colors.textSecondary,
-                      fontSize: fontSize.xs,
-                    }}
-                  >
-                    {rental.agent.status}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.rentalFooter}>
-              <View style={styles.tenantInfo}>
-                <View style={[styles.tenantAvatar, { backgroundColor: colors.background }]}>
-                  {rental.tenant?.avatarUrl ? (
-                    <Image
-                      source={{ uri: getImageUrl(rental.tenant.avatarUrl) || '' }}
-                      style={{ width: 20, height: 20 }}
-                    />
-                  ) : (
-                    <Text style={{ fontSize: 10 }}>👤</Text>
-                  )}
-                </View>
-                <Text style={{ color: colors.textSecondary, fontSize: fontSize.xs }}>
-                  {rental.tenant?.displayName ||
-                    rental.tenant?.username ||
-                    t('discover.unknownUser')}
-                </Text>
-              </View>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                {rental.listing?.hourlyRate}虾币/h
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
+      </GlassPressable>
     )
   }
 
@@ -653,8 +513,8 @@ function FeedCard({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    padding: spacing.md,
-    borderBottomWidth: 1,
+    margin: spacing.md,
+    marginBottom: 0,
   },
   titleRow: {
     flexDirection: 'row',
@@ -677,28 +537,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.lg,
-    height: 44,
-    gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: fontSize.md,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+  clearButton: {
+    width: 30,
+    height: 30,
   },
   centerContainer: {
     flex: 1,
@@ -715,8 +558,7 @@ const styles = StyleSheet.create({
   },
   // Card styles
   card: {
-    borderRadius: radius.xl,
-    padding: spacing.md,
+    borderRadius: radius['2xl'],
   },
   cardHeader: {
     flexDirection: 'row',
@@ -737,14 +579,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: fontSize.xs,
-    fontWeight: '700',
+    minWidth: 68,
   },
   metaRow: {
     flexDirection: 'row',
@@ -784,7 +619,6 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#22c55e',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -841,49 +675,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.sm,
-  },
-  // Rental styles
-  rentalIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  agentName: {
-    fontSize: fontSize.sm,
-    marginTop: 2,
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  tag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-  },
-  rentalFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#00000010',
-  },
-  tenantInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  tenantAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
   },
 })

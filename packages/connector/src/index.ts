@@ -1,3 +1,9 @@
+import {
+  CC_CONNECT_FORK_DOCS_URL,
+  CC_CONNECT_FORK_REPO,
+  CC_CONNECT_FORK_SHORT_REF,
+} from './cc-connect-fork.js'
+
 export type ShadowConnectorTarget = 'openclaw' | 'hermes' | 'cc-connect'
 
 export interface ShadowConnectorInput {
@@ -230,8 +236,12 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
     '',
     '[[projects]]',
     `name = "${projectName}"`,
+    '',
+    '[projects.agent]',
+    `type = "${agentType}"`,
+    '',
+    '[projects.agent.options]',
     `work_dir = "${workDir}"`,
-    `agent_type = "${agentType}"`,
     '',
     '[[projects.platforms]]',
     'type = "shadowob"',
@@ -244,15 +254,6 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
     'share_session_in_channel = false',
     'progress_style = "compact"',
   ].join('\n')
-  const commands = [
-    { label: 'Install cc-connect', command: 'npm install -g cc-connect' },
-    { label: 'Create config directory', command: 'mkdir -p ~/.cc-connect' },
-    {
-      label: 'Edit config',
-      command: '$EDITOR ~/.cc-connect/config.toml',
-    },
-    { label: 'Start cc-connect', command: 'cc-connect' },
-  ]
   const connectCommand = [
     'npx @shadowob/connector@latest connect',
     '--target cc-connect',
@@ -262,13 +263,27 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
     `--project-name ${shellQuote(projectName)}`,
     `--agent-type ${shellQuote(agentType)}`,
   ].join(' ')
+  const installCommand = `${connectCommand} --install`
+  const startCommand = `${connectCommand} --install --start`
+  const commands = [
+    {
+      label: 'Install ShadowOB cc-connect fork',
+      command: installCommand,
+    },
+    { label: 'Create config directory', command: 'mkdir -p ~/.cc-connect' },
+    {
+      label: 'Edit config',
+      command: '$EDITOR ~/.cc-connect/config.toml',
+    },
+    { label: 'Start ShadowOB cc-connect fork', command: startCommand },
+  ]
 
   return {
     target: 'cc-connect',
     title: 'cc-connect',
-    summary: 'Use cc-connect ShadowOB Socket.IO platform support with this Buddy token.',
-    connectCommand,
-    quickCommand: commands.map((item) => item.command).join(' && '),
+    summary: `Use ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF} with ShadowOB Socket.IO platform support for this Buddy token.`,
+    connectCommand: startCommand,
+    quickCommand: startCommand,
     commands,
     configBlocks: [{ label: '~/.cc-connect/config.toml', language: 'toml', content: tomlConfig }],
     aiPrompt: [
@@ -279,9 +294,9 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
       `Project work_dir: ${workDir}`,
       `Agent type: ${agentType}`,
       '',
-      'Install cc-connect, add the TOML platform block, and start cc-connect.',
+      `Install ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF}, add the TOML platform block, and start cc-connect.`,
     ].join('\n'),
-    docsUrl: 'https://github.com/buggyblues/cc-connect/blob/main/docs/shadowob.md',
+    docsUrl: CC_CONNECT_FORK_DOCS_URL,
     capabilities: [
       'channelMessages',
       'dms',

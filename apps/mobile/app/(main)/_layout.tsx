@@ -129,25 +129,12 @@ export default function MainLayout() {
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="dashboard" options={{ headerShown: false }} />
       <Stack.Screen name="create-server" options={{ headerShown: true, title: '', headerLeft }} />
-      <Stack.Screen name="my-rentals" options={{ headerShown: true, title: '', headerLeft }} />
       <Stack.Screen
         name="buddy-management"
         options={{ headerShown: true, title: '', headerLeft }}
       />
       <Stack.Screen
-        name="buddy-detail/[listingId]"
-        options={{ headerShown: true, title: '', headerLeft }}
-      />
-      <Stack.Screen
         name="profile/[userId]"
-        options={{ headerShown: true, title: '', headerLeft }}
-      />
-      <Stack.Screen
-        name="contract-detail/[contractId]"
-        options={{ headerShown: true, title: '', headerLeft }}
-      />
-      <Stack.Screen
-        name="create-listing/[listingId]"
         options={{ headerShown: true, title: '', headerLeft }}
       />
       <Stack.Screen name="media-preview" options={{ headerShown: true, title: '', headerLeft }} />

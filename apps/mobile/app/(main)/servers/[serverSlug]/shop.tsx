@@ -28,13 +28,24 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { EmptyState } from '../../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../../src/components/common/price-display'
 import { ShrimpCoinIcon } from '../../../../src/components/common/shrimp-coin'
+import {
+  AppText,
+  BackgroundSurface,
+  Button,
+  CardPressable,
+  GlassHeader,
+  GlassPanel,
+  MenuItem,
+  SegmentedControl,
+  Sheet,
+  TextField,
+} from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
@@ -399,15 +410,15 @@ export default function ShopScreen() {
     switch (status) {
       case 'paid':
       case 'processing':
-        return '#f0b132'
+        return colors.warning
       case 'shipped':
       case 'delivered':
         return colors.primary
       case 'completed':
-        return '#23a559'
+        return colors.success
       case 'cancelled':
       case 'refunded':
-        return '#f23f43'
+        return colors.error
       default:
         return colors.textMuted
     }
@@ -428,120 +439,91 @@ export default function ShopScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <BackgroundSurface style={styles.container}>
       {/* ── Top bar ──────────────────────────────── */}
-      <View
-        style={[
-          styles.topBar,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
+      <GlassHeader style={styles.topBar}>
         {/* Wallet */}
         <View style={styles.walletChip}>
-          <Text style={[styles.walletText, { color: colors.primary }]}>
+          <AppText variant="bodyStrong" tone="primary" style={styles.walletText}>
             <PriceCompact amount={wallet?.balance ?? 0} size={14} />
-          </Text>
+          </AppText>
         </View>
         {/* View tabs */}
-        <View style={styles.viewTabs}>
-          {(
-            [
-              { key: 'browse', label: t('shop.browse') },
-              { key: 'orders', label: t('shop.orders') },
-              { key: 'favorites', label: t('shop.favorites') },
-            ] as { key: ShopView; label: string }[]
-          ).map((tab) => (
-            <Pressable
-              key={tab.key}
-              style={[
-                styles.viewTab,
-                activeView === tab.key && {
-                  borderBottomColor: colors.primary,
-                  borderBottomWidth: 2,
-                },
-              ]}
-              onPress={() => setActiveView(tab.key)}
-            >
-              <Text
-                style={{
-                  color: activeView === tab.key ? colors.primary : colors.textMuted,
-                  fontSize: fontSize.sm,
-                  fontWeight: '600',
-                }}
-              >
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <SegmentedControl
+          value={activeView}
+          onChange={setActiveView}
+          options={[
+            { value: 'browse', label: t('shop.browse') },
+            { value: 'orders', label: t('shop.orders') },
+            { value: 'favorites', label: t('shop.favorites') },
+          ]}
+        />
         {/* Cart button */}
-        <Pressable style={styles.cartBtn} onPress={() => setShowCart(true)}>
-          <ShoppingCart size={22} color={colors.text} />
+        <View style={styles.cartBtn}>
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={ShoppingCart}
+            iconColor={colors.text}
+            onPress={() => setShowCart(true)}
+          />
           {cartCount > 0 && (
             <View style={[styles.cartBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.cartBadgeText}>{cartCount}</Text>
+              <Text style={[styles.cartBadgeText, { color: colors.background }]}>{cartCount}</Text>
             </View>
           )}
-        </Pressable>
-      </View>
+        </View>
+      </GlassHeader>
 
       {/* ── Browse view ──────────────────────────── */}
       {(activeView === 'browse' || activeView === 'favorites') && (
         <>
           {/* Search + sort */}
-          <View style={[styles.searchRow, { backgroundColor: colors.surface }]}>
-            <View style={[styles.searchBox, { backgroundColor: colors.inputBackground }]}>
-              <Search size={16} color={colors.textMuted} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                value={search}
-                onChangeText={setSearch}
-                placeholder={t('shop.searchPlaceholder')}
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-            <Pressable onPress={() => setShowSortMenu(!showSortMenu)} style={styles.sortBtn}>
-              <ArrowUpDown size={16} color={colors.textMuted} />
-            </Pressable>
-          </View>
+          <GlassPanel style={styles.searchRow}>
+            <TextField
+              value={search}
+              onChangeText={setSearch}
+              placeholder={t('shop.searchPlaceholder')}
+              icon={Search}
+              containerStyle={styles.searchField}
+            />
+            <Button
+              variant="glass"
+              size="icon"
+              icon={ArrowUpDown}
+              iconColor={colors.textMuted}
+              onPress={() => setShowSortMenu(true)}
+              style={styles.sortBtn}
+            />
+          </GlassPanel>
 
           {/* Sort dropdown */}
-          {showSortMenu && (
-            <View
-              style={[
-                styles.sortMenu,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              {(
-                [
-                  { key: 'default', label: t('shop.sortDefault') },
-                  { key: 'price_asc', label: t('shop.sortPriceAsc') },
-                  { key: 'price_desc', label: t('shop.sortPriceDesc') },
-                  { key: 'sales', label: t('shop.sortSales') },
-                ] as { key: typeof sortBy; label: string }[]
-              ).map((opt) => (
-                <Pressable
-                  key={opt.key}
-                  style={styles.sortOption}
-                  onPress={() => {
-                    setSortBy(opt.key)
-                    setShowSortMenu(false)
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: sortBy === opt.key ? colors.primary : colors.text,
-                      fontSize: fontSize.sm,
-                    }}
-                  >
-                    {opt.label}
-                  </Text>
-                  {sortBy === opt.key && <Check size={14} color={colors.primary} />}
-                </Pressable>
-              ))}
-            </View>
-          )}
+          <Sheet
+            visible={showSortMenu}
+            onClose={() => setShowSortMenu(false)}
+            title={t('sort.title', '排序方式')}
+          >
+            {(
+              [
+                { key: 'default', label: t('shop.sortDefault') },
+                { key: 'price_asc', label: t('shop.sortPriceAsc') },
+                { key: 'price_desc', label: t('shop.sortPriceDesc') },
+                { key: 'sales', label: t('shop.sortSales') },
+              ] as { key: typeof sortBy; label: string }[]
+            ).map((opt) => (
+              <MenuItem
+                key={opt.key}
+                icon={ArrowUpDown}
+                title={opt.label}
+                tone={sortBy === opt.key ? 'primary' : 'muted'}
+                right={sortBy === opt.key ? <Check size={14} color={colors.primary} /> : undefined}
+                onPress={() => {
+                  setSortBy(opt.key)
+                  setShowSortMenu(false)
+                }}
+              />
+            ))}
+          </Sheet>
 
           {/* Categories */}
           {categories.length > 0 && activeView === 'browse' && (
@@ -551,42 +533,22 @@ export default function ShopScreen() {
               style={[styles.catBar, { borderBottomColor: colors.border }]}
               contentContainerStyle={styles.catBarContent}
             >
-              <Pressable
-                style={[
-                  styles.catChip,
-                  !activeCategoryId && { backgroundColor: `${colors.primary}15` },
-                ]}
+              <Button
+                variant={!activeCategoryId ? 'primary' : 'glass'}
+                size="sm"
                 onPress={() => setActiveCategoryId(null)}
               >
-                <Text
-                  style={{
-                    color: !activeCategoryId ? colors.primary : colors.textMuted,
-                    fontWeight: '600',
-                    fontSize: fontSize.sm,
-                  }}
-                >
-                  {t('shop.allCategories')}
-                </Text>
-              </Pressable>
+                {t('shop.allCategories')}
+              </Button>
               {categories.map((cat) => (
-                <Pressable
+                <Button
                   key={cat.id}
-                  style={[
-                    styles.catChip,
-                    activeCategoryId === cat.id && { backgroundColor: `${colors.primary}15` },
-                  ]}
+                  variant={activeCategoryId === cat.id ? 'primary' : 'glass'}
+                  size="sm"
                   onPress={() => setActiveCategoryId(cat.id)}
                 >
-                  <Text
-                    style={{
-                      color: activeCategoryId === cat.id ? colors.primary : colors.textMuted,
-                      fontWeight: '600',
-                      fontSize: fontSize.sm,
-                    }}
-                  >
-                    {cat.name}
-                  </Text>
-                </Pressable>
+                  {cat.name}
+                </Button>
               ))}
             </ScrollView>
           )}
@@ -594,7 +556,7 @@ export default function ShopScreen() {
           {/* Products grid */}
           {filtered.length === 0 ? (
             <EmptyState
-              icon={activeView === 'favorites' ? '❤️' : '🛒'}
+              icon={activeView === 'favorites' ? Heart : ShoppingCart}
               title={activeView === 'favorites' ? t('shop.noFavorites') : t('shop.noProducts')}
             />
           ) : (
@@ -614,8 +576,9 @@ export default function ShopScreen() {
               renderItem={({ item }) => {
                 const imgUrl = getProductImage(item)
                 return (
-                  <Pressable
-                    style={[styles.productCard, { backgroundColor: colors.surface }]}
+                  <CardPressable
+                    variant="glassCard"
+                    style={styles.productCard}
                     onPress={() => setSelectedProduct(item)}
                   >
                     {imgUrl ? (
@@ -640,7 +603,7 @@ export default function ShopScreen() {
                     )}
                     {/* Favorite heart */}
                     <Pressable
-                      style={styles.favBtn}
+                      style={[styles.favBtn, { backgroundColor: colors.overlay }]}
                       onPress={(e) => {
                         e.stopPropagation?.()
                         toggleFavorite(item.id)
@@ -648,29 +611,29 @@ export default function ShopScreen() {
                     >
                       <Heart
                         size={18}
-                        color={favorites.has(item.id) ? '#f23f43' : '#ffffff80'}
-                        fill={favorites.has(item.id) ? '#f23f43' : 'transparent'}
+                        color={favorites.has(item.id) ? colors.error : colors.glassLineStrong}
+                        fill={favorites.has(item.id) ? colors.error : 'transparent'}
                       />
                     </Pressable>
                     <View style={styles.productInfo}>
-                      <Text style={[styles.productName, { color: colors.text }]} numberOfLines={2}>
+                      <AppText variant="bodyStrong" style={styles.productName} numberOfLines={2}>
                         {item.name}
-                      </Text>
+                      </AppText>
                       {/* Rating + sales */}
                       {(item.avgRating > 0 || item.salesCount > 0) && (
                         <View style={styles.metaRow}>
                           {item.avgRating > 0 && (
                             <View style={styles.ratingRow}>
-                              <Star size={10} color="#f0b132" fill="#f0b132" />
-                              <Text style={[styles.ratingText, { color: colors.textMuted }]}>
+                              <Star size={10} color={colors.warning} fill={colors.warning} />
+                              <AppText variant="label" tone="secondary" style={styles.ratingText}>
                                 {item.avgRating.toFixed(1)}
-                              </Text>
+                              </AppText>
                             </View>
                           )}
                           {item.salesCount > 0 && (
-                            <Text style={[styles.salesText, { color: colors.textMuted }]}>
+                            <AppText variant="label" tone="secondary" style={styles.salesText}>
                               {t('shop.sold')} {item.salesCount}
-                            </Text>
+                            </AppText>
                           )}
                         </View>
                       )}
@@ -682,20 +645,18 @@ export default function ShopScreen() {
                               key={tag}
                               style={[styles.tagChip, { backgroundColor: `${colors.primary}15` }]}
                             >
-                              <Text
-                                style={{ color: colors.primary, fontSize: 9, fontWeight: '600' }}
-                              >
+                              <AppText variant="label" tone="primary" style={styles.tagText}>
                                 {tag}
-                              </Text>
+                              </AppText>
                             </View>
                           ))}
                         </View>
                       )}
-                      <Text style={[styles.productPrice, { color: colors.primary }]}>
+                      <AppText variant="bodyStrong" tone="primary" style={styles.productPrice}>
                         <PriceCompact amount={item.basePrice} size={12} />
-                      </Text>
+                      </AppText>
                     </View>
-                  </Pressable>
+                  </CardPressable>
                 )
               }}
             />
@@ -716,9 +677,9 @@ export default function ShopScreen() {
               tintColor={colors.primary}
             />
           }
-          ListEmptyComponent={<EmptyState icon="📦" title={t('shop.noOrders')} />}
+          ListEmptyComponent={<EmptyState icon={Package} title={t('shop.noOrders')} />}
           renderItem={({ item: order }) => (
-            <View style={[styles.orderCard, { backgroundColor: colors.surface }]}>
+            <GlassPanel style={styles.orderCard}>
               <View style={styles.orderHeader}>
                 <Text style={[styles.orderNo, { color: colors.textMuted }]}>#{order.orderNo}</Text>
                 <View
@@ -778,39 +739,39 @@ export default function ShopScreen() {
                   </View>
                 </View>
               ))}
-              <View style={styles.orderFooter}>
+              <View style={[styles.orderFooter, { borderTopColor: colors.border }]}>
                 <Text style={{ color: colors.text, fontWeight: '800' }}>
                   {t('shop.total')}: <PriceCompact amount={order.totalAmount} size={14} />
                 </Text>
                 <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                   {(order.status === 'pending' || order.status === 'paid') && (
-                    <Pressable
-                      style={[styles.orderActionBtn, { backgroundColor: '#f23f43' + '15' }]}
+                    <Button
+                      variant="glass"
+                      size="xs"
+                      icon={X}
+                      iconColor={colors.error}
                       onPress={() => cancelOrderMutation.mutate(order.id)}
                     >
-                      <Text style={{ color: '#f23f43', fontSize: fontSize.xs, fontWeight: '600' }}>
-                        {t('shop.cancelOrder')}
-                      </Text>
-                    </Pressable>
+                      {t('shop.cancelOrder')}
+                    </Button>
                   )}
                   {order.status === 'completed' && (
-                    <Pressable
-                      style={[styles.orderActionBtn, { backgroundColor: `${colors.primary}15` }]}
+                    <Button
+                      variant="glass"
+                      size="xs"
+                      icon={Star}
+                      iconColor={colors.primary}
                       onPress={() => {
                         setReviewProductId(order.items[0]?.productId ?? null)
                         setShowReviews(true)
                       }}
                     >
-                      <Text
-                        style={{ color: colors.primary, fontSize: fontSize.xs, fontWeight: '600' }}
-                      >
-                        {t('shop.viewReviews')}
-                      </Text>
-                    </Pressable>
+                      {t('shop.viewReviews')}
+                    </Button>
                   )}
                 </View>
               </View>
-            </View>
+            </GlassPanel>
           )}
         />
       )}
@@ -869,8 +830,8 @@ export default function ShopScreen() {
                     <Pressable onPress={() => toggleFavorite(selectedProduct.id)}>
                       <Heart
                         size={24}
-                        color={favorites.has(selectedProduct.id) ? '#f23f43' : colors.textMuted}
-                        fill={favorites.has(selectedProduct.id) ? '#f23f43' : 'transparent'}
+                        color={favorites.has(selectedProduct.id) ? colors.error : colors.textMuted}
+                        fill={favorites.has(selectedProduct.id) ? colors.error : 'transparent'}
                       />
                     </Pressable>
                   </View>
@@ -906,7 +867,7 @@ export default function ShopScreen() {
                   <View style={styles.statsRow}>
                     {selectedProduct.avgRating > 0 && (
                       <View style={styles.statItem}>
-                        <Star size={14} color="#f0b132" fill="#f0b132" />
+                        <Star size={14} color={colors.warning} fill={colors.warning} />
                         <Text style={{ color: colors.text, fontWeight: '700' }}>
                           {selectedProduct.avgRating.toFixed(1)}
                         </Text>
@@ -1034,16 +995,16 @@ export default function ShopScreen() {
                   )}
 
                   {/* Add to cart button */}
-                  <Pressable
-                    style={[styles.addBtn, { backgroundColor: colors.primary }]}
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    icon={ShoppingCart}
                     onPress={handleAddToCart}
+                    loading={addToCartMutation.isPending}
                     disabled={addToCartMutation.isPending}
                   >
-                    <ShoppingCart size={18} color="#fff" />
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.md }}>
-                      {addToCartMutation.isPending ? t('common.loading') : t('shop.addToCart')}
-                    </Text>
-                  </Pressable>
+                    {t('shop.addToCart')}
+                  </Button>
                 </View>
               </ScrollView>
             )}
@@ -1052,242 +1013,224 @@ export default function ShopScreen() {
       </Modal>
 
       {/* ── Cart Modal ───────────────────────────── */}
-      <Modal visible={showCart} transparent animationType="slide">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowCart(false)}>
-          <View
-            style={[styles.modalSheet, { backgroundColor: colors.surface }]}
-            onStartShouldSetResponder={() => true}
-          >
-            <View style={styles.cartHeader}>
-              <Text style={[styles.detailName, { color: colors.text }]}>{t('shop.cart')}</Text>
-              <Pressable onPress={() => setShowCart(false)}>
-                <X size={22} color={colors.textMuted} />
-              </Pressable>
-            </View>
-            {cartItems.length === 0 ? (
-              <View style={{ paddingVertical: spacing['3xl'], alignItems: 'center' }}>
-                <ShoppingCart size={40} color={colors.textMuted} />
-                <Text style={{ color: colors.textMuted, marginTop: spacing.md }}>
-                  {t('shop.emptyCart')}
-                </Text>
-              </View>
-            ) : (
-              <ScrollView>
-                {cartItems.map((item) => (
+      <Sheet
+        visible={showCart}
+        onClose={() => setShowCart(false)}
+        title={t('shop.cart')}
+        action={
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={X}
+            iconColor={colors.textMuted}
+            onPress={() => setShowCart(false)}
+          />
+        }
+      >
+        {cartItems.length === 0 ? (
+          <View style={styles.cartEmpty}>
+            <ShoppingCart size={40} color={colors.textMuted} />
+            <AppText tone="secondary">{t('shop.emptyCart')}</AppText>
+          </View>
+        ) : (
+          <ScrollView>
+            {cartItems.map((item) => (
+              <View key={item.id} style={[styles.cartItem, { borderBottomColor: colors.border }]}>
+                {item.imageUrl ? (
+                  <Image
+                    source={{ uri: getImageUrl(item.imageUrl)! }}
+                    style={styles.cartItemImage}
+                    contentFit="cover"
+                  />
+                ) : (
                   <View
-                    key={item.id}
-                    style={[styles.cartItem, { borderBottomColor: colors.border }]}
-                  >
-                    {item.imageUrl ? (
-                      <Image
-                        source={{ uri: getImageUrl(item.imageUrl)! }}
-                        style={styles.cartItemImage}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View
-                        style={[
-                          styles.cartItemImage,
-                          {
-                            backgroundColor: colors.inputBackground,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          },
-                        ]}
-                      >
-                        <Package size={16} color={colors.textMuted} />
-                      </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
-                        {item.product?.name ?? '—'}
-                      </Text>
-                      {item.sku && item.sku.specValues.length > 0 && (
-                        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                          {item.sku.specValues.join(' / ')}
-                        </Text>
-                      )}
-                      <Text
-                        style={{
-                          color: colors.primary,
-                          fontSize: fontSize.sm,
-                          fontWeight: '700',
-                          marginTop: 2,
-                        }}
-                      >
-                        <PriceCompact amount={item.unitPrice} size={12} />
-                      </Text>
-                    </View>
-                    <View style={styles.qtyRow}>
-                      <Pressable
-                        onPress={() => {
-                          if (item.quantity <= 1) removeCartMutation.mutate(item.id)
-                          else
-                            updateCartMutation.mutate({
-                              itemId: item.id,
-                              quantity: item.quantity - 1,
-                            })
-                        }}
-                        style={[styles.qtyBtn, { backgroundColor: colors.inputBackground }]}
-                      >
-                        {item.quantity <= 1 ? (
-                          <Trash2 size={12} color="#f23f43" />
-                        ) : (
-                          <Minus size={14} color={colors.text} />
-                        )}
-                      </Pressable>
-                      <Text
-                        style={{
-                          color: colors.text,
-                          fontWeight: '700',
-                          minWidth: 24,
-                          textAlign: 'center',
-                        }}
-                      >
-                        {item.quantity}
-                      </Text>
-                      <Pressable
-                        onPress={() =>
-                          updateCartMutation.mutate({
-                            itemId: item.id,
-                            quantity: item.quantity + 1,
-                          })
-                        }
-                        style={[styles.qtyBtn, { backgroundColor: colors.inputBackground }]}
-                      >
-                        <Plus size={14} color={colors.text} />
-                      </Pressable>
-                    </View>
-                  </View>
-                ))}
-
-                <View style={styles.cartFooter}>
-                  <View>
-                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                      {t('shop.total')}
-                    </Text>
-                    <Text style={{ color: colors.text, fontWeight: '800', fontSize: fontSize.xl }}>
-                      <PriceCompact amount={cartTotal} size={14} />
-                    </Text>
-                  </View>
-                  <Pressable
                     style={[
-                      styles.checkoutBtn,
+                      styles.cartItemImage,
                       {
-                        backgroundColor: colors.primary,
-                        opacity: checkoutMutation.isPending ? 0.6 : 1,
+                        backgroundColor: colors.inputBackground,
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       },
                     ]}
-                    onPress={() => checkoutMutation.mutate()}
-                    disabled={checkoutMutation.isPending}
                   >
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.md }}>
-                      {checkoutMutation.isPending ? t('common.loading') : t('shop.checkout')}
+                    <Package size={16} color={colors.textMuted} />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
+                    {item.product?.name ?? '—'}
+                  </Text>
+                  {item.sku && item.sku.specValues.length > 0 && (
+                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                      {item.sku.specValues.join(' / ')}
                     </Text>
+                  )}
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontSize: fontSize.sm,
+                      fontWeight: '700',
+                      marginTop: 2,
+                    }}
+                  >
+                    <PriceCompact amount={item.unitPrice} size={12} />
+                  </Text>
+                </View>
+                <View style={styles.qtyRow}>
+                  <Pressable
+                    onPress={() => {
+                      if (item.quantity <= 1) removeCartMutation.mutate(item.id)
+                      else
+                        updateCartMutation.mutate({
+                          itemId: item.id,
+                          quantity: item.quantity - 1,
+                        })
+                    }}
+                    style={[styles.qtyBtn, { backgroundColor: colors.inputBackground }]}
+                  >
+                    {item.quantity <= 1 ? (
+                      <Trash2 size={12} color={colors.error} />
+                    ) : (
+                      <Minus size={14} color={colors.text} />
+                    )}
+                  </Pressable>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: '700',
+                      minWidth: 24,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {item.quantity}
+                  </Text>
+                  <Pressable
+                    onPress={() =>
+                      updateCartMutation.mutate({
+                        itemId: item.id,
+                        quantity: item.quantity + 1,
+                      })
+                    }
+                    style={[styles.qtyBtn, { backgroundColor: colors.inputBackground }]}
+                  >
+                    <Plus size={14} color={colors.text} />
                   </Pressable>
                 </View>
-              </ScrollView>
-            )}
-          </View>
-        </Pressable>
-      </Modal>
+              </View>
+            ))}
 
-      {/* ── Reviews Modal ────────────────────────── */}
-      <Modal visible={showReviews} transparent animationType="slide">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            setShowReviews(false)
-            setReviewProductId(null)
-          }}
-        >
-          <View
-            style={[styles.modalSheet, { backgroundColor: colors.surface }]}
-            onStartShouldSetResponder={() => true}
-          >
-            <View style={styles.cartHeader}>
-              <Text style={[styles.detailName, { color: colors.text }]}>{t('shop.reviews')}</Text>
-              <Pressable
-                onPress={() => {
-                  setShowReviews(false)
-                  setReviewProductId(null)
-                }}
-              >
-                <X size={22} color={colors.textMuted} />
-              </Pressable>
-            </View>
-            {reviews.length === 0 ? (
-              <View style={{ paddingVertical: spacing['3xl'], alignItems: 'center' }}>
-                <Star size={40} color={colors.textMuted} />
-                <Text style={{ color: colors.textMuted, marginTop: spacing.md }}>
-                  {t('shop.noReviews')}
+            <View style={styles.cartFooter}>
+              <View>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                  {t('shop.total')}
+                </Text>
+                <Text style={{ color: colors.text, fontWeight: '800', fontSize: fontSize.xl }}>
+                  <PriceCompact amount={cartTotal} size={14} />
                 </Text>
               </View>
-            ) : (
-              <ScrollView contentContainerStyle={{ padding: spacing.lg }}>
-                {reviews.map((review) => (
-                  <View
-                    key={review.id}
-                    style={[styles.reviewCard, { backgroundColor: colors.background }]}
-                  >
-                    <View style={styles.reviewHeader}>
-                      <Text style={{ color: colors.text, fontWeight: '600' }}>
-                        {review.isAnonymous ? t('shop.anonymous') : review.authorName}
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 2 }}>
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <Star
-                            key={n}
-                            size={12}
-                            color="#f0b132"
-                            fill={n <= review.rating ? '#f0b132' : 'transparent'}
-                          />
-                        ))}
-                      </View>
-                    </View>
-                    {review.content && (
-                      <Text
-                        style={{ color: colors.textSecondary, fontSize: fontSize.sm, marginTop: 4 }}
-                      >
-                        {review.content}
-                      </Text>
-                    )}
-                    {review.images && review.images.length > 0 && (
-                      <ScrollView horizontal style={{ marginTop: spacing.sm }}>
-                        {review.images.map((img) => (
-                          <Image
-                            key={img}
-                            source={{ uri: getImageUrl(img)! }}
-                            style={styles.reviewImage}
-                            contentFit="cover"
-                          />
-                        ))}
-                      </ScrollView>
-                    )}
-                    {review.reply && (
-                      <View style={[styles.reviewReply, { backgroundColor: colors.surface }]}>
-                        <Text
-                          style={{
-                            color: colors.primary,
-                            fontSize: fontSize.xs,
-                            fontWeight: '600',
-                          }}
-                        >
-                          {t('shop.shopReply')}
-                        </Text>
-                        <Text style={{ color: colors.textSecondary, fontSize: fontSize.sm }}>
-                          {review.reply}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </ScrollView>
-            )}
+              <Button
+                variant="primary"
+                size="md"
+                onPress={() => checkoutMutation.mutate()}
+                loading={checkoutMutation.isPending}
+                disabled={checkoutMutation.isPending}
+              >
+                {t('shop.checkout')}
+              </Button>
+            </View>
+          </ScrollView>
+        )}
+      </Sheet>
+
+      {/* ── Reviews Modal ────────────────────────── */}
+      <Sheet
+        visible={showReviews}
+        onClose={() => {
+          setShowReviews(false)
+          setReviewProductId(null)
+        }}
+        title={t('shop.reviews')}
+        action={
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={X}
+            iconColor={colors.textMuted}
+            onPress={() => {
+              setShowReviews(false)
+              setReviewProductId(null)
+            }}
+          />
+        }
+      >
+        {reviews.length === 0 ? (
+          <View style={styles.cartEmpty}>
+            <Star size={40} color={colors.textMuted} />
+            <AppText tone="secondary">{t('shop.noReviews')}</AppText>
           </View>
-        </Pressable>
-      </Modal>
-    </View>
+        ) : (
+          <ScrollView contentContainerStyle={{ padding: spacing.lg }}>
+            {reviews.map((review) => (
+              <View
+                key={review.id}
+                style={[styles.reviewCard, { backgroundColor: colors.background }]}
+              >
+                <View style={styles.reviewHeader}>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>
+                    {review.isAnonymous ? t('shop.anonymous') : review.authorName}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 2 }}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        size={12}
+                        color={colors.warning}
+                        fill={n <= review.rating ? colors.warning : 'transparent'}
+                      />
+                    ))}
+                  </View>
+                </View>
+                {review.content && (
+                  <Text
+                    style={{ color: colors.textSecondary, fontSize: fontSize.sm, marginTop: 4 }}
+                  >
+                    {review.content}
+                  </Text>
+                )}
+                {review.images && review.images.length > 0 && (
+                  <ScrollView horizontal style={{ marginTop: spacing.sm }}>
+                    {review.images.map((img) => (
+                      <Image
+                        key={img}
+                        source={{ uri: getImageUrl(img)! }}
+                        style={styles.reviewImage}
+                        contentFit="cover"
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+                {review.reply && (
+                  <View style={[styles.reviewReply, { backgroundColor: colors.surface }]}>
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontSize: fontSize.xs,
+                        fontWeight: '600',
+                      }}
+                    >
+                      {t('shop.shopReply')}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: fontSize.sm }}>
+                      {review.reply}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        )}
+      </Sheet>
+    </BackgroundSurface>
   )
 }
 
@@ -1301,7 +1244,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
     gap: spacing.sm,
   },
   walletChip: {
@@ -1311,16 +1253,6 @@ const styles = StyleSheet.create({
   walletText: {
     fontSize: fontSize.sm,
     fontWeight: '800',
-  },
-  viewTabs: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.lg,
-  },
-  viewTab: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: 4,
   },
   cartBtn: { padding: spacing.sm, position: 'relative' },
   cartBadge: {
@@ -1333,40 +1265,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cartBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  cartBadgeText: { fontSize: 10, fontWeight: '700' },
   // Search
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     gap: spacing.sm,
+    margin: spacing.md,
   },
-  searchBox: {
+  searchField: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.lg,
-    height: 40,
-    gap: spacing.sm,
   },
-  searchInput: { flex: 1, fontSize: fontSize.md },
   sortBtn: { padding: spacing.sm },
-  // Sort menu
-  sortMenu: {
-    marginHorizontal: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  sortOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
   // Categories
   catBar: { maxHeight: 44, borderBottomWidth: 1 },
   catBarContent: {
@@ -1375,7 +1285,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     height: 44,
   },
-  catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99 },
   // Grid
   grid: { padding: spacing.sm },
   gridRow: { gap: spacing.sm, paddingHorizontal: spacing.sm, marginBottom: spacing.sm },
@@ -1388,7 +1297,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1406,6 +1314,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  tagText: {
+    fontSize: 9,
+    fontWeight: '600',
   },
   productPrice: { fontSize: fontSize.sm, fontWeight: '800', marginTop: 6 },
   // Orders
@@ -1434,9 +1346,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.05)',
   },
-  orderActionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.lg },
   // Detail modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
@@ -1486,22 +1396,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     paddingTop: spacing.lg,
   },
-  // Add to cart
-  addBtn: {
-    flexDirection: 'row',
-    height: 48,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.xl,
-    gap: spacing.sm,
-  },
   // Cart modal
-  cartHeader: {
-    flexDirection: 'row',
+  cartEmpty: {
+    paddingVertical: spacing['3xl'],
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.xl,
+    gap: spacing.md,
   },
   cartItem: {
     flexDirection: 'row',
@@ -1517,11 +1416,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  checkoutBtn: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
   },
   // Reviews modal
   reviewCard: { padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.sm },

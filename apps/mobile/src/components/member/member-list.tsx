@@ -4,7 +4,6 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { fetchApi } from '../../lib/api'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import { Avatar } from '../common/avatar'
-import { StatusBadge } from '../common/status-badge'
 
 interface Member {
   id: string
@@ -36,12 +35,14 @@ export function MemberList({ serverId }: { serverId: string }) {
     const name = item.user.displayName || item.user.username
     return (
       <Pressable style={styles.memberItem}>
-        <View style={styles.avatarWrapper}>
-          <Avatar uri={item.user.avatarUrl} name={name} size={32} userId={item.user.id} />
-          <View style={styles.statusDot}>
-            <StatusBadge status={item.user.status || 'offline'} size={8} />
-          </View>
-        </View>
+        <Avatar
+          uri={item.user.avatarUrl}
+          name={name}
+          size={32}
+          userId={item.user.id}
+          status={item.user.status || 'offline'}
+          showStatus
+        />
         <View style={styles.info}>
           <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
             {name}
@@ -98,14 +99,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
-  },
-  avatarWrapper: {
-    position: 'relative',
-  },
-  statusDot: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
   },
   info: {
     flex: 1,

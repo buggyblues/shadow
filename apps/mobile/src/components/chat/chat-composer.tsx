@@ -6,6 +6,7 @@ import {
   File,
   Image as ImageIcon,
   Mic,
+  Paperclip,
   Plus,
   ShoppingBag,
   Smile,
@@ -29,6 +30,16 @@ import {
 } from 'react-native'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import type { Message } from '../../types/message'
+import { formatCommercePrice } from '../common/price-display'
+import {
+  AppText,
+  Button,
+  ChatWorkIndicator,
+  GlassHeader,
+  IconBubble,
+  IconButton,
+  InputValley,
+} from '../ui'
 import { TypelessMicButton } from './typeless-mic-button'
 
 // Common emoji list for inline picker
@@ -333,9 +344,14 @@ function ImageViewerModal({
     >
       <View style={[styles.imageViewerOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
         <View style={styles.imageViewerHeader}>
-          <Pressable onPress={onClose} hitSlop={8} style={styles.imageViewerCloseBtn}>
-            <X size={24} color="#fff" />
-          </Pressable>
+          <IconButton
+            icon={X}
+            variant="ghost"
+            iconColor="#fff"
+            iconSize={24}
+            style={styles.imageViewerCloseBtn}
+            onPress={onClose}
+          />
           <Text style={styles.imageViewerTitle}>{t('chat.imagePreview', '图片预览')}</Text>
           <View style={{ width: 40 }} />
         </View>
@@ -469,29 +485,19 @@ export const ChatComposer = memo(function ChatComposer({
     }
   }, [panelRequested, panelHeight, insetsBottom, animateBottomTo])
 
-  // Plus-button rotation animation
-  const rotateAnim = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    Animated.timing(rotateAnim, {
-      toValue: panelRequested ? 1 : 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start()
-  }, [panelRequested, rotateAnim])
-
-  const rotateInterpolate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '45deg'],
-  })
-
   return (
     <>
       {typingUsers.length > 0 && (
         <View style={styles.typingBar}>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }} numberOfLines={1}>
-            {typingUsers.join(', ')}{' '}
-            {typingUsers.length === 1 ? t('chat.isTyping') : t('chat.areTyping')}
-          </Text>
+          <ChatWorkIndicator
+            items={[
+              {
+                label: `${typingUsers.join(', ')} ${
+                  typingUsers.length === 1 ? t('chat.isTyping') : t('chat.areTyping')
+                }`,
+              },
+            ]}
+          />
         </View>
       )}
 
@@ -518,17 +524,18 @@ export const ChatComposer = memo(function ChatComposer({
                   {card.snapshot.name}
                 </Text>
                 <Text style={[styles.pendingProductPrice, { color: colors.textMuted }]}>
-                  {new Intl.NumberFormat(undefined, {
-                    style: 'currency',
-                    currency: card.snapshot.currency,
-                    maximumFractionDigits: 2,
-                  }).format(card.snapshot.price / 100)}
+                  {formatCommercePrice(card.snapshot.price, card.snapshot.currency, t)}
                 </Text>
               </View>
               {onRemoveCommerceCard && (
-                <Pressable onPress={() => onRemoveCommerceCard(card.id)} hitSlop={8}>
-                  <X size={14} color={colors.textMuted} />
-                </Pressable>
+                <IconButton
+                  icon={X}
+                  variant="ghost"
+                  iconColor={colors.textMuted}
+                  iconSize={14}
+                  style={styles.inlineRemoveBtn}
+                  onPress={() => onRemoveCommerceCard(card.id)}
+                />
               )}
             </View>
           ))}
@@ -544,25 +551,32 @@ export const ChatComposer = memo(function ChatComposer({
                     style={styles.pendingImageThumb}
                     contentFit="contain"
                   />
-                  <Pressable
+                  <IconButton
+                    icon={X}
+                    variant="danger"
+                    iconSize={14}
                     onPress={() => onRemovePendingFile(idx)}
-                    hitSlop={8}
+                    containerStyle={styles.pendingImageRemovePosition}
                     style={styles.pendingImageRemoveBtn}
-                  >
-                    <X size={14} color="#fff" />
-                  </Pressable>
+                  />
                 </Pressable>
               ) : (
                 <View style={[styles.pendingFileChip, { backgroundColor: colors.inputBackground }]}>
+                  <Paperclip size={13} color={colors.textMuted} />
                   <Text
                     style={[styles.pendingFileName, { color: colors.textSecondary }]}
                     numberOfLines={1}
                   >
-                    📎 {file.name}
+                    {file.name}
                   </Text>
-                  <Pressable onPress={() => onRemovePendingFile(idx)} hitSlop={8}>
-                    <X size={14} color={colors.textMuted} />
-                  </Pressable>
+                  <IconButton
+                    icon={X}
+                    variant="ghost"
+                    iconColor={colors.textMuted}
+                    iconSize={14}
+                    style={styles.inlineRemoveBtn}
+                    onPress={() => onRemovePendingFile(idx)}
+                  />
                 </View>
               )}
             </View>
@@ -579,48 +593,56 @@ export const ChatComposer = memo(function ChatComposer({
       )}
 
       {replyTo && (
-        <View
-          style={[
-            styles.replyBar,
-            { backgroundColor: colors.surface, borderTopColor: colors.border },
-          ]}
-        >
+        <GlassHeader style={styles.replyBar}>
           <View style={[styles.replyBarAccent, { backgroundColor: colors.primary }]} />
           <View style={styles.replyBarContent}>
-            <Text style={[styles.replyBarLabel, { color: colors.primary }]}>
+            <AppText variant="label" tone="primary">
               {t('chat.replyingTo')} {replyTo.author?.displayName || replyTo.author?.username}
-            </Text>
-            <Text style={[styles.replyBarPreview, { color: colors.textMuted }]} numberOfLines={1}>
+            </AppText>
+            <AppText
+              variant="label"
+              tone="secondary"
+              style={styles.replyBarPreview}
+              numberOfLines={1}
+            >
               {replyTo.content}
-            </Text>
+            </AppText>
           </View>
-          <Pressable onPress={onClearReply} hitSlop={8}>
-            <X size={18} color={colors.textMuted} />
-          </Pressable>
-        </View>
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={X}
+            iconSize={18}
+            iconColor={colors.textMuted}
+            onPress={onClearReply}
+            hitSlop={8}
+          />
+        </GlassHeader>
       )}
 
       <View
         style={[
           styles.inputBar,
           {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.border,
+            backgroundColor: colors.glassStrong,
+            borderTopColor: colors.glassLine,
             paddingBottom: spacing.sm,
             paddingTop: spacing.sm,
           },
         ]}
       >
         {showAtButton && onPressAt && (
-          <Pressable
-            style={[styles.actionBtn, { backgroundColor: colors.inputBackground }]}
+          <Button
+            variant="glass"
+            size="icon"
+            icon={AtSign}
+            iconColor={colors.textMuted}
+            iconSize={22}
             onPress={onPressAt}
-          >
-            <AtSign size={22} color={colors.textMuted} />
-          </Pressable>
+          />
         )}
 
-        <View style={[styles.inputWrapper, { backgroundColor: colors.inputBackground }]}>
+        <InputValley style={styles.inputWrapper}>
           <TextInput
             ref={inputRef}
             style={[styles.textInput, { color: colors.text }]}
@@ -634,7 +656,7 @@ export const ChatComposer = memo(function ChatComposer({
             submitBehavior="submit"
             onSubmitEditing={onSend}
             returnKeyType="send"
-            keyboardAppearance="dark"
+            keyboardAppearance={colors.mode === 'dark' ? 'dark' : 'light'}
           />
           {canUseVoice && onVoicePressIn && onVoicePressOut ? (
             <TypelessMicButton
@@ -644,20 +666,24 @@ export const ChatComposer = memo(function ChatComposer({
               onPressOut={onVoicePressOut}
             />
           ) : canUseVoice && onToggleVoice ? (
-            <Pressable
-              style={[styles.inputMicBtn, isRecording && { backgroundColor: colors.primary }]}
+            <IconButton
+              icon={Mic}
+              variant={isRecording ? 'primary' : 'ghost'}
+              iconColor={isRecording ? '#050508' : colors.textMuted}
+              iconSize={18}
+              containerStyle={styles.inputMicBtnPosition}
+              style={styles.inputMicBtn}
               onPress={onToggleVoice}
-            >
-              <Mic size={18} color={isRecording ? '#fff' : colors.textMuted} />
-            </Pressable>
+            />
           ) : null}
-        </View>
+        </InputValley>
 
-        <Pressable
-          style={[
-            styles.actionBtn,
-            { borderColor: colors.border, borderWidth: 1.5, borderRadius: 23 },
-          ]}
+        <IconButton
+          icon={Plus}
+          variant={panelRequested ? 'primary' : 'glass'}
+          iconColor={panelRequested ? '#050508' : colors.textMuted}
+          iconSize={22}
+          style={styles.actionBtn}
           onPress={() => {
             if (panelRequested) {
               // Panel → keyboard: focus input, keyboardWillShow handles the rest
@@ -674,11 +700,7 @@ export const ChatComposer = memo(function ChatComposer({
               setShowPlusMenu(true)
             }
           }}
-        >
-          <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
-            <Plus size={22} color={panelRequested ? colors.primary : colors.textMuted} />
-          </Animated.View>
-        </Pressable>
+        />
       </View>
 
       {/* Bottom slot — always rendered; height tracks keyboard / panel / idle */}
@@ -697,12 +719,14 @@ export const ChatComposer = memo(function ChatComposer({
                   <Text style={[styles.emojiPanelTitle, { color: colors.text }]}>
                     {t('chat.emoji', '表情')}
                   </Text>
-                  <Pressable
+                  <IconButton
+                    icon={X}
+                    variant="ghost"
+                    iconColor={colors.textMuted}
+                    iconSize={20}
                     onPress={() => setShowEmojiPicker(false)}
                     style={styles.emojiPanelClose}
-                  >
-                    <X size={20} color={colors.textMuted} />
-                  </Pressable>
+                  />
                 </View>
                 <FlatList
                   data={COMMON_EMOJIS}
@@ -729,29 +753,34 @@ export const ChatComposer = memo(function ChatComposer({
             ) : (
               <View style={styles.plusPanelGrid}>
                 <Pressable
-                  style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                  style={({ pressed }) => [
+                    styles.plusPanelItem,
+                    pressed && styles.plusPanelPressed,
+                  ]}
                   onPress={() => setShowEmojiPicker(true)}
                 >
-                  <View style={[styles.plusPanelIcon, { backgroundColor: '#fbbf2415' }]}>
-                    <Smile size={28} color="#fbbf24" />
-                  </View>
+                  <IconBubble icon={Smile} tone="warning" size={28} style={styles.plusPanelIcon} />
                   <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                     {t('chat.emoji', '表情')}
                   </Text>
                 </Pressable>
                 {onOpenProductPicker && (
                   <Pressable
-                    style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                    style={({ pressed }) => [
+                      styles.plusPanelItem,
+                      pressed && styles.plusPanelPressed,
+                    ]}
                     onPress={() => {
                       setShowPlusMenu(false)
                       onOpenProductPicker()
                     }}
                   >
-                    <View
-                      style={[styles.plusPanelIcon, { backgroundColor: `${colors.primary}15` }]}
-                    >
-                      <ShoppingBag size={28} color={colors.primary} />
-                    </View>
+                    <IconBubble
+                      icon={ShoppingBag}
+                      tone="primary"
+                      size={28}
+                      style={styles.plusPanelIcon}
+                    />
                     <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                       {t('chat.productPicker')}
                     </Text>
@@ -759,44 +788,57 @@ export const ChatComposer = memo(function ChatComposer({
                 )}
                 {onTakePhoto && (
                   <Pressable
-                    style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                    style={({ pressed }) => [
+                      styles.plusPanelItem,
+                      pressed && styles.plusPanelPressed,
+                    ]}
                     onPress={() => {
                       setShowPlusMenu(false)
                       onTakePhoto()
                     }}
                   >
-                    <View style={[styles.plusPanelIcon, { backgroundColor: '#10b98115' }]}>
-                      <Camera size={28} color="#10b981" />
-                    </View>
+                    <IconBubble
+                      icon={Camera}
+                      tone="success"
+                      size={28}
+                      style={styles.plusPanelIcon}
+                    />
                     <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                       {t('chat.takePhoto', '拍摄')}
                     </Text>
                   </Pressable>
                 )}
                 <Pressable
-                  style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                  style={({ pressed }) => [
+                    styles.plusPanelItem,
+                    pressed && styles.plusPanelPressed,
+                  ]}
                   onPress={() => {
                     setShowPlusMenu(false)
                     onPickImage()
                   }}
                 >
-                  <View style={[styles.plusPanelIcon, { backgroundColor: `${colors.primary}15` }]}>
-                    <ImageIcon size={28} color={colors.primary} />
-                  </View>
+                  <IconBubble
+                    icon={ImageIcon}
+                    tone="primary"
+                    size={28}
+                    style={styles.plusPanelIcon}
+                  />
                   <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                     {t('chat.pickImage', '相册')}
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                  style={({ pressed }) => [
+                    styles.plusPanelItem,
+                    pressed && styles.plusPanelPressed,
+                  ]}
                   onPress={() => {
                     setShowPlusMenu(false)
                     onPickFile()
                   }}
                 >
-                  <View style={[styles.plusPanelIcon, { backgroundColor: '#f59e0b15' }]}>
-                    <File size={28} color="#f59e0b" />
-                  </View>
+                  <IconBubble icon={File} tone="warning" size={28} style={styles.plusPanelIcon} />
                   <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                     {t('chat.pickFile', '文件')}
                   </Text>
@@ -832,17 +874,16 @@ const styles = StyleSheet.create({
   pendingFileName: { fontSize: fontSize.xs, flexShrink: 1 },
   pendingImageChip: { borderRadius: radius.md, overflow: 'hidden', position: 'relative' },
   pendingImageThumb: { width: 80, height: 80, borderRadius: radius.md },
-  pendingImageRemoveBtn: {
+  pendingImageRemovePosition: {
     position: 'absolute',
     top: 4,
     right: 4,
+  },
+  pendingImageRemoveBtn: {
     width: 24,
     height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
+  inlineRemoveBtn: { width: 28, height: 28 },
   pendingProductChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -897,14 +938,16 @@ const styles = StyleSheet.create({
   actionBtn: {
     width: 46,
     height: 46,
-    borderRadius: 23,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 0,
   },
   inputWrapper: {
     flex: 1,
-    borderRadius: radius.xl,
+    borderRadius: radius['2xl'],
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'flex-end',
     minHeight: 46,
@@ -923,9 +966,8 @@ const styles = StyleSheet.create({
   inputMicBtn: {
     width: 34,
     height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  inputMicBtnPosition: {
     position: 'absolute',
     right: 4,
     bottom: 6,
@@ -933,6 +975,7 @@ const styles = StyleSheet.create({
   plusPanel: { borderTopWidth: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md },
   plusPanelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   plusPanelItem: { alignItems: 'center', gap: spacing.xs, width: '22%', marginBottom: spacing.md },
+  plusPanelPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
   plusPanelIcon: {
     width: 60,
     height: 60,

@@ -1,48 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { AtSign, Bell, Check, CheckCheck, MessageCircle, User, X } from 'lucide-react-native'
-import { useCallback, useRef } from 'react'
+import { AtSign, Bell, Check, CheckCheck, Inbox, MessageCircle, User, X } from 'lucide-react-native'
+import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Animated,
-  FlatList,
-  Pressable,
-  type StyleProp,
-  StyleSheet,
-  Text,
-  View,
-  type ViewStyle,
-} from 'react-native'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
 import Reanimated, { FadeInUp } from 'react-native-reanimated'
 import { Avatar } from '../../src/components/common/avatar'
-import { DottedBackground } from '../../src/components/common/dotted-background'
 import { EmptyState } from '../../src/components/common/empty-state'
 import { LoadingScreen } from '../../src/components/common/loading-screen'
+import { BackgroundSurface, Button, ButtonGroup, CardPressable } from '../../src/components/ui'
 import { useSocketEvent } from '../../src/hooks/use-socket'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { fontSize, spacing, useColors } from '../../src/theme'
-
-function SquishyCard({
-  children,
-  onPress,
-  style,
-}: {
-  children: React.ReactNode
-  onPress: () => void
-  style?: StyleProp<ViewStyle>
-}) {
-  const scale = useRef(new Animated.Value(1)).current
-  return (
-    <Pressable
-      onPressIn={() => Animated.spring(scale, { toValue: 0.95, useNativeDriver: true }).start()}
-      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
-      onPress={onPress}
-    >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
-    </Pressable>
-  )
-}
 
 interface Notification {
   id: string
@@ -282,22 +252,21 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <DottedBackground>
+    <BackgroundSurface>
       <View style={[styles.container]}>
         {/* Mark all read header */}
         {unreadCount > 0 && (
-          <Pressable
-            style={[
-              styles.markAllBtn,
-              { backgroundColor: `${colors.primary}15`, borderColor: colors.primary },
-            ]}
+          <Button
+            variant="outline"
+            size="md"
+            icon={CheckCheck}
+            containerStyle={styles.markAllBtn}
+            style={styles.markAllInner}
             onPress={() => markAllRead.mutate()}
+            loading={markAllRead.isPending}
           >
-            <CheckCheck size={18} color={colors.primary} strokeWidth={2.5} />
-            <Text style={{ color: colors.primary, fontSize: fontSize.md, fontWeight: '800' }}>
-              {t('notification.markAllRead', '全部标为已读')}
-            </Text>
-          </Pressable>
+            {t('notification.markAllRead', '全部标为已读')}
+          </Button>
         )}
 
         <FlatList
@@ -306,23 +275,19 @@ export default function NotificationsScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <EmptyState
-              icon="📭"
+              icon={Inbox}
               title={t('notification.empty', '暂无通知')}
-              description="还没有收到任何新消息哦~"
+              description={t('notification.emptyDesc', '还没有收到任何新消息')}
             />
           }
           renderItem={({ item, index }) => {
             const display = getNotificationDisplay(item, t)
             return (
               <Reanimated.View entering={FadeInUp.delay(index * 40).springify()}>
-                <SquishyCard
-                  style={[
-                    styles.notifCard,
-                    {
-                      backgroundColor: item.isRead ? `${colors.surface}E6` : `${colors.primary}12`,
-                      borderColor: item.isRead ? colors.border : colors.primary,
-                    },
-                  ]}
+                <CardPressable
+                  variant="glassCard"
+                  active={!item.isRead}
+                  style={styles.notifCard}
                   onPress={() => handlePress(item)}
                 >
                   <View style={styles.notifContent}>
@@ -367,13 +332,16 @@ export default function NotificationsScreen() {
                         </Text>
                       )}
                       {item.referenceType === 'channel_join_request' && item.referenceId && (
-                        <View style={styles.requestActions}>
-                          <Pressable
+                        <ButtonGroup style={styles.requestActions}>
+                          <Button
                             disabled={reviewJoinRequest.isPending}
-                            style={[
-                              styles.requestAction,
-                              { backgroundColor: `${colors.success}20` },
-                            ]}
+                            variant="glass"
+                            size="xs"
+                            icon={Check}
+                            iconColor={colors.success}
+                            textStyle={[styles.requestActionText, { color: colors.success }]}
+                            containerStyle={styles.requestActionCell}
+                            style={styles.requestAction}
                             onPress={() =>
                               reviewJoinRequest.mutate({
                                 requestId: item.referenceId!,
@@ -381,14 +349,15 @@ export default function NotificationsScreen() {
                               })
                             }
                           >
-                            <Check size={14} color={colors.success} />
-                            <Text style={[styles.requestActionText, { color: colors.success }]}>
-                              {t('channel.approveAccess', '同意')}
-                            </Text>
-                          </Pressable>
-                          <Pressable
+                            {t('channel.approveAccess', '同意')}
+                          </Button>
+                          <Button
                             disabled={reviewJoinRequest.isPending}
-                            style={[styles.requestAction, { backgroundColor: `${colors.error}20` }]}
+                            variant="danger"
+                            size="xs"
+                            icon={X}
+                            containerStyle={styles.requestActionCell}
+                            style={styles.requestAction}
                             onPress={() =>
                               reviewJoinRequest.mutate({
                                 requestId: item.referenceId!,
@@ -396,21 +365,21 @@ export default function NotificationsScreen() {
                               })
                             }
                           >
-                            <X size={14} color={colors.error} />
-                            <Text style={[styles.requestActionText, { color: colors.error }]}>
-                              {t('channel.rejectAccess', '拒绝')}
-                            </Text>
-                          </Pressable>
-                        </View>
+                            {t('channel.rejectAccess', '拒绝')}
+                          </Button>
+                        </ButtonGroup>
                       )}
                       {item.referenceType === 'server_join_request' && item.referenceId && (
-                        <View style={styles.requestActions}>
-                          <Pressable
+                        <ButtonGroup style={styles.requestActions}>
+                          <Button
                             disabled={reviewServerJoinRequest.isPending}
-                            style={[
-                              styles.requestAction,
-                              { backgroundColor: `${colors.success}20` },
-                            ]}
+                            variant="glass"
+                            size="xs"
+                            icon={Check}
+                            iconColor={colors.success}
+                            textStyle={[styles.requestActionText, { color: colors.success }]}
+                            containerStyle={styles.requestActionCell}
+                            style={styles.requestAction}
                             onPress={() =>
                               reviewServerJoinRequest.mutate({
                                 requestId: item.referenceId!,
@@ -418,14 +387,15 @@ export default function NotificationsScreen() {
                               })
                             }
                           >
-                            <Check size={14} color={colors.success} />
-                            <Text style={[styles.requestActionText, { color: colors.success }]}>
-                              {t('server.approveAccess', '同意')}
-                            </Text>
-                          </Pressable>
-                          <Pressable
+                            {t('server.approveAccess', '同意')}
+                          </Button>
+                          <Button
                             disabled={reviewServerJoinRequest.isPending}
-                            style={[styles.requestAction, { backgroundColor: `${colors.error}20` }]}
+                            variant="danger"
+                            size="xs"
+                            icon={X}
+                            containerStyle={styles.requestActionCell}
+                            style={styles.requestAction}
                             onPress={() =>
                               reviewServerJoinRequest.mutate({
                                 requestId: item.referenceId!,
@@ -433,12 +403,9 @@ export default function NotificationsScreen() {
                               })
                             }
                           >
-                            <X size={14} color={colors.error} />
-                            <Text style={[styles.requestActionText, { color: colors.error }]}>
-                              {t('server.rejectAccess', '拒绝')}
-                            </Text>
-                          </Pressable>
-                        </View>
+                            {t('server.rejectAccess', '拒绝')}
+                          </Button>
+                        </ButtonGroup>
                       )}
                       <Text style={[styles.notifTime, { color: colors.textMuted }]}>
                         {formatTimeAgo(item.createdAt, t)}
@@ -449,13 +416,13 @@ export default function NotificationsScreen() {
                       <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
                     )}
                   </View>
-                </SquishyCard>
+                </CardPressable>
               </Reanimated.View>
             )
           }}
         />
       </View>
-    </DottedBackground>
+    </BackgroundSurface>
   )
 }
 
@@ -474,22 +441,16 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   list: { paddingBottom: 120, paddingTop: spacing.md },
   markAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
     marginHorizontal: spacing.lg,
     marginTop: spacing.sm,
-    borderRadius: 24,
-    borderWidth: 2,
+    alignSelf: 'stretch',
+  },
+  markAllInner: {
+    width: '100%',
   },
   notifCard: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    padding: spacing.md,
-    borderRadius: 24,
-    borderWidth: 2,
   },
   notifContent: {
     flexDirection: 'row',
@@ -523,18 +484,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   requestActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  requestAction: {
+  requestActionCell: {
     flex: 1,
+  },
+  requestAction: {
     minHeight: 34,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    width: '100%',
   },
   requestActionText: {
     fontSize: fontSize.xs,

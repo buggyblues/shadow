@@ -47,6 +47,7 @@ const config: ExpoConfig = {
     'expo-secure-store',
     'expo-image-picker',
     'expo-document-picker',
+    'expo-web-browser',
     'expo-speech-recognition',
     'expo-asset',
   ],

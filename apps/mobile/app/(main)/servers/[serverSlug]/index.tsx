@@ -1,7 +1,6 @@
 import type { Channel, ChannelSortBy } from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
   ArrowDown,
@@ -10,6 +9,7 @@ import {
   Calendar,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   Clock,
   Copy,
   Edit3,
@@ -27,32 +27,26 @@ import {
   Volume2,
   X,
 } from 'lucide-react-native'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import Reanimated, { FadeInDown } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import {
-  BuddyCatSvg,
-  ChannelCatSvg,
-  ShopCatSvg,
-  WorkCatSvg,
-} from '../../../../src/components/common/cat-svg'
-import { DottedBackground } from '../../../../src/components/common/dotted-background'
+import { ChannelCatSvg } from '../../../../src/components/common/cat-svg'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import {
+  AppText,
+  BackgroundSurface,
+  Badge,
+  Button,
+  ChannelRow,
+  Dialog,
+  GlassHeader,
+  GlassPanel,
+  MenuItem,
+  Sheet,
+  TextField,
+} from '../../../../src/components/ui'
 import { useChannelSort } from '../../../../src/hooks/use-channel-sort'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { setLastChannel } from '../../../../src/lib/last-channel'
@@ -93,33 +87,6 @@ interface Member {
     isBot?: boolean
   }
   role: string
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function SquishyCard({
-  children,
-  onPress,
-  onLongPress,
-  style,
-}: {
-  children: React.ReactNode
-  onPress?: () => void
-  onLongPress?: () => void
-  style?: object | object[]
-}) {
-  const scale = useRef(new Animated.Value(1)).current
-  return (
-    <Pressable
-      onPressIn={() => Animated.spring(scale, { toValue: 0.95, useNativeDriver: true }).start()}
-      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={400}
-    >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
-    </Pressable>
-  )
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -260,14 +227,14 @@ export default function ServerHomeScreen() {
     return sortChannels(channels)
   }, [channels, sortChannels])
 
-  const channelIcon = (type: string, color: string, size = 18) => {
+  const channelIcon = (type: string) => {
     switch (type) {
       case 'voice':
-        return <Volume2 size={size} color={color} strokeWidth={2.5} />
+        return Volume2
       case 'announcement':
-        return <Megaphone size={size} color={color} strokeWidth={2.5} />
+        return Megaphone
       default:
-        return <Hash size={size} color={color} strokeWidth={2.5} />
+        return Hash
     }
   }
 
@@ -330,9 +297,9 @@ export default function ServerHomeScreen() {
     const isPending =
       serverAccess.joinRequestStatus === 'pending' || requestServerAccessMutation.isSuccess
     return (
-      <DottedBackground>
+      <BackgroundSurface>
         <View style={[styles.accessGateContainer, { paddingTop: insets.top }]}>
-          <View style={[styles.accessGateCard, { backgroundColor: colors.surface }]}>
+          <GlassPanel style={styles.accessGateCard}>
             <View style={[styles.accessGateIcon, { backgroundColor: `${colors.primary}18` }]}>
               {isPending ? (
                 <Clock size={32} color={colors.primary} />
@@ -340,64 +307,44 @@ export default function ServerHomeScreen() {
                 <Lock size={32} color={colors.primary} />
               )}
             </View>
-            <Text style={[styles.accessGateTitle, { color: colors.text }]}>
+            <AppText variant="headline" style={styles.accessGateTitle}>
               {serverAccess.server.name}
-            </Text>
-            <Text style={[styles.accessGateDesc, { color: colors.textMuted }]}>
+            </AppText>
+            <AppText tone="secondary" style={styles.accessGateDesc}>
               {t('server.privateServerGateDesc')}
-            </Text>
-            <Pressable
+            </AppText>
+            <Button
+              variant="primary"
+              size="lg"
+              icon={isPending ? Clock : Send}
+              loading={requestServerAccessMutation.isPending}
               disabled={isPending || requestServerAccessMutation.isPending}
               onPress={() => requestServerAccessMutation.mutate()}
-              style={({ pressed }) => [
-                styles.accessGateButton,
-                {
-                  backgroundColor: colors.primary,
-                  opacity:
-                    isPending || requestServerAccessMutation.isPending ? 0.58 : pressed ? 0.82 : 1,
-                },
-              ]}
+              style={styles.accessGateButton}
             >
-              {requestServerAccessMutation.isPending ? (
-                <ActivityIndicator color="#050508" />
-              ) : isPending ? (
-                <Clock size={16} color="#050508" />
-              ) : (
-                <Send size={16} color="#050508" />
-              )}
-              <Text style={styles.accessGateButtonText}>
-                {isPending ? t('server.requestPending') : t('server.requestAccess')}
-              </Text>
-            </Pressable>
-          </View>
+              {isPending ? t('server.requestPending') : t('server.requestAccess')}
+            </Button>
+          </GlassPanel>
         </View>
-      </DottedBackground>
+      </BackgroundSurface>
     )
   }
 
   if (isServerAccessError || !server) return <LoadingScreen />
 
-  // Derived styling helpers
-  const glassCardStyle = {
-    backgroundColor: `${colors.surface}E6`, // 90% opacity
-    borderColor: colors.border,
-    borderWidth: 2,
-    borderRadius: 36,
-  }
-
   return (
-    <DottedBackground>
+    <BackgroundSurface>
       {/* Custom navigation header bar */}
-      <View
-        style={[styles.customHeader, { backgroundColor: colors.surface, paddingTop: insets.top }]}
-      >
-        <Pressable
+      <GlassHeader style={[styles.customHeader, { paddingTop: insets.top }]}>
+        <Button
+          variant="ghost"
+          size="icon"
+          icon={ChevronLeft}
           onPress={() => router.back()}
           hitSlop={8}
-          style={({ pressed }) => [styles.headerBackBtn, pressed && { opacity: 0.5 }]}
-        >
-          <ChevronLeft size={26} color={colors.text} />
-        </Pressable>
+          iconColor={colors.text}
+          style={styles.headerBackBtn}
+        />
 
         <Pressable
           onPress={() => router.push(`/(main)/servers/${serverSlug}/detail` as never)}
@@ -416,36 +363,46 @@ export default function ServerHomeScreen() {
                 { backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
               ]}
             >
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>
+              <Text style={[styles.headerInitial, { color: colors.background }]}>
                 {server?.name?.[0] ?? '?'}
               </Text>
             </View>
           )}
           <View style={styles.headerTextCol}>
-            <Text style={[styles.headerServerName, { color: colors.text }]} numberOfLines={1}>
-              {server?.name ?? '...'} ›
-            </Text>
+            <View style={styles.headerNameRow}>
+              <AppText variant="title" style={styles.headerServerName} numberOfLines={1}>
+                {server?.name ?? '...'}
+              </AppText>
+              <ChevronRight
+                size={16}
+                color={colors.textMuted}
+                strokeWidth={2.8}
+                style={styles.headerChevron}
+              />
+            </View>
             <View style={styles.headerOnlineRow}>
-              <View style={[styles.headerOnlineDot, { backgroundColor: '#34D399' }]} />
-              <Text style={[styles.headerOnlineText, { color: colors.textMuted }]}>
+              <View style={[styles.headerOnlineDot, { backgroundColor: colors.success }]} />
+              <AppText variant="label" tone="secondary" style={styles.headerOnlineText}>
                 {onlineCount} {t('server.membersOnline')}
-              </Text>
+              </AppText>
             </View>
           </View>
         </Pressable>
 
         <View style={styles.headerRight}>
           {isOwner && (
-            <Pressable
+            <Button
+              variant="ghost"
+              size="icon"
+              icon={Settings}
               onPress={() => router.push(`/(main)/servers/${serverSlug}/server-settings` as never)}
               hitSlop={8}
-              style={({ pressed }) => [styles.headerIconBtn, pressed && { opacity: 0.5 }]}
-            >
-              <Settings size={22} color={colors.text} />
-            </Pressable>
+              iconColor={colors.text}
+              style={styles.headerIconBtn}
+            />
           )}
         </View>
-      </View>
+      </GlassHeader>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -458,130 +415,60 @@ export default function ServerHomeScreen() {
           />
         }
       >
-        {/* ── Horizontal 1x4 Actions ────────────────────── */}
-        <View style={styles.actionRow}>
-          {/* Workspace */}
-          <Reanimated.View entering={FadeInDown.delay(100).springify()}>
-            <SquishyCard
-              style={styles.actionItem}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/workspace` as never)}
-            >
-              <LinearGradient colors={['#3B82F6', '#60A5FA']} style={styles.actionBubbleGlow}>
-                <WorkCatSvg width={40} height={40} />
-              </LinearGradient>
-              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
-                {t('server.workspace')}
-              </Text>
-            </SquishyCard>
-          </Reanimated.View>
-
-          {/* Shop */}
-          <Reanimated.View entering={FadeInDown.delay(200).springify()}>
-            <SquishyCard
-              style={styles.actionItem}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/shop` as never)}
-            >
-              <LinearGradient colors={['#F59E0B', '#FBBF24']} style={styles.actionBubbleGlow}>
-                <ShopCatSvg width={40} height={40} />
-              </LinearGradient>
-              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
-                {t('server.shop')}
-              </Text>
-            </SquishyCard>
-          </Reanimated.View>
-
-          {/* Members */}
-          <Reanimated.View entering={FadeInDown.delay(300).springify()}>
-            <SquishyCard
-              style={styles.actionItem}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/members` as never)}
-            >
-              <LinearGradient colors={['#EF4444', '#F87171']} style={styles.actionBubbleGlow}>
-                <BuddyCatSvg width={40} height={40} />
-              </LinearGradient>
-              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
-                {t('server.members')}
-              </Text>
-            </SquishyCard>
-          </Reanimated.View>
-        </View>
-
         {/* ── Channels Header ─────────────────────────── */}
         <View style={styles.channelsControls}>
-          <Text style={[styles.cuteSectionLabel, { color: colors.text }]}>
+          <AppText variant="title" style={styles.cuteSectionLabel}>
             {t('server.channels')}
-          </Text>
+          </AppText>
           <View style={styles.channelsActions}>
-            {/* Sort Button */}
-            <SquishyCard onPress={() => setShowSortModal(true)}>
-              <View
-                style={[
-                  styles.actionBubble,
-                  hasCustomSort
-                    ? { backgroundColor: colors.primary, borderColor: colors.primary }
-                    : {
-                        backgroundColor: glassCardStyle.backgroundColor,
-                        borderColor: colors.border,
-                      },
-                ]}
-              >
-                <ArrowUpDown
-                  size={18}
-                  color={hasCustomSort ? '#fff' : colors.text}
-                  strokeWidth={2.5}
-                />
-                {hasCustomSort && <View style={[styles.sortBadge, { backgroundColor: '#fff' }]} />}
-              </View>
-            </SquishyCard>
-            <SquishyCard onPress={() => setShowSearch(!showSearch)}>
-              <View
-                style={[
-                  styles.actionBubble,
-                  { backgroundColor: glassCardStyle.backgroundColor, borderColor: colors.border },
-                ]}
-              >
-                <Search size={18} color={colors.text} strokeWidth={2.5} />
-              </View>
-            </SquishyCard>
+            <View style={styles.actionButtonWrap}>
+              <Button
+                variant={hasCustomSort ? 'primary' : 'glass'}
+                size="icon"
+                icon={ArrowUpDown}
+                iconColor={hasCustomSort ? '#050508' : colors.text}
+                iconSize={18}
+                onPress={() => setShowSortModal(true)}
+              />
+              {hasCustomSort && <View style={[styles.sortBadge, { backgroundColor: '#fff' }]} />}
+            </View>
+            <Button
+              variant="glass"
+              size="icon"
+              icon={Search}
+              iconColor={colors.text}
+              iconSize={18}
+              onPress={() => setShowSearch(!showSearch)}
+            />
             {isOwner && (
-              <SquishyCard
+              <Button
+                variant="primary"
+                size="icon"
+                icon={Plus}
+                iconSize={18}
                 onPress={() => router.push(`/(main)/servers/${serverSlug}/create-channel` as never)}
-              >
-                <View
-                  style={[
-                    styles.actionBubble,
-                    { backgroundColor: '#00f3ff', borderColor: '#00c3cc' },
-                  ]}
-                >
-                  <Plus size={18} color="#1a1a1c" strokeWidth={3} />
-                </View>
-              </SquishyCard>
+              />
             )}
           </View>
         </View>
 
         {showSearch && (
-          <View
-            style={[
-              styles.channelSearchWrap,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Search size={16} color={colors.textMuted} strokeWidth={2.5} />
-            <TextInput
-              style={[styles.channelSearchInput, { color: colors.text }]}
-              value={channelSearch}
-              onChangeText={setChannelSearch}
-              placeholder={t('server.searchChannels')}
-              placeholderTextColor={colors.textMuted}
-              autoFocus
-            />
-            {channelSearch.length > 0 && (
-              <Pressable onPress={() => setChannelSearch('')} hitSlop={12}>
-                <X size={16} color={colors.textMuted} strokeWidth={2.5} />
-              </Pressable>
-            )}
-          </View>
+          <TextField
+            value={channelSearch}
+            onChangeText={setChannelSearch}
+            placeholder={t('server.searchChannels')}
+            icon={Search}
+            autoFocus
+            containerStyle={styles.channelSearchContainer}
+            style={styles.channelSearchWrap}
+            right={
+              channelSearch.length > 0 ? (
+                <Pressable onPress={() => setChannelSearch('')} hitSlop={12}>
+                  <X size={16} color={colors.textMuted} strokeWidth={2.5} />
+                </Pressable>
+              ) : null
+            }
+          />
         )}
 
         {/* ── Channel Bubbles ─────────────────────────── */}
@@ -590,384 +477,273 @@ export default function ServerHomeScreen() {
             <Reanimated.View
               key={group.category?.id ?? 'uncategorized'}
               entering={FadeInDown.delay(500 + groupIndex * 100).springify()}
-              style={[styles.categoryBubble, glassCardStyle]}
             >
-              {group.category && (
-                <Pressable
-                  style={styles.categoryRow}
-                  onPress={() => toggleCategory(group.category!.id)}
-                >
-                  <View style={styles.categoryHeaderLeft}>
-                    <ChevronDown
-                      size={14}
-                      color={colors.text}
-                      strokeWidth={3}
-                      style={{
-                        transform: [
-                          {
-                            rotate: collapsedCategories.has(group.category.id) ? '-90deg' : '0deg',
-                          },
-                        ],
-                      }}
-                    />
-                    <Text style={[styles.categoryName, { color: colors.text }]}>
-                      {group.category.name}
-                    </Text>
-                  </View>
-                  <View style={[styles.countBadge, { backgroundColor: colors.inputBackground }]}>
-                    <Text style={[styles.countText, { color: colors.textMuted }]}>
+              <GlassPanel style={styles.categoryBubble}>
+                {group.category && (
+                  <Pressable
+                    style={styles.categoryRow}
+                    onPress={() => toggleCategory(group.category!.id)}
+                  >
+                    <View style={styles.categoryHeaderLeft}>
+                      <ChevronDown
+                        size={14}
+                        color={colors.text}
+                        strokeWidth={3}
+                        style={{
+                          transform: [
+                            {
+                              rotate: collapsedCategories.has(group.category.id)
+                                ? '-90deg'
+                                : '0deg',
+                            },
+                          ],
+                        }}
+                      />
+                      <AppText variant="label" style={styles.categoryName}>
+                        {group.category.name}
+                      </AppText>
+                    </View>
+                    <Badge variant="neutral" size="xs">
                       {group.channels.length}
-                    </Text>
+                    </Badge>
+                  </Pressable>
+                )}
+                {!(group.category && collapsedCategories.has(group.category.id)) && (
+                  <View style={styles.channelsContainer}>
+                    {group.channels.map((channel) => (
+                      <ChannelRow
+                        key={channel.id}
+                        title={channel.name}
+                        icon={channelIcon(channel.type)}
+                        tone={channel.isPrivate ? 'muted' : 'primary'}
+                        right={
+                          channel.isPrivate ? (
+                            <Lock size={14} color={colors.textMuted} strokeWidth={2.5} />
+                          ) : null
+                        }
+                        onPress={() => {
+                          updateLastAccessed(channel.id)
+                          if (server) setLastChannel(server.id, channel.id)
+                          router.push(
+                            `/(main)/servers/${serverSlug}/channels/${channel.id}` as never,
+                          )
+                        }}
+                        onLongPress={() => setContextChannel(channel)}
+                        flat
+                      />
+                    ))}
                   </View>
-                </Pressable>
-              )}
-              {!(group.category && collapsedCategories.has(group.category.id)) && (
-                <View style={styles.channelsContainer}>
-                  {group.channels.map((channel) => (
-                    <SquishyCard
-                      key={channel.id}
-                      style={[styles.channelPill, { backgroundColor: colors.inputBackground }]}
-                      onPress={() => {
-                        updateLastAccessed(channel.id)
-                        if (server) setLastChannel(server.id, channel.id)
-                        router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}` as never)
-                      }}
-                      onLongPress={() => setContextChannel(channel)}
-                    >
-                      <View style={[styles.channelIconBubble, { backgroundColor: colors.surface }]}>
-                        {channelIcon(channel.type, colors.textSecondary)}
-                      </View>
-                      <Text style={[styles.channelName, { color: colors.text }]}>
-                        {channel.name}
-                      </Text>
-                      {channel.isPrivate && (
-                        <Lock size={14} color={colors.textMuted} strokeWidth={2.5} />
-                      )}
-                    </SquishyCard>
-                  ))}
-                </View>
-              )}
+                )}
+              </GlassPanel>
             </Reanimated.View>
           ))}
 
           {channels.length === 0 && (
-            <Reanimated.View
-              entering={FadeInDown.delay(500).springify()}
-              style={[styles.emptyChannels, glassCardStyle]}
-            >
-              <ChannelCatSvg width={80} height={80} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {t('server.noChannels')}
-              </Text>
-              {isOwner && (
-                <SquishyCard
-                  onPress={() =>
-                    router.push(`/(main)/servers/${serverSlug}/create-channel` as never)
-                  }
-                >
-                  <LinearGradient colors={['#00f3ff', '#00a2ff']} style={styles.cuteCreateBtn}>
-                    <Plus size={18} color="#1a1a1c" strokeWidth={3} />
-                    <Text style={styles.cuteCreateBtnText}>{t('server.createChannel')}</Text>
-                  </LinearGradient>
-                </SquishyCard>
-              )}
+            <Reanimated.View entering={FadeInDown.delay(500).springify()}>
+              <GlassPanel style={styles.emptyChannels}>
+                <ChannelCatSvg width={80} height={80} />
+                <AppText tone="secondary" style={styles.emptyText}>
+                  {t('server.noChannels')}
+                </AppText>
+                {isOwner && (
+                  <Button
+                    variant="primary"
+                    size="md"
+                    icon={Plus}
+                    onPress={() =>
+                      router.push(`/(main)/servers/${serverSlug}/create-channel` as never)
+                    }
+                  >
+                    {t('server.createChannel')}
+                  </Button>
+                )}
+              </GlassPanel>
             </Reanimated.View>
           )}
         </View>
       </ScrollView>
 
-      {/* Channel context menu */}
-      <Modal
+      <Sheet
         visible={!!contextChannel}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setContextChannel(null)}
+        onClose={() => setContextChannel(null)}
+        title={contextChannel?.name}
       >
-        <Pressable style={styles.ctxOverlay} onPress={() => setContextChannel(null)}>
-          <Reanimated.View
-            entering={FadeInDown.duration(200)}
-            style={[styles.ctxSheet, { backgroundColor: colors.surface }]}
-          >
-            {/* Invite member */}
-            <Pressable
-              style={({ pressed }) => [styles.ctxItem, pressed && { opacity: 0.6 }]}
-              onPress={() => {
-                const ch = contextChannel
-                setContextChannel(null)
-                if (ch) {
-                  router.push(
-                    `/(main)/servers/${serverSlug}/channel-members?channelId=${ch.id}&autoInvite=1` as never,
-                  )
-                }
-              }}
+        <MenuItem
+          icon={UserPlus}
+          title={t('channel.inviteMember', '邀请成员')}
+          onPress={() => {
+            const ch = contextChannel
+            setContextChannel(null)
+            if (ch) {
+              router.push(
+                `/(main)/servers/${serverSlug}/channel-members?channelId=${ch.id}&autoInvite=1` as never,
+              )
+            }
+          }}
+        />
+        <MenuItem
+          icon={Edit3}
+          title={t('channel.editChannel', '编辑频道')}
+          onPress={() => {
+            if (contextChannel) {
+              setEditingChannel(contextChannel)
+              setEditChannelName(contextChannel.name)
+            }
+            setContextChannel(null)
+          }}
+        />
+        <MenuItem
+          icon={contextChannel?.isPrivate ? LockOpen : Lock}
+          title={
+            contextChannel?.isPrivate
+              ? t('channel.setPublic', '设为公开')
+              : t('channel.setPrivate', '设为私有')
+          }
+          onPress={() => {
+            if (contextChannel) {
+              updateChannelMutation.mutate({
+                channelId: contextChannel.id,
+                name: contextChannel.name,
+                isPrivate: !contextChannel.isPrivate,
+              })
+            }
+            setContextChannel(null)
+          }}
+        />
+        <MenuItem
+          icon={Copy}
+          title={t('channel.copyChannelLink', '复制频道链接')}
+          onPress={() => {
+            if (contextChannel) {
+              showToast(t('channel.linkCopied', '频道链接已复制'), 'success')
+            }
+            setContextChannel(null)
+          }}
+        />
+        <MenuItem
+          icon={Trash2}
+          tone="danger"
+          title={t('channel.deleteChannel', '删除频道')}
+          onPress={() => {
+            const ch = contextChannel
+            setContextChannel(null)
+            if (ch) {
+              Alert.alert(
+                t('channel.deleteChannel', '删除频道'),
+                t('channel.deleteChannelConfirm', '确定要删除此频道吗？此操作不可撤销。'),
+                [
+                  { text: t('common.cancel', '取消'), style: 'cancel' },
+                  {
+                    text: t('common.delete', '删除'),
+                    style: 'destructive',
+                    onPress: () => deleteChannelMutation.mutate(ch.id),
+                  },
+                ],
+              )
+            }
+          }}
+        />
+      </Sheet>
+
+      <Dialog
+        visible={!!editingChannel}
+        onClose={() => setEditingChannel(null)}
+        title={t('channel.editChannel', '编辑频道')}
+        actions={
+          <>
+            <Button
+              variant="glass"
+              size="md"
+              style={styles.editAction}
+              onPress={() => setEditingChannel(null)}
             >
-              <UserPlus size={18} color={colors.textSecondary} />
-              <Text style={[styles.ctxLabel, { color: colors.text }]}>
-                {t('channel.inviteMember', '邀请成员')}
-              </Text>
-            </Pressable>
-
-            <View style={[styles.ctxDivider, { backgroundColor: colors.border }]} />
-
-            {/* Edit channel name */}
-            <Pressable
-              style={({ pressed }) => [styles.ctxItem, pressed && { opacity: 0.6 }]}
+              {t('common.cancel', '取消')}
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              style={styles.editAction}
               onPress={() => {
-                if (contextChannel) {
-                  setEditingChannel(contextChannel)
-                  setEditChannelName(contextChannel.name)
-                }
-                setContextChannel(null)
-              }}
-            >
-              <Edit3 size={18} color={colors.textSecondary} />
-              <Text style={[styles.ctxLabel, { color: colors.text }]}>
-                {t('channel.editChannel', '编辑频道')}
-              </Text>
-            </Pressable>
-
-            {/* Toggle private */}
-            <Pressable
-              style={({ pressed }) => [styles.ctxItem, pressed && { opacity: 0.6 }]}
-              onPress={() => {
-                if (contextChannel) {
+                if (editingChannel && editChannelName.trim()) {
                   updateChannelMutation.mutate({
-                    channelId: contextChannel.id,
-                    name: contextChannel.name,
-                    isPrivate: !contextChannel.isPrivate,
+                    channelId: editingChannel.id,
+                    name: editChannelName.trim(),
                   })
                 }
-                setContextChannel(null)
               }}
             >
-              {contextChannel?.isPrivate ? (
-                <LockOpen size={18} color={colors.textSecondary} />
-              ) : (
-                <Lock size={18} color={colors.textSecondary} />
-              )}
-              <Text style={[styles.ctxLabel, { color: colors.text }]}>
-                {contextChannel?.isPrivate
-                  ? t('channel.setPublic', '设为公开')
-                  : t('channel.setPrivate', '设为私有')}
-              </Text>
-            </Pressable>
-
-            {/* Copy channel link */}
-            <Pressable
-              style={({ pressed }) => [styles.ctxItem, pressed && { opacity: 0.6 }]}
-              onPress={() => {
-                // Copy not available natively without Clipboard, just show toast
-                if (contextChannel) {
-                  showToast(t('channel.linkCopied', '频道链接已复制'), 'success')
-                }
-                setContextChannel(null)
-              }}
-            >
-              <Copy size={18} color={colors.textSecondary} />
-              <Text style={[styles.ctxLabel, { color: colors.text }]}>
-                {t('channel.copyChannelLink', '复制频道链接')}
-              </Text>
-            </Pressable>
-
-            <View style={[styles.ctxDivider, { backgroundColor: colors.border }]} />
-
-            {/* Delete channel */}
-            <Pressable
-              style={({ pressed }) => [styles.ctxItem, pressed && { opacity: 0.6 }]}
-              onPress={() => {
-                const ch = contextChannel
-                setContextChannel(null)
-                if (ch) {
-                  Alert.alert(
-                    t('channel.deleteChannel', '删除频道'),
-                    t('channel.deleteChannelConfirm', '确定要删除此频道吗？此操作不可撤销。'),
-                    [
-                      { text: t('common.cancel', '取消'), style: 'cancel' },
-                      {
-                        text: t('common.delete', '删除'),
-                        style: 'destructive',
-                        onPress: () => deleteChannelMutation.mutate(ch.id),
-                      },
-                    ],
-                  )
-                }
-              }}
-            >
-              <Trash2 size={18} color="#ef4444" />
-              <Text style={[styles.ctxLabel, { color: '#ef4444' }]}>
-                {t('channel.deleteChannel', '删除频道')}
-              </Text>
-            </Pressable>
-          </Reanimated.View>
-        </Pressable>
-      </Modal>
-
-      {/* Edit channel name modal */}
-      <Modal
-        visible={!!editingChannel}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEditingChannel(null)}
+              {t('common.save', '保存')}
+            </Button>
+          </>
+        }
       >
-        <Pressable
-          style={[styles.ctxOverlay, { justifyContent: 'center' }]}
-          onPress={() => setEditingChannel(null)}
-        >
-          <Pressable
-            style={[styles.editSheet, { backgroundColor: colors.surface }]}
-            onPress={() => {}}
-          >
-            <Text style={[styles.editTitle, { color: colors.text }]}>
-              {t('channel.editChannel', '编辑频道')}
-            </Text>
-            <TextInput
-              style={[
-                styles.editInput,
-                {
-                  backgroundColor: colors.inputBackground,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
-              ]}
-              value={editChannelName}
-              onChangeText={setEditChannelName}
-              placeholder={t('channel.channelName', '频道名称')}
-              placeholderTextColor={colors.textMuted}
-              autoFocus
-            />
-            <View style={styles.editBtnRow}>
-              <Pressable
-                style={[styles.editBtn, { backgroundColor: colors.inputBackground }]}
-                onPress={() => setEditingChannel(null)}
-              >
-                <Text style={{ color: colors.textSecondary }}>{t('common.cancel', '取消')}</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.editBtn, { backgroundColor: colors.primary }]}
-                onPress={() => {
-                  if (editingChannel && editChannelName.trim()) {
-                    updateChannelMutation.mutate({
-                      channelId: editingChannel.id,
-                      name: editChannelName.trim(),
-                    })
-                  }
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700' }}>{t('common.save', '保存')}</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        <TextField
+          value={editChannelName}
+          onChangeText={setEditChannelName}
+          placeholder={t('channel.channelName', '频道名称')}
+          autoFocus
+        />
+      </Dialog>
 
-      {/* Sort Modal - Bottom Sheet Style */}
-      <Modal
+      <Sheet
         visible={showSortModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowSortModal(false)}
+        onClose={() => setShowSortModal(false)}
+        title={t('sort.title', '排序方式')}
       >
-        <TouchableOpacity
-          style={[styles.sortOverlay, { backgroundColor: colors.overlay }]}
-          activeOpacity={1}
-          onPress={() => setShowSortModal(false)}
-        >
-          <View style={[styles.sortSheet, { backgroundColor: colors.surface }]}>
-            {/* Handle bar */}
-            <View style={styles.sortHandleBar}>
-              <View style={[styles.sortHandle, { backgroundColor: colors.textMuted }]} />
-            </View>
-            <Text style={[styles.sortTitle, { color: colors.text }]}>
-              {t('sort.title', '排序方式')}
-            </Text>
-            <View style={styles.sortOptionsContainer}>
-              {[
-                {
-                  value: 'position' as ChannelSortBy,
-                  label: t('sort.byPosition', '默认顺序'),
-                  icon: ArrowUpDown,
-                },
-                {
-                  value: 'lastMessageAt' as ChannelSortBy,
-                  label: t('sort.byLastMessage', '最新消息'),
-                  icon: MessageSquare,
-                },
-                {
-                  value: 'lastAccessedAt' as ChannelSortBy,
-                  label: t('sort.byLastAccessed', '访问时间'),
-                  icon: Clock,
-                },
-                {
-                  value: 'createdAt' as ChannelSortBy,
-                  label: t('sort.byCreatedAt', '创建时间'),
-                  icon: Calendar,
-                },
-                {
-                  value: 'updatedAt' as ChannelSortBy,
-                  label: t('sort.byUpdatedAt', '更新时间'),
-                  icon: Clock,
-                },
-              ].map((option) => {
-                const Icon = option.icon
-                const isSelected = sortBy === option.value
-                const DirectionIcon = sortDirection === 'asc' ? ArrowUp : ArrowDown
-                return (
-                  <Pressable
-                    key={option.value}
-                    style={[
-                      styles.sortOption,
-                      isSelected && { backgroundColor: `${colors.primary}15` },
-                    ]}
-                    onPress={() => {
-                      if (isSelected) {
-                        toggleSortDirection()
-                      } else {
-                        setSortBy(option.value)
-                      }
-                      setShowSortModal(false)
-                    }}
-                  >
-                    <View
-                      style={[
-                        styles.sortOptionIcon,
-                        {
-                          backgroundColor: isSelected
-                            ? `${colors.primary}25`
-                            : colors.inputBackground,
-                        },
-                      ]}
-                    >
-                      <Icon size={20} color={isSelected ? colors.primary : colors.textSecondary} />
-                    </View>
-                    <Text
-                      style={[
-                        styles.sortOptionText,
-                        { color: isSelected ? colors.primary : colors.text },
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                    {isSelected && (
-                      <View style={styles.sortCheck}>
-                        <DirectionIcon size={16} color={colors.primary} />
-                      </View>
-                    )}
-                  </Pressable>
-                )
-              })}
-            </View>
-            <Pressable
-              style={[styles.sortCloseBtn, { backgroundColor: colors.inputBackground }]}
-              onPress={() => setShowSortModal(false)}
-            >
-              <Text style={[styles.sortCloseText, { color: colors.text }]}>
-                {t('common.close', '关闭')}
-              </Text>
-            </Pressable>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </DottedBackground>
+        <View style={styles.sortOptionsContainer}>
+          {[
+            {
+              value: 'position' as ChannelSortBy,
+              label: t('sort.byPosition', '默认顺序'),
+              icon: ArrowUpDown,
+            },
+            {
+              value: 'lastMessageAt' as ChannelSortBy,
+              label: t('sort.byLastMessage', '最新消息'),
+              icon: MessageSquare,
+            },
+            {
+              value: 'lastAccessedAt' as ChannelSortBy,
+              label: t('sort.byLastAccessed', '访问时间'),
+              icon: Clock,
+            },
+            {
+              value: 'createdAt' as ChannelSortBy,
+              label: t('sort.byCreatedAt', '创建时间'),
+              icon: Calendar,
+            },
+            {
+              value: 'updatedAt' as ChannelSortBy,
+              label: t('sort.byUpdatedAt', '更新时间'),
+              icon: Clock,
+            },
+          ].map((option) => {
+            const isSelected = sortBy === option.value
+            const DirectionIcon = sortDirection === 'asc' ? ArrowUp : ArrowDown
+            return (
+              <MenuItem
+                key={option.value}
+                icon={option.icon}
+                title={option.label}
+                tone={isSelected ? 'primary' : 'muted'}
+                right={isSelected ? <DirectionIcon size={16} color={colors.primary} /> : undefined}
+                onPress={() => {
+                  if (isSelected) {
+                    toggleSortDirection()
+                  } else {
+                    setSortBy(option.value)
+                  }
+                  setShowSortModal(false)
+                }}
+              />
+            )
+          })}
+        </View>
+        <Button variant="glass" size="md" onPress={() => setShowSortModal(false)}>
+          {t('common.close', '关闭')}
+        </Button>
+      </Sheet>
+    </BackgroundSurface>
   )
 }
 
@@ -979,8 +755,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
     zIndex: 100,
   },
   headerBackBtn: {
@@ -1001,15 +775,27 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginRight: 10,
     borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.1)',
   },
+  headerInitial: { fontSize: 16, fontWeight: '800' },
   headerTextCol: {
+    flex: 1,
     justifyContent: 'center',
+    minWidth: 0,
+  },
+  headerNameRow: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   headerServerName: {
     fontSize: 16,
     fontWeight: '800',
-    marginBottom: 2,
+    lineHeight: 20,
+    flexShrink: 1,
+  },
+  headerChevron: {
+    opacity: 0.55,
   },
   headerOnlineRow: {
     flexDirection: 'row',
@@ -1037,36 +823,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Horizontal 1x4 Actions
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.xl,
-  },
-  actionItem: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  actionBubbleGlow: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  actionLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-
   // Channels Controls
   channelsControls: {
     flexDirection: 'row',
@@ -1083,33 +839,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  actionBubble: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+  actionButtonWrap: {
+    position: 'relative',
   },
-
   // Search
-  channelSearchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  channelSearchContainer: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
-    paddingHorizontal: spacing.md,
+  },
+  channelSearchWrap: {
     height: 48,
     borderRadius: 24,
-    borderWidth: 2,
-    gap: spacing.sm,
   },
-  channelSearchInput: { flex: 1, fontSize: 16, fontWeight: '600' },
 
   // Channels List
   channelsList: {
@@ -1138,37 +879,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  countBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  countText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
   channelsContainer: {
     gap: spacing.sm,
-  },
-  channelPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 6,
-    paddingRight: 16,
-    borderRadius: 24,
-    gap: 12,
-  },
-  channelIconBubble: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  channelName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
   },
 
   // Empty State
@@ -1181,141 +893,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  cuteCreateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  cuteCreateBtnText: {
-    color: '#1a1a1c',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-
-  // Modal
-  modalOverlay: {
+  editAction: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end', // slide up from bottom feel
-  },
-  modalContent: {
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    borderWidth: 2,
-    borderBottomWidth: 0,
-    padding: spacing.xl,
-    paddingBottom: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  modalTitle: { fontSize: 24, fontWeight: '900' },
-  cuteLabel: {
-    fontSize: 14,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    marginBottom: spacing.sm,
-    letterSpacing: 0.5,
-  },
-  cuteInput: {
-    height: 56,
-    borderRadius: 16,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    fontWeight: '600',
-    borderWidth: 2,
-  },
-  typeRow: { flexDirection: 'row', gap: spacing.sm },
-  cuteTypeBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: 20,
-    borderWidth: 2,
-    gap: 8,
-  },
-  typeBtnText: { fontSize: 14, fontWeight: '800' },
-  cuteCatChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 2,
-  },
-  catChipText: { fontSize: 14, fontWeight: '800' },
-  cuteModalBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 24,
-  },
-  // Context menu
-  ctxOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  ctxSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: spacing.md,
-    paddingBottom: 34,
-    paddingHorizontal: spacing.md,
-  },
-  ctxItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.sm,
-  },
-  ctxLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  ctxDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 2,
-  },
-
-  // Edit channel modal
-  editSheet: {
-    marginHorizontal: spacing.lg,
-    borderRadius: 16,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  editTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  editInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-  },
-  editBtnRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  editBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
   },
 
   accessGateContainer: {
@@ -1351,92 +930,10 @@ const styles = StyleSheet.create({
   },
   accessGateButton: {
     width: '100%',
-    minHeight: 52,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
     marginTop: spacing.sm,
-  },
-  accessGateButtonText: {
-    color: '#050508',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-
-  // Sort modal - Bottom Sheet
-  sortOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  sortSheet: {
-    width: '100%',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 40,
-    paddingTop: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  sortHandleBar: {
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-  },
-  sortHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-  },
-  sortTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: spacing.lg,
-    textAlign: 'center',
   },
   sortOptionsContainer: {
     gap: spacing.sm,
-  },
-  sortOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 16,
-  },
-  sortOptionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sortOptionText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sortCheck: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sortCloseBtn: {
-    marginTop: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  sortCloseText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
   sortBadge: {
     position: 'absolute',

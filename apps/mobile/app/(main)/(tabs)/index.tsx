@@ -1,11 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
-import { ChevronRight, Hash, HelpCircle, Lock, Plus, Search, Users, X } from 'lucide-react-native'
-import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Animated,
+  ChevronRight,
+  Compass,
+  Hash,
+  HelpCircle,
+  Lock,
+  MessageCircle,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import {
   Dimensions,
   KeyboardAvoidingView,
   Modal,
@@ -14,52 +23,38 @@ import {
   RefreshControl,
   ScrollView,
   SectionList,
-  type StyleProp,
   StyleSheet,
-  Switch,
   Text,
-  TextInput,
   View,
-  type ViewStyle,
 } from 'react-native'
 import Reanimated, { FadeIn, FadeInDown, FadeInRight } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../src/components/common/avatar'
 import {
-  BuddyCatSvg,
   ChannelCatSvg,
   HelpBuddySvg,
   HelpProductSvg,
   HelpStartSvg,
   WorkCatSvg,
 } from '../../../src/components/common/cat-svg'
-import { DottedBackground } from '../../../src/components/common/dotted-background'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
+import {
+  AppSwitch,
+  AppText,
+  BackgroundSurface,
+  Badge,
+  Button,
+  CardPressable,
+  GlassPanel,
+  IconBubble,
+  IconButton,
+  ListHeader,
+  TextField,
+} from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
-
-function SquishyRow({
-  children,
-  onPress,
-  style: rowStyle,
-}: {
-  children: React.ReactNode
-  onPress: () => void
-  style?: StyleProp<ViewStyle>
-}) {
-  const scale = useRef(new Animated.Value(1)).current
-  return (
-    <Pressable
-      onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()}
-      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
-      onPress={onPress}
-    >
-      <Animated.View style={[rowStyle, { transform: [{ scale }] }]}>{children}</Animated.View>
-    </Pressable>
-  )
-}
 
 interface ServerEntry {
   server: {
@@ -89,6 +84,7 @@ interface DiscoverServer {
 }
 
 export default function ServersScreen() {
+  const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -246,7 +242,7 @@ export default function ServersScreen() {
   ]
 
   return (
-    <DottedBackground>
+    <BackgroundSurface>
       {/* Navigation bar */}
       <Reanimated.View
         entering={FadeIn.duration(400)}
@@ -261,57 +257,54 @@ export default function ServersScreen() {
           <Avatar
             uri={user?.avatarUrl}
             name={user?.displayName || user?.username || ''}
-            size={32}
+            size={44}
             userId={user?.id || ''}
+            status="online"
+            showStatus
           />
         </Pressable>
         <View style={styles.navActions}>
           {!hideHelpIcon && (
-            <Pressable
+            <IconButton
+              icon={HelpCircle}
+              variant="glass"
+              size="icon"
               onPress={() => setShowHelpTutorial(true)}
               hitSlop={8}
-              style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
-            >
-              <HelpCircle size={22} color={colors.text} strokeWidth={2} />
-            </Pressable>
+              style={styles.navBtn}
+            />
           )}
-          <SquishyRow onPress={() => setShowCreateServer(true)}>
-            <View
-              style={[styles.navPlusBubble, { backgroundColor: '#00f3ff', borderColor: '#00c3cc' }]}
-            >
-              <Plus size={20} color="#1a1a1c" strokeWidth={3} />
-            </View>
-          </SquishyRow>
+          <IconButton
+            variant="primary"
+            size="icon"
+            icon={Plus}
+            iconSize={20}
+            onPress={() => setShowCreateServer(true)}
+          />
         </View>
       </Reanimated.View>
 
       {/* Search bar */}
       <View style={[styles.searchWrap]}>
-        <View
-          style={[
-            styles.searchBox,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <Search size={18} color={colors.textMuted} strokeWidth={2.5} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="搜索服务器..."
-            placeholderTextColor={colors.textMuted}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch('')} hitSlop={8}>
-              <X size={16} color={colors.textMuted} strokeWidth={2.5} />
-            </Pressable>
-          )}
-        </View>
+        <TextField
+          value={search}
+          onChangeText={setSearch}
+          placeholder="搜索服务器..."
+          icon={Search}
+          style={styles.searchBox}
+          right={
+            search.length > 0 ? (
+              <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                <X size={16} color={colors.textMuted} strokeWidth={2.5} />
+              </Pressable>
+            ) : null
+          }
+        />
       </View>
 
       {filtered.length === 0 && matchedPublicServers.length === 0 ? (
         <EmptyState
-          icon="💬"
+          icon={MessageCircle}
           title={search ? '没有找到匹配的服务器' : '暂无服务器'}
           description={search ? undefined : '点击右上角 + 创建或加入一个服务器'}
         />
@@ -353,59 +346,60 @@ export default function ServersScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
           ListHeaderComponent={
             <View style={styles.quickEntryWrapper}>
-              <SquishyRow
-                style={[
-                  styles.quickEntryCard,
-                  { backgroundColor: `${colors.surface}E6`, borderColor: colors.border },
-                ]}
+              <CardPressable
+                variant="glassPanel"
+                padded={false}
+                style={styles.quickEntryCard}
                 onPress={() => router.push('/(main)/friends' as never)}
               >
-                <LinearGradient colors={['#EF4444', '#F87171']} style={styles.actionBubbleGlow}>
-                  <BuddyCatSvg width={36} height={36} />
-                </LinearGradient>
+                <IconBubble
+                  icon={MessageCircle}
+                  tone="primary"
+                  size={20}
+                  style={styles.actionBubbleGlow}
+                />
                 <View style={styles.quickEntryInfo}>
-                  <Text style={[styles.quickEntryTitle, { color: colors.text }]}>好友与私信</Text>
-                  <Text style={[styles.quickEntryDesc, { color: colors.textMuted }]}>
+                  <AppText variant="bodyStrong">好友与私信</AppText>
+                  <AppText variant="label" tone="secondary">
                     查看好友、请求与私信会话
-                  </Text>
+                  </AppText>
                 </View>
                 {pendingReceived.length > 0 && (
-                  <View style={styles.quickEntryBadge}>
-                    <Text style={styles.quickEntryBadgeText}>{pendingReceived.length}</Text>
-                  </View>
+                  <Badge variant="danger" size="xs">
+                    {pendingReceived.length}
+                  </Badge>
                 )}
                 <ChevronRight size={16} color={colors.textMuted} />
-              </SquishyRow>
+              </CardPressable>
 
-              <SquishyRow
-                style={[
-                  styles.quickEntryCard,
-                  { backgroundColor: `${colors.surface}E6`, borderColor: colors.border },
-                ]}
+              <CardPressable
+                variant="glassPanel"
+                padded={false}
+                style={styles.quickEntryCard}
                 onPress={() => router.push('/(main)/discover' as never)}
               >
-                <LinearGradient colors={['#3B82F6', '#60A5FA']} style={styles.actionBubbleGlow}>
-                  <WorkCatSvg width={36} height={36} />
-                </LinearGradient>
+                <IconBubble
+                  icon={Compass}
+                  tone="accent"
+                  size={20}
+                  style={styles.actionBubbleGlow}
+                />
                 <View style={styles.quickEntryInfo}>
-                  <Text style={[styles.quickEntryTitle, { color: colors.text }]}>探索服务器</Text>
-                  <Text style={[styles.quickEntryDesc, { color: colors.textMuted }]}>
+                  <AppText variant="bodyStrong">探索服务器</AppText>
+                  <AppText variant="label" tone="secondary">
                     发现公开服务器并快速加入
-                  </Text>
+                  </AppText>
                 </View>
                 <ChevronRight size={16} color={colors.textMuted} />
-              </SquishyRow>
+              </CardPressable>
             </View>
           }
           renderSectionHeader={({ section }) => (
-            <View style={[styles.sectionHeader]}>
-              <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
-                {section.title}
-              </Text>
-              <Text style={[styles.sectionCount, { color: colors.textMuted }]}>
-                {section.data.length}
-              </Text>
-            </View>
+            <ListHeader
+              title={section.title}
+              count={section.data.length}
+              style={styles.sectionHeader}
+            />
           )}
           renderItem={({ item, index }) => {
             const isPublicResult = item.member.role === '_public'
@@ -414,14 +408,10 @@ export default function ServersScreen() {
               : item.server.description || getRoleLabel(item.member.role)
             return (
               <Reanimated.View entering={FadeInRight.delay(index * 40).springify()}>
-                <SquishyRow
-                  style={[
-                    styles.serverCard,
-                    {
-                      backgroundColor: `${colors.surface}E6`,
-                      borderColor: colors.border,
-                    },
-                  ]}
+                <CardPressable
+                  variant="glassCard"
+                  padded={false}
+                  style={styles.serverCard}
                   onPress={() => {
                     if (isPublicResult) {
                       router.push('/(main)/discover' as never)
@@ -435,6 +425,7 @@ export default function ServersScreen() {
                     name={item.server.name}
                     size={48}
                     userId={item.server.id}
+                    shape="server"
                   />
                   <View style={styles.serverInfo}>
                     <View style={styles.serverTopRow}>
@@ -445,39 +436,10 @@ export default function ServersScreen() {
                         {item.server.isPublic === false ? ' ' : ''}
                         {item.server.name}
                       </Text>
-                      {!isPublicResult && (
-                        <View
-                          style={[
-                            styles.roleBadge,
-                            {
-                              backgroundColor:
-                                item.member.role === 'owner'
-                                  ? `${colors.primary}15`
-                                  : `${colors.textMuted}15`,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.roleText,
-                              {
-                                color:
-                                  item.member.role === 'owner' ? colors.primary : colors.textMuted,
-                              },
-                            ]}
-                          >
-                            {getRoleLabel(item.member.role)}
-                          </Text>
-                        </View>
-                      )}
                     </View>
                     {!isPublicResult && (
                       <View style={styles.serverMetaRow}>
-                        <Users size={12} color={colors.textMuted} />
-                        <Text style={[styles.serverMeta, { color: colors.textMuted }]}>
-                          {item.server.memberCount ?? 0}
-                        </Text>
-                        <Hash size={12} color={colors.textMuted} style={{ marginLeft: 6 }} />
+                        <Hash size={12} color={colors.textMuted} />
                         <Text style={[styles.serverMeta, { color: colors.textMuted }]}>
                           {item.server.channelCount ?? 0}
                         </Text>
@@ -493,7 +455,7 @@ export default function ServersScreen() {
                     )}
                   </View>
                   <ChevronRight size={16} color={colors.textMuted} />
-                </SquishyRow>
+                </CardPressable>
               </Reanimated.View>
             )
           }}
@@ -509,69 +471,51 @@ export default function ServersScreen() {
         onRequestClose={() => setShowCreateServer(false)}
       >
         <KeyboardAvoidingView
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           <Pressable style={styles.modalDismiss} onPress={() => setShowCreateServer(false)} />
-          <Reanimated.View
-            entering={FadeInDown.duration(250)}
-            style={[
-              styles.modalContent,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            {/* Header */}
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>创建服务器</Text>
-              <Pressable onPress={() => setShowCreateServer(false)} hitSlop={8}>
-                <X size={22} color={colors.textMuted} />
-              </Pressable>
-            </View>
+          <Reanimated.View entering={FadeInDown.duration(250)} style={styles.modalShell}>
+            <GlassPanel style={styles.modalContent}>
+              {/* Header */}
+              <View style={styles.modalHeader}>
+                <AppText variant="title">{t('server.createTitle')}</AppText>
+                <IconButton
+                  icon={X}
+                  variant="glass"
+                  size="icon"
+                  onPress={() => setShowCreateServer(false)}
+                />
+              </View>
 
-            {/* Name input */}
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>服务器名称</Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.inputBackground,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
-              ]}
-              value={createName}
-              onChangeText={setCreateName}
-              placeholder="输入服务器名称"
-              placeholderTextColor={colors.textMuted}
-              autoFocus
-            />
-
-            {/* Public toggle inline */}
-            <Pressable style={styles.switchRow} onPress={() => setIsPublic(!isPublic)}>
-              <Text style={[styles.switchLabel, { color: colors.text }]}>公开</Text>
-              <Switch
-                value={isPublic}
-                onValueChange={setIsPublic}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
+              {/* Name input */}
+              <TextField
+                label={t('server.nameLabel')}
+                style={styles.input}
+                value={createName}
+                onChangeText={setCreateName}
+                placeholder={t('server.namePlaceholder')}
+                autoFocus
               />
-            </Pressable>
 
-            {/* Create button */}
-            <Pressable
-              style={[
-                styles.createBtn,
-                { backgroundColor: colors.primary },
-                (!createName.trim() || createMutation.isPending) && { opacity: 0.5 },
-              ]}
-              onPress={() => createMutation.mutate()}
-              disabled={!createName.trim() || createMutation.isPending}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.md }}>
-                {createMutation.isPending ? '创建中...' : '创建'}
-              </Text>
-            </Pressable>
+              {/* Public toggle inline */}
+              <Pressable style={styles.switchRow} onPress={() => setIsPublic(!isPublic)}>
+                <AppText variant="bodyStrong">{t('server.publicServer')}</AppText>
+                <AppSwitch value={isPublic} onValueChange={setIsPublic} />
+              </Pressable>
+
+              {/* Create button */}
+              <Button
+                variant="primary"
+                size="lg"
+                onPress={() => createMutation.mutate()}
+                disabled={!createName.trim() || createMutation.isPending}
+                loading={createMutation.isPending}
+              >
+                {t('server.create')}
+              </Button>
+            </GlassPanel>
           </Reanimated.View>
         </KeyboardAvoidingView>
       </Modal>
@@ -583,102 +527,88 @@ export default function ServersScreen() {
         transparent
         onRequestClose={handleCloseTutorial}
       >
-        <View style={styles.modalOverlay}>
-          <Reanimated.View
-            entering={FadeInDown.duration(250)}
-            style={[
-              styles.tutorialContent,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.tutorialHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>新手帮助指南</Text>
-              <Pressable onPress={handleCloseTutorial} hitSlop={8}>
-                <X size={22} color={colors.textMuted} />
-              </Pressable>
-            </View>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <Reanimated.View entering={FadeInDown.duration(250)} style={styles.tutorialShell}>
+            <GlassPanel style={styles.tutorialContent}>
+              <View style={styles.tutorialHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>新手帮助指南</Text>
+                <Pressable onPress={handleCloseTutorial} hitSlop={8}>
+                  <X size={22} color={colors.textMuted} />
+                </Pressable>
+              </View>
 
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(event) => {
-                const next = Math.round(event.nativeEvent.contentOffset.x / tutorialInnerWidth)
-                setTutorialPageIndex(Math.max(0, Math.min(next, tutorialPages.length - 1)))
-              }}
-              style={{
-                width: tutorialInnerWidth,
-                height: tutorialInnerWidth,
-                maxHeight: 280,
-                borderRadius: 24,
-                backgroundColor: colors.background,
-              }}
-            >
-              {tutorialPages.map((page) => (
-                <View key={page.key} style={[styles.tutorialPage, { width: tutorialInnerWidth }]}>
-                  {page.renderIcon()}
-                  <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>
-                    {page.title}
-                  </Text>
-                  <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
-                    {page.desc}
-                  </Text>
-                  <View style={styles.tutorialTagRow}>
-                    {page.tags.map((tag) => (
-                      <View
-                        key={`${page.key}-${tag}`}
-                        style={[styles.tutorialTag, { backgroundColor: `${colors.primary}14` }]}
-                      >
-                        <Text style={[styles.tutorialTagText, { color: colors.primary }]}>
-                          {tag}
-                        </Text>
-                      </View>
-                    ))}
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(event) => {
+                  const next = Math.round(event.nativeEvent.contentOffset.x / tutorialInnerWidth)
+                  setTutorialPageIndex(Math.max(0, Math.min(next, tutorialPages.length - 1)))
+                }}
+                style={{
+                  width: tutorialInnerWidth,
+                  height: tutorialInnerWidth,
+                  maxHeight: 280,
+                  borderRadius: 24,
+                  backgroundColor: colors.background,
+                }}
+              >
+                {tutorialPages.map((page) => (
+                  <View key={page.key} style={[styles.tutorialPage, { width: tutorialInnerWidth }]}>
+                    {page.renderIcon()}
+                    <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>
+                      {page.title}
+                    </Text>
+                    <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
+                      {page.desc}
+                    </Text>
+                    <View style={styles.tutorialTagRow}>
+                      {page.tags.map((tag) => (
+                        <View
+                          key={`${page.key}-${tag}`}
+                          style={[styles.tutorialTag, { backgroundColor: `${colors.primary}14` }]}
+                        >
+                          <Text style={[styles.tutorialTagText, { color: colors.primary }]}>
+                            {tag}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                </View>
-              ))}
-            </ScrollView>
+                ))}
+              </ScrollView>
 
-            <View style={styles.tutorialIndicatorRow}>
-              {tutorialPages.map((page, idx) => (
-                <View
-                  key={`dot-${page.key}`}
-                  style={[
-                    styles.tutorialIndicatorDot,
-                    {
-                      backgroundColor:
-                        idx === tutorialPageIndex ? colors.primary : `${colors.textMuted}40`,
-                      width: idx === tutorialPageIndex ? 16 : 7,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
+              <View style={styles.tutorialIndicatorRow}>
+                {tutorialPages.map((page, idx) => (
+                  <View
+                    key={`dot-${page.key}`}
+                    style={[
+                      styles.tutorialIndicatorDot,
+                      {
+                        backgroundColor:
+                          idx === tutorialPageIndex ? colors.primary : `${colors.textMuted}40`,
+                        width: idx === tutorialPageIndex ? 16 : 7,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
 
-            <Pressable style={styles.switchRow} onPress={() => setDontShowAgain(!dontShowAgain)}>
-              <Text style={[styles.switchLabel, { color: colors.text, fontSize: fontSize.sm }]}>
-                不再显示
-              </Text>
-              <Switch
-                value={dontShowAgain}
-                onValueChange={setDontShowAgain}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
-              />
-            </Pressable>
+              <Pressable style={styles.switchRow} onPress={() => setDontShowAgain(!dontShowAgain)}>
+                <Text style={[styles.switchLabel, { color: colors.text, fontSize: fontSize.sm }]}>
+                  不再显示
+                </Text>
+                <AppSwitch value={dontShowAgain} onValueChange={setDontShowAgain} />
+              </Pressable>
 
-            <Pressable
-              style={[styles.createBtn, { backgroundColor: colors.primary }]}
-              onPress={handleCloseTutorial}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.md }}>
+              <Button variant="primary" size="lg" onPress={handleCloseTutorial}>
                 我明白啦
-              </Text>
-            </Pressable>
+              </Button>
+            </GlassPanel>
           </Reanimated.View>
         </View>
       </Modal>
-    </DottedBackground>
+    </BackgroundSurface>
   )
 }
 
@@ -707,7 +637,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   navBtn: {
-    padding: 4,
+    borderRadius: radius.full,
   },
 
   // Search
@@ -719,10 +649,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    borderRadius: 24, // Make it rounder
-    height: 48, // Taller search bar
+    borderRadius: radius.full,
+    minHeight: 50,
     gap: spacing.sm,
-    borderWidth: 2,
   },
   searchInput: {
     flex: 1,
@@ -740,20 +669,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.md,
     gap: spacing.md,
-    borderRadius: 24,
-    borderWidth: 2,
+    borderRadius: radius['2xl'],
   },
   actionBubbleGlow: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: radius.lg,
   },
   quickEntryInfo: {
     flex: 1,
@@ -766,22 +687,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     marginTop: 1,
   },
-  quickEntryBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ed4245',
-    marginRight: 2,
-  },
-  quickEntryBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-
   // Section headers
   sectionHeader: {
     flexDirection: 'row',
@@ -810,8 +715,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     gap: spacing.md,
-    borderRadius: 24,
-    borderWidth: 2,
+    borderRadius: radius['2xl'],
   },
   serverInfo: {
     flex: 1,
@@ -827,15 +731,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
     flex: 1,
-  },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  roleText: {
-    fontSize: 10,
-    fontWeight: '700',
   },
   serverDesc: {
     fontSize: fontSize.sm,
@@ -859,16 +754,17 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalDismiss: {
     ...StyleSheet.absoluteFillObject,
   },
+  modalShell: {
+    width: '88%',
+    maxWidth: 430,
+  },
   modalContent: {
-    width: '85%',
     borderRadius: 32, // Bubbly modal
     padding: spacing.xl,
-    borderWidth: 2,
     gap: spacing.sm,
   },
   modalHeader: {
@@ -888,8 +784,7 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
+    borderRadius: radius.full,
     paddingHorizontal: spacing.lg,
     fontSize: fontSize.md,
   },
@@ -910,12 +805,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: spacing.md,
   },
-  tutorialContent: {
+  tutorialShell: {
     width: '85%',
+  },
+  tutorialContent: {
     borderRadius: 32,
     padding: spacing.xl,
     paddingBottom: spacing.lg,
-    borderWidth: 2,
     gap: spacing.sm,
   },
   tutorialHeader: {

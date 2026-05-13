@@ -2,14 +2,23 @@ import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import { ChevronLeft, Share, Users } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  MessageSquare,
+  Share,
+  ShoppingBag,
+  UserPlus,
+  Users,
+} from 'lucide-react-native'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import { ActionTile, BackgroundSurface, Button, IconButton } from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
-import { radius, spacing, useColors } from '../../../../src/theme'
+import { spacing, useColors } from '../../../../src/theme'
 
 export default function ServerDetailScreen() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
@@ -46,7 +55,7 @@ export default function ServerDetailScreen() {
   if (isLoading || !server) return <LoadingScreen />
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <BackgroundSurface style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         {/* Banner */}
         <View style={styles.bannerContainer}>
@@ -66,43 +75,29 @@ export default function ServerDetailScreen() {
           )}
 
           {/* Floating Back Button */}
-          <Pressable
+          <IconButton
+            icon={ChevronLeft}
+            variant="glass"
             onPress={() => router.back()}
-            style={[styles.backBtn, { top: insets.top + spacing.sm }]}
-          >
-            <View style={styles.backBtnInner}>
-              <ChevronLeft size={24} color="#fff" />
-            </View>
-          </Pressable>
+            containerStyle={[styles.backBtn, { top: insets.top + spacing.sm }]}
+          />
         </View>
 
-        {/* Server Info Card */}
-        <View
-          style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        >
-          <View style={[styles.serverIconWrap, { borderColor: colors.surface }]}>
-            {server.iconUrl ? (
-              <Image
-                source={{ uri: getImageUrl(server.iconUrl)! }}
-                style={styles.serverIcon}
-                contentFit="cover"
-              />
-            ) : (
-              <View
-                style={[
-                  styles.serverIcon,
-                  {
-                    backgroundColor: colors.primary,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  },
-                ]}
-              >
-                <Text style={{ color: '#fff', fontSize: 32, fontWeight: '900' }}>
-                  {server.name?.[0] ?? '?'}
-                </Text>
-              </View>
-            )}
+        {/* Server Info */}
+        <View style={styles.infoCard}>
+          <View
+            style={[
+              styles.serverIconWrap,
+              { backgroundColor: colors.background, borderColor: colors.surface },
+            ]}
+          >
+            <Avatar
+              uri={server.iconUrl}
+              name={server.name}
+              userId={server.id}
+              size={84}
+              shape="server"
+            />
           </View>
 
           <Text style={[styles.serverName, { color: colors.text }]}>{server.name}</Text>
@@ -118,16 +113,38 @@ export default function ServerDetailScreen() {
             <Text style={[styles.description, { color: colors.text }]}>{server.description}</Text>
           )}
 
-          <Pressable
-            style={[styles.inviteBtn, { backgroundColor: colors.primary }]}
+          <View style={styles.featureRow}>
+            <ActionTile
+              icon={MessageSquare}
+              label={t('server.workspace')}
+              tone="primary"
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/workspace` as never)}
+            />
+            <ActionTile
+              icon={ShoppingBag}
+              label={t('server.shop')}
+              tone="warning"
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/shop` as never)}
+            />
+            <ActionTile
+              icon={UserPlus}
+              label={t('server.members')}
+              tone="danger"
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/members` as never)}
+            />
+          </View>
+
+          <Button
+            variant="primary"
+            size="lg"
+            icon={Share}
             onPress={() => router.push(`/(main)/servers/${serverSlug}/invite` as never)}
           >
-            <Share size={18} color="#fff" strokeWidth={2.5} />
-            <Text style={styles.inviteBtnText}>{t('server.inviteMembers', 'Invite Friends')}</Text>
-          </Pressable>
+            {t('server.inviteMembers', 'Invite Friends')}
+          </Button>
         </View>
       </ScrollView>
-    </View>
+    </BackgroundSurface>
   )
 }
 
@@ -149,38 +166,22 @@ const styles = StyleSheet.create({
     left: spacing.md,
     zIndex: 10,
   },
-  backBtnInner: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   infoCard: {
-    margin: spacing.md,
-    marginTop: -40,
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    paddingTop: 50,
+    marginHorizontal: spacing.xl,
+    marginTop: -54,
+    paddingTop: 64,
     alignItems: 'center',
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 4,
   },
   serverIconWrap: {
     position: 'absolute',
-    top: -45,
-    borderWidth: 4,
-    borderRadius: 45,
-  },
-  serverIcon: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    top: -48,
+    zIndex: 5,
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderRadius: 31,
   },
   serverName: {
     fontSize: 28,
@@ -204,18 +205,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
-  inviteBtn: {
+  featureRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.sm,
     width: '100%',
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    gap: 8,
-  },
-  inviteBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
+    marginBottom: spacing.lg,
   },
 })

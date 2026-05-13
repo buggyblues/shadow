@@ -2,6 +2,27 @@ import { Text, type TextStyle, View } from 'react-native'
 import { fontSize, useColors } from '../../theme'
 import { ShrimpCoinIcon } from './shrimp-coin'
 
+export function formatCommercePrice(
+  price: number,
+  currency: string,
+  t?: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (currency === 'shrimp_coin') {
+    const unit = t?.('common.shrimpCoin', { defaultValue: '虾币' }) ?? 'shrimp_coin'
+    return `${price.toLocaleString()} ${unit}`
+  }
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(price / 100)
+  } catch {
+    return `${(price / 100).toLocaleString()} ${currency}`
+  }
+}
+
 interface PriceDisplayProps {
   amount: number
   size?: 'sm' | 'md' | 'lg'

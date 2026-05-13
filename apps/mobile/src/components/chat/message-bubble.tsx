@@ -1,5 +1,5 @@
-import type { CommerceProductCard, OAuthLinkCard } from '@shadowob/shared'
-import { useMutation } from '@tanstack/react-query'
+import type { CommerceProductCard, OAuthLinkCard, PaidFileCard } from '@shadowob/shared'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import * as Clipboard from 'expo-clipboard'
 import * as FileSystem from 'expo-file-system/legacy'
@@ -19,11 +19,14 @@ import {
   FileText,
   Film,
   Globe2,
+  Lock,
   Music,
   RefreshCw,
   Save,
   Share2,
   Square as SquareIcon,
+  Unlock,
+  Wallet,
   X,
 } from 'lucide-react-native'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -56,6 +59,8 @@ import type {
   Message,
 } from '../../types/message'
 import { Avatar } from '../common/avatar'
+import { formatCommercePrice } from '../common/price-display'
+import { Badge, Button, CardPressable, ChipButton, IconButton, MenuItem, Sheet } from '../ui'
 import { MarkdownRenderer } from './markdown-renderer'
 import type { PopupAction } from './selection-popup'
 import { SelectionPopup } from './selection-popup'
@@ -66,6 +71,28 @@ type SignedMediaUrl = {
   url: string
   expiresAt: string
 }
+
+type PaidFileState = {
+  file: {
+    id: string
+    name: string
+    mime?: string | null
+    sizeBytes?: number | null
+    previewUrl?: string | null
+    paywalled?: boolean
+  }
+  entitlement: { id: string; status: string; expiresAt?: string | null } | null
+  hasAccess: boolean
+}
+
+interface WalletRechargeMetadata {
+  requiredAmount?: number
+  balance?: number
+  shortfall?: number
+  model?: string
+}
+
+const WALLET_RECHARGE_MARKER_PATTERN = /<!--\s*shadow:wallet-recharge\s+([A-Za-z0-9_-]+)\s*-->/u
 
 const signedMediaCache = new Map<string, SignedMediaUrl>()
 
@@ -84,6 +111,122 @@ async function resolveAttachmentMediaUrl(
   const resolved = await fetchApi<SignedMediaUrl>(path)
   signedMediaCache.set(cacheKey, resolved)
   return resolved.url
+}
+
+function formatByteSize(bytes: number | null | undefined) {
+  if (!bytes || bytes < 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatCoinValue(value: number | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—'
+}
+
+function decodeBase64Url(encoded: string) {
+  const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+  const atobFn = (globalThis as unknown as { atob?: (data: string) => string }).atob
+  if (typeof atobFn === 'function') return atobFn(padded)
+
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let buffer = 0
+  let bits = 0
+  let output = ''
+  for (const char of padded.replace(/=+$/u, '')) {
+    const value = alphabet.indexOf(char)
+    if (value < 0) continue
+    buffer = (buffer << 6) | value
+    bits += 6
+    if (bits >= 8) {
+      bits -= 8
+      output += String.fromCharCode((buffer >> bits) & 0xff)
+    }
+  }
+  return output
+}
+
+function decodeWalletRechargeMarker(content: string): WalletRechargeMetadata | null {
+  const encoded = content.match(WALLET_RECHARGE_MARKER_PATTERN)?.[1]
+  if (!encoded) return null
+  try {
+    const parsed = JSON.parse(decodeBase64Url(encoded)) as Record<string, unknown>
+    const pickNumber = (key: string) => {
+      const value = parsed[key]
+      return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+    }
+    return {
+      requiredAmount: pickNumber('requiredAmount'),
+      balance: pickNumber('balance'),
+      shortfall: pickNumber('shortfall'),
+      model: typeof parsed.model === 'string' ? parsed.model : undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
+function stripWalletRechargeMarker(content: string) {
+  return content.replace(WALLET_RECHARGE_MARKER_PATTERN, '').trim()
+}
+
+function WalletRechargeCard({ data }: { data: WalletRechargeMetadata }) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const router = useRouter()
+
+  const openTasks = () => router.push('/(main)/settings/tasks' as never)
+
+  return (
+    <View
+      style={[
+        styles.walletRechargeCard,
+        { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}35` },
+      ]}
+    >
+      <View style={styles.walletRechargeHeader}>
+        <View style={[styles.walletRechargeIcon, { backgroundColor: `${colors.warning}20` }]}>
+          <Wallet size={20} color={colors.warning} />
+        </View>
+        <View style={styles.walletRechargeText}>
+          <Text style={[styles.walletRechargeTitle, { color: colors.text }]}>
+            {t('chat.modelWalletRechargeTitle')}
+          </Text>
+          <Text style={[styles.walletRechargeBody, { color: colors.textMuted }]}>
+            {t('chat.modelWalletRechargeBody')}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.walletRechargeStats}>
+        {[
+          [t('chat.modelWalletRechargeNeeded'), formatCoinValue(data.requiredAmount)],
+          [t('chat.modelWalletRechargeBalance'), formatCoinValue(data.balance)],
+          [t('chat.modelWalletRechargeShortfall'), formatCoinValue(data.shortfall)],
+        ].map(([label, value]) => (
+          <View
+            key={label}
+            style={[styles.walletRechargeStat, { backgroundColor: colors.surface }]}
+          >
+            <Text style={[styles.walletRechargeStatLabel, { color: colors.textMuted }]}>
+              {label}
+            </Text>
+            <Text style={[styles.walletRechargeStatValue, { color: colors.text }]}>{value}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.walletRechargeActions}>
+        <Button variant="secondary" size="sm" icon={Wallet} onPress={openTasks}>
+          {t('chat.modelWalletRechargeAction')}
+        </Button>
+        <Button variant="glass" size="sm" onPress={openTasks}>
+          {t('chat.modelWalletTasksAction')}
+        </Button>
+      </View>
+    </View>
+  )
 }
 
 interface MessageBubbleProps {
@@ -405,6 +548,14 @@ function MessageBubbleInner({
   const displayName = message.author?.displayName || message.author?.username || '?'
   const timeAgo = formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })
   const isBot = message.author?.isBot ?? false
+  const walletRecharge = useMemo(
+    () => decodeWalletRechargeMarker(message.content),
+    [message.content],
+  )
+  const displayContent = useMemo(
+    () => (walletRecharge ? stripWalletRechargeMarker(message.content) : message.content),
+    [message.content, walletRecharge],
+  )
 
   const getAttachmentContentType = (att: Attachment) =>
     att.contentType ?? att.mimeType ?? 'application/octet-stream'
@@ -548,7 +699,7 @@ function MessageBubbleInner({
             />
           </Pressable>
         )}
-        <View style={styles.bubble}>
+        <View style={[styles.bubble, colors.mode === 'light' && styles.lightBubblePlate]}>
           {!isGrouped && (
             <View style={styles.header}>
               <Pressable
@@ -589,24 +740,35 @@ function MessageBubbleInner({
                 autoFocus
               />
               <View style={styles.editActions}>
-                <Pressable onPress={() => setIsEditing(false)} style={styles.editBtn}>
-                  <X size={16} color={colors.textMuted} />
-                </Pressable>
-                <Pressable onPress={handleSaveEdit} style={styles.editBtn}>
-                  <Check size={16} color={colors.success} />
-                </Pressable>
+                <IconButton
+                  icon={X}
+                  variant="ghost"
+                  iconColor={colors.textMuted}
+                  iconSize={16}
+                  style={styles.editBtn}
+                  onPress={() => setIsEditing(false)}
+                />
+                <IconButton
+                  icon={Check}
+                  variant="primary"
+                  iconSize={16}
+                  style={styles.editBtn}
+                  onPress={handleSaveEdit}
+                />
               </View>
             </View>
           ) : (
             <View ref={bubbleRef} pointerEvents={selectionMode ? 'none' : 'box-none'}>
               <MarkdownRenderer
-                content={message.content}
+                content={displayContent}
                 mentionMap={mentionMap}
                 mentions={message.metadata?.mentions}
                 selectable={!selectionMode}
               />
             </View>
           )}
+
+          {walletRecharge && <WalletRechargeCard data={walletRecharge} />}
 
           {/* Attachments */}
           {message.attachments?.map((att) => {
@@ -696,6 +858,10 @@ function MessageBubbleInner({
             <CommerceCardView key={card.id} card={card} messageId={message.id} />
           ))}
 
+          {message.metadata?.paidFileCards?.map((card) => (
+            <PaidFileCardMobile key={card.id} card={card} />
+          ))}
+
           {message.metadata?.oauthLinkCards?.map((card) => (
             <OAuthLinkCardMobile
               key={card.id}
@@ -772,16 +938,17 @@ function MessageBubbleInner({
               <Text style={[styles.sendStatusText, { color: colors.error }]}>
                 {t('chat.sendFailed', '发送失败')}
               </Text>
-              <Pressable
-                style={[styles.retryBtn, { backgroundColor: `${colors.error}15` }]}
+              <Button
+                variant="danger"
+                size="xs"
+                icon={RefreshCw}
+                iconSize={12}
+                style={styles.retryBtn}
                 onPress={() => onRetry?.(message)}
                 hitSlop={8}
               >
-                <RefreshCw size={12} color={colors.error} />
-                <Text style={[styles.retryText, { color: colors.error }]}>
-                  {t('chat.retry', '重试')}
-                </Text>
-              </Pressable>
+                {t('chat.retry', '重试')}
+              </Button>
             </View>
           )}
         </View>
@@ -821,58 +988,26 @@ function MessageBubbleInner({
       />
 
       {/* Attachment long-press action sheet */}
-      <Modal
+      <Sheet
         visible={!!attachmentAction}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAttachmentAction(null)}
+        onClose={() => setAttachmentAction(null)}
+        title={attachmentAction?.filename}
       >
-        <Pressable style={styles.actionSheetOverlay} onPress={() => setAttachmentAction(null)}>
-          <View style={[styles.actionSheet, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.actionSheetTitle, { color: colors.text }]} numberOfLines={1}>
-              {attachmentAction?.filename}
-            </Text>
-            <Pressable
-              style={({ pressed }) => [styles.actionSheetItem, { opacity: pressed ? 0.7 : 1 }]}
-              onPress={handleAttachmentSave}
-            >
-              <Save size={18} color={colors.text} />
-              <Text style={[styles.actionSheetLabel, { color: colors.text }]}>
-                {t('chat.saveFile', '保存文件')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.actionSheetItem, { opacity: pressed ? 0.7 : 1 }]}
-              onPress={handleAttachmentShare}
-            >
-              <Share2 size={18} color={colors.text} />
-              <Text style={[styles.actionSheetLabel, { color: colors.text }]}>
-                {t('common.share', '分享')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.actionSheetItem, { opacity: pressed ? 0.7 : 1 }]}
-              onPress={handleAttachmentCopyUrl}
-            >
-              <ExternalLink size={18} color={colors.text} />
-              <Text style={[styles.actionSheetLabel, { color: colors.text }]}>
-                {t('chat.copyLink', '复制链接')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.actionSheetCancel,
-                { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
-              ]}
-              onPress={() => setAttachmentAction(null)}
-            >
-              <Text style={[styles.actionSheetLabel, { color: colors.textMuted }]}>
-                {t('common.cancel', '取消')}
-              </Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+        <MenuItem
+          icon={Save}
+          title={t('chat.saveFile', '保存文件')}
+          onPress={handleAttachmentSave}
+        />
+        <MenuItem icon={Share2} title={t('common.share', '分享')} onPress={handleAttachmentShare} />
+        <MenuItem
+          icon={ExternalLink}
+          title={t('chat.copyLink', '复制链接')}
+          onPress={handleAttachmentCopyUrl}
+        />
+        <Button variant="glass" size="md" onPress={() => setAttachmentAction(null)}>
+          {t('common.cancel', '取消')}
+        </Button>
+      </Sheet>
     </Pressable>
   )
 }
@@ -896,6 +1031,123 @@ function getOAuthCardAvatarUrl(card: OAuthLinkCard) {
 
 function getOAuthCardAppName(card: OAuthLinkCard) {
   return card.meta?.appName ?? card.title
+}
+
+function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const router = useRouter()
+  const [isOpening, setIsOpening] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: state } = useQuery({
+    queryKey: ['paid-file', card.fileId],
+    queryFn: () => fetchApi<PaidFileState>(`/api/paid-files/${card.fileId}`),
+    staleTime: 10_000,
+  })
+
+  const isUnlocked = state?.hasAccess === true
+  const metaText =
+    formatByteSize(card.snapshot.sizeBytes) || card.snapshot.mime || t('chat.paidFile')
+
+  const openFile = async () => {
+    setIsOpening(true)
+    setError(null)
+    try {
+      const result = await fetchApi<{ viewerUrl: string }>(`/api/paid-files/${card.fileId}/open`, {
+        method: 'POST',
+      })
+      router.push({
+        pathname: '/(main)/media-preview',
+        params: {
+          url: result.viewerUrl,
+          filename: card.snapshot.name,
+          contentType: card.snapshot.mime ?? 'text/html; charset=utf-8',
+        },
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('chat.paidFileOpenFailed'))
+    } finally {
+      setIsOpening(false)
+    }
+  }
+
+  return (
+    <View
+      style={[
+        styles.paidFileCard,
+        {
+          backgroundColor: colors.surface,
+          borderColor: isUnlocked ? `${colors.success}55` : colors.border,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.paidFileIconWrap,
+          { backgroundColor: isUnlocked ? `${colors.success}18` : `${colors.warning}18` },
+        ]}
+      >
+        <FileText size={22} color={isUnlocked ? colors.success : colors.warning} />
+      </View>
+      <View style={styles.paidFileInfo}>
+        <View style={styles.paidFileLabelRow}>
+          {isUnlocked ? (
+            <Unlock size={11} color={colors.success} />
+          ) : (
+            <Lock size={11} color={colors.warning} />
+          )}
+          <Text
+            style={[styles.paidFileLabel, { color: isUnlocked ? colors.success : colors.warning }]}
+            numberOfLines={1}
+          >
+            {t('chat.paidFileEntitlementRequired')}
+          </Text>
+          <Text style={[styles.paidFileId, { color: colors.textMuted }]}>
+            {card.fileId.slice(0, 8).toUpperCase()}
+          </Text>
+        </View>
+        <Text style={[styles.paidFileName, { color: colors.text }]} numberOfLines={1}>
+          {card.snapshot.name}
+        </Text>
+        <Text style={[styles.paidFileMeta, { color: colors.textMuted }]} numberOfLines={1}>
+          {metaText}
+        </Text>
+        {card.snapshot.summary ? (
+          <Text style={[styles.paidFileSummary, { color: colors.textSecondary }]} numberOfLines={2}>
+            {card.snapshot.summary}
+          </Text>
+        ) : null}
+        {error ? (
+          <View style={styles.paidFileErrorRow}>
+            <AlertCircle size={12} color={colors.error} />
+            <Text style={[styles.paidFileError, { color: colors.error }]} numberOfLines={2}>
+              {error}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={[styles.paidFileDivider, { borderColor: colors.border }]} />
+      <View style={styles.paidFileActionCol}>
+        <Text style={[styles.paidFileActionLabel, { color: colors.textMuted }]}>
+          {isUnlocked ? t('chat.commerceStatusLabel') : t('chat.commerceTypeLabel')}
+        </Text>
+        <Badge variant={isUnlocked ? 'success' : 'warning'} size="xs">
+          {isUnlocked ? t('member.status.active', 'ACTIVE') : t('chat.paidFile')}
+        </Badge>
+        <Button
+          variant={isUnlocked ? 'outline' : 'secondary'}
+          size="xs"
+          disabled={isOpening || !isUnlocked}
+          onPress={openFile}
+          loading={isOpening}
+          style={styles.paidFileButton}
+        >
+          {isUnlocked ? t('chat.paidFileOpen') : t('chat.paidFileEntitlementRequired')}
+        </Button>
+      </View>
+    </View>
+  )
 }
 
 function OAuthLinkCardMobile({
@@ -970,10 +1222,12 @@ function OAuthLinkCardMobile({
   }
 
   return (
-    <Pressable
+    <CardPressable
       accessibilityRole="button"
       accessibilityLabel={t('chat.oauthLinkPreviewAria', { title: card.title })}
       onPress={openPreview}
+      variant="glassCard"
+      padded={false}
       style={[styles.oauthCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
       <View style={[styles.oauthIconWrap, { borderColor: colors.border }]}>
@@ -1023,12 +1277,22 @@ function OAuthLinkCardMobile({
                 {isConnected ? t('chat.oauthLinkConnected') : t('chat.oauthLinkWaiting')}
               </Text>
             </View>
-            <Pressable onPress={openExternal} style={styles.oauthModalIconButton}>
-              <ExternalLink size={20} color={colors.text} />
-            </Pressable>
-            <Pressable onPress={() => setIsOpen(false)} style={styles.oauthModalIconButton}>
-              <X size={22} color={colors.text} />
-            </Pressable>
+            <IconButton
+              icon={ExternalLink}
+              variant="ghost"
+              iconColor={colors.text}
+              iconSize={20}
+              style={styles.oauthModalIconButton}
+              onPress={openExternal}
+            />
+            <IconButton
+              icon={X}
+              variant="ghost"
+              iconColor={colors.text}
+              iconSize={22}
+              style={styles.oauthModalIconButton}
+              onPress={() => setIsOpen(false)}
+            />
           </View>
           <WebView
             ref={webViewRef}
@@ -1055,7 +1319,7 @@ function OAuthLinkCardMobile({
           </View>
         </View>
       </Modal>
-    </Pressable>
+    </CardPressable>
   )
 }
 
@@ -1097,7 +1361,7 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
             {card.snapshot.name}
           </Text>
           <Text style={[styles.commercePrice, { color: colors.primary }]}>
-            {card.snapshot.price}
+            {formatCommercePrice(card.snapshot.price, card.snapshot.currency, t)}
           </Text>
         </View>
         {card.snapshot.summary ? (
@@ -1111,18 +1375,16 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
               ? t('chat.commerceSubscription')
               : t('chat.commerceEntitlement')}
           </Text>
-          <Pressable
+          <Button
+            variant="primary"
+            size="sm"
             disabled={isBuying}
             onPress={buy}
-            style={({ pressed }) => [
-              styles.commerceButton,
-              { backgroundColor: colors.primary, opacity: pressed || isBuying ? 0.7 : 1 },
-            ]}
+            loading={isBuying}
+            style={styles.commerceButton}
           >
-            <Text style={styles.commerceButtonText}>
-              {isBuying ? t('chat.commercePurchasing') : t('chat.commerceBuy')}
-            </Text>
-          </Pressable>
+            {t('chat.commerceBuy')}
+          </Button>
         </View>
       </View>
     </View>
@@ -1179,6 +1441,14 @@ const styles = StyleSheet.create({
   },
   bubble: {
     flex: 1,
+  },
+  lightBubblePlate: {
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderColor: 'rgba(15, 23, 42, 0.08)',
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
   },
   groupedGutter: {
     width: 36,
@@ -1241,7 +1511,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   editBtn: {
-    padding: spacing.xs,
+    width: 30,
+    height: 30,
   },
   // Attachments
   imageAttachment: {
@@ -1290,6 +1561,147 @@ const styles = StyleSheet.create({
   },
   fileMeta: {
     fontSize: fontSize.xs,
+  },
+  walletRechargeCard: {
+    borderWidth: 1,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    maxWidth: 360,
+    gap: spacing.sm,
+  },
+  walletRechargeHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  walletRechargeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walletRechargeText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  walletRechargeTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+  },
+  walletRechargeBody: {
+    fontSize: fontSize.xs,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  walletRechargeStats: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  walletRechargeStat: {
+    flex: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  walletRechargeStatLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  walletRechargeStatValue: {
+    fontSize: fontSize.sm,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  walletRechargeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  paidFileCard: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.xl,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+    maxWidth: 360,
+  },
+  paidFileIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paidFileInfo: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  paidFileLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  paidFileLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    flexShrink: 1,
+  },
+  paidFileId: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  paidFileName: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  paidFileMeta: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  paidFileSummary: {
+    fontSize: fontSize.xs,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  paidFileErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  paidFileError: {
+    flex: 1,
+    fontSize: fontSize.xs,
+  },
+  paidFileDivider: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
+  },
+  paidFileActionCol: {
+    width: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  paidFileActionLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  paidFileButton: {
+    width: '100%',
+    minHeight: 32,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   commerceCard: {
     flexDirection: 'row',
@@ -1345,11 +1757,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
-  commerceButtonText: {
-    color: '#ffffff',
-    fontSize: fontSize.xs,
-    fontWeight: '800',
-  },
   oauthCard: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -1403,38 +1810,6 @@ const styles = StyleSheet.create({
   oauthOrigin: {
     fontSize: fontSize.xs,
     marginTop: 2,
-  },
-  oauthActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  oauthPrimaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  oauthPrimaryButtonText: {
-    color: '#ffffff',
-    fontSize: fontSize.xs,
-    fontWeight: '800',
-  },
-  oauthSecondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  oauthSecondaryButtonText: {
-    fontSize: fontSize.xs,
-    fontWeight: '800',
   },
   oauthModal: {
     flex: 1,
@@ -1512,43 +1887,6 @@ const styles = StyleSheet.create({
   reactionAddText: {
     fontSize: 14,
   },
-  // Attachment action sheet
-  actionSheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  actionSheet: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing.md,
-    paddingBottom: 34,
-    gap: 4,
-  },
-  actionSheetTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    textAlign: 'center',
-    paddingVertical: spacing.sm,
-  },
-  actionSheetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-  },
-  actionSheetLabel: {
-    fontSize: fontSize.md,
-    fontWeight: '500',
-  },
-  actionSheetCancel: {
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: radius.md,
-    marginTop: spacing.sm,
-  },
   // Send status
   sendStatus: {
     flexDirection: 'row',
@@ -1567,10 +1905,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: radius.sm,
     marginLeft: 4,
-  },
-  retryText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
   },
   // Interactive block (Phase 2)
   interactive: {
@@ -1593,10 +1927,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.sm,
     borderWidth: 1,
-  },
-  interactiveButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
   },
   interactiveError: {
     fontSize: fontSize.xs,
@@ -1751,26 +2081,21 @@ function InteractiveBlockRenderer({
             const isPicked = done === it.id
             const isDanger = it.style === 'destructive'
             const isPrimary = it.style === 'primary' || isPicked
-            const bg = isDanger ? `${colors.error}20` : isPrimary ? colors.primary : 'transparent'
-            const fg = isDanger ? colors.error : isPrimary ? '#ffffff' : colors.text
-            const borderColor = isDanger ? colors.error : isPrimary ? colors.primary : colors.border
             return (
-              <Pressable
+              <Button
                 key={it.id}
                 disabled={isLocked && !isPicked}
-                style={[
-                  styles.interactiveButton,
-                  { backgroundColor: bg, borderColor, opacity: isLocked && !isPicked ? 0.5 : 1 },
-                ]}
+                variant={isDanger ? 'danger' : isPrimary ? 'primary' : 'glass'}
+                size="xs"
+                icon={isPicked ? Check : undefined}
+                style={styles.interactiveButton}
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {})
                   send(it.id, it.value, it.label)
                 }}
               >
-                <Text style={[styles.interactiveButtonText, { color: fg }]}>
-                  {isPicked ? `✓ ${it.label}` : it.label}
-                </Text>
-              </Pressable>
+                {it.label}
+              </Button>
             )
           })}
         </View>
@@ -1838,53 +2163,27 @@ function InteractiveFormBody({
               {f.required ? <Text style={{ color: colors.error }}> *</Text> : null}
             </Text>
             {f.kind === 'checkbox' ? (
-              <Pressable
+              <ChipButton
                 disabled={isLocked}
                 onPress={() => setField(f.id, v === 'true' ? 'false' : 'true')}
-                style={[
-                  styles.interactiveButton,
-                  {
-                    alignSelf: 'flex-start',
-                    backgroundColor: v === 'true' ? colors.primary : 'transparent',
-                    borderColor: v === 'true' ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.interactiveButtonText,
-                    { color: v === 'true' ? '#ffffff' : colors.text },
-                  ]}
-                >
-                  {v === 'true' ? `✓ ${t('chat.interactiveOn')}` : t('chat.interactiveOff')}
-                </Text>
-              </Pressable>
+                active={v === 'true'}
+                icon={v === 'true' ? Check : undefined}
+                label={v === 'true' ? t('chat.interactiveOn') : t('chat.interactiveOff')}
+                style={styles.interactiveButton}
+              />
             ) : f.kind === 'select' ? (
               <View style={styles.interactiveRow}>
                 {(f.options ?? []).map((o) => {
                   const picked = v === o.value
                   return (
-                    <Pressable
+                    <ChipButton
                       key={o.id}
                       disabled={isLocked}
                       onPress={() => setField(f.id, o.value)}
-                      style={[
-                        styles.interactiveButton,
-                        {
-                          backgroundColor: picked ? colors.primary : 'transparent',
-                          borderColor: picked ? colors.primary : colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.interactiveButtonText,
-                          { color: picked ? '#ffffff' : colors.text },
-                        ]}
-                      >
-                        {o.label}
-                      </Text>
-                    </Pressable>
+                      active={picked}
+                      label={o.label}
+                      style={styles.interactiveButton}
+                    />
                   )
                 })}
               </View>
@@ -1921,56 +2220,37 @@ function InteractiveFormBody({
 
       <View style={styles.interactiveRow}>
         {block.kind === 'form' ? (
-          <Pressable
+          <Button
             disabled={isLocked}
             onPress={() => submit('submit', block.submitLabel ?? t('chat.interactiveSubmit'))}
-            style={[
-              styles.interactiveButton,
-              {
-                backgroundColor: colors.primary,
-                borderColor: colors.primary,
-                opacity: isLocked ? 0.5 : 1,
-              },
-            ]}
+            variant="primary"
+            size="xs"
+            style={styles.interactiveButton}
           >
-            <Text style={[styles.interactiveButtonText, { color: '#ffffff' }]}>
-              {block.submitLabel ?? t('chat.interactiveSubmit')}
-            </Text>
-          </Pressable>
+            {block.submitLabel ?? t('chat.interactiveSubmit')}
+          </Button>
         ) : (
           <>
-            <Pressable
+            <Button
               disabled={isLocked}
               onPress={() => submit('approve', t('chat.interactiveApprove'))}
-              style={[
-                styles.interactiveButton,
-                {
-                  backgroundColor: colors.primary,
-                  borderColor: colors.primary,
-                  opacity: isLocked ? 0.5 : 1,
-                },
-              ]}
+              variant="primary"
+              size="xs"
+              icon={Check}
+              style={styles.interactiveButton}
             >
-              <Text style={[styles.interactiveButtonText, { color: '#ffffff' }]}>
-                ✓ {t('chat.interactiveApprove')}
-              </Text>
-            </Pressable>
-            <Pressable
+              {t('chat.interactiveApprove')}
+            </Button>
+            <Button
               disabled={isLocked}
               onPress={() => submit('reject', t('chat.interactiveReject'))}
-              style={[
-                styles.interactiveButton,
-                {
-                  backgroundColor: `${colors.error}20`,
-                  borderColor: colors.error,
-                  opacity: isLocked ? 0.5 : 1,
-                },
-              ]}
+              variant="danger"
+              size="xs"
+              icon={X}
+              style={styles.interactiveButton}
             >
-              <Text style={[styles.interactiveButtonText, { color: colors.error }]}>
-                ✗ {t('chat.interactiveReject')}
-              </Text>
-            </Pressable>
+              {t('chat.interactiveReject')}
+            </Button>
           </>
         )}
       </View>

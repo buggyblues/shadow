@@ -11,7 +11,7 @@ import {
   User,
   Users,
 } from 'lucide-react-native'
-import { type StyleProp, Text, View, type ViewStyle } from 'react-native'
+import { type StyleProp, View, type ViewStyle } from 'react-native'
 
 type CatSvgProps = {
   size?: number
@@ -28,11 +28,10 @@ function resolveSize({ size, width, height }: CatSvgProps): number {
 
 function IconBadge({
   Icon,
-  emoji,
   color = '#64748b',
   focused,
   ...rest
-}: CatSvgProps & { Icon: LucideIcon; emoji?: string }) {
+}: CatSvgProps & { Icon: LucideIcon }) {
   const iconSize = resolveSize(rest)
   const tone = focused ? color : `${color}CC`
 
@@ -50,62 +49,50 @@ function IconBadge({
       ]}
     >
       <Icon size={iconSize} color={tone} />
-      {emoji ? (
-        <Text
-          style={{
-            position: 'absolute',
-            right: -iconSize * 0.12,
-            bottom: -iconSize * 0.08,
-            fontSize: Math.max(10, iconSize * 0.3),
-          }}
-        >
-          {emoji}
-        </Text>
-      ) : null}
     </View>
   )
 }
 
 export function TabHomeSvg(props: CatSvgProps) {
-  return <IconBadge Icon={Home} emoji="🐾" {...props} />
+  return <IconBadge Icon={Home} {...props} />
 }
 
 export function TabBuddySvg(props: CatSvgProps) {
-  return <IconBadge Icon={Users} emoji="😺" {...props} />
+  return <IconBadge Icon={Users} {...props} />
 }
 
 export function TabBellSvg(props: CatSvgProps) {
-  return <IconBadge Icon={Bell} emoji="✨" {...props} />
+  return <IconBadge Icon={Bell} {...props} />
 }
 
 export function TabMeSvg(props: CatSvgProps) {
-  return <IconBadge Icon={User} emoji="🖤" {...props} />
+  return <IconBadge Icon={User} {...props} />
 }
 
 export function BuddyCatSvg(props: CatSvgProps) {
-  return <IconBadge Icon={Bot} emoji="😼" {...props} />
+  return <IconBadge Icon={Bot} {...props} />
 }
 
 export function ChannelCatSvg(props: CatSvgProps) {
-  return <IconBadge Icon={Hash} emoji="🐱" {...props} />
+  return <IconBadge Icon={Hash} {...props} />
 }
 
 export function WorkCatSvg(props: CatSvgProps) {
-  return <IconBadge Icon={Briefcase} emoji="💼" {...props} />
+  return <IconBadge Icon={Briefcase} {...props} />
 }
 
 export function ShopCatSvg(props: CatSvgProps) {
-  return <IconBadge Icon={ShoppingBag} emoji="🛍️" {...props} />
+  return <IconBadge Icon={ShoppingBag} {...props} />
 }
 
 export function HelpBuddySvg(props: CatSvgProps) {
-  return <IconBadge Icon={Bot} emoji="🤖" {...props} />
+  return <IconBadge Icon={Bot} {...props} />
 }
 
 export function HelpProductSvg(props: CatSvgProps) {
-  return <IconBadge Icon={HelpCircle} emoji="📦" {...props} />
+  return <IconBadge Icon={HelpCircle} {...props} />
 }
 
 export function HelpStartSvg(props: CatSvgProps) {
-  return <IconBadge Icon={Rocket} emoji="🚀" {...props} />
+  return <IconBadge Icon={Rocket} {...props} />
 }

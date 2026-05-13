@@ -51,6 +51,11 @@ describe('connector plans', () => {
 
     expect(plan.configBlocks[0]?.content).toContain('type = "shadowob"')
     expect(plan.connectCommand).toContain('--target cc-connect')
+    expect(plan.connectCommand).toContain('--install --start')
+    expect(plan.quickCommand).not.toContain('npm install -g cc-connect')
+    expect(plan.summary).toContain('buggyblues/cc-connect@63b5d59')
+    expect(plan.configBlocks[0]?.content).toContain('[projects.agent]')
+    expect(plan.configBlocks[0]?.content).toContain('type = "codex"')
     expect(plan.configBlocks[0]?.content).toContain('server_url = "https://shadow.example.com"')
     expect(plan.configBlocks[0]?.content).toContain('work_dir = "/work/shadow"')
   })
