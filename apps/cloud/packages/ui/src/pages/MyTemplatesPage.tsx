@@ -62,6 +62,73 @@ function getMyTemplateOverview(content: unknown) {
 
 type TemplateSource = 'store' | 'git' | 'custom'
 
+function slugifyTemplateName(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 63) || 'custom-template'
+  )
+}
+
+function createMinimalTemplateContent(name: string) {
+  const slug = slugifyTemplateName(name)
+  const buddyId = `${slug}-buddy`.slice(0, 63)
+
+  return {
+    version: '1.0.0',
+    name: slug,
+    title: name,
+    description: '',
+    use: [
+      { plugin: 'model-provider' },
+      {
+        plugin: 'shadowob',
+        options: {
+          servers: [
+            {
+              id: 'main',
+              name,
+              slug,
+              channels: [{ id: 'general', title: 'General', type: 'text' }],
+            },
+          ],
+          buddies: [{ id: buddyId, name: `${name} Buddy` }],
+          bindings: [
+            {
+              targetId: buddyId,
+              targetType: 'buddy',
+              servers: ['main'],
+              channels: ['general'],
+              agentId: buddyId,
+              replyPolicy: { mode: 'mentionOnly' },
+            },
+          ],
+        },
+      },
+    ],
+    deployments: {
+      namespace: slug,
+      agents: [
+        {
+          id: buddyId,
+          runtime: 'openclaw',
+          identity: {
+            name: `${name} Buddy`,
+            systemPrompt: 'You are a helpful Shadow Buddy for this community.',
+          },
+          configuration: {
+            openclaw: {},
+          },
+        },
+      ],
+    },
+  }
+}
+
 function getTemplateSourceType(templateSlug: string | null): TemplateSource {
   if (templateSlug?.startsWith('git:')) return 'git'
   if (templateSlug) return 'store'
@@ -250,9 +317,13 @@ function ForkDialog({
 function CreateTemplateDialog({
   onCreate,
   onClose,
+  error,
+  isPending = false,
 }: {
   onCreate: (name: string) => void
   onClose: () => void
+  error?: string | null
+  isPending?: boolean
 }) {
   const { t } = useTranslation()
   const [name, setName] = useState('')
@@ -275,6 +346,11 @@ function CreateTemplateDialog({
             onChange={(event) => setName(event.target.value)}
             placeholder={t('templates.templateNamePlaceholder')}
           />
+          {error && (
+            <div className="rounded-xl border border-red-800 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+              {error}
+            </div>
+          )}
         </ModalBody>
 
         <ModalFooter>
@@ -289,7 +365,8 @@ function CreateTemplateDialog({
                 const templateName = name.trim()
                 if (templateName) onCreate(templateName)
               }}
-              disabled={!name.trim()}
+              disabled={!name.trim() || isPending}
+              loading={isPending}
             >
               <Plus size={14} />
               {t('templates.createTemplate')}
@@ -309,6 +386,7 @@ export function MyTemplatesPage() {
   const navigate = useNavigate()
   const [showForkDialog, setShowForkDialog] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [templateToDelete, setTemplateToDelete] = useState<{
     name: string
     reviewStatus?: 'draft' | 'pending' | 'approved' | 'rejected'
@@ -374,14 +452,24 @@ export function MyTemplatesPage() {
   }, [templates])
 
   const createTemplateMutation = useMutation({
-    mutationFn: (name: string) => api.myTemplates.save(name, {}),
-    onSuccess: (_result, name) => {
+    mutationFn: async (name: string) => {
+      const result = await api.myTemplates.save(name, createMinimalTemplateContent(name))
+      const resultName = (result as { name?: unknown }).name
+      const savedName = typeof resultName === 'string' ? resultName : name
+      return { savedName }
+    },
+    onSuccess: ({ savedName }, name) => {
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
+      setCreateError(null)
       setShowCreateDialog(false)
-      navigate({ to: '/my-templates/$name', params: { name } })
+      navigate({ to: '/my-templates/$name', params: { name: savedName } })
       toast.success(t('templates.templateCreated', { name }))
     },
-    onError: (err) => toast.error(t('templates.createFailed', { message: (err as Error).message })),
+    onError: (err) => {
+      const message = t('templates.createFailed', { message: (err as Error).message })
+      setCreateError(message)
+      toast.error(message)
+    },
   })
 
   const ensureUniqueTemplateName = (name: string) => {
@@ -452,7 +540,10 @@ export function MyTemplatesPage() {
                 type="button"
                 variant="primary"
                 size="sm"
-                onClick={() => setShowCreateDialog(true)}
+                onClick={() => {
+                  setCreateError(null)
+                  setShowCreateDialog(true)
+                }}
               >
                 <Plus size={14} />
                 <span className="truncate">{t('templates.createTemplate')}</span>
@@ -494,7 +585,10 @@ export function MyTemplatesPage() {
                 type="button"
                 variant="primary"
                 size="sm"
-                onClick={() => setShowCreateDialog(true)}
+                onClick={() => {
+                  setCreateError(null)
+                  setShowCreateDialog(true)
+                }}
               >
                 <Plus size={14} />
                 {t('templates.createTemplate')}
@@ -659,13 +753,19 @@ export function MyTemplatesPage() {
       {showCreateDialog && (
         <CreateTemplateDialog
           onCreate={(name) => {
+            setCreateError(null)
             const normalizedName = normalizeTemplateName(name)
             if (!normalizedName) return
 
             const uniqueName = ensureUniqueTemplateName(normalizedName)
             createTemplateMutation.mutate(uniqueName)
           }}
-          onClose={() => setShowCreateDialog(false)}
+          onClose={() => {
+            setCreateError(null)
+            setShowCreateDialog(false)
+          }}
+          error={createError}
+          isPending={createTemplateMutation.isPending}
         />
       )}
     </PageShell>

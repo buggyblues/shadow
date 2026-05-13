@@ -100,6 +100,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
     import('./seo-suite/index.js'),
     import('./wordpress-woocommerce/index.js'),
     import('./cloudflare/index.js'),
+    import('./claude-plugin/index.js'),
     import('./supabase/index.js'),
     import('./google-analytics/index.js'),
     import('./hubspot/index.js'),

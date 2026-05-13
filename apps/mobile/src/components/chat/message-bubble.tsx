@@ -1,4 +1,4 @@
-import type { CommerceProductCard } from '@shadowob/shared'
+import type { CommerceProductCard, OAuthLinkCard } from '@shadowob/shared'
 import { useMutation } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import * as Clipboard from 'expo-clipboard'
@@ -12,11 +12,13 @@ import {
   AlertCircle,
   Check,
   CheckSquare,
+  ChevronRight,
   ExternalLink,
   FileArchive,
   FileCode,
   FileText,
   Film,
+  Globe2,
   Music,
   RefreshCw,
   Save,
@@ -31,6 +33,7 @@ import {
   Dimensions,
   type GestureResponderEvent,
   Keyboard,
+  Linking,
   Modal,
   Pressable,
   StyleSheet,
@@ -39,6 +42,7 @@ import {
   View,
 } from 'react-native'
 import Animated, { ZoomIn } from 'react-native-reanimated'
+import WebView from 'react-native-webview'
 import type { EmojiType } from 'rn-emoji-keyboard'
 import RNEmojiPicker from 'rn-emoji-keyboard'
 import { fetchApi, getImageUrl } from '../../lib/api'
@@ -692,6 +696,15 @@ function MessageBubbleInner({
             <CommerceCardView key={card.id} card={card} messageId={message.id} />
           ))}
 
+          {message.metadata?.oauthLinkCards?.map((card) => (
+            <OAuthLinkCardMobile
+              key={card.id}
+              card={card}
+              messageId={message.id}
+              channelId={message.channelId}
+            />
+          ))}
+
           {/* Phase 2 — interactive block (buttons / select) */}
           {message.metadata?.interactive && (
             <InteractiveBlockRenderer
@@ -859,6 +872,188 @@ function MessageBubbleInner({
             </Pressable>
           </View>
         </Pressable>
+      </Modal>
+    </Pressable>
+  )
+}
+
+function parseOAuthCardUrl(value: string | null | undefined): URL | null {
+  if (!value) return null
+  try {
+    return new URL(value)
+  } catch {
+    return null
+  }
+}
+
+function formatOAuthCardOrigin(value: string) {
+  return parseOAuthCardUrl(value)?.host ?? value
+}
+
+function getOAuthCardAvatarUrl(card: OAuthLinkCard) {
+  return card.meta?.avatarUrl ?? card.meta?.iconUrl ?? card.iconUrl ?? null
+}
+
+function getOAuthCardAppName(card: OAuthLinkCard) {
+  return card.meta?.appName ?? card.title
+}
+
+function OAuthLinkCardMobile({
+  card,
+  messageId,
+  channelId,
+}: {
+  card: OAuthLinkCard
+  messageId: string
+  channelId: string
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const webViewRef = useRef<WebView>(null)
+  const [isOpen, setIsOpen] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const frameUrl = card.embedUrl ?? card.url
+  const fallbackUrl = card.fallbackUrl ?? card.url
+  const avatarUrl = getOAuthCardAvatarUrl(card)
+  const iconUri = avatarUrl ? (getImageUrl(avatarUrl) ?? avatarUrl) : null
+  const appName = getOAuthCardAppName(card)
+  const origin = card.meta?.origin ?? formatOAuthCardOrigin(card.url)
+
+  const openExternal = async () => {
+    try {
+      await Linking.openURL(fallbackUrl)
+    } catch {
+      showToast(t('chat.oauthLinkOpenFailed'))
+    }
+  }
+
+  const injectedBridge = `
+    (function () {
+      var originalPostMessage = window.postMessage;
+      window.postMessage = function (message, targetOrigin, transfer) {
+        try {
+          window.ReactNativeWebView.postMessage(
+            typeof message === 'string' ? message : JSON.stringify(message)
+          );
+        } catch (error) {}
+        if (typeof originalPostMessage === 'function') {
+          return originalPostMessage.apply(window, arguments);
+        }
+      };
+      true;
+    })();
+  `
+
+  const sendLaunchMessage = () => {
+    const payload = {
+      type: 'shadow.card.launch',
+      card: {
+        id: card.id,
+        appId: card.appId,
+        clientId: card.clientId ?? null,
+        scopes: card.scopes ?? [],
+      },
+      context: { messageId, channelId },
+    }
+    webViewRef.current?.injectJavaScript(`
+      window.dispatchEvent(new MessageEvent('message', {
+        data: ${JSON.stringify(payload)},
+        origin: window.location.origin
+      }));
+      true;
+    `)
+  }
+
+  const openPreview = () => {
+    setIsConnected(false)
+    setIsOpen(true)
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('chat.oauthLinkPreviewAria', { title: card.title })}
+      onPress={openPreview}
+      style={[styles.oauthCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      <View style={[styles.oauthIconWrap, { borderColor: colors.border }]}>
+        {iconUri ? (
+          <Image source={{ uri: iconUri }} style={styles.oauthIcon} />
+        ) : (
+          <Globe2 size={18} color={colors.textMuted} />
+        )}
+      </View>
+      <View style={styles.oauthInfo}>
+        <View style={styles.oauthLabelRow}>
+          <Globe2 size={12} color={colors.textMuted} />
+          <Text style={[styles.oauthLabel, { color: colors.textMuted }]}>
+            {t('chat.oauthLinkCardLabel')}
+          </Text>
+          <Text style={[styles.oauthLabelAppName, { color: colors.textMuted }]} numberOfLines={1}>
+            · {appName}
+          </Text>
+        </View>
+        <Text style={[styles.oauthTitle, { color: colors.text }]} numberOfLines={2}>
+          {card.title}
+        </Text>
+        {card.description ? (
+          <Text style={[styles.oauthDescription, { color: colors.textMuted }]} numberOfLines={2}>
+            {card.description}
+          </Text>
+        ) : null}
+        <Text style={[styles.oauthOrigin, { color: colors.textMuted }]} numberOfLines={1}>
+          {origin}
+        </Text>
+      </View>
+      <ChevronRight size={20} color={colors.textMuted} />
+
+      <Modal visible={isOpen} animationType="slide" presentationStyle="pageSheet">
+        <View style={[styles.oauthModal, { backgroundColor: colors.background }]}>
+          <View style={[styles.oauthModalHeader, { borderBottomColor: colors.border }]}>
+            <View style={styles.oauthModalTitleWrap}>
+              <Text style={[styles.oauthModalTitle, { color: colors.text }]} numberOfLines={1}>
+                {card.title}
+              </Text>
+              <Text
+                style={[
+                  styles.oauthModalStatus,
+                  { color: isConnected ? colors.success : colors.textMuted },
+                ]}
+              >
+                {isConnected ? t('chat.oauthLinkConnected') : t('chat.oauthLinkWaiting')}
+              </Text>
+            </View>
+            <Pressable onPress={openExternal} style={styles.oauthModalIconButton}>
+              <ExternalLink size={20} color={colors.text} />
+            </Pressable>
+            <Pressable onPress={() => setIsOpen(false)} style={styles.oauthModalIconButton}>
+              <X size={22} color={colors.text} />
+            </Pressable>
+          </View>
+          <WebView
+            ref={webViewRef}
+            source={{ uri: frameUrl }}
+            style={styles.oauthWebView}
+            originWhitelist={['https://*', 'http://localhost:*', 'http://127.0.0.1:*']}
+            injectedJavaScriptBeforeContentLoaded={injectedBridge}
+            onMessage={(event) => {
+              try {
+                const data = JSON.parse(event.nativeEvent.data)
+                if (data?.type === 'shadow.card.ready') {
+                  setIsConnected(true)
+                  sendLaunchMessage()
+                }
+              } catch {
+                // Ignore non-JSON messages from embedded apps.
+              }
+            }}
+          />
+          <View style={[styles.oauthModalFooter, { borderTopColor: colors.border }]}>
+            <Text style={[styles.oauthModalFooterText, { color: colors.textMuted }]}>
+              {t('chat.oauthLinkFallback')}
+            </Text>
+          </View>
+        </View>
       </Modal>
     </Pressable>
   )
@@ -1154,6 +1349,134 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: fontSize.xs,
     fontWeight: '800',
+  },
+  oauthCard: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+    maxWidth: 340,
+  },
+  oauthIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  oauthIcon: {
+    width: 40,
+    height: 40,
+  },
+  oauthInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  oauthLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  oauthLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  oauthLabelAppName: {
+    flexShrink: 1,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  oauthTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  oauthDescription: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  oauthOrigin: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  oauthActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  oauthPrimaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  oauthPrimaryButtonText: {
+    color: '#ffffff',
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  oauthSecondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  oauthSecondaryButtonText: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  oauthModal: {
+    flex: 1,
+  },
+  oauthModalHeader: {
+    minHeight: 58,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  oauthModalTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  oauthModalTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  oauthModalStatus: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  oauthModalIconButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+  },
+  oauthWebView: {
+    flex: 1,
+  },
+  oauthModalFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  oauthModalFooterText: {
+    fontSize: fontSize.xs,
   },
   // Reactions
   reactions: {

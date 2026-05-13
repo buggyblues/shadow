@@ -28,6 +28,7 @@ export function formatDatetimeLocal(isoString: string): string {
 
 export interface AgentOption {
   id: string
+  config?: Record<string, unknown>
   botUser?: {
     id: string
     username: string
@@ -37,6 +38,9 @@ export interface AgentOption {
   isListed?: boolean
   isRented?: boolean
 }
+
+const isPrivateBuddy = (agent: AgentOption | undefined) =>
+  agent ? agent.config?.buddyMode !== 'shareable' : false
 
 export interface ListingForm {
   agentId: string
@@ -118,6 +122,8 @@ export function CreateListingPage({
     queryKey: ['agents'],
     queryFn: () => fetchApi<AgentOption[]>('/api/agents'),
   })
+  const selectedAgent = agents.find((agent) => agent.id === form.agentId)
+  const selectedAgentPrivate = isPrivateBuddy(selectedAgent)
 
   // Load existing listing for edit
   const { data: existing } = useQuery({
@@ -197,6 +203,10 @@ export function CreateListingPage({
 
   const handleSubmit = (e: React.FormEvent, status: 'draft' | 'active') => {
     e.preventDefault()
+    if (selectedAgentPrivate) {
+      showToast(t('marketplace.privateBuddyCannotList'), 'error')
+      return
+    }
     mutation.mutate({
       agentId: form.agentId || undefined,
       title: form.title.trim(),
@@ -303,11 +313,13 @@ export function CreateListingPage({
                     </option>
                     {agents.map((agent) => {
                       const name = agent.botUser?.displayName ?? agent.botUser?.username ?? agent.id
-                      const disabled = !!agent.isRented
+                      const privateBuddy = isPrivateBuddy(agent)
+                      const disabled = !!agent.isRented || privateBuddy
                       return (
                         <option key={agent.id} value={agent.id} disabled={disabled}>
                           {name}
-                          {disabled ? ` 🔒 ${t('marketplace.buddyRented', '租赁中')}` : ''}
+                          {agent.isRented ? ` 🔒 ${t('marketplace.buddyRented', '租赁中')}` : ''}
+                          {privateBuddy ? ` (${t('agentMgmt.modePrivate')})` : ''}
                           {agent.isListed && !disabled
                             ? ` (${t('marketplace.buddyListed', '已上架')})`
                             : ''}
@@ -320,6 +332,12 @@ export function CreateListingPage({
                   <p className="text-xs text-text-muted mt-1 flex items-center gap-1">
                     <Lock className="w-3 h-3" />
                     {t('marketplace.noBuddyHint', '你还没有 Buddy，请先在“我的 Buddy”里创建')}
+                  </p>
+                )}
+                {selectedAgentPrivate && form.agentId && (
+                  <p className="text-xs text-warning mt-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    {t('marketplace.privateBuddyCannotList')}
                   </p>
                 )}
               </label>
@@ -664,7 +682,12 @@ export function CreateListingPage({
               variant="glass"
               size="lg"
               onClick={(e) => handleSubmit(e as unknown as React.FormEvent, 'draft')}
-              disabled={mutation.isPending || !form.title.trim() || !form.agentId.trim()}
+              disabled={
+                mutation.isPending ||
+                !form.title.trim() ||
+                !form.agentId.trim() ||
+                selectedAgentPrivate
+              }
             >
               <Save className="w-4 h-4" />
               {t('marketplace.saveDraft', '保存草稿')}
@@ -673,7 +696,12 @@ export function CreateListingPage({
               variant="primary"
               size="lg"
               type="submit"
-              disabled={mutation.isPending || !form.title.trim() || !form.agentId.trim()}
+              disabled={
+                mutation.isPending ||
+                !form.title.trim() ||
+                !form.agentId.trim() ||
+                selectedAgentPrivate
+              }
             >
               <Plus className="w-4 h-4" />
               {mutation.isPending

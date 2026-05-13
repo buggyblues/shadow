@@ -1,0 +1,111 @@
+{
+  "version": "1.0.0",
+  "name": "claude-financial-services-buddy",
+  "title": "${i18n:title}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "use": [
+    {
+      "plugin": "model-provider"
+    },
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "claude-finserv-hq",
+            "name": "Claude Financial Services",
+            "slug": "claude-finserv",
+            "channels": [
+              {
+                "id": "research",
+                "title": "Research",
+                "type": "text"
+              },
+              {
+                "id": "deals",
+                "title": "Deals",
+                "type": "text"
+              },
+              {
+                "id": "review",
+                "title": "Review",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "claude-finserv-bot",
+            "name": "Claude FinServ Buddy"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "claude-finserv-bot",
+            "targetType": "buddy",
+            "servers": ["claude-finserv-hq"],
+            "channels": ["research", "deals", "review"],
+            "agentId": "claude-finserv-buddy"
+          }
+        ]
+      }
+    }
+  ],
+  "deployments": {
+    "namespace": "claude-financial-services-buddy",
+    "agents": [
+      {
+        "id": "claude-finserv-buddy",
+        "runtime": "openclaw",
+        "description": "Financial-services Buddy that composes multiple Claude marketplace plugins on one agent: pitch-agent, market-researcher, and earnings-reviewer.",
+        "identity": {
+          "name": "Claude FinServ Buddy",
+          "personality": "You are a finance workflow operator. You choose the smallest relevant imported Claude plugin workflow before acting, and you keep every draft staged for human review.",
+          "systemPrompt": "Routing:\n1. Treat the imported Claude plugins as agent-scoped capabilities for this Buddy only.\n2. Use pitch-agent for first-draft banking pitch workflows, market-researcher for sector and peer landscape work, and earnings-reviewer for earnings call and filing review.\n3. Do not treat these plugins as global behavior for other agents or containers.\n4. All Claude plugin imports for this agent are declared under one claude-plugin entry, so the runtime should initialize the importer once for this agent container.\n5. Cite the imported plugin, skill, command, or agent file used before presenting a final answer."
+        },
+        "use": [
+          {
+            "plugin": "claude-plugin",
+            "options": {
+              "marketplaces": [
+                {
+                  "id": "anthropic-financial-services",
+                  "repo": "anthropics/financial-services",
+                  "plugins": ["pitch-agent", "market-researcher", "earnings-reviewer"]
+                }
+              ],
+              "poll": "1h",
+              "slashCommands": {
+                "autoRegister": true,
+                "inferInteractions": true
+              }
+            }
+          }
+        ],
+        "resources": {
+          "requests": {
+            "cpu": "100m",
+            "memory": "512Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
+        },
+        "configuration": {}
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "title": "Claude Financial Services Buddy",
+      "description": "Example template for composing multiple GitHub-hosted Claude marketplace plugins on one Shadow Cloud agent without declaring duplicate importer entries."
+    },
+    "zh-CN": {
+      "title": "Claude Financial Services Buddy",
+      "description": "示例模板：在单个 Shadow Cloud agent 上组合多个 GitHub 托管的 Claude marketplace 插件，避免重复声明 importer。"
+    }
+  }
+}

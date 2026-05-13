@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
 import { showToast } from '../../lib/toast'
-import { type WorkspaceNode, useWorkspaceStore } from '../../stores/workspace.store'
+import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { WorkspaceContextMenu } from './WorkspaceContextMenu'
 import { WorkspaceDialogs } from './WorkspaceDialogs'
@@ -483,6 +483,7 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
       {contextMenu && (
         <WorkspaceContextMenu
           menu={contextMenu}
+          serverId={serverId}
           onClose={() => setContextMenu(null)}
           hasClipboard={!!clipboard}
           onNewFolder={(parentId) => {

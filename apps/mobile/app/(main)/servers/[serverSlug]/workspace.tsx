@@ -82,6 +82,41 @@ interface WorkspaceStats {
 
 type ActionMode = 'none' | 'rename' | 'create-file' | 'create-folder' | 'search'
 
+type SignedWorkspaceMediaUrl = {
+  url: string
+  expiresAt: string
+}
+
+async function resolveWorkspaceMediaUrl(
+  serverId: string,
+  node: WorkspaceNode,
+  disposition: 'inline' | 'attachment',
+) {
+  if (node.contentRef) {
+    const params = new URLSearchParams({ disposition, contentRef: node.contentRef })
+    const signed = await fetchApi<SignedWorkspaceMediaUrl>(
+      `/api/servers/${serverId}/workspace/files/${node.id}/media-url?${params.toString()}`,
+    )
+    return getImageUrl(signed.url) ?? signed.url
+  }
+  const fallback = node.previewUrl ?? node.url
+  return fallback ? (getImageUrl(fallback) ?? fallback) : null
+}
+
+function WorkspaceThumbnail({ serverId, node }: { serverId: string; node: WorkspaceNode }) {
+  const { data: url } = useQuery({
+    queryKey: ['workspace-media-url', serverId, node.id, node.contentRef, 'thumbnail'],
+    queryFn: () => resolveWorkspaceMediaUrl(serverId, node, 'inline'),
+    enabled: Boolean(
+      serverId && node.kind === 'file' && (node.contentRef || node.previewUrl || node.url),
+    ),
+    staleTime: 4 * 60 * 1000,
+  })
+
+  if (!url) return null
+  return <Image source={{ uri: url }} style={styles.thumbnail} contentFit="cover" />
+}
+
 export default function WorkspaceScreen() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
   const { t } = useTranslation()
@@ -116,6 +151,18 @@ export default function WorkspaceScreen() {
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<{ id: string; name: string }>(`/api/servers/${serverSlug}`),
     enabled: !!serverSlug,
+  })
+
+  const { data: previewMediaUrl } = useQuery({
+    queryKey: [
+      'workspace-media-url',
+      server?.id,
+      previewNode?.id,
+      previewNode?.contentRef,
+      'inline',
+    ],
+    queryFn: () => resolveWorkspaceMediaUrl(server!.id, previewNode!, 'inline'),
+    enabled: Boolean(server?.id && previewNode?.id && previewNode?.contentRef),
   })
 
   // ── Children list ───────────────────────────────
@@ -395,10 +442,24 @@ export default function WorkspaceScreen() {
     )
   }
 
-  const getFileUrl = (node: WorkspaceNode) => {
-    const ref = node.contentRef ?? node.previewUrl ?? node.url
-    return ref ? (getImageUrl(ref) ?? ref) : null
+  const hasResolvableFileUrl = (node: WorkspaceNode) => {
+    return Boolean(node.contentRef || node.previewUrl || node.url)
   }
+
+  const openFileUrl = (node: WorkspaceNode, disposition: 'inline' | 'attachment') => {
+    if (!server?.id) return
+    void resolveWorkspaceMediaUrl(server.id, node, disposition)
+      .then((url) => {
+        if (url) return Linking.openURL(url)
+      })
+      .catch((err: Error) => showToast(err.message, 'error'))
+  }
+
+  const previewFallbackMediaUrl = previewNode
+    ? getImageUrl(previewNode.previewUrl ?? previewNode.url)
+    : null
+  const previewImageUrl =
+    previewMediaUrl ?? (previewNode?.contentRef ? null : previewFallbackMediaUrl)
 
   if (isLoading) return <LoadingScreen />
 
@@ -642,12 +703,8 @@ export default function WorkspaceScreen() {
                   )}
                 </View>
                 {item.kind === 'dir' && <ChevronRight size={16} color={colors.textMuted} />}
-                {item.kind === 'file' && isImageFile(item) && getFileUrl(item) && (
-                  <Image
-                    source={{ uri: getFileUrl(item)! }}
-                    style={styles.thumbnail}
-                    contentFit="cover"
-                  />
+                {server?.id && item.kind === 'file' && isImageFile(item) && (
+                  <WorkspaceThumbnail serverId={server.id} node={item} />
                 )}
                 <Pressable onPress={() => openNodeActions(item)} style={styles.moreBtn}>
                   <MoreHorizontal size={16} color={colors.textMuted} />
@@ -724,12 +781,11 @@ export default function WorkspaceScreen() {
                 </Pressable>
 
                 {/* Download (files only) */}
-                {selectedNode.kind === 'file' && getFileUrl(selectedNode) && (
+                {selectedNode.kind === 'file' && hasResolvableFileUrl(selectedNode) && (
                   <Pressable
                     style={styles.actionItem}
                     onPress={() => {
-                      const url = getFileUrl(selectedNode)
-                      if (url) Linking.openURL(url)
+                      openFileUrl(selectedNode, 'attachment')
                       setShowNodeActions(false)
                     }}
                   >
@@ -788,9 +844,9 @@ export default function WorkspaceScreen() {
                 </View>
 
                 <ScrollView contentContainerStyle={styles.previewBody}>
-                  {isImageFile(previewNode) && getFileUrl(previewNode) ? (
+                  {isImageFile(previewNode) && previewImageUrl ? (
                     <Image
-                      source={{ uri: getFileUrl(previewNode)! }}
+                      source={{ uri: previewImageUrl }}
                       style={styles.previewImage}
                       contentFit="contain"
                     />
@@ -836,13 +892,10 @@ export default function WorkspaceScreen() {
                   </View>
 
                   {/* Download button */}
-                  {getFileUrl(previewNode) && (
+                  {hasResolvableFileUrl(previewNode) && (
                     <Pressable
                       style={[styles.downloadBtn, { backgroundColor: colors.primary }]}
-                      onPress={() => {
-                        const url = getFileUrl(previewNode)
-                        if (url) Linking.openURL(url)
-                      }}
+                      onPress={() => openFileUrl(previewNode, 'attachment')}
                     >
                       <Download size={16} color="#fff" />
                       <Text style={{ color: '#fff', fontWeight: '700' }}>

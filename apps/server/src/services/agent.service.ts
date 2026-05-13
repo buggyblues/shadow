@@ -3,6 +3,7 @@ import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
 import type { UserDao } from '../dao/user.dao'
 import { signAgentToken } from '../lib/jwt'
+import { applyBuddyAccessConfig, type BuddyMode } from './buddy-policy'
 
 const AGENT_HEARTBEAT_ONLINE_MS = 90_000
 const SLASH_COMMAND_NAME_RE = /^[a-zA-Z][a-zA-Z0-9._-]{0,63}$/
@@ -167,6 +168,8 @@ export class AgentService {
     avatarUrl?: string
     kernelType: string
     config: Record<string, unknown>
+    buddyMode?: BuddyMode
+    allowedServerIds?: string[]
     ownerId: string
   }) {
     // Create a bot user for the agent with the provided username.
@@ -201,10 +204,16 @@ export class AgentService {
     const agent = await this.deps.agentDao.create({
       userId: botUser.id,
       kernelType: data.kernelType,
-      config: {
-        ...data.config,
-        ...(data.description ? { description: data.description } : {}),
-      },
+      config: applyBuddyAccessConfig(
+        {
+          ...data.config,
+          ...(data.description ? { description: data.description } : {}),
+        },
+        {
+          buddyMode: data.buddyMode,
+          allowedServerIds: data.allowedServerIds,
+        },
+      ),
       ownerId: data.ownerId,
     })
 
@@ -229,7 +238,13 @@ export class AgentService {
   async update(
     id: string,
     ownerId: string,
-    data: { name?: string; description?: string; avatarUrl?: string | null },
+    data: {
+      name?: string
+      description?: string
+      avatarUrl?: string | null
+      buddyMode?: BuddyMode
+      allowedServerIds?: string[]
+    },
   ) {
     const agent = await this.deps.agentDao.findById(id)
     if (!agent) {
@@ -247,9 +262,17 @@ export class AgentService {
       await this.deps.userDao.update(agent.userId, updates)
     }
 
-    if (data.description !== undefined) {
-      const config = (agent.config as Record<string, unknown>) ?? {}
-      config.description = data.description
+    if (
+      data.description !== undefined ||
+      data.buddyMode !== undefined ||
+      data.allowedServerIds !== undefined
+    ) {
+      let config = { ...((agent.config as Record<string, unknown>) ?? {}) }
+      if (data.description !== undefined) config.description = data.description
+      config = applyBuddyAccessConfig(config, {
+        buddyMode: data.buddyMode,
+        allowedServerIds: data.allowedServerIds,
+      })
       await this.deps.agentDao.updateConfig(id, config)
     }
 

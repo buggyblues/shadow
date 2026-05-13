@@ -1,12 +1,14 @@
 import { Badge, Button, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Check, Copy, PawPrint, Search, UserPlus, X } from 'lucide-react'
+import { Check, Copy, LockKeyhole, PawPrint, Search, UserPlus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../../lib/api'
+import { showToast } from '../../../lib/toast'
 import { UserAvatar } from '../avatar'
+import { useConfirmStore } from '../confirm-dialog'
 import { OnlineRank } from '../online-rank'
 
 // Types
@@ -51,13 +53,16 @@ interface BuddyAgent {
   config?: {
     description?: string
     buddyTag?: string
+    buddyMode?: 'private' | 'shareable'
+    allowedServerIds?: string[]
   }
+  accessRole?: 'owner' | 'tenant'
 }
 
 type InviteStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
 type AddAgentsResponse = {
-  added?: string[]
+  added?: Array<string | { agentId: string }>
   failed?: Array<{ agentId: string; error: string }>
   results?: Array<{ agentId: string; success: boolean; error?: string }>
 }
@@ -84,6 +89,9 @@ interface InvitePanelMember {
   canAddToServer: boolean
   canAddToChannel: boolean
   agentId?: string
+  accessRole?: 'owner' | 'tenant'
+  buddyMode?: 'private' | 'shareable'
+  requiresServerAllowlist?: boolean
 }
 
 const normalizeStatus = (value: string | undefined): InviteStatus => {
@@ -101,7 +109,9 @@ const parseAddAgentsResult = (result: AddAgentsResponse | undefined | null) => {
 
   if (Array.isArray(result.added) && Array.isArray(result.failed)) {
     return {
-      added: result.added,
+      added: result.added
+        .map((item) => (typeof item === 'string' ? item : item.agentId))
+        .filter(Boolean),
       failed: result.failed,
     }
   }
@@ -113,6 +123,19 @@ const parseAddAgentsResult = (result: AddAgentsResponse | undefined | null) => {
       .filter((item) => !item.success)
       .map((item) => ({ agentId: item.agentId, error: item.error || 'Failed' })),
   }
+}
+
+const getBuddyMode = (agent: BuddyAgent): 'private' | 'shareable' =>
+  agent.config?.buddyMode === 'shareable' ? 'shareable' : 'private'
+
+const getBuddyAllowedServerIds = (agent: BuddyAgent): string[] =>
+  Array.isArray(agent.config?.allowedServerIds)
+    ? agent.config.allowedServerIds.filter((id): id is string => typeof id === 'string')
+    : []
+
+const canBuddyJoinServer = (agent: BuddyAgent, serverId: string) => {
+  if (getBuddyMode(agent) === 'shareable') return true
+  return getBuddyAllowedServerIds(agent).includes(serverId)
 }
 
 const statusColors: Record<InviteStatus, string> = {
@@ -138,6 +161,7 @@ function InviteMemberCard({
   const { t } = useTranslation()
   const canClick = showCheckbox && !disabled && onSelect
   const totalOnlineSeconds = member.totalOnlineSeconds ?? 0
+  const isPrivateBuddy = member.buddyMode === 'private'
 
   return (
     <div
@@ -176,6 +200,13 @@ function InviteMemberCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <p className="text-sm text-text-primary truncate">{member.nickname}</p>
+          {isPrivateBuddy && (
+            <LockKeyhole
+              size={12}
+              className="shrink-0 text-warning"
+              aria-label={t('agentMgmt.modePrivate')}
+            />
+          )}
           {member.isBot && (
             <span className="text-[11px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-[3px] font-black flex items-center gap-0.5 shrink-0">
               <Check size={8} className="text-white" />
@@ -202,6 +233,14 @@ function InviteMemberCard({
         {member.creator ? (
           <p className="text-[11px] text-text-muted mt-0.5">
             {t('channel.buddyOwner')} {member.creator.nickname}
+          </p>
+        ) : null}
+        {member.accessRole === 'tenant' ? (
+          <p className="text-[11px] text-accent mt-0.5">{t('agentMgmt.rentingAccessBadge')}</p>
+        ) : null}
+        {member.requiresServerAllowlist ? (
+          <p className="text-[11px] text-warning mt-0.5">
+            {t('member.privateBuddyNeedsAllowlist')}
           </p>
         ) : null}
       </div>
@@ -252,8 +291,8 @@ export function InvitePanel({
   })
 
   const { data: myBuddies = [] } = useQuery({
-    queryKey: ['my-buddies-for-invite'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    queryKey: ['my-buddies-for-invite', 'include-rentals'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
   })
 
   const { data: channelMembers = [] } = useQuery({
@@ -302,7 +341,7 @@ export function InvitePanel({
     return map
   }, [myBuddies])
 
-  const memberCandidates = useMemo(() => {
+  const memberCandidates = useMemo<InvitePanelMember[]>(() => {
     return serverMembers
       .filter((m) => !!m.user && !m.user.isBot)
       .filter((m) => {
@@ -339,7 +378,7 @@ export function InvitePanel({
       }))
   }, [serverMembers, searchKeyword, channelId, joinedUserIds])
 
-  const buddyCandidatesOnServer = useMemo(() => {
+  const buddyCandidatesOnServer = useMemo<InvitePanelMember[]>(() => {
     if (!channelId) return []
     return serverMembers
       .filter((m) => !!m.user?.isBot && !joinedUserIds.has(m.userId))
@@ -352,6 +391,11 @@ export function InvitePanel({
       })
       .map((m) => {
         const agent = myBuddiesByBotId.get(m.user!.id)
+        const allowedInServer = agent ? canBuddyJoinServer(agent, serverId) : false
+        const buddyMode = agent ? getBuddyMode(agent) : undefined
+        const requiresServerAllowlist = Boolean(
+          agent && buddyMode === 'private' && !allowedInServer && agent.accessRole !== 'tenant',
+        )
         return {
           key: `buddy:${agent?.id ?? m.user!.id}`,
           uid: m.userId || m.user!.id,
@@ -374,14 +418,17 @@ export function InvitePanel({
             : null,
           source: 'buddy' as const,
           canAddToServer: false,
-          canAddToChannel: true,
+          canAddToChannel: allowedInServer || requiresServerAllowlist,
           agentId: agent?.id,
+          accessRole: agent?.accessRole,
+          buddyMode,
+          requiresServerAllowlist,
         } as InvitePanelMember
       })
       .filter((candidate) => candidate.agentId)
-  }, [serverMembers, searchKeyword, joinedUserIds, myBuddiesByBotId, channelId])
+  }, [serverMembers, searchKeyword, joinedUserIds, myBuddiesByBotId, channelId, serverId])
 
-  const buddyCandidatesNew = useMemo(() => {
+  const buddyCandidatesNew = useMemo<InvitePanelMember[]>(() => {
     return myBuddies
       .filter((agent) => agent.botUser && !serverMemberUserIds.has(agent.botUser.id))
       .filter((agent) => {
@@ -393,32 +440,42 @@ export function InvitePanel({
             : ''
         return name.includes(searchKeyword) || desc.includes(searchKeyword)
       })
-      .map((agent) => ({
-        key: `buddy:${agent.id}`,
-        uid: agent.botUser!.id,
-        nickname: agent.botUser!.displayName || agent.botUser!.username,
-        username: agent.botUser!.username,
-        avatar: agent.botUser!.avatarUrl,
-        status: normalizeStatus(agent.status),
-        isBot: true,
-        inServer: false,
-        inChannel: false,
-        membershipTier: null,
-        membershipLevel: null,
-        totalOnlineSeconds: agent.totalOnlineSeconds,
-        buddyTag: agent.config?.buddyTag ?? null,
-        creator: agent.owner
-          ? {
-              uid: agent.owner.userId || agent.owner.id,
-              nickname: agent.owner.displayName || agent.owner.username,
-            }
-          : null,
-        source: 'buddy' as const,
-        canAddToServer: true,
-        canAddToChannel: !!channelId,
-        agentId: agent.id,
-      }))
-  }, [myBuddies, serverMemberUserIds, searchKeyword, channelId])
+      .map((agent) => {
+        const allowedInServer = canBuddyJoinServer(agent, serverId)
+        const buddyMode = getBuddyMode(agent)
+        const requiresServerAllowlist =
+          buddyMode === 'private' && !allowedInServer && agent.accessRole !== 'tenant'
+        const canAddAfterAllowlist = allowedInServer || requiresServerAllowlist
+        return {
+          key: `buddy:${agent.id}`,
+          uid: agent.botUser!.id,
+          nickname: agent.botUser!.displayName || agent.botUser!.username,
+          username: agent.botUser!.username,
+          avatar: agent.botUser!.avatarUrl,
+          status: normalizeStatus(agent.status),
+          isBot: true,
+          inServer: false,
+          inChannel: false,
+          membershipTier: null,
+          membershipLevel: null,
+          totalOnlineSeconds: agent.totalOnlineSeconds,
+          buddyTag: agent.config?.buddyTag ?? null,
+          creator: agent.owner
+            ? {
+                uid: agent.owner.userId || agent.owner.id,
+                nickname: agent.owner.displayName || agent.owner.username,
+              }
+            : null,
+          source: 'buddy' as const,
+          canAddToServer: canAddAfterAllowlist,
+          canAddToChannel: !!channelId && canAddAfterAllowlist,
+          agentId: agent.id,
+          accessRole: agent.accessRole,
+          buddyMode,
+          requiresServerAllowlist,
+        }
+      })
+  }, [myBuddies, serverMemberUserIds, searchKeyword, channelId, serverId])
 
   const buddyCandidates = useMemo(
     () => [...buddyCandidatesOnServer, ...buddyCandidatesNew],
@@ -485,6 +542,39 @@ export function InvitePanel({
         })
       } else {
         const serverAdded = new Set<string>()
+        const allowlistCandidates = selectedCandidates.filter(
+          (candidate) => candidate.requiresServerAllowlist && candidate.agentId,
+        )
+
+        if (allowlistCandidates.length > 0) {
+          const names = allowlistCandidates.map((candidate) => candidate.nickname).join(', ')
+          const ok = await useConfirmStore.getState().confirm({
+            title: t('member.allowlistPrivateBuddyTitle'),
+            message: t('member.allowlistPrivateBuddyMessage', { names }),
+            confirmLabel: t('member.allowlistPrivateBuddyConfirm'),
+            cancelLabel: t('common.cancel'),
+            danger: false,
+          })
+          if (!ok) return
+
+          await Promise.all(
+            allowlistCandidates.map((candidate) => {
+              const agent = myBuddies.find((item) => item.id === candidate.agentId)
+              if (!agent || !candidate.agentId) return Promise.resolve(null)
+              return fetchApi<BuddyAgent>(`/api/agents/${candidate.agentId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                  buddyMode: 'private',
+                  allowedServerIds: Array.from(
+                    new Set([...getBuddyAllowedServerIds(agent), serverId]),
+                  ),
+                }),
+              })
+            }),
+          )
+          showToast(t('member.allowlistPrivateBuddyAdded'), 'success')
+        }
+
         const serverAgentIds = Array.from(
           new Set(
             selectedCandidates
@@ -554,8 +644,8 @@ export function InvitePanel({
       ) {
         onClose()
       }
-    } catch {
-      // handled with in-flight disable + modal controls
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t('common.error', '操作失败'), 'error')
     } finally {
       setAdding(false)
     }

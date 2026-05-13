@@ -745,6 +745,7 @@
     "invalidConfig": "无效：",
     "validationSummaryValid": "有效：{{agents}} 个 Agent，{{configurations}} 个配置项",
     "validationSummaryInvalid": "无效：{{count}} 个违规项",
+    "schemaLoadFailed": "Schema 校验暂不可用：{{message}}",
     "templateSaved": "模板已保存",
     "saveFailed": "保存失败",
     "agents": "Agent",

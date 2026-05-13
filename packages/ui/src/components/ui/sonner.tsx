@@ -2,7 +2,7 @@ import { Toaster as Sonner, toast } from 'sonner'
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = ({ style, ...props }: ToasterProps) => {
   return (
     <Sonner
       className="toaster group"
@@ -25,6 +25,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         },
       }}
       {...props}
+      style={{ zIndex: 2147483600, ...style }}
     />
   )
 }

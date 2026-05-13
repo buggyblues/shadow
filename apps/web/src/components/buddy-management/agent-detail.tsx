@@ -6,13 +6,29 @@ import {
   ClipboardCopy,
   Edit2,
   Key,
+  LockKeyhole,
   MessageCircle,
+  Share2,
   Trash2,
   XCircle,
 } from 'lucide-react'
 import { UserAvatar } from '../common/avatar'
 import { OpenClawSetupGuide } from './openclaw-setup-guide'
-import type { Agent, TokenResponse } from './types'
+import {
+  type Agent,
+  type BuddyMode,
+  getAgentAllowedServerIds,
+  getAgentBuddyMode,
+  type TokenResponse,
+} from './types'
+
+type ServerEntry = {
+  server: {
+    id: string
+    name: string
+    slug?: string | null
+  }
+}
 
 function formatOnlineDuration(totalSeconds: number, t: TFunction): string {
   if (totalSeconds < 60) return `${totalSeconds}${t('time.seconds', '秒')}`
@@ -37,8 +53,13 @@ export function AgentDetail({
   onDelete,
   onEdit,
   onToggle,
+  onChangeBuddyMode,
+  onChangeAllowedServerIds,
   onCreateListing,
   togglePending,
+  buddyModePending,
+  allowedServersPending,
+  servers = [],
   onMessageOwner,
   isMessageOwnerPending,
   currentUserId,
@@ -53,7 +74,12 @@ export function AgentDetail({
   onEdit: () => void
   onCreateListing: () => void
   onToggle: (agent: Agent) => void
+  onChangeBuddyMode?: (mode: BuddyMode) => void
+  onChangeAllowedServerIds?: (ids: string[]) => void
   togglePending: boolean
+  buddyModePending?: boolean
+  allowedServersPending?: boolean
+  servers?: ServerEntry[]
   onMessageOwner?: () => void
   isMessageOwnerPending?: boolean
   currentUserId?: string | null
@@ -61,12 +87,25 @@ export function AgentDetail({
 }) {
   const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'
   const desc = (agent.config?.description as string) ?? ''
+  const buddyMode = getAgentBuddyMode(agent)
+  const allowedServerIds = getAgentAllowedServerIds(agent)
+  const isPrivateBuddy = buddyMode === 'private'
+  const isTenantAccess = agent.accessRole === 'tenant'
+  const canManageAgent = !isTenantAccess
   const ownerUserId = agent.botUser?.id ?? agent.userId
   const canMessageOwner =
     Boolean(onMessageOwner) &&
     Boolean(currentUserId) &&
     Boolean(ownerUserId) &&
     currentUserId !== ownerUserId
+  const toggleAllowedServer = (serverId: string) => {
+    if (!onChangeAllowedServerIds) return
+    onChangeAllowedServerIds(
+      allowedServerIds.includes(serverId)
+        ? allowedServerIds.filter((id) => id !== serverId)
+        : [...allowedServerIds, serverId],
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -82,9 +121,21 @@ export function AgentDetail({
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-black text-text-primary">{name}</h3>
+              {isPrivateBuddy && (
+                <LockKeyhole
+                  size={15}
+                  className="text-warning"
+                  aria-label={t('agentMgmt.modePrivate')}
+                />
+              )}
               <Badge variant="primary" size="xs">
                 {t('common.bot')}
               </Badge>
+              {isTenantAccess && (
+                <Badge variant="warning" size="xs">
+                  {t('agentMgmt.rentingAccessBadge')}
+                </Badge>
+              )}
             </div>
             {agent.botUser?.username && (
               <p className="text-sm text-text-muted font-bold italic">@{agent.botUser.username}</p>
@@ -104,30 +155,138 @@ export function AgentDetail({
                 {t('marketplace.messageOwner', '私信')}
               </Button>
             )}
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onCreateListing}
-              disabled={agent.isRented}
-              className="rounded-[12px]"
-            >
-              <CircleDollarSign size={14} />
-              {agent.listingInfo
-                ? t('marketplace.updateListing', '更新挂单')
-                : t('marketplace.createListing', '出租')}
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onEdit} title={t('common.edit')}>
-              <Edit2 size={18} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onDelete}
-              className="hover:text-danger hover:bg-danger/10"
-              title={t('common.delete')}
-            >
-              <Trash2 size={18} />
-            </Button>
+            {canManageAgent && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onCreateListing}
+                  disabled={agent.isRented || isPrivateBuddy}
+                  className="rounded-[12px]"
+                  title={isPrivateBuddy ? t('agentMgmt.privateListingDisabled') : undefined}
+                >
+                  <CircleDollarSign size={14} />
+                  {agent.listingInfo
+                    ? t('marketplace.updateListing', '更新挂单')
+                    : t('marketplace.createListing', '出租')}
+                </Button>
+                <Button variant="ghost" size="icon" onClick={onEdit} title={t('common.edit')}>
+                  <Edit2 size={18} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onDelete}
+                  className="hover:text-danger hover:bg-danger/10"
+                  title={t('common.delete')}
+                >
+                  <Trash2 size={18} />
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 text-primary">
+            {isPrivateBuddy ? <LockKeyhole size={18} /> : <Share2 size={18} />}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
+                {t('agentMgmt.accessSection')}
+              </h3>
+              <Badge variant={isPrivateBuddy ? 'neutral' : 'success'} size="xs">
+                {isPrivateBuddy ? t('agentMgmt.modePrivate') : t('agentMgmt.modeShareable')}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              {isPrivateBuddy ? t('agentMgmt.modePrivateDesc') : t('agentMgmt.modeShareableDesc')}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-text-secondary">
+              {t('agentMgmt.defaultReplyPolicyDesc')}
+            </p>
+            {isPrivateBuddy && (
+              <p className="mt-2 text-xs leading-5 text-warning">
+                {t('agentMgmt.privateListingDisabledDesc')}
+              </p>
+            )}
+            {canManageAgent && onChangeBuddyMode && (
+              <div className="mt-4 inline-flex rounded-[14px] border border-border-subtle bg-bg-tertiary/50 p-1">
+                <button
+                  type="button"
+                  onClick={() => onChangeBuddyMode('private')}
+                  disabled={buddyModePending || isPrivateBuddy}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-xs font-black transition',
+                    isPrivateBuddy
+                      ? 'bg-primary/15 text-primary shadow-sm'
+                      : 'text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover',
+                    buddyModePending && 'opacity-60',
+                  )}
+                >
+                  <LockKeyhole size={13} />
+                  {t('agentMgmt.modePrivate')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeBuddyMode('shareable')}
+                  disabled={buddyModePending || !isPrivateBuddy}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-xs font-black transition',
+                    !isPrivateBuddy
+                      ? 'bg-primary/15 text-primary shadow-sm'
+                      : 'text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover',
+                    buddyModePending && 'opacity-60',
+                  )}
+                >
+                  <Share2 size={13} />
+                  {t('agentMgmt.modeShareable')}
+                </button>
+              </div>
+            )}
+            {isPrivateBuddy && canManageAgent && onChangeAllowedServerIds && (
+              <div className="mt-4 rounded-[14px] border border-border-subtle bg-bg-tertiary/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black text-text-primary">
+                      {t('agentMgmt.allowedServersLabel')}
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-text-muted">
+                      {t('agentMgmt.allowedServersDesc')}
+                    </p>
+                  </div>
+                  <Badge variant="neutral" size="xs">
+                    {allowedServerIds.length}
+                  </Badge>
+                </div>
+                {servers.length === 0 ? (
+                  <div className="mt-3 text-xs text-text-muted">
+                    {t('agentMgmt.allowedServersEmpty')}
+                  </div>
+                ) : (
+                  <div className="mt-3 max-h-36 overflow-y-auto space-y-1 pr-1">
+                    {servers.map((entry) => (
+                      <label
+                        key={entry.server.id}
+                        className="flex items-center gap-2 rounded-[10px] px-2 py-2 text-sm font-bold text-text-primary hover:bg-bg-modifier-hover"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={allowedServerIds.includes(entry.server.id)}
+                          disabled={allowedServersPending}
+                          onChange={() => toggleAllowedServer(entry.server.id)}
+                          className="h-4 w-4 rounded border-border-subtle text-primary"
+                        />
+                        <span className="truncate">{entry.server.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -172,28 +331,30 @@ export function AgentDetail({
             })()}
           </div>
         </div>
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1.5">
-            {t('agentMgmt.enableDisable')}
-          </label>
-          <button
-            type="button"
-            onClick={() => onToggle(agent)}
-            disabled={togglePending}
-            className={cn(
-              'relative w-11 h-6 rounded-full transition-colors',
-              agent.status === 'running' ? 'bg-success' : 'bg-text-muted/30',
-              togglePending && 'opacity-50',
-            )}
-          >
-            <span
+        {canManageAgent && (
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1.5">
+              {t('agentMgmt.enableDisable')}
+            </label>
+            <button
+              type="button"
+              onClick={() => onToggle(agent)}
+              disabled={togglePending}
               className={cn(
-                'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm',
-                agent.status === 'running' && 'translate-x-5',
+                'relative w-11 h-6 rounded-full transition-colors',
+                agent.status === 'running' ? 'bg-success' : 'bg-text-muted/30',
+                togglePending && 'opacity-50',
               )}
-            />
-          </button>
-        </div>
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm',
+                  agent.status === 'running' && 'translate-x-5',
+                )}
+              />
+            </button>
+          </div>
+        )}
         <div>
           <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1.5">
             {t('agentMgmt.owner')}
@@ -265,7 +426,11 @@ export function AgentDetail({
             {t('agentMgmt.rentalStatus')}
           </label>
           <div className="flex items-center gap-2">
-            {agent.isRented ? (
+            {isTenantAccess ? (
+              <Badge variant="warning" size="sm">
+                {t('agentMgmt.rentingAccessBadge')}
+              </Badge>
+            ) : agent.isRented ? (
               <Badge variant="warning" size="sm">
                 {t('agentMgmt.rented')}
               </Badge>
@@ -292,56 +457,60 @@ export function AgentDetail({
         </div>
       </div>
 
-      {/* Token section */}
-      <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
-        <div className="flex items-center gap-2 mb-3">
-          <Key size={16} className="text-primary" />
-          <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
-            {t('agentMgmt.tokenTitle')}
-          </h3>
-        </div>
-        <p className="text-sm text-text-muted font-bold italic mb-5">{t('agentMgmt.tokenDesc')}</p>
+      {canManageAgent && (
+        <>
+          {/* Token section */}
+          <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Key size={16} className="text-primary" />
+              <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
+                {t('agentMgmt.tokenTitle')}
+              </h3>
+            </div>
+            <p className="text-sm text-text-muted font-bold italic mb-5">
+              {t('agentMgmt.tokenDesc')}
+            </p>
 
-        {(() => {
-          const displayToken =
-            generatedToken ?? (agent.config?.lastToken as string | undefined) ?? null
-          if (displayToken) {
-            return (
-              <div className="space-y-4">
-                <div className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-4 break-all font-mono text-[13px] text-text-secondary border border-border-subtle shadow-inner">
-                  {displayToken}
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant={tokenCopied ? 'outline' : 'primary'}
-                    size="sm"
-                    onClick={() => onCopyToken(displayToken)}
-                    className="rounded-[12px]"
-                  >
-                    <ClipboardCopy size={14} />
-                    {tokenCopied ? t('common.copied') : t('common.copy')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => tokenMutation.mutate(agent.id)}
-                    disabled={tokenMutation.isPending}
-                    className="rounded-[12px]"
-                  >
-                    <Key size={14} />
-                    {tokenMutation.isPending
-                      ? t('agentMgmt.generating')
-                      : t('agentMgmt.regenerateToken')}
-                  </Button>
-                </div>
+            {(() => {
+              const displayToken =
+                generatedToken ?? (agent.config?.lastToken as string | undefined) ?? null
+              if (displayToken) {
+                return (
+                  <div className="space-y-4">
+                    <div className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-4 break-all font-mono text-[13px] text-text-secondary border border-border-subtle shadow-inner">
+                      {displayToken}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant={tokenCopied ? 'outline' : 'primary'}
+                        size="sm"
+                        onClick={() => onCopyToken(displayToken)}
+                        className="rounded-[12px]"
+                      >
+                        <ClipboardCopy size={14} />
+                        {tokenCopied ? t('common.copied') : t('common.copy')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => tokenMutation.mutate(agent.id)}
+                        disabled={tokenMutation.isPending}
+                        className="rounded-[12px]"
+                      >
+                        <Key size={14} />
+                        {tokenMutation.isPending
+                          ? t('agentMgmt.generating')
+                          : t('agentMgmt.regenerateToken')}
+                      </Button>
+                    </div>
 
-                {/* JSON config example */}
-                <div className="mt-5">
-                  <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
-                    {t('agentMgmt.configExample')}
-                  </label>
-                  <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-4 text-[13px] text-text-secondary border border-border-subtle overflow-x-auto shadow-inner">
-                    {`{
+                    {/* JSON config example */}
+                    <div className="mt-5">
+                      <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+                        {t('agentMgmt.configExample')}
+                      </label>
+                      <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-4 text-[13px] text-text-secondary border border-border-subtle overflow-x-auto shadow-inner">
+                        {`{
   "channels": {
     "shadowob": {
       "token": "${displayToken}...",
@@ -349,34 +518,38 @@ export function AgentDetail({
     }
   }
 }`}
-                  </pre>
-                </div>
-              </div>
-            )
-          }
-          return (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => tokenMutation.mutate(agent.id)}
-              disabled={tokenMutation.isPending}
-              className="rounded-[12px]"
-            >
-              <Key size={14} />
-              {tokenMutation.isPending ? t('agentMgmt.generating') : t('agentMgmt.generateToken')}
-            </Button>
-          )
-        })()}
-      </div>
+                      </pre>
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => tokenMutation.mutate(agent.id)}
+                  disabled={tokenMutation.isPending}
+                  className="rounded-[12px]"
+                >
+                  <Key size={14} />
+                  {tokenMutation.isPending
+                    ? t('agentMgmt.generating')
+                    : t('agentMgmt.generateToken')}
+                </Button>
+              )
+            })()}
+          </div>
 
-      {/* OpenClaw Setup Guide */}
-      <OpenClawSetupGuide
-        agent={agent}
-        generatedToken={generatedToken}
-        onGenerateToken={() => tokenMutation.mutate(agent.id)}
-        generatingToken={tokenMutation.isPending}
-        t={t}
-      />
+          {/* OpenClaw Setup Guide */}
+          <OpenClawSetupGuide
+            agent={agent}
+            generatedToken={generatedToken}
+            onGenerateToken={() => tokenMutation.mutate(agent.id)}
+            generatingToken={tokenMutation.isPending}
+            t={t}
+          />
+        </>
+      )}
     </div>
   )
 }

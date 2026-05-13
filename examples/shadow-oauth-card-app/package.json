@@ -1,0 +1,8 @@
+{
+  "name": "shadow-oauth-card-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}

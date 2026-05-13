@@ -1,6 +1,7 @@
 import { zValidator } from '@hono/zod-validator'
 import archiver from 'archiver'
 import { Hono } from 'hono'
+import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
@@ -28,6 +29,7 @@ type WorkspaceNode = {
   path: string
   flags: Record<string, unknown> | null
   contentRef?: string | null
+  mime?: string | null
   children?: WorkspaceNode[]
 }
 
@@ -171,6 +173,20 @@ export function createWorkspaceHandler(container: AppContainer) {
     if (!node || node.workspaceId !== workspaceId) hiddenNotFound()
     if (!(await canAccessNode(node, access))) hiddenNotFound()
     return node
+  }
+
+  function nodeVersionContentRefs(node: WorkspaceNode): Set<string> {
+    const refs = new Set<string>()
+    if (node.contentRef) refs.add(node.contentRef)
+    const versions =
+      isRecord(node.flags) && Array.isArray(node.flags.versions) ? node.flags.versions : []
+    for (const version of versions) {
+      if (!isRecord(version)) continue
+      if (typeof version.contentRef === 'string' && version.contentRef.trim()) {
+        refs.add(version.contentRef)
+      }
+    }
+    return refs
   }
 
   async function requireParentAccess(
@@ -425,6 +441,36 @@ export function createWorkspaceHandler(container: AppContainer) {
       hiddenNotFound()
     }
     return c.json(file)
+  })
+
+  // GET /servers/:serverId/workspace/files/:fileId/media-url
+  handler.get('/servers/:serverId/workspace/files/:fileId/media-url', async (c) => {
+    const { workspace, access } = await resolveScopedWorkspace(
+      c.req.param('serverId'),
+      c.get('user').userId,
+    )
+    const fileId = c.req.param('fileId')
+    const file = await requireNodeAccess(workspace.id, fileId, access)
+    if (file.kind !== 'file') hiddenNotFound()
+
+    const contentRef = c.req.query('contentRef') || file.contentRef
+    if (!contentRef) {
+      return c.json({ ok: false, error: 'File has no media content' }, 404)
+    }
+    if (!nodeVersionContentRefs(file).has(contentRef)) {
+      hiddenNotFound()
+    }
+
+    const dispositionInput = z.enum(['inline', 'attachment']).safeParse(c.req.query('disposition'))
+    const disposition = dispositionInput.success ? dispositionInput.data : 'inline'
+    const mediaService = container.resolve('mediaService')
+    const signed = mediaService.createSignedUrl({
+      contentRef,
+      contentType: file.mime || 'application/octet-stream',
+      disposition,
+      filename: file.name,
+    })
+    return c.json(signed)
   })
 
   // PATCH /servers/:serverId/workspace/files/:fileId

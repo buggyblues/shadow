@@ -3,7 +3,10 @@ import { Button } from '@shadowob/ui'
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { configureMonacoWorkers } from '@/lib/monaco'
 import { cn } from '@/lib/utils'
+
+configureMonacoWorkers()
 
 interface CodeBlockProps {
   code: string

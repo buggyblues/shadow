@@ -1,0 +1,63 @@
+{
+  "name": "@shadowob/connector",
+  "version": "1.1.1",
+  "description": "Shadow connector helpers for OpenClaw, Hermes Agent, and cc-connect",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "require": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "shadowob-connector": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "hermes-shadowob-plugin",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepack": "pnpm build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "shadow",
+    "shadowob",
+    "openclaw",
+    "hermes-agent",
+    "cc-connect",
+    "connector"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/buggyblues/shadow",
+    "directory": "packages/connector"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "smol-toml": "^1.6.1",
+    "yaml": "^2.8.4"
+  }
+}

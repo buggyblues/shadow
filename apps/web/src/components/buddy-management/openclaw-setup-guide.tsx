@@ -1,6 +1,11 @@
 import { Button, cn } from '@shadowob/ui'
-import { BookOpen, Check, Copy, Key, MessageSquare, Terminal } from 'lucide-react'
+import { BookOpen, Bot, Check, Copy, Key, MessageSquare, PlugZap, Terminal } from 'lucide-react'
 import { useState } from 'react'
+import {
+  createConnectorPlans,
+  type ConnectorPlan,
+  type ShadowConnectorTarget,
+} from '@shadowob/connector'
 import type { Agent } from './types'
 
 /* ── OpenClaw Setup Guide ─────────────────────────────── */
@@ -58,25 +63,37 @@ export function OpenClawSetupGuide({
   const token = (agent.config?.lastToken as string | undefined) ?? generatedToken ?? ''
   const hasToken = !!token.trim()
   const serverUrl = window.location.origin
-  const [activeTab, setActiveTab] = useState<'manual' | 'chat'>('chat')
-
-  // Bash one-liner for manual setup
-  const bashCommand = `openclaw plugins install @shadowob/openclaw-shadowob && openclaw config set channels.shadowob.token "${token || '<TOKEN>'}" && openclaw config set channels.shadowob.serverUrl "${serverUrl}" && openclaw gateway restart`
-
-  // AI prompt for chat-based setup
-  const aiPrompt = `请帮我安装和配置 ShadowOwnBuddy 插件，连接到 Shadow 服务器。
-
-配置信息：
-- 插件名称：@shadowob/openclaw
-- 服务器地址：${serverUrl}
-
-请执行以下步骤：
-1. 安装插件：openclaw plugins install @shadowob/openclaw
-2. 配置 Token：openclaw config set channels.shadowob.token "${token || '<TOKEN>'}"
-3. 配置服务器地址：openclaw config set channels.shadowob.serverUrl "${serverUrl}"
-4. 重启网关：openclaw gateway restart
-
-请依次执行这些命令，并确认每个步骤是否成功。`
+  const [activeTab, setActiveTab] = useState<'manual' | 'chat'>('manual')
+  const [activeTarget, setActiveTarget] = useState<ShadowConnectorTarget>('openclaw')
+  const plans = createConnectorPlans({
+    serverUrl,
+    token,
+    projectName: agent.botUser?.username ?? agent.id,
+    workDir: '.',
+  })
+  const activePlan =
+    plans.find((plan) => plan.target === activeTarget) ?? (plans[0] as ConnectorPlan | undefined)
+  const connectorCliCommand = activePlan?.connectCommand ?? ''
+  const targetMeta: Record<
+    ShadowConnectorTarget,
+    { icon: typeof Terminal; label: string; desc: string }
+  > = {
+    openclaw: {
+      icon: Terminal,
+      label: t('agentMgmt.connectorOpenClaw'),
+      desc: t('agentMgmt.connectorOpenClawDesc'),
+    },
+    hermes: {
+      icon: Bot,
+      label: t('agentMgmt.connectorHermes'),
+      desc: t('agentMgmt.connectorHermesDesc'),
+    },
+    'cc-connect': {
+      icon: PlugZap,
+      label: t('agentMgmt.connectorCcConnect'),
+      desc: t('agentMgmt.connectorCcConnectDesc'),
+    },
+  }
 
   if (!hasToken) {
     return (
@@ -84,7 +101,7 @@ export function OpenClawSetupGuide({
         <div className="flex items-center gap-2 mb-3">
           <BookOpen size={16} className="text-primary" />
           <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
-            {t('agentMgmt.openclawGuideTitle')}
+            {t('agentMgmt.connectorGuideTitle')}
           </h3>
         </div>
         <p className="text-sm text-text-muted font-bold italic mb-5">
@@ -109,14 +126,42 @@ export function OpenClawSetupGuide({
       <div className="flex items-center gap-2 mb-3">
         <BookOpen size={16} className="text-primary" />
         <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
-          {t('agentMgmt.openclawGuideTitle')}
+          {t('agentMgmt.connectorGuideTitle')}
         </h3>
       </div>
       <p className="text-sm text-text-muted font-bold italic mb-5">
-        {t('agentMgmt.openclawGuideDesc')}
+        {t('agentMgmt.connectorGuideDesc')}
       </p>
 
-      {/* Tab selector — pill-shaped */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
+        {plans.map((plan) => {
+          const meta = targetMeta[plan.target]
+          const Icon = meta.icon
+          return (
+            <button
+              key={plan.target}
+              type="button"
+              onClick={() => setActiveTarget(plan.target)}
+              className={cn(
+                'min-h-[76px] rounded-[14px] border p-3 text-left transition',
+                activeTarget === plan.target
+                  ? 'border-primary/50 bg-primary/10 text-text-primary shadow-sm'
+                  : 'border-border-subtle bg-bg-deep/40 text-text-muted hover:text-text-secondary',
+              )}
+            >
+              <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
+                <Icon size={14} />
+                {meta.label}
+              </span>
+              <span className="mt-1 block text-[11px] leading-4 font-bold text-text-muted">
+                {meta.desc}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Tab selector */}
       <div className="flex gap-1 mb-5 bg-bg-deep/50 backdrop-blur-sm rounded-full p-1 border border-border-subtle">
         <button
           type="button"
@@ -146,131 +191,99 @@ export function OpenClawSetupGuide({
         </button>
       </div>
 
-      {activeTab === 'manual' ? (
+      {activeTab === 'manual' && activePlan ? (
         <>
-          {/* Quick bash one-liner */}
+          <div className="mb-4">
+            <p className="text-xs font-black text-text-secondary mb-2 uppercase tracking-widest">
+              {t('agentMgmt.connectorCliTitle')}
+            </p>
+            <CopyBlock content={connectorCliCommand} t={t} />
+          </div>
+
           <div className="mb-4">
             <p className="text-xs font-black text-text-secondary mb-2 uppercase tracking-widest">
               {t('agentMgmt.setupBashTitle')}
             </p>
-            <CopyBlock content={bashCommand} t={t} />
-            {!token && (
-              <p className="text-[11px] text-warning mt-1.5 ml-1 font-bold">
-                ⚠ {t('agentMgmt.setupTokenWarning')}
-              </p>
-            )}
+            <CopyBlock content={activePlan.quickCommand} t={t} />
           </div>
 
           <div className="h-px bg-bg-tertiary/50 my-4" />
 
-          {/* Step-by-step */}
           <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-3">
             {t('agentMgmt.setupStepByStep')}
           </p>
 
-          {/* Step 1: Install */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                1
-              </span>
-              <span className="text-sm font-black text-text-primary">
-                {t('docs.openclawStep1Title')}
-              </span>
+          {activePlan.commands.map((command, index) => (
+            <div className="mb-3" key={`${activePlan.target}-${command.label}`}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
+                  {index + 1}
+                </span>
+                <span className="text-sm font-black text-text-primary">
+                  {t('agentMgmt.connectorStepCommand')}
+                </span>
+              </div>
+              <div className="ml-7">
+                <CopyBlock content={command.command} t={t} />
+              </div>
             </div>
-            <div className="ml-7">
-              <CopyBlock content="openclaw plugins install @shadowob/openclaw-shadowob" t={t} />
-            </div>
-          </div>
+          ))}
 
-          {/* Step 2: Config Token */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                2
-              </span>
-              <span className="text-sm font-black text-text-primary">
-                {t('agentMgmt.setupConfigToken')}
-              </span>
-            </div>
-            <div className="ml-7">
-              <CopyBlock content={`openclaw config set channels.shadowob.token "${token}"`} t={t} />
-            </div>
-          </div>
-
-          {/* Step 3: Config Server URL */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                3
-              </span>
-              <span className="text-sm font-black text-text-primary">
-                {t('agentMgmt.setupConfigServer')}
-              </span>
-            </div>
-            <div className="ml-7">
+          <div className="h-px bg-bg-tertiary/50 my-4" />
+          <div className="space-y-3">
+            {activePlan.configBlocks.map((block) => (
               <CopyBlock
-                content={`openclaw config set channels.shadowob.serverUrl "${serverUrl}"`}
+                key={`${activePlan.target}-${block.label}`}
+                content={block.content}
+                label={block.label}
                 t={t}
               />
-            </div>
-          </div>
-
-          {/* Step 4: Run */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                4
-              </span>
-              <span className="text-sm font-black text-text-primary">
-                {t('agentMgmt.openclawRunTitle')}
-              </span>
-            </div>
-            <div className="ml-7">
-              <CopyBlock content="openclaw gateway restart" t={t} />
-            </div>
+            ))}
           </div>
         </>
-      ) : (
+      ) : activePlan ? (
         <>
-          {/* AI chat prompt */}
           <p className="text-xs text-text-muted font-bold italic mb-3">
             {t('agentMgmt.setupChatDesc')}
           </p>
-          <CopyBlock content={aiPrompt} t={t} />
+          <CopyBlock content={activePlan.aiPrompt} t={t} />
         </>
-      )}
+      ) : null}
 
       {/* Capabilities */}
-      <div className="mt-4 pt-4 border-t border-border-subtle">
-        <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-2">
-          {t('docs.openclawCapabilities')}
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {['messaging', 'threads', 'reactions', 'media', 'mentions', 'editDelete'].map((cap) => (
-            <div
-              key={cap}
-              className="flex items-center gap-1.5 text-xs text-text-secondary font-bold"
-            >
-              <span className="text-success">✓</span>
-              {t(`docs.openclawCap_${cap}`)}
-            </div>
-          ))}
+      {activePlan && (
+        <div className="mt-4 pt-4 border-t border-border-subtle">
+          <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-2">
+            {t('docs.openclawCapabilities')}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {activePlan.capabilities.map((cap) => (
+              <div
+                key={cap}
+                className="flex items-center gap-1.5 text-xs text-text-secondary font-bold"
+              >
+                <Check size={12} className="text-success" />
+                {t(`agentMgmt.connectorCap_${cap}`)}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Link to full docs */}
-      <div className="mt-4 pt-3 border-t border-border-subtle">
-        <a
-          href="/product/index.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-primary hover:text-primary-hover font-black flex items-center gap-1 transition uppercase tracking-widest"
-        >
-          <BookOpen size={12} />
-          {t('agentMgmt.openclawFullDocs')}
-        </a>
-      </div>
+      {activePlan && (
+        <div className="mt-4 pt-3 border-t border-border-subtle">
+          <a
+            href={activePlan.docsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:text-primary-hover font-black flex items-center gap-1 transition uppercase tracking-widest"
+          >
+            <BookOpen size={12} />
+            {t('agentMgmt.openclawFullDocs')}
+          </a>
+        </div>
+      )}
     </div>
   )
 }

@@ -131,6 +131,58 @@ describe('ServerService', () => {
     })
   })
 
+  describe('addBotMember', () => {
+    it('rejects private Buddies when the server is not allowlisted', async () => {
+      const serverDao = createMockServerDao({
+        findById: vi.fn().mockResolvedValue({ id: 'srv1', name: 'Server' }),
+        getMember: vi.fn().mockResolvedValue(null),
+      })
+      const channelDao = createMockChannelDao()
+      const agentDao = {
+        findByUserId: vi.fn().mockResolvedValue({
+          id: 'agent1',
+          userId: 'bot1',
+          config: { buddyMode: 'private', allowedServerIds: [] },
+        }),
+      }
+      const service = new ServerService({
+        serverDao: serverDao as any,
+        channelDao: channelDao as any,
+        agentDao: agentDao as any,
+      })
+
+      await expect(service.addBotMember('srv1', 'bot1')).rejects.toThrow(
+        'Private Buddy is not allowlisted for this server',
+      )
+      expect(serverDao.addMember).not.toHaveBeenCalled()
+    })
+
+    it('allows private Buddies when the server is allowlisted', async () => {
+      const member = { id: 'member1', serverId: 'srv1', userId: 'bot1', role: 'member' }
+      const serverDao = createMockServerDao({
+        findById: vi.fn().mockResolvedValue({ id: 'srv1', name: 'Server' }),
+        getMember: vi.fn().mockResolvedValue(null),
+        addMember: vi.fn().mockResolvedValue(member),
+      })
+      const channelDao = createMockChannelDao()
+      const agentDao = {
+        findByUserId: vi.fn().mockResolvedValue({
+          id: 'agent1',
+          userId: 'bot1',
+          config: { buddyMode: 'private', allowedServerIds: ['srv1'] },
+        }),
+      }
+      const service = new ServerService({
+        serverDao: serverDao as any,
+        channelDao: channelDao as any,
+        agentDao: agentDao as any,
+      })
+
+      await expect(service.addBotMember('srv1', 'bot1')).resolves.toEqual(member)
+      expect(serverDao.addMember).toHaveBeenCalledWith('srv1', 'bot1', 'member')
+    })
+  })
+
   describe('join', () => {
     it('should add member when invite code is valid and user is not a member', async () => {
       const mockServer = { id: 'srv1', name: 'Server', inviteCode: 'abcd1234' }

@@ -631,7 +631,7 @@ export function createServerHandler(container: AppContainer) {
       ctx: createActorContext(c.get('actor'), { route: c.req.path }),
       serverId: id,
       agentIds: body.agentIds,
-      ownerId: user.userId,
+      requesterUserId: user.userId,
     })
 
     // Emit member:joined to server members for each added agent (non-critical)

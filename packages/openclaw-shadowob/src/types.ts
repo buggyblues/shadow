@@ -51,6 +51,11 @@ export type ShadowPolicyConfig = {
   replyToUsers?: string[]
   keywords?: string[]
   smartReply?: boolean
+  allowedTriggerUserIds?: string[]
+  triggerUserIds?: string[]
+  ownerId?: string
+  activeTenantIds?: string[]
+  replyRequiresMention?: boolean
 }
 
 // ─── Slash Commands (discovered from agent packs) ───────────────────────────

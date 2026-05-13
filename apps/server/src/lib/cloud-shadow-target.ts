@@ -18,6 +18,10 @@ export function attachPlayLaunchRuntimeMetadata(
   metadata: PlayLaunchRuntimeMetadata,
 ) {
   if (!metadata.defaultChannelName && !metadata.greeting) return configSnapshot
+  const runtime = isRecord(configSnapshot[CLOUD_SAAS_RUNTIME_KEY])
+    ? (configSnapshot[CLOUD_SAAS_RUNTIME_KEY] as Record<string, unknown>)
+    : {}
+  const runtimePlayLaunch = isRecord(runtime.playLaunch) ? runtime.playLaunch : {}
   const use = Array.isArray(configSnapshot.use)
     ? configSnapshot.use.map((entry) => {
         if (!isRecord(entry) || entry.plugin !== 'shadowob') return entry
@@ -41,6 +45,14 @@ export function attachPlayLaunchRuntimeMetadata(
 
   return {
     ...configSnapshot,
+    [CLOUD_SAAS_RUNTIME_KEY]: {
+      ...runtime,
+      playLaunch: {
+        ...runtimePlayLaunch,
+        ...(metadata.defaultChannelName ? { defaultChannelName: metadata.defaultChannelName } : {}),
+        ...(metadata.greeting ? { greeting: metadata.greeting } : {}),
+      },
+    },
     ...(use ? { use } : {}),
   }
 }

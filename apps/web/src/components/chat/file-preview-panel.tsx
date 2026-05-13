@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchApi } from '../../lib/api'
+import { getApiErrorMessage } from '../../lib/api-errors'
 import { useUIStore } from '../../stores/ui.store'
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -707,6 +708,7 @@ export function FilePreviewPanel({
   const isDragging = useRef(false)
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(640)
+  const paidFileRetryRef = useRef<Set<string>>(new Set())
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
@@ -747,7 +749,10 @@ export function FilePreviewPanel({
     return () => setFilePreviewOpen(false)
   }, [setFilePreviewOpen])
 
-  useEffect(() => setCurrentAttachment(attachment), [attachment])
+  useEffect(() => {
+    paidFileRetryRef.current.clear()
+    setCurrentAttachment(attachment)
+  }, [attachment])
 
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth)
@@ -772,7 +777,6 @@ export function FilePreviewPanel({
     setTextContent(null)
     setMode('preview')
 
-    let retriedGrant = false
     fetch(currentAttachment.url)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -787,19 +791,27 @@ export function FilePreviewPanel({
         }
       })
       .catch(async (err) => {
-        if (!retriedGrant && currentAttachment.paidFileId && /HTTP 40[13]/.test(err.message)) {
-          retriedGrant = true
-          const result = await fetchApi<{ viewerUrl: string }>(
-            `/api/paid-files/${currentAttachment.paidFileId}/open`,
-            { method: 'POST' },
-          )
-          setCurrentAttachment((prev) => ({ ...prev, url: result.viewerUrl }))
+        if (
+          currentAttachment.paidFileId &&
+          /HTTP 40[13]/.test(err.message) &&
+          !paidFileRetryRef.current.has(currentAttachment.paidFileId)
+        ) {
+          paidFileRetryRef.current.add(currentAttachment.paidFileId)
+          try {
+            const result = await fetchApi<{ viewerUrl: string }>(
+              `/api/paid-files/${currentAttachment.paidFileId}/open`,
+              { method: 'POST' },
+            )
+            setCurrentAttachment((prev) => ({ ...prev, url: result.viewerUrl }))
+          } catch (retryErr) {
+            setError(getApiErrorMessage(retryErr, t, 'chat.paidFileOpenFailed'))
+          }
           return
         }
         setError(err.message)
       })
       .finally(() => setLoading(false))
-  }, [currentAttachment.url, currentAttachment.paidFileId, category])
+  }, [currentAttachment.url, currentAttachment.paidFileId, category, t])
 
   // Close on Escape key (exit fullscreen first if in fullscreen)
   useEffect(() => {

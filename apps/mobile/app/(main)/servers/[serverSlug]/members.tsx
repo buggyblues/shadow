@@ -93,8 +93,8 @@ export default function MembersScreen() {
 
   // Buddy agents for reply policy
   const { data: buddyAgents = [] } = useQuery({
-    queryKey: ['members-buddy-agents'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    queryKey: ['members-buddy-agents', 'include-rentals'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
   })
 
   // Find the agent for the selected buddy
@@ -144,11 +144,8 @@ export default function MembersScreen() {
 
   // Can current user manage buddy policy?
   const canManagePolicy = (member: Member) => {
-    if (!channelId || !member.user.isBot) return false
-    const agent = buddyAgents.find((a) => a.botUser?.id === member.user.id)
-    if (!agent) return false
-    // Owner of the buddy or server admin/owner
-    return agent.ownerId === currentUser?.id || server?.id != null
+    void member
+    return false
   }
 
   // Open custom policy sheet with current values

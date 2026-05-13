@@ -2,13 +2,13 @@ import { type AwilixContainer, asClass, asValue, createContainer, InjectionMode 
 import type { Server as SocketIOServer } from 'socket.io'
 import { AgentDao } from './dao/agent.dao'
 import { AgentDashboardDao } from './dao/agent-dashboard.dao'
+import { AgentListingDao } from './dao/agent-listing.dao'
 import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { ApiTokenDao } from './dao/api-token.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelJoinRequestDao } from './dao/channel-join-request.dao'
 import { ChannelMemberDao } from './dao/channel-member.dao'
-import { AgentListingDao } from './dao/agent-listing.dao'
 import { CloudActivityDao } from './dao/cloud-activity.dao'
 import { CloudClusterDao } from './dao/cloud-cluster.dao'
 import { CloudConfigDao } from './dao/cloud-config.dao'
@@ -113,14 +113,20 @@ import { AdminUseCase } from './usecases/admin.usecase'
 import { ApiTokenUseCase } from './usecases/api-token.usecase'
 import { AuthUseCase } from './usecases/auth.usecase'
 import { ChannelUseCase } from './usecases/channel.usecase'
-import { ServerUseCase } from './usecases/server.usecase'
 import { CloudUseCase } from './usecases/cloud.usecase'
 import { CloudSaasUseCase } from './usecases/cloud-saas.usecase'
 import { InviteUseCase } from './usecases/invite.usecase'
-import { ProductUseCase } from './usecases/product.usecase'
-import { ShopUseCase } from './usecases/shop.usecase'
 import { NotificationUseCase } from './usecases/notification.usecase'
+import { ProductUseCase } from './usecases/product.usecase'
 import { ProfileCommentUseCase } from './usecases/profile-comment.usecase'
+import { ServerUseCase } from './usecases/server.usecase'
+import { ShopUseCase } from './usecases/shop.usecase'
+
+const noopSocketServer = {
+  to: () => ({
+    emit: () => undefined,
+  }),
+} as unknown as SocketIOServer
 
 export interface Cradle {
   // Infrastructure
@@ -282,6 +288,7 @@ export function createAppContainer(db: Database): AppContainer {
     // Infrastructure
     db: asValue(db),
     logger: asValue(logger),
+    io: asValue(noopSocketServer),
 
     // Security architecture
     accessService: asClass(AccessService).singleton(),

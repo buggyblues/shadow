@@ -3,6 +3,7 @@ import { Clock, Edit3, Loader2, Save } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WorkspaceNode } from '../../../stores/workspace.store'
 import { type FileVersion, useWorkspaceData, useWorkspaceMutations } from '../workspace-hooks'
+import { resolveWorkspaceMediaUrl } from '../workspace-media'
 import { getLanguageFromExt } from '../workspace-utils'
 import { VersionHistoryPanel } from './VersionHistoryPanel'
 
@@ -25,7 +26,11 @@ export function CodeRenderer({ node, serverId }: { node: WorkspaceNode; serverId
     queryKey: ['workspace-file-content', node.id, node.contentRef],
     queryFn: async () => {
       if (!node.contentRef) return null
-      const res = await fetch(node.contentRef)
+      const url = await resolveWorkspaceMediaUrl(serverId, node.id, {
+        disposition: 'inline',
+        contentRef: node.contentRef,
+      })
+      const res = await fetch(url)
       if (!res.ok) return null
       return res.text()
     },
@@ -84,7 +89,11 @@ export function CodeRenderer({ node, serverId }: { node: WorkspaceNode; serverId
   const handleRestoreVersion = useCallback(
     (version: FileVersion) => {
       // Restoring version: fetch old content, then save it (this also creates a new version of current)
-      fetch(version.contentRef)
+      resolveWorkspaceMediaUrl(serverId, node.id, {
+        disposition: 'inline',
+        contentRef: version.contentRef,
+      })
+        .then((url) => fetch(url))
         .then((res) => res.text())
         .then((oldContent) => {
           mutations.updateFileContent.mutate(
@@ -106,7 +115,15 @@ export function CodeRenderer({ node, serverId }: { node: WorkspaceNode; serverId
           )
         })
     },
-    [node.id, node.name, node.contentRef, node.sizeBytes, node.flags, mutations.updateFileContent],
+    [
+      serverId,
+      node.id,
+      node.name,
+      node.contentRef,
+      node.sizeBytes,
+      node.flags,
+      mutations.updateFileContent,
+    ],
   )
 
   const handleKeyDown = useCallback(
@@ -246,6 +263,7 @@ export function CodeRenderer({ node, serverId }: { node: WorkspaceNode; serverId
           <div className="w-64 shrink-0 border-l border-border-subtle bg-bg-secondary overflow-hidden">
             <VersionHistoryPanel
               node={node}
+              serverId={serverId}
               onClose={() => setShowVersions(false)}
               onRestore={handleRestoreVersion}
             />

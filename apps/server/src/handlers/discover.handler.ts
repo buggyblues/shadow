@@ -3,6 +3,18 @@ import { Hono } from 'hono'
 import type { AppContainer } from '../container'
 import * as schema from '../db/schema'
 
+function resolveMediaUrl(
+  mediaService: {
+    resolveMediaUrl: (
+      mediaUrl: string | null | undefined,
+      fallbackContentType?: string,
+    ) => string | null
+  },
+  mediaUrl: string | null | undefined,
+): string | null {
+  return mediaService.resolveMediaUrl(mediaUrl)
+}
+
 /**
  * 计算热度分数
  * 基于：成员数、消息活跃度、最近活动
@@ -40,6 +52,7 @@ export function createDiscoverHandler(container: AppContainer) {
    */
   handler.get('/feed', async (c) => {
     const db = container.resolve('db')
+    const mediaService = container.resolve('mediaService')
     const limit = Math.min(Number(c.req.query('limit') ?? '20'), 50)
     const offset = Number(c.req.query('offset') ?? '0')
     const type = c.req.query('type') as 'all' | 'servers' | 'channels' | 'rentals' | undefined
@@ -78,8 +91,8 @@ export function createDiscoverHandler(container: AppContainer) {
             name: server.name,
             slug: server.slug,
             description: server.description,
-            iconUrl: server.iconUrl,
-            bannerUrl: server.bannerUrl,
+            iconUrl: resolveMediaUrl(mediaService, server.iconUrl),
+            bannerUrl: resolveMediaUrl(mediaService, server.bannerUrl),
             memberCount,
             isPublic: server.isPublic,
             inviteCode: server.inviteCode,
@@ -156,7 +169,7 @@ export function createDiscoverHandler(container: AppContainer) {
               id: server.id,
               name: server.name,
               slug: server.slug,
-              iconUrl: server.iconUrl,
+              iconUrl: resolveMediaUrl(mediaService, server.iconUrl),
             },
             memberCount,
             lastMessage: lastMessage
@@ -219,7 +232,7 @@ export function createDiscoverHandler(container: AppContainer) {
                   id: tenant.id,
                   username: tenant.username,
                   displayName: tenant.displayName,
-                  avatarUrl: tenant.avatarUrl,
+                  avatarUrl: resolveMediaUrl(mediaService, tenant.avatarUrl),
                 }
               : null,
             owner: owner
@@ -227,7 +240,7 @@ export function createDiscoverHandler(container: AppContainer) {
                   id: owner.id,
                   username: owner.username,
                   displayName: owner.displayName,
-                  avatarUrl: owner.avatarUrl,
+                  avatarUrl: resolveMediaUrl(mediaService, owner.avatarUrl),
                 }
               : null,
             agent: agent
@@ -262,6 +275,7 @@ export function createDiscoverHandler(container: AppContainer) {
    */
   handler.get('/search', async (c) => {
     const db = container.resolve('db')
+    const mediaService = container.resolve('mediaService')
     const query = c.req.query('q')?.toLowerCase()
     const type = c.req.query('type') as 'all' | 'servers' | 'channels' | 'rentals' | undefined
     const limit = Math.min(Number(c.req.query('limit') ?? '20'), 50)
@@ -303,8 +317,8 @@ export function createDiscoverHandler(container: AppContainer) {
             name: server.name,
             slug: server.slug,
             description: server.description,
-            iconUrl: server.iconUrl,
-            bannerUrl: server.bannerUrl,
+            iconUrl: resolveMediaUrl(mediaService, server.iconUrl),
+            bannerUrl: resolveMediaUrl(mediaService, server.bannerUrl),
             memberCount,
             isPublic: server.isPublic,
             inviteCode: server.inviteCode,
@@ -348,7 +362,7 @@ export function createDiscoverHandler(container: AppContainer) {
               id: server.id,
               name: server.name,
               slug: server.slug,
-              iconUrl: server.iconUrl,
+              iconUrl: resolveMediaUrl(mediaService, server.iconUrl),
             },
             memberCount,
           },

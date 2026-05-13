@@ -72,6 +72,12 @@ function asInteractiveBlock(value: unknown): InteractiveBlockLite | null {
   }
 }
 
+function hasOAuthLinkCards(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
+  const cards = (metadata as { oauthLinkCards?: unknown }).oauthLinkCards
+  return Array.isArray(cards) && cards.length > 0
+}
+
 function formatInteractiveEcho(
   block: InteractiveBlockLite,
   input: { actionId: string; value?: string; label?: string; values?: Record<string, string> },
@@ -193,6 +199,9 @@ export function createMessageHandler(container: AppContainer) {
       const channelId = c.req.param('channelId')
       const input = c.req.valid('json')
       const user = c.get('user')
+      if (hasOAuthLinkCards(input.metadata)) {
+        return c.json({ ok: false, error: 'OAuth link cards must be sent through OAuth APIs' }, 400)
+      }
       const access = await getChannelAccess(container, channelId, user.userId)
       if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
       const commerceCardService = container.resolve('commerceCardService')
@@ -553,6 +562,9 @@ export function createMessageHandler(container: AppContainer) {
     const id = c.req.param('id')
     const input = c.req.valid('json')
     const user = c.get('user')
+    if (hasOAuthLinkCards(input.metadata)) {
+      return c.json({ ok: false, error: 'OAuth link cards must be sent through OAuth APIs' }, 400)
+    }
     const thread = await messageService.getThread(id)
     const access = await getChannelAccess(container, thread.channelId, user.userId)
     if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)

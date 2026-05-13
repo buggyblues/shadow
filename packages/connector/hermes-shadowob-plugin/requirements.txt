@@ -1,0 +1,2 @@
+httpx>=0.27.0
+python-socketio[asyncio_client]>=5.11.0

@@ -26,6 +26,7 @@ COPY apps/playground/package.json ./apps/playground/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
 COPY packages/cli/package.json ./packages/cli/
+COPY packages/connector/package.json ./packages/connector/
 COPY packages/oauth/package.json ./packages/oauth/
 COPY packages/openclaw-shadowob/package.json ./packages/openclaw-shadowob/
 COPY packages/sdk/package.json ./packages/sdk/

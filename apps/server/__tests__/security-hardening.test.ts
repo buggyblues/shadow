@@ -460,10 +460,9 @@ describe('RentalService security validation', () => {
     findByUsageEventId: vi.fn(),
   }
   const rentalViolationDao = {}
-  const walletService = {
+  const ledgerService = {
     debit: vi.fn(),
-    settle: vi.fn(),
-    refund: vi.fn(),
+    credit: vi.fn(),
   }
   const agentDao = {
     findById: vi.fn(),
@@ -476,14 +475,14 @@ describe('RentalService security validation', () => {
     vi.clearAllMocks()
     rentalUsageDao.findByUsageEventId.mockResolvedValue(null)
     rentalUsageDao.create.mockResolvedValue({ id: 'usage-1' })
-    walletService.debit.mockResolvedValue(undefined)
-    walletService.settle.mockResolvedValue(undefined)
+    ledgerService.debit.mockResolvedValue(undefined)
+    ledgerService.credit.mockResolvedValue(undefined)
     service = new RentalService({
       agentListingDao,
       rentalContractDao,
       rentalUsageDao,
       rentalViolationDao,
-      walletService,
+      ledgerService,
       agentDao,
       userDao,
     } as unknown as ConstructorParameters<typeof RentalService>[0])
@@ -498,6 +497,22 @@ describe('RentalService security validation', () => {
         title: 'Listing',
       }),
     ).rejects.toThrow('Agent does not belong to listing owner')
+    expect(agentListingDao.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects marketplace listings for private Buddy agents', async () => {
+    agentDao.findById.mockResolvedValue({
+      id: 'agent-1',
+      ownerId: 'owner-1',
+      config: { buddyMode: 'private' },
+    })
+
+    await expect(
+      service.createListing('owner-1', {
+        agentId: 'agent-1',
+        title: 'Private Buddy listing',
+      }),
+    ).rejects.toThrow('Private Buddy cannot be listed or rented')
     expect(agentListingDao.create).not.toHaveBeenCalled()
   })
 
@@ -605,7 +620,7 @@ describe('RentalService security validation', () => {
       ),
     ).resolves.toBe(existingUsage)
     expect(rentalUsageDao.create).not.toHaveBeenCalled()
-    expect(walletService.debit).not.toHaveBeenCalled()
-    expect(walletService.settle).not.toHaveBeenCalled()
+    expect(ledgerService.debit).not.toHaveBeenCalled()
+    expect(ledgerService.credit).not.toHaveBeenCalled()
   })
 })

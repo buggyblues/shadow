@@ -8,7 +8,7 @@ import {
   ModalHeader,
 } from '@shadowob/ui'
 import { Elements } from '@stripe/react-stripe-js'
-import { loadStripe } from '@stripe/stripe-js'
+import { loadStripe } from '@stripe/stripe-js/pure'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'

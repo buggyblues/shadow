@@ -6,6 +6,8 @@ import { type ActorInput, actorUserId, type OAuthActor } from '../security/actor
 import type {
   AuthorizeApproveInput,
   CreateOAuthAppInput,
+  OAuthBuddySendMessageInput,
+  OAuthSendMessageInput,
   UpdateOAuthAppInput,
 } from '../validators/oauth.schema'
 import type { AgentService } from './agent.service'
@@ -34,6 +36,78 @@ function generateClientSecret(): string {
 function requireOAuthActor(actor: ActorInput): OAuthActor {
   if (typeof actor !== 'string' && actor.kind === 'oauth') return actor
   throw Object.assign(new Error('OAuth actor is required'), { status: 401 })
+}
+
+type OAuthAppRecord = NonNullable<Awaited<ReturnType<OAuthAppDao['findById']>>>
+type OAuthMessageMetadataInput = OAuthSendMessageInput['metadata']
+type OAuthLinkCardInput = NonNullable<
+  NonNullable<OAuthMessageMetadataInput>['oauthLinkCards']
+>[number]
+
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase()
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1'
+}
+
+function parseCardUrl(value: string, label: string): URL {
+  try {
+    return new URL(value)
+  } catch {
+    throw Object.assign(new Error(`Invalid OAuth card ${label}`), { status: 400 })
+  }
+}
+
+function isAllowedCardProtocol(url: URL): boolean {
+  if (url.protocol === 'https:') return true
+  return url.protocol === 'http:' && isLoopbackHost(url.hostname)
+}
+
+function collectOAuthCardOrigins(app: OAuthAppRecord): Set<string> {
+  const origins = new Set<string>()
+  const candidates = [app.homepageUrl, ...(app.redirectUris ?? [])].filter(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  )
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate)
+      if (isAllowedCardProtocol(url)) origins.add(url.origin)
+    } catch {
+      // App registration validates these, but legacy data may not be clean.
+    }
+  }
+  return origins
+}
+
+function assertCardUrlAllowed(url: URL, allowedOrigins: Set<string>, label: string) {
+  if (!isAllowedCardProtocol(url)) {
+    throw Object.assign(new Error(`OAuth card ${label} must use HTTPS`), { status: 400 })
+  }
+  if (!allowedOrigins.has(url.origin)) {
+    throw Object.assign(new Error(`OAuth card ${label} origin is not registered`), {
+      status: 403,
+    })
+  }
+}
+
+function maybeAllowedIconUrl(
+  value: string | null | undefined,
+  allowedOrigins: Set<string>,
+): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    assertCardUrlAllowed(url, allowedOrigins, 'iconUrl')
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim()
+  }
+  return null
 }
 
 const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000 // 1 hour
@@ -485,6 +559,90 @@ export class OAuthService {
 
   // ─── OAuth API: Messages ──────────────────────────
 
+  private normalizeOAuthLinkCard(
+    actor: OAuthActor,
+    app: OAuthAppRecord,
+    allowedOrigins: Set<string>,
+    card: OAuthLinkCardInput,
+  ) {
+    if (card.appId !== actor.appId) {
+      throw Object.assign(new Error('OAuth card appId does not match token app'), {
+        status: 403,
+      })
+    }
+
+    if (allowedOrigins.size === 0) {
+      throw Object.assign(new Error('OAuth app has no registered card origins'), {
+        status: 400,
+      })
+    }
+
+    const url = parseCardUrl(card.url, 'url')
+    const embedUrl = parseCardUrl(card.embedUrl ?? card.url, 'embedUrl')
+    const fallbackUrl = parseCardUrl(card.fallbackUrl ?? card.url, 'fallbackUrl')
+
+    assertCardUrlAllowed(url, allowedOrigins, 'url')
+    assertCardUrlAllowed(embedUrl, allowedOrigins, 'embedUrl')
+    assertCardUrlAllowed(fallbackUrl, allowedOrigins, 'fallbackUrl')
+
+    const requestedMeta = card.meta ?? {}
+    const metaAvatarUrl = maybeAllowedIconUrl(requestedMeta.avatarUrl, allowedOrigins)
+    const metaIconUrl = maybeAllowedIconUrl(requestedMeta.iconUrl, allowedOrigins)
+    const metaCoverUrl = maybeAllowedIconUrl(requestedMeta.coverUrl, allowedOrigins)
+    const cardIconUrl = maybeAllowedIconUrl(card.iconUrl, allowedOrigins)
+    const appLogoUrl = maybeAllowedIconUrl(app.logoUrl, allowedOrigins)
+    const iconUrl = metaAvatarUrl ?? metaIconUrl ?? cardIconUrl ?? appLogoUrl
+    const homepageUrl =
+      maybeAllowedIconUrl(app.homepageUrl, allowedOrigins) ??
+      maybeAllowedIconUrl(requestedMeta.homepageUrl, allowedOrigins)
+
+    return {
+      id: card.id ?? `oauth-link-${randomBytes(8).toString('hex')}`,
+      kind: 'oauth_link' as const,
+      appId: actor.appId,
+      clientId: app.clientId,
+      title: card.title,
+      description: card.description ?? app.description ?? null,
+      iconUrl,
+      meta: {
+        appName: firstNonEmpty(requestedMeta.appName, app.name),
+        avatarUrl: metaAvatarUrl ?? iconUrl,
+        iconUrl,
+        coverUrl: metaCoverUrl,
+        homepageUrl,
+        origin: url.origin,
+      },
+      url: url.toString(),
+      embedUrl: embedUrl.toString(),
+      fallbackUrl: fallbackUrl.toString(),
+      scopes: card.scopes ?? [],
+      action: {
+        mode: card.action?.mode ?? 'open_iframe',
+      },
+    }
+  }
+
+  private async normalizeOAuthMessageMetadata(
+    actor: ActorInput,
+    metadata?: OAuthMessageMetadataInput,
+  ) {
+    const cards = metadata?.oauthLinkCards
+    if (!cards || cards.length === 0) return metadata
+
+    const oauthActor = requireOAuthActor(actor)
+    const app = await this.deps.oauthAppDao.findById(oauthActor.appId)
+    if (!app || !app.isActive) {
+      throw Object.assign(new Error('OAuth app not found'), { status: 404 })
+    }
+    const allowedOrigins = collectOAuthCardOrigins(app)
+
+    return {
+      oauthLinkCards: cards.map((card) =>
+        this.normalizeOAuthLinkCard(oauthActor, app, allowedOrigins, card),
+      ),
+    }
+  }
+
   async getMessages(actor: ActorInput, channelId: string, limit?: number, cursor?: string) {
     const { messageService, policyService } = this.deps
     await policyService.requireChannelRead(actor, channelId)
@@ -497,22 +655,28 @@ export class OAuthService {
         channelId: m.channelId,
         authorId: m.authorId,
         createdAt: m.createdAt,
+        metadata: m.metadata ?? null,
       })),
       hasMore: result.hasMore,
     }
   }
 
-  async sendMessage(actor: ActorInput, channelId: string, input: { content: string }) {
+  async sendMessage(actor: ActorInput, channelId: string, input: OAuthSendMessageInput) {
     const { messageService, policyService } = this.deps
     await policyService.requireChannelRead(actor, channelId)
     const authorId = actorUserId(actor)
-    const message = await messageService.send(channelId, authorId, { content: input.content })
+    const metadata = await this.normalizeOAuthMessageMetadata(actor, input.metadata)
+    const message = await messageService.send(channelId, authorId, {
+      content: input.content,
+      metadata,
+    })
     return {
       id: message.id,
       content: message.content,
       channelId: message.channelId,
       authorId: message.authorId,
       createdAt: message.createdAt,
+      metadata: message.metadata ?? null,
     }
   }
 
@@ -584,7 +748,7 @@ export class OAuthService {
   async sendBuddyMessage(
     actor: ActorInput,
     buddyAgentId: string,
-    input: { channelId: string; content: string },
+    input: OAuthBuddySendMessageInput,
   ) {
     const { agentService, messageService, oauthAppDao, policyService } = this.deps
     const oauthActor = requireOAuthActor(actor)
@@ -603,9 +767,11 @@ export class OAuthService {
       throw Object.assign(new Error('Buddy user not found'), { status: 404 })
     }
     await policyService.requireChannelRead(actor, input.channelId)
+    const metadata = await this.normalizeOAuthMessageMetadata(actor, input.metadata)
 
     const message = await messageService.send(input.channelId, buddyUserId, {
       content: input.content,
+      metadata,
     })
     return {
       id: message.id,
@@ -613,6 +779,7 @@ export class OAuthService {
       channelId: message.channelId,
       authorId: message.authorId,
       createdAt: message.createdAt,
+      metadata: message.metadata ?? null,
     }
   }
 }

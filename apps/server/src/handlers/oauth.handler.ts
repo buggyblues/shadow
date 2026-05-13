@@ -10,6 +10,8 @@ import {
   authorizeApproveSchema,
   authorizeQuerySchema,
   createOAuthAppSchema,
+  oauthBuddySendMessageSchema,
+  oauthSendMessageSchema,
   revokeConsentSchema,
   tokenExchangeSchema,
   updateOAuthAppSchema,
@@ -274,10 +276,11 @@ export function createOAuthHandler(container: AppContainer) {
     '/channels/:id/messages',
     oauthAuthMiddleware,
     oauthScopeMiddleware(['messages:write']),
+    zValidator('json', oauthSendMessageSchema),
     async (c) => {
       const oauthService = container.resolve('oauthService')
       const channelId = c.req.param('id')!
-      const body = await c.req.json<{ content: string }>()
+      const body = c.req.valid('json')
       const result = await oauthService.sendMessage(c.get('actor'), channelId, body)
       return c.json(result, 201)
     },
@@ -314,10 +317,11 @@ export function createOAuthHandler(container: AppContainer) {
     '/buddies/:id/messages',
     oauthAuthMiddleware,
     oauthScopeMiddleware(['buddies:manage']),
+    zValidator('json', oauthBuddySendMessageSchema),
     async (c) => {
       const oauthService = container.resolve('oauthService')
       const buddyId = c.req.param('id')!
-      const body = await c.req.json<{ channelId: string; content: string }>()
+      const body = c.req.valid('json')
       const result = await oauthService.sendBuddyMessage(c.get('actor'), buddyId, body)
       return c.json(result, 201)
     },

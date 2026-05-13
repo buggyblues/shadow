@@ -765,6 +765,186 @@ describe('OAuthService — Resource API', () => {
     expect(result.content).toBe('hello')
   })
 
+  it('sendMessage normalizes OAuth link cards for the token app origin', async () => {
+    const now = new Date()
+    const appId = '11111111-1111-4111-8111-111111111111'
+    const messageService = {
+      send: vi.fn().mockImplementation((_channelId, _authorId, input) =>
+        Promise.resolve({
+          id: 'm3',
+          content: input.content,
+          channelId: 'ch1',
+          authorId: 'user-1',
+          createdAt: now,
+          metadata: input.metadata,
+        }),
+      ),
+    }
+    const { service } = createService({
+      oauthAppDao: {
+        findById: vi.fn().mockResolvedValue({
+          id: appId,
+          clientId: 'shadow_client',
+          name: 'Card App',
+          description: 'Embedded card app',
+          homepageUrl: 'https://app.example.com',
+          logoUrl: 'https://app.example.com/icon.png',
+          redirectUris: ['https://app.example.com/callback'],
+          isActive: true,
+        }),
+      },
+      messageService,
+    })
+
+    const result = await service.sendMessage(oauthActor({ appId }), 'ch1', {
+      content: 'open this',
+      metadata: {
+        oauthLinkCards: [
+          {
+            kind: 'oauth_link',
+            appId,
+            title: 'Example Card',
+            url: 'https://app.example.com/card',
+          },
+        ],
+      },
+    })
+
+    expect(messageService.send).toHaveBeenCalledWith(
+      'ch1',
+      'user-1',
+      expect.objectContaining({
+        metadata: {
+          oauthLinkCards: [
+            expect.objectContaining({
+              appId,
+              clientId: 'shadow_client',
+              title: 'Example Card',
+              description: 'Embedded card app',
+              iconUrl: 'https://app.example.com/icon.png',
+              meta: expect.objectContaining({
+                appName: 'Card App',
+                avatarUrl: 'https://app.example.com/icon.png',
+                iconUrl: 'https://app.example.com/icon.png',
+                homepageUrl: 'https://app.example.com/',
+                origin: 'https://app.example.com',
+              }),
+              url: 'https://app.example.com/card',
+              embedUrl: 'https://app.example.com/card',
+              fallbackUrl: 'https://app.example.com/card',
+              action: { mode: 'open_iframe' },
+            }),
+          ],
+        },
+      }),
+    )
+    expect(result.metadata?.oauthLinkCards).toHaveLength(1)
+  })
+
+  it('sendMessage reads OAuth link card meta from registered app origins', async () => {
+    const appId = '11111111-1111-4111-8111-111111111111'
+    const messageService = {
+      send: vi.fn().mockResolvedValue({
+        id: 'msg-1',
+        content: 'open this',
+        metadata: {
+          oauthLinkCards: [],
+        },
+      }),
+    }
+    const { service } = createService({
+      oauthAppDao: {
+        findById: vi.fn().mockResolvedValue({
+          id: appId,
+          clientId: 'shadow_client',
+          name: 'Card App',
+          description: null,
+          homepageUrl: 'https://app.example.com',
+          logoUrl: null,
+          redirectUris: ['https://app.example.com/callback'],
+          isActive: true,
+        }),
+      },
+      messageService,
+    })
+
+    await service.sendMessage(oauthActor({ appId }), 'ch1', {
+      content: 'open this',
+      metadata: {
+        oauthLinkCards: [
+          {
+            kind: 'oauth_link',
+            appId,
+            title: 'Example Card',
+            url: 'https://app.example.com/card',
+            meta: {
+              appName: 'Meta App',
+              avatarUrl: 'https://app.example.com/avatar.png',
+              coverUrl: 'https://app.example.com/cover.png',
+            },
+          },
+        ],
+      },
+    })
+
+    expect(messageService.send).toHaveBeenCalledWith(
+      'ch1',
+      'user-1',
+      expect.objectContaining({
+        metadata: {
+          oauthLinkCards: [
+            expect.objectContaining({
+              iconUrl: 'https://app.example.com/avatar.png',
+              meta: expect.objectContaining({
+                appName: 'Meta App',
+                avatarUrl: 'https://app.example.com/avatar.png',
+                iconUrl: 'https://app.example.com/avatar.png',
+                coverUrl: 'https://app.example.com/cover.png',
+                origin: 'https://app.example.com',
+              }),
+            }),
+          ],
+        },
+      }),
+    )
+  })
+
+  it('sendMessage rejects OAuth link cards from unregistered origins', async () => {
+    const appId = '11111111-1111-4111-8111-111111111111'
+    const messageService = { send: vi.fn() }
+    const { service } = createService({
+      oauthAppDao: {
+        findById: vi.fn().mockResolvedValue({
+          id: appId,
+          clientId: 'shadow_client',
+          name: 'Card App',
+          homepageUrl: 'https://app.example.com',
+          logoUrl: null,
+          redirectUris: ['https://app.example.com/callback'],
+          isActive: true,
+        }),
+      },
+      messageService,
+    })
+
+    await expect(
+      service.sendMessage(oauthActor({ appId }), 'ch1', {
+        content: 'open this',
+        metadata: {
+          oauthLinkCards: [
+            {
+              kind: 'oauth_link',
+              appId,
+              title: 'Bad Card',
+              url: 'https://evil.example.com/card',
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow('origin is not registered')
+    expect(messageService.send).not.toHaveBeenCalled()
+  })
+
   it('getWorkspace delegates to workspaceService', async () => {
     const { service } = createService({
       workspaceService: {

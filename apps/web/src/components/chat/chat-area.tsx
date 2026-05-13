@@ -22,6 +22,7 @@ import {
   Copy,
   Hash,
   Loader2,
+  LockKeyhole,
   LogIn,
   LogOut,
   type LucideProps,
@@ -41,6 +42,7 @@ import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
+import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { InvitePanel } from '../common/invite-panel'
 import { NotificationBell } from '../notification/notification-bell'
@@ -57,6 +59,7 @@ import {
 import { FilePreviewPanel } from './file-preview-panel'
 import { type Message as BubbleMessage, MessageBubble } from './message-bubble'
 import { MessageInput } from './message-input'
+import { type OAuthLinkPreview, OAuthLinkPreviewPanel } from './oauth-link-card'
 
 const CopyQrIcon = (props: LucideProps) => <Copy {...props} size={14} strokeWidth={2.4} />
 
@@ -101,9 +104,18 @@ interface MessagesPage {
 interface Channel {
   id: string
   name: string
+  kind?: string
   topic: string | null
   type: string
   isArchived?: boolean
+  otherUser?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+    status?: string | null
+    isBot?: boolean
+  } | null
 }
 
 interface MemberEvent {
@@ -161,6 +173,16 @@ interface BuddyAgentCacheEntry {
     id: string
     username?: string | null
     displayName?: string | null
+  } | null
+}
+
+interface BuddyAgentAccessEntry {
+  userId: string
+  config?: {
+    buddyMode?: 'private' | 'shareable'
+  } | null
+  botUser?: {
+    id: string
   } | null
 }
 
@@ -222,6 +244,7 @@ export function ChatArea({
     contentType: string
     size: number
   } | null>(null)
+  const [previewOAuthLink, setPreviewOAuthLink] = useState<OAuthLinkPreview | null>(null)
 
   const resolveWorkStatusName = useCallback(
     (payload: WorkStatusPayload, existingName?: string) => {
@@ -360,6 +383,28 @@ export function ChatArea({
     queryFn: () => fetchApi<Channel>(`/api/channels/${activeChannelId}`),
     enabled: !!activeChannelId,
   })
+
+  const { data: buddyAgents = [] } = useQuery({
+    queryKey: ['agents', 'include-rentals', 'dm-buddy-modes'],
+    queryFn: () => fetchApi<BuddyAgentAccessEntry[]>('/api/agents?includeRentals=true'),
+    enabled: !!activeChannelId,
+  })
+
+  const privateBuddyUserIds = useMemo(
+    () =>
+      new Set(
+        buddyAgents
+          .filter((agent) => agent.config?.buddyMode !== 'shareable')
+          .map((agent) => agent.botUser?.id ?? agent.userId),
+      ),
+    [buddyAgents],
+  )
+  const directPeer = channel?.kind === 'dm' ? channel.otherUser : null
+  const directPeerName = directPeer?.displayName ?? directPeer?.username ?? channel?.name ?? '...'
+  const directPeerIsPrivateBuddy = Boolean(
+    directPeer?.isBot && privateBuddyUserIds.has(directPeer.id),
+  )
+  const channelDisplayName = directPeer ? directPeerName : (channel?.name ?? '...')
 
   // Fetch messages with infinite query (cursor-based pagination)
   const PAGE_SIZE = 50
@@ -1012,7 +1057,14 @@ export function ChatArea({
           onReact={handleReact}
           onMessageUpdate={handleMessageUpdate}
           onMessageDelete={handleMessageDelete}
-          onPreviewFile={(att) => setPreviewFile(att)}
+          onPreviewFile={(att) => {
+            setPreviewOAuthLink(null)
+            setPreviewFile(att)
+          }}
+          onPreviewOAuthLink={(preview) => {
+            setPreviewFile(null)
+            setPreviewOAuthLink(preview)
+          }}
           onSaveToWorkspace={activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined}
           highlight={highlightMsgId === item.data.id}
           replyToMessage={
@@ -1077,12 +1129,30 @@ export function ChatArea({
           >
             <ArrowLeft size={20} />
           </Button>
-          <div className="w-8 h-8 rounded-full bg-bg-tertiary/50 flex items-center justify-center text-primary shrink-0 shadow-inner">
-            <Hash size={16} strokeWidth={2.5} />
+          {directPeer ? (
+            <UserAvatar
+              userId={directPeer.id}
+              avatarUrl={directPeer.avatarUrl}
+              displayName={directPeerName}
+              size="sm"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-bg-tertiary/50 flex items-center justify-center text-primary shrink-0 shadow-inner">
+              <Hash size={16} strokeWidth={2.5} />
+            </div>
+          )}
+          <div className="flex min-w-0 items-center gap-1.5">
+            <h3 className="font-black text-text-primary text-[15px] truncate uppercase tracking-tight">
+              {channelDisplayName}
+            </h3>
+            {directPeerIsPrivateBuddy && (
+              <LockKeyhole
+                size={14}
+                className="shrink-0 text-warning"
+                aria-label={t('agentMgmt.modePrivate')}
+              />
+            )}
           </div>
-          <h3 className="font-black text-text-primary text-[15px] truncate uppercase tracking-tight">
-            {channel?.name ?? '...'}
-          </h3>
           {channel?.topic && (
             <>
               <div className="w-[1px] h-6 bg-bg-modifier-hover mx-2 hidden sm:block shrink-0" />
@@ -1335,6 +1405,13 @@ export function ChatArea({
       {/* File preview panel */}
       {previewFile && (
         <FilePreviewPanel attachment={previewFile} onClose={() => setPreviewFile(null)} />
+      )}
+
+      {previewOAuthLink && (
+        <OAuthLinkPreviewPanel
+          preview={previewOAuthLink}
+          onClose={() => setPreviewOAuthLink(null)}
+        />
       )}
 
       {/* Save attachment to workspace picker */}

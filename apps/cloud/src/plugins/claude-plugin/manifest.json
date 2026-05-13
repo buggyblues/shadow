@@ -1,0 +1,138 @@
+{
+  "id": "claude-plugin",
+  "name": "Claude Plugin Importer",
+  "description": "Imports Claude Code plugins and marketplaces from GitHub or Git repositories at deploy time, then normalizes their skills, commands, agents, hooks, MCP/LSP descriptors, monitors, themes, settings, and bin tools for Shadow Cloud agents.",
+  "version": "1.0.0",
+  "category": "code",
+  "icon": "package-plus",
+  "auth": {
+    "type": "token",
+    "fields": [
+      {
+        "key": "GITHUB_TOKEN",
+        "label": "GitHub Token",
+        "description": "Optional token for private GitHub plugin repositories",
+        "required": false,
+        "sensitive": true,
+        "placeholder": "ghp_..."
+      }
+    ]
+  },
+  "config": {
+    "type": "object",
+    "properties": {
+      "marketplaces": {
+        "type": "array",
+        "description": "Claude Code plugin marketplaces to import from GitHub or Git repositories.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string", "description": "Stable source id for labels and logs." },
+            "repo": {
+              "type": "string",
+              "description": "GitHub owner/repo shorthand, e.g. anthropics/financial-services."
+            },
+            "url": {
+              "type": "string",
+              "description": "Full git URL, owner/repo shorthand, or GitHub tree URL."
+            },
+            "ref": { "type": "string", "description": "Branch, tag, or commit-ish." },
+            "sha": { "type": "string", "description": "Exact commit SHA to checkout." },
+            "depth": { "type": "number", "description": "Shallow clone depth. Defaults to 1." },
+            "path": {
+              "type": "string",
+              "description": "Marketplace root path inside the repository."
+            },
+            "marketplacePath": {
+              "type": "string",
+              "description": "Path to .claude-plugin/marketplace.json relative to path or repo root."
+            },
+            "plugins": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Marketplace plugin names to import. Omit to import all entries."
+            }
+          }
+        }
+      },
+      "plugins": {
+        "type": "array",
+        "description": "Direct Claude plugin directories or plugin-collection directories to import.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string", "description": "Stable source id for labels and logs." },
+            "repo": {
+              "type": "string",
+              "description": "GitHub owner/repo shorthand."
+            },
+            "url": {
+              "type": "string",
+              "description": "Full git URL, owner/repo shorthand, or GitHub tree URL."
+            },
+            "ref": { "type": "string", "description": "Branch, tag, or commit-ish." },
+            "sha": { "type": "string", "description": "Exact commit SHA to checkout." },
+            "depth": { "type": "number", "description": "Shallow clone depth. Defaults to 1." },
+            "path": {
+              "type": "string",
+              "description": "Plugin directory or collection directory inside the repository."
+            },
+            "plugins": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Plugin directory names or manifest names to import when path points at a collection."
+            }
+          }
+        }
+      },
+      "mountPath": {
+        "type": "string",
+        "default": "/claude-plugins",
+        "description": "Container path where imported Claude plugin assets are mounted."
+      },
+      "poll": {
+        "type": "string",
+        "description": "Optional poll interval (e.g. 5m, 30s, 1h) for live refresh sidecar."
+      },
+      "slashCommands": {
+        "type": "object",
+        "description": "Controls automatic Shadow slash command registration for imported Claude commands and skills.",
+        "properties": {
+          "autoRegister": {
+            "type": "boolean",
+            "default": true,
+            "description": "Register discovered upstream commands with Shadow."
+          },
+          "inferInteractions": {
+            "type": "boolean",
+            "default": true,
+            "description": "Derive form interactions from upstream AskUserQuestion-style markdown."
+          },
+          "includeScripts": {
+            "type": "boolean",
+            "default": false,
+            "description": "Register executable helper scripts from imported script directories as slash commands."
+          },
+          "generateScriptSkills": {
+            "type": "boolean",
+            "default": false,
+            "description": "Generate lightweight SKILL.md wrappers for discovered helper scripts."
+          },
+          "maxScriptCommandsPerPack": {
+            "type": "number",
+            "default": 80,
+            "description": "Maximum number of script-backed commands to expose per imported plugin."
+          },
+          "rules": {
+            "type": "array",
+            "description": "Optional command match rules for aliases or explicit interaction metadata.",
+            "items": { "type": "object" }
+          }
+        }
+      }
+    }
+  },
+  "capabilities": ["config-builder", "skill"],
+  "tags": ["claude", "claude-code", "plugin", "marketplace", "github", "skills", "agents"],
+  "popularity": 88
+}

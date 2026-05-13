@@ -30,6 +30,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 | [Business Connectors](./business-connectors/README.md) | None | Reserved shared connector directory |
 | [Canva](./canva/README.md) | `CANVA_ACCESS_TOKEN`, `CANVA_BRAND_TEMPLATE_ID` | Canva CLI and Connect API |
 | [Cloudflare](./cloudflare/README.md) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID` | Cloudflare MCP, Wrangler, skills |
+| [Claude Plugin Importer](./claude-plugin/README.md) | `GITHUB_TOKEN`, marketplace/plugin repository options | Claude Code plugins and marketplaces |
 | [CNB](./cnb/README.md) | `CNB_TOKEN`, `CNB_ENDPOINT` | CNB MCP on CloudBase |
 | [Coze](./coze/README.md) | `COZE_API_TOKEN`, `COZE_SPACE_ID`, `COZE_BOT_ID` | Coze MCP publishing and Open API |
 | [DingTalk](./dingtalk/README.md) | `DINGTALK_Client_ID`, `DINGTALK_Client_Secret`, robot fields | DingTalk OpenAPI MCP |

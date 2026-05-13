@@ -3,9 +3,11 @@ import type { AgentDao } from '../dao/agent.dao'
 import type { AgentPolicyDao } from '../dao/agent-policy.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
+import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { ServerDao } from '../dao/server.dao'
 import { validateJsonLimits } from '../lib/json-limits'
 import { normalizeSlashCommands } from './agent.service'
+import { getBuddyAllowedServerIds, getBuddyMode } from './buddy-policy'
 
 const AGENT_POLICY_CONFIG_KEYS = new Set([
   'replyToUsers',
@@ -16,6 +18,11 @@ const AGENT_POLICY_CONFIG_KEYS = new Set([
   'buddyBlacklist',
   'buddyWhitelist',
   'smartReply',
+  'allowedTriggerUserIds',
+  'triggerUserIds',
+  'ownerId',
+  'activeTenantIds',
+  'replyRequiresMention',
 ])
 
 function stringArray(value: unknown, key: string): string[] | undefined {
@@ -52,14 +59,29 @@ function validatePolicyConfig(config: Record<string, unknown> | undefined) {
       key === 'replyToUsers' ||
       key === 'keywords' ||
       key === 'buddyBlacklist' ||
-      key === 'buddyWhitelist'
+      key === 'buddyWhitelist' ||
+      key === 'allowedTriggerUserIds' ||
+      key === 'triggerUserIds' ||
+      key === 'activeTenantIds'
     ) {
       sanitized[key] = stringArray(value, key)
       continue
     }
-    if (key === 'mentionOnly' || key === 'replyToBuddy' || key === 'smartReply') {
+    if (
+      key === 'mentionOnly' ||
+      key === 'replyToBuddy' ||
+      key === 'smartReply' ||
+      key === 'replyRequiresMention'
+    ) {
       if (typeof value !== 'boolean') {
         throw Object.assign(new Error(`Invalid policy config ${key}`), { status: 400 })
+      }
+      sanitized[key] = value
+      continue
+    }
+    if (key === 'ownerId') {
+      if (typeof value !== 'string' || value.length > 120) {
+        throw Object.assign(new Error('Invalid policy config ownerId'), { status: 400 })
       }
       sanitized[key] = value
       continue
@@ -82,6 +104,7 @@ export class AgentPolicyService {
       serverDao: ServerDao
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
+      rentalContractDao: RentalContractDao
       logger: Logger
     },
   ) {}
@@ -164,13 +187,57 @@ export class AgentPolicyService {
 
     // Find all servers the bot user has joined
     const memberships = await this.deps.serverDao.findByUserId(agent.userId)
+    const buddyMode = getBuddyMode(agent.config)
+    const allowedServerIds = getBuddyAllowedServerIds(agent.config)
+    const activeContracts = await this.deps.rentalContractDao.findActiveByAgentId(agentId)
+    const activeTenantIds = Array.from(
+      new Set(activeContracts.map((contract) => contract.tenantId)),
+    )
+    const allowedTriggerUserIds = [agent.ownerId, ...activeTenantIds]
 
     // Get all policies for the agent
     const allPolicies = await this.deps.agentPolicyDao.findByAgentId(agentId)
 
+    const canUseInServer = async (serverId: string) => {
+      if (buddyMode === 'private') {
+        return allowedServerIds.includes(serverId)
+      }
+      const ownerMember = await this.deps.serverDao.getMember(serverId, agent.ownerId)
+      if (ownerMember) return true
+      for (const tenantId of activeTenantIds) {
+        const tenantMember = await this.deps.serverDao.getMember(serverId, tenantId)
+        if (tenantMember) return true
+      }
+      return false
+    }
+
+    const visibleMemberships = []
+    for (const membership of memberships) {
+      if (await canUseInServer(membership.server.id)) {
+        visibleMemberships.push(membership)
+      }
+    }
+
+    const buildFixedPolicy = (base?: { config?: unknown }) => ({
+      listen: true,
+      reply: true,
+      mentionOnly: false,
+      config: {
+        ...(((base?.config as Record<string, unknown> | undefined) ?? {}) as Record<
+          string,
+          unknown
+        >),
+        allowedTriggerUserIds,
+        triggerUserIds: allowedTriggerUserIds,
+        ownerId: agent.ownerId,
+        activeTenantIds,
+        replyRequiresMention: false,
+      },
+    })
+
     // Build the response
     const servers = await Promise.all(
-      memberships.map(async ({ server }) => {
+      visibleMemberships.map(async ({ server }) => {
         const channels = await this.deps.channelDao.findByServerId(server.id)
         const channelIds = channels.map((ch) => ch.id)
         let visibleChannelIds: Set<string> | null = null
@@ -191,12 +258,7 @@ export class AgentPolicyService {
 
         // Find server-wide default policy (channelId is null)
         const serverDefault = serverPolicies.find((p) => p.channelId === null)
-        const defaultPolicy = {
-          listen: serverDefault?.listen ?? true,
-          reply: serverDefault?.reply ?? true,
-          mentionOnly: serverDefault?.mentionOnly ?? false,
-          config: serverDefault?.config ?? {},
-        }
+        const defaultPolicy = buildFixedPolicy(serverDefault)
 
         return {
           id: server.id,
@@ -210,14 +272,7 @@ export class AgentPolicyService {
               id: ch.id,
               name: ch.name,
               type: ch.type,
-              policy: channelPolicy
-                ? {
-                    listen: channelPolicy.listen,
-                    reply: channelPolicy.reply,
-                    mentionOnly: channelPolicy.mentionOnly,
-                    config: channelPolicy.config,
-                  }
-                : defaultPolicy,
+              policy: channelPolicy ? buildFixedPolicy(channelPolicy) : defaultPolicy,
             }
           }),
         }
@@ -227,6 +282,11 @@ export class AgentPolicyService {
     return {
       agentId,
       botUserId: agent.userId,
+      ownerId: agent.ownerId,
+      buddyMode,
+      allowedServerIds,
+      activeTenantIds,
+      allowedTriggerUserIds,
       slashCommands: normalizeSlashCommands(
         (agent.config as Record<string, unknown>)?.slashCommands,
       ),

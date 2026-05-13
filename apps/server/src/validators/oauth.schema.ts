@@ -1,4 +1,6 @@
+import { LIMITS } from '@shadowob/shared'
 import { z } from 'zod'
+import { oauthLinkCardSchema } from './message.schema'
 
 // --- OAuth App Management ---
 
@@ -59,8 +61,27 @@ export const revokeConsentSchema = z.object({
   appId: z.string().uuid(),
 })
 
+// --- OAuth Resource API ---
+
+export const oauthMessageMetadataSchema = z
+  .object({
+    oauthLinkCards: z.array(oauthLinkCardSchema).max(3).optional(),
+  })
+  .strict()
+
+export const oauthSendMessageSchema = z.object({
+  content: z.string().min(1).max(LIMITS.MESSAGE_CONTENT_MAX),
+  metadata: oauthMessageMetadataSchema.optional(),
+})
+
+export const oauthBuddySendMessageSchema = oauthSendMessageSchema.extend({
+  channelId: z.string().uuid(),
+})
+
 export type CreateOAuthAppInput = z.infer<typeof createOAuthAppSchema>
 export type UpdateOAuthAppInput = z.infer<typeof updateOAuthAppSchema>
 export type AuthorizeQuery = z.infer<typeof authorizeQuerySchema>
 export type AuthorizeApproveInput = z.infer<typeof authorizeApproveSchema>
 export type TokenExchangeInput = z.infer<typeof tokenExchangeSchema>
+export type OAuthSendMessageInput = z.infer<typeof oauthSendMessageSchema>
+export type OAuthBuddySendMessageInput = z.infer<typeof oauthBuddySendMessageSchema>

@@ -33,7 +33,10 @@ import type { Database } from '../src/db'
 import * as schema from '../src/db/schema'
 import { createAgentHandler } from '../src/handlers/agent.handler'
 import { createCloudSaasHandler } from '../src/handlers/cloud-saas.handler'
-import { processCloudDeploymentQueueOnce } from '../src/lib/cloud-deployment-processor'
+import {
+  createCloudHourlyBillingReferenceId,
+  processCloudDeploymentQueueOnce,
+} from '../src/lib/cloud-deployment-processor'
 import { signAccessToken, signAgentToken } from '../src/lib/jwt'
 import { closeRedisClient } from '../src/lib/redis'
 
@@ -2648,21 +2651,26 @@ describe('Cloud SaaS — deployment + billing', () => {
       }
       expect(walletAfter.balance).toBe(walletBefore.balance - 1)
 
+      const [updated] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment!.id))
+        .limit(1)
+      const hourlyReferenceId = createCloudHourlyBillingReferenceId(
+        deployment!.id,
+        updated!.lastHourlyBilledAt!,
+      )
+
       const txRes = await req('GET', '/api/cloud-saas/wallet/transactions')
       const txBody = (await txRes.json()) as {
         transactions: Array<{ amount: number; referenceId?: string; referenceType?: string }>
       }
       expect(
         txBody.transactions.find(
-          (tx) => tx.referenceType === 'cloud_hourly' && tx.referenceId === deployment!.id,
+          (tx) => tx.referenceType === 'cloud_hourly' && tx.referenceId === hourlyReferenceId,
         ),
       ).toMatchObject({ amount: -1 })
 
-      const [updated] = await db
-        .select()
-        .from(schema.cloudDeployments)
-        .where(eq(schema.cloudDeployments.id, deployment!.id))
-        .limit(1)
       expect(updated!.lastHourlyBilledAt!.getTime()).toBeGreaterThan(
         deployment!.lastHourlyBilledAt!.getTime(),
       )

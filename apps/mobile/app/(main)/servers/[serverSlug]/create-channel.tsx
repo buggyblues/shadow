@@ -64,12 +64,25 @@ interface BuddyAgent {
   id: string
   ownerId: string
   userId: string
+  accessRole?: 'owner' | 'tenant'
+  config?: {
+    buddyMode?: 'private' | 'shareable'
+    allowedServerIds?: string[]
+  }
   botUser?: {
     id: string
     username: string
     displayName?: string | null
     avatarUrl?: string | null
   } | null
+}
+
+const canBuddyJoinServer = (agent: BuddyAgent, serverId: string | undefined) => {
+  if (!serverId) return false
+  if (agent.config?.buddyMode === 'shareable') return true
+  return Array.isArray(agent.config?.allowedServerIds)
+    ? agent.config.allowedServerIds.includes(serverId)
+    : false
 }
 
 type ChannelType = 'text' | 'voice' | 'announcement'
@@ -116,8 +129,8 @@ export default function CreateChannelScreen() {
   })
 
   const { data: myAgents = [] } = useQuery({
-    queryKey: ['my-agents-for-channel-create'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    queryKey: ['my-agents-for-channel-create', 'include-rentals'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
   })
 
   const selectableMembers = useMemo(() => {
@@ -151,6 +164,7 @@ export default function CreateChannelScreen() {
     const q = memberSearch.toLowerCase()
     return myAgents
       .filter((agent) => agent.botUser && !serverBotUserIds.has(agent.botUser.id))
+      .filter((agent) => canBuddyJoinServer(agent, server?.id))
       .filter((agent) => {
         if (!q) return true
         const displayName = (
@@ -160,7 +174,7 @@ export default function CreateChannelScreen() {
         ).toLowerCase()
         return displayName.includes(q)
       })
-  }, [memberSearch, myAgents, serverBotUserIds])
+  }, [memberSearch, myAgents, serverBotUserIds, server?.id])
 
   const selectionCount = selectedMembers.size + selectedAgents.size
 

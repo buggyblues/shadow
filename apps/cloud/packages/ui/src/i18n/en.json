@@ -745,6 +745,7 @@
     "invalidConfig": "Invalid:",
     "validationSummaryValid": "Valid: {{agents}} agent(s), {{configurations}} configuration(s)",
     "validationSummaryInvalid": "Invalid: {{count}} violation(s)",
+    "schemaLoadFailed": "Schema validation is unavailable: {{message}}",
     "templateSaved": "Template saved",
     "saveFailed": "Save failed",
     "agents": "Agents",

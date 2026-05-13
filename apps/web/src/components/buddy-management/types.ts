@@ -12,6 +12,8 @@ export interface Agent {
   updatedAt: string
   isListed?: boolean
   isRented?: boolean
+  accessRole?: 'owner' | 'tenant'
+  activeContractId?: string | null
   listingInfo?: {
     listingId: string
     listingStatus: string
@@ -30,6 +32,19 @@ export interface Agent {
     displayName: string | null
     avatarUrl: string | null
   } | null
+}
+
+export type BuddyMode = 'private' | 'shareable'
+
+export function getAgentBuddyMode(agent: Pick<Agent, 'config'>): BuddyMode {
+  return agent.config?.buddyMode === 'shareable' ? 'shareable' : 'private'
+}
+
+export function getAgentAllowedServerIds(agent: Pick<Agent, 'config'>): string[] {
+  const value = agent.config?.allowedServerIds
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
 }
 
 export interface TokenResponse {

@@ -16,6 +16,7 @@ import {
 import { useRef } from 'react'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import { useContextMenuPosition } from '../common/context-menu'
+import { resolveWorkspaceMediaUrl } from './workspace-media'
 import type { ContextMenuState } from './workspace-types'
 
 interface ContextMenuAction {
@@ -34,6 +35,7 @@ interface ContextMenuGroup {
 
 interface WorkspaceContextMenuProps {
   menu: ContextMenuState
+  serverId: string
   onClose: () => void
   hasClipboard: boolean
   /* actions */
@@ -57,6 +59,7 @@ const metaKey = isMac ? '⌘' : 'Ctrl+'
 
 export function WorkspaceContextMenu({
   menu,
+  serverId,
   onClose,
   hasClipboard,
   onNewFolder,
@@ -79,6 +82,7 @@ export function WorkspaceContextMenu({
 
   const groups = buildMenuGroups({
     node,
+    serverId,
     hasClipboard,
     onNewFolder,
     onNewFile,
@@ -158,6 +162,7 @@ export function WorkspaceContextMenu({
 
 function buildMenuGroups(ctx: {
   node: WorkspaceNode | null
+  serverId: string
   hasClipboard: boolean
   onNewFolder: (parentId: string | null) => void
   onNewFile: (parentId: string | null) => void
@@ -285,7 +290,12 @@ function buildMenuGroups(ctx: {
               {
                 icon: Download,
                 label: '下载',
-                onClick: () => window.open(node.contentRef!, '_blank'),
+                onClick: () => {
+                  void resolveWorkspaceMediaUrl(ctx.serverId, node.id, {
+                    disposition: 'attachment',
+                    contentRef: node.contentRef,
+                  }).then((url) => window.open(url, '_blank'))
+                },
               },
             ]
           : []),
