@@ -309,14 +309,14 @@ describe('Rental Filtering & Agent Chat Status E2E', () => {
     expect(data.reason).toBeUndefined()
   })
 
-  it('should return chatDisabled: true with reason "listed" for listed agent', async () => {
+  it('should allow owner chat for listed agent', async () => {
     const res = await req('GET', `/api/marketplace/agent-chat-status/${botUserId}`, {
       token: ownerToken,
     })
     expect(res.status).toBe(200)
-    const data = await json<{ chatDisabled: boolean; reason?: string }>(res)
-    expect(data.chatDisabled).toBe(true)
-    expect(data.reason).toBe('listed')
+    const data = await json<{ chatDisabled: boolean; role?: string }>(res)
+    expect(data.chatDisabled).toBe(false)
+    expect(data.role).toBe('owner')
   })
 
   /* ─────── 4. Rent the agent listing → rented_out ─────── */
@@ -347,14 +347,14 @@ describe('Rental Filtering & Agent Chat Status E2E', () => {
     expect(found).toBeUndefined()
   })
 
-  it('should return chatDisabled: true with reason "rented_out" for rented agent', async () => {
+  it('should allow owner chat for rented agent', async () => {
     const res = await req('GET', `/api/marketplace/agent-chat-status/${botUserId}`, {
       token: ownerToken,
     })
     expect(res.status).toBe(200)
-    const data = await json<{ chatDisabled: boolean; reason?: string }>(res)
-    expect(data.chatDisabled).toBe(true)
-    expect(data.reason).toBe('rented_out')
+    const data = await json<{ chatDisabled: boolean; role?: string }>(res)
+    expect(data.chatDisabled).toBe(false)
+    expect(data.role).toBe('owner')
   })
 
   /* ─────── 5. Terminate contract & delist → chatDisabled: false ─────── */

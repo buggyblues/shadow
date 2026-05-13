@@ -250,17 +250,17 @@ describe('Rental Lifecycle E2E', () => {
     expect(data.reason).toBe('listed')
   })
 
-  /* ─────── 3. agent-chat-status: owner also blocked when listed ─────── */
+  /* ─────── 3. agent-chat-status: owner can chat when listed ─────── */
 
-  it('should block owner chat when their agent is listed', async () => {
+  it('should allow owner chat when their agent is listed', async () => {
     const res = await req('GET', `/api/marketplace/agent-chat-status/${agentBotUserId}`, {
       token: ownerToken,
     })
 
     expect(res.status).toBe(200)
-    const data = await json<{ chatDisabled: boolean; reason?: string }>(res)
-    expect(data.chatDisabled).toBe(true)
-    expect(data.reason).toBe('listed')
+    const data = await json<{ chatDisabled: boolean; role?: string }>(res)
+    expect(data.chatDisabled).toBe(false)
+    expect(data.role).toBe('owner')
   })
 
   /* ─────── 4. Sign contract ─────── */

@@ -39,6 +39,8 @@ let ownerUserId: string
 let tenantUserId: string
 let ownerToken: string
 let tenantToken: string
+let agentBotUserId: string
+let agentId: string
 
 // IDs tracked across tests
 let listingId: string
@@ -92,6 +94,7 @@ beforeAll(async () => {
 
   // Create test users directly in DB
   const userDao = container.resolve('userDao')
+  const agentDao = container.resolve('agentDao')
   const ts = Date.now()
 
   const owner = await userDao.create({
@@ -122,6 +125,20 @@ beforeAll(async () => {
   // Give the tenant some balance for deposits and rental
   const walletService = container.resolve('walletService')
   await walletService.topUp(tenantUserId, 10000, 'Test balance for rental E2E')
+
+  const botUser = await agentDao.createBotUser({
+    username: `rentalbot${ts}`,
+    displayName: 'Rental Test Bot',
+  })
+  agentBotUserId = botUser!.id
+
+  const agent = await agentDao.create({
+    userId: agentBotUserId,
+    kernelType: 'docker',
+    config: { buddyMode: 'shareable', allowedServerIds: [] },
+    ownerId: ownerUserId,
+  })
+  agentId = agent!.id
 }, 30_000)
 
 afterAll(async () => {
@@ -130,7 +147,7 @@ afterAll(async () => {
     const { eq, inArray } = await import('drizzle-orm')
 
     // Clean rental data
-    const { agentListings, rentalContracts, rentalUsageRecords, rentalViolations } = schema
+    const { agentListings, rentalContracts, rentalUsageRecords, rentalViolations, agents } = schema
     if (contractId) {
       await db.delete(rentalViolations).where(eq(rentalViolations.contractId, contractId))
       await db.delete(rentalUsageRecords).where(eq(rentalUsageRecords.contractId, contractId))
@@ -142,13 +159,17 @@ afterAll(async () => {
       await db.delete(agentListings).where(eq(agentListings.ownerId, ownerUserId))
     }
 
+    if (agentId) {
+      await db.delete(agents).where(eq(agents.id, agentId))
+    }
+
     // Delete wallets
     const { wallets } = schema
     if (tenantUserId) await db.delete(wallets).where(eq(wallets.userId, tenantUserId))
     if (ownerUserId) await db.delete(wallets).where(eq(wallets.userId, ownerUserId))
 
     // Delete users
-    const userIds = [ownerUserId, tenantUserId].filter(Boolean)
+    const userIds = [ownerUserId, tenantUserId, agentBotUserId].filter(Boolean)
     if (userIds.length > 0) {
       await db.delete(users).where(inArray(users.id, userIds))
     }
@@ -181,6 +202,7 @@ describe('P2P Rental E2E', () => {
         premiumMarkup: 10,
         depositAmount: 200,
         listingStatus: 'active',
+        agentId,
       },
     })
 

@@ -454,10 +454,8 @@ export function MyTemplatesPage() {
   const createTemplateMutation = useMutation({
     mutationFn: async (name: string) => {
       const result = await api.myTemplates.save(name, createMinimalTemplateContent(name))
-      const savedName =
-        typeof (result as { name?: unknown }).name === 'string'
-          ? (result as { name: string }).name
-          : name
+      const resultName = (result as { name?: unknown }).name
+      const savedName = typeof resultName === 'string' ? resultName : name
       return { savedName }
     },
     onSuccess: ({ savedName }, name) => {

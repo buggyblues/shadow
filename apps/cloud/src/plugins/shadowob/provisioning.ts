@@ -580,7 +580,7 @@ async function provisionBuddy(
     if (/already|conflict|duplicate|unique/i.test(msg)) {
       log.dim(`  Buddy "${buddyDef.name}" already exists, looking up...`)
       const fallbackAgents = await client.listAgents()
-      const fallback = fallbackAgents.find((a: { name: string }) => a.name === buddyDef.name)
+      const fallback = fallbackAgents.find((a) => a.name === buddyDef.name)
       if (!fallback) throw new Error(`Cannot find existing buddy "${buddyDef.name}": ${msg}`)
 
       agentId = fallback.id

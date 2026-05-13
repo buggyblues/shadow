@@ -580,6 +580,17 @@ export function createChannelHandler(container: AppContainer) {
           channelId: id,
           serverId,
         })
+        if (targetUser.isBot) {
+          const agentDao = container.resolve('agentDao')
+          const agent = await agentDao.findByUserId(targetUserId)
+          if (agent) {
+            io.to(`user:${targetUserId}`).emit('agent:policy-changed', {
+              agentId: agent.id,
+              serverId,
+              channelId: id,
+            })
+          }
+        }
 
         // Send channel invite notification (skip for bots)
         if (!targetUser.isBot) {
@@ -632,6 +643,15 @@ export function createChannelHandler(container: AppContainer) {
         channelId: id,
         serverId: channel.serverId,
       })
+      const agentDao = container.resolve('agentDao')
+      const agent = await agentDao.findByUserId(targetUserId)
+      if (agent) {
+        io.to(`user:${targetUserId}`).emit('agent:policy-changed', {
+          agentId: agent.id,
+          serverId: channel.serverId,
+          channelId: id,
+        })
+      }
     } catch {
       /* non-critical */
     }
