@@ -1,22 +1,21 @@
 import { Save } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
 import { AvatarEditor } from '../../../src/components/common/avatar-editor'
 import { LanguageSwitcher } from '../../../src/components/common/language-switcher'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
+import {
+  AppText,
+  BackgroundSurface,
+  GlassPanel,
+  IconButton,
+  TextField,
+} from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../src/theme'
+import { spacing, useColors } from '../../../src/theme'
 
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation()
@@ -56,25 +55,26 @@ export default function ProfileSettingsScreen() {
   if (!user) return null
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <BackgroundSurface style={styles.container}>
       <SettingsHeader
         title={t('settings.tabProfile')}
         right={
-          <Pressable onPress={handleSave} disabled={saving} hitSlop={8}>
-            {saving ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Save size={22} color={colors.primary} />
-            )}
-          </Pressable>
+          <IconButton
+            icon={Save}
+            variant="primary"
+            size="icon"
+            loading={saving}
+            disabled={saving}
+            onPress={handleSave}
+          />
         }
       />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         {/* Avatar */}
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
+        <GlassPanel style={styles.card}>
+          <AppText variant="label" tone="secondary" style={styles.label}>
             {t('settings.avatarLabel')}
-          </Text>
+          </AppText>
           <View style={styles.avatarRow}>
             <Avatar
               uri={avatarUrl || user.avatarUrl}
@@ -88,75 +88,55 @@ export default function ProfileSettingsScreen() {
             userId={user.id}
             onChange={setAvatarUrl}
           />
-        </View>
+        </GlassPanel>
 
         {/* Display name */}
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
-            {t('settings.displayNameLabel')}
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
+        <GlassPanel style={styles.card}>
+          <TextField
+            label={t('settings.displayNameLabel')}
             value={displayName}
             onChangeText={setDisplayName}
             placeholder={user.username}
-            placeholderTextColor={colors.textMuted}
           />
-        </View>
+        </GlassPanel>
 
         {/* Language */}
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
+        <GlassPanel style={styles.card}>
+          <AppText variant="label" tone="secondary" style={styles.label}>
             {t('settings.languageLabel')}
-          </Text>
+          </AppText>
           <LanguageSwitcher />
-        </View>
+        </GlassPanel>
 
         {message ? (
-          <Text
+          <AppText
+            variant="label"
             style={{
               color:
                 message.includes('成功') ||
                 message.includes('success') ||
                 message.includes('Success')
-                  ? '#23a559'
-                  : '#f23f43',
-              fontSize: fontSize.sm,
+                  ? colors.success
+                  : colors.error,
               marginTop: spacing.sm,
               textAlign: 'center',
             }}
           >
             {message}
-          </Text>
+          </AppText>
         ) : null}
       </ScrollView>
-    </View>
+    </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
-  card: { padding: spacing.lg, borderRadius: radius.xl },
+  card: { gap: spacing.md },
   avatarRow: { alignItems: 'center', marginBottom: spacing.md },
   label: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
     textTransform: 'uppercase',
-    marginBottom: spacing.sm,
-  },
-  input: {
-    height: 44,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
-    borderWidth: 1,
+    letterSpacing: 0.8,
   },
 })

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { Check, ChevronLeft, UserPlus, X } from 'lucide-react-native'
+import { Check, ChevronLeft, Inbox, UserPlus, X } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
@@ -23,9 +23,9 @@ interface FriendUser {
 
 interface FriendEntry {
   friendshipId: string
-  source: 'friend' | 'owned_agent' | 'rented_agent'
+  source: 'friend' | 'owned_agent'
   user: FriendUser
-  agentStatus?: 'available' | 'listed' | 'rented_out'
+  agentStatus?: 'available'
   createdAt: string
 }
 
@@ -197,7 +197,7 @@ export default function NewFriendsScreen() {
           </Reanimated.View>
         )}
         ListEmptyComponent={
-          <EmptyState icon="📭" title={t('friends.noPending', '暂无待处理请求')} />
+          <EmptyState icon={Inbox} title={t('friends.noPending', '暂无待处理请求')} />
         }
       />
     </View>

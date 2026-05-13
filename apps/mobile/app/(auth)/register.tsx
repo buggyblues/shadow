@@ -1,16 +1,9 @@
 import { Link, useLocalSearchParams, useRouter } from 'expo-router'
+import { Bot } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Button, TextField } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { useAuthStore } from '../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
@@ -70,7 +63,9 @@ export default function RegisterScreen() {
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={[styles.brand, { color: colors.primary }]}>🐱</Text>
+          <View style={[styles.brand, { backgroundColor: `${colors.primary}18` }]}>
+            <Bot size={34} color={colors.primary} strokeWidth={2.4} />
+          </View>
           <Text style={[styles.title, { color: colors.text }]}>{t('auth.registerTitle')}</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             {t('auth.registerSubtitle')}
@@ -89,103 +84,59 @@ export default function RegisterScreen() {
         ) : null}
 
         <View style={styles.form}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
-            {t('auth.emailLabel')} <Text style={{ color: '#f23f43' }}>*</Text>
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
+          <TextField
+            label={`${t('auth.emailLabel')} *`}
+            style={styles.input}
             value={email}
             onChangeText={setEmail}
             placeholder="you@shadowob.com"
-            placeholderTextColor={colors.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
           />
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
-            {t('auth.displayNameLabel')}{' '}
-            <Text style={{ color: colors.textMuted, fontWeight: '400', fontStyle: 'italic' }}>
-              {t('auth.optional')}
-            </Text>
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
+          <TextField
+            label={`${t('auth.displayNameLabel')} (${t('auth.optional')})`}
+            style={styles.input}
             value={displayName}
             onChangeText={setDisplayName}
             placeholder={t('auth.displayNamePlaceholder')}
-            placeholderTextColor={colors.textMuted}
           />
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
-            {t('auth.passwordLabel')} <Text style={{ color: '#f23f43' }}>*</Text>
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
+          <TextField
+            label={`${t('auth.passwordLabel')} *`}
+            style={styles.input}
             value={password}
             onChangeText={setPassword}
             placeholder={t('auth.passwordPlaceholder')}
-            placeholderTextColor={colors.textMuted}
             secureTextEntry
           />
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
-            {t('auth.inviteCodeLabel')}{' '}
-            <Text style={{ color: colors.textMuted, fontWeight: '400', fontStyle: 'italic' }}>
-              {t('auth.optional')}
-            </Text>
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-                fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                letterSpacing: 2,
-              },
-            ]}
+          <TextField
+            label={`${t('auth.inviteCodeLabel')} (${t('auth.optional')})`}
+            style={styles.input}
+            inputStyle={{
+              fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+              letterSpacing: 2,
+            }}
             value={inviteCode}
             onChangeText={setInviteCode}
             placeholder={t('auth.inviteCodePlaceholder')}
-            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
           />
           <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 4 }}>
             {t('auth.inviteCodeHint')}
           </Text>
 
-          <Pressable
-            style={[styles.button, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]}
+          <Button
+            variant="primary"
+            size="lg"
             onPress={handleRegister}
             disabled={loading}
+            loading={loading}
           >
-            <Text style={styles.buttonText}>
-              {loading ? t('auth.registerLoading') : t('auth.registerSubmit')}
-            </Text>
-          </Pressable>
+            {t('auth.registerSubmit')}
+          </Button>
         </View>
 
         <View style={styles.footer}>
@@ -210,7 +161,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing['2xl'],
   },
   brand: {
-    fontSize: 48,
+    width: 56,
+    height: 56,
+    borderRadius: radius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.md,
   },
   title: {

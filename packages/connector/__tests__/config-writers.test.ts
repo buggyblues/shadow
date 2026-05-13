@@ -98,7 +98,10 @@ describe('connector config writers', () => {
     const parsed = parseToml(next) as any
     expect(parsed.language).toBe('zh')
     expect(parsed.projects).toHaveLength(1)
-    expect(parsed.projects[0].agent_type).toBe('opencode')
+    expect(parsed.projects[0].agent_type).toBeUndefined()
+    expect(parsed.projects[0].work_dir).toBeUndefined()
+    expect(parsed.projects[0].agent.type).toBe('opencode')
+    expect(parsed.projects[0].agent.options.work_dir).toBe('/repo')
     expect(parsed.projects[0].platforms).toHaveLength(2)
     const shadow = parsed.projects[0].platforms.find((item: any) => item.type === 'shadowob')
     expect(shadow.options.token).toBe('new-token')

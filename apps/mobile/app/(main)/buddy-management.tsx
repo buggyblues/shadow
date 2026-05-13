@@ -1,3 +1,8 @@
+import {
+  type ConnectorPlan,
+  createConnectorPlans,
+  type ShadowConnectorTarget,
+} from '@shadowob/connector'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Clipboard from 'expo-clipboard'
 import { useNavigation } from 'expo-router'
@@ -10,40 +15,44 @@ import {
   Key,
   Lock,
   MessageSquare,
-  Plus,
   PlugZap,
+  Plus,
   RefreshCw,
   Share2,
   Terminal,
   Trash2,
   X,
 } from 'lucide-react-native'
-import {
-  createConnectorPlans,
-  type ConnectorPlan,
-  type ShadowConnectorTarget,
-} from '@shadowob/connector'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import Reanimated, { FadeIn, FadeInUp } from 'react-native-reanimated'
 import { Avatar } from '../../src/components/common/avatar'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
 import { OnlineRank } from '../../src/components/common/online-rank'
+import {
+  AppText,
+  BackgroundSurface,
+  Badge,
+  Button,
+  CardPressable,
+  ChipButton,
+  EmptyState,
+  IconButton,
+  Spinner,
+  TextField,
+} from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
@@ -55,9 +64,6 @@ interface Agent {
   status: string
   lastHeartbeat: string | null
   totalOnlineSeconds: number
-  isListed?: boolean
-  isRented?: boolean
-  accessRole?: 'owner' | 'tenant'
   activeContractId?: string | null
   config?: {
     lastToken?: string
@@ -170,12 +176,14 @@ function BuddyAccessEditor({
         {t('agentMgmt.accessSection')}
       </Text>
       <View style={styles.modeRow}>
-        <Pressable
+        <CardPressable
+          variant="glassCard"
+          active={mode === 'private'}
+          padded={false}
           style={[
             styles.modeOption,
             {
-              backgroundColor: mode === 'private' ? `${colors.primary}1A` : colors.background,
-              borderColor: mode === 'private' ? colors.primary : colors.border,
+              backgroundColor: mode === 'private' ? `${colors.primary}1A` : colors.glassSoft,
             },
           ]}
           onPress={() => onModeChange('private')}
@@ -187,13 +195,15 @@ function BuddyAccessEditor({
           <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
             {t('agentMgmt.modePrivateDesc')}
           </Text>
-        </Pressable>
-        <Pressable
+        </CardPressable>
+        <CardPressable
+          variant="glassCard"
+          active={mode === 'shareable'}
+          padded={false}
           style={[
             styles.modeOption,
             {
-              backgroundColor: mode === 'shareable' ? `${colors.primary}1A` : colors.background,
-              borderColor: mode === 'shareable' ? colors.primary : colors.border,
+              backgroundColor: mode === 'shareable' ? `${colors.primary}1A` : colors.glassSoft,
             },
           ]}
           onPress={() => onModeChange('shareable')}
@@ -205,7 +215,7 @@ function BuddyAccessEditor({
           <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
             {t('agentMgmt.modeShareableDesc')}
           </Text>
-        </Pressable>
+        </CardPressable>
       </View>
       <View style={[styles.policyNote, { backgroundColor: colors.background }]}>
         <Text style={[styles.policyTitle, { color: colors.text }]}>
@@ -226,8 +236,11 @@ function BuddyAccessEditor({
             </Text>
           ) : (
             servers.map((entry) => (
-              <Pressable
+              <CardPressable
                 key={entry.server.id}
+                variant="glass"
+                active={allowedServerIds.includes(entry.server.id)}
+                padded={false}
                 style={styles.serverOption}
                 onPress={() => toggleServer(entry.server.id)}
               >
@@ -247,7 +260,7 @@ function BuddyAccessEditor({
                 <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
                   {entry.server.name}
                 </Text>
-              </Pressable>
+              </CardPressable>
             ))
           )}
         </View>
@@ -415,7 +428,6 @@ export default function BuddyManagementScreen() {
 
   const updateSelectedAccess = (buddyMode: BuddyMode, allowedServerIds: string[]) => {
     if (!selectedAgent) return
-    if (selectedAgent.accessRole === 'tenant') return
     updateAccessMutation.mutate({
       agentId: selectedAgent.id,
       buddyMode,
@@ -427,15 +439,9 @@ export default function BuddyManagementScreen() {
     const online = isOnline(agent)
     const name = agent.botUser?.displayName ?? agent.name ?? agent.id.slice(0, 8)
     return (
-      <Pressable
-        style={({ pressed }) => [
-          styles.agentCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            opacity: pressed ? 0.7 : 1,
-          },
-        ]}
+      <CardPressable
+        variant="glassCard"
+        style={styles.agentCard}
         onPress={() => {
           setSelectedAgent(agent)
           setGeneratedToken(null)
@@ -446,38 +452,29 @@ export default function BuddyManagementScreen() {
         <Avatar uri={agent.botUser?.avatarUrl} name={name} size={44} userId={agent.botUser?.id} />
         <View style={{ flex: 1, marginLeft: spacing.sm }}>
           <View style={styles.row}>
-            <Text style={[styles.agentName, { color: colors.text }]}>{name}</Text>
-            <View style={[styles.dot, { backgroundColor: online ? '#22c55e' : '#d1d5db' }]} />
+            <AppText variant="bodyStrong" style={styles.agentName}>
+              {name}
+            </AppText>
+            <Badge variant={online ? 'success' : 'neutral'} size="xs">
+              {online ? t('member.online') : t('member.offline')}
+            </Badge>
           </View>
           <View style={styles.row}>
-            <Text style={[styles.meta, { color: colors.textMuted }]}>
-              {online ? '在线' : '离线'}
-            </Text>
             {agent.totalOnlineSeconds > 0 && (
-              <Text style={[styles.meta, { color: colors.textMuted }]}>
-                · 累计 {formatDuration(agent.totalOnlineSeconds)}
-              </Text>
+              <AppText variant="label" tone="secondary">
+                {formatDuration(agent.totalOnlineSeconds)}
+              </AppText>
             )}
             {agent.totalOnlineSeconds > 0 && <OnlineRank totalSeconds={agent.totalOnlineSeconds} />}
-            {agent.isListed && (
-              <Text style={[styles.listedBadge, { color: colors.primary }]}>
-                · {t('agentMgmt.listed')}
-              </Text>
-            )}
-            {agent.isRented && <Text style={styles.rentedBadge}> · {t('agentMgmt.rented')}</Text>}
-            {agent.accessRole === 'tenant' && (
-              <Text style={styles.rentedBadge}> · {t('agentMgmt.rentingAccessBadge')}</Text>
-            )}
-            <Text style={[styles.meta, { color: colors.textMuted }]}>
-              ·{' '}
+            <AppText variant="label" tone="secondary">
               {getBuddyMode(agent) === 'shareable'
                 ? t('agentMgmt.modeShareable')
                 : t('agentMgmt.modePrivate')}
-            </Text>
+            </AppText>
           </View>
         </View>
         <ChevronRight size={20} color={colors.textMuted} />
-      </Pressable>
+      </CardPressable>
     )
   }
 
@@ -494,22 +491,18 @@ export default function BuddyManagementScreen() {
 
   // Get server URL
   const serverUrl = 'https://shadowob.com'
-  const selectedAgentIsTenant = selectedAgent?.accessRole === 'tenant'
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <BackgroundSurface style={styles.container}>
       {isLoading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
-      ) : agents.length === 0 ? (
-        <View style={styles.empty}>
-          <Bot size={48} color={colors.textMuted} />
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            {t('buddyMgmt.noBuddies', '还没有 Buddy')}
-          </Text>
-          <Text style={[styles.emptyHint, { color: colors.textMuted }]}>
-            {t('buddyMgmt.createHint', '点击右上角 + 创建你的第一个 Buddy')}
-          </Text>
+        <View style={styles.loading}>
+          <Spinner />
         </View>
+      ) : agents.length === 0 ? (
+        <EmptyState
+          icon={Bot}
+          title={t('buddyMgmt.noBuddies', '还没有 Buddy')}
+          description={t('buddyMgmt.createHint', '点击右上角 + 创建你的第一个 Buddy')}
+        />
       ) : (
         <FlatList
           data={agents}
@@ -538,14 +531,16 @@ export default function BuddyManagementScreen() {
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
                   {t('agentMgmt.createTitle')}
                 </Text>
-                <Pressable
+                <IconButton
+                  icon={X}
+                  variant="ghost"
+                  iconColor={colors.textMuted}
+                  iconSize={24}
                   onPress={() => {
                     resetCreateForm()
                   }}
                   style={styles.closeBtn}
-                >
-                  <X size={24} color={colors.textMuted} />
-                </Pressable>
+                />
               </View>
 
               <ScrollView
@@ -561,42 +556,19 @@ export default function BuddyManagementScreen() {
                   {t('agentMgmt.identitySection')}
                 </Text>
 
-                <View style={styles.formField}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                    {t('agentMgmt.nameLabel')}
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
-                    placeholder={t('agentMgmt.namePlaceholder')}
-                    placeholderTextColor={colors.textMuted}
-                    value={createName}
-                    onChangeText={handleCreateNameChange}
-                    maxLength={64}
-                  />
-                </View>
+                <TextField
+                  label={t('agentMgmt.nameLabel')}
+                  placeholder={t('agentMgmt.namePlaceholder')}
+                  value={createName}
+                  onChangeText={handleCreateNameChange}
+                  maxLength={64}
+                  containerStyle={styles.formField}
+                />
 
                 <View style={styles.formField}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                    {t('agentMgmt.usernameLabel')}
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
+                  <TextField
+                    label={t('agentMgmt.usernameLabel')}
                     placeholder={t('agentMgmt.usernamePlaceholder')}
-                    placeholderTextColor={colors.textMuted}
                     value={createUsername}
                     onChangeText={handleCreateUsernameChange}
                     autoCapitalize="none"
@@ -613,25 +585,14 @@ export default function BuddyManagementScreen() {
                 </Text>
 
                 <View style={styles.formField}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                    {t('agentMgmt.descLabel')}
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      styles.textArea,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
+                  <TextField
+                    label={t('agentMgmt.descLabel')}
                     placeholder={t('agentMgmt.descPlaceholder')}
-                    placeholderTextColor={colors.textMuted}
                     value={createDescription}
                     onChangeText={setCreateDescription}
                     multiline
                     maxLength={500}
+                    inputStyle={styles.textArea}
                   />
                   <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
                     {t('agentMgmt.descriptionHint')}
@@ -653,24 +614,22 @@ export default function BuddyManagementScreen() {
 
               {/* Footer Buttons */}
               <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.cancelBtn,
-                    { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
-                  ]}
+                <Button
+                  variant="glass"
+                  size="md"
+                  containerStyle={styles.footerButtonCell}
+                  style={styles.footerButton}
                   onPress={() => {
                     resetCreateForm()
                   }}
                 >
-                  <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>
-                    {t('common.cancel', '取消')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.confirmBtn,
-                    { backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 },
-                  ]}
+                  {t('common.cancel', '取消')}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  containerStyle={styles.footerButtonCell}
+                  style={styles.footerButton}
                   onPress={() =>
                     createName.trim() &&
                     createUsername.trim() &&
@@ -685,15 +644,10 @@ export default function BuddyManagementScreen() {
                   disabled={
                     !createName.trim() || !createUsername.trim() || createMutation.isPending
                   }
+                  loading={createMutation.isPending}
                 >
-                  {createMutation.isPending ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={{ color: '#fff', fontWeight: '700' }}>
-                      {t('common.create', '创建')}
-                    </Text>
-                  )}
-                </Pressable>
+                  {t('common.create', '创建')}
+                </Button>
               </View>
             </Reanimated.View>
           </View>
@@ -738,15 +692,17 @@ export default function BuddyManagementScreen() {
                       )}
                     </View>
                   </View>
-                  <Pressable
+                  <IconButton
+                    icon={X}
+                    variant="ghost"
+                    iconColor={colors.textMuted}
+                    iconSize={24}
                     onPress={() => {
                       setSelectedAgent(null)
                       setGeneratedToken(null)
                     }}
                     style={styles.closeBtn}
-                  >
-                    <X size={24} color={colors.textMuted} />
-                  </Pressable>
+                  />
                 </View>
 
                 <ScrollView
@@ -770,278 +726,223 @@ export default function BuddyManagementScreen() {
                         {t('agentMgmt.accessSection')}
                       </Text>
                     </View>
-                    {selectedAgentIsTenant ? (
-                      <View style={[styles.policyNote, { backgroundColor: colors.surface }]}>
-                        <Text style={[styles.policyTitle, { color: colors.text }]}>
-                          {getBuddyMode(selectedAgent) === 'shareable'
-                            ? t('agentMgmt.modeShareable')
-                            : t('agentMgmt.modePrivate')}
-                        </Text>
-                        <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                          {t('agentMgmt.defaultReplyPolicyDesc')}
-                        </Text>
-                      </View>
-                    ) : (
-                      <BuddyAccessEditor
-                        mode={getBuddyMode(selectedAgent)}
-                        allowedServerIds={getAllowedServerIds(selectedAgent)}
-                        servers={servers}
-                        colors={colors}
-                        t={t}
-                        onModeChange={(mode) =>
-                          updateSelectedAccess(mode, getAllowedServerIds(selectedAgent))
-                        }
-                        onAllowedServerIdsChange={(ids) =>
-                          updateSelectedAccess(getBuddyMode(selectedAgent), ids)
-                        }
-                      />
-                    )}
+                    <BuddyAccessEditor
+                      mode={getBuddyMode(selectedAgent)}
+                      allowedServerIds={getAllowedServerIds(selectedAgent)}
+                      servers={servers}
+                      colors={colors}
+                      t={t}
+                      onModeChange={(mode) =>
+                        updateSelectedAccess(mode, getAllowedServerIds(selectedAgent))
+                      }
+                      onAllowedServerIdsChange={(ids) =>
+                        updateSelectedAccess(getBuddyMode(selectedAgent), ids)
+                      }
+                    />
                   </View>
 
                   {/* Token Section */}
-                  {!selectedAgentIsTenant && (
-                    <View
-                      style={[
-                        styles.section,
-                        { backgroundColor: colors.background, borderColor: colors.border },
-                      ]}
-                    >
-                      <View style={styles.sectionHeader}>
-                        <Key size={16} color={colors.primary} />
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                          {t('buddyMgmt.tokenTitle', '连接配置')}
-                        </Text>
-                      </View>
+                  <View
+                    style={[
+                      styles.section,
+                      { backgroundColor: colors.background, borderColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.sectionHeader}>
+                      <Key size={16} color={colors.primary} />
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                        {t('buddyMgmt.tokenTitle', '连接配置')}
+                      </Text>
+                    </View>
 
-                      {(() => {
-                        const displayToken = getDisplayToken()
-                        if (displayToken) {
-                          const plans = createConnectorPlans({
-                            serverUrl,
-                            token: displayToken,
-                            projectName:
-                              selectedAgent.botUser?.username ??
-                              selectedAgent.name ??
-                              selectedAgent.id,
-                            workDir: '.',
-                          })
-                          const activePlan =
-                            plans.find((plan) => plan.target === connectorTarget) ??
-                            (plans[0] as ConnectorPlan)
-                          const openDocs = () => {
-                            const docsUrl = activePlan.docsUrl.startsWith('/')
-                              ? `${serverUrl}${activePlan.docsUrl}`
-                              : activePlan.docsUrl
-                            Linking.openURL(docsUrl).catch(() => undefined)
-                          }
-                          return (
-                            <View style={styles.tokenContainer}>
-                              {/* Token Display */}
-                              <View
-                                style={[
-                                  styles.tokenBox,
-                                  { backgroundColor: colors.surface, borderColor: colors.border },
-                                ]}
-                              >
-                                <Text
-                                  style={[styles.tokenValue, { color: colors.text }]}
-                                  numberOfLines={1}
-                                  ellipsizeMode="middle"
-                                >
-                                  {displayToken}
-                                </Text>
-                              </View>
-
-                              {/* Token Actions */}
-                              <View style={styles.tokenActions}>
-                                <Pressable
-                                  style={({ pressed }) => [
-                                    styles.tokenActionBtn,
-                                    { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-                                  ]}
-                                  onPress={() => copyToClipboard(displayToken, t('common.copied'))}
-                                >
-                                  <Copy size={14} color={colors.textSecondary} />
-                                  <Text
-                                    style={[
-                                      styles.tokenActionText,
-                                      { color: colors.textSecondary },
-                                    ]}
-                                  >
-                                    {t('common.copy')}
-                                  </Text>
-                                </Pressable>
-                                <Pressable
-                                  style={({ pressed }) => [
-                                    styles.tokenActionBtn,
-                                    { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-                                  ]}
-                                  onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
-                                  disabled={regenTokenMutation.isPending}
-                                >
-                                  <RefreshCw
-                                    size={14}
-                                    color={colors.textSecondary}
-                                    style={
-                                      regenTokenMutation.isPending ? { opacity: 0.5 } : undefined
-                                    }
-                                  />
-                                  <Text
-                                    style={[
-                                      styles.tokenActionText,
-                                      { color: colors.textSecondary },
-                                    ]}
-                                  >
-                                    {t('buddyMgmt.regenerate', '重新生成')}
-                                  </Text>
-                                </Pressable>
-                              </View>
-
+                    {(() => {
+                      const displayToken = getDisplayToken()
+                      if (displayToken) {
+                        const plans = createConnectorPlans({
+                          serverUrl,
+                          token: displayToken,
+                          projectName:
+                            selectedAgent.botUser?.username ??
+                            selectedAgent.name ??
+                            selectedAgent.id,
+                          workDir: '.',
+                        })
+                        const activePlan =
+                          plans.find((plan) => plan.target === connectorTarget) ??
+                          (plans[0] as ConnectorPlan)
+                        const openDocs = () => {
+                          const docsUrl = activePlan.docsUrl.startsWith('/')
+                            ? `${serverUrl}${activePlan.docsUrl}`
+                            : activePlan.docsUrl
+                          Linking.openURL(docsUrl).catch(() => undefined)
+                        }
+                        return (
+                          <View style={styles.tokenContainer}>
+                            {/* Token Display */}
+                            <View
+                              style={[
+                                styles.tokenBox,
+                                { backgroundColor: colors.surface, borderColor: colors.border },
+                              ]}
+                            >
                               <Text
-                                style={[styles.connectorGuideDesc, { color: colors.textMuted }]}
+                                style={[styles.tokenValue, { color: colors.text }]}
+                                numberOfLines={1}
+                                ellipsizeMode="middle"
                               >
-                                {t('agentMgmt.connectorGuideDesc')}
+                                {displayToken}
                               </Text>
+                            </View>
 
-                              <View style={styles.connectorTargets}>
-                                {connectorTargets.map((target) => {
-                                  const Icon = getConnectorIcon(target)
-                                  const active = target === connectorTarget
-                                  return (
-                                    <Pressable
-                                      key={target}
-                                      style={[
-                                        styles.connectorTarget,
-                                        {
-                                          backgroundColor: active
-                                            ? `${colors.primary}1A`
-                                            : colors.surface,
-                                          borderColor: active ? colors.primary : colors.border,
-                                        },
-                                      ]}
-                                      onPress={() => setConnectorTarget(target)}
-                                    >
-                                      <Icon
-                                        size={14}
-                                        color={active ? colors.primary : colors.textMuted}
-                                      />
-                                      <Text
-                                        style={[
-                                          styles.connectorTargetText,
-                                          { color: active ? colors.primary : colors.textMuted },
-                                        ]}
-                                      >
-                                        {getConnectorLabel(target, t)}
-                                      </Text>
-                                    </Pressable>
-                                  )
-                                })}
-                              </View>
+                            {/* Token Actions */}
+                            <View style={styles.tokenActions}>
+                              <Button
+                                variant="glass"
+                                size="sm"
+                                icon={Copy}
+                                containerStyle={styles.tokenActionCell}
+                                style={styles.tokenActionBtn}
+                                onPress={() => copyToClipboard(displayToken, t('common.copied'))}
+                              >
+                                {t('common.copy')}
+                              </Button>
+                              <Button
+                                variant="glass"
+                                size="sm"
+                                icon={RefreshCw}
+                                containerStyle={styles.tokenActionCell}
+                                style={styles.tokenActionBtn}
+                                onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
+                                disabled={regenTokenMutation.isPending}
+                                loading={regenTokenMutation.isPending}
+                              >
+                                {t('buddyMgmt.regenerate', '重新生成')}
+                              </Button>
+                            </View>
 
-                              {/* Config Tabs */}
-                              <View style={styles.configTabs}>
-                                <Pressable
-                                  style={[
-                                    styles.configTab,
-                                    configTab === 'manual' && {
-                                      backgroundColor: colors.surface,
-                                      borderColor: colors.border,
-                                    },
-                                  ]}
-                                  onPress={() => setConfigTab('manual')}
-                                >
-                                  <Terminal
-                                    size={12}
-                                    color={configTab === 'manual' ? colors.text : colors.textMuted}
+                            <Text style={[styles.connectorGuideDesc, { color: colors.textMuted }]}>
+                              {t('agentMgmt.connectorGuideDesc')}
+                            </Text>
+
+                            <View style={styles.connectorTargets}>
+                              {connectorTargets.map((target) => {
+                                const Icon = getConnectorIcon(target)
+                                const active = target === connectorTarget
+                                return (
+                                  <ChipButton
+                                    key={target}
+                                    label={getConnectorLabel(target, t)}
+                                    icon={Icon}
+                                    active={active}
+                                    containerStyle={styles.connectorTargetCell}
+                                    style={styles.connectorTarget}
+                                    onPress={() => setConnectorTarget(target)}
                                   />
-                                  <Text
-                                    style={[
-                                      styles.configTabText,
-                                      {
-                                        color:
-                                          configTab === 'manual' ? colors.text : colors.textMuted,
-                                      },
-                                    ]}
-                                  >
-                                    {t('agentMgmt.setupManual')}
-                                  </Text>
-                                </Pressable>
-                                <Pressable
-                                  style={[
-                                    styles.configTab,
-                                    configTab === 'chat' && {
-                                      backgroundColor: colors.surface,
-                                      borderColor: colors.border,
-                                    },
-                                  ]}
-                                  onPress={() => setConfigTab('chat')}
-                                >
-                                  <MessageSquare
-                                    size={12}
-                                    color={configTab === 'chat' ? colors.text : colors.textMuted}
-                                  />
-                                  <Text
-                                    style={[
-                                      styles.configTabText,
-                                      {
-                                        color:
-                                          configTab === 'chat' ? colors.text : colors.textMuted,
-                                      },
-                                    ]}
-                                  >
-                                    {t('agentMgmt.setupChat')}
-                                  </Text>
-                                </Pressable>
-                              </View>
+                                )
+                              })}
+                            </View>
 
-                              {/* Config Content */}
-                              {configTab === 'manual' ? (
-                                <View style={styles.configContent}>
-                                  <View style={styles.configBlock}>
-                                    <View style={styles.configBlockHeader}>
-                                      <Text
-                                        style={[
-                                          styles.configBlockLabel,
-                                          { color: colors.textMuted },
-                                        ]}
-                                      >
-                                        {t('agentMgmt.connectorCliTitle')}
-                                      </Text>
-                                      <Pressable
-                                        style={({ pressed }) => [
-                                          styles.copySmallBtn,
-                                          { opacity: pressed ? 0.7 : 1 },
-                                        ]}
-                                        onPress={() => copyToClipboard(activePlan.connectCommand)}
-                                      >
-                                        <Copy size={12} color={colors.primary} />
-                                        <Text
-                                          style={[styles.copySmallText, { color: colors.primary }]}
-                                        >
-                                          {t('common.copy')}
-                                        </Text>
-                                      </Pressable>
-                                    </View>
-                                    <View
-                                      style={[
-                                        styles.codeBlock,
-                                        {
-                                          backgroundColor: colors.surface,
-                                          borderColor: colors.border,
-                                        },
-                                      ]}
+                            {/* Config Tabs */}
+                            <View style={styles.configTabs}>
+                              <ChipButton
+                                label={t('agentMgmt.setupManual')}
+                                icon={Terminal}
+                                active={configTab === 'manual'}
+                                containerStyle={styles.configTabCell}
+                                style={styles.configTab}
+                                onPress={() => setConfigTab('manual')}
+                              />
+                              <ChipButton
+                                label={t('agentMgmt.setupChat')}
+                                icon={MessageSquare}
+                                active={configTab === 'chat'}
+                                containerStyle={styles.configTabCell}
+                                style={styles.configTab}
+                                onPress={() => setConfigTab('chat')}
+                              />
+                            </View>
+
+                            {/* Config Content */}
+                            {configTab === 'manual' ? (
+                              <View style={styles.configContent}>
+                                <View style={styles.configBlock}>
+                                  <View style={styles.configBlockHeader}>
+                                    <Text
+                                      style={[styles.configBlockLabel, { color: colors.textMuted }]}
                                     >
-                                      <Text
-                                        style={[styles.codeText, { color: colors.textSecondary }]}
-                                        numberOfLines={5}
-                                      >
-                                        {activePlan.connectCommand}
-                                      </Text>
-                                    </View>
+                                      {t('agentMgmt.connectorCliTitle')}
+                                    </Text>
+                                    <Button
+                                      variant="ghost"
+                                      size="xs"
+                                      icon={Copy}
+                                      iconColor={colors.primary}
+                                      style={styles.copySmallBtn}
+                                      onPress={() => copyToClipboard(activePlan.connectCommand)}
+                                    >
+                                      {t('common.copy')}
+                                    </Button>
                                   </View>
+                                  <View
+                                    style={[
+                                      styles.codeBlock,
+                                      {
+                                        backgroundColor: colors.surface,
+                                        borderColor: colors.border,
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[styles.codeText, { color: colors.textSecondary }]}
+                                      numberOfLines={5}
+                                    >
+                                      {activePlan.connectCommand}
+                                    </Text>
+                                  </View>
+                                </View>
 
-                                  {/* Quick Command */}
-                                  <View style={styles.configBlock}>
+                                {/* Quick Command */}
+                                <View style={styles.configBlock}>
+                                  <View style={styles.configBlockHeader}>
+                                    <Text
+                                      style={[styles.configBlockLabel, { color: colors.textMuted }]}
+                                    >
+                                      {t('agentMgmt.setupBashTitle')}
+                                    </Text>
+                                    <Button
+                                      variant="ghost"
+                                      size="xs"
+                                      icon={Copy}
+                                      iconColor={colors.primary}
+                                      style={styles.copySmallBtn}
+                                      onPress={() => copyToClipboard(activePlan.quickCommand)}
+                                    >
+                                      {t('common.copy')}
+                                    </Button>
+                                  </View>
+                                  <View
+                                    style={[
+                                      styles.codeBlock,
+                                      {
+                                        backgroundColor: colors.surface,
+                                        borderColor: colors.border,
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[styles.codeText, { color: colors.textSecondary }]}
+                                      numberOfLines={3}
+                                    >
+                                      {activePlan.quickCommand}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                {activePlan.commands.map((command, index) => (
+                                  <View
+                                    key={`${activePlan.target}-${command.label}`}
+                                    style={styles.configBlock}
+                                  >
                                     <View style={styles.configBlockHeader}>
                                       <Text
                                         style={[
@@ -1049,22 +950,18 @@ export default function BuddyManagementScreen() {
                                           { color: colors.textMuted },
                                         ]}
                                       >
-                                        {t('agentMgmt.setupBashTitle')}
+                                        {index + 1}. {t('agentMgmt.connectorStepCommand')}
                                       </Text>
-                                      <Pressable
-                                        style={({ pressed }) => [
-                                          styles.copySmallBtn,
-                                          { opacity: pressed ? 0.7 : 1 },
-                                        ]}
-                                        onPress={() => copyToClipboard(activePlan.quickCommand)}
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        icon={Copy}
+                                        iconColor={colors.primary}
+                                        style={styles.copySmallBtn}
+                                        onPress={() => copyToClipboard(command.command)}
                                       >
-                                        <Copy size={12} color={colors.primary} />
-                                        <Text
-                                          style={[styles.copySmallText, { color: colors.primary }]}
-                                        >
-                                          {t('common.copy')}
-                                        </Text>
-                                      </Pressable>
+                                        {t('common.copy')}
+                                      </Button>
                                     </View>
                                     <View
                                       style={[
@@ -1079,116 +976,17 @@ export default function BuddyManagementScreen() {
                                         style={[styles.codeText, { color: colors.textSecondary }]}
                                         numberOfLines={3}
                                       >
-                                        {activePlan.quickCommand}
+                                        {command.command}
                                       </Text>
                                     </View>
                                   </View>
+                                ))}
 
-                                  {activePlan.commands.map((command, index) => (
-                                    <View
-                                      key={`${activePlan.target}-${command.label}`}
-                                      style={styles.configBlock}
-                                    >
-                                      <View style={styles.configBlockHeader}>
-                                        <Text
-                                          style={[
-                                            styles.configBlockLabel,
-                                            { color: colors.textMuted },
-                                          ]}
-                                        >
-                                          {index + 1}. {t('agentMgmt.connectorStepCommand')}
-                                        </Text>
-                                        <Pressable
-                                          style={({ pressed }) => [
-                                            styles.copySmallBtn,
-                                            { opacity: pressed ? 0.7 : 1 },
-                                          ]}
-                                          onPress={() => copyToClipboard(command.command)}
-                                        >
-                                          <Copy size={12} color={colors.primary} />
-                                          <Text
-                                            style={[
-                                              styles.copySmallText,
-                                              { color: colors.primary },
-                                            ]}
-                                          >
-                                            {t('common.copy')}
-                                          </Text>
-                                        </Pressable>
-                                      </View>
-                                      <View
-                                        style={[
-                                          styles.codeBlock,
-                                          {
-                                            backgroundColor: colors.surface,
-                                            borderColor: colors.border,
-                                          },
-                                        ]}
-                                      >
-                                        <Text
-                                          style={[styles.codeText, { color: colors.textSecondary }]}
-                                          numberOfLines={3}
-                                        >
-                                          {command.command}
-                                        </Text>
-                                      </View>
-                                    </View>
-                                  ))}
-
-                                  {activePlan.configBlocks.map((block) => (
-                                    <View
-                                      key={`${activePlan.target}-${block.label}`}
-                                      style={styles.configBlock}
-                                    >
-                                      <View style={styles.configBlockHeader}>
-                                        <Text
-                                          style={[
-                                            styles.configBlockLabel,
-                                            { color: colors.textMuted },
-                                          ]}
-                                        >
-                                          {block.label}
-                                        </Text>
-                                        <Pressable
-                                          style={({ pressed }) => [
-                                            styles.copySmallBtn,
-                                            { opacity: pressed ? 0.7 : 1 },
-                                          ]}
-                                          onPress={() => copyToClipboard(block.content)}
-                                        >
-                                          <Copy size={12} color={colors.primary} />
-                                          <Text
-                                            style={[
-                                              styles.copySmallText,
-                                              { color: colors.primary },
-                                            ]}
-                                          >
-                                            {t('common.copy')}
-                                          </Text>
-                                        </Pressable>
-                                      </View>
-                                      <View
-                                        style={[
-                                          styles.codeBlock,
-                                          {
-                                            backgroundColor: colors.surface,
-                                            borderColor: colors.border,
-                                          },
-                                        ]}
-                                      >
-                                        <Text
-                                          style={[styles.codeText, { color: colors.textSecondary }]}
-                                          numberOfLines={8}
-                                        >
-                                          {block.content}
-                                        </Text>
-                                      </View>
-                                    </View>
-                                  ))}
-                                </View>
-                              ) : (
-                                <View style={styles.configContent}>
-                                  <View style={styles.configBlock}>
+                                {activePlan.configBlocks.map((block) => (
+                                  <View
+                                    key={`${activePlan.target}-${block.label}`}
+                                    style={styles.configBlock}
+                                  >
                                     <View style={styles.configBlockHeader}>
                                       <Text
                                         style={[
@@ -1196,28 +994,19 @@ export default function BuddyManagementScreen() {
                                           { color: colors.textMuted },
                                         ]}
                                       >
-                                        {t('agentMgmt.setupChat')}
+                                        {block.label}
                                       </Text>
-                                      <Pressable
-                                        style={({ pressed }) => [
-                                          styles.copySmallBtn,
-                                          { opacity: pressed ? 0.7 : 1 },
-                                        ]}
-                                        onPress={() => copyToClipboard(activePlan.aiPrompt)}
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        icon={Copy}
+                                        iconColor={colors.primary}
+                                        style={styles.copySmallBtn}
+                                        onPress={() => copyToClipboard(block.content)}
                                       >
-                                        <Copy size={12} color={colors.primary} />
-                                        <Text
-                                          style={[styles.copySmallText, { color: colors.primary }]}
-                                        >
-                                          {t('common.copy')}
-                                        </Text>
-                                      </Pressable>
+                                        {t('common.copy')}
+                                      </Button>
                                     </View>
-                                    <Text
-                                      style={[styles.aiPromptText, { color: colors.textSecondary }]}
-                                    >
-                                      {t('agentMgmt.setupChatDesc')}
-                                    </Text>
                                     <View
                                       style={[
                                         styles.codeBlock,
@@ -1231,69 +1020,110 @@ export default function BuddyManagementScreen() {
                                         style={[styles.codeText, { color: colors.textSecondary }]}
                                         numberOfLines={8}
                                       >
-                                        {activePlan.aiPrompt}
+                                        {block.content}
                                       </Text>
                                     </View>
                                   </View>
-                                </View>
-                              )}
-
-                              <View style={styles.capabilityGrid}>
-                                {activePlan.capabilities.map((cap) => (
+                                ))}
+                              </View>
+                            ) : (
+                              <View style={styles.configContent}>
+                                <View style={styles.configBlock}>
+                                  <View style={styles.configBlockHeader}>
+                                    <Text
+                                      style={[styles.configBlockLabel, { color: colors.textMuted }]}
+                                    >
+                                      {t('agentMgmt.setupChat')}
+                                    </Text>
+                                    <Button
+                                      variant="ghost"
+                                      size="xs"
+                                      icon={Copy}
+                                      iconColor={colors.primary}
+                                      style={styles.copySmallBtn}
+                                      onPress={() => copyToClipboard(activePlan.aiPrompt)}
+                                    >
+                                      {t('common.copy')}
+                                    </Button>
+                                  </View>
+                                  <Text
+                                    style={[styles.aiPromptText, { color: colors.textSecondary }]}
+                                  >
+                                    {t('agentMgmt.setupChatDesc')}
+                                  </Text>
                                   <View
-                                    key={`${activePlan.target}-${cap}`}
                                     style={[
-                                      styles.capabilityPill,
+                                      styles.codeBlock,
                                       {
                                         backgroundColor: colors.surface,
                                         borderColor: colors.border,
                                       },
                                     ]}
                                   >
-                                    <Check size={12} color={colors.primary} />
                                     <Text
-                                      style={[
-                                        styles.capabilityText,
-                                        { color: colors.textSecondary },
-                                      ]}
-                                      numberOfLines={1}
+                                      style={[styles.codeText, { color: colors.textSecondary }]}
+                                      numberOfLines={8}
                                     >
-                                      {t(`agentMgmt.connectorCap_${cap}`)}
+                                      {activePlan.aiPrompt}
                                     </Text>
                                   </View>
-                                ))}
+                                </View>
                               </View>
+                            )}
 
-                              {/* Docs Link */}
-                              <Pressable style={styles.docsLink} onPress={openDocs}>
-                                <BookOpen size={14} color={colors.primary} />
-                                <Text style={[styles.docsLinkText, { color: colors.primary }]}>
-                                  {t('agentMgmt.openclawFullDocs')}
-                                </Text>
-                              </Pressable>
+                            <View style={styles.capabilityGrid}>
+                              {activePlan.capabilities.map((cap) => (
+                                <View
+                                  key={`${activePlan.target}-${cap}`}
+                                  style={[
+                                    styles.capabilityPill,
+                                    {
+                                      backgroundColor: colors.surface,
+                                      borderColor: colors.border,
+                                    },
+                                  ]}
+                                >
+                                  <Check size={12} color={colors.primary} />
+                                  <Text
+                                    style={[styles.capabilityText, { color: colors.textSecondary }]}
+                                    numberOfLines={1}
+                                  >
+                                    {t(`agentMgmt.connectorCap_${cap}`)}
+                                  </Text>
+                                </View>
+                              ))}
                             </View>
-                          )
-                        }
-                        return (
-                          <Pressable
-                            style={({ pressed }) => [
-                              styles.generateBtn,
-                              { backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 },
-                            ]}
-                            onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
-                            disabled={regenTokenMutation.isPending}
-                          >
-                            <Key size={16} color="#fff" />
-                            <Text style={styles.generateBtnText}>
-                              {regenTokenMutation.isPending
-                                ? t('buddyMgmt.generating', '生成中...')
-                                : t('buddyMgmt.generateToken', '生成 Token')}
-                            </Text>
-                          </Pressable>
+
+                            {/* Docs Link */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              icon={BookOpen}
+                              style={styles.docsLink}
+                              onPress={openDocs}
+                            >
+                              {t('agentMgmt.openclawFullDocs')}
+                            </Button>
+                          </View>
                         )
-                      })()}
-                    </View>
-                  )}
+                      }
+                      return (
+                        <Button
+                          variant="primary"
+                          size="md"
+                          icon={Key}
+                          style={styles.generateBtn}
+                          onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
+                          disabled={regenTokenMutation.isPending}
+                          loading={regenTokenMutation.isPending}
+                        >
+                          {regenTokenMutation.isPending
+                            ? t('buddyMgmt.generating', '生成中...')
+                            : t('buddyMgmt.generateToken', '生成 Token')}
+                        </Button>
+                      )
+                    })()}
+                  </View>
 
                   {/* Info Section */}
                   <View
@@ -1364,30 +1194,28 @@ export default function BuddyManagementScreen() {
                   </View>
 
                   {/* Delete Button */}
-                  {!selectedAgentIsTenant && (
-                    <Pressable
-                      style={({ pressed }) => [styles.deleteBtn, { opacity: pressed ? 0.7 : 1 }]}
-                      onPress={() =>
-                        Alert.alert(
-                          t('buddyMgmt.confirmDelete', '确定删除此 Buddy？'),
-                          t('buddyMgmt.deleteWarning', '删除后不可恢复'),
-                          [
-                            { text: t('common.cancel', '取消'), style: 'cancel' },
-                            {
-                              text: t('common.delete', '删除'),
-                              style: 'destructive',
-                              onPress: () => deleteMutation.mutate(selectedAgent.id),
-                            },
-                          ],
-                        )
-                      }
-                    >
-                      <Trash2 size={18} color="#ef4444" />
-                      <Text style={styles.deleteBtnText}>
-                        {t('buddyMgmt.deleteBuddy', '删除 Buddy')}
-                      </Text>
-                    </Pressable>
-                  )}
+                  <Button
+                    variant="danger"
+                    size="md"
+                    icon={Trash2}
+                    style={styles.deleteBtn}
+                    onPress={() =>
+                      Alert.alert(
+                        t('buddyMgmt.confirmDelete', '确定删除此 Buddy？'),
+                        t('buddyMgmt.deleteWarning', '删除后不可恢复'),
+                        [
+                          { text: t('common.cancel', '取消'), style: 'cancel' },
+                          {
+                            text: t('common.delete', '删除'),
+                            style: 'destructive',
+                            onPress: () => deleteMutation.mutate(selectedAgent.id),
+                          },
+                        ],
+                      )
+                    }
+                  >
+                    {t('buddyMgmt.deleteBuddy', '删除 Buddy')}
+                  </Button>
 
                   {/* Bottom Spacer */}
                   <View style={{ height: 40 }} />
@@ -1397,12 +1225,17 @@ export default function BuddyManagementScreen() {
           </Reanimated.View>
         </View>
       </Modal>
-    </View>
+    </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   list: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xl * 2 },
   agentCard: {
     flexDirection: 'row',
@@ -1413,13 +1246,6 @@ const styles = StyleSheet.create({
   },
   agentName: { fontSize: fontSize.md, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  meta: { fontSize: fontSize.xs },
-  listedBadge: { fontSize: fontSize.xs, fontWeight: '700' },
-  rentedBadge: { fontSize: fontSize.xs, fontWeight: '700', color: '#ea580c' },
-  empty: { alignItems: 'center', paddingTop: 80, gap: spacing.sm },
-  emptyText: { fontSize: fontSize.lg, fontWeight: '700' },
-  emptyHint: { fontSize: fontSize.sm },
 
   // Keyboard avoiding
   keyboardAvoidingContainer: { flex: 1 },
@@ -1448,7 +1274,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   modalTitle: { fontSize: fontSize.xl, fontWeight: '700' },
-  closeBtn: { padding: spacing.xs },
+  closeBtn: { width: 36, height: 36 },
   createForm: { flex: 1 },
   createFormContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   formIntro: { fontSize: fontSize.sm, lineHeight: 21, marginBottom: spacing.lg },
@@ -1480,13 +1306,6 @@ const styles = StyleSheet.create({
   serverOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8 },
   checkbox: { width: 16, height: 16, borderRadius: 4, borderWidth: 1 },
   serverName: { flex: 1, fontSize: fontSize.sm, fontWeight: '600' },
-  input: {
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    fontSize: fontSize.md,
-  },
   textArea: {
     minHeight: 96,
     textAlignVertical: 'top',
@@ -1497,17 +1316,11 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderTopWidth: 1,
   },
-  cancelBtn: {
+  footerButtonCell: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: radius.lg,
-    alignItems: 'center',
   },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radius.lg,
-    alignItems: 'center',
+  footerButton: {
+    width: '100%',
   },
 
   // Detail Modal
@@ -1565,64 +1378,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
   },
+  connectorTargetCell: {
+    flex: 1,
+  },
   connectorTarget: {
-    flex: 1,
     minHeight: 48,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    width: '100%',
     paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.sm,
   },
-  connectorTargetText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
+  tokenActionCell: { flex: 1 },
   tokenActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: 'center',
+    width: '100%',
   },
-  tokenActionText: { fontSize: fontSize.xs, fontWeight: '700' },
   generateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
+    width: '100%',
   },
-  generateBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSize.md },
 
   // Config Tabs
   configTabs: {
     flexDirection: 'row',
     gap: spacing.xs,
-    backgroundColor: 'rgba(0,0,0,0.05)',
     borderRadius: radius.lg,
     padding: spacing.xs,
   },
-  configTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+  configTabCell: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
-  configTabText: { fontSize: fontSize.xs, fontWeight: '700' },
+  configTab: {
+    width: '100%',
+  },
 
   // Config Content
   configContent: { gap: spacing.md },
@@ -1634,13 +1418,9 @@ const styles = StyleSheet.create({
   },
   configBlockLabel: { fontSize: fontSize.xs, fontWeight: '700' },
   copySmallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 4,
+    minHeight: 28,
+    paddingHorizontal: spacing.sm,
   },
-  copySmallText: { fontSize: fontSize.xs, fontWeight: '700' },
   codeBlock: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -1671,13 +1451,8 @@ const styles = StyleSheet.create({
 
   // Docs Link
   docsLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
+    width: '100%',
   },
-  docsLinkText: { fontSize: fontSize.sm, fontWeight: '700' },
 
   // Info Grid
   infoGrid: {
@@ -1695,14 +1470,7 @@ const styles = StyleSheet.create({
 
   // Delete
   deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    backgroundColor: '#fef2f2',
-    borderRadius: radius.lg,
     marginTop: spacing.sm,
+    width: '100%',
   },
-  deleteBtnText: { color: '#ef4444', fontWeight: '700', fontSize: fontSize.md },
 })

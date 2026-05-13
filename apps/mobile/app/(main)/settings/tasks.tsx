@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check } from 'lucide-react-native'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Check, ClipboardList, Gift, ListChecks, WalletCards } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../src/components/common/price-display'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { ShrimpCoinIcon } from '../../../src/components/common/shrimp-coin'
+import { AppScreen, Button, Card, IconBubble, Typography } from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
-import { fontSize, radius, spacing, useColors } from '../../../src/theme'
+import { fontSize, spacing, useColors } from '../../../src/theme'
 
 export default function TaskCenterScreen() {
+  const { t } = useTranslation()
   const colors = useColors()
   const queryClient = useQueryClient()
 
@@ -39,37 +42,41 @@ export default function TaskCenterScreen() {
   if (isLoading) return <LoadingScreen />
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SettingsHeader title="任务中心" />
+    <AppScreen>
+      <SettingsHeader title={t('taskCenter.title', '任务中心')} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         {/* Stats */}
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>总数</Text>
-            <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: '800' }}>
+          <Card variant="stat" style={styles.statCard}>
+            <IconBubble icon={ClipboardList} size={16} />
+            <Typography variant="micro">{t('taskCenter.total', '总数')}</Typography>
+            <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: '900' }}>
               {data?.summary.totalTasks ?? 0}
             </Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>可领</Text>
+          </Card>
+          <Card variant="stat" style={styles.statCard}>
+            <IconBubble icon={Gift} tone="success" size={16} />
+            <Typography variant="micro">{t('taskCenter.claimable', '可领')}</Typography>
             <Text style={{ color: '#23a559', fontSize: fontSize.lg, fontWeight: '800' }}>
               {data?.summary.claimableTasks ?? 0}
             </Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>已完成</Text>
+          </Card>
+          <Card variant="stat" style={styles.statCard}>
+            <IconBubble icon={ListChecks} tone="primary" size={16} />
+            <Typography variant="micro">{t('taskCenter.completed', '已完成')}</Typography>
             <Text style={{ color: colors.primary, fontSize: fontSize.lg, fontWeight: '800' }}>
               {data?.summary.completedTasks ?? 0}
             </Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>虾币</Text>
+          </Card>
+          <Card variant="stat" style={styles.statCard}>
+            <IconBubble icon={WalletCards} tone="accent" size={16} />
+            <Typography variant="micro">{t('taskCenter.wallet', '虾币')}</Typography>
             <PriceCompact amount={data?.wallet.balance ?? 0} size={fontSize.lg} />
-          </View>
+          </Card>
         </View>
 
         {/* Task list */}
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <Card variant="glassCard" padded={false}>
           {data?.tasks.map((task, idx) => (
             <View
               key={task.key}
@@ -93,39 +100,36 @@ export default function TaskCenterScreen() {
                 </View>
               </View>
               {task.claimable ? (
-                <Pressable
-                  style={[styles.claimBtn, { backgroundColor: colors.primary }]}
+                <Button
+                  size="xs"
                   onPress={() => claimMutation.mutate(task.key)}
-                  disabled={claimMutation.isPending}
+                  loading={claimMutation.isPending}
                 >
-                  <Text style={{ color: '#fff', fontSize: fontSize.xs, fontWeight: '700' }}>
-                    领取
-                  </Text>
-                </Pressable>
+                  {t('taskCenter.claim', '领取')}
+                </Button>
               ) : task.completed ? (
                 <Check size={16} color="#23a559" />
               ) : (
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>未完成</Text>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                  {t('taskCenter.incomplete', '未完成')}
+                </Text>
               )}
             </View>
           ))}
-        </View>
+        </Card>
       </ScrollView>
-    </View>
+    </AppScreen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   statsRow: { flexDirection: 'row', gap: spacing.sm },
   statCard: {
     flex: 1,
-    padding: spacing.md,
-    borderRadius: radius.xl,
     alignItems: 'center',
+    gap: spacing.xs,
   },
-  card: { borderRadius: radius.xl, overflow: 'hidden' },
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -133,10 +137,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  claimBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.lg,
   },
 })

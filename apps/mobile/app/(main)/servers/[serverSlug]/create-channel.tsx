@@ -21,16 +21,21 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import {
+  Button,
+  CardPressable,
+  ChipButton,
+  IconButton,
+  TextField,
+} from '../../../../src/components/ui'
 import { fetchApi } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { radius, spacing, useColors } from '../../../../src/theme'
@@ -64,7 +69,6 @@ interface BuddyAgent {
   id: string
   ownerId: string
   userId: string
-  accessRole?: 'owner' | 'tenant'
   config?: {
     buddyMode?: 'private' | 'shareable'
     allowedServerIds?: string[]
@@ -129,8 +133,8 @@ export default function CreateChannelScreen() {
   })
 
   const { data: myAgents = [] } = useQuery({
-    queryKey: ['my-agents-for-channel-create', 'include-rentals'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
+    queryKey: ['my-agents-for-channel-create'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
   })
 
   const selectableMembers = useMemo(() => {
@@ -197,6 +201,17 @@ export default function CreateChannelScreen() {
         return <Megaphone size={size} color={color} strokeWidth={2.5} />
       default:
         return <Hash size={size} color={color} strokeWidth={2.5} />
+    }
+  }
+
+  const channelIconComponent = (type: ChannelType) => {
+    switch (type) {
+      case 'voice':
+        return Volume2
+      case 'announcement':
+        return Megaphone
+      default:
+        return Hash
     }
   }
 
@@ -382,9 +397,14 @@ export default function CreateChannelScreen() {
           { backgroundColor: colors.surface, paddingTop: insets.top + spacing.md },
         ]}
       >
-        <Pressable onPress={handleBack} hitSlop={8} style={styles.headerBtn}>
-          <ChevronLeft size={26} color={colors.text} />
-        </Pressable>
+        <IconButton
+          icon={ChevronLeft}
+          variant="ghost"
+          iconColor={colors.text}
+          iconSize={26}
+          style={styles.headerBtn}
+          onPress={handleBack}
+        />
         <View
           style={{
             flex: 1,
@@ -397,41 +417,31 @@ export default function CreateChannelScreen() {
             {t('server.createChannel')}
           </Text>
         </View>
-        <Pressable
+        <Button
           onPress={handleCreate}
           disabled={createChannelMutation.isPending}
-          style={[
-            styles.headerCreateBtn,
-            {
-              backgroundColor: colors.primary,
-              opacity: createChannelMutation.isPending ? 0.5 : 1,
-            },
-          ]}
+          loading={createChannelMutation.isPending}
+          variant="primary"
+          size="sm"
+          style={styles.headerCreateBtn}
         >
-          <Text style={styles.headerCreateBtnText}>{createButtonLabel}</Text>
-        </Pressable>
+          {createButtonLabel}
+        </Button>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing.xl + insets.bottom }}
       >
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.inputBackground,
-              color: colors.text,
-              borderColor: colors.border,
-              marginHorizontal: spacing.md,
-              marginTop: spacing.md,
-            },
-          ]}
+        <TextField
           value={channelName}
           onChangeText={setChannelName}
           placeholder={t('server.channelNamePlaceholder')}
-          placeholderTextColor={colors.textMuted}
           autoFocus
+          left={channelIcon(channelType, colors.textMuted, 18)}
+          containerStyle={styles.nameField}
+          style={styles.inputFrame}
+          inputStyle={styles.inputText}
         />
         <View style={styles.section}>
           <View style={styles.typeAndPrivacyRow}>
@@ -443,63 +453,24 @@ export default function CreateChannelScreen() {
               {(['text', 'voice', 'announcement'] as ChannelType[]).map((item) => {
                 const selected = channelType === item
                 return (
-                  <Pressable
+                  <ChipButton
                     key={item}
-                    style={[
-                      styles.typeChip,
-                      {
-                        backgroundColor: selected ? `${colors.primary}12` : colors.surface,
-                        borderColor: selected ? colors.primary : colors.border,
-                      },
-                    ]}
+                    label={channelTypeLabel(item)}
+                    icon={channelIconComponent(item)}
+                    active={selected}
+                    style={styles.typeChip}
                     onPress={() => setChannelType(item)}
-                  >
-                    <View
-                      style={[
-                        styles.typeChipIconWrap,
-                        {
-                          backgroundColor: colors.inputBackground,
-                        },
-                      ]}
-                    >
-                      {channelIcon(item, selected ? colors.primary : colors.textSecondary, 16)}
-                    </View>
-                    <Text
-                      style={[
-                        styles.typeChipText,
-                        { color: selected ? colors.primary : colors.text },
-                      ]}
-                    >
-                      {channelTypeLabel(item)}
-                    </Text>
-                  </Pressable>
+                  />
                 )
               })}
             </ScrollView>
-            <Pressable
-              style={[
-                styles.privateToggleCompact,
-                {
-                  backgroundColor: isPrivate ? `${colors.primary}12` : colors.surface,
-                  borderColor: isPrivate ? colors.primary : colors.border,
-                },
-              ]}
+            <ChipButton
+              label={t('channel.private', '私密')}
+              icon={Lock}
+              active={isPrivate}
+              style={styles.privateToggleCompact}
               onPress={() => setIsPrivate(!isPrivate)}
-            >
-              <View
-                style={[styles.privateIconWrapCompact, { backgroundColor: colors.inputBackground }]}
-              >
-                <Lock size={14} color={isPrivate ? colors.primary : colors.textSecondary} />
-              </View>
-              <Text
-                style={[
-                  styles.privateLabelCompact,
-                  { color: isPrivate ? colors.primary : colors.text },
-                ]}
-              >
-                {t('channel.private', '私密')}
-              </Text>
-            </Pressable>
+            />
           </View>
         </View>
 
@@ -513,39 +484,22 @@ export default function CreateChannelScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoryRow}
             >
-              <Pressable
-                style={[
-                  styles.categoryChip,
-                  {
-                    backgroundColor: !categoryId ? `${colors.primary}14` : colors.surface,
-                    borderColor: !categoryId ? colors.primary : colors.border,
-                  },
-                ]}
+              <ChipButton
+                label={t('server.noCategory')}
+                icon={Layers3}
+                active={!categoryId}
+                style={styles.categoryChip}
                 onPress={() => setCategoryId(null)}
-              >
-                <Layers3 size={14} color={!categoryId ? colors.primary : colors.textMuted} />
-                <Text style={{ color: !categoryId ? colors.primary : colors.text }}>
-                  {t('server.noCategory')}
-                </Text>
-              </Pressable>
+              />
 
               {categories.map((cat) => (
-                <Pressable
+                <ChipButton
                   key={cat.id}
-                  style={[
-                    styles.categoryChip,
-                    {
-                      backgroundColor:
-                        categoryId === cat.id ? `${colors.primary}14` : colors.surface,
-                      borderColor: categoryId === cat.id ? colors.primary : colors.border,
-                    },
-                  ]}
+                  label={cat.name}
+                  active={categoryId === cat.id}
+                  style={styles.categoryChip}
                   onPress={() => setCategoryId(cat.id)}
-                >
-                  <Text style={{ color: categoryId === cat.id ? colors.primary : colors.text }}>
-                    {cat.name}
-                  </Text>
-                </Pressable>
+                />
               ))}
             </ScrollView>
           </View>
@@ -561,16 +515,12 @@ export default function CreateChannelScreen() {
                 contentContainerStyle={styles.selectedRow}
               >
                 {selectedPreview.map((item) => (
-                  <Pressable
+                  <CardPressable
                     key={item.id}
                     onPress={() => removeSelection(item.id)}
-                    style={[
-                      styles.selectedChip,
-                      {
-                        backgroundColor: colors.inputBackground,
-                        borderColor: colors.border,
-                      },
-                    ]}
+                    variant="glass"
+                    padded={false}
+                    style={styles.selectedChip}
                   >
                     <Avatar uri={item.avatarUrl} name={item.name} size={24} userId={item.userId} />
                     <Text
@@ -580,7 +530,7 @@ export default function CreateChannelScreen() {
                       {item.name}
                     </Text>
                     <X size={12} color={colors.textMuted} />
-                  </Pressable>
+                  </CardPressable>
                 ))}
               </ScrollView>
             </View>
@@ -591,21 +541,26 @@ export default function CreateChannelScreen() {
               { backgroundColor: colors.surface, borderColor: colors.border },
             ]}
           >
-            <View style={[styles.searchRow, { backgroundColor: colors.inputBackground }]}>
-              <Search size={16} color={colors.textMuted} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                value={memberSearch}
-                onChangeText={setMemberSearch}
-                placeholder={t('members.searchMembers', '搜索成员')}
-                placeholderTextColor={colors.textMuted}
-              />
-              {memberSearch.length > 0 && (
-                <Pressable onPress={() => setMemberSearch('')} hitSlop={8}>
-                  <X size={14} color={colors.textMuted} />
-                </Pressable>
-              )}
-            </View>
+            <TextField
+              value={memberSearch}
+              onChangeText={setMemberSearch}
+              placeholder={t('members.searchMembers', '搜索成员')}
+              left={<Search size={16} color={colors.textMuted} />}
+              right={
+                memberSearch.length > 0 ? (
+                  <IconButton
+                    icon={X}
+                    variant="ghost"
+                    iconColor={colors.textMuted}
+                    iconSize={14}
+                    style={styles.clearButton}
+                    onPress={() => setMemberSearch('')}
+                  />
+                ) : null
+              }
+              containerStyle={styles.memberSearchField}
+              style={styles.searchFrame}
+            />
 
             <ScrollView
               horizontal
@@ -618,39 +573,14 @@ export default function CreateChannelScreen() {
                 const selected = activeTab === key
 
                 return (
-                  <Pressable
+                  <ChipButton
                     key={key}
-                    style={[
-                      styles.tab,
-                      {
-                        backgroundColor: selected ? `${colors.primary}12` : colors.inputBackground,
-                        borderColor: selected ? colors.primary : 'transparent',
-                      },
-                    ]}
+                    label={`${tab.label} ${tab.count}`}
+                    icon={Icon}
+                    active={selected}
+                    style={styles.tab}
                     onPress={() => setActiveTab(key)}
-                  >
-                    <Icon size={14} color={selected ? colors.primary : colors.textMuted} />
-                    <Text
-                      style={{ color: selected ? colors.primary : colors.text, fontWeight: '600' }}
-                    >
-                      {tab.label}
-                    </Text>
-                    <View
-                      style={[
-                        styles.tabCount,
-                        { backgroundColor: selected ? colors.primary : `${colors.textMuted}22` },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.tabCountText,
-                          { color: selected ? '#fff' : colors.textMuted },
-                        ]}
-                      >
-                        {tab.count}
-                      </Text>
-                    </View>
-                  </Pressable>
+                  />
                 )
               })}
             </ScrollView>
@@ -750,12 +680,14 @@ function SelectableRow({
   onPress: () => void
 }) {
   return (
-    <Pressable
+    <CardPressable
+      variant="glassCard"
+      active={selected}
+      padded={false}
       style={[
         styles.memberRow,
         {
-          backgroundColor: selected ? `${colors.primary}0D` : colors.background,
-          borderColor: selected ? `${colors.primary}55` : colors.border,
+          backgroundColor: selected ? `${colors.primary}0D` : colors.glassSoft,
         },
       ]}
       onPress={onPress}
@@ -781,7 +713,7 @@ function SelectableRow({
       >
         {selected && <Check size={14} color="#fff" />}
       </View>
-    </Pressable>
+    </CardPressable>
   )
 }
 
@@ -799,57 +731,26 @@ const styles = StyleSheet.create({
   headerBtn: {
     width: 44,
     height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '700',
   },
-  headerSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
   headerCreateBtn: {
     minWidth: 84,
     height: 38,
-    paddingHorizontal: spacing.md,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  headerCreateBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
+  nameField: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
   },
-  compactTopSection: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-  },
-  compactCard: {
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    padding: spacing.md,
-  },
-  input: {
-    height: 52,
+  inputFrame: {
+    minHeight: 52,
     borderRadius: 18,
-    paddingHorizontal: spacing.lg,
+  },
+  inputText: {
     fontSize: 16,
     fontWeight: '600',
-    borderWidth: 1,
-  },
-  compactMetaRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
   },
   section: {
     paddingHorizontal: spacing.lg,
@@ -872,24 +773,7 @@ const styles = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   typeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  typeChipIconWrap: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeChipText: {
-    fontSize: 14,
-    fontWeight: '700',
+    minHeight: 36,
   },
   categoryRow: {
     flexDirection: 'row',
@@ -897,109 +781,26 @@ const styles = StyleSheet.create({
     paddingRight: spacing.lg,
   },
   categoryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  privateToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-    borderRadius: radius.xl,
-    borderWidth: 1,
   },
   privateToggleCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  privateToggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  privateIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  privateIconWrapCompact: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  privateTextWrap: {
-    flex: 1,
-  },
-  privateLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  privateLabelCompact: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  privateDesc: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  toggleSwitch: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    padding: 4,
-  },
-  toggleThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    flexShrink: 0,
   },
   selectionSection: {
     borderRadius: radius.xl,
     borderWidth: 1,
     padding: spacing.md,
   },
-  selectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing.md,
+  memberSearchField: {
     marginBottom: spacing.md,
   },
-  selectionHeaderText: {
-    flex: 1,
-  },
-  selectionSubtext: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    height: 48,
+  searchFrame: {
+    minHeight: 48,
     borderRadius: 16,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    height: 48,
+  clearButton: {
+    width: 28,
+    height: 28,
   },
   tabRow: {
     flexDirection: 'row',
@@ -1008,25 +809,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  tabCount: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  tabCountText: {
-    fontSize: 11,
-    fontWeight: '700',
+    minHeight: 36,
   },
   selectedSection: {
     marginBottom: spacing.md,

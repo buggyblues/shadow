@@ -380,7 +380,26 @@ export function createChannelHandler(container: AppContainer) {
     try {
       const channel = await channelService.getById(id)
       if (channel.kind === 'dm') {
-        return c.json({ commands: [] })
+        await channelService.getDirectChannelById(id, requesterId)
+        const peer = await channelService.findDirectPeer(id, requesterId)
+        if (!peer?.isBot) {
+          return c.json({ commands: [] })
+        }
+
+        const agents = await agentDao.findByUserIds([peer.id])
+        const commands = agents.flatMap((agent) =>
+          normalizeSlashCommands((agent.config as Record<string, unknown>)?.slashCommands).map(
+            (command) => ({
+              ...command,
+              agentId: agent.id,
+              botUserId: agent.userId,
+              botUsername: peer.username,
+              botDisplayName: peer.displayName ?? peer.username ?? null,
+            }),
+          ),
+        )
+
+        return c.json({ commands })
       }
       const serverId = requireServerChannel(channel)
       const requesterServerMember = await serverDao.getMember(serverId, requesterId)

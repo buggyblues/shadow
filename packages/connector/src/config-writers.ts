@@ -176,6 +176,16 @@ function tomlArray(value: TomlValue | undefined): TomlTable[] {
   return tables
 }
 
+function ccConnectProjectWorkDir(project: TomlTable): string | undefined {
+  const agent = asTomlTable(project.agent)
+  const options = asTomlTable(agent.options)
+  return typeof options.work_dir === 'string'
+    ? options.work_dir
+    : typeof project.work_dir === 'string'
+      ? project.work_dir
+      : undefined
+}
+
 export function mergeCcConnectConfigContent(
   existing: string,
   values: CcConnectConfigValues,
@@ -184,7 +194,7 @@ export function mergeCcConnectConfigContent(
   const projects = tomlArray(root.projects)
   let project =
     projects.find((item) => item.name === values.projectName) ??
-    projects.find((item) => item.work_dir === values.workDir)
+    projects.find((item) => ccConnectProjectWorkDir(item) === values.workDir)
 
   if (!project) {
     project = {}
@@ -192,8 +202,17 @@ export function mergeCcConnectConfigContent(
   }
 
   project.name = values.projectName
-  project.work_dir = values.workDir
-  project.agent_type = values.agentType
+  delete project.work_dir
+  delete project.agent_type
+
+  const agent = asTomlTable(project.agent)
+  const agentOptions = asTomlTable(agent.options)
+  agent.type = values.agentType
+  agent.options = {
+    ...agentOptions,
+    work_dir: values.workDir,
+  }
+  project.agent = agent
 
   const platforms = tomlArray(project.platforms)
   let shadowPlatform = platforms.find((item) => item.type === 'shadowob')

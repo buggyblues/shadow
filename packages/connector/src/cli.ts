@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node
 import { homedir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ensureCcConnectFork } from './cc-connect-installer.js'
 import {
   mergeCcConnectConfigContent,
   mergeEnvContent,
@@ -58,7 +59,7 @@ function usage(): string {
     '  --agent-type <type>     cc-connect agent type, default codex',
     '  --json                  Print the full plan as JSON',
     '  --force                 Overwrite target config files when needed',
-    '  --install               Install cc-connect when target is cc-connect',
+    '  --install               Install the ShadowOB cc-connect fork when target is cc-connect',
     '  --no-install            Skip Hermes dependency install and plugin enablement',
     '  --start                 Start Hermes gateway or cc-connect after setup',
     '  --dry-run               Show what would be applied without changing files',
@@ -129,6 +130,20 @@ function runShell(command: string, dryRun: boolean): void {
   const result = spawnSync(command, { shell: true, stdio: 'inherit' })
   if (result.status !== 0) {
     throw new Error(`Command failed with exit code ${result.status ?? 'unknown'}: ${command}`)
+  }
+}
+
+function runBinary(binaryPath: string, args: string[], dryRun: boolean): void {
+  const rendered = [binaryPath, ...args]
+    .map((arg) => (/^[A-Za-z0-9_./:@=-]+$/.test(arg) ? arg : JSON.stringify(arg)))
+    .join(' ')
+  if (dryRun) {
+    console.log(`[dry-run] ${rendered}`)
+    return
+  }
+  const result = spawnSync(binaryPath, args, { stdio: 'inherit' })
+  if (result.status !== 0) {
+    throw new Error(`Command failed with exit code ${result.status ?? 'unknown'}: ${rendered}`)
   }
 }
 
@@ -234,7 +249,7 @@ function applyHermes(options: CliOptions): void {
   }
 }
 
-function applyCcConnect(options: CliOptions): void {
+async function applyCcConnect(options: CliOptions): Promise<void> {
   const plan = createConnectorPlan(options)
   const configBlock = plan.configBlocks.find((block) => block.label === '~/.cc-connect/config.toml')
   if (!configBlock) throw new Error('cc-connect plan is missing config block')
@@ -251,16 +266,22 @@ function applyCcConnect(options: CliOptions): void {
       })
   writeFile(configPath, nextConfig, options.dryRun)
 
-  if (options.install) {
-    runShell('npm install -g cc-connect', options.dryRun)
+  let binaryPath: string | undefined
+  if (options.install || options.start) {
+    const installed = await ensureCcConnectFork({
+      dryRun: options.dryRun,
+      log: (message) => console.log(message),
+    })
+    binaryPath = installed.binaryPath
+    console.log(`cc-connect binary: ${binaryPath}`)
   }
 
   if (options.start) {
-    runShell('cc-connect', options.dryRun)
+    runBinary(binaryPath ?? 'cc-connect', [], options.dryRun)
   }
 }
 
-function connect(options: CliOptions): void {
+async function connect(options: CliOptions): Promise<void> {
   if (options.target === 'openclaw') {
     applyOpenClaw(options)
     return
@@ -269,19 +290,21 @@ function connect(options: CliOptions): void {
     applyHermes(options)
     return
   }
-  applyCcConnect(options)
+  await applyCcConnect(options)
 }
 
-try {
+async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2))
   if (options.command === 'connect') {
-    connect(options)
+    await connect(options)
   } else {
     printPlan(options)
   }
-} catch (error) {
+}
+
+main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error))
   console.error('')
   console.error(usage())
   process.exit(1)
-}
+})

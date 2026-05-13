@@ -13,7 +13,6 @@ import {
   ScrollView,
   Share,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -22,6 +21,7 @@ import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import { AppSwitch, BackgroundSurface } from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
@@ -246,11 +246,19 @@ export default function ServerSettingsScreen() {
   if (isLoading || !server) return <LoadingScreen />
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <BackgroundSurface style={styles.container}>
       {/* Custom header */}
       <Reanimated.View
         entering={FadeIn.duration(300)}
-        style={[styles.customHeader, { backgroundColor: colors.surface, paddingTop: insets.top }]}
+        style={[
+          styles.customHeader,
+          {
+            backgroundColor: colors.glassStrong,
+            borderBottomColor: colors.glassLine,
+            paddingTop: insets.top,
+            shadowColor: colors.mode === 'dark' ? '#000000' : '#64748B',
+          },
+        ]}
       >
         <Pressable
           onPress={() => router.back()}
@@ -433,17 +441,14 @@ export default function ServerSettingsScreen() {
           >
             <Pressable style={styles.settingRow} onPress={() => setIsPublic(!isPublic)}>
               <View style={styles.settingInfo}>
-                <Text style={[styles.settingLabel, { color: colors.text }]}>公开服务器</Text>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  {t('server.publicServer')}
+                </Text>
                 <Text style={[styles.settingHint, { color: colors.textMuted }]}>
-                  允许所有人发现并加入
+                  {t('server.publicServerDesc')}
                 </Text>
               </View>
-              <Switch
-                value={isPublic}
-                onValueChange={setIsPublic}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
-              />
+              <AppSwitch value={isPublic} onValueChange={setIsPublic} />
             </Pressable>
           </Reanimated.View>
         )}
@@ -525,7 +530,7 @@ export default function ServerSettingsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </View>
+    </BackgroundSurface>
   )
 }
 
@@ -539,8 +544,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.06)',
+    borderBottomWidth: 1,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 4,
   },
   headerBtn: {
     width: 44,

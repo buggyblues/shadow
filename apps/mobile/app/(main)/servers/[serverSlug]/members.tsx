@@ -12,10 +12,10 @@ import {
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Modal, Pressable, SectionList, StyleSheet, Switch, Text, View } from 'react-native'
+import { Modal, Pressable, SectionList, StyleSheet, Text, View } from 'react-native'
 import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
-import { StatusBadge } from '../../../../src/components/common/status-badge'
+import { AppSwitch } from '../../../../src/components/ui'
 import { fetchApi } from '../../../../src/lib/api'
 import { useAuthStore } from '../../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
@@ -93,8 +93,8 @@ export default function MembersScreen() {
 
   // Buddy agents for reply policy
   const { data: buddyAgents = [] } = useQuery({
-    queryKey: ['members-buddy-agents', 'include-rentals'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
+    queryKey: ['members-buddy-agents'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
   })
 
   // Find the agent for the selected buddy
@@ -243,17 +243,14 @@ export default function MembersScreen() {
               if (canManagePolicy(item)) setPolicySheet(item)
             }}
           >
-            <View style={{ position: 'relative' }}>
-              <Avatar
-                uri={item.user.avatarUrl}
-                name={item.user.displayName || item.user.username}
-                size={40}
-                userId={item.user.id}
-              />
-              <View style={{ position: 'absolute', bottom: -1, right: -1 }}>
-                <StatusBadge status={item.user.status ?? 'offline'} size={12} />
-              </View>
-            </View>
+            <Avatar
+              uri={item.user.avatarUrl}
+              name={item.user.displayName || item.user.username}
+              size={40}
+              userId={item.user.id}
+              status={item.user.status ?? 'offline'}
+              showStatus
+            />
             <View style={{ flex: 1 }}>
               <View style={styles.nameRow}>
                 <Text
@@ -421,11 +418,7 @@ export default function MembersScreen() {
                   {t('member.policySmartReplyDesc', '跳过明显针对其他人的消息')}
                 </Text>
               </View>
-              <Switch
-                value={customSmartReply}
-                onValueChange={setCustomSmartReply}
-                trackColor={{ false: colors.border, true: colors.primary }}
-              />
+              <AppSwitch value={customSmartReply} onValueChange={setCustomSmartReply} />
             </View>
 
             {/* Reply to Buddy */}
@@ -438,11 +431,7 @@ export default function MembersScreen() {
                   {t('member.policyReplyToBuddyDesc', '允许回复其他 Buddy 发送的消息')}
                 </Text>
               </View>
-              <Switch
-                value={customReplyToBuddy}
-                onValueChange={setCustomReplyToBuddy}
-                trackColor={{ false: colors.border, true: colors.primary }}
-              />
+              <AppSwitch value={customReplyToBuddy} onValueChange={setCustomReplyToBuddy} />
             </View>
 
             {/* Max Buddy Chain Depth */}

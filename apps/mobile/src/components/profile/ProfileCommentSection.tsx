@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { MessageSquare, MoreHorizontal, Reply, Send, Trash2, X } from 'lucide-react-native'
+import {
+  MessageSquare,
+  MoreHorizontal,
+  Reply,
+  Send,
+  SmilePlus,
+  Trash2,
+  X,
+} from 'lucide-react-native'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -380,7 +388,7 @@ function CommentItem({
                 style={[styles.emojiBtn, { backgroundColor: colors.inputBackground }]}
                 onPress={() => setShowEmojiPicker(!showEmojiPicker)}
               >
-                <Text style={styles.emojiBtnText}>+😊</Text>
+                <SmilePlus size={16} color={colors.textMuted} />
               </Pressable>
             )}
 

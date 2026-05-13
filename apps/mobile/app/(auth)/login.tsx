@@ -9,10 +9,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import Svg, { Path, SvgXml } from 'react-native-svg'
+import { Button, GlassCard, SegmentedControl, Separator, TextField } from '../../src/components/ui'
 import { useOAuth } from '../../src/hooks/use-oauth'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
@@ -206,7 +206,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <GlassCard padded={false} style={styles.card}>
           <View style={styles.header}>
             <SvgXml xml={SHADOW_LOGO_XML} width={56} height={56} />
             <Text style={[styles.productName, { color: colors.text }]}>
@@ -217,51 +217,22 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          <View style={[styles.segmented, { backgroundColor: colors.background }]}>
-            <Pressable
-              style={[
-                styles.segment,
-                mode === 'email-code' ? { backgroundColor: colors.primary } : null,
-              ]}
-              onPress={() => setMode('email-code')}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: mode === 'email-code' ? '#fff' : colors.textSecondary },
-                ]}
-              >
-                {t('auth.emailCodeTab')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.segment,
-                mode === 'password' ? { backgroundColor: colors.primary } : null,
-              ]}
-              onPress={() => setMode('password')}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: mode === 'password' ? '#fff' : colors.textSecondary },
-                ]}
-              >
-                {t('auth.passwordLoginTab')}
-              </Text>
-            </Pressable>
-          </View>
+          <SegmentedControl
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'email-code', label: t('auth.emailCodeTab') },
+              { value: 'password', label: t('auth.passwordLoginTab') },
+            ]}
+          />
 
           <View style={styles.form}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>
-              {t('auth.emailLabel')} <Text style={{ color: '#f23f43' }}>*</Text>
-            </Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
+            <TextField
+              label={`${t('auth.emailLabel')} *`}
+              style={styles.input}
               value={email}
               onChangeText={setEmail}
               placeholder="you@shadowob.com"
-              placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -269,49 +240,38 @@ export default function LoginScreen() {
 
             {mode === 'password' ? (
               <>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>
-                  {t('auth.passwordLabel')} <Text style={{ color: '#f23f43' }}>*</Text>
-                </Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
+                <TextField
+                  label={`${t('auth.passwordLabel')} *`}
+                  style={styles.input}
                   value={password}
                   onChangeText={setPassword}
                   placeholder="••••••••"
-                  placeholderTextColor={colors.textMuted}
                   secureTextEntry
                 />
               </>
             ) : (
               <>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>
-                  {t('auth.emailCodeLabel')} <Text style={{ color: '#f23f43' }}>*</Text>
-                </Text>
                 <View style={styles.codeRow}>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      styles.codeInput,
-                      { backgroundColor: colors.background, color: colors.text },
-                    ]}
+                  <TextField
+                    label={`${t('auth.emailCodeLabel')} *`}
+                    containerStyle={styles.codeInput}
+                    style={styles.input}
                     value={code}
                     onChangeText={setCode}
                     placeholder={t('auth.emailCodePlaceholder')}
-                    placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
                     autoCapitalize="none"
                   />
-                  <Pressable
-                    style={[
-                      styles.codeButton,
-                      { borderColor: colors.border, opacity: codeLoading ? 0.6 : 1 },
-                    ]}
+                  <Button
+                    variant="glass"
+                    size="sm"
                     onPress={handleSendCode}
                     disabled={codeLoading}
+                    loading={codeLoading}
+                    style={styles.codeButton}
                   >
-                    <Text style={[styles.codeButtonText, { color: colors.text }]}>
-                      {codeLoading ? t('auth.sendingEmailCode') : t('auth.sendEmailCode')}
-                    </Text>
-                  </Pressable>
+                    {t('auth.sendEmailCode')}
+                  </Button>
                 </View>
                 {codeSent ? (
                   <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
@@ -321,30 +281,23 @@ export default function LoginScreen() {
               </>
             )}
 
-            <Pressable
-              style={[
-                styles.button,
-                { backgroundColor: '#5865F2', opacity: isButtonDisabled ? 0.6 : 1 },
-              ]}
+            <Button
+              variant="primary"
+              size="lg"
               onPress={mode === 'password' ? handleLogin : handleVerifyCode}
               disabled={isButtonDisabled}
+              loading={loading}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>
-                  {mode === 'password' ? t('auth.loginSubmit') : t('auth.verifyEmailCode')}
-                </Text>
-              )}
-            </Pressable>
+              {mode === 'password' ? t('auth.loginSubmit') : t('auth.verifyEmailCode')}
+            </Button>
           </View>
 
           <View style={styles.dividerContainer}>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <Separator style={styles.divider} />
             <Text style={[styles.dividerText, { color: colors.textMuted }]}>
               {t('auth.orContinueWith', 'OR')}
             </Text>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <Separator style={styles.divider} />
           </View>
 
           <View style={styles.oauthContainer}>
@@ -397,7 +350,7 @@ export default function LoginScreen() {
               {t('auth.registerLink')}
             </Link>
           </View>
-        </View>
+        </GlassCard>
       </ScrollView>
     </KeyboardAvoidingView>
   )

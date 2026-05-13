@@ -98,6 +98,11 @@ export SHADOW_SLASH_COMMANDS_JSON='[]'
 
 ## cc-connect
 
+The connector uses the ShadowOB-capable fork
+`buggyblues/cc-connect@63b5d59`. It does not install the official npm
+`cc-connect` package, because the npm package currently points to the upstream
+`chenhg5/cc-connect` release line.
+
 ```bash
 npx @shadowob/connector@latest connect \
   --target cc-connect \
@@ -105,8 +110,17 @@ npx @shadowob/connector@latest connect \
   --token buddy-token \
   --work-dir . \
   --project-name shadow-buddy \
-  --agent-type codex
+  --agent-type codex \
+  --install \
+  --start
 ```
+
+With `--install`, the CLI first tries the fork's GitHub release asset matching
+the local OS/CPU and verifies its pinned SHA-256. If the fork release asset is
+missing or does not match, it pulls the pinned source archive, builds a `no_web`
+Go binary, caches it under
+`~/.shadowob/connector/cc-connect/63b5d59/bin/`, and starts that binary when
+`--start` is present.
 
 Equivalent TOML:
 
@@ -115,8 +129,12 @@ language = "zh"
 
 [[projects]]
 name = "shadow-buddy"
+
+[projects.agent]
+type = "codex"
+
+[projects.agent.options]
 work_dir = "."
-agent_type = "codex"
 
 [[projects.platforms]]
 type = "shadowob"

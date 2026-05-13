@@ -3,18 +3,26 @@ import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, Link2, Plus, Trash2, UserPlus, X } from 'lucide-react-native'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../src/components/common/price-display'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
+import {
+  AppText,
+  BackgroundSurface,
+  Button,
+  EmptyState,
+  GlassPanel,
+  IconButton,
+  TextField,
+} from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
-import { fontSize, radius, spacing, useColors } from '../../../src/theme'
+import { radius, spacing, useColors } from '../../../src/theme'
 
 export default function InviteSettingsScreen() {
   const { t } = useTranslation()
   const colors = useColors()
-  // biome-ignore lint/suspicious/noExplicitAny: invite code shape varies
   const [codes, setCodes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -33,7 +41,6 @@ export default function InviteSettingsScreen() {
 
   const fetchCodes = useCallback(async () => {
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: invite code shape varies
       const data = await fetchApi<any[]>('/api/invite-codes')
       setCodes(data)
     } catch {}
@@ -85,85 +92,68 @@ export default function InviteSettingsScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <BackgroundSurface style={styles.container}>
       <SettingsHeader title={t('settings.tabInvite')} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        {/* Referral stats */}
-        <View style={[styles.referralBanner, { backgroundColor: `${colors.primary}08` }]}>
-          <Text style={{ color: colors.text, fontWeight: '700', fontSize: fontSize.sm }}>
-            {referralSummary?.campaignText ?? '邀请好友完成注册登录，你和好友均可获得 500 虾币'}
-          </Text>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <GlassPanel style={styles.referralBanner}>
+          <AppText variant="bodyStrong">
+            {referralSummary?.campaignText ?? t('settings.inviteDefaultCampaign')}
+          </AppText>
           <View style={styles.referralStatsRow}>
             <View style={styles.referralStat}>
-              <Text style={{ color: colors.primary, fontSize: fontSize.lg, fontWeight: '800' }}>
+              <AppText variant="headline" tone="primary">
                 {referralSummary?.successfulInvites ?? 0}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: 10 }}>已邀请</Text>
+              </AppText>
+              <AppText variant="label" tone="secondary">
+                {t('settings.inviteSuccessful')}
+              </AppText>
             </View>
             <View style={styles.referralStat}>
-              <Text style={{ color: '#f0b132', fontSize: fontSize.lg, fontWeight: '800' }}>
+              <AppText variant="headline" style={{ color: colors.accentStrong }}>
                 <PriceCompact amount={referralSummary?.totalInviteRewards ?? 0} size={17} />
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: 10 }}>已获得</Text>
+              </AppText>
+              <AppText variant="label" tone="secondary">
+                {t('settings.inviteRewards')}
+              </AppText>
             </View>
           </View>
-        </View>
+        </GlassPanel>
 
-        {/* Actions */}
-        <Pressable
-          style={[styles.createBtn, { backgroundColor: colors.primary }]}
+        <Button
+          variant={showForm ? 'glass' : 'primary'}
+          size="lg"
+          icon={showForm ? X : Plus}
           onPress={() => setShowForm(!showForm)}
         >
-          {showForm ? <X size={14} color="#fff" /> : <Plus size={14} color="#fff" />}
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
-            {showForm ? t('common.cancel') : t('settings.inviteCreate')}
-          </Text>
-        </Pressable>
+          {showForm ? t('common.cancel') : t('settings.inviteCreate')}
+        </Button>
 
-        {showForm && (
-          <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.inputBackground,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
-              ]}
+        {showForm ? (
+          <GlassPanel style={styles.formCard}>
+            <TextField
               value={note}
               onChangeText={setNote}
               placeholder={t('settings.inviteNotePlaceholder')}
-              placeholderTextColor={colors.textMuted}
             />
-            <Pressable
-              style={[
-                styles.generateBtn,
-                { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1 },
-              ]}
+            <Button
+              variant="primary"
+              size="md"
               onPress={handleCreate}
               disabled={creating}
+              loading={creating}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
-                {creating ? t('common.loading') : t('settings.inviteGenerate')}
-              </Text>
-            </Pressable>
-          </View>
-        )}
+              {t('settings.inviteGenerate')}
+            </Button>
+          </GlassPanel>
+        ) : null}
 
-        {/* Code list */}
         {loading ? (
           <LoadingScreen />
         ) : codes.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Link2 size={40} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm }}>
-              {t('settings.inviteEmpty')}
-            </Text>
-          </View>
+          <EmptyState icon={Link2} title={t('settings.inviteEmpty')} style={styles.emptyState} />
         ) : (
-          <View style={[styles.card, { backgroundColor: colors.surface }]}>
-            {codes.map((code, idx) => {
+          <GlassPanel padded={false} style={styles.card}>
+            {codes.map((code, index) => {
               const isUsed = !!code.usedBy
               const isActive = code.isActive && !isUsed
               return (
@@ -171,134 +161,123 @@ export default function InviteSettingsScreen() {
                   key={code.id}
                   style={[
                     styles.codeRow,
-                    { borderBottomColor: colors.border, opacity: isActive ? 1 : 0.5 },
-                    idx === codes.length - 1 && { borderBottomWidth: 0 },
+                    { borderBottomColor: colors.glassLine, opacity: isActive ? 1 : 0.55 },
+                    index === codes.length - 1 && { borderBottomWidth: 0 },
                   ]}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontFamily: 'monospace',
-                        fontWeight: '700',
-                        color: colors.text,
-                        letterSpacing: 1.5,
-                        fontSize: fontSize.sm,
-                      }}
-                    >
+                  <View style={styles.codeInfo}>
+                    <AppText variant="bodyStrong" style={styles.codeText}>
                       {code.code}
-                    </Text>
-                    {code.note && (
-                      <Text
-                        style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}
-                      >
+                    </AppText>
+                    {code.note ? (
+                      <AppText variant="label" tone="secondary" numberOfLines={1}>
                         {code.note}
-                      </Text>
-                    )}
-                    {isUsed && code.usedByUser && (
-                      <View
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}
-                      >
+                      </AppText>
+                    ) : null}
+                    {isUsed && code.usedByUser ? (
+                      <View style={styles.usedByRow}>
                         <Avatar
                           uri={code.usedByUser.avatarUrl}
                           name={code.usedByUser.displayName || code.usedByUser.username}
                           userId={code.usedByUser.id}
-                          size={20}
+                          size={22}
                         />
-                        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, flex: 1 }}>
+                        <AppText variant="label" tone="secondary" style={styles.usedByText}>
                           {t('settings.inviteUsedBy')}:{' '}
                           {code.usedByUser.displayName || code.usedByUser.username}
-                        </Text>
+                        </AppText>
                       </View>
-                    )}
+                    ) : null}
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 4 }}>
-                    {isUsed && code.usedByUser && !friendSent.has(code.usedByUser.id) && (
-                      <Pressable
+                  <View style={styles.iconRow}>
+                    {isUsed && code.usedByUser && !friendSent.has(code.usedByUser.id) ? (
+                      <IconButton
+                        icon={UserPlus}
+                        variant="glass"
+                        style={styles.iconBtn}
+                        iconColor={colors.primary}
                         onPress={() =>
                           handleAddFriend(code.usedByUser.username, code.usedByUser.id)
                         }
+                      />
+                    ) : null}
+                    {isUsed && code.usedByUser && friendSent.has(code.usedByUser.id) ? (
+                      <IconButton
+                        icon={Check}
+                        variant="glass"
                         style={styles.iconBtn}
-                      >
-                        <UserPlus size={14} color={colors.primary} />
-                      </Pressable>
-                    )}
-                    {isUsed && code.usedByUser && friendSent.has(code.usedByUser.id) && (
-                      <View style={styles.iconBtn}>
-                        <Check size={14} color="#23a559" />
-                      </View>
-                    )}
-                    {isActive && (
-                      <Pressable
+                        iconColor={colors.success}
+                      />
+                    ) : null}
+                    {isActive ? (
+                      <IconButton
+                        icon={copiedId === code.id ? Check : Copy}
+                        variant="glass"
+                        style={styles.iconBtn}
+                        iconColor={copiedId === code.id ? colors.success : colors.textMuted}
                         onPress={() => handleCopy(code.code, code.id)}
+                      />
+                    ) : null}
+                    {isActive ? (
+                      <IconButton
+                        icon={X}
+                        variant="glass"
                         style={styles.iconBtn}
-                      >
-                        {copiedId === code.id ? (
-                          <Check size={14} color="#23a559" />
-                        ) : (
-                          <Copy size={14} color={colors.textMuted} />
-                        )}
-                      </Pressable>
-                    )}
-                    {isActive && (
-                      <Pressable onPress={() => handleDeactivate(code.id)} style={styles.iconBtn}>
-                        <X size={14} color={colors.textMuted} />
-                      </Pressable>
-                    )}
-                    {!isActive && (
-                      <Pressable onPress={() => handleDelete(code.id)} style={styles.iconBtn}>
-                        <Trash2 size={14} color="#f23f43" />
-                      </Pressable>
+                        iconColor={colors.textMuted}
+                        onPress={() => handleDeactivate(code.id)}
+                      />
+                    ) : (
+                      <IconButton
+                        icon={Trash2}
+                        variant="glass"
+                        style={styles.iconBtn}
+                        iconColor={colors.error}
+                        onPress={() => handleDelete(code.id)}
+                      />
                     )}
                   </View>
                 </View>
               )
             })}
-          </View>
+          </GlassPanel>
         )}
       </ScrollView>
-    </View>
+    </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scroll: { flex: 1 },
   content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   referralBanner: {
-    padding: spacing.lg,
-    borderRadius: radius.xl,
+    gap: spacing.lg,
   },
-  referralStatsRow: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md },
-  referralStat: { alignItems: 'center' },
-  createBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    height: 48,
-    borderRadius: radius.xl,
-  },
-  formCard: { padding: spacing.lg, borderRadius: radius.xl, gap: spacing.sm },
-  input: {
-    height: 44,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
-    borderWidth: 1,
-  },
-  generateBtn: {
-    height: 40,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyState: { alignItems: 'center', paddingVertical: spacing.xl * 2 },
-  card: { borderRadius: radius.xl, overflow: 'hidden' },
+  referralStatsRow: { flexDirection: 'row', gap: spacing.xl },
+  referralStat: { alignItems: 'center', flex: 1 },
+  formCard: { gap: spacing.md },
+  emptyState: { paddingVertical: spacing.xl * 2 },
+  card: { borderRadius: radius['2xl'], overflow: 'hidden' },
   codeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
+    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  iconBtn: { padding: 6 },
+  codeInfo: { flex: 1, minWidth: 0 },
+  codeText: {
+    fontFamily: 'monospace',
+    letterSpacing: 1.2,
+  },
+  usedByRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  usedByText: { flex: 1, minWidth: 0 },
+  iconRow: { flexDirection: 'row', gap: spacing.xs },
+  iconBtn: { width: 34, height: 34 },
 })

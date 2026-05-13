@@ -1,8 +1,11 @@
+import { type LucideIcon, Moon, Star, Sun } from 'lucide-react-native'
 import type { ReactNode } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { useColors } from '../../theme'
 
 /** QQ-style online rank: stars (<100h) → moons (100-500h) → suns (500h+) */
 export function OnlineRank({ totalSeconds }: { totalSeconds: number }) {
+  const colors = useColors()
   const hours = totalSeconds / 3600
   let suns = 0
   let moons = 0
@@ -28,13 +31,11 @@ export function OnlineRank({ totalSeconds }: { totalSeconds: number }) {
 
   if (suns === 0 && moons === 0 && stars === 0) return null
 
-  const renderIcons = (count: number, prefix: 'sun' | 'moon' | 'star', icon: string) => {
+  const renderIcons = (count: number, prefix: 'sun' | 'moon' | 'star', Icon: LucideIcon) => {
     const items: ReactNode[] = []
     for (let n = count; n >= 1; n--) {
       items.push(
-        <Text key={`${prefix}-${n}`} style={styles.icon}>
-          {icon}
-        </Text>,
+        <Icon key={`${prefix}-${n}`} size={12} color={colors.warning} fill={colors.warning} />,
       )
     }
     return items
@@ -42,9 +43,9 @@ export function OnlineRank({ totalSeconds }: { totalSeconds: number }) {
 
   return (
     <View style={styles.container}>
-      {renderIcons(suns, 'sun', '☀️')}
-      {renderIcons(moons, 'moon', '🌙')}
-      {renderIcons(stars, 'star', '⭐')}
+      {renderIcons(suns, 'sun', Sun)}
+      {renderIcons(moons, 'moon', Moon)}
+      {renderIcons(stars, 'star', Star)}
     </View>
   )
 }
@@ -54,8 +55,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 1,
-  },
-  icon: {
-    fontSize: 10,
   },
 })

@@ -9,6 +9,7 @@ import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { StatusBadge } from '../../../src/components/common/status-badge'
 import { ProfileCommentSection } from '../../../src/components/profile/ProfileCommentSection'
+import { AppText, BackgroundSurface, Button, GlassPanel } from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { showToast } from '../../../src/lib/toast'
 import { useAuthStore } from '../../../src/stores/auth.store'
@@ -103,18 +104,15 @@ export default function UserProfileScreen() {
   const addFriendDisabled = sendFriendRequest.isPending || isFriend || isRequestSent
 
   const statusColors: Record<string, string> = {
-    online: '#22c55e',
-    idle: '#eab308',
-    dnd: '#ef4444',
-    offline: '#6b7280',
+    online: colors.statusOnline,
+    idle: colors.statusIdle,
+    dnd: colors.statusDnd,
+    offline: colors.statusOffline,
   }
 
   return (
-    <>
-      <ScrollView
-        style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={styles.content}
-      >
+    <BackgroundSurface style={styles.container}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Header area */}
         <View style={[styles.header, { backgroundColor: `${colors.primary}15` }]}>
           <View style={styles.avatarWrap}>
@@ -131,69 +129,40 @@ export default function UserProfileScreen() {
         </View>
 
         {/* Info */}
-        <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
+        <GlassPanel style={styles.infoCard}>
           <View style={styles.nameRow}>
-            <Text style={[styles.displayName, { color: colors.text }]}>
+            <AppText variant="headline" style={styles.displayName}>
               {profile.displayName || profile.username}
-            </Text>
+            </AppText>
             {profile.isBot && (
               <View style={[styles.botBadge, { backgroundColor: `${colors.primary}20` }]}>
                 <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
               </View>
             )}
           </View>
-          <Text style={[styles.username, { color: colors.textMuted }]}>@{profile.username}</Text>
+          <AppText variant="label" tone="secondary" style={styles.username}>
+            @{profile.username}
+          </AppText>
 
           {/* Business Card Button - Show for both users and bots */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.businessCardBtn,
-              {
-                backgroundColor: pressed ? `${colors.primary}DD` : colors.primary,
-              },
-            ]}
-            onPress={() => setShowQrCard(true)}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <QrCode size={16} color="#fff" />
-              <Text style={styles.businessCardText}>
-                {t('profile.viewBusinessCard', '查看名片')}
-              </Text>
-            </View>
-          </Pressable>
+          <Button variant="primary" size="md" icon={QrCode} onPress={() => setShowQrCard(true)}>
+            {t('profile.viewBusinessCard', '查看名片')}
+          </Button>
 
           {!isSelf && !profile.isBot && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.addFriendBtn,
-                {
-                  backgroundColor:
-                    isFriend || isRequestSent
-                      ? colors.inputBackground
-                      : pressed
-                        ? `${colors.primary}DD`
-                        : colors.primary,
-                },
-                (isFriend || isRequestSent) && { borderWidth: 1, borderColor: colors.border },
-              ]}
+            <Button
+              variant={isFriend || isRequestSent ? 'glass' : 'primary'}
+              size="md"
               disabled={addFriendDisabled}
+              loading={sendFriendRequest.isPending}
               onPress={() => sendFriendRequest.mutate()}
             >
-              <Text
-                style={[
-                  styles.addFriendText,
-                  (isFriend || isRequestSent) && { color: colors.textSecondary },
-                ]}
-              >
-                {sendFriendRequest.isPending
-                  ? t('common.saving', '处理中...')
-                  : isFriend
-                    ? t('friends.alreadyFriend', '已是好友')
-                    : isRequestSent
-                      ? t('friends.requestPending', '等待对方接受')
-                      : t('friends.addFriend', '添加好友')}
-              </Text>
-            </Pressable>
+              {isFriend
+                ? t('friends.alreadyFriend', '已是好友')
+                : isRequestSent
+                  ? t('friends.requestPending', '等待对方接受')
+                  : t('friends.addFriend', '添加好友')}
+            </Button>
           )}
 
           {/* Status */}
@@ -343,7 +312,7 @@ export default function UserProfileScreen() {
           <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
             <ProfileCommentSection profileUserId={profile.id} />
           </View>
-        </View>
+        </GlassPanel>
       </ScrollView>
 
       {/* QR Code Business Card Modal */}
@@ -390,7 +359,7 @@ export default function UserProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </>
+    </BackgroundSurface>
   )
 }
 
@@ -434,32 +403,6 @@ const styles = StyleSheet.create({
   username: {
     fontSize: fontSize.md,
     marginTop: 4,
-  },
-  businessCardBtn: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    height: 38,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  businessCardText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: fontSize.sm,
-  },
-  addFriendBtn: {
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    height: 38,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addFriendText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: fontSize.sm,
   },
   statusRow: {
     flexDirection: 'row',

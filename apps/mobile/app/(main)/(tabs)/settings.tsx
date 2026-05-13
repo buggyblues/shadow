@@ -13,18 +13,36 @@ import {
   Target,
   User,
 } from 'lucide-react-native'
-import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../src/components/common/avatar'
-import { DottedBackground } from '../../../src/components/common/dotted-background'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { ShrimpCoinIcon } from '../../../src/components/common/shrimp-coin'
+import {
+  ActionTile,
+  AppText,
+  BackgroundSurface,
+  Badge,
+  Button,
+  CardPressable,
+  GlassPanel,
+  MenuItem,
+  Separator,
+  type Tone,
+} from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { disconnectSocket } from '../../../src/lib/socket'
 import { useAuthStore } from '../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../src/theme'
+import { radius, spacing, useColors } from '../../../src/theme'
+
+type SectionItem = {
+  key: string
+  icon: typeof User
+  label: string
+  tone: Tone
+  route: string
+}
 
 export default function SettingsScreen() {
   const { t } = useTranslation()
@@ -56,34 +74,26 @@ export default function SettingsScreen() {
 
   if (!user) return <LoadingScreen />
 
-  type SectionItem = {
-    key: string
-    icon: typeof User
-    label: string
-    color: string
-    route: string
-  }
-
   const userSettings: SectionItem[] = [
     {
       key: 'profile',
       icon: User,
       label: t('settings.tabProfile'),
-      color: '#5865f2',
+      tone: 'primary',
       route: '/(main)/settings/profile',
     },
     {
       key: 'appearance',
       icon: Paintbrush,
       label: t('settings.tabAppearance'),
-      color: '#fee75c',
+      tone: 'accent',
       route: '/(main)/settings/appearance',
     },
     {
       key: 'notification',
       icon: Bell,
-      label: '通知',
-      color: '#f0b132',
+      label: t('settings.tabNotification'),
+      tone: 'warning',
       route: '/(main)/settings/notifications',
     },
   ]
@@ -92,15 +102,15 @@ export default function SettingsScreen() {
     {
       key: 'tasks',
       icon: Target,
-      label: '任务中心',
-      color: '#ed4245',
+      label: t('settings.tabTasks'),
+      tone: 'danger',
       route: '/(main)/settings/tasks',
     },
     {
       key: 'buddy',
       icon: Bot,
       label: t('settings.tabBuddy'),
-      color: '#00c8d6',
+      tone: 'primary',
       route: '/(main)/settings/buddy',
     },
   ]
@@ -110,243 +120,173 @@ export default function SettingsScreen() {
       key: 'account',
       icon: Shield,
       label: t('settings.tabAccount'),
-      color: '#eb459e',
+      tone: 'danger',
       route: '/(main)/settings/account',
     },
     {
       key: 'invite',
       icon: Link2,
       label: t('settings.tabInvite'),
-      color: '#23a559',
+      tone: 'success',
       route: '/(main)/settings/invite',
     },
   ]
 
-  const glassCardStyle = {
-    backgroundColor: `${colors.surface}E6`,
-    borderColor: colors.border,
-    borderWidth: 2,
-    borderRadius: 24,
-  }
-
   const renderGroup = (title: string, items: SectionItem[]) => (
-    <>
-      <Text style={[styles.groupTitle, { color: colors.textMuted }]}>{title}</Text>
-      <View
-        style={[
-          styles.sectionGroup,
-          glassCardStyle,
-          { backgroundColor: colors.surface, overflow: 'hidden', paddingVertical: 4 },
-        ]}
-      >
-        {items.map((item, idx) => {
-          const Icon = item.icon
-          const isLast = idx === items.length - 1
+    <View style={styles.group}>
+      <AppText variant="label" tone="secondary" style={styles.groupTitle}>
+        {title}
+      </AppText>
+      <GlassPanel padded={false} style={styles.sectionGroup}>
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1
           return (
-            <React.Fragment key={item.key}>
-              {/* biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing */}
-              <Pressable style={styles.sectionRow} onPress={() => router.push(item.route as any)}>
-                <View style={[styles.sectionIconCircle, { backgroundColor: `${item.color}15` }]}>
-                  <Icon size={16} color={item.color} />
-                </View>
-                <Text style={[styles.sectionLabel, { color: colors.text }]}>{item.label}</Text>
-                <ChevronRight size={16} color={colors.textMuted} />
-              </Pressable>
-              {!isLast && <View style={[styles.separator, { backgroundColor: colors.border }]} />}
-            </React.Fragment>
+            <View key={item.key}>
+              <MenuItem
+                icon={item.icon}
+                title={item.label}
+                tone={item.tone}
+                right={<ChevronRight size={16} color={colors.textMuted} strokeWidth={2.5} />}
+                onPress={() => router.push(item.route as never)}
+              />
+              {!isLast ? <Separator style={styles.separator} /> : null}
+            </View>
           )
         })}
-      </View>
-    </>
+      </GlassPanel>
+    </View>
   )
 
   return (
-    <DottedBackground>
-      <View style={[styles.container]}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+    <BackgroundSurface>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
+      >
+        <CardPressable
+          variant="glassPanel"
+          padded={false}
+          style={styles.profileCard}
+          onPress={() => router.push('/(main)/settings/profile' as never)}
         >
-          {/* ── User profile card ─────────────────────── */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.profileCard,
-              glassCardStyle,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              },
-            ]}
-            // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
-            onPress={() => router.push('/(main)/settings/profile' as any)}
-          >
-            <View style={[styles.profileBanner, { backgroundColor: `${colors.primary}30` }]} />
-            <View style={styles.profileBody}>
-              <View style={styles.profileAvatarRow}>
-                <Avatar
-                  uri={user.avatarUrl}
-                  name={user.displayName || user.username}
-                  size={64}
-                  userId={user.id}
-                />
-                <View style={[styles.editProfileBtn, { borderColor: colors.border }]}>
-                  <Text style={{ color: colors.primary, fontWeight: '700', fontSize: fontSize.xs }}>
-                    {t('settings.tabProfile')}
-                  </Text>
-                  <ChevronRight size={12} color={colors.primary} />
-                </View>
-              </View>
-              <Text style={[styles.profileName, { color: colors.text }]}>
-                {user.displayName || user.username}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
-                @{user.username}
-              </Text>
+          <View style={[styles.profileBanner, { backgroundColor: `${colors.primary}20` }]} />
+          <View style={styles.profileBody}>
+            <View style={styles.profileAvatarRow}>
+              <Avatar
+                uri={user.avatarUrl}
+                name={user.displayName || user.username}
+                size={68}
+                userId={user.id}
+                status="online"
+                showStatus
+              />
+              <Badge variant="primary" size="md">
+                {t('settings.tabProfile')}
+              </Badge>
+            </View>
+            <AppText variant="headline" style={styles.profileName} numberOfLines={1}>
+              {user.displayName || user.username}
+            </AppText>
+            <AppText variant="label" tone="secondary" numberOfLines={1}>
+              @{user.username}
+            </AppText>
 
-              {/* Wallet + Stats */}
-              <View style={styles.profileStatsRow}>
-                {wallet && (
-                  <View style={[styles.profileStat, { backgroundColor: `${colors.shrimpCoin}15` }]}>
-                    <ShrimpCoinIcon size={16} color={colors.shrimpCoin} />
-                    <Text
-                      style={{ color: colors.shrimpCoin, fontWeight: '800', fontSize: fontSize.sm }}
-                    >
-                      {wallet.balance}
-                    </Text>
-                  </View>
-                )}
-                <View style={[styles.profileStat, { backgroundColor: `${colors.text}08` }]}>
-                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                    {user.email}
-                  </Text>
+            <View style={styles.profileStatsRow}>
+              {wallet ? (
+                <View
+                  style={[
+                    styles.profileStat,
+                    {
+                      backgroundColor: `${colors.shrimpCoin}18`,
+                      borderColor: `${colors.shrimpCoin}35`,
+                    },
+                  ]}
+                >
+                  <ShrimpCoinIcon size={16} color={colors.shrimpCoin} />
+                  <AppText variant="label" style={{ color: colors.shrimpCoin }}>
+                    {wallet.balance}
+                  </AppText>
                 </View>
+              ) : null}
+              <View
+                style={[
+                  styles.profileStat,
+                  { backgroundColor: colors.glassSoft, borderColor: colors.glassLine },
+                ]}
+              >
+                <AppText variant="label" tone="secondary" numberOfLines={1}>
+                  {user.email}
+                </AppText>
               </View>
             </View>
-          </Pressable>
-
-          {/* ── Quick actions ─────────────────────────── */}
-          <View style={styles.quickActionRow}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                glassCardStyle,
-                { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
-              ]}
-              onPress={() => router.push('/(main)/discover')}
-            >
-              <View style={[styles.quickIconCircle, { backgroundColor: '#5865f220' }]}>
-                <Compass size={18} color="#5865f2" />
-              </View>
-              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
-                {t('guide.discoverTitle')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                glassCardStyle,
-                { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
-              ]}
-              onPress={() => router.push('/(main)/settings/buddy')}
-            >
-              <View style={[styles.quickIconCircle, { backgroundColor: '#00c8d620' }]}>
-                <Bot size={18} color="#00c8d6" />
-              </View>
-              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
-                {t('settings.tabBuddy', '我的 Buddy')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                glassCardStyle,
-                { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
-              ]}
-              // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
-              onPress={() => router.push('/(main)/settings/tasks' as any)}
-            >
-              <View style={[styles.quickIconCircle, { backgroundColor: '#ed424520' }]}>
-                <Target size={18} color="#ed4245" />
-              </View>
-              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
-                {t('settings.tabTasks', '任务')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                glassCardStyle,
-                { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
-              ]}
-              // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
-              onPress={() => router.push(`/(main)/profile/${user.id}` as any)}
-            >
-              <View style={[styles.quickIconCircle, { backgroundColor: '#23a55920' }]}>
-                <QrCode size={18} color="#23a559" />
-              </View>
-              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
-                {t('settings.qrCard', '名片')}
-              </Text>
-            </Pressable>
           </View>
+        </CardPressable>
 
-          {/* ── Section groups ──────────────────────── */}
-          {renderGroup(t('settings.tabProfile').toUpperCase(), userSettings)}
-          {renderGroup(t('settings.activityGroup', '任务 & BUDDY'), activitySettings)}
-          {renderGroup(t('settings.tabAccount').toUpperCase(), accountSettings)}
+        <View style={styles.quickActionRow}>
+          <ActionTile
+            icon={Compass}
+            label={t('guide.discoverTitle')}
+            tone="primary"
+            onPress={() => router.push('/(main)/discover' as never)}
+          />
+          <ActionTile
+            icon={Bot}
+            label={t('settings.tabBuddy')}
+            tone="primary"
+            onPress={() => router.push('/(main)/settings/buddy' as never)}
+          />
+          <ActionTile
+            icon={Target}
+            label={t('settings.tabTasks')}
+            tone="danger"
+            onPress={() => router.push('/(main)/settings/tasks' as never)}
+          />
+          <ActionTile
+            icon={QrCode}
+            label={t('settings.qrCard')}
+            tone="success"
+            onPress={() => router.push(`/(main)/profile/${user.id}` as never)}
+          />
+        </View>
 
-          {/* ── Logout ────────────────────────────────── */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.logoutCard,
-              glassCardStyle,
-              { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
-            ]}
-            onPress={handleLogout}
-          >
-            <LogOut size={18} color="#f23f43" />
-            <Text style={{ color: '#f23f43', fontWeight: '700', fontSize: fontSize.md }}>
-              {t('settings.logout')}
-            </Text>
-          </Pressable>
+        {renderGroup(t('settings.tabProfile').toUpperCase(), userSettings)}
+        {renderGroup(t('settings.activityGroup'), activitySettings)}
+        {renderGroup(t('settings.tabAccount').toUpperCase(), accountSettings)}
 
-          <View style={{ height: insets.bottom + 100 }} />
-        </ScrollView>
-      </View>
-    </DottedBackground>
+        <GlassPanel style={styles.logoutPanel}>
+          <Button variant="danger" size="lg" icon={LogOut} onPress={handleLogout}>
+            {t('settings.logout')}
+          </Button>
+        </GlassPanel>
+      </ScrollView>
+    </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { paddingBottom: spacing.xl },
-  profileCard: {
-    overflow: 'hidden',
-    marginHorizontal: spacing.md,
-    marginTop: spacing.md,
-    borderRadius: radius.xl,
+  scrollContent: {
+    paddingTop: spacing.md,
+    gap: spacing.lg,
   },
-  profileBanner: { height: 60 },
-  profileBody: { padding: spacing.lg, marginTop: -20 },
+  profileCard: {
+    marginHorizontal: spacing.md,
+    borderRadius: radius['3xl'],
+  },
+  profileBanner: {
+    height: 68,
+  },
+  profileBody: {
+    padding: spacing.lg,
+    paddingTop: 0,
+    marginTop: -28,
+  },
   profileAvatarRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-  },
-  editProfileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 99,
-    borderWidth: 1,
+    gap: spacing.md,
   },
   profileName: {
-    fontSize: fontSize.xl,
-    fontWeight: '800',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   profileStatsRow: {
     flexDirection: 'row',
@@ -355,79 +295,38 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   profileStat: {
+    minHeight: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 99,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    maxWidth: '100%',
   },
   quickActionRow: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
     gap: spacing.sm,
   },
-  quickAction: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: radius.xl,
-    gap: 4,
+  group: {
+    gap: spacing.sm,
   },
-  quickIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickLabel: { fontSize: fontSize.xs, fontWeight: '600' },
   groupTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
   },
   sectionGroup: {
     marginHorizontal: spacing.md,
-    borderRadius: radius.xl,
+    borderRadius: radius['2xl'],
     overflow: 'hidden',
   },
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
-  },
-  sectionIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionLabel: {
-    flex: 1,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
   separator: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 60,
+    marginLeft: 62,
   },
-  logoutCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
+  logoutPanel: {
     marginHorizontal: spacing.md,
-    marginTop: spacing.lg,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.xl,
+    padding: spacing.md,
   },
 })

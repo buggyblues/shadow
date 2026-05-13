@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import { Avatar } from './avatar'
-import { StatusBadge } from './status-badge'
 
 export type InviteStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
@@ -113,12 +112,14 @@ export function BuddyListItem({
         ) : null}
       </View>
 
-      <View style={styles.avatarWrap}>
-        <Avatar uri={member.avatar} name={member.nickname} size={36} userId={member.uid} />
-        <View style={styles.statusWrap}>
-          <StatusBadge status={member.status} size={8} />
-        </View>
-      </View>
+      <Avatar
+        uri={member.avatar}
+        name={member.nickname}
+        size={36}
+        userId={member.uid}
+        status={member.status}
+        showStatus
+      />
 
       <View style={styles.content}>
         <View style={styles.nameRow}>
@@ -177,14 +178,6 @@ const styles = StyleSheet.create({
   checkboxWrap: {
     width: 20,
     alignItems: 'center',
-  },
-  avatarWrap: {
-    position: 'relative',
-  },
-  statusWrap: {
-    position: 'absolute',
-    right: -4,
-    bottom: -2,
   },
   content: {
     flex: 1,

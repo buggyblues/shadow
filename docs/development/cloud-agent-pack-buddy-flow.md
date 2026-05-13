@@ -35,7 +35,7 @@ Cloud Core 只做微内核：读取模板、加载插件、收集配置碎片、
 导入后的命令会走两层注册：
 
 1. `agent-pack` 插件的 init/sync 容器扫描 mounted pack，生成 `/agent-packs/.shadow/slash-commands.json`。
-2. Shadow Server 暴露 `GET /api/channels/:id/slash-commands`，供频道输入框补全。
+2. Shadow Server 暴露 `GET /api/channels/:id/slash-commands`，供频道和私聊输入框补全。
 
 `agent-pack` 默认通过 `onBuildRuntime` 暴露标准 runtime artifact：`{ kind: "shadow.slashCommands", path: "/agent-packs/.shadow/slash-commands.json" }`。通用 runner 只把这个 artifact 路径传给 Shadow channel，不扫描 pack，也不内置 agent-pack 逻辑。命令识别和交互推断属于 agent-pack 插件：优先级是上游命令 frontmatter 自带 `interaction`、插件通用 rule、从 AskUserQuestion 风格的 `**Ask:**` / `Q1:` markdown 自动生成表单、最后把可执行 helper scripts 包装成 script-backed skills。模板不复制 gstack 这类上游问题，容器入口也不允许写仓库名、命令名或表单字段特例。
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams } from 'expo-router'
-import { Plus, Trash2 } from 'lucide-react-native'
+import { Package, Plus, Trash2 } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
@@ -85,7 +85,7 @@ export default function ShopAdminScreen() {
       </Pressable>
 
       {products.length === 0 ? (
-        <EmptyState icon="📦" title={t('shop.noProducts')} />
+        <EmptyState icon={Package} title={t('shop.noProducts')} />
       ) : (
         <FlatList
           data={products}

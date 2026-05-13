@@ -216,8 +216,8 @@ export default function ChannelMembersScreen() {
 
   // User's buddy agents for invite
   const { data: myAgents = [] } = useQuery({
-    queryKey: ['my-agents-for-invite', 'include-rentals'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
+    queryKey: ['my-agents-for-invite'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
     enabled: showInviteSheet,
   })
 
@@ -405,8 +405,8 @@ export default function ChannelMembersScreen() {
 
   // Buddy policy
   const { data: buddyAgents = [] } = useQuery({
-    queryKey: ['channel-buddy-agents', 'include-rentals'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
+    queryKey: ['channel-buddy-agents'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
   })
 
   const canManagePolicy = (member: ChannelMember) => {
@@ -896,7 +896,7 @@ export default function ChannelMembersScreen() {
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
                   {t(
                     'member.policyOwnerTenantOnlyDesc',
-                    '默认只回复主人和有效租客，无需 @ Buddy。',
+                    '默认只回复拥有者和允许互动的成员，无需 @ Buddy。',
                   )}
                 </Text>
               </View>

@@ -11,8 +11,11 @@ import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
+  Bot,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
+  Command as CommandIcon,
   Copy,
   File,
   Hash,
@@ -45,7 +48,22 @@ import { useDraftStorage } from '@/hooks/use-draft-storage'
 import { ChatComposer } from '../../../../../src/components/chat/chat-composer'
 import { MessageBubble } from '../../../../../src/components/chat/message-bubble'
 import { Avatar } from '../../../../../src/components/common/avatar'
+import { formatCommercePrice } from '../../../../../src/components/common/price-display'
 import { StatusBadge } from '../../../../../src/components/common/status-badge'
+import {
+  AppText,
+  BackgroundSurface,
+  Button,
+  ChatWorkIndicator,
+  ChipButton,
+  EmptyState,
+  GlassHeader,
+  GlassPanel,
+  InputValley,
+  MenuItem,
+  Sheet,
+  Spinner,
+} from '../../../../../src/components/ui'
 import { useSocketEvent } from '../../../../../src/hooks/use-socket'
 import { useVoiceInput } from '../../../../../src/hooks/use-voice-input'
 import { fetchApi } from '../../../../../src/lib/api'
@@ -66,6 +84,8 @@ import type {
 import { normalizeMessage } from '../../../../../src/types/message'
 
 const PAGE_SIZE = 50
+const TYPING_STATUS_TIMEOUT_MS = 3000
+const ACTIVITY_STATUS_TIMEOUT_MS = 120_000
 
 function mentionFromSuggestion(
   suggestion: MentionSuggestion,
@@ -100,6 +120,17 @@ function mergeMention(list: MessageMention[], mention: MessageMention): MessageM
 
 function mentionsForContent(content: string, mentions: MessageMention[]): MessageMention[] {
   return assignMentionRanges(content, mentions).slice(0, 20)
+}
+
+interface SlashCommand {
+  name: string
+  description?: string
+  aliases?: string[]
+  packId?: string
+  agentId: string
+  botUserId: string
+  botUsername: string
+  botDisplayName?: string | null
 }
 
 export default function ChannelViewScreen() {
@@ -141,6 +172,7 @@ export default function ChannelViewScreen() {
   const [inviteSearch, setInviteSearch] = useState('')
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionTrigger, setMentionTrigger] = useState<MentionSuggestionTrigger | null>(null)
+  const [slashQuery, setSlashQuery] = useState<string | null>(null)
   const [selectedMentions, setSelectedMentions] = useState<MessageMention[]>([])
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [keyboardHeight, setKeyboardHeight] = useState(320)
@@ -198,6 +230,7 @@ export default function ChannelViewScreen() {
 
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const activityUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const {
     isRecording,
     isHolding,
@@ -327,6 +360,69 @@ export default function ChannelViewScreen() {
   })
 
   const mentionResults = mentionSuggestionData?.suggestions ?? []
+
+  const { data: slashCommandData } = useQuery({
+    queryKey: ['channel-slash-commands', channelId],
+    queryFn: () =>
+      fetchApi<{ commands: SlashCommand[] }>(`/api/channels/${channelId}/slash-commands`),
+    enabled: Boolean(channelId && canAccessChannel),
+    staleTime: 30_000,
+  })
+
+  const slashCommands = slashCommandData?.commands ?? []
+
+  useEffect(() => {
+    if (!channelId) return
+    const socket = getSocket()
+    const refreshSlashCommands = () => {
+      queryClient.invalidateQueries({ queryKey: ['channel-slash-commands', channelId] })
+    }
+    const handleMemberJoined = (payload: { channelId?: string; isBot?: boolean }) => {
+      if (payload.channelId === channelId && payload.isBot) refreshSlashCommands()
+    }
+    const handleMemberLeft = (payload: { channelId?: string }) => {
+      if (payload.channelId === channelId) refreshSlashCommands()
+    }
+    const handleSlashCommandsUpdated = (payload: { channelId?: string }) => {
+      if (payload.channelId === channelId) refreshSlashCommands()
+    }
+
+    socket.on('member:joined', handleMemberJoined)
+    socket.on('member:left', handleMemberLeft)
+    socket.on('channel:slash-commands-updated', handleSlashCommandsUpdated)
+    return () => {
+      socket.off('member:joined', handleMemberJoined)
+      socket.off('member:left', handleMemberLeft)
+      socket.off('channel:slash-commands-updated', handleSlashCommandsUpdated)
+    }
+  }, [channelId, queryClient])
+
+  const filteredSlashCommands = useMemo(() => {
+    if (slashQuery === null) return []
+    const q = slashQuery.trim().toLocaleLowerCase()
+    return slashCommands
+      .filter((command) => {
+        if (!q) return true
+        const haystack = [
+          command.name,
+          ...(command.aliases ?? []),
+          command.description ?? '',
+          command.packId ?? '',
+          command.botUsername,
+          command.botDisplayName ?? '',
+        ]
+          .join(' ')
+          .toLocaleLowerCase()
+        return haystack.includes(q)
+      })
+      .sort((a, b) => {
+        const aExact = a.name.toLocaleLowerCase() === q ? 1 : 0
+        const bExact = b.name.toLocaleLowerCase() === q ? 1 : 0
+        if (aExact !== bExact) return bExact - aExact
+        return a.name.localeCompare(b.name)
+      })
+      .slice(0, 12)
+  }, [slashCommands, slashQuery])
 
   const onlineMemberCount = useMemo(
     () =>
@@ -791,7 +887,7 @@ export default function ChannelViewScreen() {
         typingUsersTimeout.current[userId] = setTimeout(() => {
           setTypingUsers((prev) => prev.filter((n) => n !== username))
           delete typingUsersTimeout.current[userId]
-        }, 3000)
+        }, TYPING_STATUS_TIMEOUT_MS)
       },
       [channelId, currentUser?.id],
     ),
@@ -851,6 +947,10 @@ export default function ChannelViewScreen() {
         username?: string
       }) => {
         if (payload.channelId !== channelId) return
+        if (activityUsersTimeout.current[payload.userId]) {
+          clearTimeout(activityUsersTimeout.current[payload.userId])
+          delete activityUsersTimeout.current[payload.userId]
+        }
         setActivityUsers((prev) => {
           if (!payload.activity) return prev.filter((u) => u.userId !== payload.userId)
           const existing = prev.find((u) => u.userId === payload.userId)
@@ -867,6 +967,12 @@ export default function ChannelViewScreen() {
             },
           ]
         })
+        if (payload.activity) {
+          activityUsersTimeout.current[payload.userId] = setTimeout(() => {
+            setActivityUsers((prev) => prev.filter((u) => u.userId !== payload.userId))
+            delete activityUsersTimeout.current[payload.userId]
+          }, ACTIVITY_STATUS_TIMEOUT_MS)
+        }
       },
       [channelId],
     ),
@@ -875,6 +981,7 @@ export default function ChannelViewScreen() {
   useEffect(() => {
     return () => {
       Object.values(typingUsersTimeout.current).forEach(clearTimeout)
+      Object.values(activityUsersTimeout.current).forEach(clearTimeout)
       if (typingTimeout.current) clearTimeout(typingTimeout.current)
     }
   }, [])
@@ -1058,6 +1165,13 @@ export default function ChannelViewScreen() {
 
   const handleSend = async () => {
     const content = inputText.trim()
+    if (content === '/product' || content === '/shop') {
+      setInputText('')
+      setSlashQuery(null)
+      setShowProductPicker(true)
+      clearDraft()
+      return
+    }
     if (!content && pendingFiles.length === 0 && selectedCommerceCards.length === 0) return
     if (sending) return
     setSending(true)
@@ -1091,6 +1205,7 @@ export default function ChannelViewScreen() {
     setSelectedMentions([])
     setMentionQuery(null)
     setMentionTrigger(null)
+    setSlashQuery(null)
     setReplyTo(null)
     setPendingFiles([])
     setSelectedCommerceCards([])
@@ -1249,11 +1364,30 @@ export default function ChannelViewScreen() {
     }, 2000)
   }, [channelId])
 
+  const formatActivityLabel = useCallback(
+    (activity: string) => {
+      if (activity === 'thinking') return t('member.activityThinking')
+      if (activity === 'working') return t('member.activityWorking')
+      if (activity === 'preparing') return t('member.activityPreparing')
+      if (activity === 'ready') return t('member.activityReady')
+      return activity
+    },
+    [t],
+  )
+
   // @mention detection on input text change
   const handleTextChange = useCallback(
     (text: string) => {
       setInputText(text)
       handleTyping()
+      const slashMatch = text.match(/(?:^|\s)\/([^\s/]{0,64})$/u)
+      if (slashMatch) {
+        setSlashQuery(slashMatch[1] ?? '')
+        setMentionTrigger(null)
+        setMentionQuery(null)
+        return
+      }
+      setSlashQuery(null)
       // Detect mention/reference query
       const match = text.match(/(?:^|\s)([@#])([^\s@#]{0,128})$/u)
       setMentionTrigger((match?.[1] as MentionSuggestionTrigger | undefined) ?? null)
@@ -1294,6 +1428,24 @@ export default function ChannelViewScreen() {
     [inputText],
   )
 
+  const insertSlashCommand = useCallback(
+    (command: SlashCommand) => {
+      const match = inputText.match(/(?:^|\s)\/([^\s/]{0,64})$/u)
+      if (!match || match.index === undefined) return
+
+      const prefix = match[0].startsWith(' ') ? ' ' : ''
+      const start = match.index + prefix.length
+      const before = inputText.slice(0, start)
+      const name = command.name.replace(/^\/+/, '')
+      setInputText(`${before}/${name} `)
+      setSlashQuery(null)
+      setMentionQuery(null)
+      setMentionTrigger(null)
+      inputRef.current?.focus()
+    },
+    [inputText],
+  )
+
   const handleReply = useCallback((msg: Message) => {
     setReplyTo(msg)
   }, [])
@@ -1326,7 +1478,7 @@ export default function ChannelViewScreen() {
         const author = m.author?.displayName || m.author?.username || 'Unknown'
         const time = new Date(m.createdAt).toLocaleString()
         const attachmentLines = (m.attachments ?? []).map(
-          (a: { filename: string; url: string }) => `  📎 [${a.filename}](${a.url})`,
+          (a: { filename: string; url: string }) => `  - [${a.filename}](${a.url})`,
         )
         return [`**${author}** (${time})`, m.content, ...attachmentLines].filter(Boolean).join('\n')
       })
@@ -1431,71 +1583,62 @@ export default function ChannelViewScreen() {
     const gateChannel = access.channel ?? channel
     const isPending = access.joinRequestStatus === 'pending' || requestAccessMutation.isSuccess
     return (
-      <View style={[styles.container, { backgroundColor: colors.chatBackground }]}>
-        <View
-          style={[styles.customHeader, { backgroundColor: colors.surface, paddingTop: insets.top }]}
-        >
-          <Pressable
+      <BackgroundSurface style={styles.container}>
+        <GlassHeader style={[styles.customHeader, { paddingTop: insets.top }]}>
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={ChevronLeft}
             onPress={() => router.back()}
             hitSlop={8}
-            style={({ pressed }) => [styles.headerBackBtn, pressed && { opacity: 0.5 }]}
-          >
-            <ChevronLeft size={26} color={colors.text} />
-          </Pressable>
+            iconColor={colors.text}
+            style={styles.headerBackBtn}
+          />
           <View style={styles.headerTitleRow}>
-            <Text style={[styles.headerChannel, { color: colors.text }]} numberOfLines={1}>
+            <AppText variant="title" numberOfLines={1}>
               # {gateChannel?.name ?? t('channel.privateChannel')}
-            </Text>
+            </AppText>
           </View>
-        </View>
-        <View style={styles.accessGate}>
+        </GlassHeader>
+        <GlassPanel style={styles.accessGate}>
           <View style={[styles.accessGateIcon, { backgroundColor: `${colors.primary}18` }]}>
             <Lock size={32} color={colors.primary} />
           </View>
-          <Text style={[styles.accessGateTitle, { color: colors.text }]}>
+          <AppText variant="headline" style={styles.accessGateTitle}>
             # {gateChannel?.name ?? t('channel.privateChannel')}
-          </Text>
-          <Text style={[styles.accessGateDesc, { color: colors.textMuted }]}>
+          </AppText>
+          <AppText tone="secondary" style={styles.accessGateDesc}>
             {t('channel.privateChannelGateDesc')}
-          </Text>
-          <Pressable
+          </AppText>
+          <Button
+            variant="primary"
+            size="lg"
+            icon={Send}
+            loading={requestAccessMutation.isPending}
             disabled={isPending || requestAccessMutation.isPending}
             onPress={() => requestAccessMutation.mutate()}
-            style={({ pressed }) => [
-              styles.accessGateButton,
-              {
-                backgroundColor: colors.primary,
-                opacity: isPending || requestAccessMutation.isPending ? 0.58 : pressed ? 0.82 : 1,
-              },
-            ]}
+            style={styles.accessGateButton}
           >
-            {requestAccessMutation.isPending ? (
-              <ActivityIndicator color="#050508" />
-            ) : (
-              <Send size={16} color="#050508" />
-            )}
-            <Text style={styles.accessGateButtonText}>
-              {isPending ? t('channel.requestPending') : t('channel.requestAccess')}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+            {isPending ? t('channel.requestPending') : t('channel.requestAccess')}
+          </Button>
+        </GlassPanel>
+      </BackgroundSurface>
     )
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.chatBackground }]}>
+    <BackgroundSurface style={styles.container}>
       {/* Custom header bar — left-aligned like Discord */}
-      <View
-        style={[styles.customHeader, { backgroundColor: colors.surface, paddingTop: insets.top }]}
-      >
-        <Pressable
+      <GlassHeader style={[styles.customHeader, { paddingTop: insets.top }]}>
+        <Button
+          variant="ghost"
+          size="icon"
+          icon={ChevronLeft}
           onPress={() => router.back()}
           hitSlop={8}
-          style={({ pressed }) => [styles.headerBackBtn, pressed && { opacity: 0.5 }]}
-        >
-          <ChevronLeft size={26} color={colors.text} />
-        </Pressable>
+          iconColor={colors.text}
+          style={styles.headerBackBtn}
+        />
         <Pressable
           onPress={() => {
             if (serverSlug) {
@@ -1508,9 +1651,17 @@ export default function ChannelViewScreen() {
           }}
           style={styles.headerTitleRow}
         >
-          <Text style={[styles.headerChannel, { color: colors.text }]} numberOfLines={1}>
-            # {channel?.name ?? '...'} ›
-          </Text>
+          <View style={styles.headerNameRow}>
+            <AppText variant="title" style={styles.headerChannel} numberOfLines={1}>
+              # {channel?.name ?? '...'}
+            </AppText>
+            <ChevronRight
+              size={16}
+              color={colors.textMuted}
+              strokeWidth={2.8}
+              style={styles.headerChevron}
+            />
+          </View>
           <View style={styles.headerOnlineRow}>
             <View
               style={[
@@ -1518,43 +1669,41 @@ export default function ChannelViewScreen() {
                 onlineMemberCount === 0 && { backgroundColor: colors.textMuted },
               ]}
             />
-            <Text style={[styles.headerOnlineText, { color: colors.textMuted }]}>
+            <AppText variant="label" tone="secondary" style={styles.headerOnlineText}>
               {onlineMemberCount}
               {t('chat.onlineSuffix', '人在线')}
-            </Text>
+            </AppText>
           </View>
         </Pressable>
         <View style={styles.headerRight}>
-          <Pressable
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={Search}
             onPress={() => {
               setShowSearchPanel(true)
               setTimeout(() => searchInputRef.current?.focus(), 300)
             }}
             hitSlop={8}
-            style={({ pressed }) => [styles.headerIconBtn, pressed && { opacity: 0.5 }]}
-          >
-            <Search size={24} color={colors.textMuted} />
-          </Pressable>
+            iconColor={colors.textMuted}
+            style={styles.headerIconBtn}
+          />
         </View>
-      </View>
+      </GlassHeader>
 
       {isLoading ? (
         <View style={styles.loading}>
-          <ActivityIndicator color={colors.primary} />
+          <Spinner />
         </View>
       ) : timeline.length === 0 ? (
         <Pressable style={styles.emptyState} onPress={Keyboard.dismiss}>
-          <View style={[styles.emptyIcon, { backgroundColor: `${colors.primary}15` }]}>
-            <Hash size={28} color={colors.primary} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            {t('chat.welcomeChannel', {
+          <EmptyState
+            icon={Hash}
+            title={t('chat.welcomeChannel', {
               channelName: channel?.name ?? t('chat.channelFallback'),
             })}
-          </Text>
-          <Text style={[styles.emptyDescription, { color: colors.textMuted }]}>
-            {t('chat.welcomeStart')}
-          </Text>
+            description={t('chat.welcomeStart')}
+          />
         </Pressable>
       ) : (
         <FlatList
@@ -1593,32 +1742,77 @@ export default function ChannelViewScreen() {
 
       {/* Scroll to bottom FAB */}
       {showScrollBottom && (
-        <Pressable
-          style={[
-            styles.scrollBottomFab,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
+        <Button
+          variant="glass"
+          size="icon"
+          icon={ChevronDown}
+          iconColor={colors.textSecondary}
+          style={styles.scrollBottomFab}
           onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
-        >
-          <ChevronDown size={20} color={colors.textSecondary} />
-        </Pressable>
+        />
       )}
 
       {/* Activity indicator */}
       {activityUsers.length > 0 && (
-        <View style={[styles.activityBar, { backgroundColor: colors.surface }]}>
-          {activityUsers.map((u) => (
-            <View key={u.userId} style={styles.activityRow}>
-              <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
-              <Text style={[styles.activityText, { color: colors.textMuted }]} numberOfLines={1}>
-                {u.username} {u.activity}
-              </Text>
-            </View>
-          ))}
+        <View style={styles.activityBar}>
+          <ChatWorkIndicator
+            items={activityUsers.map((u) => ({
+              id: u.userId,
+              label: `${u.username} ${formatActivityLabel(u.activity)}`,
+            }))}
+          />
         </View>
       )}
 
       {/* Typing indicator */}
+
+      {/* Slash command autocomplete dropdown */}
+      {filteredSlashCommands.length > 0 && slashQuery !== null && (
+        <View
+          style={[
+            styles.mentionDropdown,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.suggestionHeader}>
+            <CommandIcon size={13} color={colors.primary} />
+            <Text style={[styles.suggestionHeaderText, { color: colors.textMuted }]}>
+              {t('chat.slashCommands')}
+            </Text>
+          </View>
+          {filteredSlashCommands.map((command) => (
+            <Pressable
+              key={`${command.agentId}:${command.name}`}
+              style={({ pressed }) => [
+                styles.mentionRow,
+                pressed && { backgroundColor: colors.surfaceHover },
+              ]}
+              onPress={() => insertSlashCommand(command)}
+            >
+              <View style={[styles.mentionIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <CommandIcon size={15} color={colors.primary} />
+              </View>
+              <View style={styles.slashCommandBody}>
+                <Text style={[styles.mentionName, { color: colors.text }]} numberOfLines={1}>
+                  /{command.name.replace(/^\/+/, '')}
+                </Text>
+                <Text
+                  style={[styles.mentionUsername, { color: colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  {command.description || t('chat.slashCommandNoDescription')}
+                </Text>
+              </View>
+              <View style={[styles.mentionBotBadge, { backgroundColor: `${colors.primary}20` }]}>
+                <Bot size={11} color={colors.primary} />
+                <Text style={[styles.mentionBotText, { color: colors.primary }]} numberOfLines={1}>
+                  {command.botDisplayName ?? command.botUsername}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {/* @mention autocomplete dropdown */}
       {mentionResults.length > 0 && mentionQuery !== null && (
@@ -1670,58 +1864,28 @@ export default function ChannelViewScreen() {
       )}
 
       {selectionMode ? (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-            paddingBottom: insets.bottom + spacing.sm,
-            backgroundColor: colors.surface,
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: colors.border,
-            gap: spacing.sm,
-          }}
+        <GlassHeader
+          style={[styles.selectionToolbar, { paddingBottom: insets.bottom + spacing.sm }]}
         >
-          <Text style={{ color: colors.textSecondary, fontSize: fontSize.sm, flex: 1 }}>
+          <AppText variant="label" tone="secondary" style={styles.selectionCount}>
             {t('chat.selectedCount', {
               count: selectedMessageIds.size,
               defaultValue: `已选 ${selectedMessageIds.size} 条`,
             })}
-          </Text>
-          <Pressable
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.sm,
-              backgroundColor: colors.primary,
-              borderRadius: radius.md,
-              opacity: selectedMessageIds.size === 0 ? 0.5 : 1,
-            }}
+          </AppText>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={Copy}
             onPress={handleCopySelectedAsMarkdown}
             disabled={selectedMessageIds.size === 0}
           >
-            <Copy size={14} color="#fff" />
-            <Text style={{ color: '#fff', fontWeight: '600', fontSize: fontSize.sm }}>
-              Markdown
-            </Text>
-          </Pressable>
-          <Pressable
-            style={{
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.sm,
-              backgroundColor: colors.inputBackground,
-              borderRadius: radius.md,
-            }}
-            onPress={handleExitSelectionMode}
-          >
-            <Text style={{ color: colors.textSecondary, fontSize: fontSize.sm }}>
-              {t('common.cancel')}
-            </Text>
-          </Pressable>
-        </View>
+            Markdown
+          </Button>
+          <Button variant="glass" size="sm" onPress={handleExitSelectionMode}>
+            {t('common.cancel')}
+          </Button>
+        </GlassHeader>
       ) : (
         <ChatComposer
           inputText={inputText}
@@ -1744,6 +1908,7 @@ export default function ChannelViewScreen() {
           onPressAt={() => {
             setInputText((prev) => `${prev}@`)
             setMentionQuery('')
+            setSlashQuery(null)
             inputRef.current?.focus()
           }}
           showEmojiPicker={showInputEmojiPicker}
@@ -1774,90 +1939,54 @@ export default function ChannelViewScreen() {
         />
       )}
 
-      <Modal
+      <Sheet
         visible={showProductPicker}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowProductPicker(false)}
+        onClose={() => setShowProductPicker(false)}
+        title={t('chat.productPicker')}
+        action={
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={X}
+            iconColor={colors.textMuted}
+            onPress={() => setShowProductPicker(false)}
+          />
+        }
       >
-        <View style={styles.sheetOverlay}>
-          <Pressable style={styles.sheetDismiss} onPress={() => setShowProductPicker(false)} />
-          <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
-            <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                {t('chat.productPicker')}
-              </Text>
-              <Pressable
-                onPress={() => setShowProductPicker(false)}
-                hitSlop={8}
-                style={styles.sheetActionBtn}
-              >
-                <X size={20} color={colors.textMuted} />
-              </Pressable>
-            </View>
-            {isFetchingProducts ? (
-              <View style={styles.productPickerState}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
-                  {t('chat.productPickerLoading')}
-                </Text>
-              </View>
-            ) : productCards.length === 0 ? (
-              <View style={styles.productPickerState}>
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
-                  {t('chat.productPickerEmpty')}
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={productCards}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.productPickerList}
-                renderItem={({ item }) => (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.productPickerItem,
-                      { borderColor: colors.border, backgroundColor: colors.inputBackground },
-                      pressed && { opacity: 0.75 },
-                    ]}
-                    onPress={() => addCommerceCard(item)}
-                  >
-                    <View
-                      style={[styles.productPickerIcon, { backgroundColor: `${colors.primary}18` }]}
-                    >
-                      <ShoppingBag size={22} color={colors.primary} />
-                    </View>
-                    <View style={styles.productPickerInfo}>
-                      <Text
-                        style={[styles.productPickerName, { color: colors.text }]}
-                        numberOfLines={1}
-                      >
-                        {item.snapshot.name}
-                      </Text>
-                      {item.snapshot.summary ? (
-                        <Text
-                          style={[styles.productPickerSummary, { color: colors.textMuted }]}
-                          numberOfLines={2}
-                        >
-                          {item.snapshot.summary}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text style={[styles.productPickerPrice, { color: colors.primary }]}>
-                      {new Intl.NumberFormat(undefined, {
-                        style: 'currency',
-                        currency: item.snapshot.currency,
-                        maximumFractionDigits: 2,
-                      }).format(item.snapshot.price / 100)}
-                    </Text>
-                  </Pressable>
-                )}
+        {isFetchingProducts ? (
+          <View style={styles.productPickerState}>
+            <Spinner />
+            <AppText variant="label" tone="secondary">
+              {t('chat.productPickerLoading')}
+            </AppText>
+          </View>
+        ) : productCards.length === 0 ? (
+          <View style={styles.productPickerState}>
+            <AppText variant="label" tone="secondary">
+              {t('chat.productPickerEmpty')}
+            </AppText>
+          </View>
+        ) : (
+          <FlatList
+            data={productCards}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.productPickerList}
+            renderItem={({ item }) => (
+              <MenuItem
+                icon={ShoppingBag}
+                title={item.snapshot.name}
+                subtitle={item.snapshot.summary}
+                onPress={() => addCommerceCard(item)}
+                right={
+                  <AppText variant="bodyStrong" tone="primary">
+                    {formatCommercePrice(item.snapshot.price, item.snapshot.currency, t)}
+                  </AppText>
+                }
               />
             )}
-          </View>
-        </View>
-      </Modal>
+          />
+        )}
+      </Sheet>
 
       {/* Member list modal */}
       <Modal
@@ -2081,15 +2210,12 @@ export default function ChannelViewScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowSearchPanel(false)}
       >
-        <View style={[styles.searchPanel, { backgroundColor: colors.background }]}>
+        <BackgroundSurface style={styles.searchPanel}>
           {/* Search header */}
-          <View
-            style={[
-              styles.searchHeader,
-              { backgroundColor: colors.surface, paddingTop: Platform.OS === 'ios' ? 12 : 0 },
-            ]}
+          <GlassHeader
+            style={[styles.searchHeader, { paddingTop: Platform.OS === 'ios' ? 12 : 0 }]}
           >
-            <View style={[styles.searchInputRow, { backgroundColor: colors.inputBackground }]}>
+            <InputValley style={styles.searchInputRow} focused={searchQuery.length > 0}>
               <Search size={18} color={colors.textMuted} />
               <TextInput
                 ref={searchInputRef}
@@ -2110,13 +2236,11 @@ export default function ChannelViewScreen() {
                   <X size={16} color={colors.textMuted} />
                 </Pressable>
               )}
-            </View>
-            <Pressable onPress={() => setShowSearchPanel(false)} hitSlop={8}>
-              <Text style={{ color: colors.primary, fontSize: fontSize.md, fontWeight: '600' }}>
-                {t('common.cancel', '取消')}
-              </Text>
-            </Pressable>
-          </View>
+            </InputValley>
+            <Button variant="ghost" size="sm" onPress={() => setShowSearchPanel(false)} hitSlop={8}>
+              {t('common.cancel', '取消')}
+            </Button>
+          </GlassHeader>
 
           {/* Tab bar */}
           <View style={[styles.searchTabBar, { borderBottomColor: colors.border }]}>
@@ -2173,79 +2297,45 @@ export default function ChannelViewScreen() {
             <>
               {/* Filter chips */}
               <View style={styles.searchFilters}>
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    {
-                      backgroundColor: searchHasAttachment ? `${colors.primary}20` : colors.surface,
-                      borderColor: searchHasAttachment ? colors.primary : colors.border,
-                    },
-                  ]}
+                <ChipButton
+                  label={t('chat.hasFile', '含附件')}
+                  icon={File}
+                  active={searchHasAttachment}
                   onPress={() => setSearchHasAttachment(!searchHasAttachment)}
-                >
-                  <File size={12} color={searchHasAttachment ? colors.primary : colors.textMuted} />
-                  <Text
-                    style={{
-                      color: searchHasAttachment ? colors.primary : colors.textMuted,
-                      fontSize: fontSize.xs,
-                      fontWeight: '600',
-                    }}
-                  >
-                    {t('chat.hasFile', '含附件')}
-                  </Text>
-                </Pressable>
+                />
                 {searchFromUser && (
-                  <Pressable
-                    style={[
-                      styles.filterChip,
-                      { backgroundColor: `${colors.primary}20`, borderColor: colors.primary },
-                    ]}
+                  <ChipButton
+                    active
+                    iconRight={X}
+                    label={`${t('chat.fromUser', '来自')}: ${
+                      channelMembers.find((m) => m.user.id === searchFromUser)?.user.displayName ??
+                      '...'
+                    }`}
                     onPress={() => setSearchFromUser(null)}
-                  >
-                    <Text
-                      style={{ color: colors.primary, fontSize: fontSize.xs, fontWeight: '600' }}
-                    >
-                      {t('chat.fromUser', '来自')}:{' '}
-                      {channelMembers.find((m) => m.user.id === searchFromUser)?.user.displayName ??
-                        '...'}
-                    </Text>
-                    <X size={10} color={colors.primary} />
-                  </Pressable>
+                  />
                 )}
               </View>
 
               {/* Member filter list (when no query) */}
               {searchQuery.length < 2 && !searchFromUser && (
-                <View style={{ paddingHorizontal: spacing.md }}>
-                  <Text
-                    style={{
-                      color: colors.textMuted,
-                      fontSize: fontSize.xs,
-                      fontWeight: '700',
-                      marginBottom: spacing.sm,
-                      textTransform: 'uppercase',
-                    }}
-                  >
+                <View style={styles.searchMemberFilter}>
+                  <AppText variant="label" tone="secondary" style={styles.searchSectionLabel}>
                     {t('chat.filterByMember', '按成员筛选')}
-                  </Text>
+                  </AppText>
                   {channelMembers.slice(0, 10).map((m) => (
-                    <Pressable
+                    <MenuItem
                       key={m.user.id}
-                      style={[styles.searchMemberRow, { backgroundColor: colors.surface }]}
+                      title={m.user.displayName || m.user.username}
                       onPress={() => setSearchFromUser(m.user.id)}
-                    >
-                      <Avatar
-                        uri={m.user.avatarUrl}
-                        name={m.user.displayName || m.user.username}
-                        size={28}
-                        userId={m.user.id}
-                      />
-                      <Text
-                        style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: '500' }}
-                      >
-                        {m.user.displayName || m.user.username}
-                      </Text>
-                    </Pressable>
+                      right={
+                        <Avatar
+                          uri={m.user.avatarUrl}
+                          name={m.user.displayName || m.user.username}
+                          size={28}
+                          userId={m.user.id}
+                        />
+                      }
+                    />
                   ))}
                 </View>
               )}
@@ -2263,16 +2353,11 @@ export default function ChannelViewScreen() {
                         style={{ marginTop: spacing['3xl'] }}
                       />
                     ) : (
-                      <Text
-                        style={{
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                          marginTop: spacing['3xl'],
-                          fontSize: fontSize.sm,
-                        }}
-                      >
-                        {t('chat.noSearchResults', '没有找到匹配的消息')}
-                      </Text>
+                      <EmptyState
+                        title={t('chat.noSearchResults', '没有找到匹配的消息')}
+                        icon={Search}
+                        style={styles.searchEmpty}
+                      />
                     )
                   }
                   renderItem={({ item }) => {
@@ -2331,16 +2416,11 @@ export default function ChannelViewScreen() {
               keyExtractor={(item) => item.id}
               contentContainerStyle={{ padding: spacing.md }}
               ListEmptyComponent={
-                <Text
-                  style={{
-                    color: colors.textMuted,
-                    textAlign: 'center',
-                    marginTop: spacing['3xl'],
-                    fontSize: fontSize.sm,
-                  }}
-                >
-                  {t('chat.noMembersFound', '未找到成员')}
-                </Text>
+                <EmptyState
+                  title={t('chat.noMembersFound', '未找到成员')}
+                  icon={Users}
+                  style={styles.searchEmpty}
+                />
               }
               renderItem={({ item }) => {
                 const name = item.user.displayName || item.user.username
@@ -2385,9 +2465,9 @@ export default function ChannelViewScreen() {
               }}
             />
           )}
-        </View>
+        </BackgroundSurface>
       </Modal>
-    </View>
+    </BackgroundSurface>
   )
 }
 
@@ -2412,10 +2492,22 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     justifyContent: 'center',
+    minWidth: 0,
+  },
+  headerNameRow: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   headerChannel: {
     fontSize: fontSize.lg,
     fontWeight: '700',
+    lineHeight: 22,
+    flexShrink: 1,
+  },
+  headerChevron: {
+    opacity: 0.55,
   },
   headerOnlineRow: {
     flexDirection: 'row',
@@ -2520,10 +2612,24 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   // Activity
-  activityBar: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  activityBar: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
   activityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   pulseDot: { width: 8, height: 8, borderRadius: 4 },
   activityText: { fontSize: fontSize.xs },
+  activityDots: {
+    flexDirection: 'row',
+    gap: 3,
+    marginLeft: 'auto',
+  },
+  activityDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.7,
+  },
   // Typing
   typingBar: {
     flexDirection: 'row',
@@ -2571,6 +2677,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     maxHeight: 240,
   },
+  suggestionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  suggestionHeaderText: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
   mentionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2594,7 +2713,15 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     flexShrink: 1,
   },
+  slashCommandBody: {
+    flex: 1,
+    minWidth: 0,
+  },
   mentionBotBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    maxWidth: 120,
     paddingHorizontal: spacing.xs,
     paddingVertical: 1,
     borderRadius: radius.sm,
@@ -2839,6 +2966,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    margin: spacing.lg,
     paddingHorizontal: spacing.xl,
   },
   accessGateIcon: {
@@ -2862,19 +2990,21 @@ const styles = StyleSheet.create({
   },
   accessGateButton: {
     marginTop: spacing.xl,
-    minHeight: 46,
-    minWidth: 180,
-    borderRadius: radius.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    minWidth: 190,
   },
   accessGateButtonText: {
     color: '#050508',
     fontSize: fontSize.sm,
     fontWeight: '800',
+  },
+  selectionToolbar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  selectionCount: {
+    flex: 1,
   },
   // Search panel
   searchPanel: {
@@ -2912,7 +3042,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
-    height: 40,
+    minHeight: 44,
     gap: spacing.sm,
   },
   searchInput: {
@@ -2927,14 +3057,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
-    borderWidth: 1,
+  searchMemberFilter: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+  },
+  searchSectionLabel: {
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    textTransform: 'uppercase',
+  },
+  searchEmpty: {
+    marginTop: spacing['3xl'],
   },
   searchMemberRow: {
     flexDirection: 'row',

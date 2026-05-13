@@ -1,7 +1,8 @@
 import type { LucideIcon } from 'lucide-react-native'
 import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { spacing, useColors } from '../../theme'
+import { ToolbarButton } from '../ui'
 
 interface HeaderButtonProps {
   icon: LucideIcon
@@ -23,19 +24,17 @@ export function HeaderButton({
   const colors = useColors()
   const iconColor = color ?? colors.textSecondary
   return (
-    <Pressable
-      onPress={onPress}
+    <ToolbarButton
+      icon={Icon}
+      iconColor={iconColor}
+      iconSize={size}
       disabled={disabled}
+      onPress={onPress}
       hitSlop={6}
-      style={({ pressed }) => [
-        styles.btn,
-        pressed && { opacity: 0.5 },
-        disabled && { opacity: 0.4 },
-      ]}
-    >
-      <Icon size={size} color={iconColor} />
-      {badge && <View style={styles.badgeWrap}>{badge}</View>}
-    </Pressable>
+      badge={badge}
+      variant="ghost"
+      style={disabled ? { opacity: 0.4 } : undefined}
+    />
   )
 }
 
@@ -48,18 +47,6 @@ export function HeaderButtonGroup({ children }: HeaderButtonGroupProps) {
 }
 
 const styles = StyleSheet.create({
-  btn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeWrap: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-  },
   group: {
     flexDirection: 'row',
     alignItems: 'center',
