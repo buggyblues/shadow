@@ -33,7 +33,10 @@ import type { Database } from '../src/db'
 import * as schema from '../src/db/schema'
 import { createAgentHandler } from '../src/handlers/agent.handler'
 import { createCloudSaasHandler } from '../src/handlers/cloud-saas.handler'
-import { processCloudDeploymentQueueOnce } from '../src/lib/cloud-deployment-processor'
+import {
+  createCloudHourlyBillingReferenceId,
+  processCloudDeploymentQueueOnce,
+} from '../src/lib/cloud-deployment-processor'
 import { signAccessToken, signAgentToken } from '../src/lib/jwt'
 import { closeRedisClient } from '../src/lib/redis'
 
@@ -2652,9 +2655,15 @@ describe('Cloud SaaS — deployment + billing', () => {
       const txBody = (await txRes.json()) as {
         transactions: Array<{ amount: number; referenceId?: string; referenceType?: string }>
       }
+      const billedUntil = new Date(
+        deployment!.lastHourlyBilledAt!.getTime() +
+          Math.floor((Date.now() - deployment!.lastHourlyBilledAt!.getTime()) / (15 * 60 * 1000)) *
+            (15 * 60 * 1000),
+      )
+      const expectedRefId = createCloudHourlyBillingReferenceId(deployment!.id, billedUntil)
       expect(
         txBody.transactions.find(
-          (tx) => tx.referenceType === 'cloud_hourly' && tx.referenceId === deployment!.id,
+          (tx) => tx.referenceType === 'cloud_hourly' && tx.referenceId === expectedRefId,
         ),
       ).toMatchObject({ amount: -1 })
 
