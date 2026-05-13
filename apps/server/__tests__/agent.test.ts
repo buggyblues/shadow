@@ -157,7 +157,53 @@ describe('AgentService', () => {
       expect(agentDao.create).toHaveBeenCalledWith({
         userId: 'bot-user-1',
         kernelType: 'openclaw',
-        config: { description: 'A test bot' },
+        config: { description: 'A test bot', buddyMode: 'private', allowedServerIds: [] },
+        ownerId: 'owner-1',
+      })
+    })
+
+    it('should persist explicit Buddy access mode and server whitelist', async () => {
+      const botUser = {
+        id: 'bot-user-shareable',
+        email: 'agent-shareable@shadowob.bot',
+        username: 'agent-shareable',
+        displayName: 'Shareable Buddy',
+        avatarUrl: null,
+        isBot: true,
+      }
+      const agent = {
+        id: 'agent-shareable',
+        userId: botUser.id,
+        kernelType: 'openclaw',
+        config: { buddyMode: 'shareable', allowedServerIds: ['server-1'] },
+        ownerId: 'owner-1',
+        status: 'stopped',
+      }
+
+      const agentDao = createMockAgentDao({
+        createBotUser: vi.fn().mockResolvedValue(botUser),
+        create: vi.fn().mockResolvedValue(agent),
+      })
+      const service = new AgentService({
+        agentDao: agentDao as any,
+        userDao: createMockUserDao() as any,
+        logger: createMockLogger() as any,
+      })
+
+      await service.create({
+        name: 'Shareable Buddy',
+        username: 'shareable-buddy',
+        kernelType: 'openclaw',
+        config: {},
+        buddyMode: 'shareable',
+        allowedServerIds: ['server-1', 'server-1', ' '],
+        ownerId: 'owner-1',
+      })
+
+      expect(agentDao.create).toHaveBeenCalledWith({
+        userId: botUser.id,
+        kernelType: 'openclaw',
+        config: { buddyMode: 'shareable', allowedServerIds: ['server-1'] },
         ownerId: 'owner-1',
       })
     })

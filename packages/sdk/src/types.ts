@@ -4,6 +4,7 @@ import type {
   MentionSuggestion as SharedMentionSuggestion,
   MentionSuggestionTrigger as SharedMentionSuggestionTrigger,
   MessageMention as SharedMessageMention,
+  OAuthLinkCard as SharedOAuthLinkCard,
 } from '@shadowob/shared'
 
 // ─── Unified API Response Types ────────────────────────────────────────────
@@ -150,6 +151,7 @@ export interface ShadowMessageMetadata {
   interactiveResponse?: ShadowInteractiveResponse
   interactiveState?: ShadowInteractiveState
   commerceCards?: Array<ShadowCommerceProductCard | ShadowCommerceOfferCardInput>
+  oauthLinkCards?: ShadowOAuthLinkCard[]
   [key: string]: unknown
 }
 
@@ -160,6 +162,7 @@ export interface ShadowCommerceOfferCardInput {
 }
 
 export type ShadowMessageMention = SharedMessageMention
+export type ShadowOAuthLinkCard = SharedOAuthLinkCard
 export type ShadowMentionSuggestion = SharedMentionSuggestion
 export type ShadowMentionSuggestionTrigger = SharedMentionSuggestionTrigger
 
@@ -476,7 +479,16 @@ export interface ShadowChannelPolicy {
   listen: boolean
   reply: boolean
   mentionOnly: boolean
-  config: Record<string, unknown>
+  config: ShadowChannelPolicyConfig
+}
+
+export interface ShadowChannelPolicyConfig {
+  allowedTriggerUserIds?: string[]
+  triggerUserIds?: string[]
+  ownerId?: string
+  activeTenantIds?: string[]
+  replyRequiresMention?: boolean
+  [key: string]: unknown
 }
 
 export interface ShadowSlashCommand {
@@ -514,6 +526,11 @@ export interface ShadowRemoteServer {
 export interface ShadowRemoteConfig {
   agentId: string
   botUserId: string
+  ownerId?: string
+  buddyMode?: 'private' | 'shareable'
+  allowedServerIds?: string[]
+  activeTenantIds?: string[]
+  allowedTriggerUserIds?: string[]
   slashCommands?: ShadowSlashCommand[]
   servers: ShadowRemoteServer[]
 }

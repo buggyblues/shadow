@@ -61,6 +61,7 @@ export interface MessageMetadata {
   interactiveState?: Record<string, unknown>
   commerceCards?: CommerceMessageCard[]
   paidFileCards?: PaidFileCard[]
+  oauthLinkCards?: OAuthLinkCard[]
   [key: string]: unknown
 }
 
@@ -110,6 +111,29 @@ export interface PaidFileCard {
     previewUrl?: string | null
   }
   action: { mode: 'open_paid_file' }
+}
+
+export interface OAuthLinkCard {
+  id: string
+  kind: 'oauth_link'
+  appId: string
+  clientId?: string | null
+  title: string
+  description?: string | null
+  iconUrl?: string | null
+  meta?: {
+    appName?: string | null
+    avatarUrl?: string | null
+    iconUrl?: string | null
+    coverUrl?: string | null
+    homepageUrl?: string | null
+    origin?: string | null
+  }
+  url: string
+  embedUrl?: string | null
+  fallbackUrl?: string | null
+  scopes?: string[]
+  action: { mode: 'open_iframe' | 'open_external' }
 }
 
 export type MentionSuggestionTrigger = '@' | '#'

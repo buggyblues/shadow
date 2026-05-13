@@ -24,9 +24,10 @@ import type {
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import type { PluginRuntime } from 'openclaw/plugin-sdk/core'
 import { processShadowMessage } from './monitor/channel-message.js'
+import { createShadowMessageProcessingQueue } from './monitor/message-queue.js'
 import {
   formatSlashCommandPrompt,
-  loadLocalSlashCommands,
+  loadShadowSlashCommands,
   matchShadowSlashCommand,
   normalizeShadowSlashCommands,
   registerAgentSlashCommands,
@@ -67,6 +68,12 @@ type ChannelServerContext = {
   serverSlug: string
   serverName: string
   channelName: string
+}
+
+type ShadowRemoteAccessConfig = ShadowRemoteConfig & {
+  ownerId?: string
+  activeTenantIds?: string[]
+  allowedTriggerUserIds?: string[]
 }
 
 export function resolveShadowAgentIdFromConfig(config: unknown, accountId: string): string | null {
@@ -222,7 +229,7 @@ export async function monitorShadowProvider(
     runtime.log?.(`[config] Resolved agentId: ${agentId}`)
   }
 
-  const slashCommands = await loadLocalSlashCommands(runtime)
+  const slashCommands = await loadShadowSlashCommands(runtime)
   if (agentId) {
     try {
       await runShadowApiOperation(
@@ -243,6 +250,29 @@ export async function monitorShadowProvider(
   const messageWatermarks = await loadMessageWatermarks(accountId)
   const processedMessageIds = new Set<string>()
   const catchupInFlight = new Map<string, Promise<void>>()
+
+  const buildAccessPolicyConfig = (
+    config: ShadowRemoteAccessConfig | null,
+  ): Record<string, unknown> => {
+    const activeTenantIds = config?.activeTenantIds ?? []
+    const allowedTriggerUserIds =
+      config?.allowedTriggerUserIds ??
+      [config?.ownerId, ...activeTenantIds].filter((id): id is string => Boolean(id))
+    return {
+      allowedTriggerUserIds,
+      triggerUserIds: allowedTriggerUserIds,
+      ownerId: config?.ownerId,
+      activeTenantIds,
+      replyRequiresMention: false,
+    }
+  }
+
+  const buildDefaultAccessPolicy = (config: ShadowRemoteConfig | null): ShadowChannelPolicy => ({
+    listen: true,
+    reply: true,
+    mentionOnly: false,
+    config: buildAccessPolicyConfig(config),
+  })
 
   const rememberProcessedMessage = (messageId: string) => {
     processedMessageIds.add(messageId)
@@ -366,12 +396,7 @@ export async function monitorShadowProvider(
     for (const ch of directChannels) {
       if (!allChannelIds.includes(ch.id)) allChannelIds.push(ch.id)
       if (!channelPolicies.has(ch.id)) {
-        channelPolicies.set(ch.id, {
-          listen: true,
-          reply: true,
-          mentionOnly: false,
-          config: {},
-        })
+        channelPolicies.set(ch.id, buildDefaultAccessPolicy(remoteConfig))
       }
     }
     runtime.log?.(`[config] Monitoring ${directChannels.length} direct channel(s)`)
@@ -441,6 +466,14 @@ export async function monitorShadowProvider(
     }
   }
 
+  const messageQueue = createShadowMessageProcessingQueue<ShadowMessage>({
+    process: processChannelMessageWithRetry,
+    isStopped: () => stopped,
+    onSkipped: (message, source) => {
+      runtime.log?.(`[${source}] Monitor stopped, skipping queued message ${message.id}`)
+    },
+  })
+
   const catchUpChannel = async (channelId: string, reason: string) => {
     try {
       const result = await client.getMessages(channelId, 50)
@@ -467,7 +500,7 @@ export async function monitorShadowProvider(
       }
       for (const message of candidates) {
         rememberProcessedMessage(message.id)
-        await processChannelMessageWithRetry(message, 'catchup')
+        await messageQueue.enqueue(message, 'catchup')
       }
     } catch (err) {
       runtime.error?.(`[catchup] Failed for channel ${channelId}: ${String(err)}`)
@@ -586,8 +619,68 @@ export async function monitorShadowProvider(
       config?: Record<string, unknown>
     }) => {
       if (data.agentId !== agentId) return
-      if (!data.channelId) return
-      const mentionOnly = data.mentionOnly ?? false
+      if (!data.channelId) {
+        void (async () => {
+          try {
+            const updatedConfig = await runShadowApiOperation(
+              'refresh remote config after access policy change',
+              () => client.getAgentConfig(agentId),
+              { runtime, abortSignal },
+            )
+            remoteConfig = updatedConfig
+            const remoteChannelIds = new Set<string>()
+            const accessConfig = buildAccessPolicyConfig(updatedConfig)
+
+            for (const server of updatedConfig.servers) {
+              for (const ch of server.channels) {
+                remoteChannelIds.add(ch.id)
+                channelServerMap.set(ch.id, {
+                  serverId: server.id,
+                  serverSlug: server.slug ?? server.id,
+                  serverName: server.name,
+                  channelName: ch.name,
+                })
+                channelPolicies.set(ch.id, {
+                  listen: true,
+                  reply: true,
+                  mentionOnly: false,
+                  config: { ...ch.policy.config, ...accessConfig },
+                })
+                if (!allChannelIds.includes(ch.id)) {
+                  allChannelIds.push(ch.id)
+                  void socket.joinChannel(ch.id)
+                }
+              }
+            }
+
+            for (const [channelId] of channelServerMap) {
+              if (remoteChannelIds.has(channelId)) continue
+              channelServerMap.delete(channelId)
+              channelPolicies.delete(channelId)
+              const idx = allChannelIds.indexOf(channelId)
+              if (idx !== -1) allChannelIds.splice(idx, 1)
+              socket.leaveChannel(channelId)
+            }
+
+            for (const [channelId, existing] of channelPolicies) {
+              if (channelServerMap.has(channelId)) continue
+              channelPolicies.set(channelId, {
+                ...existing,
+                listen: true,
+                reply: true,
+                mentionOnly: false,
+                config: { ...existing.config, ...accessConfig },
+              })
+            }
+            runtime.log?.('[config] Refreshed Buddy owner/tenant access policy')
+          } catch (err) {
+            runtime.error?.(`[config] Failed to refresh access policy: ${String(err)}`)
+          }
+        })()
+        return
+      }
+      const mentionOnly = false
+      const accessConfig = buildAccessPolicyConfig(remoteConfig)
       runtime.log?.(
         `[ws] Received agent:policy-changed for channel ${data.channelId}: mentionOnly=${mentionOnly}, reply=${data.reply}, config=${JSON.stringify(data.config ?? {})}`,
       )
@@ -596,15 +689,15 @@ export async function monitorShadowProvider(
         channelPolicies.set(data.channelId, {
           ...existing,
           mentionOnly,
-          reply: data.reply ?? existing.reply,
-          config: data.config ?? existing.config,
+          reply: true,
+          config: { ...existing.config, ...accessConfig, ...(data.config ?? {}) },
         })
       } else {
         channelPolicies.set(data.channelId, {
           listen: true,
-          reply: data.reply ?? true,
+          reply: true,
           mentionOnly,
-          config: data.config ?? {},
+          config: { ...accessConfig, ...(data.config ?? {}) },
         })
       }
     },
@@ -657,12 +750,12 @@ export async function monitorShadowProvider(
       if (!refreshed) {
         await resolveChannelContext(data.channelId, 'member-added')
       }
-      if (!refreshed && !channelPolicies.has(data.channelId)) {
+      if (!channelPolicies.has(data.channelId)) {
         const defaultPolicy: ShadowChannelPolicy = {
           listen: true,
           reply: true,
           mentionOnly: false,
-          config: {},
+          config: buildAccessPolicyConfig(remoteConfig),
         }
         channelPolicies.set(data.channelId, defaultPolicy)
       }
@@ -712,7 +805,7 @@ export async function monitorShadowProvider(
       return
     }
 
-    void processChannelMessageWithRetry(message, 'ws')
+    void messageQueue.enqueue(message, 'ws')
   })
 
   socket.connect()

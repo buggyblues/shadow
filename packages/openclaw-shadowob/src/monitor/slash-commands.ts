@@ -170,8 +170,16 @@ function toPublicSlashCommands(commands: ShadowSlashCommand[]): ShadowSlashComma
   return commands.map(({ body: _body, ...command }) => command)
 }
 
-export async function loadLocalSlashCommands(runtime: ShadowRuntimeLogger) {
-  const indexPath = process.env.SHADOW_SLASH_COMMANDS_PATH
+async function fileExists(path: string) {
+  try {
+    await fsPromises.access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function loadSlashCommandFile(indexPath: string, runtime: ShadowRuntimeLogger) {
   if (!indexPath) return []
   try {
     const raw = await fsPromises.readFile(indexPath, 'utf-8')
@@ -182,6 +190,56 @@ export async function loadLocalSlashCommands(runtime: ShadowRuntimeLogger) {
     runtime.error?.(`[slash] Failed to load command index: ${String(err)}`)
     return []
   }
+}
+
+async function runtimeExtensionSlashCommandPaths(runtime: ShadowRuntimeLogger) {
+  const candidates = [
+    process.env.SHADOW_RUNTIME_EXTENSIONS_PATH,
+    process.env.OPENCLAW_RUNTIME_EXTENSIONS_PATH,
+    '/etc/openclaw/runtime-extensions.json',
+  ].filter((path): path is string => Boolean(path))
+  const paths: string[] = []
+
+  for (const manifestPath of [...new Set(candidates)]) {
+    if (!(await fileExists(manifestPath))) continue
+    try {
+      const raw = await fsPromises.readFile(manifestPath, 'utf-8')
+      const manifest = JSON.parse(raw) as { artifacts?: unknown }
+      const artifacts = Array.isArray(manifest.artifacts) ? manifest.artifacts : []
+      for (const artifact of artifacts) {
+        if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) continue
+        const record = artifact as Record<string, unknown>
+        if (record.kind === 'shadow.slashCommands' && typeof record.path === 'string') {
+          paths.push(record.path)
+        }
+      }
+    } catch (err) {
+      runtime.error?.(`[slash] Failed to read runtime extensions ${manifestPath}: ${String(err)}`)
+    }
+  }
+
+  return paths
+}
+
+export async function loadLocalSlashCommands(runtime: ShadowRuntimeLogger) {
+  const indexPath = process.env.SHADOW_SLASH_COMMANDS_PATH
+  return indexPath ? loadSlashCommandFile(indexPath, runtime) : []
+}
+
+export async function loadShadowSlashCommands(runtime: ShadowRuntimeLogger) {
+  const paths = [
+    process.env.SHADOW_SLASH_COMMANDS_PATH,
+    ...(await runtimeExtensionSlashCommandPaths(runtime)),
+  ].filter((path): path is string => Boolean(path))
+  const seenPaths = [...new Set(paths)]
+  const loaded = await Promise.all(seenPaths.map((path) => loadSlashCommandFile(path, runtime)))
+  const merged = normalizeShadowSlashCommands(loaded.flat())
+  if (seenPaths.length > 1) {
+    runtime.log?.(
+      `[slash] Merged ${merged.length} slash command(s) from ${seenPaths.length} source(s)`,
+    )
+  }
+  return merged
 }
 
 export async function registerAgentSlashCommands(params: {

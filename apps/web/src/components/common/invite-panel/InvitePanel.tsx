@@ -51,13 +51,16 @@ interface BuddyAgent {
   config?: {
     description?: string
     buddyTag?: string
+    buddyMode?: 'private' | 'shareable'
+    allowedServerIds?: string[]
   }
+  accessRole?: 'owner' | 'tenant'
 }
 
 type InviteStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
 type AddAgentsResponse = {
-  added?: string[]
+  added?: Array<string | { agentId: string }>
   failed?: Array<{ agentId: string; error: string }>
   results?: Array<{ agentId: string; success: boolean; error?: string }>
 }
@@ -84,6 +87,7 @@ interface InvitePanelMember {
   canAddToServer: boolean
   canAddToChannel: boolean
   agentId?: string
+  accessRole?: 'owner' | 'tenant'
 }
 
 const normalizeStatus = (value: string | undefined): InviteStatus => {
@@ -101,7 +105,9 @@ const parseAddAgentsResult = (result: AddAgentsResponse | undefined | null) => {
 
   if (Array.isArray(result.added) && Array.isArray(result.failed)) {
     return {
-      added: result.added,
+      added: result.added
+        .map((item) => (typeof item === 'string' ? item : item.agentId))
+        .filter(Boolean),
       failed: result.failed,
     }
   }
@@ -113,6 +119,13 @@ const parseAddAgentsResult = (result: AddAgentsResponse | undefined | null) => {
       .filter((item) => !item.success)
       .map((item) => ({ agentId: item.agentId, error: item.error || 'Failed' })),
   }
+}
+
+const canBuddyJoinServer = (agent: BuddyAgent, serverId: string) => {
+  if (agent.config?.buddyMode === 'shareable') return true
+  return Array.isArray(agent.config?.allowedServerIds)
+    ? agent.config.allowedServerIds.includes(serverId)
+    : false
 }
 
 const statusColors: Record<InviteStatus, string> = {
@@ -204,6 +217,9 @@ function InviteMemberCard({
             {t('channel.buddyOwner')} {member.creator.nickname}
           </p>
         ) : null}
+        {member.accessRole === 'tenant' ? (
+          <p className="text-[11px] text-accent mt-0.5">{t('agentMgmt.rentingAccessBadge')}</p>
+        ) : null}
       </div>
     </div>
   )
@@ -252,8 +268,8 @@ export function InvitePanel({
   })
 
   const { data: myBuddies = [] } = useQuery({
-    queryKey: ['my-buddies-for-invite'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    queryKey: ['my-buddies-for-invite', 'include-rentals'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
   })
 
   const { data: channelMembers = [] } = useQuery({
@@ -352,6 +368,7 @@ export function InvitePanel({
       })
       .map((m) => {
         const agent = myBuddiesByBotId.get(m.user!.id)
+        const allowedInServer = agent ? canBuddyJoinServer(agent, serverId) : false
         return {
           key: `buddy:${agent?.id ?? m.user!.id}`,
           uid: m.userId || m.user!.id,
@@ -374,12 +391,13 @@ export function InvitePanel({
             : null,
           source: 'buddy' as const,
           canAddToServer: false,
-          canAddToChannel: true,
+          canAddToChannel: allowedInServer,
           agentId: agent?.id,
+          accessRole: agent?.accessRole,
         } as InvitePanelMember
       })
       .filter((candidate) => candidate.agentId)
-  }, [serverMembers, searchKeyword, joinedUserIds, myBuddiesByBotId, channelId])
+  }, [serverMembers, searchKeyword, joinedUserIds, myBuddiesByBotId, channelId, serverId])
 
   const buddyCandidatesNew = useMemo(() => {
     return myBuddies
@@ -414,11 +432,12 @@ export function InvitePanel({
             }
           : null,
         source: 'buddy' as const,
-        canAddToServer: true,
-        canAddToChannel: !!channelId,
+        canAddToServer: canBuddyJoinServer(agent, serverId),
+        canAddToChannel: !!channelId && canBuddyJoinServer(agent, serverId),
         agentId: agent.id,
+        accessRole: agent.accessRole,
       }))
-  }, [myBuddies, serverMemberUserIds, searchKeyword, channelId])
+  }, [myBuddies, serverMemberUserIds, searchKeyword, channelId, serverId])
 
   const buddyCandidates = useMemo(
     () => [...buddyCandidatesOnServer, ...buddyCandidatesNew],

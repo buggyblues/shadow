@@ -35,19 +35,18 @@ export class PaidFileService {
     return node
   }
 
-  private async findViewerEntitlement(userId: string, fileId: string) {
-    const access = await this.deps.entitlementAccessService.checkResourceAccess({
+  private async findViewerAccess(userId: string, fileId: string) {
+    return this.deps.entitlementAccessService.checkResourceAccess({
       userId,
       resourceType: 'workspace_file',
       resourceId: fileId,
       capabilities: ['view', 'use'],
     })
-    return access.entitlement
   }
 
   async getFileState(userId: string, fileId: string) {
     const node = await this.getFileOrThrow(fileId)
-    const entitlement = await this.findViewerEntitlement(userId, fileId)
+    const access = await this.findViewerAccess(userId, fileId)
     const flags = asRecord(node.flags)
     return {
       file: {
@@ -58,22 +57,24 @@ export class PaidFileService {
         previewUrl: node.previewUrl,
         paywalled: flags.paywall === true || flags.paidFile === true,
       },
-      entitlement: entitlement
+      entitlement: access.entitlement
         ? {
-            id: entitlement.id,
-            status: entitlement.status,
-            expiresAt: entitlement.expiresAt,
-            capability: entitlement.capability,
+            id: access.entitlement.id,
+            status: access.entitlement.status,
+            expiresAt: access.entitlement.expiresAt,
+            capability: access.entitlement.capability,
           }
         : null,
-      hasAccess: Boolean(entitlement),
+      hasAccess: access.allowed,
     }
   }
 
   async openPaidFile(userId: string, fileId: string) {
     await this.getFileOrThrow(fileId)
-    const entitlement = await this.findViewerEntitlement(userId, fileId)
-    if (!entitlement) throw apiError('PAID_FILE_ENTITLEMENT_REQUIRED', 403)
+    const access = await this.findViewerAccess(userId, fileId)
+    if (!access.allowed || !access.entitlement) {
+      throw apiError('PAID_FILE_ENTITLEMENT_REQUIRED', 403)
+    }
 
     const token = randomBytes(24).toString('base64url')
     const expiresAt = new Date(Date.now() + DEFAULT_GRANT_SECONDS * 1000)
@@ -82,7 +83,7 @@ export class PaidFileService {
       .values({
         fileId,
         userId,
-        entitlementId: entitlement.id,
+        entitlementId: access.entitlement.id,
         expiresAt,
         metadata: { token },
       })

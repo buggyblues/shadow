@@ -3,15 +3,22 @@ import { useCallback, useState } from 'react'
 import type { WorkspaceNode } from '../../../stores/workspace.store'
 import { useConfirmStore } from '../../common/confirm-dialog'
 import type { FileVersion } from '../workspace-hooks'
+import { resolveWorkspaceMediaUrl } from '../workspace-media'
 import { formatFileSize } from '../workspace-utils'
 
 interface VersionHistoryPanelProps {
   node: WorkspaceNode
+  serverId: string
   onClose: () => void
   onRestore: (version: FileVersion) => void
 }
 
-export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistoryPanelProps) {
+export function VersionHistoryPanel({
+  node,
+  serverId,
+  onClose,
+  onRestore,
+}: VersionHistoryPanelProps) {
   const versions: FileVersion[] = Array.isArray(node.flags?.versions)
     ? (node.flags.versions as FileVersion[])
     : []
@@ -29,7 +36,11 @@ export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistory
       setPreviewVersion(version)
       setLoadingPreview(true)
       try {
-        const res = await fetch(version.contentRef)
+        const url = await resolveWorkspaceMediaUrl(serverId, node.id, {
+          disposition: 'inline',
+          contentRef: version.contentRef,
+        })
+        const res = await fetch(url)
         if (res.ok) {
           setPreviewContent(await res.text())
         } else {
@@ -40,7 +51,7 @@ export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistory
       }
       setLoadingPreview(false)
     },
-    [previewVersion],
+    [node.id, previewVersion, serverId],
   )
 
   const handleRestore = useCallback(

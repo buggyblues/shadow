@@ -1,6 +1,6 @@
 import { Badge, Button, cn, Input, Popover, PopoverContent, PopoverTrigger } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, Check, Clock, MessageCircle, Search, UserPlus, X } from 'lucide-react'
+import { Bell, Check, Clock, LockKeyhole, MessageCircle, Search, UserPlus, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
@@ -42,6 +42,16 @@ interface DirectChannelEntry {
   } | null
 }
 
+interface BuddyAgentEntry {
+  userId: string
+  config?: {
+    buddyMode?: 'private' | 'shareable'
+  } | null
+  botUser?: {
+    id: string
+  } | null
+}
+
 const statusColor: Record<string, string> = {
   online: 'bg-success',
   idle: 'bg-warning',
@@ -78,6 +88,11 @@ export function UnifiedContactSidebar({
   const { data: friends = [], isLoading: friendsLoading } = useQuery({
     queryKey: ['friends'],
     queryFn: () => fetchApi<FriendEntry[]>('/api/friends'),
+  })
+
+  const { data: buddyAgents = [] } = useQuery({
+    queryKey: ['agents', 'include-rentals', 'dm-buddy-modes'],
+    queryFn: () => fetchApi<BuddyAgentEntry[]>('/api/agents?includeRentals=true'),
   })
 
   const { data: pendingReceived = [] } = useQuery({
@@ -153,6 +168,13 @@ export function UnifiedContactSidebar({
   const showAddSuggestion = q && !hasAnyResults
 
   const pendingCount = pendingReceived.length
+  const privateBuddyUserIds = new Set(
+    buddyAgents
+      .filter((agent) => agent.config?.buddyMode !== 'shareable')
+      .map((agent) => agent.botUser?.id ?? agent.userId),
+  )
+  const isPrivateBuddyUser = (user: { id: string; isBot: boolean } | null | undefined) =>
+    Boolean(user?.isBot && privateBuddyUserIds.has(user.id))
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -280,6 +302,13 @@ export function UnifiedContactSidebar({
                         >
                           {ch.otherUser?.displayName ?? ch.otherUser?.username}
                         </span>
+                        {isPrivateBuddyUser(ch.otherUser) && (
+                          <LockKeyhole
+                            size={12}
+                            className="shrink-0 text-warning"
+                            aria-label={t('agentMgmt.modePrivate')}
+                          />
+                        )}
                         {ch.otherUser?.isBot && (
                           <Badge variant="primary" size="sm">
                             Buddy
@@ -307,6 +336,7 @@ export function UnifiedContactSidebar({
                   <FriendContactItem
                     key={f.friendshipId}
                     friend={f}
+                    isPrivateBuddy={isPrivateBuddyUser(f.user)}
                     onStartChat={() => onStartChatWithUser(f.user.id)}
                   />
                 ))}
@@ -323,6 +353,7 @@ export function UnifiedContactSidebar({
                   <FriendContactItem
                     key={f.friendshipId}
                     friend={f}
+                    isPrivateBuddy={isPrivateBuddyUser(f.user)}
                     onStartChat={() => onStartChatWithUser(f.user.id)}
                   />
                 ))}
@@ -371,11 +402,14 @@ export function UnifiedContactSidebar({
 
 function FriendContactItem({
   friend,
+  isPrivateBuddy,
   onStartChat,
 }: {
   friend: FriendEntry
+  isPrivateBuddy: boolean
   onStartChat: () => void
 }) {
+  const { t } = useTranslation()
   const { user } = friend
   return (
     <button
@@ -402,6 +436,13 @@ function FriendContactItem({
           <span className="font-bold text-sm truncate text-text-primary">
             {user.displayName ?? user.username}
           </span>
+          {isPrivateBuddy && (
+            <LockKeyhole
+              size={12}
+              className="shrink-0 text-warning"
+              aria-label={t('agentMgmt.modePrivate')}
+            />
+          )}
           {user.isBot && (
             <Badge variant="primary" size="sm">
               Buddy

@@ -435,7 +435,16 @@
     "productPicker": "商品",
     "productPickerLoading": "正在加载商品...",
     "productPickerEmpty": "暂无可发送商品",
-    "removeProductCard": "移除商品卡片"
+    "removeProductCard": "移除商品卡片",
+    "oauthLinkCardLabel": "外部应用",
+    "oauthLinkOpen": "在 Shadow 中打开",
+    "oauthLinkPreviewAria": "打开 {{title}}",
+    "oauthLinkOpenExternal": "外部打开",
+    "oauthLinkClose": "关闭",
+    "oauthLinkConnected": "已连接",
+    "oauthLinkWaiting": "等待应用响应",
+    "oauthLinkFallback": "如果该网站无法嵌入，请在外部打开。",
+    "oauthLinkOpenFailed": "无法打开链接"
   },
   "member": {
     "title": "成员",
@@ -509,7 +518,9 @@
     "policyMaxBuddyChainDepth": "最大对话链深度",
     "policyMaxBuddyChainDepthDesc": "防止 Buddy 之间无限循环对话（默认：3）",
     "policySmartReply": "智能回复",
-    "policySmartReplyDesc": "跳过明显针对其他人的消息（如 @了别人但没 @ 自己）"
+    "policySmartReplyDesc": "跳过明显针对其他人的消息（如 @了别人但没 @ 自己）",
+    "policyOwnerTenantOnly": "固定回复策略",
+    "policyOwnerTenantOnlyDesc": "默认只回复主人和有效租客，无需 @ Buddy。"
   },
   "features": {
     "pageTitle": "所有你需要的协作功能",
@@ -990,7 +1001,20 @@
     "listingClosed": "已关闭",
     "myBuddies": "我的 Buddy",
     "selectBuddy": "选择 Buddy",
-    "selectBuddyDesc": "从左侧选择一个 Buddy 管理配置。"
+    "selectBuddyDesc": "从左侧选择一个 Buddy 管理配置。",
+    "accessSection": "访问策略",
+    "modePrivate": "私有",
+    "modePrivateDesc": "不公开出租，不允许公开加入服务器；仅白名单服务器可添加并使用。",
+    "modeShareable": "可共享",
+    "modeShareableDesc": "可以出租；租客可在有效租期内 DM 使用，也可拉进服务器使用。",
+    "allowedServersLabel": "服务器白名单",
+    "allowedServersDesc": "私有 Buddy 只能加入这些服务器。",
+    "allowedServersEmpty": "你还没有可选择的服务器。",
+    "defaultReplyPolicy": "默认回复策略",
+    "defaultReplyPolicyDesc": "Buddy 默认只回复主人和有效租客的消息，不区分 DM 和服务器频道，也不需要 @。",
+    "privateListingDisabled": "私有 Buddy 不能出租",
+    "privateListingDisabledDesc": "切换为可共享后才能创建公开租赁挂单。",
+    "rentingAccessBadge": "租入使用权"
   },
   "serverHome": {
     "welcome": "欢迎来到",
@@ -1089,6 +1113,8 @@
     "outContracts": "租赁合同",
     "myListings": "我的挂单",
     "createListing": "创建挂单",
+    "privateBuddyCannotList": "私有 Buddy 不能创建公开租赁挂单。",
+    "useBuddy": "开始使用",
     "noContracts": "暂无租赁合同",
     "noListings": "还没有挂单，快去创建一个吧",
     "unknownListing": "未知挂单",

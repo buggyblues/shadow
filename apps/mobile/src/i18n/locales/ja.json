@@ -436,7 +436,16 @@
     "productPicker": "商品",
     "productPickerLoading": "商品を読み込み中...",
     "productPickerEmpty": "送信できる商品はありません",
-    "removeProductCard": "商品カードを削除"
+    "removeProductCard": "商品カードを削除",
+    "oauthLinkCardLabel": "外部アプリ",
+    "oauthLinkOpen": "Shadow で開く",
+    "oauthLinkPreviewAria": "{{title}} を開く",
+    "oauthLinkOpenExternal": "外部で開く",
+    "oauthLinkClose": "閉じる",
+    "oauthLinkConnected": "接続済み",
+    "oauthLinkWaiting": "アプリの応答待ち",
+    "oauthLinkFallback": "このサイトを埋め込めない場合は、外部で開いてください。",
+    "oauthLinkOpenFailed": "リンクを開けませんでした"
   },
   "member": {
     "title": "メンバー",
@@ -510,7 +519,9 @@
     "policyReplyToBuddy": "他の Buddy メッセージに返信",
     "policyReplyToBuddyDesc": "この Buddy がチャンネル内の他の Buddy からのメッセージに返信できるようにする",
     "policySmartReply": "スマートリプライ",
-    "policySmartReplyDesc": "他者を明確にターゲットとしたメッセージをスキップ（例：他のユーザーへの @メンションなど）"
+    "policySmartReplyDesc": "他者を明確にターゲットとしたメッセージをスキップ（例：他のユーザーへの @メンションなど）",
+    "policyOwnerTenantOnly": "固定返信ポリシー",
+    "policyOwnerTenantOnlyDesc": "デフォルトではオーナーと有効な借り手にのみ返信します。@メンションは不要です。"
   },
   "features": {
     "pageTitle": "必要なコラボ機能がすべて揃っています",
@@ -991,7 +1002,20 @@
     "listingClosed": "終了",
     "myBuddies": "My Buddy",
     "selectBuddy": "Buddy を選択",
-    "selectBuddyDesc": "左側から Buddy を選択して設定を管理します。"
+    "selectBuddyDesc": "左側から Buddy を選択して設定を管理します。",
+    "accessSection": "アクセス設定",
+    "modePrivate": "プライベート",
+    "modePrivateDesc": "公開レンタルや公開サーバー追加はできません。許可リストのサーバーだけが追加して利用できます。",
+    "modeShareable": "共有可能",
+    "modeShareableDesc": "レンタル可能です。有効な借り手は DM で利用し、サーバーにも追加できます。",
+    "allowedServersLabel": "サーバー許可リスト",
+    "allowedServersDesc": "プライベート Buddy はこれらのサーバーにのみ参加できます。",
+    "allowedServersEmpty": "選択できるサーバーがありません。",
+    "defaultReplyPolicy": "デフォルト返信ポリシー",
+    "defaultReplyPolicyDesc": "Buddy はデフォルトでオーナーと有効な借り手のメッセージにのみ返信します。DM とサーバーチャンネルを区別せず、@ は不要です。",
+    "privateListingDisabled": "プライベート Buddy はレンタルできません",
+    "privateListingDisabledDesc": "公開レンタル出品を作成するには共有可能に切り替えてください。",
+    "rentingAccessBadge": "レンタル利用権"
   },
   "serverHome": {
     "welcome": "ようこそ",
@@ -1090,6 +1114,8 @@
     "outContracts": "契約",
     "myListings": "マイ出品",
     "createListing": "出品を作成",
+    "privateBuddyCannotList": "プライベート Buddy は公開レンタル出品を作成できません。",
+    "useBuddy": "利用開始",
     "noContracts": "レンタル契約なし",
     "noListings": "出品がありません — 作成しましょう！",
     "unknownListing": "不明な出品",

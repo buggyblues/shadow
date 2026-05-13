@@ -6,7 +6,10 @@ import { FileJson, Layers, Save, Shield } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, type ValidateResult } from '@/lib/api'
+import { configureMonacoWorkers } from '@/lib/monaco'
 import { useToast } from '@/stores/toast'
+
+configureMonacoWorkers()
 
 // ── Monaco JSON Schema setup (driven by API-served schema) ───────────────────
 
@@ -29,10 +32,12 @@ function CodeEditor({
   value,
   onChange,
   language = 'json',
+  onSchemaLoadError,
 }: {
   value: string
   onChange: (val: string) => void
   language?: string
+  onSchemaLoadError?: (message: string | null) => void
 }) {
   const editorRef = useRef<unknown>(null)
 
@@ -41,8 +46,9 @@ function CodeEditor({
     try {
       const schema = await api.schema()
       setupMonacoJsonSchema(monaco, schema)
-    } catch {
-      // Schema fetch failed — editor works without autocomplete
+      onSchemaLoadError?.(null)
+    } catch (error) {
+      onSchemaLoadError?.(error instanceof Error ? error.message : '')
     }
   }
 
@@ -93,6 +99,7 @@ export function ConfigEditorPage() {
   const [validateResult, setValidateResult] = useState<ValidateResult | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   const [dirty, setDirty] = useState(false)
+  const [schemaLoadError, setSchemaLoadError] = useState<string | null>(null)
 
   // Fetch store templates for the selector
   const { data: storeTemplates } = useQuery({
@@ -379,8 +386,19 @@ export function ConfigEditorPage() {
         </div>
       )}
 
+      {schemaLoadError && (
+        <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-3 mb-4 text-yellow-300 text-sm">
+          {t('templateDetail.schemaLoadFailed', { message: schemaLoadError })}
+        </div>
+      )}
+
       {/* Editor with JSON Schema autocomplete */}
-      <CodeEditor value={content} onChange={handleContentChange} language="json" />
+      <CodeEditor
+        value={content}
+        onChange={handleContentChange}
+        language="json"
+        onSchemaLoadError={setSchemaLoadError}
+      />
 
       {/* Status bar */}
       <div className="flex items-center justify-between mt-2 text-xs text-text-muted">

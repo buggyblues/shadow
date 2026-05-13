@@ -118,6 +118,16 @@ export function buildAgentRuntimePackage(options: {
     ...(extraEnv ?? {}),
   }
 
+  const slashCommandArtifact = runtimeExtensions.artifacts?.find(
+    (artifact) => artifact.kind === 'shadow.slashCommands',
+  )
+  if (slashCommandArtifact?.path && !mergedEnv.SHADOW_SLASH_COMMANDS_PATH) {
+    mergedEnv.SHADOW_SLASH_COMMANDS_PATH = slashCommandArtifact.path
+  }
+  if (hasRuntimeExtensions(runtimeExtensions) && !mergedEnv.SHADOW_RUNTIME_EXTENSIONS_PATH) {
+    mergedEnv.SHADOW_RUNTIME_EXTENSIONS_PATH = '/etc/openclaw/runtime-extensions.json'
+  }
+
   for (const provision of pluginProvisions) {
     if (provision.secrets) {
       Object.assign(mergedEnv, provision.secrets)

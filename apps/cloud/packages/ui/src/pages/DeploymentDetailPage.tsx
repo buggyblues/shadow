@@ -47,9 +47,12 @@ import { StatCard } from '@/components/StatCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type Pod, type ValidateResult } from '@/lib/api'
+import { configureMonacoWorkers } from '@/lib/monaco'
 import { cn, formatTimestamp, getAge, pluralize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
+
+configureMonacoWorkers()
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

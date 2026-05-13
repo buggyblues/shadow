@@ -671,6 +671,37 @@ describe('PaidFileService', () => {
     expect(read.buffer.toString('utf8')).toBe('<html>match</html>')
   })
 
+  it('does not create grants when the matching entitlement is not currently allowed', async () => {
+    const db = createPaidFileDb()
+    const service = new PaidFileService({
+      db: db as any,
+      workspaceNodeDao: {
+        findById: vi.fn(async () => createFileNode()),
+      } as any,
+      entitlementAccessService: {
+        checkResourceAccess: vi.fn(async () => ({
+          allowed: false,
+          status: 'expired',
+          reasonCode: 'ENTITLEMENT_EXPIRED',
+          entitlement: createEntitlement({ expiresAt: new Date(Date.now() - 1000) }),
+        })),
+      } as any,
+      mediaService: {
+        getFileBuffer: vi.fn(async () => Buffer.from('<html>match</html>')),
+      } as any,
+    })
+
+    const state = await service.getFileState(buyerId, fileId)
+
+    expect(state.entitlement).toMatchObject({ id: entitlementId, status: 'active' })
+    expect(state.hasAccess).toBe(false)
+    await expect(service.openPaidFile(buyerId, fileId)).rejects.toMatchObject({
+      code: 'PAID_FILE_ENTITLEMENT_REQUIRED',
+      status: 403,
+    })
+    expect(db.grants).toHaveLength(0)
+  })
+
   it('rejects grant reads when the backing entitlement has been revoked', async () => {
     const db = createPaidFileDb()
     const service = new PaidFileService({

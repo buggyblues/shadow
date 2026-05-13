@@ -1,4 +1,9 @@
-import type { CommerceProductCard, MessageMention, PaidFileCard } from '@shadowob/shared'
+import type {
+  CommerceProductCard,
+  MessageMention,
+  OAuthLinkCard,
+  PaidFileCard,
+} from '@shadowob/shared'
 import { segmentTextByMentions } from '@shadowob/shared'
 import { Button, cn } from '@shadowob/ui'
 import { type InfiniteData, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -46,6 +51,7 @@ import { CommunityEconomySendModal } from '../community-economy/community-econom
 import { formatFileSize } from '../workspace/workspace-utils'
 import { FileCard } from './file-card'
 import { ImageContextMenu } from './image-context-menu'
+import { OAuthLinkCardView, type OAuthLinkPreview } from './oauth-link-card'
 
 function lowerText(value: unknown) {
   return typeof value === 'string' ? value.toLocaleLowerCase() : ''
@@ -96,6 +102,7 @@ export interface Message {
     interactiveState?: InteractiveStateMetadata
     commerceCards?: CommerceProductCard[]
     paidFileCards?: PaidFileCard[]
+    oauthLinkCards?: OAuthLinkCard[]
     [key: string]: unknown
   }
   /** Optimistic send status — only set on client-side pending messages */
@@ -178,6 +185,7 @@ export interface MessageBubbleProps {
   onMessageUpdate?: (msg: Message) => void
   onMessageDelete?: (msgId: string) => void
   onPreviewFile?: (attachment: Attachment) => void
+  onPreviewOAuthLink?: (preview: OAuthLinkPreview) => void
   onSaveToWorkspace?: (attachment: Attachment) => void
   /** Custom edit API — defaults to PATCH /api/messages/:id */
   editApi?: (messageId: string, content: string) => Promise<Message>
@@ -1004,7 +1012,7 @@ function PaidFileCardView({
           <Button
             size="sm"
             onClick={openFile}
-            disabled={isOpening}
+            disabled={isOpening || !isUnlocked}
             className={cn(
               '!rounded-[12px] w-full !px-0 !h-[36px] !text-[13px]',
               isUnlocked
@@ -1012,7 +1020,11 @@ function PaidFileCardView({
                 : 'shadow-[0_0_15px_rgba(248,231,28,0.2)] hover:shadow-[0_0_25px_rgba(248,231,28,0.35)] !bg-gradient-to-br !from-[#f59e0b] !to-[#d97706] !text-white !border-none',
             )}
           >
-            {isOpening ? t('chat.paidFileOpening') : t('chat.paidFileOpen')}
+            {isOpening
+              ? t('chat.paidFileOpening')
+              : isUnlocked
+                ? t('chat.paidFileOpen')
+                : t('chat.paidFileEntitlementRequired')}
           </Button>
         </div>
       </div>
@@ -1158,6 +1170,7 @@ function MessageBubbleInner({
   onMessageUpdate,
   onMessageDelete,
   onPreviewFile,
+  onPreviewOAuthLink,
   onSaveToWorkspace,
   editApi,
   deleteApi,
@@ -1770,6 +1783,20 @@ function MessageBubbleInner({
           <div className="flex flex-col gap-2 mt-2">
             {message.metadata.paidFileCards.map((card) => (
               <PaidFileCardView key={card.id} card={card} onPreviewFile={onPreviewFile} />
+            ))}
+          </div>
+        )}
+
+        {message.metadata?.oauthLinkCards && message.metadata.oauthLinkCards.length > 0 && (
+          <div className="flex flex-col gap-2 mt-2">
+            {message.metadata.oauthLinkCards.map((card) => (
+              <OAuthLinkCardView
+                key={card.id}
+                card={card}
+                messageId={message.id}
+                channelId={message.channelId}
+                onPreview={onPreviewOAuthLink ?? (() => undefined)}
+              />
             ))}
           </div>
         )}

@@ -137,6 +137,36 @@ const paidFileCardSchema = z.object({
   action: z.record(z.unknown()).optional(),
 })
 
+const oauthLinkCardMetaSchema = z
+  .object({
+    appName: z.string().min(1).max(128).nullable().optional(),
+    avatarUrl: z.string().url().nullable().optional(),
+    iconUrl: z.string().url().nullable().optional(),
+    coverUrl: z.string().url().nullable().optional(),
+    homepageUrl: z.string().url().nullable().optional(),
+    origin: z.string().max(255).nullable().optional(),
+  })
+  .strict()
+
+export const oauthLinkCardSchema = z.object({
+  id: idLikeSchema.optional(),
+  kind: z.literal('oauth_link'),
+  appId: z.string().uuid(),
+  title: z.string().min(1).max(120),
+  description: z.string().max(500).nullable().optional(),
+  iconUrl: z.string().url().nullable().optional(),
+  meta: oauthLinkCardMetaSchema.optional(),
+  url: z.string().url(),
+  embedUrl: z.string().url().nullable().optional(),
+  fallbackUrl: z.string().url().nullable().optional(),
+  scopes: z.array(z.string().min(1).max(80)).max(20).optional(),
+  action: z
+    .object({
+      mode: z.enum(['open_iframe', 'open_external']).optional(),
+    })
+    .optional(),
+})
+
 const commerceFulfillmentSchema = z.object({
   jobId: z.string().uuid(),
   deliverableId: z.string().uuid(),
@@ -163,6 +193,7 @@ export const metadataSchema = z.object({
     .max(3)
     .optional(),
   paidFileCards: z.array(paidFileCardSchema).max(3).optional(),
+  oauthLinkCards: z.array(oauthLinkCardSchema).max(3).optional(),
   commerceFulfillment: commerceFulfillmentSchema.optional(),
   playLaunch: playLaunchSchema.optional(),
   custom: z.record(z.unknown()).optional(),

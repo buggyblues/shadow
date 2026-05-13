@@ -436,7 +436,16 @@
     "productPicker": "Products",
     "productPickerLoading": "Loading products...",
     "productPickerEmpty": "No products available",
-    "removeProductCard": "Remove product card"
+    "removeProductCard": "Remove product card",
+    "oauthLinkCardLabel": "External app",
+    "oauthLinkOpen": "Open in Shadow",
+    "oauthLinkPreviewAria": "Open {{title}}",
+    "oauthLinkOpenExternal": "Open externally",
+    "oauthLinkClose": "Close",
+    "oauthLinkConnected": "Connected",
+    "oauthLinkWaiting": "Waiting for app",
+    "oauthLinkFallback": "If this site cannot be embedded, open it externally.",
+    "oauthLinkOpenFailed": "Could not open link"
   },
   "member": {
     "title": "Members",
@@ -510,7 +519,9 @@
     "policyMaxBuddyChainDepth": "Max conversation chain depth",
     "policyMaxBuddyChainDepthDesc": "Prevent infinite loops between Buddies (default: 3)",
     "policySmartReply": "Smart Reply",
-    "policySmartReplyDesc": "Skip messages clearly targeting others (e.g., @mentions others but not this Buddy)"
+    "policySmartReplyDesc": "Skip messages clearly targeting others (e.g., @mentions others but not this Buddy)",
+    "policyOwnerTenantOnly": "Fixed reply policy",
+    "policyOwnerTenantOnlyDesc": "Replies only to the owner and active tenants by default. @mention is not required."
   },
   "features": {
     "pageTitle": "All the Collaboration Features You Need",
@@ -991,7 +1002,20 @@
     "listingClosed": "Closed",
     "myBuddies": "My Buddy",
     "selectBuddy": "Select Buddy",
-    "selectBuddyDesc": "Select a Buddy from the left sidebar to manage its settings."
+    "selectBuddyDesc": "Select a Buddy from the left sidebar to manage its settings.",
+    "accessSection": "Access Policy",
+    "modePrivate": "Private",
+    "modePrivateDesc": "Cannot be publicly rented or publicly added to servers. Only allowlisted servers can add and use it.",
+    "modeShareable": "Shareable",
+    "modeShareableDesc": "Can be rented. Active tenants can use it in DM and add it to servers.",
+    "allowedServersLabel": "Server Allowlist",
+    "allowedServersDesc": "Private Buddies can only join these servers.",
+    "allowedServersEmpty": "You do not have any servers to select.",
+    "defaultReplyPolicy": "Default Reply Policy",
+    "defaultReplyPolicyDesc": "Buddy replies only to the owner and active tenants by default, across DMs and server channels, without requiring @mention.",
+    "privateListingDisabled": "Private Buddies cannot be rented",
+    "privateListingDisabledDesc": "Switch to shareable before creating a public rental listing.",
+    "rentingAccessBadge": "Rental access"
   },
   "serverHome": {
     "welcome": "Welcome to",
@@ -1090,6 +1114,8 @@
     "outContracts": "Contracts",
     "myListings": "My Listings",
     "createListing": "Create Listing",
+    "privateBuddyCannotList": "Private Buddies cannot create public rental listings.",
+    "useBuddy": "Start using",
     "noContracts": "No rental contracts",
     "noListings": "No listings yet — create one!",
     "unknownListing": "Unknown Listing",

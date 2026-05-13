@@ -505,21 +505,25 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
         source: t.source as 'official' | 'community' | undefined,
       })),
     save: async (name: string, content: unknown, _templateSlug?: string) => {
-      try {
-        await saasApi.templates.update(name, { content: content as Record<string, unknown> })
-        return { ok: true }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        if (!message.includes('failed: 404')) throw err
+      const slug = slugifyTemplateName(name) || 'template'
+      const existing = (await saasApi.templates.mine()).find(
+        (template) => template.slug === name || template.slug === slug,
+      )
 
-        const slug = slugifyTemplateName(name) || 'template'
-        await saasApi.templates.create({
-          slug,
+      if (existing) {
+        const updated = await saasApi.templates.update(existing.slug, {
           name,
           content: content as Record<string, unknown>,
         })
-        return { ok: true }
+        return { ok: true, name: updated.slug }
       }
+
+      const created = await saasApi.templates.create({
+        slug,
+        name,
+        content: content as Record<string, unknown>,
+      })
+      return { ok: true, name: created.slug }
     },
     fork: (sourceTemplate: string, newName?: string) =>
       saasApi.templates

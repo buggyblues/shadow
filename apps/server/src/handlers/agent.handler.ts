@@ -48,6 +48,22 @@ async function requireAgentOwner(
   return null
 }
 
+function toTenantAgentView<T extends { config?: unknown }>(agent: T): T {
+  const config =
+    agent.config && typeof agent.config === 'object' && !Array.isArray(agent.config)
+      ? (agent.config as Record<string, unknown>)
+      : {}
+  return {
+    ...agent,
+    config: {
+      description: config.description,
+      buddyTag: config.buddyTag,
+      buddyMode: config.buddyMode,
+      allowedServerIds: config.allowedServerIds,
+    },
+  }
+}
+
 export function createAgentHandler(container: AppContainer) {
   const agentHandler = new Hono()
 
@@ -58,16 +74,31 @@ export function createAgentHandler(container: AppContainer) {
     const agentService = container.resolve('agentService')
     const agentListingDao = container.resolve('agentListingDao')
     const rentalContractDao = container.resolve('rentalContractDao')
+    const rentalService = container.resolve('rentalService')
     const user = c.get('user')
+    const includeRentals = c.req.query('includeRentals') === 'true'
     const agents = await agentService.getByOwnerId(user.userId)
+    const accessRoles = new Map<string, 'owner' | 'tenant'>()
+    const activeContractIds = new Map<string, string>()
     // Enrich with bot user info
     const enriched = await Promise.all(
       agents.map(async (agent) => {
+        accessRoles.set(agent.id, 'owner')
         const full = await agentService.getById(agent.id)
         return full
       }),
     )
-    const result = enriched.filter(Boolean)
+    const tenantRows = includeRentals ? await rentalService.getActiveTenantAgents(user.userId) : []
+    const enrichedTenantAgents = await Promise.all(
+      tenantRows
+        .filter(({ agent }) => agent.ownerId !== user.userId)
+        .map(async ({ agent, contract }) => {
+          accessRoles.set(agent.id, 'tenant')
+          activeContractIds.set(agent.id, contract.id)
+          return agentService.getById(agent.id)
+        }),
+    )
+    const result = [...enriched, ...enrichedTenantAgents].filter(Boolean)
 
     // Enrich with rental status: check all listings (any status) for each agent
     const agentIds = result.map((a) => a!.id)
@@ -108,12 +139,18 @@ export function createAgentHandler(container: AppContainer) {
     }
 
     return c.json(
-      result.map((agent) => ({
-        ...agent,
-        isListed: listedAgentIds.has(agent!.id),
-        isRented: rentedAgentIds.has(agent!.id),
-        listingInfo: agentListingStatus.get(agent!.id) ?? null,
-      })),
+      result.map((agent) => {
+        const accessRole = accessRoles.get(agent!.id) ?? 'owner'
+        const base = {
+          ...agent,
+          accessRole,
+          activeContractId: activeContractIds.get(agent!.id) ?? null,
+          isListed: listedAgentIds.has(agent!.id),
+          isRented: rentedAgentIds.has(agent!.id),
+          listingInfo: agentListingStatus.get(agent!.id) ?? null,
+        }
+        return accessRole === 'tenant' ? toTenantAgentView(base) : base
+      }),
     )
   })
 
@@ -133,6 +170,8 @@ export function createAgentHandler(container: AppContainer) {
           : input.avatarUrl,
         kernelType: input.kernelType,
         config: input.config,
+        buddyMode: input.buddyMode,
+        allowedServerIds: input.allowedServerIds,
         ownerId: user.userId,
       })
       return c.json(agent, 201)
@@ -173,6 +212,8 @@ export function createAgentHandler(container: AppContainer) {
 
     const agent = await agentService.update(id, user.userId, {
       ...input,
+      buddyMode: input.buddyMode,
+      allowedServerIds: input.allowedServerIds,
       ...(input.avatarUrl !== undefined
         ? { avatarUrl: mediaService.normalizeMediaUrl(input.avatarUrl) ?? undefined }
         : {}),

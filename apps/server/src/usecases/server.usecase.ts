@@ -1,11 +1,13 @@
-import type { ServerDao } from '../dao/server.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
+import type { ServerDao } from '../dao/server.dao'
 import type { ServerJoinRequestDao } from '../dao/server-join-request.dao'
 import type { AccessService } from '../security/access.service'
-import type { AuditLogService } from '../services/audit-log.service'
 import type { AgentService } from '../services/agent.service'
 import type { AgentPolicyService } from '../services/agent-policy.service'
+import type { AuditLogService } from '../services/audit-log.service'
+import { canBuddyJoinServer, getBuddyMode } from '../services/buddy-policy'
+import type { RentalService } from '../services/rental.service'
 import type { ServerService } from '../services/server.service'
 import type { SecureUseCaseInput } from './_security-usecase'
 import { auditUseCase } from './_security-usecase'
@@ -28,6 +30,7 @@ export class ServerUseCase {
       channelMemberDao: ChannelMemberDao
       agentService: AgentService
       agentPolicyService: AgentPolicyService
+      rentalService: RentalService
     },
   ) {}
 
@@ -54,10 +57,7 @@ export class ServerUseCase {
         }
 
         // Private server — upsert join request
-        const request = await this.deps.serverJoinRequestDao.request(
-          input.serverId,
-          userId,
-        )
+        const request = await this.deps.serverJoinRequestDao.request(input.serverId, userId)
         return {
           status: 'pending' as const,
           requestId: request.id,
@@ -81,8 +81,7 @@ export class ServerUseCase {
       action: 'server.reviewJoinRequest',
       scope: { kind: 'server', id: input.requestId },
       run: async () => {
-        const request =
-          await this.deps.serverJoinRequestDao.findById(input.requestId)
+        const request = await this.deps.serverJoinRequestDao.findById(input.requestId)
         if (!request) {
           throw Object.assign(new Error('Join request not found'), {
             status: 404,
@@ -94,10 +93,7 @@ export class ServerUseCase {
           throw Object.assign(new Error('Server not found'), { status: 404 })
         }
 
-        await this.deps.accessService.requireServerAdmin(
-          input.ctx.actor,
-          server.id,
-        )
+        await this.deps.accessService.requireServerAdmin(input.ctx.actor, server.id)
 
         const reviewerId = actorUserIdOrSystem(input)
         const reviewed = await this.deps.serverJoinRequestDao.review(
@@ -112,28 +108,15 @@ export class ServerUseCase {
         }
 
         if (input.status === 'approved') {
-          const existingMember = await this.deps.serverDao.getMember(
-            server.id,
-            request.userId,
-          )
+          const existingMember = await this.deps.serverDao.getMember(server.id, request.userId)
           if (!existingMember) {
-            await this.deps.serverDao.addMember(
-              server.id,
-              request.userId,
-              'member',
-            )
+            await this.deps.serverDao.addMember(server.id, request.userId, 'member')
           }
           // Add user to all public channels
-          const channels =
-            await this.deps.channelDao.findByServerId(server.id)
-          const publicChannelIds = channels
-            .filter((ch) => !ch.isPrivate)
-            .map((ch) => ch.id)
+          const channels = await this.deps.channelDao.findByServerId(server.id)
+          const publicChannelIds = channels.filter((ch) => !ch.isPrivate).map((ch) => ch.id)
           if (publicChannelIds.length > 0) {
-            await this.deps.channelMemberDao.addBulk(
-              publicChannelIds,
-              request.userId,
-            )
+            await this.deps.channelMemberDao.addBulk(publicChannelIds, request.userId)
           }
         }
 
@@ -150,23 +133,20 @@ export class ServerUseCase {
   /**
    * Add one or more agents to a server as bot members.
    * Requires `assertCanInstallAgentToServer` permission.
-   * Each agent is verified to be owned by the caller before being added.
+   * Each agent is verified to be owned by the caller or actively rented by the caller.
    */
   async addAgentsToServer(
     input: SecureUseCaseInput & {
       serverId: string
       agentIds: string[]
-      ownerId: string
+      requesterUserId: string
     },
   ) {
     return auditUseCase(this.deps, input, {
       action: 'server.addAgents',
       scope: { kind: 'server', id: input.serverId },
       run: async () => {
-        await this.deps.accessService.assertCanInstallAgentToServer(
-          input.ctx.actor,
-          input.serverId,
-        )
+        await this.deps.accessService.assertCanInstallAgentToServer(input.ctx.actor, input.serverId)
 
         const added: Array<{
           agentId: string
@@ -183,14 +163,20 @@ export class ServerUseCase {
               failed.push({ agentId, error: 'Agent not found' })
               continue
             }
-            if (agent.ownerId !== input.ownerId) {
-              failed.push({ agentId, error: 'Not the owner' })
+            const access = await this.deps.rentalService.canUseAgent(agentId, input.requesterUserId)
+            if (!access.canUse) {
+              failed.push({ agentId, error: 'Not the owner or active tenant' })
               continue
             }
-            const existingMember = await this.deps.serverDao.getMember(
-              input.serverId,
-              agent.userId,
-            )
+            if (access.role === 'tenant' && getBuddyMode(agent.config) !== 'shareable') {
+              failed.push({ agentId, error: 'Private Buddy cannot be added by tenants' })
+              continue
+            }
+            if (!canBuddyJoinServer(agent.config, input.serverId)) {
+              failed.push({ agentId, error: 'Buddy is not allowed in this server' })
+              continue
+            }
+            const existingMember = await this.deps.serverDao.getMember(input.serverId, agent.userId)
             if (existingMember) {
               failed.push({
                 agentId,
@@ -198,22 +184,15 @@ export class ServerUseCase {
               })
               continue
             }
-            await this.deps.serverService.addBotMember(
-              input.serverId,
-              agent.userId,
-            )
-            await this.deps.agentPolicyService.ensureServerDefault(
-              agentId,
-              input.serverId,
-            )
+            await this.deps.serverService.addBotMember(input.serverId, agent.userId)
+            await this.deps.agentPolicyService.ensureServerDefault(agentId, input.serverId)
             added.push({
               agentId,
               userId: agent.userId,
               ownerId: agent.ownerId,
             })
           } catch (err) {
-            const msg =
-              err instanceof Error ? err.message : 'Unknown error'
+            const msg = err instanceof Error ? err.message : 'Unknown error'
             failed.push({ agentId, error: msg })
           }
         }

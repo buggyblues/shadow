@@ -1,13 +1,18 @@
 import { nanoid } from 'nanoid'
+import type { Server as SocketIOServer } from 'socket.io'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentListingDao } from '../dao/agent-listing.dao'
+import type { ChannelDao } from '../dao/channel.dao'
+import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type {
   RentalContractDao,
   RentalUsageDao,
   RentalViolationDao,
 } from '../dao/rental-contract.dao'
+import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
 import { type Actor, actorHasScope } from '../security/actor'
+import { getBuddyMode } from './buddy-policy'
 import type { LedgerService } from './ledger.service'
 
 /* ──────────────── Pricing Constants ──────────────── */
@@ -58,10 +63,63 @@ export class RentalService {
       ledgerService: LedgerService
       agentDao: AgentDao
       userDao: UserDao
+      serverDao: ServerDao
+      channelDao: ChannelDao
+      channelMemberDao: ChannelMemberDao
+      io: SocketIOServer
     },
   ) {}
 
   /* ═══════════════ Listings ═══════════════ */
+
+  private assertShareableAgent(agent: Awaited<ReturnType<AgentDao['findById']>>) {
+    if (!agent) return
+    if (getBuddyMode(agent.config) !== 'shareable') {
+      throw Object.assign(new Error('Private Buddy cannot be listed or rented'), { status: 400 })
+    }
+  }
+
+  private async getListingAgent(listing: Awaited<ReturnType<AgentListingDao['findById']>>) {
+    if (!listing?.agentId) return null
+    return this.deps.agentDao.findById(listing.agentId)
+  }
+
+  private notifyAgentAccessChanged(agentUserId: string, agentId: string) {
+    this.deps.io.to(`user:${agentUserId}`).emit('agent:policy-changed', { agentId })
+  }
+
+  private async deactivateTenantServerAccess(
+    contract: Awaited<ReturnType<RentalContractDao['findById']>>,
+  ) {
+    if (!contract) return
+    const listing = await this.deps.agentListingDao.findById(contract.listingId)
+    const agent = await this.getListingAgent(listing)
+    if (!listing?.agentId || !agent) return
+
+    try {
+      const tenantServers = await this.deps.serverDao.findByUserId(contract.tenantId)
+      for (const entry of tenantServers) {
+        const serverId = entry.server.id
+        const botMember = await this.deps.serverDao.getMember(serverId, agent.userId)
+        if (!botMember) continue
+
+        const ownerMember = await this.deps.serverDao.getMember(serverId, agent.ownerId)
+        if (ownerMember) continue
+
+        const channels = await this.deps.channelDao.findByServerId(serverId)
+        for (const channel of channels) {
+          await this.deps.channelMemberDao.remove(channel.id, agent.userId)
+          this.deps.io.to(`user:${agent.userId}`).emit('channel:member-removed', {
+            channelId: channel.id,
+            serverId,
+          })
+        }
+        await this.deps.serverDao.removeMember(serverId, agent.userId)
+      }
+    } finally {
+      this.notifyAgentAccessChanged(agent.userId, listing.agentId)
+    }
+  }
 
   async createListing(
     ownerId: string,
@@ -95,6 +153,7 @@ export class RentalService {
       if (!agent || agent.ownerId !== ownerId) {
         throw Object.assign(new Error('Agent does not belong to listing owner'), { status: 403 })
       }
+      this.assertShareableAgent(agent)
     }
     return this.deps.agentListingDao.create({
       ownerId,
@@ -128,6 +187,17 @@ export class RentalService {
     }
 
     const updateData: Record<string, unknown> = { ...data }
+    const nextAgentId = typeof data.agentId === 'string' ? data.agentId : listing.agentId
+    if (
+      nextAgentId &&
+      (data.agentId !== undefined || data.listingStatus === 'active' || data.isListed === true)
+    ) {
+      const agent = await this.deps.agentDao.findById(nextAgentId)
+      if (!agent || agent.ownerId !== ownerId) {
+        throw Object.assign(new Error('Agent does not belong to listing owner'), { status: 403 })
+      }
+      this.assertShareableAgent(agent)
+    }
     if (data.availableFrom) updateData.availableFrom = new Date(data.availableFrom as string)
     if (data.availableUntil !== undefined) {
       updateData.availableUntil = data.availableUntil
@@ -147,12 +217,17 @@ export class RentalService {
     if (listing.ownerId !== ownerId) {
       throw Object.assign(new Error('Not your listing'), { status: 403 })
     }
+    if (isListed) {
+      const agent = await this.getListingAgent(listing)
+      this.assertShareableAgent(agent)
+    }
     return this.deps.agentListingDao.update(id, { isListed })
   }
 
   async getListingDetail(id: string) {
     const listing = await this.deps.agentListingDao.findById(id)
     if (!listing) throw Object.assign(new Error('Listing not found'), { status: 404 })
+    this.assertShareableAgent(await this.getListingAgent(listing))
     // Increment view count
     await this.deps.agentListingDao.incrementViewCount(id)
     // Enrich with agent online time
@@ -272,6 +347,8 @@ export class RentalService {
     if (listing.listingStatus !== 'active' || !listing.isListed) {
       throw Object.assign(new Error('Listing is not available'), { status: 400 })
     }
+
+    this.assertShareableAgent(await this.getListingAgent(listing))
 
     // Check no active contract already
     const existing = await this.deps.rentalContractDao.findActiveByListingId(data.listingId)
@@ -399,6 +476,11 @@ export class RentalService {
     // Increment rental count
     await this.deps.agentListingDao.incrementRentalCount(listing.id)
 
+    if (listing.agentId) {
+      const agent = await this.deps.agentDao.findById(listing.agentId)
+      if (agent) this.notifyAgentAccessChanged(agent.userId, listing.agentId)
+    }
+
     return this.deps.rentalContractDao.findById(contract.id)
   }
 
@@ -454,11 +536,37 @@ export class RentalService {
     // Delist the listing so it doesn't reappear on the marketplace
     await this.deps.agentListingDao.update(contract.listingId, { isListed: false })
 
-    return this.deps.rentalContractDao.update(contractId, {
+    const updated = await this.deps.rentalContractDao.update(contractId, {
       status: 'completed',
       terminatedAt: new Date(),
       terminationReason: reason || '合同提前终止',
     })
+    await this.deactivateTenantServerAccess(updated ?? contract)
+    return updated
+  }
+
+  async canUseAgent(agentId: string, userId: string) {
+    const agent = await this.deps.agentDao.findById(agentId)
+    if (!agent) return { canUse: false, role: null as null, activeContract: null }
+    if (agent.ownerId === userId) {
+      return { canUse: true, role: 'owner' as const, activeContract: null }
+    }
+    const activeContract = await this.deps.rentalContractDao.findActiveByTenantAndAgentId(
+      userId,
+      agentId,
+    )
+    return activeContract
+      ? { canUse: true, role: 'tenant' as const, activeContract }
+      : { canUse: false, role: null as null, activeContract: null }
+  }
+
+  async getActiveTenantAgents(tenantId: string) {
+    return this.deps.rentalContractDao.findActiveTenantAgents(tenantId)
+  }
+
+  async getActiveTenantIdsForAgent(agentId: string) {
+    const contracts = await this.deps.rentalContractDao.findActiveByAgentId(agentId)
+    return Array.from(new Set(contracts.map((contract) => contract.tenantId)))
   }
 
   /* ═══════════════ Usage & Billing ═══════════════ */
@@ -719,11 +827,12 @@ export class RentalService {
         // Delist the listing so it doesn't reappear on the marketplace
         await this.deps.agentListingDao.update(contract.listingId, { isListed: false })
 
-        await this.deps.rentalContractDao.update(contract.id, {
+        const updated = await this.deps.rentalContractDao.update(contract.id, {
           status: 'completed',
           terminatedAt: new Date(),
           terminationReason: '合同到期自动终止',
         })
+        await this.deactivateTenantServerAccess(updated ?? contract)
 
         results.push({ contractId: contract.id, success: true })
       } catch (err) {

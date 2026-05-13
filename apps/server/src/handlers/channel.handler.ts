@@ -203,7 +203,30 @@ export function createChannelHandler(container: AppContainer) {
       const user = c.get('user')
       const peer = await userDao.findById(peerUserId)
       if (!peer) return c.json({ ok: false, error: 'User not found' }, 404)
+      if (peer.isBot) {
+        const agentDao = container.resolve('agentDao')
+        const rentalService = container.resolve('rentalService')
+        const agent = await agentDao.findByUserId(peerUserId)
+        if (!agent) return c.json({ ok: false, error: 'Buddy not found' }, 404)
+        const access = await rentalService.canUseAgent(agent.id, user.userId)
+        if (!access.canUse) {
+          return c.json(
+            { ok: false, error: 'Only the Buddy owner or active tenant can DM this Buddy' },
+            403,
+          )
+        }
+      }
       const channel = await channelService.getOrCreateDirectChannel(user.userId, peerUserId)
+      if (peer.isBot) {
+        try {
+          const io = container.resolve('io')
+          io.to(`user:${peerUserId}`).emit('channel:member-added', {
+            channelId: channel.id,
+          })
+        } catch {
+          /* non-critical */
+        }
+      }
       return c.json(channel, 201)
     },
   )
@@ -605,20 +628,7 @@ export function createChannelHandler(container: AppContainer) {
     const user = c.get('user')
     const channelId = c.req.param('channelId')
     const agentId = c.req.param('agentId')
-    const body = await c.req.json<{
-      mentionOnly?: boolean
-      mode?: 'replyAll' | 'mentionOnly' | 'custom' | 'disabled'
-      config?: {
-        replyToUsers?: string[]
-        keywords?: string[]
-        mentionOnly?: boolean
-        replyToBuddy?: boolean
-        maxBuddyChainDepth?: number
-        buddyBlacklist?: string[]
-        buddyWhitelist?: string[]
-        smartReply?: boolean
-      }
-    }>()
+    await c.req.json().catch(() => ({}))
 
     // Verify channel exists
     const channel = await channelService.getById(channelId)
@@ -637,49 +647,18 @@ export function createChannelHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'Not authorized' }, 403)
     }
 
-    // Determine policy fields based on mode
     const listen = true
-    let reply = true
-    let mentionOnly = body.mentionOnly ?? false
-    const config: Record<string, unknown> = {}
-
-    if (body.mode) {
-      switch (body.mode) {
-        case 'replyAll':
-          mentionOnly = false
-          break
-        case 'mentionOnly':
-          mentionOnly = true
-          break
-        case 'disabled':
-          reply = false
-          break
-        case 'custom':
-          mentionOnly = body.config?.mentionOnly === true
-          if (body.config?.replyToUsers?.length) {
-            config.replyToUsers = body.config.replyToUsers
-          }
-          if (body.config?.keywords?.length) {
-            config.keywords = body.config.keywords
-          }
-          if (typeof body.config?.replyToBuddy === 'boolean') {
-            config.replyToBuddy = body.config.replyToBuddy
-          }
-          if (typeof body.config?.maxBuddyChainDepth === 'number') {
-            config.maxBuddyChainDepth = body.config.maxBuddyChainDepth
-          }
-          if (body.config?.buddyBlacklist?.length) {
-            config.buddyBlacklist = body.config.buddyBlacklist
-          }
-          if (body.config?.buddyWhitelist?.length) {
-            config.buddyWhitelist = body.config.buddyWhitelist
-          }
-          if (typeof body.config?.smartReply === 'boolean') {
-            config.smartReply = body.config.smartReply
-          }
-          config.mentionOnly = mentionOnly
-          break
-      }
+    const reply = true
+    const mentionOnly = false
+    const rentalService = container.resolve('rentalService')
+    const activeTenantIds = await rentalService.getActiveTenantIdsForAgent(agentId)
+    const allowedTriggerUserIds = [agent.ownerId, ...activeTenantIds]
+    const config: Record<string, unknown> = {
+      allowedTriggerUserIds,
+      triggerUserIds: allowedTriggerUserIds,
+      ownerId: agent.ownerId,
+      activeTenantIds,
+      replyRequiresMention: false,
     }
 
     // Upsert channel-level policy
@@ -731,19 +710,19 @@ export function createChannelHandler(container: AppContainer) {
     const channelPolicy = await agentPolicyDao.findByChannel(agentId, serverId, channelId)
     if (channelPolicy) {
       return c.json({
-        mentionOnly: channelPolicy.mentionOnly,
-        listen: channelPolicy.listen,
-        reply: channelPolicy.reply,
-        config: channelPolicy.config ?? {},
+        mentionOnly: false,
+        listen: true,
+        reply: true,
+        config: {},
       })
     }
 
-    const serverDefault = await agentPolicyDao.findServerDefault(agentId, serverId)
+    await agentPolicyDao.findServerDefault(agentId, serverId)
     return c.json({
-      mentionOnly: serverDefault?.mentionOnly ?? false,
-      listen: serverDefault?.listen ?? true,
-      reply: serverDefault?.reply ?? true,
-      config: serverDefault?.config ?? {},
+      mentionOnly: false,
+      listen: true,
+      reply: true,
+      config: {},
     })
   })
 

@@ -5,6 +5,63 @@ import { logger } from '../lib/logger'
 import { presenceKeys } from '../lib/redis'
 
 const ACTIVITY_TTL = 60 // seconds — auto-expire safety net
+const SOCKET_TTL = 90 // seconds — Redis stale socket cleanup window
+const HEARTBEAT_MS = 30_000
+
+const localOnlineSockets = new Map<string, Set<string>>()
+
+function addLocalSocket(userId: string, socketId: string) {
+  let sockets = localOnlineSockets.get(userId)
+  if (!sockets) {
+    sockets = new Set()
+    localOnlineSockets.set(userId, sockets)
+  }
+  const wasEmpty = sockets.size === 0
+  sockets.add(socketId)
+  return wasEmpty
+}
+
+function removeLocalSocket(userId: string, socketId: string) {
+  const sockets = localOnlineSockets.get(userId)
+  if (!sockets) return true
+  sockets.delete(socketId)
+  if (sockets.size === 0) {
+    localOnlineSockets.delete(userId)
+    return true
+  }
+  return false
+}
+
+async function refreshRedisSocket(redis: RedisClientType, userId: string, socketId: string) {
+  await redis.sAdd(presenceKeys.onlineSockets(userId), socketId)
+  await redis.set(presenceKeys.onlineSocket(userId, socketId), '1', { EX: SOCKET_TTL })
+  await redis.expire(presenceKeys.onlineSockets(userId), SOCKET_TTL * 2)
+}
+
+async function removeRedisSocket(redis: RedisClientType, userId: string, socketId: string) {
+  await redis.sRem(presenceKeys.onlineSockets(userId), socketId)
+  await redis.del(presenceKeys.onlineSocket(userId, socketId))
+}
+
+async function redisOnlineSocketCount(redis: RedisClientType, userId: string) {
+  const socketIds = await redis.sMembers(presenceKeys.onlineSockets(userId))
+  if (socketIds.length === 0) return 0
+
+  let count = 0
+  const staleSocketIds: string[] = []
+  for (const socketId of socketIds) {
+    const exists = await redis.exists(presenceKeys.onlineSocket(userId, socketId))
+    if (exists) count += 1
+    else staleSocketIds.push(socketId)
+  }
+  if (staleSocketIds.length > 0) {
+    await redis.sRem(presenceKeys.onlineSockets(userId), staleSocketIds)
+  }
+  if (count === 0) {
+    await redis.del(presenceKeys.onlineSockets(userId))
+  }
+  return count
+}
 
 /**
  * Broadcast presence change to only the rooms where the user is active:
@@ -43,12 +100,24 @@ export function setupPresenceGateway(
     const userId = socket.data.userId as string | undefined
     if (!userId) return
 
-    // Track online user
-    socket.on('connect', async () => {
-      if (redis) {
-        await redis.sAdd(presenceKeys.onlineSockets(userId), socket.id)
-        const wasEmpty = (await redis.sCard(presenceKeys.onlineSockets(userId))) === 1
-        if (wasEmpty) {
+    // Run immediately for already-connected socket
+    let heartbeat: ReturnType<typeof setInterval> | null = null
+    ;(async () => {
+      try {
+        let becameOnline = false
+        if (redis) {
+          const wasOnline = (await redisOnlineSocketCount(redis, userId)) > 0
+          await refreshRedisSocket(redis, userId, socket.id)
+          becameOnline = !wasOnline
+          heartbeat = setInterval(() => {
+            void refreshRedisSocket(redis, userId, socket.id).catch((err) =>
+              logger.warn({ err, userId }, 'Failed to refresh presence socket TTL'),
+            )
+          }, HEARTBEAT_MS)
+        } else {
+          becameOnline = addLocalSocket(userId, socket.id)
+        }
+        if (becameOnline) {
           const userDao = container.resolve('userDao')
           await userDao.updateStatus(userId, 'online')
           await broadcastPresenceToRooms(io, container, userId, {
@@ -56,26 +125,8 @@ export function setupPresenceGateway(
             status: 'online',
           })
         }
-      }
-    })
-
-    // Run immediately for already-connected socket
-    ;(async () => {
-      try {
-        if (redis) {
-          await redis.sAdd(presenceKeys.onlineSockets(userId), socket.id)
-          const size = await redis.sCard(presenceKeys.onlineSockets(userId))
-          if (size === 1) {
-            const userDao = container.resolve('userDao')
-            await userDao.updateStatus(userId, 'online')
-            await broadcastPresenceToRooms(io, container, userId, {
-              userId,
-              status: 'online',
-            })
-          }
-        }
       } catch (err) {
-        logger.warn({ err, userId }, 'Failed to track online presence in Redis')
+        logger.warn({ err, userId }, 'Failed to track online presence')
       }
     })()
 
@@ -128,19 +179,28 @@ export function setupPresenceGateway(
     // Disconnect
     socket.on('disconnect', async () => {
       try {
+        if (heartbeat) {
+          clearInterval(heartbeat)
+          heartbeat = null
+        }
+        let becameOffline = false
         if (redis) {
-          await redis.sRem(presenceKeys.onlineSockets(userId), socket.id)
-          const size = await redis.sCard(presenceKeys.onlineSockets(userId))
+          await removeRedisSocket(redis, userId, socket.id)
+          const size = await redisOnlineSocketCount(redis, userId)
           if (size === 0) {
-            await redis.del(presenceKeys.onlineSockets(userId))
             await redis.del(presenceKeys.userActivity(userId))
-            const userDao = container.resolve('userDao')
-            await userDao.updateStatus(userId, 'offline')
-            await broadcastPresenceToRooms(io, container, userId, {
-              userId,
-              status: 'offline',
-            })
+            becameOffline = true
           }
+        } else {
+          becameOffline = removeLocalSocket(userId, socket.id)
+        }
+        if (becameOffline) {
+          const userDao = container.resolve('userDao')
+          await userDao.updateStatus(userId, 'offline')
+          await broadcastPresenceToRooms(io, container, userId, {
+            userId,
+            status: 'offline',
+          })
         }
       } catch (err) {
         logger.warn({ err, userId }, 'Failed to clean up presence on disconnect')
@@ -151,15 +211,16 @@ export function setupPresenceGateway(
 
 /** Get online user IDs — Redis-backed, multi-instance safe */
 export async function getOnlineUserIds(redis: RedisClientType | null): Promise<string[]> {
-  if (!redis) return []
+  if (!redis) return [...localOnlineSockets.keys()]
   const keys = await redis.keys('presence:online:*')
   const onlineUsers: string[] = []
 
   for (const key of keys) {
-    const size = await redis.sCard(key)
+    const parts = key.split(':')
+    if (parts.length !== 3) continue
+    const userId = key.replace('presence:online:', '')
+    const size = await redisOnlineSocketCount(redis, userId)
     if (size > 0) {
-      // Extract userId from key: presence:online:{userId}
-      const userId = key.replace('presence:online:', '')
       onlineUsers.push(userId)
     }
   }
@@ -176,8 +237,28 @@ export async function forceDisconnectUser(
 ): Promise<void> {
   try {
     if (redis) {
+      const socketIds = await redis.sMembers(presenceKeys.onlineSockets(userId))
+      if (socketIds.length > 0) {
+        await redis.del(socketIds.map((socketId) => presenceKeys.onlineSocket(userId, socketId)))
+      }
       await redis.del(presenceKeys.onlineSockets(userId))
       await redis.del(presenceKeys.userActivity(userId))
+    } else {
+      localOnlineSockets.delete(userId)
+    }
+    const hasActiveSocket = [...io.sockets.sockets.values()].some(
+      (socket) => socket.data.userId === userId,
+    )
+    if (hasActiveSocket) {
+      for (const socket of io.sockets.sockets.values()) {
+        if (socket.data.userId !== userId) continue
+        if (redis) {
+          await refreshRedisSocket(redis, userId, socket.id)
+        } else {
+          addLocalSocket(userId, socket.id)
+        }
+      }
+      return
     }
     const userDao = container.resolve('userDao')
     await userDao.updateStatus(userId, 'offline')

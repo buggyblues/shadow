@@ -3,7 +3,7 @@
  * Canonical shapes used throughout the mobile app.
  */
 
-import type { CommerceProductCard, MessageMention } from '@shadowob/shared'
+import type { CommerceProductCard, MessageMention, OAuthLinkCard } from '@shadowob/shared'
 
 export interface Author {
   id: string
@@ -94,6 +94,7 @@ export interface MessageMetadata {
   interactiveResponse?: InteractiveResponseMetadata
   interactiveState?: InteractiveStateMetadata
   commerceCards?: CommerceProductCard[]
+  oauthLinkCards?: OAuthLinkCard[]
   [key: string]: unknown
 }
 

@@ -253,8 +253,11 @@ class ShadowClient:
 
     # ── Agents ───────────────────────────────────────────────────────────
 
-    def list_agents(self) -> list[dict[str, Any]]:
-        return self._get("/api/agents")
+    def list_agents(self, *, include_rentals: bool = False) -> list[dict[str, Any]]:
+        path = "/api/agents"
+        if include_rentals:
+            path = f"{path}?includeRentals=true"
+        return self._get(path)
 
     def create_agent(
         self,
@@ -266,12 +269,16 @@ class ShadowClient:
         avatar_url: str | None = None,
         kernel_type: str = "openclaw",
         config: dict[str, Any] | None = None,
+        buddy_mode: str = "private",
+        allowed_server_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         data: dict[str, Any] = {
             "name": name,
             "username": username,
             "kernelType": kernel_type,
             "config": config or {},
+            "buddyMode": buddy_mode,
+            "allowedServerIds": allowed_server_ids or [],
         }
         if description:
             data["description"] = description
@@ -855,6 +862,20 @@ class ShadowClient:
         path = f"/api/attachments/{attachment_id}/media-url"
         return self._get(path, params={"disposition": disposition})
 
+    def resolve_workspace_media_url(
+        self,
+        server_id: str,
+        file_id: str,
+        *,
+        disposition: str = "inline",
+        content_ref: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"disposition": disposition}
+        if content_ref:
+            params["contentRef"] = content_ref
+        path = f"/api/servers/{server_id}/workspace/files/{file_id}/media-url"
+        return self._get(path, params=params)
+
     # ── Friendships ──────────────────────────────────────────────────────
 
     def send_friend_request(self, username: str) -> dict[str, Any]:
@@ -912,6 +933,31 @@ class ShadowClient:
 
     def revoke_oauth_consent(self, app_id: str) -> dict[str, Any]:
         return self._post("/api/oauth/revoke", json={"appId": app_id})
+
+    def send_oauth_channel_message(
+        self,
+        channel_id: str,
+        content: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {"content": content}
+        if metadata is not None:
+            data["metadata"] = metadata
+        return self._post(f"/api/oauth/channels/{channel_id}/messages", json=data)
+
+    def send_oauth_buddy_message(
+        self,
+        buddy_id: str,
+        *,
+        channel_id: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {"channelId": channel_id, "content": content}
+        if metadata is not None:
+            data["metadata"] = metadata
+        return self._post(f"/api/oauth/buddies/{buddy_id}/messages", json=data)
 
     # ── Marketplace / Rentals ────────────────────────────────────────────
 

@@ -100,6 +100,8 @@ interface BuddyAgent {
   config?: {
     description?: string
     buddyTag?: string
+    buddyMode?: 'private' | 'shareable'
+    allowedServerIds?: string[]
   }
   owner?: {
     userId?: string
@@ -111,7 +113,7 @@ interface BuddyAgent {
 }
 
 type AddAgentsResponse = {
-  added?: string[]
+  added?: Array<string | { agentId: string }>
   failed?: Array<{ agentId: string; error: string }>
   results?: Array<{ agentId: string; success: boolean; error?: string }>
 }
@@ -131,7 +133,13 @@ type InviteCandidate = BuddyListItemData & {
   agentId?: string
 }
 
-type PolicyMode = 'replyAll' | 'mentionOnly' | 'disabled'
+const canBuddyJoinServer = (agent: BuddyAgent, serverId: string | undefined) => {
+  if (!serverId) return false
+  if (agent.config?.buddyMode === 'shareable') return true
+  return Array.isArray(agent.config?.allowedServerIds)
+    ? agent.config.allowedServerIds.includes(serverId)
+    : false
+}
 
 const normalizeStatus = (value?: string | null): OnlineStatus => {
   if (value === 'online' || value === 'idle' || value === 'dnd' || value === 'offline') {
@@ -147,7 +155,12 @@ const parseAddAgentsResult = (
   if (!result) return { added: [], failed: [] }
 
   if (Array.isArray(result.added) && Array.isArray(result.failed)) {
-    return { added: result.added, failed: result.failed }
+    return {
+      added: result.added
+        .map((item) => (typeof item === 'string' ? item : item.agentId))
+        .filter(Boolean),
+      failed: result.failed,
+    }
   }
 
   const results = Array.isArray(result.results) ? result.results : []
@@ -203,8 +216,8 @@ export default function ChannelMembersScreen() {
 
   // User's buddy agents for invite
   const { data: myAgents = [] } = useQuery({
-    queryKey: ['my-agents-for-invite'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    queryKey: ['my-agents-for-invite', 'include-rentals'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
     enabled: showInviteSheet,
   })
 
@@ -218,10 +231,15 @@ export default function ChannelMembersScreen() {
 
   const channelUserIds = useMemo(() => new Set(members.map((m) => m.userId)), [members])
   const searchKeyword = useMemo(() => inviteSearch.trim().toLowerCase(), [inviteSearch])
-  const serverBotUserIds = useMemo(
-    () => new Set(serverMembers.filter((m) => m.user?.isBot).map((m) => m.user.id)),
-    [serverMembers],
-  )
+  const serverBotUserIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const member of serverMembers) {
+      if (member.user?.isBot) {
+        ids.add(member.user.id)
+      }
+    }
+    return ids
+  }, [serverMembers])
   const myAgentByBotUserId = useMemo(() => {
     const map = new Map<string, BuddyAgent>()
     for (const agent of myAgents) {
@@ -232,7 +250,7 @@ export default function ChannelMembersScreen() {
     return map
   }, [myAgents])
 
-  const memberCandidates = useMemo(() => {
+  const memberCandidates = useMemo<InviteCandidate[]>(() => {
     return serverMembers
       .filter((m) => m.user && !m.user.isBot)
       .filter((m) => !channelUserIds.has(m.userId))
@@ -263,24 +281,25 @@ export default function ChannelMembersScreen() {
           creator: null,
           source: 'member' as const,
           agentId: undefined,
-        }
+        } satisfies InviteCandidate
       })
   }, [serverMembers, channelUserIds, searchKeyword])
 
-  const buddyCandidatesOnServer = useMemo(() => {
-    return serverMembers
-      .filter((m) => m.user?.isBot && !channelUserIds.has(m.user!.id))
-      .filter((m) => myAgentByBotUserId.has(m.user!.id))
-      .filter((m) => {
-        if (!searchKeyword) return true
-        const displayName = m.user!.displayName || m.user!.username
-        return displayName.toLowerCase().includes(searchKeyword)
-      })
-      .map((m) => {
-        const user = m.user!
-        const agent = myAgentByBotUserId.get(user.id)
-        if (!agent) return null
-        return {
+  const buddyCandidatesOnServer = useMemo<InviteCandidate[]>(() => {
+    return serverMembers.flatMap((m) => {
+      const user = m.user
+      if (!user?.isBot || channelUserIds.has(user.id)) return []
+
+      const agent = myAgentByBotUserId.get(user.id)
+      if (!agent) return []
+
+      if (searchKeyword) {
+        const displayName = user.displayName || user.username
+        if (!displayName.toLowerCase().includes(searchKeyword)) return []
+      }
+
+      return [
+        {
           key: `buddy:${agent.id}`,
           uid: user.id,
           nickname: m.nickname || user.displayName || user.username,
@@ -289,7 +308,7 @@ export default function ChannelMembersScreen() {
           status: normalizeStatus(user.status),
           isBot: true,
           canAddToServer: false,
-          canAddToChannel: true,
+          canAddToChannel: canBuddyJoinServer(agent, channel?.serverId),
           membershipTier: m.membershipTier,
           membershipLevel: m.membershipLevel,
           totalOnlineSeconds: m.totalOnlineSeconds,
@@ -300,43 +319,49 @@ export default function ChannelMembersScreen() {
           },
           source: 'buddy' as const,
           agentId: agent.id,
-        }
-      })
-      .filter((candidate): candidate is InviteCandidate => !!candidate)
-  }, [serverMembers, searchKeyword, channelUserIds, myAgentByBotUserId])
+        } satisfies InviteCandidate,
+      ]
+    })
+  }, [serverMembers, searchKeyword, channelUserIds, myAgentByBotUserId, channel?.serverId])
 
-  const buddyCandidatesNew = useMemo(() => {
-    return myAgents
-      .filter((agent) => agent.botUser && !serverBotUserIds.has(agent.botUser.id))
-      .filter((agent) => {
-        if (!searchKeyword) return true
-        const name = (agent.botUser?.displayName || agent.botUser?.username || '').toLowerCase()
-        return name.includes(searchKeyword)
-      })
-      .map((agent) => ({
-        key: `buddy-new:${agent.id}`,
-        uid: agent.botUser!.id,
-        nickname: agent.botUser!.displayName || agent.botUser!.username,
-        username: agent.botUser!.username,
-        avatar: agent.botUser!.avatarUrl ?? null,
-        status: normalizeStatus(agent.status),
-        isBot: true,
-        canAddToServer: true,
-        canAddToChannel: !!channelId,
-        membershipTier: null,
-        membershipLevel: null,
-        totalOnlineSeconds: agent.totalOnlineSeconds,
-        buddyTag: agent.config?.buddyTag ?? null,
-        creator: agent.owner
-          ? {
-              uid: agent.owner.userId || agent.owner.id || '',
-              nickname: agent.owner.displayName || agent.owner.username || '',
-            }
-          : null,
-        source: 'buddy' as const,
-        agentId: agent.id,
-      }))
-  }, [myAgents, serverBotUserIds, searchKeyword, channelId])
+  const buddyCandidatesNew = useMemo<InviteCandidate[]>(() => {
+    return myAgents.flatMap((agent) => {
+      const botUser = agent.botUser
+      if (!botUser || serverBotUserIds.has(botUser.id)) return []
+      if (!canBuddyJoinServer(agent, channel?.serverId)) return []
+
+      if (searchKeyword) {
+        const name = (botUser.displayName || botUser.username || '').toLowerCase()
+        if (!name.includes(searchKeyword)) return []
+      }
+
+      return [
+        {
+          key: `buddy-new:${agent.id}`,
+          uid: botUser.id,
+          nickname: botUser.displayName || botUser.username,
+          username: botUser.username,
+          avatar: botUser.avatarUrl ?? null,
+          status: normalizeStatus(agent.status),
+          isBot: true,
+          canAddToServer: true,
+          canAddToChannel: !!channelId,
+          membershipTier: null,
+          membershipLevel: null,
+          totalOnlineSeconds: agent.totalOnlineSeconds,
+          buddyTag: agent.config?.buddyTag ?? null,
+          creator: agent.owner
+            ? {
+                uid: agent.owner.userId || agent.owner.id || '',
+                nickname: agent.owner.displayName || agent.owner.username || '',
+              }
+            : null,
+          source: 'buddy' as const,
+          agentId: agent.id,
+        } satisfies InviteCandidate,
+      ]
+    })
+  }, [myAgents, serverBotUserIds, searchKeyword, channelId, channel?.serverId])
 
   const buddyCandidates = useMemo(
     () => [...buddyCandidatesOnServer, ...buddyCandidatesNew],
@@ -380,40 +405,8 @@ export default function ChannelMembersScreen() {
 
   // Buddy policy
   const { data: buddyAgents = [] } = useQuery({
-    queryKey: ['channel-buddy-agents'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
-  })
-
-  const selectedAgent = policySheet?.user.isBot
-    ? buddyAgents.find((a) => a.botUser?.id === policySheet.user.id)
-    : null
-
-  const { data: currentPolicy } = useQuery({
-    queryKey: ['agent-policy', channelId, selectedAgent?.id],
-    queryFn: () =>
-      fetchApi<{ mentionOnly: boolean; reply: boolean; config: Record<string, unknown> }>(
-        `/api/channels/${channelId}/agents/${selectedAgent!.id}/policy`,
-      ),
-    enabled: !!channelId && !!selectedAgent,
-  })
-
-  const currentMode: PolicyMode = (() => {
-    if (!currentPolicy) return 'replyAll'
-    if (!currentPolicy.reply) return 'disabled'
-    if (currentPolicy.mentionOnly) return 'mentionOnly'
-    return 'replyAll'
-  })()
-
-  const updatePolicy = useMutation({
-    mutationFn: ({ mode }: { mode: string }) =>
-      fetchApi(`/api/channels/${channelId}/agents/${selectedAgent!.id}/policy`, {
-        method: 'PUT',
-        body: JSON.stringify({ mode }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent-policy', channelId, selectedAgent?.id] })
-      setPolicySheet(null)
-    },
+    queryKey: ['channel-buddy-agents', 'include-rentals'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
   })
 
   const canManagePolicy = (member: ChannelMember) => {
@@ -488,8 +481,9 @@ export default function ChannelMembersScreen() {
           selectedCandidates.map((candidate) => addToChannelCandidate.mutateAsync(candidate.uid)),
         )
         results.forEach((result, index) => {
-          if (result.status === 'fulfilled') {
-            success.add(selectedCandidates[index].key)
+          const candidate = selectedCandidates[index]
+          if (result.status === 'fulfilled' && candidate) {
+            success.add(candidate.key)
           }
         })
       } else {
@@ -521,8 +515,9 @@ export default function ChannelMembersScreen() {
           ),
         )
         channelResults.forEach((result, index) => {
-          if (result.status === 'fulfilled') {
-            success.add(needChannelCandidates[index].key)
+          const candidate = needChannelCandidates[index]
+          if (result.status === 'fulfilled' && candidate) {
+            success.add(candidate.key)
           }
         })
 
@@ -893,50 +888,20 @@ export default function ChannelMembersScreen() {
               {policySheet?.user.displayName || policySheet?.user.username}
             </Text>
 
-            <Pressable
-              style={[styles.policyOption, { borderBottomColor: colors.border }]}
-              onPress={() => updatePolicy.mutate({ mode: 'replyAll' })}
-            >
+            <View style={[styles.policyOption, { borderBottomColor: colors.border }]}>
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  {t('member.policyReplyAll', '回复所有消息')}
+                  {t('member.policyOwnerTenantOnly', '固定回复策略')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyReplyAllDesc', 'Buddy 会回复频道中的所有消息')}
+                  {t(
+                    'member.policyOwnerTenantOnlyDesc',
+                    '默认只回复主人和有效租客，无需 @ Buddy。',
+                  )}
                 </Text>
               </View>
-              {currentMode === 'replyAll' && <Check size={18} color="#23a559" />}
-            </Pressable>
-
-            <Pressable
-              style={[styles.policyOption, { borderBottomColor: colors.border }]}
-              onPress={() => updatePolicy.mutate({ mode: 'mentionOnly' })}
-            >
-              <View style={styles.policyOptionContent}>
-                <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  {t('member.policyMentionOnly', '仅回复 @提及')}
-                </Text>
-                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyMentionOnlyDesc', '仅在被 @ 时回复')}
-                </Text>
-              </View>
-              {currentMode === 'mentionOnly' && <Check size={18} color="#23a559" />}
-            </Pressable>
-
-            <Pressable
-              style={[styles.policyOption, { borderBottomColor: colors.border }]}
-              onPress={() => updatePolicy.mutate({ mode: 'disabled' })}
-            >
-              <View style={styles.policyOptionContent}>
-                <Text style={[styles.policyLabel, { color: colors.error }]}>
-                  {t('member.policyDisabled', '静默（不回复）')}
-                </Text>
-                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyDisabledDesc', 'Buddy 将不会在此频道回复任何消息')}
-                </Text>
-              </View>
-              {currentMode === 'disabled' && <Check size={18} color={colors.error} />}
-            </Pressable>
+              <Check size={18} color="#23a559" />
+            </View>
 
             <Pressable
               style={[styles.sheetCancel, { backgroundColor: colors.background }]}
@@ -1030,6 +995,14 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: '700',
   },
+  inviteSectionTitle: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+    marginHorizontal: spacing.md,
+  },
   inviteSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1085,6 +1058,11 @@ const styles = StyleSheet.create({
   },
   inviteList: {
     paddingBottom: spacing.md + spacing.sm,
+  },
+  inviteEmpty: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   inviteBottomBar: {
     borderTopWidth: StyleSheet.hairlineWidth,

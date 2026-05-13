@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agentListings, rentalContracts } from '../db/schema'
+import { agents } from '../db/schema/agents'
 
 export class AgentListingDao {
   constructor(private deps: { db: Database }) {}
@@ -56,6 +57,11 @@ export class AgentListingDao {
       eq(agentListings.isListed, true),
       or(lte(agentListings.availableFrom, now), sql`${agentListings.availableFrom} IS NULL`),
       or(gte(agentListings.availableUntil, now), sql`${agentListings.availableUntil} IS NULL`),
+      sql`EXISTS (
+        SELECT 1 FROM ${agents}
+        WHERE ${agents.id} = ${agentListings.agentId}
+          AND ${agents.config}->>'buddyMode' = 'shareable'
+      )`,
     ]
 
     // Exclude listings that are currently being rented
@@ -132,6 +138,11 @@ export class AgentListingDao {
       eq(agentListings.isListed, true),
       or(lte(agentListings.availableFrom, now), sql`${agentListings.availableFrom} IS NULL`),
       or(gte(agentListings.availableUntil, now), sql`${agentListings.availableUntil} IS NULL`),
+      sql`EXISTS (
+        SELECT 1 FROM ${agents}
+        WHERE ${agents.id} = ${agentListings.agentId}
+          AND ${agents.config}->>'buddyMode' = 'shareable'
+      )`,
     ]
 
     // Exclude listings that are currently being rented

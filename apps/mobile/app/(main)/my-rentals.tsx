@@ -6,6 +6,7 @@ import {
   Clock,
   Edit,
   Eye,
+  MessageCircle,
   Package,
   Pause,
   Play,
@@ -29,6 +30,7 @@ interface Contract {
   expiresAt: string | null
   hourlyRate: number
   totalCost: number
+  agentUserId?: string | null
   listing?: { title: string; deviceTier: string; osType: string } | null
   createdAt: string
 }
@@ -104,6 +106,18 @@ export default function MyRentalsScreen() {
     },
   })
 
+  const startChatMutation = useMutation({
+    mutationFn: (agentUserId: string) =>
+      fetchApi<{ id: string }>('/api/channels/dm', {
+        method: 'POST',
+        body: JSON.stringify({ userId: agentUserId }),
+      }),
+    onSuccess: (channel) => {
+      router.push(`/(main)/dm/${channel.id}` as never)
+    },
+    onError: (err: Error) => showToast(err.message),
+  })
+
   const contracts = mainTab === 'renting' ? rentingData?.contracts : ownerData?.contracts
   const isLoadingContracts = mainTab === 'renting' ? loadRenting : loadOwner
 
@@ -151,6 +165,21 @@ export default function MyRentalsScreen() {
             <Text style={[styles.meta, { color: colors.textMuted }]}>
               {new Date(c.createdAt).toLocaleDateString()}
             </Text>
+            {mainTab === 'renting' && c.status === 'active' && c.agentUserId ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.chatBtn,
+                  { borderColor: colors.primary, opacity: pressed ? 0.7 : 1 },
+                ]}
+                onPress={() => startChatMutation.mutate(c.agentUserId!)}
+                disabled={startChatMutation.isPending}
+              >
+                <MessageCircle size={14} color={colors.primary} />
+                <Text style={[styles.chatBtnText, { color: colors.primary }]}>
+                  {t('marketplace.useBuddy', '开始使用')}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </Pressable>
@@ -420,7 +449,17 @@ const styles = StyleSheet.create({
   list: { padding: spacing.md, gap: spacing.sm },
   card: { borderRadius: radius.xl, borderWidth: 1, padding: spacing.md },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  cardRight: { alignItems: 'flex-end' },
+  cardRight: { alignItems: 'flex-end', gap: 6 },
+  chatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  chatBtnText: { fontSize: fontSize.xs, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full },
   badgeText: { fontSize: fontSize.xs, fontWeight: '700' },

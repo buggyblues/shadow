@@ -38,5 +38,6 @@ export async function closeRedisClient() {
 /** Redis key helpers for presence */
 export const presenceKeys = {
   onlineSockets: (userId: string) => `presence:online:${userId}`,
+  onlineSocket: (userId: string, socketId: string) => `presence:online:${userId}:${socketId}`,
   userActivity: (userId: string) => `presence:activity:${userId}`,
 }

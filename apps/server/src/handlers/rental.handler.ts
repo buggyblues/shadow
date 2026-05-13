@@ -169,10 +169,11 @@ export function createRentalHandler(container: AppContainer) {
       limit,
       offset,
     })
-    // Enrich each contract with listing summary and agent bot user ID
+    // Enrich each contract with listing summary and agent IDs
     const enriched = await Promise.all(
       contracts.map(async (contract) => {
         const listing = await agentListingDao.findById(contract.listingId)
+        let agentId: string | null = listing?.agentId ?? null
         let agentUserId: string | null = null
         if (listing?.agentId) {
           const agent = await agentDao.findById(listing.agentId)
@@ -183,6 +184,7 @@ export function createRentalHandler(container: AppContainer) {
           listing: listing
             ? { title: listing.title, deviceTier: listing.deviceTier, osType: listing.osType }
             : null,
+          agentId,
           agentUserId,
         }
       }),
@@ -203,6 +205,7 @@ export function createRentalHandler(container: AppContainer) {
     }
     // Enrich with listing summary and agent bot user ID
     const listing = await agentListingDao.findById(detail.listingId)
+    let agentId: string | null = listing?.agentId ?? null
     let agentUserId: string | null = null
     if (listing?.agentId) {
       const agent = await agentDao.findById(listing.agentId)
@@ -213,6 +216,7 @@ export function createRentalHandler(container: AppContainer) {
       listing: listing
         ? { title: listing.title, deviceTier: listing.deviceTier, osType: listing.osType }
         : null,
+      agentId,
       agentUserId,
     })
   })
@@ -253,6 +257,11 @@ export function createRentalHandler(container: AppContainer) {
       return c.json({ chatDisabled: false })
     }
 
+    // Owner can always use their Buddy directly; ownership never moves to tenants.
+    if (agent.ownerId === user.userId) {
+      return c.json({ chatDisabled: false, role: 'owner' })
+    }
+
     // Check if agent has any listing
     const listings = await agentListingDao.findByOwnerId(agent.ownerId)
     const agentListing = listings.find((l) => l.agentId === agent.id)
@@ -269,6 +278,7 @@ export function createRentalHandler(container: AppContainer) {
     if (activeContract && activeContract.tenantId === user.userId) {
       return c.json({
         chatDisabled: false,
+        role: 'tenant',
         rental: {
           contractId: activeContract.id,
           baseDailyRate: activeContract.baseDailyRate ?? 0,
@@ -280,18 +290,12 @@ export function createRentalHandler(container: AppContainer) {
       })
     }
 
-    // Agent is listed or rented out - chat is disabled for everyone (including owner)
+    // Agent is listed/rented but only owner and active tenant may use it.
     if (isRentedOut) {
       return c.json({ chatDisabled: true, reason: 'rented_out' })
     }
     if (isListed) {
       return c.json({ chatDisabled: true, reason: 'listed' })
-    }
-
-    // Agent has a listing but not listed and no active contract
-    // Owner can chat, but non-owner cannot (rental expired)
-    if (agent.ownerId === user.userId) {
-      return c.json({ chatDisabled: false })
     }
 
     return c.json({ chatDisabled: true, reason: 'expired' })

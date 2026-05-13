@@ -9,6 +9,7 @@ import {
   PdfRenderer,
   VideoRenderer,
 } from './renderers'
+import { useWorkspaceMediaUrl } from './workspace-media'
 import { formatFileSize, getFileCategory, getNodeIcon } from './workspace-utils'
 
 interface WorkspaceWorkbenchProps {
@@ -25,6 +26,7 @@ interface WorkspaceWorkbenchProps {
 export function WorkspaceWorkbench({ node, serverId, onClose }: WorkspaceWorkbenchProps) {
   const Icon = getNodeIcon(node)
   const category = getFileCategory(node)
+  const { data: downloadUrl } = useWorkspaceMediaUrl(serverId, node, 'attachment')
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -43,11 +45,15 @@ export function WorkspaceWorkbench({ node, serverId, onClose }: WorkspaceWorkben
         <div className="flex items-center gap-0.5 ml-auto">
           {node.contentRef && (
             <a
-              href={node.contentRef}
+              href={downloadUrl ?? '#'}
               target="_blank"
               rel="noopener noreferrer"
               className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
               title="下载"
+              aria-disabled={!downloadUrl}
+              onClick={(event) => {
+                if (!downloadUrl) event.preventDefault()
+              }}
             >
               <Download size={15} />
             </a>
@@ -84,13 +90,13 @@ function FileRenderer({
 }) {
   switch (category) {
     case 'image':
-      return <ImageRenderer node={node} />
+      return <ImageRenderer node={node} serverId={serverId} />
     case 'video':
-      return <VideoRenderer node={node} />
+      return <VideoRenderer node={node} serverId={serverId} />
     case 'audio':
-      return <AudioRenderer node={node} />
+      return <AudioRenderer node={node} serverId={serverId} />
     case 'pdf':
-      return <PdfRenderer node={node} />
+      return <PdfRenderer node={node} serverId={serverId} />
     case 'code':
       return <CodeRenderer node={node} serverId={serverId} />
     case 'markdown':
@@ -98,6 +104,6 @@ function FileRenderer({
     case 'text':
       return <CodeRenderer node={node} serverId={serverId} />
     default:
-      return <FallbackRenderer node={node} />
+      return <FallbackRenderer node={node} serverId={serverId} />
   }
 }

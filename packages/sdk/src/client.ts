@@ -53,6 +53,7 @@ import type {
   ShadowNotificationPreferences,
   ShadowOAuthApp,
   ShadowOAuthConsent,
+  ShadowOAuthLinkCard,
   ShadowOAuthToken,
   ShadowOrder,
   ShadowPaidFileOpenResult,
@@ -339,8 +340,20 @@ export class ShadowClient {
 
   // ── Agents ────────────────────────────────────────────────────────────
 
-  async listAgents(): Promise<{ id: string; name: string; status: string }[]> {
-    return this.request('/api/agents')
+  async listAgents(options?: { includeRentals?: boolean }): Promise<
+    {
+      id: string
+      name?: string
+      status: string
+      accessRole?: 'owner' | 'tenant'
+      activeContractId?: string | null
+      config?: Record<string, unknown>
+    }[]
+  > {
+    const params = new URLSearchParams()
+    if (options?.includeRentals) params.set('includeRentals', 'true')
+    const query = params.toString()
+    return this.request(`/api/agents${query ? `?${query}` : ''}`)
   }
 
   async createAgent(data: {
@@ -351,6 +364,8 @@ export class ShadowClient {
     avatarUrl?: string | null
     kernelType?: string
     config?: Record<string, unknown>
+    buddyMode?: 'private' | 'shareable'
+    allowedServerIds?: string[]
   }): Promise<{ id: string; token: string; userId: string }> {
     return this.request('/api/agents', {
       method: 'POST',
@@ -366,7 +381,13 @@ export class ShadowClient {
 
   async updateAgent(
     agentId: string,
-    data: { name?: string; displayName?: string; avatarUrl?: string | null },
+    data: {
+      name?: string
+      displayName?: string
+      avatarUrl?: string | null
+      buddyMode?: 'private' | 'shareable'
+      allowedServerIds?: string[]
+    },
   ): Promise<{ id: string; name: string }> {
     return this.request(`/api/agents/${agentId}`, {
       method: 'PATCH',
@@ -1081,6 +1102,19 @@ export class ShadowClient {
     )
   }
 
+  async resolveWorkspaceMediaUrl(
+    serverId: string,
+    fileId: string,
+    options?: { disposition?: 'inline' | 'attachment'; contentRef?: string },
+  ): Promise<ShadowSignedMediaUrl> {
+    const params = new URLSearchParams()
+    params.set('disposition', options?.disposition ?? 'inline')
+    if (options?.contentRef) params.set('contentRef', options.contentRef)
+    return this.request<ShadowSignedMediaUrl>(
+      `/api/servers/${serverId}/workspace/files/${fileId}/media-url?${params}`,
+    )
+  }
+
   /**
    * Download a file from a URL and upload it to the Shadow media service.
    * Supports local filesystem paths, file:// URLs, tilde paths, and HTTP(S) URLs.
@@ -1641,6 +1675,34 @@ export class ShadowClient {
     return this.request('/api/oauth/revoke', {
       method: 'POST',
       body: JSON.stringify({ appId }),
+    })
+  }
+
+  async sendOAuthChannelMessage(
+    channelId: string,
+    content: string,
+    opts?: { metadata?: { oauthLinkCards?: ShadowOAuthLinkCard[] } },
+  ): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/oauth/channels/${channelId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        content,
+        ...(opts?.metadata ? { metadata: opts.metadata } : {}),
+      }),
+    })
+  }
+
+  async sendOAuthBuddyMessage(
+    buddyId: string,
+    data: {
+      channelId: string
+      content: string
+      metadata?: { oauthLinkCards?: ShadowOAuthLinkCard[] }
+    },
+  ): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/oauth/buddies/${buddyId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     })
   }
 

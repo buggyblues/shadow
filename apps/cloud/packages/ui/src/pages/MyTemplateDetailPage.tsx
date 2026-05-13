@@ -45,8 +45,11 @@ import {
 } from '@/components/TemplateDetailShared'
 import { type ValidateResult } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
+import { configureMonacoWorkers } from '@/lib/monaco'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
+
+configureMonacoWorkers()
 
 // ── Editor Tab ────────────────────────────────────────────────────────────────
 
@@ -69,6 +72,7 @@ function EditorTab({
     initialContent ? JSON.stringify(initialContent, null, 2) : '',
   )
   const [validateResult, setValidateResult] = useState<ValidateResult | null>(null)
+  const [schemaLoadError, setSchemaLoadError] = useState<string | null>(null)
   const [saved, setSaved] = useState(true)
 
   useEffect(() => {
@@ -221,6 +225,12 @@ function EditorTab({
         </div>
       )}
 
+      {schemaLoadError && (
+        <div className="mb-3 rounded-lg border border-yellow-800 bg-yellow-900/20 p-3 text-sm text-yellow-300">
+          {schemaLoadError}
+        </div>
+      )}
+
       {/* Monaco Editor */}
       <div className="overflow-hidden rounded-xl border border-border-subtle min-h-[500px]">
         <Editor
@@ -243,8 +253,13 @@ function EditorTab({
                   },
                 ],
               })
-            } catch {
-              // Schema fetch failed — editor works without validation
+              setSchemaLoadError(null)
+            } catch (error) {
+              setSchemaLoadError(
+                t('templateDetail.schemaLoadFailed', {
+                  message: error instanceof Error ? error.message : t('common.error'),
+                }),
+              )
             }
           }}
           theme="vs-dark"

@@ -230,6 +230,42 @@ export class RentalContractDao {
       .limit(1)
     return r[0]?.contract ?? null
   }
+
+  async findActiveByTenantAndAgentId(tenantId: string, agentId: string) {
+    const r = await this.db
+      .select({ contract: rentalContracts })
+      .from(rentalContracts)
+      .innerJoin(agentListings, eq(rentalContracts.listingId, agentListings.id))
+      .where(
+        and(
+          eq(rentalContracts.tenantId, tenantId),
+          eq(rentalContracts.status, 'active'),
+          eq(agentListings.agentId, agentId),
+        ),
+      )
+      .limit(1)
+    return r[0]?.contract ?? null
+  }
+
+  async findActiveByAgentId(agentId: string) {
+    const rows = await this.db
+      .select({ contract: rentalContracts })
+      .from(rentalContracts)
+      .innerJoin(agentListings, eq(rentalContracts.listingId, agentListings.id))
+      .where(and(eq(rentalContracts.status, 'active'), eq(agentListings.agentId, agentId)))
+      .orderBy(desc(rentalContracts.createdAt))
+    return rows.map((row) => row.contract)
+  }
+
+  async findActiveTenantAgents(tenantId: string) {
+    return this.db
+      .select({ contract: rentalContracts, agent: agents })
+      .from(rentalContracts)
+      .innerJoin(agentListings, eq(rentalContracts.listingId, agentListings.id))
+      .innerJoin(agents, eq(agentListings.agentId, agents.id))
+      .where(and(eq(rentalContracts.tenantId, tenantId), eq(rentalContracts.status, 'active')))
+      .orderBy(desc(rentalContracts.createdAt))
+  }
 }
 
 /* ──────────────── Usage Record DAO ──────────────── */

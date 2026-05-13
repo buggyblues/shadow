@@ -16,6 +16,7 @@ import {
   Clock,
   Edit,
   Eye,
+  LockKeyhole,
   MessageCircle,
   PackageMinus,
   Pause,
@@ -31,7 +32,12 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgentDetail } from '../components/buddy-management/agent-detail'
 import { CreateAgentDialog, EditAgentDialog } from '../components/buddy-management/agent-dialogs'
-import type { Agent, TokenResponse } from '../components/buddy-management/types'
+import {
+  type Agent,
+  type BuddyMode,
+  getAgentBuddyMode,
+  type TokenResponse,
+} from '../components/buddy-management/types'
 import { BuddyMarketContent } from '../components/buddy-market/buddy-market-content'
 import { UserAvatar } from '../components/common/avatar'
 import { OnlineRank } from '../components/common/online-rank'
@@ -369,6 +375,20 @@ export function BuddyManagementContent({
     },
   })
 
+  const buddyModeMutation = useMutation({
+    mutationFn: ({ agentId, buddyMode }: { agentId: string; buddyMode: BuddyMode }) =>
+      fetchApi<Agent>(`/api/agents/${agentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ buddyMode }),
+      }),
+    onSuccess: (agent) => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+      setSelectedAgent(agent)
+      showMsg(t('agentMgmt.editSuccess'), true)
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
   const messageOwnerMutation = useMutation({
     mutationFn: (agentUserId: string) =>
       fetchApi<{ id: string }>('/api/channels/dm', {
@@ -512,6 +532,7 @@ export function BuddyManagementContent({
               filteredAgents.map((agent) => {
                 const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Node'
                 const isSelected = detailAgentId === agent.id
+                const isPrivateBuddy = getAgentBuddyMode(agent) === 'private'
                 return (
                   <button
                     type="button"
@@ -547,14 +568,23 @@ export function BuddyManagementContent({
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p
-                        className={cn(
-                          'text-[14px] font-bold truncate transition-colors',
-                          isSelected ? 'text-primary' : 'text-text-primary',
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p
+                          className={cn(
+                            'text-[14px] font-bold truncate transition-colors',
+                            isSelected ? 'text-primary' : 'text-text-primary',
+                          )}
+                        >
+                          {name}
+                        </p>
+                        {isPrivateBuddy && (
+                          <LockKeyhole
+                            size={12}
+                            className="shrink-0 text-warning"
+                            aria-label={t('agentMgmt.modePrivate')}
+                          />
                         )}
-                      >
-                        {name}
-                      </p>
+                      </div>
                       <p className="flex items-center gap-1 text-[11px] text-text-muted truncate font-mono">
                         <span>
                           {t('agentMgmt.buddyLevel', {
@@ -644,6 +674,10 @@ export function BuddyManagementContent({
                     currentUserId={currentUserId}
                     onToggle={(agent) => toggleMutation.mutate(agent)}
                     togglePending={toggleMutation.isPending}
+                    onChangeBuddyMode={(buddyMode) =>
+                      buddyModeMutation.mutate({ agentId: selectedAgent.id, buddyMode })
+                    }
+                    buddyModePending={buddyModeMutation.isPending}
                     t={t}
                   />
                 )
