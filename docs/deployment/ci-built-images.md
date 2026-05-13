@@ -6,6 +6,7 @@ passes on `main`:
 
 - `ghcr.io/buggyblues/shadow-server`
 - `ghcr.io/buggyblues/shadow-web`
+- `ghcr.io/buggyblues/shadow-admin`
 
 The workflow publishes three useful tag styles:
 
@@ -40,7 +41,7 @@ SHADOW_IMAGE_TAG=sha-0123456789ab
 Then deploy without building on the server:
 
 ```bash
-docker compose -f docker-compose.prod.yml pull server web
+docker compose -f docker-compose.prod.yml pull server web admin
 docker compose -f docker-compose.prod.yml up -d --remove-orphans
 docker image prune -f
 ```

@@ -42,6 +42,9 @@ jobs:
           - name: web
             image: shadow-web
             dockerfile: apps/web/Dockerfile
+          - name: admin
+            image: shadow-admin
+            dockerfile: apps/admin/Dockerfile
 
     steps:
       - name: Checkout
