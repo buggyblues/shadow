@@ -11,6 +11,13 @@ on:
           - patch
           - minor
           - major
+      release_channel:
+        description: Publish channel
+        type: choice
+        default: stable
+        options:
+          - stable
+          - test
       publish_npm:
         description: Publish all public npm packages under packages/
         type: boolean
@@ -142,19 +149,36 @@ jobs:
 
           const baseline = versions.sort(compareSemver).at(-1)
           const bumpType = process.env.BUMP_TYPE || 'patch'
-          const releaseVersion = bumpSemver(baseline, bumpType)
+          const releaseBaseVersion = bumpSemver(baseline, bumpType)
+
+          const channel = process.env.RELEASE_CHANNEL || 'stable'
+          const runNumber = process.env.GITHUB_RUN_NUMBER || '0'
+          const runAttempt = process.env.GITHUB_RUN_ATTEMPT || '1'
+          const testBuildNumber = `${runNumber}${runAttempt}`
+          const releaseVersion = channel === 'test'
+            ? `${releaseBaseVersion}-dev.${testBuildNumber}`
+            : releaseBaseVersion
+          const pythonVersion = channel === 'test'
+            ? `${releaseBaseVersion}.dev${testBuildNumber}`
+            : releaseBaseVersion
 
           process.stdout.write(JSON.stringify({
             filters: filters.join(' '),
             baseline,
+            releaseBaseVersion,
             releaseVersion,
+            pythonVersion,
+            testBuildNumber,
           }))
           NODE
           )
 
           FILTERS=$(node -e "const d=JSON.parse(process.argv[1]); process.stdout.write(d.filters)" "$TARGETS")
           BASELINE=$(node -e "const d=JSON.parse(process.argv[1]); process.stdout.write(d.baseline)" "$TARGETS")
+          RELEASE_BASE_VERSION=$(node -e "const d=JSON.parse(process.argv[1]); process.stdout.write(d.releaseBaseVersion)" "$TARGETS")
           RELEASE_VERSION=$(node -e "const d=JSON.parse(process.argv[1]); process.stdout.write(d.releaseVersion)" "$TARGETS")
+          PYTHON_VERSION=$(node -e "const d=JSON.parse(process.argv[1]); process.stdout.write(d.pythonVersion)" "$TARGETS")
+          TEST_BUILD_NUMBER=$(node -e "const d=JSON.parse(process.argv[1]); process.stdout.write(d.testBuildNumber)" "$TARGETS")
 
           if [ -z "$FILTERS" ]; then
             echo "No publishable npm packages found under packages/ or apps/flash/packages/."
@@ -163,16 +187,29 @@ jobs:
 
           echo "npm_filters=$FILTERS" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "python_version=$PYTHON_VERSION" >> "$GITHUB_OUTPUT"
           echo "NPM_FILTERS=$FILTERS" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
+          echo "PYTHON_VERSION=$PYTHON_VERSION" >> "$GITHUB_ENV"
+          echo "TEST_BUILD_NUMBER=$TEST_BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "Publish filters: $FILTERS"
           echo "Version baseline: $BASELINE"
+          echo "Release base version: $RELEASE_BASE_VERSION"
           echo "Release version: $RELEASE_VERSION"
+          echo "Python version: $PYTHON_VERSION"
         env:
           BUMP_TYPE: ${{ inputs.bump }}
+          RELEASE_CHANNEL: ${{ inputs.release_channel }}
 
       - name: Verify workspace dependencies before bump
         run: pnpm check:workspace-deps
+
+      - name: Ensure connector is included in npm release targets
+        if: inputs.publish_npm
+        shell: bash
+        run: |
+          echo "$NPM_FILTERS"
+          grep -q -- '--filter=@shadowob/connector' <<< "$NPM_FILTERS"
 
       - name: Bump all public npm package versions
         shell: bash
@@ -182,10 +219,16 @@ jobs:
       - name: Sync sdk-python version with npm SDK
         shell: bash
         run: |
-          SDK_VERSION="${RELEASE_VERSION}"
+          SDK_VERSION="${PYTHON_VERSION}"
           echo "SDK_VERSION=$SDK_VERSION" >> "$GITHUB_ENV"
           sed -i "s/^version = \".*\"/version = \"${SDK_VERSION}\"/" packages/sdk-python/pyproject.toml
-          pnpm check:sdk-versions
+          if [ "${RELEASE_CHANNEL}" = "stable" ]; then
+            pnpm check:sdk-versions
+          else
+            echo "Test channel uses npm ${RELEASE_VERSION} and Python ${PYTHON_VERSION} for registry-compatible prerelease syntax."
+          fi
+        env:
+          RELEASE_CHANNEL: ${{ inputs.release_channel }}
 
       - name: Build npm publish artifacts
         if: inputs.publish_npm
@@ -201,10 +244,16 @@ jobs:
 
       - name: Publish public npm packages
         if: inputs.publish_npm && !inputs.dry_run
+        run: |
+          if [ "${RELEASE_CHANNEL}" = "test" ]; then
+            PUBLISH_TAG="test"
+          else
+            PUBLISH_TAG="latest"
+          fi
+          pnpm -r ${NPM_FILTERS} publish --no-git-checks --access public --tag "${PUBLISH_TAG}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          pnpm -r ${NPM_FILTERS} publish --no-git-checks --access public
+          RELEASE_CHANNEL: ${{ inputs.release_channel }}
 
       - name: Publish shadowob-sdk to PyPI
         if: inputs.publish_pypi && !inputs.dry_run
@@ -221,8 +270,87 @@ jobs:
           echo "dry_run=true, publish/tag/release steps were skipped."
           echo "built npm/python artifacts and verified version consistency only."
 
+      - name: Verify published npm package metadata
+        if: inputs.publish_npm && !inputs.dry_run
+        shell: bash
+        run: |
+          node <<'NODE' > /tmp/shadow-published-npm-packages.txt
+          const filters = process.env.NPM_FILTERS.split(/\s+/).filter(Boolean)
+          for (const filter of filters) {
+            const name = filter.replace(/^--filter=/, '')
+            if (name) console.log(name)
+          }
+          NODE
+
+          while read -r package_name; do
+            [ -n "$package_name" ] || continue
+            for attempt in 1 2 3 4 5 6; do
+              if npm view "${package_name}@${RELEASE_VERSION}" version; then
+                break
+              fi
+              if [ "$attempt" = "6" ]; then
+                echo "Package ${package_name}@${RELEASE_VERSION} was not visible in the registry."
+                exit 1
+              fi
+              sleep 10
+            done
+          done < /tmp/shadow-published-npm-packages.txt
+
+      - name: Verify cold connector install from npm
+        if: inputs.publish_npm && !inputs.dry_run
+        shell: bash
+        run: |
+          tmpdir="$(mktemp -d)"
+          cd "$tmpdir"
+          npm init -y
+          npm install "@shadowob/connector@${RELEASE_VERSION}"
+          node node_modules/@shadowob/connector/dist/cli.js plan \
+            --target hermes \
+            --server-url https://shadowob.example.com \
+            --token test-token \
+            --json > plan.json
+          node <<'NODE'
+          const fs = require('node:fs')
+          const plan = fs.readFileSync('plan.json', 'utf8')
+          if (plan.includes('--agent-id') || plan.includes('--channel-id')) {
+            throw new Error('Hermes connector plan still contains static agent/channel flags')
+          }
+          NODE
+
+      - name: Verify cold Python SDK install from PyPI
+        if: inputs.publish_pypi && !inputs.dry_run
+        shell: bash
+        run: |
+          python -m venv /tmp/shadow-sdk-verify
+          for attempt in 1 2 3 4 5 6; do
+            if /tmp/shadow-sdk-verify/bin/python -m pip install "shadowob-sdk==${PYTHON_VERSION}"; then
+              break
+            fi
+            if [ "$attempt" = "6" ]; then
+              echo "shadowob-sdk==${PYTHON_VERSION} was not installable from PyPI."
+              exit 1
+            fi
+            sleep 10
+          done
+          /tmp/shadow-sdk-verify/bin/python - <<'PY'
+          from shadowob_sdk import ShadowClient, ShadowSocket
+
+          print(ShadowClient.__name__, ShadowSocket.__name__)
+          PY
+
+      - name: Test publish summary
+        if: inputs.release_channel == 'test' && !inputs.dry_run
+        run: |
+          {
+            echo "## Test package publish"
+            echo
+            echo "- npm version: \`${RELEASE_VERSION}\`"
+            echo "- Python version: \`${PYTHON_VERSION}\`"
+            echo "- npm dist-tag: \`test\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Commit and tag release
-        if: ${{ !inputs.dry_run }}
+        if: ${{ inputs.release_channel == 'stable' && !inputs.dry_run }}
         shell: bash
         run: |
           VERSION="${SDK_VERSION}"
@@ -235,7 +363,7 @@ jobs:
           git push --tags
 
       - name: Create GitHub Release
-        if: inputs.create_release && !inputs.dry_run
+        if: inputs.release_channel == 'stable' && inputs.create_release && !inputs.dry_run
         uses: softprops/action-gh-release@v2
         with:
           tag_name: sdk-v${{ env.SDK_VERSION }}

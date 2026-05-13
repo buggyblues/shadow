@@ -14,7 +14,21 @@ import {
 } from 'lucide-react'
 import { UserAvatar } from '../common/avatar'
 import { OpenClawSetupGuide } from './openclaw-setup-guide'
-import { type Agent, type BuddyMode, getAgentBuddyMode, type TokenResponse } from './types'
+import {
+  type Agent,
+  type BuddyMode,
+  getAgentAllowedServerIds,
+  getAgentBuddyMode,
+  type TokenResponse,
+} from './types'
+
+type ServerEntry = {
+  server: {
+    id: string
+    name: string
+    slug?: string | null
+  }
+}
 
 function formatOnlineDuration(totalSeconds: number, t: TFunction): string {
   if (totalSeconds < 60) return `${totalSeconds}${t('time.seconds', '秒')}`
@@ -40,9 +54,12 @@ export function AgentDetail({
   onEdit,
   onToggle,
   onChangeBuddyMode,
+  onChangeAllowedServerIds,
   onCreateListing,
   togglePending,
   buddyModePending,
+  allowedServersPending,
+  servers = [],
   onMessageOwner,
   isMessageOwnerPending,
   currentUserId,
@@ -58,8 +75,11 @@ export function AgentDetail({
   onCreateListing: () => void
   onToggle: (agent: Agent) => void
   onChangeBuddyMode?: (mode: BuddyMode) => void
+  onChangeAllowedServerIds?: (ids: string[]) => void
   togglePending: boolean
   buddyModePending?: boolean
+  allowedServersPending?: boolean
+  servers?: ServerEntry[]
   onMessageOwner?: () => void
   isMessageOwnerPending?: boolean
   currentUserId?: string | null
@@ -68,6 +88,7 @@ export function AgentDetail({
   const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'
   const desc = (agent.config?.description as string) ?? ''
   const buddyMode = getAgentBuddyMode(agent)
+  const allowedServerIds = getAgentAllowedServerIds(agent)
   const isPrivateBuddy = buddyMode === 'private'
   const isTenantAccess = agent.accessRole === 'tenant'
   const canManageAgent = !isTenantAccess
@@ -77,6 +98,14 @@ export function AgentDetail({
     Boolean(currentUserId) &&
     Boolean(ownerUserId) &&
     currentUserId !== ownerUserId
+  const toggleAllowedServer = (serverId: string) => {
+    if (!onChangeAllowedServerIds) return
+    onChangeAllowedServerIds(
+      allowedServerIds.includes(serverId)
+        ? allowedServerIds.filter((id) => id !== serverId)
+        : [...allowedServerIds, serverId],
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -216,6 +245,46 @@ export function AgentDetail({
                   <Share2 size={13} />
                   {t('agentMgmt.modeShareable')}
                 </button>
+              </div>
+            )}
+            {isPrivateBuddy && canManageAgent && onChangeAllowedServerIds && (
+              <div className="mt-4 rounded-[14px] border border-border-subtle bg-bg-tertiary/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black text-text-primary">
+                      {t('agentMgmt.allowedServersLabel')}
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-text-muted">
+                      {t('agentMgmt.allowedServersDesc')}
+                    </p>
+                  </div>
+                  <Badge variant="neutral" size="xs">
+                    {allowedServerIds.length}
+                  </Badge>
+                </div>
+                {servers.length === 0 ? (
+                  <div className="mt-3 text-xs text-text-muted">
+                    {t('agentMgmt.allowedServersEmpty')}
+                  </div>
+                ) : (
+                  <div className="mt-3 max-h-36 overflow-y-auto space-y-1 pr-1">
+                    {servers.map((entry) => (
+                      <label
+                        key={entry.server.id}
+                        className="flex items-center gap-2 rounded-[10px] px-2 py-2 text-sm font-bold text-text-primary hover:bg-bg-modifier-hover"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={allowedServerIds.includes(entry.server.id)}
+                          disabled={allowedServersPending}
+                          onChange={() => toggleAllowedServer(entry.server.id)}
+                          className="h-4 w-4 rounded border-border-subtle text-primary"
+                        />
+                        <span className="truncate">{entry.server.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

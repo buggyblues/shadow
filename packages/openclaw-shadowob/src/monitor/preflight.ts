@@ -1,4 +1,5 @@
 import type { ShadowChannelPolicy, ShadowMessage } from '@shadowob/sdk'
+import { getShadowMessageMentions, mentionTargetsBot } from '../mentions.js'
 import type { AgentChainMetadata, ShadowPolicyConfig, ShadowRuntimeLogger } from '../types.js'
 
 export type ShadowMessagePreflightOk = {
@@ -110,9 +111,19 @@ export function evaluateShadowMessagePreflight(params: {
     }
   }
 
-  let wasMentionedExplicitly = false
-  void botUsername
-  void runtime
+  const structuredMentions = getShadowMessageMentions(message)
+  const escapedBotUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const mentionRegex = new RegExp(`@${escapedBotUsername}(?:\\s|$)`, 'i')
+  const wasMentionedExplicitly =
+    mentionTargetsBot({ mentions: structuredMentions, botUserId, botUsername }) ||
+    mentionRegex.test(message.content)
+
+  if (policy?.mentionOnly && !wasMentionedExplicitly) {
+    return {
+      ok: false,
+      reason: `[msg] Policy requires mention for channel ${message.channelId}, skipping (${message.id})`,
+    }
+  }
 
   return {
     ok: true,

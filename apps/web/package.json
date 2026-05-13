@@ -16,6 +16,7 @@
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@shadowob/cloud-ui": "workspace:*",
+    "@shadowob/connector": "workspace:*",
     "@shadowob/shared": "workspace:*",
     "@shadowob/ui": "workspace:*",
     "@stripe/react-stripe-js": "^6.1.0",

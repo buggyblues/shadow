@@ -1,0 +1,84 @@
+name: shadowob
+label: Shadow
+kind: platform
+version: 0.2.0
+description: Shadow/OpenClaw Buddy messaging platform adapter for Hermes Agent.
+author: Shadow/OpenClaw
+requires_env:
+  - name: SHADOW_BASE_URL
+    description: "Shadow server base URL, for example https://shadowob.example.com"
+    prompt: "Shadow base URL"
+    password: false
+  - name: SHADOW_TOKEN
+    description: "Shadow bot/user access token"
+    prompt: "Shadow access token"
+    password: true
+optional_env:
+  - name: SHADOW_CHANNEL_IDS
+    description: "Advanced override: comma-separated channel IDs to join. Normally omitted because Shadow policy is discovered dynamically."
+    prompt: "Shadow channel IDs"
+    password: false
+  - name: SHADOW_HOME_CHANNEL
+    description: "Default Shadow channel ID used by cron/send_message delivery."
+    prompt: "Shadow home channel"
+    password: false
+  - name: SHADOW_AGENT_ID
+    description: "Advanced override: Shadow Buddy agent ID. Normally resolved from /api/auth/me."
+    prompt: "Shadow Buddy agent ID"
+    password: false
+  - name: SHADOW_HEARTBEAT_INTERVAL_SECONDS
+    description: "Agent heartbeat interval in seconds. Defaults to 30."
+    prompt: "Heartbeat interval"
+    password: false
+  - name: SHADOW_SLASH_COMMANDS_JSON
+    description: "JSON array of slash command definitions to register on startup."
+    prompt: "Slash commands JSON"
+    password: false
+  - name: SHADOW_SERVER_IDS
+    description: "Advanced override: comma-separated server IDs/slugs to discover manually."
+    prompt: "Shadow server IDs"
+    password: false
+  - name: SHADOW_AUTO_DISCOVER_CHANNELS
+    description: "Advanced override: true/false. Discover accessible server channels without the Buddy remote policy."
+    prompt: "Auto-discover channels?"
+    password: false
+  - name: SHADOW_ALLOWED_USERS
+    description: "Comma-separated allowed Shadow user IDs/usernames for Hermes gateway authorization."
+    prompt: "Allowed Shadow users"
+    password: false
+  - name: SHADOW_ALLOW_ALL_USERS
+    description: "true/false. Allow all Shadow users."
+    prompt: "Allow all Shadow users?"
+    password: false
+  - name: SHADOW_BOT_USER_ID
+    description: "Optional bot user ID. If omitted, adapter calls /api/auth/me."
+    prompt: "Shadow bot user ID"
+    password: false
+  - name: SHADOW_BOT_USERNAME
+    description: "Optional bot username for mention-only filtering."
+    prompt: "Shadow bot username"
+    password: false
+  - name: SHADOW_MENTION_ONLY
+    description: "true/false. In group channels, only process messages that mention the bot."
+    prompt: "Mention-only mode?"
+    password: false
+  - name: SHADOW_REPLY_TO_BOTS
+    description: "true/false. Process messages authored by other bot users. Defaults false."
+    prompt: "Reply to bot users?"
+    password: false
+  - name: SHADOW_REST_ONLY
+    description: "true/false. Use REST polling instead of Socket.IO."
+    prompt: "REST-only mode?"
+    password: false
+  - name: SHADOW_POLL_INTERVAL_SECONDS
+    description: "REST polling interval in seconds. Defaults to 3."
+    prompt: "Poll interval"
+    password: false
+  - name: SHADOW_CATCHUP_MINUTES
+    description: "On startup, process recent messages newer than this window. Defaults to 0."
+    prompt: "Catch-up minutes"
+    password: false
+  - name: SHADOW_DOWNLOAD_MEDIA
+    description: "true/false. Download inbound attachments into Hermes cache. Defaults true."
+    prompt: "Download media?"
+    password: false

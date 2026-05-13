@@ -5,6 +5,7 @@ import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { createActorContext } from '../security/actor-context'
 import { normalizeSlashCommands } from '../services/agent.service'
+import { canBuddyJoinServer, getBuddyMode } from '../services/buddy-policy'
 import {
   channelPositionsSchema,
   createChannelSchema,
@@ -477,14 +478,32 @@ export function createChannelHandler(container: AppContainer) {
     if (!requesterServerMember) {
       return c.json({ ok: false, error: 'Not a member of this server' }, 403)
     }
+    const agentDao = container.resolve('agentDao')
+    const targetAgent = await agentDao.findByUserId(targetUserId)
+    if (targetAgent) {
+      const rentalService = container.resolve('rentalService')
+      const access = await rentalService.canUseAgent(targetAgent.id, requesterId)
+      if (!access.canUse) {
+        return c.json({ ok: false, error: 'Not the Buddy owner or active tenant' }, 403)
+      }
+      if (access.role === 'tenant' && getBuddyMode(targetAgent.config) !== 'shareable') {
+        return c.json({ ok: false, error: 'Private Buddy cannot be added by tenants' }, 403)
+      }
+      if (!canBuddyJoinServer(targetAgent.config, serverId)) {
+        return c.json({ ok: false, error: 'Private Buddy is not allowlisted for this server' }, 403)
+      }
+    }
+
     if (!targetServerMember) {
-      // If target is a bot, auto-add to server as member
-      const userDao = container.resolve('userDao')
-      const targetUser = await userDao.findById(targetUserId)
-      if (targetUser?.isBot) {
+      if (targetAgent) {
         const serverService = container.resolve('serverService')
         await serverService.addBotMember(serverId, targetUserId)
       } else {
+        const userDao = container.resolve('userDao')
+        const targetUser = await userDao.findById(targetUserId)
+        if (targetUser?.isBot) {
+          return c.json({ ok: false, error: 'Buddy not found' }, 404)
+        }
         return c.json({ ok: false, error: 'Target user is not a server member' }, 400)
       }
     }

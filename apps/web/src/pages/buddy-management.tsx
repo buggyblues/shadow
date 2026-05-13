@@ -99,6 +99,14 @@ interface MyListing {
   } | null
 }
 
+type ServerEntry = {
+  server: {
+    id: string
+    name: string
+    slug?: string | null
+  }
+}
+
 const STATUS_STYLES: Record<string, { labelKey: string; bg: string; text: string }> = {
   pending: { labelKey: 'marketplace.statusPending', bg: 'bg-warning/10', text: 'text-warning' },
   active: { labelKey: 'marketplace.statusActive', bg: 'bg-success/10', text: 'text-success' },
@@ -310,6 +318,10 @@ export function BuddyManagementContent({
     queryFn: () => fetchApi<Agent[]>('/api/agents'),
     refetchInterval: 30000,
   })
+  const { data: servers = [] } = useQuery({
+    queryKey: ['servers', 'buddy-access'],
+    queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
+  })
 
   useEffect(() => {
     if (effectiveSection !== 'buddies') return
@@ -375,14 +387,23 @@ export function BuddyManagementContent({
     },
   })
 
-  const buddyModeMutation = useMutation({
-    mutationFn: ({ agentId, buddyMode }: { agentId: string; buddyMode: BuddyMode }) =>
+  const buddyAccessMutation = useMutation({
+    mutationFn: ({
+      agentId,
+      buddyMode,
+      allowedServerIds,
+    }: {
+      agentId: string
+      buddyMode?: BuddyMode
+      allowedServerIds?: string[]
+    }) =>
       fetchApi<Agent>(`/api/agents/${agentId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ buddyMode }),
+        body: JSON.stringify({ buddyMode, allowedServerIds }),
       }),
     onSuccess: (agent) => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
+      queryClient.invalidateQueries({ queryKey: ['my-buddies-for-invite'] })
       setSelectedAgent(agent)
       showMsg(t('agentMgmt.editSuccess'), true)
     },
@@ -675,9 +696,17 @@ export function BuddyManagementContent({
                     onToggle={(agent) => toggleMutation.mutate(agent)}
                     togglePending={toggleMutation.isPending}
                     onChangeBuddyMode={(buddyMode) =>
-                      buddyModeMutation.mutate({ agentId: selectedAgent.id, buddyMode })
+                      buddyAccessMutation.mutate({ agentId: selectedAgent.id, buddyMode })
                     }
-                    buddyModePending={buddyModeMutation.isPending}
+                    onChangeAllowedServerIds={(allowedServerIds) =>
+                      buddyAccessMutation.mutate({
+                        agentId: selectedAgent.id,
+                        allowedServerIds,
+                      })
+                    }
+                    buddyModePending={buddyAccessMutation.isPending}
+                    allowedServersPending={buddyAccessMutation.isPending}
+                    servers={servers}
                     t={t}
                   />
                 )

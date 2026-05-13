@@ -1,3 +1,4 @@
+import type { AgentDao } from '../dao/agent.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
@@ -8,6 +9,7 @@ import type {
   UpdateMemberInput,
   UpdateServerInput,
 } from '../validators/server.schema'
+import { canBuddyJoinServer } from './buddy-policy'
 import type { MembershipSnapshot } from './membership.service'
 import type { PolicyService } from './policy.service'
 
@@ -31,6 +33,7 @@ export class ServerService {
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
       userDao: UserDao
+      agentDao?: Pick<AgentDao, 'findByUserId'>
       membershipService: {
         getMembership: (userId: string) => Promise<MembershipSnapshot>
       }
@@ -462,6 +465,12 @@ export class ServerService {
     const server = await this.deps.serverDao.findById(serverId)
     if (!server) {
       throw Object.assign(new Error('Server not found'), { status: 404 })
+    }
+    const agent = await this.deps.agentDao?.findByUserId(botUserId)
+    if (agent && !canBuddyJoinServer(agent.config, serverId)) {
+      throw Object.assign(new Error('Private Buddy is not allowlisted for this server'), {
+        status: 403,
+      })
     }
     const existing = await this.deps.serverDao.getMember(serverId, botUserId)
     if (existing) {

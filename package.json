@@ -60,7 +60,7 @@
     "dev:cloud": "pnpm --filter @shadowob/cloud dev",
     "dev:cloud-dashboard": "pnpm --filter @shadowob/cloud console:dev",
     "cloud:serve": "pnpm --filter @shadowob/cloud exec shadow-cloud serve",
-    "build:packages": "pnpm --filter @shadowob/shared build && pnpm --filter @shadowob/sdk build && pnpm --parallel --filter @shadowob/oauth --filter @shadowob/openclaw-shadowob --filter @shadowob/cli build",
+    "build:packages": "pnpm --filter @shadowob/shared build && pnpm --filter @shadowob/sdk build && pnpm --parallel --filter @shadowob/oauth --filter @shadowob/openclaw-shadowob --filter @shadowob/cli --filter @shadowob/connector build",
     "build": "pnpm build:packages && pnpm -r build",
     "lint": "biome lint . --diagnostic-level=error",
     "lint:fix": "biome check --write . --diagnostic-level=error",

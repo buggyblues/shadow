@@ -25,6 +25,7 @@ const WORKSPACE_DIRS = [
   'apps/server',
   'apps/web',
   'packages/cli',
+  'packages/connector',
   'packages/oauth',
   'packages/openclaw-shadowob',
   'packages/sdk',
