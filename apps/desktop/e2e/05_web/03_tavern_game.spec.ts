@@ -298,6 +298,7 @@ test.describe
               username:
                 npc.name.split(' · ')[1]?.toLowerCase().replace(/\s+/g, '_') ?? `npc_${Date.now()}`,
               kernelType: 'openclaw',
+              buddyMode: 'shareable',
             },
           })
 

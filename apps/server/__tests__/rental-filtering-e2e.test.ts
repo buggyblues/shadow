@@ -133,7 +133,7 @@ beforeAll(async () => {
   const agent = await agentDao.create({
     userId: botUserId,
     kernelType: 'docker',
-    config: {},
+    config: { buddyMode: 'shareable', allowedServerIds: [] },
     ownerId: ownerUserId,
   })
   agentId = agent!.id

@@ -26,6 +26,14 @@ npx @shadowob/connector@latest connect \
 
 Use `--dry-run` to preview writes and commands. Use `--json` with `plan` when embedding the plan in another tool.
 
+`connect` merges existing configuration instead of replacing it:
+
+- OpenClaw JSON defaults to `~/.shadowob/openclaw.json` or `--openclaw-config`.
+- Hermes updates `~/.hermes/.env` and merges `~/.hermes/config.yaml`.
+- cc-connect merges the ShadowOB platform into `~/.cc-connect/config.toml`.
+
+Existing model providers, plugins, projects, platforms, and unrelated keys are preserved.
+
 ## OpenClaw
 
 ```bash
@@ -57,7 +65,7 @@ npx @shadowob/connector@latest connect \
 
 The Hermes plugin is bundled in `hermes-shadowob-plugin/`. The connector copies it to `~/.hermes/plugins/shadowob`, writes the Shadow token/base URL, and enables the plugin.
 
-Hermes does not need `agentId` or `channelId` in the setup command. The plugin calls `/api/auth/me` to resolve the Buddy agent id, then `/api/agents/:id/config` to receive channel access policy dynamically, matching the OpenClaw plugin behavior.
+Hermes does not need `agentId` or `channelId` in the setup command. The plugin calls `/api/auth/me` to resolve the Buddy agent id, then `/api/agents/:id/config` to receive channel access policy dynamically, matching the OpenClaw plugin behavior. If no channel is available yet, Hermes stays online and waits for a DM, server join, channel membership, or policy update. By default it creates/uses the DM with the Buddy owner as the home channel.
 
 Manual config shape:
 
@@ -148,7 +156,7 @@ pnpm -C packages/connector build
 uv run --project .tmp/hermes-agent --with pytest python -m pytest packages/connector/hermes-shadowob-plugin/tests
 ```
 
-The tests cover plan generation for OpenClaw, Hermes, and cc-connect, and assert that Hermes setup no longer emits static `agentId` or `channelId` arguments.
+The tests cover plan generation, config merging for OpenClaw/Hermes/cc-connect, and Hermes dynamic channel behavior without static `agentId` or `channelId` arguments.
 
 ## Capability Coverage
 

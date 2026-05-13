@@ -4,6 +4,12 @@ import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node
 import { homedir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  mergeCcConnectConfigContent,
+  mergeEnvContent,
+  mergeHermesConfigContent,
+  mergeOpenClawConfigContent,
+} from './config-writers.js'
 import { createConnectorPlan, type ShadowConnectorTarget } from './index.js'
 
 interface CliOptions {
@@ -11,6 +17,7 @@ interface CliOptions {
   target: ShadowConnectorTarget
   serverUrl: string
   token: string
+  openclawConfig?: string
   hermesHome?: string
   workDir?: string
   projectName?: string
@@ -44,6 +51,7 @@ function usage(): string {
     '  shadowob-connector connect --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
     '',
     'Options:',
+    '  --openclaw-config <path> OpenClaw JSON config, default $OPENCLAW_CONFIG or ~/.shadowob/openclaw.json',
     '  --hermes-home <path>    Hermes config directory, default $HERMES_HOME or ~/.hermes',
     '  --work-dir <path>       cc-connect project work directory',
     '  --project-name <name>   cc-connect project name',
@@ -81,6 +89,7 @@ function parseArgs(args: string[]): CliOptions {
     target,
     serverUrl: readOption(optionArgs, '--server-url') ?? 'https://shadowob.com',
     token: readOption(optionArgs, '--token') ?? '',
+    openclawConfig: readOption(optionArgs, '--openclaw-config'),
     hermesHome: readOption(optionArgs, '--hermes-home'),
     workDir: readOption(optionArgs, '--work-dir'),
     projectName: readOption(optionArgs, '--project-name'),
@@ -132,26 +141,21 @@ function writeFile(path: string, content: string, dryRun: boolean): void {
   writeFileSync(path, content.endsWith('\n') ? content : `${content}\n`)
 }
 
-function upsertManagedBlock(path: string, name: string, content: string, dryRun: boolean): void {
-  const begin = `# BEGIN ShadowOB ${name}`
-  const end = `# END ShadowOB ${name}`
-  const block = `${begin}\n${content}\n${end}`
-  const existing = existsSync(path) ? readFileSync(path, 'utf8') : ''
-  const pattern = new RegExp(
-    `${begin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${end.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
-  )
-  const next = existing.match(pattern)
-    ? existing.replace(pattern, block)
-    : [existing.trimEnd(), block].filter(Boolean).join('\n\n')
-  writeFile(path, next, dryRun)
-}
-
 function packageRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..')
 }
 
 function expandHome(value: string): string {
   return value.startsWith('~/') ? resolve(homedir(), value.slice(2)) : resolve(value)
+}
+
+function readExisting(path: string): string {
+  return existsSync(path) ? readFileSync(path, 'utf8') : ''
+}
+
+function normalizeServerUrl(value: string): string {
+  const trimmed = value.trim() || 'https://shadowob.com'
+  return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed.replace(/\/$/, '')
 }
 
 function hermesPluginSource(): string {
@@ -166,9 +170,24 @@ function hermesPluginSource(): string {
 
 function applyOpenClaw(options: CliOptions): void {
   const plan = createConnectorPlan(options)
-  for (const step of plan.commands) {
-    console.log(`Applying: ${step.label}`)
-    runShell(step.command, options.dryRun)
+  const configPath = expandHome(
+    options.openclawConfig ?? process.env.OPENCLAW_CONFIG ?? '~/.shadowob/openclaw.json',
+  )
+
+  console.log('Applying: Install plugin')
+  runShell('openclaw plugins install @shadowob/openclaw-shadowob', options.dryRun)
+
+  console.log(`Applying: Merge OpenClaw config ${configPath}`)
+  const next = mergeOpenClawConfigContent(readExisting(configPath), {
+    token: options.token,
+    serverUrl: normalizeServerUrl(options.serverUrl),
+  })
+  writeFile(configPath, next, options.dryRun)
+
+  const restart = plan.commands.find((step) => step.label === 'Restart gateway')
+  if (restart) {
+    console.log(`Applying: ${restart.label}`)
+    runShell(restart.command, options.dryRun)
   }
 }
 
@@ -178,11 +197,9 @@ function applyHermes(options: CliOptions): void {
   const pluginTarget = resolve(hermesDir, 'plugins/shadowob')
   const envPath = resolve(hermesDir, '.env')
   const configPath = resolve(hermesDir, 'config.yaml')
-  const generatedConfigPath = resolve(hermesDir, 'config.shadowob.yaml')
   const envBlock = plan.configBlocks.find((block) => block.label === '~/.hermes/.env')
-  const yamlBlock = plan.configBlocks.find((block) => block.label === '~/.hermes/config.yaml')
 
-  if (!envBlock || !yamlBlock) throw new Error('Hermes plan is missing config blocks')
+  if (!envBlock) throw new Error('Hermes plan is missing config blocks')
 
   if (options.dryRun) {
     console.log(`[dry-run] copy ${hermesPluginSource()} -> ${pluginTarget}`)
@@ -190,14 +207,19 @@ function applyHermes(options: CliOptions): void {
     mkdirSync(resolve(hermesDir, 'plugins'), { recursive: true })
     cpSync(hermesPluginSource(), pluginTarget, { recursive: true, force: true })
   }
-  upsertManagedBlock(envPath, 'Hermes ShadowOB', envBlock.content, options.dryRun)
+  const nextEnv = options.force
+    ? envBlock.content
+    : mergeEnvContent(readExisting(envPath), {
+        token: options.token,
+        serverUrl: normalizeServerUrl(options.serverUrl),
+      })
+  writeFile(envPath, nextEnv, options.dryRun)
 
-  if (!existsSync(configPath) || options.force) {
-    writeFile(configPath, yamlBlock.content, options.dryRun)
-  } else {
-    writeFile(generatedConfigPath, yamlBlock.content, options.dryRun)
-    console.log(`Existing Hermes config kept. Generated ShadowOB config: ${generatedConfigPath}`)
-  }
+  const nextConfig = mergeHermesConfigContent(options.force ? '' : readExisting(configPath), {
+    token: options.token,
+    serverUrl: normalizeServerUrl(options.serverUrl),
+  })
+  writeFile(configPath, nextConfig, options.dryRun)
 
   if (options.install) {
     runShell(
@@ -218,13 +240,16 @@ function applyCcConnect(options: CliOptions): void {
   if (!configBlock) throw new Error('cc-connect plan is missing config block')
 
   const configPath = resolve(homedir(), '.cc-connect/config.toml')
-  const generatedPath = resolve(homedir(), '.cc-connect/config.shadowob.toml')
-  if (!existsSync(configPath) || options.force) {
-    writeFile(configPath, configBlock.content, options.dryRun)
-  } else {
-    writeFile(generatedPath, configBlock.content, options.dryRun)
-    console.log(`Existing cc-connect config kept. Generated ShadowOB config: ${generatedPath}`)
-  }
+  const nextConfig = options.force
+    ? configBlock.content
+    : mergeCcConnectConfigContent(readExisting(configPath), {
+        token: options.token,
+        serverUrl: normalizeServerUrl(options.serverUrl),
+        projectName: options.projectName?.trim() || 'shadow-buddy',
+        workDir: options.workDir?.trim() || '.',
+        agentType: options.agentType?.trim() || 'codex',
+      })
+  writeFile(configPath, nextConfig, options.dryRun)
 
   if (options.install) {
     runShell('npm install -g cc-connect', options.dryRun)

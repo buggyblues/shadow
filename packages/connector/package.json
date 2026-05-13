@@ -54,5 +54,10 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "smol-toml": "^1.6.1",
+    "yaml": "^2.8.4"
   }
 }

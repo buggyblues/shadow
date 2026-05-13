@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import asyncio
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -81,6 +82,107 @@ def test_remote_config_entries_filter_listen_policy():
 
     assert [entry[0] for entry in entries] == ['listen-1']
     assert entries[0][1]['serverId'] == 'server-1'
+
+
+def test_resolve_channels_creates_owner_dm_home_channel_when_empty():
+    class FakeClient:
+        async def get_agent_config(self, agent_id):
+            assert agent_id == 'agent-1'
+            return {
+                'agentId': 'agent-1',
+                'botUserId': 'bot-1',
+                'ownerId': 'owner-1',
+                'servers': [],
+            }
+
+        async def create_direct_channel(self, user_id):
+            assert user_id == 'owner-1'
+            return {'id': 'dm-owner', 'kind': 'dm', 'name': 'Owner DM'}
+
+    class FakeSocket:
+        def __init__(self):
+            self.joined = []
+
+        async def join_channel(self, channel_id):
+            self.joined.append(channel_id)
+            return {'ok': True}
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance.socket = FakeSocket()
+    instance._agent_id = 'agent-1'
+    instance._bot_user_id = 'bot-1'
+    instance._slash_commands = []
+    instance._channel_ids = []
+    instance._configured_channel_ids = set()
+    instance._remote_channel_ids = set()
+    instance._channel_policies = {}
+    instance._remote_config = None
+    instance._channel_cache = {}
+    instance._server_ids = []
+    instance._auto_discover = False
+
+    asyncio.run(instance._resolve_channels(sync_socket=True))
+
+    assert instance._channel_ids == ['dm-owner']
+    assert instance._channel_cache['dm-owner']['kind'] == 'dm'
+    assert instance.socket.joined == ['dm-owner']
+
+
+def test_member_added_refreshes_remote_config_and_joins_channel():
+    class FakeClient:
+        async def get_agent_config(self, agent_id):
+            assert agent_id == 'agent-1'
+            return {
+                'agentId': 'agent-1',
+                'botUserId': 'bot-1',
+                'servers': [
+                    {
+                        'id': 'server-1',
+                        'name': 'Server',
+                        'channels': [
+                            {
+                                'id': 'channel-1',
+                                'name': 'general',
+                                'policy': {'listen': True, 'reply': True},
+                            }
+                        ],
+                    }
+                ],
+            }
+
+        async def get_channel(self, channel_id):
+            return {'id': channel_id, 'kind': 'channel', 'name': 'general'}
+
+    class FakeSocket:
+        def __init__(self):
+            self.joined = []
+
+        async def join_channel(self, channel_id):
+            self.joined.append(channel_id)
+            return {'ok': True}
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance.socket = FakeSocket()
+    instance._agent_id = 'agent-1'
+    instance._bot_user_id = 'bot-1'
+    instance._slash_commands = []
+    instance._channel_ids = []
+    instance._configured_channel_ids = set()
+    instance._remote_channel_ids = set()
+    instance._channel_policies = {}
+    instance._remote_config = None
+    instance._channel_cache = {}
+    instance._server_ids = []
+    instance._auto_discover = False
+    instance._catchup_minutes = 0
+
+    asyncio.run(instance._on_channel_member_added({'channelId': 'channel-1'}))
+
+    assert instance._channel_ids == ['channel-1']
+    assert instance._channel_policies['channel-1']['reply'] is True
+    assert instance.socket.joined == ['channel-1']
 
 
 def test_slash_command_prompt_and_interactive_block():

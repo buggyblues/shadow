@@ -231,6 +231,13 @@ class ShadowAsyncClient:
     async def list_direct_channels(self) -> list[JsonDict]:
         return await self.request("GET", "/api/channels/dm")
 
+    async def create_direct_channel(self, user_id: str) -> JsonDict:
+        return await self.request(
+            "POST",
+            "/api/channels/dm",
+            json_body={"userId": str(user_id)},
+        )
+
     async def get_channel(self, channel_id: str) -> JsonDict:
         return await self.request("GET", f"/api/channels/{quote(str(channel_id), safe='')}")
 

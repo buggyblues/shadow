@@ -465,6 +465,13 @@ def _remote_listen_channel_entries(
     return entries
 
 
+def _owner_id_from_remote_config(remote_config: dict[str, Any] | None) -> str | None:
+    if not isinstance(remote_config, dict):
+        return None
+    owner_id = str(remote_config.get("ownerId") or remote_config.get("owner_id") or "").strip()
+    return owner_id or None
+
+
 class ShadowOBAdapter(BasePlatformAdapter):
     """Hermes ``BasePlatformAdapter`` implementation for Shadow."""
 
@@ -479,6 +486,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self.socket: ShadowSocketClient | None = None
         self._poll_task: asyncio.Task | None = None
         self._heartbeat_task: asyncio.Task | None = None
+        self._channel_refresh_task: asyncio.Task | None = None
         self._channel_ids: list[str] = _channel_ids_from_config(config)
         self._configured_channel_ids: set[str] = set(self._channel_ids)
         self._remote_channel_ids: set[str] = set()
@@ -532,26 +540,26 @@ class ShadowOBAdapter(BasePlatformAdapter):
             await self.client.open()
             await self._load_identity()
             await self._register_slash_commands()
-            await self._start_heartbeat()
             await self._resolve_channels()
             if not self._channel_ids:
-                self._set_fatal_error(
-                    "config_missing",
-                    "No Shadow channels are available for this Buddy token. Add the Buddy to a server/channel, open a DM, or verify the remote agent policy.",
-                    retryable=False,
+                logger.warning(
+                    "[Shadow] No channels are available yet for this Buddy token. "
+                    "Waiting for the Buddy to be added to a channel or DM.",
                 )
-                return False
 
-            if self._rest_only:
-                await self._start_polling()
-            else:
+            use_polling = self._rest_only
+            if not self._rest_only:
                 try:
                     await self._start_socket()
                 except Exception as exc:
                     logger.warning("[Shadow] Socket.IO connection failed, falling back to REST polling: %s", exc)
-                    await self._start_polling()
+                    use_polling = True
 
             self._mark_connected()
+            if use_polling:
+                await self._start_polling()
+            await self._start_heartbeat()
+            await self._start_channel_refresh()
             logger.info("[Shadow] Connected to %s; channels=%s", self.base_url, ",".join(self._channel_ids))
             return True
         except Exception as exc:
@@ -573,6 +581,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
             except asyncio.CancelledError:
                 pass
         self._heartbeat_task = None
+        if self._channel_refresh_task is not None and not self._channel_refresh_task.done():
+            self._channel_refresh_task.cancel()
+            try:
+                await self._channel_refresh_task
+            except asyncio.CancelledError:
+                pass
+        self._channel_refresh_task = None
         if self._poll_task is not None and not self._poll_task.done():
             self._poll_task.cancel()
             try:
@@ -909,19 +924,47 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self._remote_channel_ids = new_remote_ids
         logger.info("[Shadow] Refreshed remote config for agent %s; channels=%s", self._agent_id, len(new_remote_ids))
 
-        if sync_socket and self.socket is not None:
-            next_channel_ids = set(self._channel_ids)
-            for channel_id in old_channel_ids - next_channel_ids:
-                try:
-                    await self.socket.leave_channel(channel_id)
-                except Exception:
-                    pass
-            for channel_id in next_channel_ids - old_channel_ids:
-                try:
-                    ack = await self.socket.join_channel(channel_id)
-                    logger.info("[Shadow] Joined channel %s after config refresh ack=%s", channel_id, ack)
-                except Exception as exc:
-                    logger.warning("[Shadow] Failed to join refreshed channel %s: %s", channel_id, exc)
+        if sync_socket:
+            await self._sync_socket_channels(old_channel_ids)
+
+    async def _sync_socket_channels(self, old_channel_ids: set[str]) -> None:
+        if self.socket is None:
+            return
+        next_channel_ids = set(self._channel_ids)
+        for channel_id in old_channel_ids - next_channel_ids:
+            try:
+                await self.socket.leave_channel(channel_id)
+            except Exception:
+                pass
+        for channel_id in next_channel_ids - old_channel_ids:
+            try:
+                ack = await self.socket.join_channel(channel_id)
+                logger.info("[Shadow] Joined channel %s after config refresh ack=%s", channel_id, ack)
+            except Exception as exc:
+                logger.warning("[Shadow] Failed to join refreshed channel %s: %s", channel_id, exc)
+
+    async def _ensure_owner_dm_home_channel(self) -> None:
+        if self.client is None:
+            return
+        owner_id = _owner_id_from_remote_config(self._remote_config)
+        if not owner_id or owner_id == self._bot_user_id:
+            return
+        try:
+            channel = await self.client.create_direct_channel(owner_id)
+        except Exception as exc:
+            logger.debug("[Shadow] Owner DM home channel is not available yet: %s", exc)
+            return
+        channel_id = str(channel.get("id") or "").strip()
+        if not channel_id:
+            return
+        self._channel_cache[channel_id] = {
+            **channel,
+            "kind": channel.get("kind") or channel.get("type") or "dm",
+        }
+        self._channel_policies.setdefault(channel_id, _default_policy_from_remote_config(self._remote_config))
+        if channel_id not in self._channel_ids:
+            self._channel_ids.append(channel_id)
+            logger.info("[Shadow] Using owner DM %s as the default home channel", channel_id)
 
     async def _register_slash_commands(self) -> None:
         if self.client is None or not self._agent_id or not self._slash_commands:
@@ -951,6 +994,26 @@ class ShadowOBAdapter(BasePlatformAdapter):
             await self.client.heartbeat_agent(self._agent_id)
         except Exception as exc:
             logger.debug("[Shadow] heartbeat failed for agent %s: %s", self._agent_id, exc)
+
+    async def _start_channel_refresh(self) -> None:
+        if self._channel_refresh_task is None or self._channel_refresh_task.done():
+            self._channel_refresh_task = asyncio.create_task(
+                self._channel_refresh_loop(),
+                name="shadowob-channel-refresh",
+            )
+
+    async def _channel_refresh_loop(self) -> None:
+        interval = max(10.0, min(60.0, self._heartbeat_interval))
+        while self._running and not self.has_fatal_error:
+            await asyncio.sleep(interval)
+            try:
+                await self._resolve_channels(sync_socket=True)
+                if not self._channel_ids:
+                    logger.debug("[Shadow] Still waiting for a channel or owner DM")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.debug("[Shadow] Channel refresh failed: %s", exc)
 
     async def _send_slash_interactive_prompt(
         self,
@@ -986,9 +1049,10 @@ class ShadowOBAdapter(BasePlatformAdapter):
         logger.info("[Shadow] Sent interactive prompt for slash command /%s", name)
         return True
 
-    async def _resolve_channels(self) -> None:
+    async def _resolve_channels(self, *, sync_socket: bool = False) -> None:
         if self.client is None:
             return
+        old_channel_ids = set(self._channel_ids)
         if self._agent_id:
             try:
                 await self._refresh_remote_config()
@@ -1044,6 +1108,8 @@ class ShadowOBAdapter(BasePlatformAdapter):
             except Exception as exc:
                 logger.debug("[Shadow] Failed to list direct channels: %s", exc)
 
+        await self._ensure_owner_dm_home_channel()
+
         # Best-effort metadata cache for explicitly configured channels.
         for channel_id in list(self._channel_ids):
             if channel_id in self._channel_cache:
@@ -1052,6 +1118,9 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 self._channel_cache[channel_id] = await self.client.get_channel(channel_id)
             except Exception:
                 self._channel_cache[channel_id] = {"id": channel_id, "name": channel_id, "kind": "channel"}
+
+        if sync_socket:
+            await self._sync_socket_channels(old_channel_ids)
 
     async def _start_socket(self) -> None:
         self.socket = ShadowSocketClient(self.base_url, self.token, transports=self._transports, logger=logger)
@@ -1070,12 +1139,26 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self.socket.on("server:joined", self._on_server_joined)
         self.socket.on("agent:policy-changed", self._on_agent_policy_changed)
         await self.socket.connect()
-        await self.socket.update_presence("online")
-        for channel_id in self._channel_ids:
-            ack = await self.socket.join_channel(channel_id)
-            logger.info("[Shadow] Joined channel %s ack=%s", channel_id, ack)
+        await self._join_current_socket_channels()
         if self._catchup_minutes > 0:
             await self._catchup_recent_messages()
+
+    async def _join_current_socket_channels(self) -> None:
+        if self.socket is None:
+            return
+        try:
+            await self.socket.update_presence("online")
+        except Exception as exc:
+            logger.debug("[Shadow] Failed to update socket presence: %s", exc)
+        if not self._channel_ids:
+            logger.info("[Shadow] Socket connected with no channels yet; waiting for channel membership events")
+            return
+        for channel_id in list(self._channel_ids):
+            try:
+                ack = await self.socket.join_channel(channel_id)
+                logger.info("[Shadow] Joined channel %s ack=%s", channel_id, ack)
+            except Exception as exc:
+                logger.warning("[Shadow] Failed to join channel %s: %s", channel_id, exc)
 
     async def _start_polling(self) -> None:
         if self._catchup_minutes > 0:
@@ -1142,6 +1225,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
 
     async def _on_socket_connect(self) -> None:
         logger.info("[Shadow] Socket connected")
+        await self._join_current_socket_channels()
 
     async def _on_socket_disconnect(self, reason: str | None = None) -> None:
         logger.info("[Shadow] Socket disconnected: %s", reason)
@@ -1163,6 +1247,11 @@ class ShadowOBAdapter(BasePlatformAdapter):
         channel_id = str(payload.get("channelId") or payload.get("channel_id") or "").strip()
         if not channel_id:
             return
+        old_channel_ids = set(self._channel_ids)
+        try:
+            await self._resolve_channels(sync_socket=False)
+        except Exception as exc:
+            logger.warning("[Shadow] Failed to refresh config after channel member add: %s", exc)
         if channel_id not in self._channel_ids:
             self._channel_ids.append(channel_id)
         if self.client is not None:
@@ -1170,10 +1259,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 self._channel_cache[channel_id] = await self.client.get_channel(channel_id)
             except Exception:
                 self._channel_cache[channel_id] = {"id": channel_id, "name": channel_id, "kind": "channel"}
+        self._channel_policies.setdefault(
+            channel_id,
+            _default_policy_from_remote_config(self._remote_config),
+        )
         if self.socket is not None:
             try:
-                ack = await self.socket.join_channel(channel_id)
-                logger.info("[Shadow] Joined newly added channel %s ack=%s", channel_id, ack)
+                await self._sync_socket_channels(old_channel_ids)
             except Exception as exc:
                 logger.warning("[Shadow] Failed to join newly added channel %s: %s", channel_id, exc)
         if self._catchup_minutes > 0:
@@ -1200,7 +1292,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if payload_agent_id and self._agent_id and payload_agent_id != self._agent_id:
             return
         try:
-            await self._refresh_remote_config(sync_socket=True)
+            await self._resolve_channels(sync_socket=True)
         except Exception as exc:
             logger.warning("[Shadow] Failed to refresh remote config after server join: %s", exc)
 
@@ -1209,7 +1301,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if payload_agent_id and self._agent_id and payload_agent_id != self._agent_id:
             return
         try:
-            await self._refresh_remote_config(sync_socket=True)
+            await self._resolve_channels(sync_socket=True)
         except Exception as exc:
             logger.warning("[Shadow] Failed to refresh remote config after policy change: %s", exc)
 

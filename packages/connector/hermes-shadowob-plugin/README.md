@@ -150,8 +150,8 @@ This iteration fixes issues found during static review against the uploaded Shad
 - Fixed REST polling shutdown condition so the polling loop stops when the adapter is disconnected.
 - Fixed `env_enablement_fn` to return a flat seed dict, because Hermes merges all non-`home_channel` keys directly into `PlatformConfig.extra`.
 - Changed env auto-enable and connector setup to require only Shadow endpoint/token; Buddy id and channel policy are now resolved dynamically from Shadow.
-- Added dynamic handling for `channel:member-added` and `channel:member-removed` events.
-- Added dynamic handling for `server:joined` and `agent:policy-changed` events.
+- Added OpenClaw-aligned dynamic handling for `channel:member-added`, `channel:member-removed`, `server:joined`, and `agent:policy-changed` events.
+- Changed empty-channel startup from fatal to tolerant waiting. The adapter stays online, refreshes channel policy periodically, and uses the owner DM as the default home channel when available.
 - Updated standalone media delivery to support local paths, `MEDIA:` refs, relative paths, Shadow private URLs and remote URLs through the SDK helper.
 
 ## Known limits in this first version
