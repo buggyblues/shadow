@@ -55,6 +55,9 @@ services:
   server:
     image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-server:${SHADOW_IMAGE_TAG:-latest}
     pull_policy: always
+    env_file:
+      - path: .env
+        required: false
     restart: unless-stopped
     ports:
       - '3002:3002'
