@@ -1,5 +1,11 @@
-# Production docker-compose for public deployment
-# Usage: docker-compose -f docker-compose.prod.yml up -d
+# Production docker-compose for public deployment.
+#
+# Runtime hosts should pull CI-built application images instead of building
+# from source. The app image defaults match .github/workflows/publish-prod-images.yml.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml pull server web
+#   docker compose -f docker-compose.prod.yml up -d
 #
 # ⚠️  All sensitive values MUST be provided via a .env file.
 #     See .env.example for required variables.
@@ -47,9 +53,8 @@ services:
       retries: 5
 
   server:
-    build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-server:${SHADOW_IMAGE_TAG:-latest}
+    pull_policy: always
     restart: unless-stopped
     ports:
       - '3002:3002'
@@ -93,11 +98,8 @@ services:
         condition: service_healthy
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      args:
-        VITE_API_BASE: ${OAUTH_BASE_URL:?OAUTH_BASE_URL is required}/api
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-web:${SHADOW_IMAGE_TAG:-latest}
+    pull_policy: always
     restart: unless-stopped
     ports:
       - '3000:3000'
