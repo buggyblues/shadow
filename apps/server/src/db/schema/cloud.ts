@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   boolean,
   doublePrecision,
@@ -149,6 +150,20 @@ export const cloudDeployments = pgTable(
     cloudDeploymentsUserIdIdx: index('cloud_deployments_user_id_idx').on(t.userId),
     cloudDeploymentsStatusIdx: index('cloud_deployments_status_idx').on(t.status),
     cloudDeploymentsSaasModeIdx: index('cloud_deployments_saas_mode_idx').on(t.saasMode),
+    cloudDeploymentsPlatformNamespaceUnique: uniqueIndex(
+      'cloud_deployments_platform_namespace_unique',
+    )
+      .on(t.namespace)
+      .where(
+        sql`${t.clusterId} IS NULL AND ${t.saasMode} = false AND ${t.status} <> 'failed' AND ${t.status} <> 'destroyed'`,
+      ),
+    cloudDeploymentsClusterNamespaceUnique: uniqueIndex(
+      'cloud_deployments_cluster_namespace_unique',
+    )
+      .on(t.clusterId, t.namespace)
+      .where(
+        sql`${t.clusterId} IS NOT NULL AND ${t.saasMode} = false AND ${t.status} <> 'failed' AND ${t.status} <> 'destroyed'`,
+      ),
   }),
 )
 

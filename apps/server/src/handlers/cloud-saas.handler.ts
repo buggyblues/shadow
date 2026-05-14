@@ -31,7 +31,6 @@ import { type Context, Hono } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
-import type { CloudSaasUseCase } from '../usecases/cloud-saas.usecase'
 import { cloudDeployments, cloudTemplates } from '../db/schema'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { requestCloudDeploymentCancellation } from '../lib/cloud-deployment-processor'
@@ -45,11 +44,11 @@ import {
 } from '../lib/model-proxy-config'
 import { assertSafeHttpUrl } from '../lib/ssrf'
 import { authMiddleware } from '../middleware/auth.middleware'
-import { createActorContext } from '../security/actor-context'
 import {
   areRateLimitsDisabled,
   createRateLimitMiddleware,
 } from '../middleware/rate-limit.middleware'
+import { createActorContext } from '../security/actor-context'
 import { assertCloudTemplatePolicy } from '../services/cloud-template-policy.service'
 import {
   DIY_CLOUD_MAX_ESTIMATED_TOKENS,
@@ -64,6 +63,7 @@ import {
   normalizeLlmProviderModels,
   parseDiscoveredModelsFromResponse,
 } from '../services/llm-provider-platform'
+import type { CloudSaasUseCase } from '../usecases/cloud-saas.usecase'
 
 const OFFICIAL_MODEL_PROXY_ENV_KEYS = new Set([
   'OPENAI_COMPATIBLE_API_KEY',
@@ -1481,7 +1481,10 @@ async function resolveDeploymentKubeconfig(
 ): Promise<string | undefined> {
   if (!deployment.clusterId) return undefined
   const useCase = container.resolve('cloudSaasUseCase')
-  const cluster = await useCase.findClusterByIdOnly({ ctx: createActorContext({ kind: 'system', service: 'cloud-processor', capabilities: [] }), clusterId: deployment.clusterId })
+  const cluster = await useCase.findClusterByIdOnly({
+    ctx: createActorContext({ kind: 'system', service: 'cloud-processor', capabilities: [] }),
+    clusterId: deployment.clusterId,
+  })
   if (!cluster?.kubeconfigEncrypted) return undefined
   return decrypt(cluster.kubeconfigEncrypted)
 }
@@ -2103,23 +2106,43 @@ export function createCloudSaasHandler(container: AppContainer) {
     return budget
   }
 
-  async function loadGroupNameLookup(useCase: CloudSaasUseCase, userId: string): Promise<Map<string, string>> {
-    const groups = await useCase.listEnvGroupsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }) })
+  async function loadGroupNameLookup(
+    useCase: CloudSaasUseCase,
+    userId: string,
+  ): Promise<Map<string, string>> {
+    const groups = await useCase.listEnvGroupsByUser({
+      ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
+    })
     return new Map(groups.map((group: { id: string; name: string }) => [group.id, group.name]))
   }
 
-  async function resolveGroupId(useCase: CloudSaasUseCase, userId: string, groupName?: string | null): Promise<string | null> {
+  async function resolveGroupId(
+    useCase: CloudSaasUseCase,
+    userId: string,
+    groupName?: string | null,
+  ): Promise<string | null> {
     if (!groupName || groupName === 'default') return null
 
-    const existing = await useCase.findEnvGroupByName({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }), name: groupName })
+    const existing = await useCase.findEnvGroupByName({
+      ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
+      name: groupName,
+    })
     if (existing) return existing.id
 
-    const created = await useCase.createEnvGroup({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }), name: groupName })
+    const created = await useCase.createEnvGroup({
+      ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
+      name: groupName,
+    })
     return created?.id ?? null
   }
 
-  async function readProviderProfiles(useCase: CloudSaasUseCase, userId: string): Promise<ProviderProfileView[]> {
-    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }) })
+  async function readProviderProfiles(
+    useCase: CloudSaasUseCase,
+    userId: string,
+  ): Promise<ProviderProfileView[]> {
+    const vars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
+    })
     const byScope = new Map<string, typeof vars>()
     for (const variable of vars) {
       if (!variable.scope.startsWith(PROVIDER_PROFILE_SCOPE_PREFIX)) continue
@@ -2178,7 +2201,9 @@ export function createCloudSaasHandler(container: AppContainer) {
       profileIds && profileIds.length > 0
         ? new Set(profileIds.map(normalizeProviderProfileId))
         : null
-    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }) })
+    const vars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
+    })
     const catalogs = (await listProviderCatalogs()).map((entry) => entry.provider)
     const byScope = new Map<string, typeof vars>()
     for (const variable of vars) {
@@ -2349,14 +2374,20 @@ export function createCloudSaasHandler(container: AppContainer) {
     }
 
     if (needsSavedLookup || runtimeEnvRequirements.length > 0 || providerProfileIds.length > 0) {
-      const globalVars = await useCase.listEnvVarsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }), scope: 'global' })
+      const globalVars = await useCase.listEnvVarsByUser({
+        ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
+        scope: 'global',
+      })
       for (const variable of globalVars) {
         const decrypted = safeDecryptEnvValue(variable.encryptedValue, 'global', variable.key)
         if (decrypted !== null) savedValues.set(variable.key, decrypted)
       }
       for (const profileId of providerProfileIds) {
         if (usesModelProvider) continue
-        const scopedVars = await useCase.listEnvVarsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }), scope: providerProfileScope(profileId) })
+        const scopedVars = await useCase.listEnvVarsByUser({
+          ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
+          scope: providerProfileScope(profileId),
+        })
         const scope = providerProfileScope(profileId)
         const values = new Map<string, string>()
         for (const variable of scopedVars) {
@@ -2731,9 +2762,9 @@ export function createCloudSaasHandler(container: AppContainer) {
     const q = c.req.query('q')?.toLowerCase()
     const locale = c.req.query('locale') ?? 'en'
     const useCase = container.resolve('cloudSaasUseCase')
-    let templates = (await useCase.listApprovedTemplates({ ctx: createActorContext(c.get('actor')) })).filter((template) =>
-      isDeployableTemplateContent(template.content),
-    )
+    let templates = (
+      await useCase.listApprovedTemplates({ ctx: createActorContext(c.get('actor')) })
+    ).filter((template) => isDeployableTemplateContent(template.content))
     if (category) {
       templates = templates.filter((t) => t.category === category)
     }
@@ -2769,7 +2800,10 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/templates/mine/:slug', async (c) => {
     const slug = c.req.param('slug')
     const useCase = container.resolve('cloudSaasUseCase')
-    const template = await useCase.getMyTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug })
+    const template = await useCase.getMyTemplateBySlug({
+      ctx: createActorContext(c.get('actor')),
+      slug,
+    })
     if (!template) return c.json({ ok: false, error: 'Template not found' }, 404)
     return c.json(template)
   })
@@ -2783,7 +2817,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const slug = c.req.param('slug')
     const locale = c.req.query('locale') ?? 'en'
     const useCase = container.resolve('cloudSaasUseCase')
-    const template = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug })
+    const template = await useCase.getTemplateBySlug({
+      ctx: createActorContext(c.get('actor')),
+      slug,
+    })
     if (!template || !canUseTemplate(template, user.userId)) {
       return c.json({ ok: false, error: 'Template not found' }, 404)
     }
@@ -2797,7 +2834,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const slug = c.req.param('slug')
     const useCase = container.resolve('cloudSaasUseCase')
-    const template = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug })
+    const template = await useCase.getTemplateBySlug({
+      ctx: createActorContext(c.get('actor')),
+      slug,
+    })
     if (!template || !canUseTemplate(template, user.userId)) {
       return c.json({ ok: false, error: 'Template not found' }, 404)
     }
@@ -2860,7 +2900,10 @@ export function createCloudSaasHandler(container: AppContainer) {
         payload: { ...input, content },
       })
       if (!result.ok) {
-        return c.json({ ok: false, error: result.error }, ((result as { status?: number }).status ?? 409) as ContentfulStatusCode)
+        return c.json(
+          { ok: false, error: result.error },
+          ((result as { status?: number }).status ?? 409) as ContentfulStatusCode,
+        )
       }
       return c.json(result.template, 201)
     },
@@ -2903,7 +2946,10 @@ export function createCloudSaasHandler(container: AppContainer) {
         payload: { ...input, ...(content !== undefined && { content }) },
       })
       if (!result.ok) {
-        return c.json({ ok: false, error: result.error }, ((result as { status?: number }).status ?? 404) as ContentfulStatusCode)
+        return c.json(
+          { ok: false, error: result.error },
+          ((result as { status?: number }).status ?? 404) as ContentfulStatusCode,
+        )
       }
       return c.json(result.template)
     },
@@ -2922,7 +2968,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       slug,
     })
     if (!result.ok) {
-      return c.json({ ok: false, error: result.error }, ((result as { status?: number }).status ?? 404) as ContentfulStatusCode)
+      return c.json(
+        { ok: false, error: result.error },
+        ((result as { status?: number }).status ?? 404) as ContentfulStatusCode,
+      )
     }
     return c.json(result.template)
   })
@@ -2941,7 +2990,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       slug,
     })
     if (!result.ok) {
-      return c.json({ ok: false, error: result.error }, ((result as { status?: number }).status ?? 404) as ContentfulStatusCode)
+      return c.json(
+        { ok: false, error: result.error },
+        ((result as { status?: number }).status ?? 404) as ContentfulStatusCode,
+      )
     }
     return c.json({ ok: true })
   })
@@ -3026,7 +3078,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
     const useCase = container.resolve('cloudSaasUseCase')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     if (deployment.status === 'deployed') {
       await container
@@ -3052,7 +3107,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
     const useCase = container.resolve('cloudSaasUseCase')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     const summary = await container.resolve('cloudUsageService').collectDeploymentCost(deployment)
@@ -3068,7 +3126,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       const id = c.req.param('id')
       const input = c.req.valid('json') ?? {}
       const useCase = container.resolve('cloudSaasUseCase')
-      const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+      const deployment = await useCase.getDeployment({
+        ctx: createActorContext(c.get('actor')),
+        deploymentId: id,
+      })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
       const dao = container.resolve('cloudDeploymentDao')
 
@@ -3144,7 +3205,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       const id = c.req.param('id')
       const input = c.req.valid('json') ?? {}
       const useCase = container.resolve('cloudSaasUseCase')
-      const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+      const deployment = await useCase.getDeployment({
+        ctx: createActorContext(c.get('actor')),
+        deploymentId: id,
+      })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
       const dao = container.resolve('cloudDeploymentDao')
 
@@ -3212,7 +3276,11 @@ export function createCloudSaasHandler(container: AppContainer) {
     const id = c.req.param('id')
     const agentId = c.req.query('agentId')
     const useCase = container.resolve('cloudSaasUseCase')
-    const result = await useCase.listDeploymentBackups({ ctx: createActorContext(c.get('actor')), deploymentId: id, agentId })
+    const result = await useCase.listDeploymentBackups({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+      agentId,
+    })
     if (!result) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     return c.json({ deploymentId: id, backups: result.backups })
   })
@@ -3226,7 +3294,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       const input = c.req.valid('json') ?? {}
       const useCase = container.resolve('cloudSaasUseCase')
       const deploymentDao = container.resolve('cloudDeploymentDao')
-      const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+      const deployment = await useCase.getDeployment({
+        ctx: createActorContext(c.get('actor')),
+        deploymentId: id,
+      })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
       if (deployment.status !== 'deployed' && deployment.status !== 'paused') {
         return c.json(
@@ -3402,7 +3473,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const input = c.req.valid('json') ?? {}
     const useCase = container.resolve('cloudSaasUseCase')
     const deploymentDao = container.resolve('cloudDeploymentDao')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const current = await deploymentDao.findLatestCurrentInNamespace({
       userId: user.userId,
@@ -3426,8 +3500,17 @@ export function createCloudSaasHandler(container: AppContainer) {
     const backupDao = container.resolve('cloudDeploymentBackupDao')
     const agentId = resolveDeploymentAgentId(deployment, input.agentId)
     const backup = input.backupId
-      ? await useCase.getBackupById({ ctx: createActorContext(c.get('actor')), backupId: input.backupId })
-      : (await useCase.listDeploymentBackups({ ctx: createActorContext(c.get('actor')), deploymentId: id, agentId }))?.backups?.[0] ?? null
+      ? await useCase.getBackupById({
+          ctx: createActorContext(c.get('actor')),
+          backupId: input.backupId,
+        })
+      : ((
+          await useCase.listDeploymentBackups({
+            ctx: createActorContext(c.get('actor')),
+            deploymentId: id,
+            agentId,
+          })
+        )?.backups?.[0] ?? null)
     if (!backup || backup.deploymentId !== id) {
       return c.json({ ok: false, error: 'Backup not found' }, 404)
     }
@@ -3571,7 +3654,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       const useCase = container.resolve('cloudSaasUseCase')
 
       // Verify template exists
-      const template = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: input.templateSlug })
+      const template = await useCase.getTemplateBySlug({
+        ctx: createActorContext(c.get('actor')),
+        slug: input.templateSlug,
+      })
       if (!template || !canUseTemplate(template, user.userId)) {
         return c.json({ ok: false, error: 'Template not found or not approved' }, 404)
       }
@@ -3794,13 +3880,19 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
     const useCase = container.resolve('cloudSaasUseCase')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     let linkedTemplateSlug: string | null = deploymentTemplateSlugCandidates(deployment)[0] ?? null
     let template: CloudTemplateRecord | null = null
     for (const candidate of deploymentTemplateSlugCandidates(deployment)) {
-      const found = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: candidate })
+      const found = await useCase.getTemplateBySlug({
+        ctx: createActorContext(c.get('actor')),
+        slug: candidate,
+      })
       if (found && canUseTemplate(found, user.userId)) {
         linkedTemplateSlug = candidate
         template = found
@@ -3833,7 +3925,10 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     if (!deployment.configSnapshot || typeof deployment.configSnapshot !== 'object') {
       return c.json({ ok: false, error: 'Deployment has no config snapshot' }, 422)
@@ -3963,14 +4058,17 @@ export function createCloudSaasHandler(container: AppContainer) {
 
   /**
    * DELETE /api/cloud-saas/deployments/:id
-   * Enqueue a Pulumi destroy task for the current deployment instance.
+   * Mark the current deployment instance as a Pulumi destroy task.
    */
   h.delete('/deployments/:id', async (c) => {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
     const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     if (deployment.status === 'destroyed') {
@@ -4017,23 +4115,9 @@ export function createCloudSaasHandler(container: AppContainer) {
       )
     }
 
-    const destroyTask = await dao.create({
-      userId: user.userId,
-      clusterId: current.clusterId,
-      namespace: current.namespace,
-      name: current.name,
-      status: 'destroying',
-      agentCount: current.agentCount,
-      configSnapshot: current.configSnapshot,
-      templateSlug: current.templateSlug,
-      resourceTier: current.resourceTier,
-      monthlyCost: current.monthlyCost,
-      hourlyCost: current.hourlyCost,
-      lastHourlyBilledAt: current.lastHourlyBilledAt,
-      saasMode: current.saasMode,
-    })
+    const destroyTask = await dao.updateStatus(current.id, 'destroying')
     if (!destroyTask) {
-      return c.json({ ok: false, error: 'Failed to create destroy task' }, 500)
+      return c.json({ ok: false, error: 'Failed to queue destroy task' }, 500)
     }
 
     await dao.appendLog(
@@ -4080,7 +4164,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const id = c.req.param('id')
     const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     if (deployment.status === 'cancelling') {
@@ -4161,7 +4248,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const redeployInput = parsedRedeploy.data ?? {}
     const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     if (deployment.status === 'destroyed') {
       return c.json({ ok: false, error: 'Destroyed deployments cannot be redeployed' }, 422)
@@ -4239,14 +4329,20 @@ export function createCloudSaasHandler(container: AppContainer) {
         if (redeployInput.configSnapshot) {
           baseConfigSnapshot = validateTemplateContentForWrite(redeployInput.configSnapshot)
           if (requestedTemplateSlug) {
-            const found = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: requestedTemplateSlug })
+            const found = await useCase.getTemplateBySlug({
+              ctx: createActorContext(c.get('actor')),
+              slug: requestedTemplateSlug,
+            })
             templateForManifest = found && canUseTemplate(found, user.userId) ? found : null
           }
         } else if (useTemplate) {
           if (!requestedTemplateSlug) {
             return c.json({ ok: false, error: 'Deployment has no linked template' }, 422)
           }
-          const template = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: requestedTemplateSlug })
+          const template = await useCase.getTemplateBySlug({
+            ctx: createActorContext(c.get('actor')),
+            slug: requestedTemplateSlug,
+          })
           if (!template || !canUseTemplate(template, user.userId)) {
             return c.json({ ok: false, error: 'Template not found or not approved' }, 404)
           }
@@ -4262,7 +4358,10 @@ export function createCloudSaasHandler(container: AppContainer) {
         } else {
           baseConfigSnapshot = runtime.configSnapshot
           if (requestedTemplateSlug) {
-            const found = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: requestedTemplateSlug })
+            const found = await useCase.getTemplateBySlug({
+              ctx: createActorContext(c.get('actor')),
+              slug: requestedTemplateSlug,
+            })
             templateForManifest = found && canUseTemplate(found, user.userId) ? found : null
           }
         }
@@ -4330,6 +4429,11 @@ export function createCloudSaasHandler(container: AppContainer) {
         name: deployment.name,
         agentCount: deployment.agentCount,
         configSnapshot,
+        templateSlug: nextTemplateSlug,
+        resourceTier: deployment.resourceTier,
+        monthlyCost: deployment.monthlyCost,
+        hourlyCost: deployment.hourlyCost,
+        saasMode: deployment.saasMode,
       })
       if (!next) {
         return c.json({ ok: false, error: 'Failed to create redeployment' }, 500)
@@ -4465,15 +4569,25 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const deploymentId = c.req.param('deploymentId')
     const useCase = container.resolve('cloudSaasUseCase')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const groupNames = await loadGroupNameLookup(useCase, user.userId)
-    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: deploymentId })
+    const vars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext(c.get('actor')),
+      scope: deploymentId,
+    })
     return c.json(
-      vars.map(({ encryptedValue: _e, ...rest }: { encryptedValue: string; [key: string]: unknown }) => ({
-        ...rest,
-        groupName: (rest as { groupId?: string | null }).groupId ? (groupNames.get((rest as { groupId?: string }).groupId ?? '') ?? 'default') : 'default',
-      })),
+      vars.map(
+        ({ encryptedValue: _e, ...rest }: { encryptedValue: string; [key: string]: unknown }) => ({
+          ...rest,
+          groupName: (rest as { groupId?: string | null }).groupId
+            ? (groupNames.get((rest as { groupId?: string }).groupId ?? '') ?? 'default')
+            : 'default',
+        }),
+      ),
     )
   })
 
@@ -4486,10 +4600,16 @@ export function createCloudSaasHandler(container: AppContainer) {
     const deploymentId = c.req.param('deploymentId')
     const key = c.req.param('key')
     const useCase = container.resolve('cloudSaasUseCase')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const groupNames = await loadGroupNameLookup(useCase, user.userId)
-    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: deploymentId })
+    const vars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext(c.get('actor')),
+      scope: deploymentId,
+    })
     const found = vars.find((v: { key: string }) => v.key === key)
     if (!found) return c.json({ ok: false, error: 'Not found' }, 404)
     const value = safeDecryptEnvValue(found.encryptedValue, deploymentId, found.key)
@@ -4515,11 +4635,18 @@ export function createCloudSaasHandler(container: AppContainer) {
     const deploymentId = c.req.param('deploymentId')
     const key = c.req.param('key')
     const useCase = container.resolve('cloudSaasUseCase')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: deploymentId })
+    const vars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext(c.get('actor')),
+      scope: deploymentId,
+    })
     const found = vars.find((v: { key: string }) => v.key === key)
-    if (found) await useCase.deleteEnvVar({ ctx: createActorContext(c.get('actor')), envVarId: found.id })
+    if (found)
+      await useCase.deleteEnvVar({ ctx: createActorContext(c.get('actor')), envVarId: found.id })
     return c.json({ ok: true })
   })
 
@@ -4531,7 +4658,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const id = c.req.param('id')
     const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     const agentParam = c.req.query('agent')
@@ -4647,7 +4777,10 @@ export function createCloudSaasHandler(container: AppContainer) {
   }): Promise<string | null> {
     if (!deployment.clusterId) return null
     const useCase = container.resolve('cloudSaasUseCase')
-    const cluster = await useCase.findClusterByIdOnly({ ctx: createActorContext({ kind: 'system', service: 'cloud-processor', capabilities: [] }), clusterId: deployment.clusterId })
+    const cluster = await useCase.findClusterByIdOnly({
+      ctx: createActorContext({ kind: 'system', service: 'cloud-processor', capabilities: [] }),
+      clusterId: deployment.clusterId,
+    })
     if (!cluster?.kubeconfigEncrypted) return null
     return decrypt(cluster.kubeconfigEncrypted)
   }
@@ -4659,7 +4792,10 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/deployments/:id/pods', async (c) => {
     const id = c.req.param('id')
     const useCase = container.resolve('cloudSaasUseCase')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
     const pods = await container
@@ -4682,7 +4818,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const containerParam = c.req.query('container')
 
     const useCase = container.resolve('cloudSaasUseCase')
-    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
+    const deployment = await useCase.getDeployment({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId: id,
+    })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
@@ -4852,18 +4991,33 @@ export function createCloudSaasHandler(container: AppContainer) {
       const deploymentId = c.req.param('deploymentId')
       const { vars } = c.req.valid('json')
       const useCase = container.resolve('cloudSaasUseCase')
-      const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId })
+      const deployment = await useCase.getDeployment({
+        ctx: createActorContext(c.get('actor')),
+        deploymentId,
+      })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
       const { encrypt } = await import('../lib/kms')
       for (const { key, value } of vars) {
         const encryptedValue = encrypt(value)
-        const existingVars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: deploymentId })
+        const existingVars = await useCase.listEnvVarsByUser({
+          ctx: createActorContext(c.get('actor')),
+          scope: deploymentId,
+        })
         const existing = existingVars.find((v: { key: string }) => v.key === key)
         if (existing) {
-          await useCase.updateEnvVar({ ctx: createActorContext(c.get('actor')), id: existing.id, encryptedValue })
+          await useCase.updateEnvVar({
+            ctx: createActorContext(c.get('actor')),
+            id: existing.id,
+            encryptedValue,
+          })
           continue
         }
-        await useCase.createEnvVar({ ctx: createActorContext(c.get('actor')), key, encryptedValue, scope: deploymentId })
+        await useCase.createEnvVar({
+          ctx: createActorContext(c.get('actor')),
+          key,
+          encryptedValue,
+          scope: deploymentId,
+        })
       }
       await useCase.logActivity({
         ctx: createActorContext(c.get('actor')),
@@ -4919,23 +5073,36 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const useCase = container.resolve('cloudSaasUseCase')
     const groupNames = await loadGroupNameLookup(useCase, user.userId)
-    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: 'global' })
-    const persistedGroups = await useCase.listEnvGroupsByUser({ ctx: createActorContext(c.get('actor')) })
+    const vars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext(c.get('actor')),
+      scope: 'global',
+    })
+    const persistedGroups = await useCase.listEnvGroupsByUser({
+      ctx: createActorContext(c.get('actor')),
+    })
     const groups: string[] = [
       'default',
       ...persistedGroups.map((group: { name: string }) => group.name),
       ...vars
-        .map((v: { groupId?: string | null }) => (v.groupId ? groupNames.get(v.groupId) : 'default'))
-        .filter((groupName: string | undefined): groupName is string => Boolean(groupName && groupName !== 'default')),
+        .map((v: { groupId?: string | null }) =>
+          v.groupId ? groupNames.get(v.groupId) : 'default',
+        )
+        .filter((groupName: string | undefined): groupName is string =>
+          Boolean(groupName && groupName !== 'default'),
+        ),
     ]
     return c.json({
-      envVars: vars.map(({ encryptedValue: _e, ...rest }: { encryptedValue: string; [key: string]: unknown }) => ({
-        scope: (rest as { scope?: string }).scope ?? 'global',
-        key: (rest as { key: string }).key,
-        maskedValue: '****',
-        isSecret: true,
-        groupName: (rest as { groupId?: string | null }).groupId ? (groupNames.get((rest as { groupId?: string }).groupId ?? '') ?? 'default') : 'default',
-      })),
+      envVars: vars.map(
+        ({ encryptedValue: _e, ...rest }: { encryptedValue: string; [key: string]: unknown }) => ({
+          scope: (rest as { scope?: string }).scope ?? 'global',
+          key: (rest as { key: string }).key,
+          maskedValue: '****',
+          isSecret: true,
+          groupName: (rest as { groupId?: string | null }).groupId
+            ? (groupNames.get((rest as { groupId?: string }).groupId ?? '') ?? 'default')
+            : 'default',
+        }),
+      ),
       groups: [...new Set(groups)],
     })
   })
@@ -4947,11 +5114,17 @@ export function createCloudSaasHandler(container: AppContainer) {
       const user = c.get('user') as { userId: string }
       const { name } = c.req.valid('json')
       const useCase = container.resolve('cloudSaasUseCase')
-      const existing = await useCase.findEnvGroupByName({ ctx: createActorContext(c.get('actor')), name })
+      const existing = await useCase.findEnvGroupByName({
+        ctx: createActorContext(c.get('actor')),
+        name,
+      })
       if (existing) {
         return c.json({ ok: true, name: existing.name })
       }
-      const created = await useCase.createEnvGroup({ ctx: createActorContext(c.get('actor')), name })
+      const created = await useCase.createEnvGroup({
+        ctx: createActorContext(c.get('actor')),
+        name,
+      })
       if (!created) {
         return c.json({ ok: false, error: 'Failed to create env group' }, 500)
       }
@@ -4989,12 +5162,26 @@ export function createCloudSaasHandler(container: AppContainer) {
       const useCase = container.resolve('cloudSaasUseCase')
       const resolvedGroupId = await resolveGroupId(useCase, user.userId, groupName)
       // Upsert pattern via UseCase
-      const existing = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: 'global' })
+      const existing = await useCase.listEnvVarsByUser({
+        ctx: createActorContext(c.get('actor')),
+        scope: 'global',
+      })
       const found = existing.find((v: { key: string }) => v.key === key)
       if (found) {
-        await useCase.updateEnvVar({ ctx: createActorContext(c.get('actor')), id: found.id, encryptedValue: encrypt(value), groupId: resolvedGroupId })
+        await useCase.updateEnvVar({
+          ctx: createActorContext(c.get('actor')),
+          id: found.id,
+          encryptedValue: encrypt(value),
+          groupId: resolvedGroupId,
+        })
       } else {
-        await useCase.createEnvVar({ ctx: createActorContext(c.get('actor')), key, encryptedValue: encrypt(value), scope: 'global', groupId: resolvedGroupId })
+        await useCase.createEnvVar({
+          ctx: createActorContext(c.get('actor')),
+          key,
+          encryptedValue: encrypt(value),
+          scope: 'global',
+          groupId: resolvedGroupId,
+        })
       }
       return c.json({ ok: true })
     },
@@ -5007,9 +5194,13 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.delete('/global-envvars/:key', async (c) => {
     const key = c.req.param('key')
     const useCase = container.resolve('cloudSaasUseCase')
-    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: 'global' })
+    const vars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext(c.get('actor')),
+      scope: 'global',
+    })
     const found = vars.find((v: { key: string }) => v.key === key)
-    if (found) await useCase.deleteEnvVar({ ctx: createActorContext(c.get('actor')), envVarId: found.id })
+    if (found)
+      await useCase.deleteEnvVar({ ctx: createActorContext(c.get('actor')), envVarId: found.id })
     return c.json({ ok: true })
   })
 
@@ -5021,7 +5212,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const key = c.req.param('key')
     const useCase = container.resolve('cloudSaasUseCase')
     const groupNames = await loadGroupNameLookup(useCase, c.get('user').userId)
-    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: 'global' })
+    const vars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext(c.get('actor')),
+      scope: 'global',
+    })
     const found = vars.find((v: { key: string }) => v.key === key)
     if (!found) return c.json({ ok: false, error: 'Not found' }, 404)
     const value = safeDecryptEnvValue(found.encryptedValue, 'global', found.key)
@@ -5138,7 +5332,9 @@ export function createCloudSaasHandler(container: AppContainer) {
         })
       }
 
-      const profile = (await readProviderProfiles(useCase, user.userId)).find((p) => p.id === profileId)
+      const profile = (await readProviderProfiles(useCase, user.userId)).find(
+        (p) => p.id === profileId,
+      )
       return c.json({ ok: true, profile })
     },
   )
@@ -5152,7 +5348,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!profileId) return c.json({ ok: false, error: 'Invalid provider profile' }, 400)
 
     const useCase = container.resolve('cloudSaasUseCase')
-    const scopedVars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: providerProfileScope(profileId) })
+    const scopedVars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext(c.get('actor')),
+      scope: providerProfileScope(profileId),
+    })
     if (scopedVars.length === 0) {
       return c.json({ ok: false, error: 'Provider profile not found' }, 404)
     }
@@ -5193,7 +5392,10 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     const useCase = container.resolve('cloudSaasUseCase')
     const scope = providerProfileScope(profileId)
-    const scopedVars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope })
+    const scopedVars = await useCase.listEnvVarsByUser({
+      ctx: createActorContext(c.get('actor')),
+      scope,
+    })
     if (scopedVars.length === 0) {
       return c.json({ ok: false, error: 'Provider profile not found' }, 404)
     }
@@ -5227,7 +5429,9 @@ export function createCloudSaasHandler(container: AppContainer) {
       encryptedValue: encrypt(JSON.stringify(nextConfig)),
     })
 
-    const profile = (await readProviderProfiles(useCase, c.get('user').userId)).find((p) => p.id === profileId)
+    const profile = (await readProviderProfiles(useCase, c.get('user').userId)).find(
+      (p) => p.id === profileId,
+    )
     return c.json({ ...result, profile })
   })
 
@@ -5239,7 +5443,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const profileId = normalizeProviderProfileId(c.req.param('id'))
     if (profileId) {
       const useCase = container.resolve('cloudSaasUseCase')
-      await useCase.deleteEnvVarByScope({ ctx: createActorContext(c.get('actor')), scope: providerProfileScope(profileId) })
+      await useCase.deleteEnvVarByScope({
+        ctx: createActorContext(c.get('actor')),
+        scope: providerProfileScope(profileId),
+      })
     }
     return c.json({ ok: true })
   })
@@ -5254,7 +5461,9 @@ export function createCloudSaasHandler(container: AppContainer) {
     const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
     const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
     const useCase = container.resolve('cloudSaasUseCase')
-    return c.json(await useCase.listActivity({ ctx: createActorContext(c.get('actor')), limit, offset }))
+    return c.json(
+      await useCase.listActivity({ ctx: createActorContext(c.get('actor')), limit, offset }),
+    )
   })
 
   return h
