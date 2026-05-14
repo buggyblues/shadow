@@ -5,6 +5,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
+import { runtimeStatePvcName } from '../../runtimes/container.js'
 import type { ServiceContainer } from '../../services/container.js'
 
 async function resolveNamespace(
@@ -27,7 +28,7 @@ async function resolveNamespace(
 }
 
 function statePvcFor(agent: string, pvcName?: string): string {
-  return pvcName ?? `openclaw-data-${agent}`
+  return pvcName ?? runtimeStatePvcName(agent)
 }
 
 export function createSandboxCommand(container: ServiceContainer) {
@@ -103,7 +104,7 @@ export function createSandboxCommand(container: ServiceContainer) {
     .option('-f, --file <path>', 'Config file path', 'shadowob-cloud.json')
     .option('-n, --namespace <ns>', 'Kubernetes namespace')
     .option('--driver <driver>', 'Backup driver: volumeSnapshot or restic', 'volumeSnapshot')
-    .option('--pvc <name>', 'State PVC name (default: openclaw-data-<agent>)')
+    .option('--pvc <name>', 'State PVC name (default: runner state PVC for the agent)')
     .option('--snapshot <name>', 'VolumeSnapshot name')
     .option('--snapshot-class <name>', 'VolumeSnapshotClass name')
     .action(

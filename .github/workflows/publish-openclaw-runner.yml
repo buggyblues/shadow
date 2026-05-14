@@ -1,12 +1,14 @@
-name: Publish openclaw-runner image
+name: Publish runner images
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'apps/cloud/images/openclaw-runner/**'
+      - 'apps/cloud/images/**-runner/**'
+      - 'apps/cloud/src/runtimes/**'
       - 'packages/openclaw-shadowob/**'
+      - 'packages/connector/**'
       - 'packages/sdk/**'
       - 'packages/shared/**'
   workflow_dispatch:
@@ -15,18 +17,52 @@ on:
         description: 'Image tag (default: latest)'
         required: false
         default: 'latest'
+      image:
+        description: 'Runner image to publish, or all'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - openclaw-runner
+          - claude-runner
+          - codex-runner
+          - gemini-runner
+          - opencode-runner
+          - hermes-runner
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: buggyblues/openclaw-runner
 
 jobs:
   build-and-push:
-    name: Build & push multi-arch image
+    name: Build & push ${{ matrix.image }} multi-arch image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: openclaw-runner
+            image_name: buggyblues/openclaw-runner
+            dockerfile: apps/cloud/images/openclaw-runner/Dockerfile
+          - image: claude-runner
+            image_name: buggyblues/claude-runner
+            dockerfile: apps/cloud/images/claude-runner/Dockerfile
+          - image: codex-runner
+            image_name: buggyblues/codex-runner
+            dockerfile: apps/cloud/images/codex-runner/Dockerfile
+          - image: gemini-runner
+            image_name: buggyblues/gemini-runner
+            dockerfile: apps/cloud/images/gemini-runner/Dockerfile
+          - image: opencode-runner
+            image_name: buggyblues/opencode-runner
+            dockerfile: apps/cloud/images/opencode-runner/Dockerfile
+          - image: hermes-runner
+            image_name: buggyblues/hermes-runner
+            dockerfile: apps/cloud/images/hermes-runner/Dockerfile
 
     steps:
       - name: Checkout
@@ -64,17 +100,18 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ matrix.image_name }}
           tags: |
             type=raw,value=${{ github.event.inputs.tag || 'latest' }}
             type=sha,prefix=sha-,format=short
             type=ref,event=branch
 
       - name: Build and push
+        if: github.event_name != 'workflow_dispatch' || inputs.image == 'all' || inputs.image == matrix.image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: apps/cloud/images/openclaw-runner/Dockerfile
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

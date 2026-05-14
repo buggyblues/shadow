@@ -16,9 +16,9 @@ const PLUGIN_ID = 'google-workspace'
 const GWS_PACKAGE = '@googleworkspace/cli'
 const GWS_REPO = 'https://github.com/googleworkspace/cli.git'
 const RUNTIME_MOUNT = '/opt/shadow-plugin-deps/google-workspace'
-const SKILLS_MOUNT = '/app/plugin-skills/google-workspace'
-const CREDENTIALS_FILE = '/home/openclaw/.config/gws/credentials.json'
-const ADC_FILE = '/home/openclaw/.config/gws/application-default-credentials.json'
+const SKILLS_MOUNT = '/workspace/.agents/plugin-skills/google-workspace'
+const CREDENTIALS_FILE = '/home/shadow/.config/gws/credentials.json'
+const ADC_FILE = '/home/shadow/.config/gws/application-default-credentials.json'
 const AUTH_ENV_KEYS = ['GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON']
 const SECRET_FIELD_KEYS = {
   credentialsJson: 'GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON',

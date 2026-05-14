@@ -40,7 +40,7 @@ const skillSources = [
     url: 'https://github.com/wechat-miniprogram/skyline-skills.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/wechat-miniprogram-skyline',
+    targetPath: '/workspace/.agents/plugin-skills/wechat-miniprogram-skyline',
     includePattern: 'skyline-*',
     description: 'WeChat Mini Program Skyline skills',
   },
@@ -56,7 +56,7 @@ const plugin = defineConnectorPlugin(manifest, {
       command: [
         'test',
         '-f',
-        '/app/plugin-skills/wechat-miniprogram-skyline/skyline-overview/SKILL.md',
+        '/workspace/.agents/plugin-skills/wechat-miniprogram-skyline/skyline-overview/SKILL.md',
       ],
       timeoutMs: 5_000,
       risk: 'safe',
@@ -68,5 +68,5 @@ const plugin = defineConnectorPlugin(manifest, {
 
 export default attachConnectorRuntimeAssets(plugin, {
   skillSources,
-  skillsMountPath: '/app/plugin-skills/wechat-miniprogram-skyline',
+  skillsMountPath: '/workspace/.agents/plugin-skills/wechat-miniprogram-skyline',
 })

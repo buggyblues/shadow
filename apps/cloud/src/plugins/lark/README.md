@@ -24,7 +24,7 @@ Lark / Feishu connects a Buddy to workspace operations across messages, Docs, Ba
 
 - Installs the official `@larksuite/cli` package.
 - Registers the official `@larksuiteoapi/lark-mcp` MCP server through `npx`.
-- Mounts official Lark CLI agent skills under `/app/plugin-skills/lark`.
+- Mounts official Lark CLI agent skills under `/workspace/.agents/plugin-skills/lark`.
 - Adds verification checks for the CLI and mounted skills.
 
 ## References

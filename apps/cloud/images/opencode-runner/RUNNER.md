@@ -15,9 +15,10 @@ Shadow transport should come from the cc-connect ShadowOB platform.
 
 ## Current repository state
 
-The current runtime adapter still configures OpenClaw ACPX and an OpenClaw
-gateway process. The current runner image should be replaced by a cc-connect
-based image for this runtime.
+The OpenCode adapter and image now use the cc-connect fork path. The runtime
+package emits `cc-connect-config.toml`, `opencode.json`, `.opencode` runtime
+files, workspace bootstrap files, and ShadowOB skill files through
+`runtime-files.json`.
 
 ## Native OpenCode configuration
 
@@ -46,6 +47,24 @@ OpenCode uses JSON/JSONC config and keeps several extensibility surfaces native:
 - cc-connect type anchor: `../cc-connect/agent/opencode/opencode.go`.
 - Test rule: generated `opencode.json` must validate against the schema URL and
   then survive an OpenCode startup smoke test.
+
+## Provider and authentication notes
+
+- OpenCode uses `/connect` to store provider credentials under
+  `~/.local/share/opencode/auth.json`. Cloud should materialize that credential
+  file from Secret data or pass provider env only through a controlled adapter.
+- `opencode.json` owns the provider catalog. Custom OpenAI-compatible providers
+  use `provider.<id>.npm = "@ai-sdk/openai-compatible"`, `options.baseURL`,
+  optional headers/API key, and a `models` map.
+- If a provider/model uses `/v1/responses`, OpenCode docs direct users to the
+  AI SDK OpenAI package rather than the OpenAI-compatible chat-completions
+  package. The adapter must record this distinction in provider metadata.
+- Subscription or OAuth flows are provider-specific and interactive through
+  `/connect`; they are not a universal bootstrap method for disposable runner
+  containers.
+- Keep provider config and provider credentials separate: `opencode.json`
+  describes available providers/models, while raw keys belong in Secret data or
+  a generated auth file with `0600` mode.
 
 ## Security, audit, cost, network, and tools
 
@@ -116,9 +135,9 @@ type = "shadowob"
 
 ## Migration implications
 
-- Remove OpenClaw, ACPX, and `@shadowob/openclaw-shadowob` from the OpenCode
-  runner image.
-- Embed cc-connect fork plus the OpenCode CLI.
+- OpenClaw, ACPX, and `@shadowob/openclaw-shadowob` are not used by the
+  OpenCode runner image.
+- The image embeds the cc-connect fork plus the OpenCode CLI.
 - Generate `opencode.json`, `.opencode/agents`, `.opencode/commands`,
   `.opencode/skills`, and `.opencode/plugins` as native artifacts.
 - Keep OpenCode model/provider config separate from cc-connect provider refs so
@@ -149,6 +168,7 @@ Container smoke:
 ## Sources
 
 - Config: https://opencode.ai/docs/config
+- Providers: https://dev.opencode.ai/docs/providers/
 - Permissions: https://opencode.ai/docs/permissions
 - Agents: https://opencode.ai/docs/agents
 - Commands: https://opencode.ai/docs/commands

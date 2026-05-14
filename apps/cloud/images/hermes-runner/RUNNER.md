@@ -11,9 +11,9 @@ the bundled ShadowOB Hermes platform plugin, not OpenClaw and not cc-connect:
 hermes gateway -> shadowob Hermes platform plugin
 ```
 
-This directory currently contains research documentation only. The Dockerfile,
-entrypoint, schema adapter, and runtime loader entry still need to be added in a
-follow-up implementation.
+This directory now contains the Hermes runner Dockerfile and entrypoint. The
+runtime loader and package generator emit Hermes-native files through
+`runtime-files.json` and keep ShadowOB token material in Kubernetes Secret data.
 
 ## Native Hermes configuration
 
@@ -48,6 +48,25 @@ backends.
   and its adapter code.
 - Test rule: generated `config.yaml` must parse as YAML, load through Hermes,
   and, when the dashboard/API is enabled, match the runtime schema endpoint.
+
+## Provider and authentication notes
+
+- Hermes requires at least one inference provider. The interactive
+  `hermes model` flow can configure providers, but Cloud should generate
+  `~/.hermes/config.yaml` and `~/.hermes/.env` directly from deployment
+  provider refs.
+- Official provider paths include Nous Portal OAuth/subscription, Codex ChatGPT
+  OAuth, GitHub Copilot OAuth or tokens, Anthropic OAuth/API key/manual token,
+  OpenRouter, AI Gateway, z.ai/GLM, Kimi/Moonshot, and other provider-specific
+  API keys.
+- API-key providers belong in `~/.hermes/.env`, for example
+  `OPENROUTER_API_KEY`, `AI_GATEWAY_API_KEY`, or provider-specific keys. The
+  adapter must not place raw model keys in ConfigMaps.
+- Custom provider/base-url routing belongs in Hermes `model.default`,
+  `model.provider`, and `model.base_url` fields, plus routing/fallback config
+  when enabled.
+- Hermes model auth and ShadowOB platform auth are separate. `SHADOW_TOKEN`
+  enables the messaging platform plugin; model provider keys enable inference.
 
 ## Models, tools, and extensions
 
@@ -144,15 +163,17 @@ SHADOW_TOKEN=...
 
 ## Migration implications
 
-- Add `hermes` to `AgentRuntime` schema and runtime loader.
-- Add a `hermes-runner` image that installs Hermes Agent and copies/enables the
-  ShadowOB Hermes plugin.
+- `hermes` is included in the `AgentRuntime` schema and runtime loader.
+- `hermes-runner` installs Hermes Agent, ShadowOB CLI/connector packages, and
+  copies/enables the ShadowOB Hermes plugin.
 - Generate `~/.hermes/config.yaml`, `.env`, `SOUL.md`, skills, MCP config, and
   cron config as native artifacts.
 - Keep this runner out of the cc-connect narrowed binary. Hermes already has a
   native gateway/platform plugin boundary.
-- Add an end-to-end smoke test that starts `hermes gateway`, resolves the Buddy
-  id through Shadow, registers slash commands, and sends a DM response.
+- Runtime package smoke tests verify Hermes config/file generation; an
+  end-to-end Docker smoke should still start `hermes gateway`, resolve the Buddy
+  id through Shadow, register slash commands, and send a DM response before
+  publishing an image tag.
 
 ## Adapter and smoke tests
 
@@ -185,6 +206,8 @@ Container smoke:
   https://hermes-agent.nousresearch.com/docs/user-guide/features/tool-gateway
 - Configuring models:
   https://hermes-agent.nousresearch.com/docs/user-guide/configuring-models
+- AI providers:
+  https://hermes-agent.nousresearch.com/docs/integrations/providers
 - Skills:
   https://hermes-agent.nousresearch.com/docs/user-guide/features/skills
 - MCP: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp

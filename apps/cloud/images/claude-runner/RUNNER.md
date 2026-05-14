@@ -16,14 +16,15 @@ come from the cc-connect ShadowOB platform.
 
 ## Current repository state
 
-The current `apps/cloud` adapter still declares:
+The previous `apps/cloud` adapter declared:
 
 ```text
 openclaw gateway -> ACPX plugin -> claude CLI process
 ```
 
-The current Dockerfile installs OpenClaw, `@anthropic-ai/claude-code`, and the
-OpenClaw ShadowOB plugin. That path is the thing to replace for this runtime.
+The current adapter and Dockerfile now use the cc-connect fork path. The runner
+package emits `cc-connect-config.toml`, Claude settings, MCP config, and
+ShadowOB skill files through `runtime-files.json`.
 
 ## Native Claude Code configuration
 
@@ -54,6 +55,25 @@ agent defaults:
 - MCP project config uses `.mcp.json`; subagents use Markdown files under
   `.claude/agents/` with YAML frontmatter.
 - cc-connect type anchor: `../cc-connect/agent/claudecode/claudecode.go`.
+
+## Provider and authentication notes
+
+- Headless Cloud runners should prefer API/provider secrets over subscription
+  login. `ANTHROPIC_API_KEY` forces API-key usage in non-interactive mode and
+  overrides Claude subscription auth when present.
+- Claude subscription login can be useful locally, but a clean Kubernetes
+  container should not depend on a browser-backed Claude Pro/Max/Team session.
+- Custom gateway routing is not the same as model selection:
+  `ANTHROPIC_BASE_URL` changes the request destination, while `model`,
+  `ANTHROPIC_DEFAULT_*_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL`, or
+  `ANTHROPIC_CUSTOM_MODEL_OPTION` determine model IDs.
+- For LLM gateways, enable model discovery with
+  `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1` when the gateway exposes
+  `/v1/models`; otherwise emit `ANTHROPIC_CUSTOM_MODEL_OPTION` and companion
+  display metadata for the selected Cloud model.
+- Bedrock, Vertex AI, Foundry, and Claude Platform on AWS have provider-specific
+  envs and model identifiers. The adapter must keep those as Claude-native env
+  or settings values, never as OpenClaw `models.providers`.
 
 ## Security, audit, cost, network, and tools
 
@@ -131,8 +151,8 @@ not through OpenClaw `models.providers`.
 
 ## Migration implications
 
-- Remove OpenClaw and ACPX from the Claude runner image.
-- Embed the cc-connect fork binary and the Claude CLI.
+- OpenClaw and ACPX have been removed from the Claude runner image path.
+- The image builds the cc-connect fork binary and installs the Claude CLI.
 - Generate Claude config files in the workspace/home directory before starting
   cc-connect.
 - Keep `run_as_user` available for OS-user isolation; the fork currently
@@ -162,6 +182,8 @@ Container smoke:
 ## Sources
 
 - Settings: https://code.claude.com/docs/en/settings
+- Model configuration: https://code.claude.com/docs/en/model-config
+- Environment variables: https://code.claude.com/docs/en/env-vars
 - Permissions: https://code.claude.com/docs/en/permissions
 - Sandboxing: https://code.claude.com/docs/en/sandboxing
 - Skills and custom commands:

@@ -52,7 +52,7 @@ const skillSources = [
     url: 'https://github.com/infsh-skills/skills.git',
     ref: 'main',
     from: 'tools/image',
-    targetPath: '/app/plugin-skills/inference-ai-image-generation',
+    targetPath: '/workspace/.agents/plugin-skills/inference-ai-image-generation',
     include: [
       'ai-image-generation',
       'gpt-image',
@@ -88,7 +88,7 @@ const plugin = defineConnectorPlugin(manifest, {
       command: [
         'test',
         '-f',
-        '/app/plugin-skills/inference-ai-image-generation/ai-image-generation/SKILL.md',
+        '/workspace/.agents/plugin-skills/inference-ai-image-generation/ai-image-generation/SKILL.md',
       ],
       timeoutMs: 5_000,
       risk: 'safe',
@@ -101,5 +101,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/inference-ai-image-generation',
+  skillsMountPath: '/workspace/.agents/plugin-skills/inference-ai-image-generation',
 })

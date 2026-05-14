@@ -49,7 +49,7 @@ const skillSources = [
     url: 'https://github.com/getsentry/agent-skills.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/sentry',
+    targetPath: '/workspace/.agents/plugin-skills/sentry',
     include: [
       'sentry-fix-issues',
       'sentry-pr-code-review',
@@ -92,7 +92,7 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'sentry-skills-mounted',
       label: 'Sentry skills mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/sentry/sentry-fix-issues/SKILL.md'],
+      command: ['test', '-f', '/workspace/.agents/plugin-skills/sentry/sentry-fix-issues/SKILL.md'],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -104,5 +104,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/sentry',
+  skillsMountPath: '/workspace/.agents/plugin-skills/sentry',
 })

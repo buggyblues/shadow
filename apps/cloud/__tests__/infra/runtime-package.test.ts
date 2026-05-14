@@ -228,12 +228,12 @@ describe('buildAgentRuntimePackage', () => {
     )
     expect(runtimeExtensions.credentialFiles).toContainEqual({
       envKey: 'GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON',
-      path: '/home/openclaw/.config/gws/credentials.json',
+      path: '/home/shadow/.config/gws/credentials.json',
       mode: '0600',
     })
     expect(runtimeExtensions.credentialFiles).toContainEqual({
       envKey: 'GOOGLE_APPLICATION_CREDENTIALS_JSON',
-      path: '/home/openclaw/.config/gws/application-default-credentials.json',
+      path: '/home/shadow/.config/gws/application-default-credentials.json',
       mode: '0600',
     })
     expect(runtimeExtensions.verificationChecks.map((check: { id: string }) => check.id)).toEqual(
@@ -243,7 +243,7 @@ describe('buildAgentRuntimePackage', () => {
       enabled: true,
       config: {
         services: ['gmail', 'calendar', 'drive', 'docs', 'sheets'],
-        skillSources: ['/app/plugin-skills/google-workspace'],
+        skillSources: ['/workspace/.agents/plugin-skills/google-workspace'],
       },
       env: {
         GOOGLE_WORKSPACE_SERVICES: 'gmail,calendar,drive,docs,sheets',
@@ -257,7 +257,7 @@ describe('buildAgentRuntimePackage', () => {
     )
     expect(runtimePackage.secretData.GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON).toBe('{"installed":{}}')
     expect(runtimePackage.secretData.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE).toBe(
-      '/home/openclaw/.config/gws/credentials.json',
+      '/home/shadow/.config/gws/credentials.json',
     )
   })
 })
@@ -361,10 +361,10 @@ describe('buildManifests', () => {
       '{"installed":{"client_id":"abc"}}',
     )
     expect(secret.stringData.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE).toBe(
-      '/home/openclaw/.config/gws/credentials.json',
+      '/home/shadow/.config/gws/credentials.json',
     )
     expect(configMap.data['runtime-extensions.json']).toContain(
-      '/home/openclaw/.config/gws/credentials.json',
+      '/home/shadow/.config/gws/credentials.json',
     )
     expect(deployment.spec.template.spec.containers[0].envFrom).toEqual(
       expect.arrayContaining([{ secretRef: { name: 'workspace-agent-secrets' } }]),
@@ -587,7 +587,7 @@ describe('buildManifests', () => {
     expect(template.apiVersion).toBe('extensions.agents.x-k8s.io/v1alpha1')
     expect(claim.apiVersion).toBe('extensions.agents.x-k8s.io/v1alpha1')
     expect(template.spec.volumeClaimTemplates[0]).toMatchObject({
-      metadata: { name: 'openclaw-data' },
+      metadata: { name: 'shadow-runner-state' },
       spec: {
         accessModes: ['ReadWriteOnce'],
         resources: { requests: { storage: '5Gi' } },
@@ -596,15 +596,17 @@ describe('buildManifests', () => {
     expect(podSpec.automountServiceAccountToken).toBe(false)
     expect(podSpec.runtimeClassName).toBe('gvisor')
     expect(podSpec.volumes).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: 'openclaw-data' })]),
+      expect.arrayContaining([expect.objectContaining({ name: 'shadow-runner-state' })]),
     )
     expect(container.volumeMounts).toEqual(
-      expect.arrayContaining([{ name: 'openclaw-data', mountPath: '/home/openclaw/.openclaw' }]),
+      expect.arrayContaining([
+        { name: 'shadow-runner-state', mountPath: '/home/shadow/.openclaw' },
+      ]),
     )
     expect(container.env).toEqual(
       expect.arrayContaining([
-        { name: 'OPENCLAW_STATE_DIR', value: '/home/openclaw/.openclaw' },
-        { name: 'OPENCLAW_DATA_DIR', value: '/home/openclaw/.openclaw' },
+        { name: 'OPENCLAW_STATE_DIR', value: '/home/shadow/.openclaw' },
+        { name: 'OPENCLAW_DATA_DIR', value: '/home/shadow/.openclaw' },
       ]),
     )
     expect(claim.spec).toMatchObject({

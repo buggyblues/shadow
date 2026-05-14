@@ -25,6 +25,7 @@ import type {
   PluginRuntimeExtension,
   PluginRuntimeSource,
   PluginSecretField,
+  PluginShadowobRuntime,
   PluginSkillsConfig,
   PluginValidationResult,
   PluginVerificationCheck,
@@ -154,9 +155,11 @@ function mergeCollectedRuntime(
     ...(current.openclaw?.manifestPatches ?? []),
     ...(fragment.openclaw?.manifestPatches ?? []),
   ]
+  const shadowob = mergeShadowobRuntime(current.shadowob, fragment.shadowob)
 
   return {
     ...(manifestPatches.length > 0 ? { openclaw: { manifestPatches } } : {}),
+    ...(shadowob ? { shadowob } : {}),
     ...(current.artifacts?.length || fragment.artifacts?.length
       ? {
           artifacts: mergeByKey(
@@ -213,6 +216,29 @@ function mergeCollectedRuntime(
           ),
         }
       : {}),
+  }
+}
+
+function mergeShadowobRuntime(
+  current: PluginShadowobRuntime | undefined,
+  fragment: PluginShadowobRuntime | undefined,
+): PluginShadowobRuntime | undefined {
+  if (!current) return fragment
+  if (!fragment) return current
+
+  const accounts = new Map(current.accounts.map((account) => [account.buddyId, account]))
+  for (const account of fragment.accounts) {
+    accounts.set(account.buddyId, { ...accounts.get(account.buddyId), ...account })
+  }
+
+  return {
+    ...current,
+    ...fragment,
+    capabilities: {
+      ...(current.capabilities ?? {}),
+      ...(fragment.capabilities ?? {}),
+    },
+    accounts: [...accounts.values()],
   }
 }
 

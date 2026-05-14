@@ -94,6 +94,10 @@ function shadowobOpenClawPluginConfig(): Pick<PluginConfigFragment, 'plugins'> {
   }
 }
 
+function shadowobRuntimeTokenEnvKey(buddyId: string): string {
+  return `SHADOW_TOKEN_${buddyId.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
+}
+
 function shadowobChannelConfigMetadata(): Record<string, unknown> {
   return {
     label: 'ShadowOwnBuddy',
@@ -246,21 +250,46 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
 }
 
 export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig, (api) => {
-  api.onBuildRuntime(() => ({
-    openclaw: {
-      manifestPatches: [
-        {
-          extensionId: SHADOWOB_OPENCLAW_EXTENSION_ID,
-          channelEnvVars: {
-            shadowob: ['SHADOW_SERVER_URL', 'SHADOW_AGENT_TOKEN'],
+  api.onBuildRuntime((context) => {
+    const shadowConfig = context.agentConfig as unknown as ShadowobPluginConfig
+    const bindings = shadowConfig.bindings?.filter((b) => b.agentId === context.agent.id) ?? []
+    const accounts = bindings
+      .map((binding) => {
+        const buddy = shadowConfig.buddies?.find((b) => b.id === binding.targetId)
+        if (!buddy) return undefined
+        return {
+          buddyId: buddy.id,
+          buddyName: buddy.name,
+          ...(buddy.description ? { buddyDescription: buddy.description } : {}),
+          tokenEnvKey: shadowobRuntimeTokenEnvKey(binding.targetId),
+          ...(binding.replyPolicy ? { replyPolicy: binding.replyPolicy } : {}),
+        }
+      })
+      .filter((account): account is NonNullable<typeof account> => Boolean(account))
+
+    return {
+      openclaw: {
+        manifestPatches: [
+          {
+            extensionId: SHADOWOB_OPENCLAW_EXTENSION_ID,
+            channelEnvVars: {
+              shadowob: ['SHADOW_SERVER_URL', 'SHADOW_AGENT_TOKEN'],
+            },
+            channelConfigs: {
+              shadowob: shadowobChannelConfigMetadata(),
+            },
           },
-          channelConfigs: {
-            shadowob: shadowobChannelConfigMetadata(),
-          },
-        },
-      ],
-    },
-  }))
+        ],
+      },
+      shadowob: {
+        enabled: accounts.length > 0,
+        serverUrlEnvKey: 'SHADOW_SERVER_URL',
+        accounts,
+        defaultAccountEnvKey: accounts[0]?.tokenEnvKey,
+        capabilities: shadowobChannelCapabilities(),
+      },
+    }
+  })
 
   api.onValidate((context) => {
     const errors: PluginValidationError[] = []
@@ -302,7 +331,7 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
       context.secrets.SHADOW_PROVISION_URL ?? process.env.SHADOW_PROVISION_URL ?? serverUrl
     const userToken = context.secrets.SHADOW_USER_TOKEN
     context.logger.dim(
-      `  shadowob: provisionUrl=${provisionUrl} tokenLen=${userToken?.length ?? 0} tokenStart=${userToken?.slice(0, 10) ?? '(none)'}`,
+      `  shadowob: provisionUrl=${provisionUrl} tokenPresent=${Boolean(userToken)} tokenLen=${userToken?.length ?? 0}`,
     )
     if (!serverUrl || !userToken) {
       context.logger.dim(
@@ -340,7 +369,7 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
       SHADOW_SERVER_URL: serverUrl,
     }
     for (const [buddyId, { token }] of result.buddies) {
-      const key = `SHADOW_TOKEN_${buddyId.toUpperCase().replace(/-/g, '_')}`
+      const key = shadowobRuntimeTokenEnvKey(buddyId)
       secrets[key] = token
     }
     for (const [seedId, ids] of result.commerce) {

@@ -19,7 +19,7 @@ FlyAI provides travel workflows for real-time flight, hotel, train, attraction, 
 ## Runtime Assets
 
 - Installs `@fly-ai/flyai-cli`.
-- Mounts the official `alibaba-flyai/flyai-skill` skill under `/app/plugin-skills/flyai`.
+- Mounts the official `alibaba-flyai/flyai-skill` skill under `/workspace/.agents/plugin-skills/flyai`.
 - Adds verification checks for the CLI and mounted skill file.
 
 ## References

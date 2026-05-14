@@ -58,7 +58,7 @@ const skillSources = [
     url: 'https://github.com/huggingface/skills.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/huggingface',
+    targetPath: '/workspace/.agents/plugin-skills/huggingface',
     include: [
       'hf-cli',
       'huggingface-best',
@@ -99,7 +99,7 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'huggingface-skills-mounted',
       label: 'Hugging Face skills mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/huggingface/hf-cli/SKILL.md'],
+      command: ['test', '-f', '/workspace/.agents/plugin-skills/huggingface/hf-cli/SKILL.md'],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -111,5 +111,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/huggingface',
+  skillsMountPath: '/workspace/.agents/plugin-skills/huggingface',
 })

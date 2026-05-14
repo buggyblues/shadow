@@ -5,6 +5,7 @@
 import * as k8s from '@pulumi/kubernetes'
 import type * as pulumi from '@pulumi/pulumi'
 import type { AgentDeployment, AgentSandboxConfig, CloudConfig } from '../config/schema.js'
+import { RUNNER_STATE_VOLUME_NAME, runtimeStatePvcName } from '../runtimes/container.js'
 import { buildAgentPodSpec } from './agent-pod.js'
 import { PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
 import { buildSecurityContext } from './security.js'
@@ -123,7 +124,7 @@ export function buildSandboxVolumeClaimTemplates(sandbox: ResolvedAgentSandboxCo
   return [
     {
       metadata: {
-        name: 'openclaw-data',
+        name: RUNNER_STATE_VOLUME_NAME,
         labels: { app: 'shadowob-cloud' },
         annotations: PULUMI_MANAGED_ANNOTATIONS,
       },
@@ -167,7 +168,7 @@ export function createAgentSandbox(options: AgentSandboxOptions) {
     sharedWorkspaceMountPath: options.sharedWorkspaceMountPath,
     skillsInstallDir: options.skillsInstallDir,
     podTemplateAnnotations: options.podTemplateAnnotations,
-    openclawDataVolume: sandboxConfig.state.enabled ? 'volumeClaimTemplate' : 'emptyDir',
+    stateVolume: sandboxConfig.state.enabled ? 'volumeClaimTemplate' : 'emptyDir',
   })
   const { pluginArtifacts } = pod
   const templateName = `${agentName}-template`
@@ -307,7 +308,7 @@ export function buildAgentSandboxClaimManifest(options: {
       },
       annotations: {
         ...PULUMI_MANAGED_ANNOTATIONS,
-        'shadowob.cloud/state-pvc': `openclaw-data-${options.agentName}`,
+        'shadowob.cloud/state-pvc': runtimeStatePvcName(options.agentName),
       },
     },
     spec: {

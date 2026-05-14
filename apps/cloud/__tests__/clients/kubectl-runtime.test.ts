@@ -304,7 +304,7 @@ users:
               metadata: {
                 name: 'shadow-cloud-cli-agent',
                 annotations: {
-                  'shadowob.cloud/state-pvc': 'openclaw-data-shadow-cloud-cli-agent',
+                  'shadowob.cloud/state-pvc': 'shadow-runner-state-shadow-cloud-cli-agent',
                 },
               },
               status: {
@@ -338,7 +338,7 @@ users:
         runtimeState: 'running',
         sandboxName: 'shadow-cloud-cli-agent',
         serviceFQDN: 'shadow-cloud-cli-agent.shadow-cloud-cli-smoke.svc.cluster.local',
-        statePvc: 'openclaw-data-shadow-cloud-cli-agent',
+        statePvc: 'shadow-runner-state-shadow-cloud-cli-agent',
       },
     ])
   })
@@ -396,7 +396,7 @@ users:
     await expect(
       isPvcBackedByCsiProvisioner({
         namespace: 'gstack-buddy',
-        pvcName: 'openclaw-data-strategy-buddy',
+        pvcName: 'shadow-runner-state-strategy-buddy',
       }),
     ).resolves.toBe(false)
   })

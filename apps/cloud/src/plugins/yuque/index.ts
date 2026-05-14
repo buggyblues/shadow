@@ -28,13 +28,13 @@ const manifest = connectorManifest({
 
 const skillSources = [
   {
-    id: 'yuque-openclaw-skills',
+    id: 'yuque-agent-skills',
     kind: 'git' as const,
     url: 'https://github.com/yuque/yuque-ecosystem.git',
     ref: 'main',
     from: 'plugins/openclaw/skills',
-    targetPath: '/app/plugin-skills/yuque',
-    description: 'Yuque OpenClaw skills',
+    targetPath: '/workspace/.agents/plugin-skills/yuque',
+    description: 'Yuque agent skills',
   },
 ]
 
@@ -53,7 +53,7 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'yuque-skills-mounted',
       label: 'Yuque skills mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/yuque/smart-search/SKILL.md'],
+      command: ['test', '-f', '/workspace/.agents/plugin-skills/yuque/smart-search/SKILL.md'],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -64,5 +64,5 @@ const plugin = defineConnectorPlugin(manifest, {
 
 export default attachConnectorRuntimeAssets(plugin, {
   skillSources,
-  skillsMountPath: '/app/plugin-skills/yuque',
+  skillsMountPath: '/workspace/.agents/plugin-skills/yuque',
 })

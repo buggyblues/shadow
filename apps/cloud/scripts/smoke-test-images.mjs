@@ -3,12 +3,8 @@
 /**
  * Smoke test Docker images for Shadow Cloud runners.
  *
- * Verifies each image can:
- *  1. Start without crashing
- *  2. Has OpenClaw's internal template files (docs/reference/templates/)
- *  3. Can run `openclaw setup` to seed workspace
- *  4. Workspace has required bootstrap files after setup
- *  5. Entrypoint can resolve config and workspace path when env vars are empty
+ * Verifies each image can run its expected CLI binaries and entrypoint
+ * validation path without starting a long-lived gateway.
  *
  * Usage:
  *   node scripts/smoke-test-images.mjs                     # Test all images
@@ -23,7 +19,14 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY = process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
 
-const IMAGES = ['openclaw-runner', 'claude-runner']
+const IMAGES = [
+  'openclaw-runner',
+  'claude-runner',
+  'codex-runner',
+  'gemini-runner',
+  'opencode-runner',
+  'hermes-runner',
+]
 
 const REQUIRED_TEMPLATES = ['AGENTS.md', 'SOUL.md', 'IDENTITY.md', 'TOOLS.md', 'USER.md']
 
@@ -173,6 +176,59 @@ function testNodeVersion(image) {
   return true
 }
 
+function testCcConnectBinary(image) {
+  const result = docker(image, 'cc-connect --help >/dev/null && echo OK')
+  if (typeof result === 'object' || !result.includes('OK')) {
+    return fail('cc-connect binary not available', result.stderr || result.stdout)
+  }
+  pass('cc-connect binary works')
+  return true
+}
+
+function testShadowobBinaries(image) {
+  const result = docker(
+    image,
+    'shadowob --help >/dev/null && shadowob-connector --help >/dev/null && echo OK',
+  )
+  if (typeof result === 'object' || !result.includes('OK')) {
+    return fail('ShadowOB CLI/connector not available', result.stderr || result.stdout)
+  }
+  pass('ShadowOB CLI/connector work')
+  return true
+}
+
+function testRunnerCli(image, name) {
+  const commandByImage = {
+    'claude-runner': 'claude --version',
+    'codex-runner': 'codex --version',
+    'gemini-runner': 'gemini --version',
+    'opencode-runner': 'opencode --version',
+    'hermes-runner': 'hermes --version',
+  }
+  const command = commandByImage[name]
+  if (!command) return true
+  const result = docker(image, `${command} >/dev/null && echo OK`, { timeout: 30000 })
+  if (typeof result === 'object' || !result.includes('OK')) {
+    return fail(`${name} native CLI not available`, result.stderr || result.stdout)
+  }
+  pass(`${name} native CLI works`)
+  return true
+}
+
+function testEntrypointValidateOnly(image) {
+  const result = docker(image, 'SHADOW_RUNNER_VALIDATE_ONLY=1 node /app/entrypoint.mjs', {
+    timeout: 30000,
+  })
+  if (typeof result === 'object' && result.error) {
+    return fail('Entrypoint validation failed', result.stderr || result.stdout)
+  }
+  if (result.includes('validation completed')) {
+    pass('Entrypoint validation path works')
+    return true
+  }
+  return fail('Entrypoint validation output missing', result)
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 function parseArgs() {
@@ -213,13 +269,22 @@ for (const name of opts.images) {
     continue
   }
 
-  const tests = [
-    testNodeVersion,
-    testOpenclawBinary,
-    testTemplatesExist,
-    testWorkspaceSetup,
-    testEntrypointDryRun,
-  ]
+  const tests =
+    name === 'openclaw-runner'
+      ? [
+          testNodeVersion,
+          testOpenclawBinary,
+          testTemplatesExist,
+          testWorkspaceSetup,
+          testEntrypointDryRun,
+        ]
+      : [
+          testNodeVersion,
+          testShadowobBinaries,
+          ...(name === 'hermes-runner' ? [] : [testCcConnectBinary]),
+          (candidate) => testRunnerCli(candidate, name),
+          testEntrypointValidateOnly,
+        ]
 
   for (const test of tests) {
     if (!test(image)) allPassed = false

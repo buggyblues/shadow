@@ -39,7 +39,7 @@ const skillSources = [
     url: 'https://github.com/Airtable/skills.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/airtable',
+    targetPath: '/workspace/.agents/plugin-skills/airtable',
     include: ['airtable-overview', 'airtable-filters'],
     description: 'Airtable official agent skills',
   },
@@ -60,7 +60,11 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'airtable-skills-mounted',
       label: 'Airtable skills mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/airtable/airtable-overview/SKILL.md'],
+      command: [
+        'test',
+        '-f',
+        '/workspace/.agents/plugin-skills/airtable/airtable-overview/SKILL.md',
+      ],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -71,5 +75,5 @@ const plugin = defineConnectorPlugin(manifest, {
 
 export default attachConnectorRuntimeAssets(plugin, {
   skillSources,
-  skillsMountPath: '/app/plugin-skills/airtable',
+  skillsMountPath: '/workspace/.agents/plugin-skills/airtable',
 })

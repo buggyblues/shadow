@@ -1,64 +1,63 @@
-/**
- * Runtime Adapter — plugin-based abstraction for agent runtime types.
- *
- * Each runtime (openclaw, claude-code, codex, gemini, opencode) is a separate
- * adapter that provides:
- * - Default container image
- * - OpenClaw config generation (ACP + plugins)
- * - Container environment variables
- * - npm package for the Dockerfile
- * - Validation
- *
- * The architecture follows openclaw → ACP → CLI pattern:
- *   openclaw gateway → ACPX plugin → CLI harness process
- *
- * The "openclaw" runtime is the baseline — no ACP, just a plain gateway.
- * All other runtimes use ACP to bridge to an external coding CLI.
- */
-
 import type {
   AgentDeployment,
-  OpenClawAcpRuntime,
-  OpenClawAgentConfig,
+  AgentRuntime,
+  CloudConfig,
   OpenClawConfig,
 } from '../config/schema.js'
+import type { PluginRuntimeExtension } from '../plugins/types.js'
+import type { DeploymentRuntimeContext } from '../utils/runtime-context.js'
+
+export type RuntimeKind = 'openclaw' | 'cc-connect' | 'hermes'
+export type RuntimeEnv = Record<string, string | undefined>
+export type RuntimeFiles = Record<string, string>
+
+export interface RuntimePackageBuildContext {
+  agent: AgentDeployment
+  config: CloudConfig
+  cwd?: string
+  runtimeEnv: RuntimeEnv
+  runtimeExtensions: PluginRuntimeExtension
+  runtimeContext?: DeploymentRuntimeContext
+}
+
+export interface RuntimePackageBuildResult {
+  openclawConfig?: OpenClawConfig
+  configData: Record<string, string>
+  pluginResources: Record<string, unknown>[]
+  provisionSecrets?: Record<string, string>
+}
+
+export interface RuntimeContainerSpec {
+  homeDir: string
+  healthPort: number
+  statePath: string
+  logPath: string
+  env: Array<{ name: string; value: string }>
+}
 
 /**
- * Runtime adapter interface — one per supported runtime type.
+ * Runtime adapter interface — one per supported runtime type. Package generation
+ * lives with the concrete runtime so the shared infra layer does not know native
+ * config details for Claude, Codex, OpenCode, Gemini, Hermes, or OpenClaw.
  */
 export interface RuntimeAdapter {
   /** Runtime identifier (matches AgentRuntime type) */
-  readonly id: string
+  readonly id: AgentRuntime
 
   /** Human-readable name */
   readonly name: string
 
+  /** Native runner package family. */
+  readonly runtimeKind: RuntimeKind
+
   /** Default container image when not overridden by user */
   readonly defaultImage: string
 
-  /** npm package(s) to install in the Dockerfile (empty for openclaw base) */
-  readonly packages: string[]
+  /** Kubernetes/container layout for this runtime. */
+  readonly container: RuntimeContainerSpec
 
-  /** Whether this runtime requires git in the container image */
-  readonly requiresGit: boolean
-
-  /**
-   * ACP harness configuration for this runtime.
-   * Returns null for the baseline openclaw runtime (no ACP).
-   */
-  acpRuntime(agent: AgentDeployment): OpenClawAcpRuntime | null
-
-  /**
-   * Apply runtime-specific config to the OpenClaw config object.
-   * Called after the base config is built by the parser.
-   */
-  applyConfig(agent: AgentDeployment, agentEntry: OpenClawAgentConfig, config: OpenClawConfig): void
-
-  /**
-   * Extra environment variables needed by this runtime.
-   * Merged into the container env.
-   */
-  extraEnv(agent: AgentDeployment): Record<string, string>
+  /** Build the runtime's ConfigMap payload and plugin resource artifacts. */
+  buildPackage(context: RuntimePackageBuildContext): RuntimePackageBuildResult
 }
 
 // ─── Adapter Registry ─────────────────────────────────────────────────────

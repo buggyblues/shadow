@@ -65,7 +65,7 @@ export default defineConnectorPlugin(manifest, {
   credentialFiles: [
     {
       envKey: 'GOOGLE_APPLICATION_CREDENTIALS_JSON',
-      path: '/home/openclaw/.config/google/application-default-credentials.json',
+      path: '/home/shadow/.config/google/application-default-credentials.json',
       mode: '0600',
     },
   ],
@@ -73,7 +73,7 @@ export default defineConnectorPlugin(manifest, {
     if (!context.secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON) return undefined
     return {
       GOOGLE_APPLICATION_CREDENTIALS:
-        '/home/openclaw/.config/google/application-default-credentials.json',
+        '/home/shadow/.config/google/application-default-credentials.json',
     }
   },
   prompt:

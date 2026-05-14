@@ -17,6 +17,11 @@ import type {
 
 const RUNTIME_ASSET_IMAGE = 'node:22-alpine'
 const DEFAULT_CONTAINER_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export const PLUGIN_RUNTIME_DEPS_ROOT = '/opt/shadow-plugin-deps'
+export const PLUGIN_SKILLS_ROOT = '/workspace/.agents/plugin-skills'
+export const PLUGIN_SUBAGENTS_ROOT = '/workspace/.agents/plugin-subagents'
+export const PLUGIN_SKILLS_STAGING_ROOT = '/plugin-skills'
+export const PLUGIN_SUBAGENTS_STAGING_ROOT = '/plugin-subagents'
 
 interface RuntimeAssetK8sOptions {
   pluginId: string
@@ -85,7 +90,7 @@ function runtimeDependencySnippet(dep: PluginRuntimeDependency, runtimeRoot: str
     case 'system-package': {
       const packages = dep.packages?.filter(Boolean) ?? []
       if (packages.length === 0) return ''
-      return `apk add --no-cache ${packages.map(shQuote).join(' ')}`
+      return `install_system_packages ${packages.map(shQuote).join(' ')}`
     }
     case 'shell':
       return dep.command?.length ? dep.command.join(' ') : ''
@@ -94,6 +99,40 @@ function runtimeDependencySnippet(dep: PluginRuntimeDependency, runtimeRoot: str
     default:
       return ''
   }
+}
+
+function systemPackageInstallerSnippet(): string {
+  return [
+    'install_system_packages() {',
+    '  if [ "$#" -eq 0 ]; then return 0; fi',
+    '  pm=""',
+    '  if command -v apk >/dev/null 2>&1; then',
+    '    pm="apk"',
+    '  elif command -v apt-get >/dev/null 2>&1; then',
+    '    pm="apt"',
+    '  else',
+    '    echo "[runtime-assets] no supported package manager found for: $*" >&2',
+    '    return 127',
+    '  fi',
+    '  normalized=""',
+    '  for pkg in "$@"; do',
+    '    case "$pm:$pkg" in',
+    '      apt:py3-pip) pkg="python3-pip" ;;',
+    '      apt:py3-virtualenv) pkg="python3-venv" ;;',
+    '      apt:github-cli) pkg="gh" ;;',
+    '    esac',
+    '    normalized="$normalized ${pkg}"',
+    '  done',
+    '  if [ "$pm" = "apk" ]; then',
+    '    apk add --no-cache $normalized',
+    '  else',
+    '    export DEBIAN_FRONTEND=noninteractive',
+    '    apt-get update >/dev/null',
+    '    apt-get install -y --no-install-recommends $normalized',
+    '    rm -rf /var/lib/apt/lists/*',
+    '  fi',
+    '}',
+  ].join('\n')
 }
 
 export function buildRuntimeAssetInstallScript(options: {
@@ -109,11 +148,20 @@ export function buildRuntimeAssetInstallScript(options: {
   const skillsRoot = options.skillsRoot ?? '/plugin-skills'
   const subagentsRoot = options.subagentsRoot ?? '/plugin-subagents'
   const hasGitSources = Boolean(options.skillSources?.length || options.subagentSources?.length)
-  const lines = ['set -eu', `mkdir -p ${shQuote(runtimeRoot)}`]
+  const needsSystemInstaller = Boolean(
+    hasGitSources || options.runtimeDependencies?.some((dep) => dep.kind === 'system-package'),
+  )
+  const lines = [
+    'set -eu',
+    ...(needsSystemInstaller ? [systemPackageInstallerSnippet()] : []),
+    `mkdir -p ${shQuote(runtimeRoot)}`,
+  ]
 
   if (options.skillSources?.length) lines.push(`mkdir -p ${shQuote(skillsRoot)}`)
   if (options.subagentSources?.length) lines.push(`mkdir -p ${shQuote(subagentsRoot)}`)
-  if (hasGitSources) lines.push('apk add --no-cache git >/dev/null')
+  if (hasGitSources) {
+    lines.push('command -v git >/dev/null 2>&1 || install_system_packages git >/dev/null')
+  }
 
   for (const dep of options.runtimeDependencies ?? []) {
     const snippet = runtimeDependencySnippet(dep, runtimeRoot)
@@ -140,7 +188,7 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
       const skillsVolumeName = options.skillsVolumeName ?? `${options.pluginId}-skills`
       const subagentsVolumeName = options.subagentsVolumeName ?? `${options.pluginId}-subagents`
       const runtimeMountPath =
-        options.runtimeMountPath ?? `/opt/shadow-plugin-deps/${options.pluginId}`
+        options.runtimeMountPath ?? `${PLUGIN_RUNTIME_DEPS_ROOT}/${options.pluginId}`
       const initRuntimeMountPath = options.initRuntimeMountPath ?? '/runtime-deps'
       const skillsMountPath = options.skillsMountPath
       const subagentsMountPath = options.subagentsMountPath
@@ -153,7 +201,7 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
         { name: runtimeVolumeName, mountPath: runtimeMountPath, readOnly: true },
       ]
       if (hasSkillSources) {
-        volumeMounts.push({ name: skillsVolumeName, mountPath: '/plugin-skills' })
+        volumeMounts.push({ name: skillsVolumeName, mountPath: PLUGIN_SKILLS_STAGING_ROOT })
         volumes.push({ name: skillsVolumeName, spec: { emptyDir: {} } })
         mainVolumeMounts.push({
           name: skillsVolumeName,
@@ -162,7 +210,7 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
         })
       }
       if (hasSubagentSources) {
-        volumeMounts.push({ name: subagentsVolumeName, mountPath: '/plugin-subagents' })
+        volumeMounts.push({ name: subagentsVolumeName, mountPath: PLUGIN_SUBAGENTS_STAGING_ROOT })
         volumes.push({ name: subagentsVolumeName, spec: { emptyDir: {} } })
         mainVolumeMounts.push({
           name: subagentsVolumeName,

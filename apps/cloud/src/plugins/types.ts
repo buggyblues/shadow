@@ -278,9 +278,9 @@ export interface ProviderModelEntry {
 }
 
 export interface ProviderCatalog {
-  /** OpenClaw provider ID used in model refs, e.g. anthropic/claude-sonnet-4-5. */
+  /** Provider ID used in model refs, e.g. anthropic/claude-sonnet-4-5. */
   id: string
-  /** OpenClaw API adapter. */
+  /** Provider API adapter identifier. */
   api: string
   baseUrl?: string
   /** Primary env var used to authenticate this provider. */
@@ -406,10 +406,30 @@ export interface PluginVerificationCheck {
   cleanup?: PluginVerificationCheck
 }
 
+export interface PluginShadowobRuntimeAccount {
+  buddyId: string
+  buddyName?: string
+  buddyDescription?: string
+  tokenEnvKey: string
+  replyPolicy?: {
+    mode: string
+    custom?: Record<string, unknown>
+  }
+}
+
+export interface PluginShadowobRuntime {
+  enabled: boolean
+  serverUrlEnvKey: string
+  accounts: PluginShadowobRuntimeAccount[]
+  defaultAccountEnvKey?: string
+  capabilities?: Record<string, unknown>
+}
+
 export interface PluginRuntimeExtension {
   openclaw?: {
     manifestPatches?: PluginOpenClawManifestPatch[]
   }
+  shadowob?: PluginShadowobRuntime
   artifacts?: PluginRuntimeArtifact[]
   runtimeDependencies?: PluginRuntimeDependency[]
   skillSources?: PluginRuntimeSource[]
@@ -554,7 +574,7 @@ export interface PluginAPI {
    */
   onResolveAgent(fn: (agent: AgentDeployment, config: CloudConfig) => AgentDeployment): void
 
-  /** Emit an OpenClaw config fragment (merged with other plugin fragments) */
+  /** Emit an OpenClaw adapter config fragment (merged only by the OpenClaw runner). */
   onBuildConfig(fn: (ctx: PluginBuildContext) => PluginConfigFragment | void): void
 
   /** Emit additional standing instructions to append to the agent prompt */

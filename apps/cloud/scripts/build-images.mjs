@@ -22,7 +22,14 @@ const IMAGES_DIR = join(ROOT, 'images')
 const REGISTRY =
   process.env.SHADOWOB_REGISTRY ?? process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
 
-const IMAGES = ['openclaw-runner', 'claude-runner']
+const IMAGES = [
+  'openclaw-runner',
+  'claude-runner',
+  'codex-runner',
+  'gemini-runner',
+  'opencode-runner',
+  'hermes-runner',
+]
 
 function parseArgs() {
   const args = process.argv.slice(2)
@@ -69,7 +76,7 @@ function buildImage(name, opts) {
 
   console.log(`\n━━━ Building ${fullTag} ━━━`)
 
-  const buildContext = name === 'openclaw-runner' ? WORKSPACE_ROOT : imageDir
+  const buildContext = WORKSPACE_ROOT
   const buildArgs = ['docker', 'build', '-t', fullTag, '-f', dockerfilePath]
 
   if (opts.tag !== 'latest') {

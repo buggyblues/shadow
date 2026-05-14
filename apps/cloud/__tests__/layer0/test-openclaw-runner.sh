@@ -95,10 +95,10 @@ echo "✓ Running as non-root (uid=$USER_ID)"
 
 # 6. Generated config must stay out of the mutable OpenClaw state directory.
 echo "▸ Checking generated config path..."
-CONFIG_PATH=$(docker exec "$CONTAINER_NAME" sh -lc 'test ! -f /home/openclaw/.openclaw/openclaw.json && test -f /tmp/openclaw/config/openclaw.json && echo ok' 2>/dev/null || true)
+CONFIG_PATH=$(docker exec "$CONTAINER_NAME" sh -lc 'test ! -f /home/shadow/.openclaw/openclaw.json && test -f /tmp/openclaw/config/openclaw.json && echo ok' 2>/dev/null || true)
 if [ "$CONFIG_PATH" != "ok" ]; then
   echo "✗ Runtime config was not isolated from ~/.openclaw"
-  docker exec "$CONTAINER_NAME" sh -lc 'ls -la /home/openclaw/.openclaw /tmp/openclaw/config 2>/dev/null' || true
+  docker exec "$CONTAINER_NAME" sh -lc 'ls -la /home/shadow/.openclaw /tmp/openclaw/config 2>/dev/null' || true
   exit 1
 fi
 echo "✓ Runtime config is isolated from ~/.openclaw"
@@ -197,11 +197,11 @@ echo "✓ No known noisy cloud warnings"
 
 # 11. OpenClaw expects writable runtime files for plugin evolution and local state.
 echo "▸ Checking writable runtime filesystem..."
-if docker exec "$CONTAINER_NAME" sh -lc 'touch /app/extensions/.shadow-write-test /home/openclaw/.openclaw/.shadow-write-test && rm -f /app/extensions/.shadow-write-test /home/openclaw/.openclaw/.shadow-write-test' 2>/dev/null; then
+if docker exec "$CONTAINER_NAME" sh -lc 'touch /app/extensions/.shadow-write-test /home/shadow/.openclaw/.shadow-write-test && rm -f /app/extensions/.shadow-write-test /home/shadow/.openclaw/.shadow-write-test' 2>/dev/null; then
   echo "✓ OpenClaw runtime paths are writable"
 else
   echo "✗ OpenClaw runtime paths are not writable"
-  docker exec "$CONTAINER_NAME" sh -lc 'ls -ld /app /app/extensions /home/openclaw/.openclaw' || true
+  docker exec "$CONTAINER_NAME" sh -lc 'ls -ld /app /app/extensions /home/shadow/.openclaw' || true
   exit 1
 fi
 

@@ -20,8 +20,8 @@ import type {
   PluginBuildContext,
   PluginDefinition,
   PluginRuntimeExtension,
+  PluginShadowobRuntime,
 } from '../plugins/types.js'
-import { getRuntime } from '../runtimes/index.js'
 import {
   buildRuntimeContextPromptSection,
   type DeploymentRuntimeContext,
@@ -567,6 +567,7 @@ function mergeRuntimeExtensions(
     ...(target.openclaw?.manifestPatches ?? []),
     ...(fragment.openclaw?.manifestPatches ?? []),
   ]
+  const shadowob = mergeShadowobRuntime(target.shadowob, fragment.shadowob)
   const artifacts = new Map<string, NonNullable<PluginRuntimeExtension['artifacts']>[number]>()
   for (const artifact of target.artifacts ?? []) {
     artifacts.set(artifact.kind, artifact)
@@ -637,6 +638,7 @@ function mergeRuntimeExtensions(
 
   return {
     ...(manifestPatches.length > 0 ? { openclaw: { manifestPatches } } : {}),
+    ...(shadowob ? { shadowob } : {}),
     ...(artifacts.size > 0 ? { artifacts: [...artifacts.values()] } : {}),
     ...(runtimeDependencies.size > 0
       ? { runtimeDependencies: [...runtimeDependencies.values()] }
@@ -648,6 +650,29 @@ function mergeRuntimeExtensions(
     ...(verificationChecks.size > 0
       ? { verificationChecks: [...verificationChecks.values()] }
       : {}),
+  }
+}
+
+function mergeShadowobRuntime(
+  target: PluginShadowobRuntime | undefined,
+  fragment: PluginShadowobRuntime | undefined,
+): PluginShadowobRuntime | undefined {
+  if (!target) return fragment
+  if (!fragment) return target
+
+  const accounts = new Map(target.accounts.map((account) => [account.buddyId, account]))
+  for (const account of fragment.accounts) {
+    accounts.set(account.buddyId, { ...accounts.get(account.buddyId), ...account })
+  }
+
+  return {
+    ...target,
+    ...fragment,
+    capabilities: {
+      ...(target.capabilities ?? {}),
+      ...(fragment.capabilities ?? {}),
+    },
+    accounts: [...accounts.values()],
   }
 }
 
@@ -792,35 +817,31 @@ export function buildOpenClawConfig(
   // 5. Model config
   buildModelConfig(agent, config, openclawConfig.agents)
 
-  // 6. Runtime adapter (ACP config)
-  const runtimeAdapter = getRuntime(agent.runtime)
-  runtimeAdapter.applyConfig(agent, agentEntry, openclawConfig)
-
-  // 7. Permissions → tools
+  // 6. Permissions → tools
   applyPermissions(agent, openclawConfig)
 
-  // 8. Model providers from registry
+  // 7. Model providers from registry
   const models = buildProvidersConfig(config)
   if (models) openclawConfig.models = models
 
-  // 9. Cloud skills
+  // 8. Cloud skills
   openclawConfig.skills =
     buildCloudSkillsConfig(config, openclawConfig.skills) ?? openclawConfig.skills
 
-  // 10. Shared workspace
+  // 9. Shared workspace
   applySharedWorkspace(agent, config, openclawConfig.agents)
 
-  // 11. Compliance → audit logging
+  // 10. Compliance → audit logging
   applyCompliance(agent, config, openclawConfig)
 
-  // 13. Logging + messages
+  // 11. Logging + messages
   if (oc?.logging) openclawConfig.logging = oc.logging
   if (oc?.messages) openclawConfig.messages = oc.messages
 
-  // 14. Gateway config
+  // 12. Gateway config
   openclawConfig.gateway = buildGatewayConfig(oc, openclawConfig.gateway)
 
-  // 15. Plugin pipeline — merge enabled plugin configs (channels, bindings, resources)
+  // 13. Plugin pipeline — merge enabled plugin configs (channels, bindings, resources)
   applyPluginPipeline(agent, config, openclawConfig, cwd, env)
 
   // 16. Remove bundled plugin config entries not installed in the cloud runner.

@@ -52,7 +52,7 @@ const skillSources = [
     url: 'https://github.com/infsh-skills/skills.git',
     ref: 'main',
     from: 'tools',
-    targetPath: '/app/plugin-skills/inference-sh',
+    targetPath: '/workspace/.agents/plugin-skills/inference-sh',
     include: ['infsh-cli'],
     description: 'inference.sh CLI skill',
   },
@@ -77,7 +77,7 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'infsh-cli-skill-mounted',
       label: 'inference.sh skill mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/inference-sh/infsh-cli/SKILL.md'],
+      command: ['test', '-f', '/workspace/.agents/plugin-skills/inference-sh/infsh-cli/SKILL.md'],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -89,5 +89,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/inference-sh',
+  skillsMountPath: '/workspace/.agents/plugin-skills/inference-sh',
 })

@@ -2661,7 +2661,7 @@
           "type": "boolean"
         },
         "size": {
-          "description": "PVC size for /home/openclaw/.openclaw.",
+          "description": "PVC size for /home/shadow/.openclaw.",
           "type": "string"
         },
         "storageClassName": {
@@ -3106,7 +3106,7 @@
     },
     "AgentRuntime": {
       "description": "Agent runtime types.",
-      "enum": ["claude-code", "codex", "gemini", "openclaw", "opencode"],
+      "enum": ["claude-code", "codex", "gemini", "hermes", "openclaw", "opencode"],
       "type": "string"
     },
     "AgentConfiguration": {

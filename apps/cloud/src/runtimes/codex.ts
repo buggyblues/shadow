@@ -1,64 +1,77 @@
 /**
  * OpenAI Codex runtime adapter.
  *
- * Architecture: openclaw gateway → ACPX plugin → codex CLI process
- *
- * Package: @openai/codex (npm) or Rust binary
- * CLI: codex -q "prompt" --approval-mode full-auto
- * Auth: OPENAI_API_KEY env var, or ChatGPT subscription
- * Docs: https://developers.openai.com/codex
+ * Architecture: cc-connect fork -> codex agent -> codex CLI process.
  */
 
-import type {
-  AgentDeployment,
-  OpenClawAcpRuntime,
-  OpenClawAgentConfig,
-  OpenClawConfig,
-} from '../config/schema.js'
+import { stringify as stringifyToml, type TomlTable } from 'smol-toml'
+import type { AgentDeployment } from '../config/schema.js'
+import type { PluginRuntimeExtension } from '../plugins/types.js'
+import { buildCcConnectPackage } from './cc-connect-package.js'
+import { ccConnectContainerSpec } from './container.js'
 import { type RuntimeAdapter, registerRuntime } from './index.js'
+import { codexMcpTable } from './mcp.js'
+import {
+  HOME_DIR,
+  modelName,
+  nativePermissionMode,
+  reasoningEffort,
+  runtimeExtensionsForKind,
+  WORKSPACE_DIR,
+} from './package-common.js'
+
+function buildCodexConfig(
+  agent: AgentDeployment,
+  runtimeExtensions: PluginRuntimeExtension,
+): string {
+  const root: TomlTable = {
+    ...(modelName(agent) ? { model: modelName(agent) } : {}),
+    ...(reasoningEffort(agent) ? { model_reasoning_effort: reasoningEffort(agent) } : {}),
+    approval_policy: nativePermissionMode(agent) === 'allow' ? 'on-request' : 'untrusted',
+    sandbox_mode: nativePermissionMode(agent) === 'deny' ? 'read-only' : 'workspace-write',
+    shell_environment_policy: {
+      inherit: 'core',
+      ignore_default_excludes: false,
+    },
+    sandbox_workspace_write: {
+      network_access: false,
+    },
+    features: {
+      shell_tool: true,
+    },
+    otel: {
+      enabled: false,
+      log_user_prompt: false,
+    },
+    ...(codexMcpTable(runtimeExtensions) ?? {}),
+  }
+
+  return stringifyToml(root)
+}
 
 const codexAdapter: RuntimeAdapter = {
   id: 'codex',
   name: 'Codex (OpenAI)',
-  defaultImage: 'ghcr.io/shadowob/codex-runner:latest',
-  packages: ['@openai/codex'],
-  requiresGit: true,
+  runtimeKind: 'cc-connect',
+  defaultImage: 'ghcr.io/buggyblues/codex-runner:latest',
+  container: ccConnectContainerSpec(),
 
-  acpRuntime(_agent: AgentDeployment): OpenClawAcpRuntime {
-    return {
-      agent: 'codex',
-      backend: 'acpx',
-      mode: 'persistent',
-      cwd: '/workspace',
-    }
-  },
-
-  applyConfig(agent: AgentDeployment, agentEntry: OpenClawAgentConfig, config: OpenClawConfig) {
-    const acpRuntime = this.acpRuntime(agent)!
-    if (agentEntry.runtime?.acp) {
-      Object.assign(acpRuntime, agentEntry.runtime.acp)
-    }
-    agentEntry.runtime = { type: 'acp', acp: acpRuntime }
-
-    config.acp = {
-      enabled: true,
-      backend: 'acpx',
-      defaultAgent: agent.id,
-      allowedAgents: [agent.id],
-      maxConcurrentSessions: 4,
-      ...config.acp,
-    }
-
-    if (!config.plugins) config.plugins = {}
-    if (!config.plugins.entries) config.plugins.entries = {}
-    config.plugins.entries.acpx = {
-      enabled: true,
-      ...config.plugins.entries.acpx,
-    }
-  },
-
-  extraEnv() {
-    return {}
+  buildPackage(context) {
+    return buildCcConnectPackage(context, {
+      agentType: 'codex',
+      agentOptions: () => ({
+        codex_home: `${HOME_DIR}/.codex`,
+        backend: 'exec',
+      }),
+      nativeFiles: (context) => {
+        const runtimeExtensions = runtimeExtensionsForKind(context.runtimeExtensions, 'cc-connect')
+        const codexConfig = buildCodexConfig(context.agent, runtimeExtensions)
+        return {
+          [`${HOME_DIR}/.codex/config.toml`]: codexConfig,
+          [`${WORKSPACE_DIR}/.codex/config.toml`]: codexConfig,
+        }
+      },
+    })
   },
 }
 

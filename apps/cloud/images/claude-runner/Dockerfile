@@ -1,87 +1,88 @@
+# syntax=docker/dockerfile:1.7
+
 # ─── Claude Runner ────────────────────────────────────────────────────────
-# Container image for Claude Code agent runtime.
-# Extends the OpenClaw runner with Claude Code CLI + ACPX harness.
-# OpenClaw serves as the gateway, forwarding to Claude Code via ACP.
+# Native cc-connect runner for Claude Code.
 #
-# User:   openclaw:1000
-# Home:   /home/openclaw
-# State:  /home/openclaw/.openclaw   (emptyDir mount)
-# Config: /etc/openclaw              (ConfigMap mount, read-only)
-# Logs:   /var/log/openclaw          (emptyDir mount)
-#
-# Build: docker build -t ghcr.io/shadowob/claude-runner:latest .
+# Build from the repository root:
+#   docker build -t ghcr.io/buggyblues/claude-runner:latest \
+#     -f apps/cloud/images/claude-runner/Dockerfile .
 # ──────────────────────────────────────────────────────────────────────────
 
-# ── Stage 1: Builder ─────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM golang:1.25-bookworm AS cc-builder
+
+ARG CC_CONNECT_REF=63b5d59127b3004bc7002f2d51892b1f2a91ea83
+ARG CC_CONNECT_REPO=https://github.com/buggyblues/cc-connect.git
 
 WORKDIR /build
 
-ARG OPENCLAW_VERSION=2026.5.7
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates git && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install OpenClaw, Claude Code, Shadow plugin, and ACPX plugin
+RUN git clone --depth 1 "${CC_CONNECT_REPO}" /tmp/cc-connect && \
+    cd /tmp/cc-connect && \
+    git fetch --depth 1 origin "${CC_CONNECT_REF}" && \
+    git checkout "${CC_CONNECT_REF}" && \
+    CGO_ENABLED=0 go build \
+      -tags "no_web no_acp no_cursor no_devin no_iflow no_kimi no_qoder no_feishu no_telegram no_discord no_slack no_dingtalk no_wecom no_weixin no_qq no_qqbot no_line no_weibo" \
+      -ldflags "-s -w" \
+      -o /build/cc-connect ./cmd/cc-connect
+
+FROM node:22-bookworm-slim AS node-deps
+
+WORKDIR /build
+
 RUN npm init -y && \
-    npm install "openclaw@${OPENCLAW_VERSION}" @anthropic-ai/claude-code@latest \
-                @shadowob/openclaw-shadowob@latest && \
-    # Setup extensions directories
-    mkdir -p extensions/shadowob && \
-    cp -r node_modules/@shadowob/openclaw-shadowob/* extensions/shadowob/ && \
-    # Clean up dev artifacts
-    # NOTE: preserve openclaw/docs/reference/templates — OpenClaw needs these at runtime
-    find node_modules -type d \( -name ".github" -o -name "test" -o -name "tests" \
-      -o -name "__tests__" -o -name "examples" \) \
-      -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules -type d -name "docs" ! -path "*/openclaw/docs*" \
-      -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules \( -name "CHANGELOG.md" -o -name "README.md" \) \
-      -delete 2>/dev/null || true
+    npm install --no-audit --fund=false \
+      @anthropic-ai/claude-code@latest \
+      @shadowob/cli@latest \
+      @shadowob/connector@latest
 
-# ── Stage 2: Runner ─────────────────────────────────────────────────────
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 
 LABEL org.opencontainers.image.source="https://github.com/nicepkg/shadow"
-LABEL org.opencontainers.image.description="Shadow Cloud Claude Runner (OpenClaw + ACP + Claude Code)"
+LABEL org.opencontainers.image.description="Shadow Cloud Claude Runner (cc-connect + Claude Code)"
 
-# Install runtime dependencies
-RUN apk add --no-cache curl tini git
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl git tini && \
+    rm -rf /var/lib/apt/lists/*
 
-# Create non-root user openclaw:1000
-# node:22-alpine ships with node:node at UID/GID 1000 — remove it first
-RUN deluser node && \
-    addgroup -g 1000 openclaw && \
-    adduser -u 1000 -G openclaw -D openclaw
+RUN userdel -r node 2>/dev/null || true; \
+    groupdel node 2>/dev/null || true; \
+    groupadd -g 1000 shadow; \
+    useradd -u 1000 -g shadow -m -d /home/shadow -s /usr/sbin/nologin shadow
 
-# Setup directories
 WORKDIR /app
-RUN mkdir -p /home/openclaw/.openclaw /home/openclaw/.claude /etc/openclaw \
-             /var/log/openclaw /workspace /tmp/openclaw && \
-    chown -R openclaw:openclaw /home/openclaw /var/log/openclaw /workspace /tmp/openclaw /app
+RUN mkdir -p /home/shadow/.cc-connect /home/shadow/.claude /etc/openclaw /etc/shadowob \
+             /var/log/shadowob /workspace /tmp/npm-cache && \
+    ln -s /home/shadow /home/openclaw && \
+    chown -R shadow:shadow /home/shadow /etc/shadowob /var/log/shadowob \
+      /workspace /tmp/npm-cache /app
 
-# Copy from builder (large layer, changes when deps update)
-COPY --from=builder --chown=openclaw:openclaw /build/node_modules ./node_modules
-COPY --from=builder --chown=openclaw:openclaw /build/extensions ./extensions
-COPY --from=builder --chown=openclaw:openclaw /build/package.json ./package.json
+COPY --from=node-deps --chown=shadow:shadow /build/node_modules ./node_modules
+COPY --from=node-deps --chown=shadow:shadow /build/package.json ./package.json
+COPY --from=cc-builder /build/cc-connect /usr/local/bin/cc-connect
 
-# Symlink CLIs to PATH (local install only, no global npm install)
-RUN ln -s /app/node_modules/.bin/openclaw /usr/local/bin/openclaw && \
-    ln -s /app/node_modules/.bin/claude /usr/local/bin/claude
+RUN ln -s /app/node_modules/.bin/claude /usr/local/bin/claude && \
+    ln -s /app/node_modules/.bin/shadowob /usr/local/bin/shadowob && \
+    ln -s /app/node_modules/.bin/shadowob-connector /usr/local/bin/shadowob-connector
 
-# Copy entrypoint (small, changes often → last COPY for cache)
-COPY --chown=openclaw:openclaw entrypoint.mjs /app/entrypoint.mjs
+COPY --chown=shadow:shadow apps/cloud/images/cc-connect-runner/entrypoint.mjs /app/entrypoint.mjs
 
-# Health check
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:3100/health || exit 1
 
 EXPOSE 3100
 
 ENV NODE_ENV=production
-ENV OPENCLAW_GATEWAY_PORT=3100
+ENV HOME=/home/shadow
+ENV SHADOW_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
-ENV CLAUDE_CONFIG_DIR=/home/openclaw/.claude
+ENV SHADOW_RUNNER_NAME=claude-runner
+ENV CLAUDE_CONFIG_DIR=/home/shadow/.claude
+ENV npm_config_cache=/tmp/npm-cache
 
-# Run as non-root
-USER openclaw
+USER shadow
 
 ENTRYPOINT ["tini", "--"]
 CMD ["node", "/app/entrypoint.mjs"]

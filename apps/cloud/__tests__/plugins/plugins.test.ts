@@ -361,9 +361,7 @@ describe('loadAllPlugins', () => {
         args: ['-y', 'dingtalk-mcp@latest'],
       }),
     )
-    expect(yuque?.runtime?.skillSources?.map((source) => source.id)).toContain(
-      'yuque-openclaw-skills',
-    )
+    expect(yuque?.runtime?.skillSources?.map((source) => source.id)).toContain('yuque-agent-skills')
     expect(yuque?.runtime?.mcpServers).toContainEqual(
       expect.objectContaining({ id: 'yuque-mcp', args: ['-y', 'yuque-mcp@latest'] }),
     )
@@ -635,7 +633,7 @@ describe('defineSkillPlugin', () => {
             id: 'demo-skills',
             kind: 'git',
             url: 'https://example.com/demo.git',
-            targetPath: '/app/plugin-skills/demo',
+            targetPath: '/workspace/.agents/plugin-skills/demo',
           },
         ])
         api.addSubagentSources([
@@ -643,7 +641,7 @@ describe('defineSkillPlugin', () => {
             id: 'demo-subagents',
             kind: 'git',
             url: 'https://example.com/demo-subagents.git',
-            targetPath: '/app/plugin-subagents/demo',
+            targetPath: '/workspace/.agents/plugin-subagents/demo',
           },
         ])
         api.addMCP({
@@ -651,7 +649,7 @@ describe('defineSkillPlugin', () => {
           transport: 'stdio',
           command: 'demo-mcp',
         })
-        api.addCredentialFiles([{ envKey: 'DEMO_JSON', path: '/home/openclaw/.config/demo.json' }])
+        api.addCredentialFiles([{ envKey: 'DEMO_JSON', path: '/home/shadow/.config/demo.json' }])
         api.addVerificationChecks([
           {
             id: 'demo-auth',
@@ -667,10 +665,12 @@ describe('defineSkillPlugin', () => {
     const runtime = plugin._hooks.buildRuntime[0]?.(makeBuildContext())
     expect(runtime).toMatchObject({
       runtimeDependencies: [{ id: 'demo-cli', kind: 'npm-global', packages: ['demo-cli'] }],
-      skillSources: [{ id: 'demo-skills', targetPath: '/app/plugin-skills/demo' }],
-      subagentSources: [{ id: 'demo-subagents', targetPath: '/app/plugin-subagents/demo' }],
+      skillSources: [{ id: 'demo-skills', targetPath: '/workspace/.agents/plugin-skills/demo' }],
+      subagentSources: [
+        { id: 'demo-subagents', targetPath: '/workspace/.agents/plugin-subagents/demo' },
+      ],
       mcpServers: [{ id: 'demo-mcp', transport: 'stdio', command: 'demo-mcp' }],
-      credentialFiles: [{ envKey: 'DEMO_JSON', path: '/home/openclaw/.config/demo.json' }],
+      credentialFiles: [{ envKey: 'DEMO_JSON', path: '/home/shadow/.config/demo.json' }],
       verificationChecks: [
         {
           id: 'demo-auth',
@@ -1236,13 +1236,13 @@ describe('Tool plugins', () => {
     const fragment = plugin._hooks.buildConfig[0]!(ctx)
     expect(fragment?.tools).toBeUndefined()
     expect(fragment?.skills).toMatchObject({
-      load: { extraDirs: ['/app/plugin-skills/google-workspace'] },
+      load: { extraDirs: ['/workspace/.agents/plugin-skills/google-workspace'] },
       entries: {
         'google-workspace': {
           enabled: true,
           config: {
             services: ['gmail', 'calendar'],
-            skillSources: ['/app/plugin-skills/google-workspace'],
+            skillSources: ['/workspace/.agents/plugin-skills/google-workspace'],
           },
           env: {
             GOOGLE_WORKSPACE_SERVICES: 'gmail,calendar',
@@ -1254,7 +1254,7 @@ describe('Tool plugins', () => {
 
     const env = plugin._hooks.buildEnv[0]!(ctx)
     expect(env?.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE).toBe(
-      '/home/openclaw/.config/gws/credentials.json',
+      '/home/shadow/.config/gws/credentials.json',
     )
     expect(env?.GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON).toBe('{"installed":{}}')
     expect(env?.GOOGLE_WORKSPACE_CLI_TOKEN).toBeUndefined()
@@ -1289,7 +1289,7 @@ describe('Tool plugins', () => {
     const runtime = plugin._hooks.buildRuntime[0]!(ctx)
     expect(runtime?.credentialFiles).toContainEqual({
       envKey: 'GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON',
-      path: '/home/openclaw/.config/gws/credentials.json',
+      path: '/home/shadow/.config/gws/credentials.json',
       mode: '0600',
     })
     expect(runtime?.runtimeDependencies).toContainEqual(
@@ -1303,7 +1303,7 @@ describe('Tool plugins', () => {
       expect.objectContaining({
         id: 'google-workspace-cli-skills',
         includePattern: 'gws-*',
-        targetPath: '/app/plugin-skills/google-workspace',
+        targetPath: '/workspace/.agents/plugin-skills/google-workspace',
       }),
     )
     expect(runtime?.verificationChecks?.map((check) => check.id)).toEqual(
@@ -1365,7 +1365,7 @@ describe('Tool plugins', () => {
         },
         {
           name: 'google-workspace-skills',
-          mountPath: '/app/plugin-skills/google-workspace',
+          mountPath: '/workspace/.agents/plugin-skills/google-workspace',
           readOnly: true,
         },
       ]),

@@ -19,7 +19,7 @@ WeChat Mini Program Skyline provides development skills for page structure, Skyl
 
 ## Runtime Assets
 
-- Mounts official `wechat-miniprogram/skyline-skills` under `/app/plugin-skills/wechat-miniprogram-skyline`.
+- Mounts official `wechat-miniprogram/skyline-skills` under `/workspace/.agents/plugin-skills/wechat-miniprogram-skyline`.
 - Adds a verification check for the mounted Skyline overview skill.
 
 ## References

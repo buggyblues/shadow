@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { runtimeStatePvcName } from '../../../runtimes/container.js'
 import { GLOBAL_ENV_SCOPE, toDeploymentEnvScope } from '../../../utils/deployment-scope.js'
 import { normalizeGroupName } from '../../../utils/env-names.js'
 import { redactSecrets } from '../../../utils/redact.js'
@@ -562,7 +563,7 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
       namespace,
       agentId: name,
       sandboxName: state?.sandboxName ?? name,
-      pvcName: state?.statePvc ?? `openclaw-data-${state?.sandboxName ?? name}`,
+      pvcName: state?.statePvc ?? runtimeStatePvcName(state?.sandboxName ?? name),
       driver,
       snapshotName: driver === 'volumeSnapshot' ? `${name}-${stamp}` : undefined,
       objectKey: driver === 'restic' ? `${namespace}/${name}/${stamp}` : undefined,

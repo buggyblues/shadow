@@ -1,275 +1,75 @@
-/**
- * Tests for the runtime adapter registry and all concrete adapters.
- *
- * Covers:
- * - Registry: registerRuntime, getRuntime, getAllRuntimes, getRuntimeIds
- * - OpenClaw baseline adapter (no ACP)
- * - Claude Code, Codex, Gemini, OpenCode adapters (ACP config)
- */
-
 import { describe, expect, it } from 'vitest'
-import type {
-  AgentDeployment,
-  OpenClawAgentConfig,
-  OpenClawConfig,
-} from '../../src/config/schema.js'
+import '../../src/runtimes/loader.js'
 import { getAllRuntimes, getRuntime, getRuntimeIds } from '../../src/runtimes/index.js'
 
-// Side-effect imports to register all adapters
-import '../../src/runtimes/loader.js'
+const EXPECTED_RUNTIMES = ['openclaw', 'claude-code', 'codex', 'gemini', 'opencode', 'hermes']
 
-// ─── Test Helpers ─────────────────────────────────────────────────────────────
-
-function makeAgent(overrides: Partial<AgentDeployment> = {}): AgentDeployment {
-  return {
-    id: 'test-agent',
-    name: 'Test Agent',
-    runtime: 'claude-code',
-    model: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-    providers: [{ id: 'anthropic', apiKey: '${env:ANTHROPIC_API_KEY}' }],
-    ...overrides,
-  } as AgentDeployment
-}
-
-function emptyOpenClawConfig(): OpenClawConfig {
-  return {} as OpenClawConfig
-}
-
-function emptyAgentEntry(): OpenClawAgentConfig {
-  return { id: 'test-agent', name: 'test-agent' } as OpenClawAgentConfig
-}
-
-// ─── Registry Tests ───────────────────────────────────────────────────────────
-
-describe('Runtime Registry', () => {
-  it('has all 5 runtimes registered after loader import', () => {
-    const ids = getRuntimeIds()
-    expect(ids).toContain('openclaw')
-    expect(ids).toContain('claude-code')
-    expect(ids).toContain('codex')
-    expect(ids).toContain('gemini')
-    expect(ids).toContain('opencode')
-    expect(ids.length).toBeGreaterThanOrEqual(5)
+describe('Runtime registry', () => {
+  it('registers all phase-1 runtimes', () => {
+    expect(getRuntimeIds()).toEqual(expect.arrayContaining(EXPECTED_RUNTIMES))
   })
 
-  it('getRuntime returns the correct adapter by ID', () => {
+  it('returns runtime adapters by ID', () => {
     const adapter = getRuntime('claude-code')
-    expect(adapter.id).toBe('claude-code')
-    expect(adapter.name).toContain('Claude')
+    expect(adapter).toMatchObject({
+      id: 'claude-code',
+      name: expect.stringContaining('Claude'),
+      runtimeKind: 'cc-connect',
+      defaultImage: 'ghcr.io/buggyblues/claude-runner:latest',
+    })
   })
 
-  it('getRuntime throws for unknown ID', () => {
+  it('throws for unknown runtime IDs', () => {
     expect(() => getRuntime('unknown-runtime')).toThrow('Unknown runtime "unknown-runtime"')
   })
 
-  it('getAllRuntimes returns at least 5 adapters', () => {
-    const all = getAllRuntimes()
-    expect(all.length).toBeGreaterThanOrEqual(5)
-    expect(all.every((a) => typeof a.id === 'string')).toBe(true)
+  it('does not expose no-op OpenClaw adapter hooks on native runtimes', () => {
+    for (const adapter of getAllRuntimes()) {
+      const shape = adapter as unknown as Record<string, unknown>
+      expect(shape.acpRuntime).toBeUndefined()
+      expect(shape.applyConfig).toBeUndefined()
+      expect(shape.extraEnv).toBeUndefined()
+      expect(shape.packages).toBeUndefined()
+      expect(shape.requiresGit).toBeUndefined()
+      expect(typeof adapter.buildPackage).toBe('function')
+    }
   })
 })
 
-// ─── OpenClaw Baseline ───────────────────────────────────────────────────────
-
-describe('OpenClaw Adapter', () => {
-  const adapter = getRuntime('openclaw')
-
-  it('has correct metadata', () => {
-    expect(adapter.id).toBe('openclaw')
-    expect(adapter.packages).toEqual([])
-    expect(adapter.requiresGit).toBe(false)
-  })
-
-  it('uses the current Shadow runner image by default', () => {
+describe('Runtime container layout', () => {
+  it('keeps OpenClaw on its gateway health port and state path', () => {
+    const adapter = getRuntime('openclaw')
+    expect(adapter.runtimeKind).toBe('openclaw')
     expect(adapter.defaultImage).toBe('ghcr.io/buggyblues/openclaw-runner:latest')
+    expect(adapter.container.healthPort).toBe(3102)
+    expect(adapter.container.statePath).toBe('/home/shadow/.openclaw')
+    expect(adapter.container.logPath).toBe('/var/log/openclaw')
+    expect(adapter.container.env).toEqual(
+      expect.arrayContaining([
+        { name: 'OPENCLAW_HEALTH_PORT', value: '3102' },
+        { name: 'OPENCLAW_GATEWAY_PORT', value: '3101' },
+      ]),
+    )
   })
 
-  it('acpRuntime returns null (no ACP harness)', () => {
-    expect(adapter.acpRuntime(makeAgent())).toBeNull()
+  it.each([
+    ['claude-code', 'cc-connect', '/home/shadow/.cc-connect'],
+    ['codex', 'cc-connect', '/home/shadow/.cc-connect'],
+    ['gemini', 'cc-connect', '/home/shadow/.cc-connect'],
+    ['opencode', 'cc-connect', '/home/shadow/.cc-connect'],
+    ['hermes', 'hermes', '/home/shadow/.hermes'],
+  ] as const)('defines native container layout for %s', (id, kind, statePath) => {
+    const adapter = getRuntime(id)
+    expect(adapter.runtimeKind).toBe(kind)
+    expect(adapter.container.healthPort).toBe(3100)
+    expect(adapter.container.statePath).toBe(statePath)
+    expect(adapter.container.logPath).toBe('/var/log/shadowob')
+    expect(adapter.container.env).toEqual(
+      expect.arrayContaining([
+        { name: 'SHADOW_RUNNER_HEALTH_PORT', value: '3100' },
+        { name: 'SHADOW_RUNNER_CONFIG_MOUNT', value: '/etc/openclaw' },
+        { name: 'SHADOW_RUNNER_LOG_DIR', value: '/var/log/shadowob' },
+      ]),
+    )
   })
-
-  it('extraEnv returns empty object', () => {
-    expect(adapter.extraEnv(makeAgent())).toEqual({})
-  })
-
-  it('applyConfig does not set acp config', () => {
-    const config = emptyOpenClawConfig()
-    const entry = emptyAgentEntry()
-    adapter.applyConfig(makeAgent(), entry, config)
-    expect(config.acp).toBeUndefined()
-  })
-
-  it('applyConfig does not write acpx plugin config', () => {
-    const config = emptyOpenClawConfig()
-    const entry = emptyAgentEntry()
-    adapter.applyConfig(makeAgent(), entry, config)
-    expect(config.plugins?.entries?.acpx).toBeUndefined()
-  })
-})
-
-// ─── Claude Code ──────────────────────────────────────────────────────────────
-
-describe('Claude Code Adapter', () => {
-  const adapter = getRuntime('claude-code')
-
-  it('has correct metadata', () => {
-    expect(adapter.id).toBe('claude-code')
-    expect(adapter.packages).toContain('@anthropic-ai/claude-code')
-    expect(adapter.requiresGit).toBe(true)
-  })
-
-  it('acpRuntime returns claude ACP config', () => {
-    const acp = adapter.acpRuntime(makeAgent())
-    expect(acp).not.toBeNull()
-    expect(acp!.agent).toBe('claude')
-    expect(acp!.backend).toBe('acpx')
-    expect(acp!.mode).toBe('persistent')
-    expect(acp!.cwd).toBe('/workspace')
-  })
-
-  it('applyConfig enables ACP and ACPX plugin', () => {
-    const config = emptyOpenClawConfig()
-    const entry = emptyAgentEntry()
-    adapter.applyConfig(makeAgent({ id: 'my-agent' }), entry, config)
-
-    // ACP is enabled
-    expect(config.acp?.enabled).toBe(true)
-    expect(config.acp?.backend).toBe('acpx')
-    expect(config.acp?.defaultAgent).toBe('my-agent')
-    expect(config.acp?.allowedAgents).toContain('my-agent')
-
-    // ACPX plugin is enabled
-    expect(config.plugins?.entries?.acpx?.enabled).toBe(true)
-
-    // Agent entry has runtime set
-    expect(entry.runtime).toEqual({
-      type: 'acp',
-      acp: { agent: 'claude', backend: 'acpx', mode: 'persistent', cwd: '/workspace' },
-    })
-  })
-
-  it('applyConfig preserves existing ACP overrides on agent entry', () => {
-    const config = emptyOpenClawConfig()
-    const entry = emptyAgentEntry()
-    entry.runtime = { acp: { cwd: '/custom' } } as any
-    adapter.applyConfig(makeAgent(), entry, config)
-
-    expect(entry.runtime?.acp?.cwd).toBe('/custom')
-    expect(entry.runtime?.acp?.agent).toBe('claude')
-  })
-
-  it('extraEnv returns empty', () => {
-    expect(adapter.extraEnv(makeAgent())).toEqual({})
-  })
-})
-
-// ─── Codex ────────────────────────────────────────────────────────────────────
-
-describe('Codex Adapter', () => {
-  const adapter = getRuntime('codex')
-
-  it('has correct metadata', () => {
-    expect(adapter.id).toBe('codex')
-    expect(adapter.packages).toContain('@openai/codex')
-    expect(adapter.requiresGit).toBe(true)
-  })
-
-  it('acpRuntime returns codex ACP config', () => {
-    const acp = adapter.acpRuntime(makeAgent())
-    expect(acp).not.toBeNull()
-    expect(acp!.agent).toBe('codex')
-    expect(acp!.backend).toBe('acpx')
-  })
-
-  it('applyConfig sets maxConcurrentSessions to 4', () => {
-    const config = emptyOpenClawConfig()
-    adapter.applyConfig(makeAgent(), emptyAgentEntry(), config)
-    expect(config.acp?.maxConcurrentSessions).toBe(4)
-  })
-})
-
-// ─── Gemini ───────────────────────────────────────────────────────────────────
-
-describe('Gemini Adapter', () => {
-  const adapter = getRuntime('gemini')
-
-  it('has correct metadata', () => {
-    expect(adapter.id).toBe('gemini')
-    expect(adapter.packages).toContain('@google/gemini-cli')
-    expect(adapter.requiresGit).toBe(false) // Gemini doesn't require git
-  })
-
-  it('acpRuntime returns gemini ACP config', () => {
-    const acp = adapter.acpRuntime(makeAgent())
-    expect(acp).not.toBeNull()
-    expect(acp!.agent).toBe('gemini')
-    expect(acp!.backend).toBe('acpx')
-  })
-
-  it('applyConfig sets maxConcurrentSessions to 8', () => {
-    const config = emptyOpenClawConfig()
-    adapter.applyConfig(makeAgent(), emptyAgentEntry(), config)
-    expect(config.acp?.maxConcurrentSessions).toBe(8)
-  })
-})
-
-// ─── OpenCode ─────────────────────────────────────────────────────────────────
-
-describe('OpenCode Adapter', () => {
-  const adapter = getRuntime('opencode')
-
-  it('has correct metadata', () => {
-    expect(adapter.id).toBe('opencode')
-    expect(adapter.packages).toContain('opencode-ai')
-    expect(adapter.requiresGit).toBe(true)
-  })
-
-  it('acpRuntime returns opencode ACP config', () => {
-    const acp = adapter.acpRuntime(makeAgent())
-    expect(acp).not.toBeNull()
-    expect(acp!.agent).toBe('opencode')
-    expect(acp!.backend).toBe('acpx')
-  })
-
-  it('applyConfig sets maxConcurrentSessions to 4', () => {
-    const config = emptyOpenClawConfig()
-    adapter.applyConfig(makeAgent(), emptyAgentEntry(), config)
-    expect(config.acp?.maxConcurrentSessions).toBe(4)
-  })
-})
-
-// ─── Cross-adapter Contracts ──────────────────────────────────────────────────
-
-describe('All ACP Adapters (cross-cutting)', () => {
-  const acpIds = ['claude-code', 'codex', 'gemini', 'opencode']
-
-  for (const id of acpIds) {
-    describe(`${id}`, () => {
-      const adapter = getRuntime(id)
-      const agent = makeAgent({ id: 'cross-test', runtime: id as any })
-
-      it('acpRuntime returns non-null with correct shape', () => {
-        const acp = adapter.acpRuntime(agent)
-        expect(acp).not.toBeNull()
-        expect(acp).toHaveProperty('agent')
-        expect(acp).toHaveProperty('backend', 'acpx')
-        expect(acp).toHaveProperty('mode', 'persistent')
-        expect(acp).toHaveProperty('cwd', '/workspace')
-      })
-
-      it('applyConfig enables ACP + ACPX plugin', () => {
-        const config = emptyOpenClawConfig()
-        const entry = emptyAgentEntry()
-        adapter.applyConfig(agent, entry, config)
-
-        expect(config.acp?.enabled).toBe(true)
-        expect(config.plugins?.entries?.acpx?.enabled).toBe(true)
-        expect(entry.runtime?.type).toBe('acp')
-      })
-
-      it('defaultImage is a valid image reference', () => {
-        expect(adapter.defaultImage).toMatch(/^[\w./-]+:\w+/)
-      })
-    })
-  }
 })

@@ -20,7 +20,7 @@ Yuque supports knowledge-base workflows for searching team knowledge, writing SO
 ## Runtime Assets
 
 - Registers `yuque-mcp` through `npx`.
-- Mounts Yuque OpenClaw skills from `yuque/yuque-ecosystem`.
+- Mounts Yuque agent skills from `yuque/yuque-ecosystem`.
 - Adds a verification check for the mounted smart-search skill.
 
 ## References

@@ -45,7 +45,7 @@ const skillSources = [
     url: 'https://github.com/Shopify/shopify-ai-toolkit.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/shopify',
+    targetPath: '/workspace/.agents/plugin-skills/shopify',
     includePattern: 'shopify-*',
     description: 'Shopify AI Toolkit skills',
   },
@@ -57,7 +57,7 @@ const verificationChecks = [
     id: 'shopify-skills-mounted',
     label: 'Shopify skills mounted',
     kind: 'command' as const,
-    command: ['test', '-f', '/app/plugin-skills/shopify/shopify-admin/SKILL.md'],
+    command: ['test', '-f', '/workspace/.agents/plugin-skills/shopify/shopify-admin/SKILL.md'],
     timeoutMs: 5_000,
     risk: 'safe' as const,
   },
@@ -88,5 +88,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/shopify',
+  skillsMountPath: '/workspace/.agents/plugin-skills/shopify',
 })
