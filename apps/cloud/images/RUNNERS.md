@@ -63,7 +63,10 @@ ShadowOB assets are installed in two explicit places:
 - Slash command index: `/etc/shadowob/slash-commands.json` exists for every
   runner. Each runner owns its own command catalog under
   `apps/cloud/src/runtimes/slash-commands/`; common packaging only serializes
-  the selected runner's catalog.
+  the selected runner's catalog. Runtime/plugin slash command artifacts are
+  additive sources. The runner catalog is loaded first, plugin artifacts are
+  loaded afterward in runtime-extension order, and duplicate command names use
+  first-wins semantics rather than overwriting an earlier command.
 
 ## Slash command catalogs
 

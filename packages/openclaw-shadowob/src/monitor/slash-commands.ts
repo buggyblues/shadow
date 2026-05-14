@@ -3,6 +3,7 @@ import type { ShadowClient } from '@shadowob/sdk'
 import type { AgentChainMetadata, ShadowRuntimeLogger, ShadowSlashCommand } from '../types.js'
 
 const SLASH_COMMAND_RE = /^\/([a-zA-Z][a-zA-Z0-9._-]{0,63})(?:\s+([\s\S]*))?$/
+const DEFAULT_SLASH_COMMANDS_PATH = '/etc/shadowob/slash-commands.json'
 
 export type ShadowSlashCommandMatch = {
   command: ShadowSlashCommand
@@ -194,10 +195,31 @@ async function loadSlashCommandFile(indexPath: string, runtime: ShadowRuntimeLog
   }
 }
 
+function logDuplicateSlashCommands(
+  sources: Array<{ path: string; commands: ShadowSlashCommand[] }>,
+  runtime: ShadowRuntimeLogger,
+) {
+  const owners = new Map<string, string>()
+  for (const source of sources) {
+    for (const command of source.commands) {
+      const key = command.name.toLowerCase()
+      const existingPath = owners.get(key)
+      if (existingPath) {
+        runtime.log?.(
+          `[slash] Ignoring duplicate command /${command.name} from ${source.path}; already defined by ${existingPath}`,
+        )
+        continue
+      }
+      owners.set(key, source.path)
+    }
+  }
+}
+
 async function runtimeExtensionSlashCommandPaths(runtime: ShadowRuntimeLogger) {
   const candidates = [
     process.env.SHADOW_RUNTIME_EXTENSIONS_PATH,
     process.env.OPENCLAW_RUNTIME_EXTENSIONS_PATH,
+    '/etc/shadowob/runtime-extensions.json',
     '/etc/openclaw/runtime-extensions.json',
   ].filter((path): path is string => Boolean(path))
   const paths: string[] = []
@@ -229,16 +251,28 @@ export async function loadLocalSlashCommands(runtime: ShadowRuntimeLogger) {
 }
 
 export async function loadShadowSlashCommands(runtime: ShadowRuntimeLogger) {
+  const defaultIndexPath =
+    process.env.SHADOW_DEFAULT_SLASH_COMMANDS_PATH || DEFAULT_SLASH_COMMANDS_PATH
   const paths = [
+    defaultIndexPath,
     process.env.SHADOW_SLASH_COMMANDS_PATH,
     ...(await runtimeExtensionSlashCommandPaths(runtime)),
   ].filter((path): path is string => Boolean(path))
   const seenPaths = [...new Set(paths)]
-  const loaded = await Promise.all(seenPaths.map((path) => loadSlashCommandFile(path, runtime)))
-  const merged = normalizeShadowSlashCommands(loaded.flat())
-  if (seenPaths.length > 1) {
+  const existingPaths = (
+    await Promise.all(seenPaths.map(async (path) => ((await fileExists(path)) ? path : null)))
+  ).filter((path): path is string => Boolean(path))
+  const sources = await Promise.all(
+    existingPaths.map(async (path) => ({
+      path,
+      commands: await loadSlashCommandFile(path, runtime),
+    })),
+  )
+  logDuplicateSlashCommands(sources, runtime)
+  const merged = normalizeShadowSlashCommands(sources.flatMap((source) => source.commands))
+  if (existingPaths.length > 1) {
     runtime.log?.(
-      `[slash] Merged ${merged.length} slash command(s) from ${seenPaths.length} source(s)`,
+      `[slash] Merged ${merged.length} slash command(s) from ${existingPaths.length} source(s)`,
     )
   }
   return merged
