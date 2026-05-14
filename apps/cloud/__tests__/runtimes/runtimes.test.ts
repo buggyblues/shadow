@@ -1,8 +1,18 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import '../../src/runtimes/loader.js'
 import { getAllRuntimes, getRuntime, getRuntimeIds } from '../../src/runtimes/index.js'
 
 const EXPECTED_RUNTIMES = ['openclaw', 'claude-code', 'codex', 'gemini', 'opencode', 'hermes']
+const RUNNER_DOCKERFILES = [
+  'openclaw-runner',
+  'claude-runner',
+  'codex-runner',
+  'gemini-runner',
+  'opencode-runner',
+  'hermes-runner',
+]
 
 describe('Runtime registry', () => {
   it('registers all phase-1 runtimes', () => {
@@ -71,5 +81,22 @@ describe('Runtime container layout', () => {
         { name: 'SHADOW_RUNNER_LOG_DIR', value: '/var/log/shadowob' },
       ]),
     )
+  })
+})
+
+describe('Runner Dockerfile layout', () => {
+  it.each(
+    RUNNER_DOCKERFILES,
+  )('%s runtime stage keeps /workspace writable for materialized runtime files', (runnerDir) => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), `images/${runnerDir}/Dockerfile`),
+      'utf8',
+    )
+    const runnerStageMatch = /\nFROM [^\n]+ AS runner\n/.exec(`\n${dockerfile}`)
+    const runnerStage = dockerfile.slice(Math.max((runnerStageMatch?.index ?? 0) - 1, 0))
+
+    expect(runnerStage).toMatch(/mkdir -p[\s\S]*\/workspace/)
+    expect(runnerStage).toMatch(/chown -R [^\n]*[\s\S]*\/workspace/)
+    expect(runnerStage).toMatch(/USER shadow/)
   })
 })

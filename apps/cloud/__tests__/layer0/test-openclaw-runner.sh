@@ -197,11 +197,11 @@ echo "✓ No known noisy cloud warnings"
 
 # 11. OpenClaw expects writable runtime files for plugin evolution and local state.
 echo "▸ Checking writable runtime filesystem..."
-if docker exec "$CONTAINER_NAME" sh -lc 'touch /app/extensions/.shadow-write-test /home/shadow/.openclaw/.shadow-write-test && rm -f /app/extensions/.shadow-write-test /home/shadow/.openclaw/.shadow-write-test' 2>/dev/null; then
+if docker exec "$CONTAINER_NAME" sh -lc 'mkdir -p /workspace/.agents/skills/shadowob && touch /app/extensions/.shadow-write-test /home/shadow/.openclaw/.shadow-write-test /workspace/.agents/skills/shadowob/.shadow-write-test && rm -f /app/extensions/.shadow-write-test /home/shadow/.openclaw/.shadow-write-test /workspace/.agents/skills/shadowob/.shadow-write-test' 2>/dev/null; then
   echo "✓ OpenClaw runtime paths are writable"
 else
   echo "✗ OpenClaw runtime paths are not writable"
-  docker exec "$CONTAINER_NAME" sh -lc 'ls -ld /app /app/extensions /home/shadow/.openclaw' || true
+  docker exec "$CONTAINER_NAME" sh -lc 'ls -ld /app /app/extensions /home/shadow/.openclaw /workspace /workspace/.agents /workspace/.agents/skills /workspace/.agents/skills/shadowob 2>/dev/null' || true
   exit 1
 fi
 

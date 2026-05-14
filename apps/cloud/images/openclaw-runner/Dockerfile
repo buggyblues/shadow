@@ -147,9 +147,11 @@ RUN userdel -r node 2>/dev/null || true; \
 
 # Setup directories
 WORKDIR /app
-RUN mkdir -p /home/shadow/.openclaw /etc/openclaw /var/log/openclaw /tmp/openclaw /tmp/npm-cache && \
+RUN mkdir -p /home/shadow/.openclaw /etc/openclaw /etc/shadowob /var/log/openclaw \
+      /workspace /tmp/openclaw /tmp/npm-cache && \
     ln -s /home/shadow /home/openclaw && \
-    chown -R shadow:shadow /home/shadow /var/log/openclaw /tmp/openclaw /tmp/npm-cache /app
+    chown -R shadow:shadow /home/shadow /etc/shadowob /var/log/openclaw \
+      /workspace /tmp/openclaw /tmp/npm-cache /app
 
 # Copy stable OpenClaw runtime deps first.
 COPY --from=builder --chown=shadow:shadow /build/node_modules ./node_modules
