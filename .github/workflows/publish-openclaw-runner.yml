@@ -68,6 +68,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        run: |
+          df -h
+          sudo rm -rf \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift
+          sudo docker system prune -af --volumes || true
+          df -h
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
 
@@ -108,7 +120,7 @@ jobs:
 
       - name: Build and push
         if: github.event_name != 'workflow_dispatch' || inputs.image == 'all' || inputs.image == matrix.image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
