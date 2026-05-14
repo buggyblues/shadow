@@ -10,7 +10,6 @@
  */
 
 import type { CloudApiClient } from '@shadowob/cloud-ui/lib/api-context'
-import { runtimeStatePvcName } from '../../runtimes/container.js'
 import {
   BASE,
   type ResourceTier,
@@ -71,6 +70,7 @@ type DeploymentAgentEntry = { name: string; replicas: number; runtime: string | 
 
 const deploymentCacheByNamespace = new Map<string, SaasDeployment>()
 const deploymentCacheById = new Map<string, SaasDeployment>()
+const RUNNER_STATE_VOLUME_NAME = 'shadow-runner-state'
 const VISIBLE_DEPLOYMENT_STATUSES = new Set<SaasDeployment['status']>([
   'pending',
   'deploying',
@@ -80,6 +80,10 @@ const VISIBLE_DEPLOYMENT_STATUSES = new Set<SaasDeployment['status']>([
   'resuming',
   'destroying',
 ])
+
+function runtimeStatePvcName(agentName: string): string {
+  return `${RUNNER_STATE_VOLUME_NAME}-${agentName}`
+}
 
 function deploymentCreatedTime(row: SaasDeployment): number {
   return Date.parse(row.createdAt || row.updatedAt || '') || 0
