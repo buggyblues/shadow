@@ -96,6 +96,10 @@ Keep ShadowOB integration as an OpenClaw plugin concern:
   `/etc/shadowob/slash-commands.json` with `dispatch=passthrough`, registered
   with Shadow for the input picker, and then forwarded to OpenClaw as the
   original standalone `/...` message instead of being rewritten into a prompt
+- plugin-provided slash command indexes are loaded as additional runtime
+  artifacts after the official OpenClaw catalog. Duplicate command names keep
+  the first loaded definition, so plugin commands do not replace OpenClaw's
+  official commands.
 
 The OpenClaw command catalog is owned by
 `apps/cloud/src/runtimes/slash-commands/openclaw.ts`. The researched official
