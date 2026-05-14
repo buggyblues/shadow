@@ -82,11 +82,11 @@ describe('runner runtime package smoke checks', () => {
   })
 
   it.each([
-    ['claude-code', '/workspace/.claude/settings.json', 'json'],
-    ['codex', '/home/shadow/.codex/config.toml', 'toml'],
-    ['opencode', '/workspace/opencode.json', 'json'],
-    ['gemini', '/workspace/.gemini/settings.json', 'json'],
-  ] as const)('checks cc-connect container files for %s', (runtime, nativePath, parser) => {
+    ['claude-code', '/workspace/.claude/settings.json', 'json', 'add-dir'],
+    ['codex', '/home/shadow/.codex/config.toml', 'toml', 'permissions'],
+    ['opencode', '/workspace/opencode.json', 'json', 'connect'],
+    ['gemini', '/workspace/.gemini/settings.json', 'json', 'about'],
+  ] as const)('checks cc-connect container files for %s', (runtime, nativePath, parser, commandName) => {
     const subject = agent(runtime)
     const pkg = buildAgentRuntimePackage({
       agent: subject,
@@ -104,7 +104,22 @@ describe('runner runtime package smoke checks', () => {
     expect(() => parseToml(files['/home/shadow/.cc-connect/config.toml'] ?? '')).not.toThrow()
     expect(files['/workspace/AGENTS.md']).toContain(`${runtime} smoke`)
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('shadowob')
-    expect(files['/etc/shadowob/slash-commands.json']).toBe('[]\n')
+    const slashCommands = JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]') as Array<{
+      name: string
+      packId: string
+      body?: string
+    }>
+    expect(slashCommands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: commandName,
+          packId: runtime,
+        }),
+      ]),
+    )
+    expect(slashCommands.find((command) => command.name === commandName)?.body).toContain(
+      `/${commandName}`,
+    )
     if (parser === 'toml') {
       expect(() => parseToml(files[nativePath] ?? '')).not.toThrow()
     } else {

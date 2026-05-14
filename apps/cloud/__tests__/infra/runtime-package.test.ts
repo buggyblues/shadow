@@ -70,6 +70,7 @@ describe('buildAgentRuntimePackage', () => {
     expect(runtimePackage.plainEnv).toEqual({
       PUBLIC_FLAG: '1',
       SHADOW_SERVER_URL: 'http://shadow.local',
+      SHADOW_SLASH_COMMANDS_PATH: '/etc/shadowob/slash-commands.json',
     })
 
     expect(runtimePackage.secretData).toMatchObject({
