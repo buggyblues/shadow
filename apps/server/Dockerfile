@@ -81,6 +81,7 @@ COPY --from=builder /app/apps/cloud/dist apps/cloud/dist
 COPY --from=builder /app/apps/cloud/templates apps/cloud/templates
 COPY --from=builder /app/apps/cloud/images apps/cloud/images
 COPY --from=builder /app/apps/server/src/db/migrations apps/server/migrations
+COPY skills/shadowob-cli/SKILL.md skills/shadowob-cli/SKILL.md
 
 EXPOSE 3002
 ENV NODE_ENV=production

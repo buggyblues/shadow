@@ -1035,7 +1035,7 @@ describe('Cloud SaaS — deployment state consistency', () => {
         status: string
       }
       expect(destroyBody.ok).toBe(true)
-      expect(destroyBody.taskId).not.toBe(current!.id)
+      expect(destroyBody.taskId).toBe(current!.id)
       expect(destroyBody.status).toBe('destroying')
 
       const currentListRes = await req('GET', '/api/cloud-saas/deployments?limit=100&offset=0')
@@ -1063,7 +1063,6 @@ describe('Cloud SaaS — deployment state consistency', () => {
         status: string
       }>
       expect(history.filter((row) => row.namespace === namespace).map((row) => row.id)).toEqual([
-        destroyBody.taskId,
         current!.id,
       ])
 
@@ -1080,14 +1079,6 @@ describe('Cloud SaaS — deployment state consistency', () => {
         status: 'destroying',
       })
 
-      const oldDetailRes = await req('GET', `/api/cloud-saas/deployments/${current!.id}`)
-      expect(oldDetailRes.status).toBe(200)
-      const oldDetail = (await oldDetailRes.json()) as {
-        id: string
-        status: string
-      }
-      expect(oldDetail).toMatchObject({ id: current!.id, status: 'deployed' })
-
       const secondDestroyRes = await req('DELETE', `/api/cloud-saas/deployments/${current!.id}`)
       expect(secondDestroyRes.status).toBe(200)
       const secondDestroy = (await secondDestroyRes.json()) as {
@@ -1103,7 +1094,7 @@ describe('Cloud SaaS — deployment state consistency', () => {
         'POST',
         `/api/cloud-saas/deployments/${current!.id}/redeploy`,
       )
-      expect(redeployOldRes.status).toBe(409)
+      expect(redeployOldRes.status).toBe(422)
 
       const logs = await db
         .select()
@@ -1166,6 +1157,7 @@ describe('Cloud SaaS — deployment state consistency', () => {
         status: string
       }
       expect(destroyBody.status).toBe('destroying')
+      expect(destroyBody.taskId).toBe(current!.id)
 
       const logs = await db
         .select()
@@ -3058,7 +3050,7 @@ describe('Cloud SaaS — deployment + billing', () => {
     }
   })
 
-  it('DELETE /api/cloud-saas/deployments/:id enqueues a durable Pulumi destroy task', async () => {
+  it('DELETE /api/cloud-saas/deployments/:id turns the current deployment into a durable Pulumi destroy task', async () => {
     const namespace = uniqueName('e2e-destroy-ns')
 
     try {
@@ -3086,7 +3078,7 @@ describe('Cloud SaaS — deployment + billing', () => {
         status: string
       }
       expect(destroyBody.ok).toBe(true)
-      expect(destroyBody.taskId).not.toBe(existing!.id)
+      expect(destroyBody.taskId).toBe(existing!.id)
       expect(destroyBody.status).toBe('destroying')
 
       const detailRes = await req('GET', `/api/cloud-saas/deployments/${destroyBody.taskId}`)

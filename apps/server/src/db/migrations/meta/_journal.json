@@ -484,6 +484,13 @@
       "when": 1779454800000,
       "tag": "0068_rename_agent_listings",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1779541200000,
+      "tag": "0069_rebuild_cloud_deployment_namespace_indexes",
+      "breakpoints": true
     }
   ]
 }

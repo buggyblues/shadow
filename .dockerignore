@@ -15,6 +15,9 @@ node_modules
 solo-*.png
 *.md
 *.log
+!skills/
+!skills/shadowob-cli/
+!skills/shadowob-cli/SKILL.md
 !packages/openclaw-shadowob/
 !packages/openclaw-shadowob/openclaw.plugin.json
 !packages/openclaw-shadowob/package.json
