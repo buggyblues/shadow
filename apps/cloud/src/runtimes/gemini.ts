@@ -17,6 +17,7 @@ import {
   runtimeExtensionsForKind,
   WORKSPACE_DIR,
 } from './package-common.js'
+import { geminiSlashCommands } from './slash-commands/gemini.js'
 
 function buildGeminiSettings(
   agent: AgentDeployment,
@@ -59,6 +60,7 @@ const geminiAdapter: RuntimeAdapter = {
       agentOptions: () => ({
         timeout_mins: 30,
       }),
+      shadowSlashCommands: geminiSlashCommands,
       nativeFiles: (context) => {
         const runtimeExtensions = runtimeExtensionsForKind(context.runtimeExtensions, 'cc-connect')
         return {

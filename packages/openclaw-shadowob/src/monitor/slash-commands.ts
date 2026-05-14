@@ -143,6 +143,7 @@ export function normalizeShadowSlashCommands(input: unknown): ShadowSlashCommand
         ].filter((alias) => alias.toLowerCase() !== key)
       : undefined
     const interaction = normalizeSlashInteraction(record.interaction)
+    const dispatch = readString(record.dispatch, 40)
 
     commands.push({
       name,
@@ -159,6 +160,7 @@ export function normalizeShadowSlashCommands(input: unknown): ShadowSlashCommand
       ...(typeof record.body === 'string' && record.body.trim()
         ? { body: record.body.trim().slice(0, 20_000) }
         : {}),
+      ...(dispatch === 'agent' || dispatch === 'passthrough' ? { dispatch } : {}),
       ...(interaction ? { interaction } : {}),
     })
   }
@@ -167,7 +169,7 @@ export function normalizeShadowSlashCommands(input: unknown): ShadowSlashCommand
 }
 
 function toPublicSlashCommands(commands: ShadowSlashCommand[]): ShadowSlashCommand[] {
-  return commands.map(({ body: _body, ...command }) => command)
+  return commands.map(({ body: _body, dispatch: _dispatch, ...command }) => command)
 }
 
 async function fileExists(path: string) {

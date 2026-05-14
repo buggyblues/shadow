@@ -29,6 +29,7 @@ export interface CcConnectPackageOptions {
   agentType: CcConnectAgentType
   agentOptions?: (agent: AgentDeployment) => TomlTable
   nativeFiles?: (context: RuntimePackageBuildContext) => RuntimeFiles
+  shadowSlashCommands?: unknown[]
 }
 
 function buildCcConnectConfig(options: {
@@ -76,12 +77,13 @@ function buildCcConnectRuntimeFiles(options: {
   agent: AgentDeployment
   ccConnectConfig: string
   nativeFiles?: RuntimeFiles
+  shadowSlashCommands?: unknown[]
 }): RuntimeFiles {
   const { agent, ccConnectConfig } = options
   const files: RuntimeFiles = {
     ...buildIdentityWorkspaceFiles(agent),
     [CC_CONNECT_CONFIG_PATH]: ccConnectConfig,
-    [SHADOW_SLASH_COMMANDS_PATH]: '[]\n',
+    [SHADOW_SLASH_COMMANDS_PATH]: json(options.shadowSlashCommands ?? []),
     ...(options.nativeFiles ?? {}),
   }
   addShadowobSkill(files, 'cc-connect', agent.runtime)
@@ -104,6 +106,7 @@ export function buildCcConnectPackage(
     agent: context.agent,
     ccConnectConfig,
     nativeFiles: options.nativeFiles?.(context),
+    shadowSlashCommands: options.shadowSlashCommands,
   })
 
   return {

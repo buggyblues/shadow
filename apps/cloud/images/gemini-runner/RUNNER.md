@@ -44,6 +44,35 @@ like Codex, Claude Code, OpenCode, or Hermes. Treat skills as Cloud-authored
 prompts/context, Gemini extensions, or custom commands until a native Gemini
 skill standard exists.
 
+## Shadow slash command bridge
+
+The runner package always materializes `/etc/shadowob/slash-commands.json` so
+Shadow can load a stable command index. The Gemini runner owns its catalog in
+`apps/cloud/src/runtimes/slash-commands/gemini.ts`; this is intentionally not a
+common runtime artifact.
+
+Official Gemini CLI slash commands researched from the reference include
+`/about`, `/agents`, `/auth`, `/bug`, `/chat`, `/clear`, `/commands`,
+`/compress`, `/copy`, `/directory`, `/docs`, `/editor`, `/extensions`,
+`/help`, `/hooks`, `/ide`, `/init`, `/mcp`, `/memory`, `/model`,
+`/permissions`, `/plan`, `/policies`, `/privacy`, `/quit`, `/restore`,
+`/rewind`, `/resume`, `/settings`, `/shells`, `/setup-github`, `/skills`,
+`/stats`, `/terminal-setup`, `/theme`, `/tools`, `/upgrade`, and `/vim`.
+
+Current Cloud injection registers only names that do not collide with
+cc-connect's universal bot commands. Examples include `/about`, `/agents`,
+`/auth`, `/bug`, `/chat`, `/clear`, `/copy`, `/directory`, `/docs`, `/editor`,
+`/extensions`, `/hooks`, `/ide`, `/init`, `/mcp`, `/permissions`, `/plan`,
+`/policies`, `/privacy`, `/quit`, `/restore`, `/rewind`, `/resume`,
+`/settings`, `/shells`, `/setup-github`, `/stats`, `/terminal-setup`,
+`/theme`, `/tools`, and `/vim`. Overlapping names such as `/commands`,
+`/compress`, `/help`, `/memory`, `/model`, `/skills`, and `/upgrade` remain
+cc-connect-managed.
+
+cc-connect local commands are prompt-backed. Native Gemini TUI passthrough and
+custom TOML command discovery should be implemented inside the cc-connect Gemini
+agent before Cloud treats them as exact CLI control commands.
+
 ## Schema and type anchors
 
 - Settings schema URL:

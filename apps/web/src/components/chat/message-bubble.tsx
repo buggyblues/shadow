@@ -704,6 +704,10 @@ function CommerceProductCardView({
     !!purchaseResult ||
     currentCheckoutPreview?.viewerState === 'active' ||
     currentCheckoutPreview?.primaryAction === 'open_content'
+  const opensPaidFile = Boolean(currentCheckoutPreview?.paidFile)
+  const unlockedActionLabel = opensPaidFile
+    ? t('chat.paidFileOpenAction')
+    : t('chat.commerceViewEntitlement')
 
   return (
     <div
@@ -839,12 +843,16 @@ function CommerceProductCardView({
               onClick={resolveCardAction}
               disabled={isOpening}
               className="!rounded-[12px] w-full !px-0 !h-[36px] !text-[13px] !bg-success/15 hover:!bg-success/25 !text-success !border-none shadow-none"
-              title={t('chat.commerceViewEntitlement')}
+              title={unlockedActionLabel}
             >
               <span className="truncate">
-                {isOpening ? t('chat.paidFileOpening') : t('chat.commerceViewEntitlement')}
+                {isOpening ? t('chat.paidFileOpening') : unlockedActionLabel}
               </span>
-              <Unlock size={14} className="shrink-0" />
+              {opensPaidFile ? (
+                <FileText size={14} className="shrink-0" />
+              ) : (
+                <Unlock size={14} className="shrink-0" />
+              )}
             </Button>
           ) : (
             <Button
@@ -853,9 +861,8 @@ function CommerceProductCardView({
               disabled={isBuying || isOpening}
               className="!rounded-[12px] w-full !px-0 !h-[36px] !text-[13px] shadow-[0_0_15px_rgba(0,198,209,0.2)] hover:shadow-[0_0_25px_rgba(0,198,209,0.35)]"
             >
-              {currentCheckoutPreview?.primaryAction === 'open_content' ||
-              currentCheckoutPreview?.viewerState === 'active'
-                ? t('chat.paidFileOpen')
+              {currentCheckoutPreview?.primaryAction === 'open_content' || opensPaidFile
+                ? t('chat.paidFileOpenAction')
                 : t('chat.commerceBuy')}
             </Button>
           )}
@@ -896,6 +903,10 @@ function PaidFileCardView({
     staleTime: 10_000,
   })
   const isUnlocked = state?.hasAccess === true
+  const fileStateLabel = isUnlocked ? t('chat.paidFileUnlocked') : t('chat.paidFileLocked')
+  const fileAccessLabel = isUnlocked
+    ? t('chat.paidFileReady')
+    : t('chat.paidFileRequiresEntitlement')
 
   const openFile = async () => {
     setIsOpening(true)
@@ -918,16 +929,16 @@ function PaidFileCardView({
   return (
     <div
       className={cn(
-        'relative w-full max-w-[460px] flex overflow-hidden rounded-[20px] border backdrop-blur-2xl shadow-xl text-left my-2 group',
+        'relative w-full max-w-[440px] flex overflow-hidden rounded-[18px] border backdrop-blur-xl shadow-sm text-left my-2 group',
         isUnlocked
-          ? 'border-success/30 bg-bg-secondary/40'
-          : 'border-border-subtle bg-bg-secondary/40',
+          ? 'border-primary/25 bg-bg-secondary/70'
+          : 'border-border-subtle bg-bg-secondary/70',
       )}
     >
       <div
         className={cn(
           'absolute inset-0 bg-gradient-to-r from-transparent pointer-events-none',
-          isUnlocked ? 'via-success/5 to-success/10' : 'via-warning/5 to-warning/10',
+          isUnlocked ? 'via-primary/5 to-primary/10' : 'via-text-muted/5 to-transparent',
         )}
       />
       <div className="flex-1 p-4 min-w-0 flex flex-col justify-center relative z-10">
@@ -935,7 +946,7 @@ function PaidFileCardView({
           <div
             className={cn(
               'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-inner',
-              isUnlocked ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
+              isUnlocked ? 'bg-primary/10 text-primary' : 'bg-bg-tertiary text-text-muted',
             )}
           >
             <FileText size={24} strokeWidth={2.5} />
@@ -944,7 +955,7 @@ function PaidFileCardView({
             <div
               className={cn(
                 'text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 flex items-center gap-1.5',
-                isUnlocked ? 'text-success/80' : 'text-warning/80',
+                isUnlocked ? 'text-primary/80' : 'text-text-muted',
               )}
             >
               {isUnlocked ? (
@@ -952,7 +963,7 @@ function PaidFileCardView({
               ) : (
                 <Lock size={10} strokeWidth={3} />
               )}
-              {t('chat.paidFileEntitlementRequired')}
+              {fileStateLabel}
               <span className="opacity-30">·</span>
               <span className="font-mono truncate">{card.fileId.slice(0, 8).toUpperCase()}</span>
             </div>
@@ -982,30 +993,28 @@ function PaidFileCardView({
       <div
         className={cn(
           'flex flex-col items-center justify-center relative w-0 border-l-2 border-dashed my-4 z-10',
-          isUnlocked ? 'border-success/30' : 'border-border-subtle/60',
+          isUnlocked ? 'border-primary/25' : 'border-border-subtle/60',
         )}
       />
       <div
         className={cn(
           'w-[130px] shrink-0 p-4 flex flex-col items-center justify-center gap-4 relative z-10',
-          isUnlocked ? 'bg-success/5' : 'bg-warning/5',
+          isUnlocked ? 'bg-primary/5' : 'bg-bg-tertiary/30',
         )}
       >
         <div className="flex flex-col items-center gap-1 w-full text-center">
           <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">
-            {isUnlocked ? t('chat.commerceStatusLabel') : t('chat.commerceTypeLabel')}
+            {t('chat.paidFileAccessLabel')}
           </span>
           <div
             className={cn(
               'inline-flex max-w-full px-2.5 py-1 rounded-lg border text-[12px] font-black tracking-wide justify-center',
               isUnlocked
-                ? 'bg-success/10 border-success/20 text-success'
-                : 'bg-warning/10 border-warning/20 text-warning',
+                ? 'bg-primary/10 border-primary/20 text-primary'
+                : 'bg-bg-secondary border-border-subtle text-text-muted',
             )}
           >
-            <span className="truncate">
-              {isUnlocked ? t('member.status.active', 'ACTIVE') : t('chat.paidFile')}
-            </span>
+            <span className="truncate">{fileAccessLabel}</span>
           </div>
         </div>
         <div className="w-full">
@@ -1016,15 +1025,16 @@ function PaidFileCardView({
             className={cn(
               '!rounded-[12px] w-full !px-0 !h-[36px] !text-[13px]',
               isUnlocked
-                ? '!bg-success/15 hover:!bg-success/25 !text-success !border-none shadow-none'
-                : 'shadow-[0_0_15px_rgba(248,231,28,0.2)] hover:shadow-[0_0_25px_rgba(248,231,28,0.35)] !bg-gradient-to-br !from-[#f59e0b] !to-[#d97706] !text-white !border-none',
+                ? '!bg-primary/15 hover:!bg-primary/25 !text-primary !border !border-primary/20 shadow-none'
+                : '!bg-bg-secondary !text-text-muted !border !border-border-subtle shadow-none',
             )}
+            title={isUnlocked ? t('chat.paidFileOpenAction') : fileAccessLabel}
           >
             {isOpening
               ? t('chat.paidFileOpening')
               : isUnlocked
-                ? t('chat.paidFileOpen')
-                : t('chat.paidFileEntitlementRequired')}
+                ? t('chat.paidFileOpenAction')
+                : fileAccessLabel}
           </Button>
         </div>
       </div>

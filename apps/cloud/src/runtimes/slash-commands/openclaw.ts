@@ -1,0 +1,63 @@
+import type { RuntimeSlashCommand } from './types.js'
+
+const OPENCLAW_SLASH_COMMANDS_SOURCE = 'https://docs.openclaw.ai/tools/slash-commands'
+
+const openClawCommands = [
+  { name: 'new', description: 'Start a new session.', aliases: ['reset'] },
+  { name: 'compact', description: 'Compact the session context.' },
+  { name: 'stop', description: 'Abort the current run.' },
+  { name: 'session', description: 'Manage thread-binding expiry.' },
+  { name: 'think', description: 'Set the thinking level.', aliases: ['thinking', 't'] },
+  { name: 'verbose', description: 'Toggle verbose output.', aliases: ['v'] },
+  { name: 'fast', description: 'Show or set fast mode.' },
+  { name: 'reasoning', description: 'Toggle reasoning visibility.', aliases: ['reason'] },
+  { name: 'elevated', description: 'Toggle elevated mode.', aliases: ['elev'] },
+  { name: 'exec', description: 'Show or set exec defaults.' },
+  { name: 'model', description: 'Show or set the active model.' },
+  { name: 'models', description: 'List providers or models.' },
+  { name: 'queue', description: 'Manage queue behavior.' },
+  { name: 'help', description: 'Show the short help summary.' },
+  { name: 'commands', description: 'Show the generated command catalog.' },
+  { name: 'tools', description: 'Show tools available in the current conversation.' },
+  { name: 'status', description: 'Show runtime status and provider usage when available.' },
+  { name: 'tasks', description: 'List active and recent background tasks.' },
+  { name: 'context', description: 'Explain how context is assembled.' },
+  {
+    name: 'export-session',
+    description: 'Export the current session to HTML.',
+    aliases: ['export'],
+  },
+  { name: 'whoami', description: 'Show your sender id.', aliases: ['id'] },
+  { name: 'skill', description: 'Run a skill by name.' },
+  { name: 'allowlist', description: 'Manage allowlist entries.' },
+  { name: 'approve', description: 'Resolve exec approval prompts.' },
+  { name: 'btw', description: 'Ask a side question without changing future session context.' },
+  { name: 'subagents', description: 'Manage sub-agent runs for the current session.' },
+  { name: 'acp', description: 'Manage ACP sessions and runtime options.' },
+  { name: 'focus', description: 'Bind the current conversation to a session target.' },
+  { name: 'unfocus', description: 'Remove the current session binding.' },
+  { name: 'agents', description: 'List thread-bound agents for the current session.' },
+  { name: 'kill', description: 'Abort one or all running sub-agents.' },
+  { name: 'steer', description: 'Send steering to a running sub-agent.', aliases: ['tell'] },
+  { name: 'config', description: 'Read or write openclaw.json when config commands are enabled.' },
+  { name: 'mcp', description: 'Read or write OpenClaw-managed MCP config when enabled.' },
+  {
+    name: 'plugins',
+    description: 'Inspect or mutate plugin state when plugin commands are enabled.',
+    aliases: ['plugin'],
+  },
+  { name: 'debug', description: 'Manage runtime-only config overrides when enabled.' },
+  { name: 'usage', description: 'Control usage footers or print a local cost summary.' },
+  { name: 'tts', description: 'Control text-to-speech.' },
+  { name: 'restart', description: 'Restart OpenClaw when enabled.' },
+  { name: 'activation', description: 'Set group activation mode.' },
+  { name: 'send', description: 'Set send policy.' },
+  { name: 'bash', description: 'Run a host shell command when bash commands are enabled.' },
+]
+
+export const openClawSlashCommands: RuntimeSlashCommand[] = openClawCommands.map((command) => ({
+  ...command,
+  packId: 'openclaw',
+  sourcePath: OPENCLAW_SLASH_COMMANDS_SOURCE,
+  dispatch: 'passthrough',
+}))

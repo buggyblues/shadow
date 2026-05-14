@@ -14,7 +14,9 @@ import {
   hasRuntimeExtensions,
   json,
   OPENCLAW_SKILLS_DIR,
+  SHADOW_SLASH_COMMANDS_PATH,
 } from './package-common.js'
+import { openClawSlashCommands } from './slash-commands/openclaw.js'
 
 export const DEFAULT_OPENCLAW_RUNNER_IMAGE =
   process.env.SHADOWOB_OPENCLAW_RUNNER_IMAGE ??
@@ -59,7 +61,9 @@ const openclawAdapter: RuntimeAdapter = {
     delete openclawConfig._pluginProvisions
 
     ensureOpenClawShadowobSkillConfig(openclawConfig)
-    const runtimeFiles: Record<string, string> = {}
+    const runtimeFiles: Record<string, string> = {
+      [SHADOW_SLASH_COMMANDS_PATH]: json(openClawSlashCommands),
+    }
     addShadowobSkill(runtimeFiles, 'openclaw', context.agent.runtime)
 
     const configData: Record<string, string> = {

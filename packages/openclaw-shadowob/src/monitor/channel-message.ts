@@ -135,6 +135,7 @@ export async function processShadowMessage(params: {
   })
 
   const slashCommandMatch = matchShadowSlashCommand(cleanBody, slashCommands)
+  const slashCommandPassThrough = slashCommandMatch?.command.dispatch === 'passthrough'
   if (slashCommandMatch) {
     runtime.log?.(
       `[slash] Matched /${slashCommandMatch.invokedName} -> /${slashCommandMatch.command.name}`,
@@ -165,17 +166,16 @@ export async function processShadowMessage(params: {
     return
   }
 
-  const baseBodyForAgent = slashCommandMatch
-    ? formatSlashCommandPrompt(cleanBody, slashCommandMatch)
-    : cleanBody
+  const baseBodyForAgent =
+    slashCommandMatch && !slashCommandPassThrough
+      ? formatSlashCommandPrompt(cleanBody, slashCommandMatch)
+      : cleanBody
   const structuredMentions = getShadowMessageMentions(message)
   const mentionContext = formatShadowMentionsForAgent(structuredMentions)
   const serverInfo = channelServerMap.get(channelId)
   const channelLabel = serverInfo ? `#${serverInfo.channelName}` : `channel:${channelId}`
   const conversationLabel = serverInfo ? `${serverInfo.serverName} ${channelLabel}` : peerId
-  const messageBodyForAgent = interactiveResponseContext.text
-    ? `${interactiveResponseContext.text}\n\nUser message:\n${baseBodyForAgent}`
-    : baseBodyForAgent
+  const messageBodyForAgent = interactiveResponseContext.text || baseBodyForAgent
   const client = new ShadowClient(account.serverUrl, account.token)
   const viewerCommerceContext = await buildCommerceViewerContextForAgent({
     account,
@@ -209,7 +209,7 @@ export async function processShadowMessage(params: {
     Body: body,
     BodyForAgent: bodyForAgent,
     RawBody: rawBody,
-    CommandBody: slashCommandMatch?.args ?? cleanBody,
+    CommandBody: slashCommandPassThrough ? cleanBody : (slashCommandMatch?.args ?? cleanBody),
     From: `shadowob:user:${senderId}`,
     To: `shadowob:channel:${channelId}`,
     SessionKey: route.sessionKey,

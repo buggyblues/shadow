@@ -92,6 +92,20 @@ Keep ShadowOB integration as an OpenClaw plugin concern:
 - config section: `channels.shadowob`
 - runtime artifacts: slash commands, credential files, plugin resources, and
   verification checks from Cloud plugin runtime extensions
+- official OpenClaw slash commands are generated into
+  `/etc/shadowob/slash-commands.json` with `dispatch=passthrough`, registered
+  with Shadow for the input picker, and then forwarded to OpenClaw as the
+  original standalone `/...` message instead of being rewritten into a prompt
+
+The OpenClaw command catalog is owned by
+`apps/cloud/src/runtimes/slash-commands/openclaw.ts`. The researched official
+list includes `/new`, `/compact`, `/stop`, `/session`, `/think`, `/verbose`,
+`/fast`, `/reasoning`, `/elevated`, `/exec`, `/model`, `/models`, `/queue`,
+`/help`, `/commands`, `/tools`, `/status`, `/tasks`, `/context`,
+`/export-session`, `/whoami`, `/skill`, `/allowlist`, `/approve`, `/btw`,
+`/subagents`, `/acp`, `/focus`, `/unfocus`, `/agents`, `/kill`, `/steer`,
+`/config`, `/mcp`, `/plugins`, `/debug`, `/usage`, `/tts`, `/restart`,
+`/activation`, `/send`, and `/bash`.
 
 This runner can continue to support OpenClaw-native slash commands, skills,
 cron jobs, hooks, and channels. No cc-connect bridge is needed.
@@ -142,6 +156,7 @@ Container smoke:
   https://docs.openclaw.ai/gateway/configuration-reference
 - Sandboxing: https://docs.openclaw.ai/gateway/sandboxing
 - Tools: https://docs.openclaw.ai/tools
+- Slash commands: https://docs.openclaw.ai/tools/slash-commands
 - Exec approvals: https://docs.openclaw.ai/tools/exec-approvals
 - API usage and costs:
   https://docs.openclaw.ai/reference/api-usage-costs

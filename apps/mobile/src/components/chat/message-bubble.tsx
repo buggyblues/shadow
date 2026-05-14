@@ -1049,6 +1049,10 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
   const isUnlocked = state?.hasAccess === true
   const metaText =
     formatByteSize(card.snapshot.sizeBytes) || card.snapshot.mime || t('chat.paidFile')
+  const fileStateLabel = isUnlocked ? t('chat.paidFileUnlocked') : t('chat.paidFileLocked')
+  const fileAccessLabel = isUnlocked
+    ? t('chat.paidFileReady')
+    : t('chat.paidFileRequiresEntitlement')
 
   const openFile = async () => {
     setIsOpening(true)
@@ -1078,30 +1082,33 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
         styles.paidFileCard,
         {
           backgroundColor: colors.surface,
-          borderColor: isUnlocked ? `${colors.success}55` : colors.border,
+          borderColor: isUnlocked ? `${colors.primary}55` : colors.border,
         },
       ]}
     >
       <View
         style={[
           styles.paidFileIconWrap,
-          { backgroundColor: isUnlocked ? `${colors.success}18` : `${colors.warning}18` },
+          { backgroundColor: isUnlocked ? `${colors.primary}18` : colors.surfaceHover },
         ]}
       >
-        <FileText size={22} color={isUnlocked ? colors.success : colors.warning} />
+        <FileText size={22} color={isUnlocked ? colors.primary : colors.textMuted} />
       </View>
       <View style={styles.paidFileInfo}>
         <View style={styles.paidFileLabelRow}>
           {isUnlocked ? (
-            <Unlock size={11} color={colors.success} />
+            <Unlock size={11} color={colors.primary} />
           ) : (
-            <Lock size={11} color={colors.warning} />
+            <Lock size={11} color={colors.textMuted} />
           )}
           <Text
-            style={[styles.paidFileLabel, { color: isUnlocked ? colors.success : colors.warning }]}
+            style={[
+              styles.paidFileLabel,
+              { color: isUnlocked ? colors.primary : colors.textMuted },
+            ]}
             numberOfLines={1}
           >
-            {t('chat.paidFileEntitlementRequired')}
+            {fileStateLabel}
           </Text>
           <Text style={[styles.paidFileId, { color: colors.textMuted }]}>
             {card.fileId.slice(0, 8).toUpperCase()}
@@ -1130,10 +1137,10 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
       <View style={[styles.paidFileDivider, { borderColor: colors.border }]} />
       <View style={styles.paidFileActionCol}>
         <Text style={[styles.paidFileActionLabel, { color: colors.textMuted }]}>
-          {isUnlocked ? t('chat.commerceStatusLabel') : t('chat.commerceTypeLabel')}
+          {t('chat.paidFileAccessLabel')}
         </Text>
-        <Badge variant={isUnlocked ? 'success' : 'warning'} size="xs">
-          {isUnlocked ? t('member.status.active', 'ACTIVE') : t('chat.paidFile')}
+        <Badge variant={isUnlocked ? 'primary' : 'neutral'} size="xs">
+          {fileAccessLabel}
         </Badge>
         <Button
           variant={isUnlocked ? 'outline' : 'secondary'}
@@ -1143,7 +1150,7 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
           loading={isOpening}
           style={styles.paidFileButton}
         >
-          {isUnlocked ? t('chat.paidFileOpen') : t('chat.paidFileEntitlementRequired')}
+          {isUnlocked ? t('chat.paidFileOpenAction') : fileAccessLabel}
         </Button>
       </View>
     </View>

@@ -60,6 +60,30 @@ ShadowOB assets are installed in two explicit places:
   `/home/shadow/.codex/skills/shadowob/SKILL.md`,
   `/home/shadow/.gemini/skills/shadowob/SKILL.md`, and
   `/home/shadow/.hermes/skills/shadowob/SKILL.md`.
+- Slash command index: `/etc/shadowob/slash-commands.json` exists for every
+  runner. Each runner owns its own command catalog under
+  `apps/cloud/src/runtimes/slash-commands/`; common packaging only serializes
+  the selected runner's catalog.
+
+## Slash command catalogs
+
+Slash commands are runner-specific. Do not put runtime command lists in shared
+package code.
+
+| Runtime | Catalog source | Current Cloud injection |
+| --- | --- | --- |
+| OpenClaw | https://docs.openclaw.ai/tools/slash-commands | Injects the official OpenClaw command list with `dispatch=passthrough`, so OpenClaw receives the original `/...` message. |
+| Claude Code | https://code.claude.com/docs/en/commands | Injects non-conflicting Claude Code command names into cc-connect's ShadowOB `slash_commands_path`; cc-connect-owned names such as `/model`, `/status`, `/help`, `/config`, and `/compact` remain cc-connect management commands. |
+| Codex | https://developers.openai.com/codex/cli/slash-commands | Injects non-conflicting Codex command names such as `/permissions`, `/init`, `/review`, `/mcp`, `/agent`, `/apps`, `/plugins`, `/logout`, `/clear`, `/plan`, and `/statusline`; cc-connect owns `/new`, `/model`, `/status`, `/diff`, `/help`, `/stop`, `/ps`, and `/compact`. |
+| OpenCode | https://opencode.ai/docs/tui/ | Injects non-conflicting OpenCode commands such as `/connect`, `/details`, `/editor`, `/export`, `/init`, `/models`, `/redo`, `/share`, `/themes`, `/thinking`, `/undo`, and `/unshare`; cc-connect owns session/control names that overlap. |
+| Gemini CLI | https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/commands.md | Injects non-conflicting Gemini commands such as `/about`, `/agents`, `/auth`, `/bug`, `/chat`, `/hooks`, `/ide`, `/init`, `/mcp`, `/permissions`, `/plan`, `/settings`, `/stats`, `/tools`, and `/vim`; cc-connect owns overlapping management commands. |
+| Hermes | https://github.com/NousResearch/hermes-agent/blob/main/website/docs/reference/slash-commands.md | Injects Hermes messaging commands such as `/model`, `/goal`, `/queue`, `/steer`, `/background`, `/approve`, `/deny`, and `/commands` through the Hermes ShadowOB plugin path. Hermes documents `/cron` as CLI-only, so Cloud should not expose it in Shadow until the Hermes gateway supports it safely. |
+
+The cc-connect fork also publishes its own universal bot commands from the
+engine (`/new`, `/list`, `/switch`, `/model`, `/reasoning`, `/mode`, `/cron`,
+`/provider`, `/stop`, `/help`, and related aliases). Native CLI command names
+that collide with those are intentionally excluded from the local per-runner
+catalog to avoid stealing cc-connect control flow.
 
 ## Adapter boundary required by the refactor
 

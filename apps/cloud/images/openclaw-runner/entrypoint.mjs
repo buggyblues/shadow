@@ -201,8 +201,12 @@ function applyRuntimeArtifacts(runtimeExtensions) {
     runtimeArtifactPath(runtimeExtensions, 'shadow.slashCommands') ??
     runtimeExtensions?.slashCommands?.indexPath
   if (typeof slashIndexPath === 'string' && slashIndexPath.trim()) {
-    process.env.SHADOW_SLASH_COMMANDS_PATH = slashIndexPath.trim()
-    console.log(`[entrypoint] Slash command index: ${slashIndexPath.trim()}`)
+    if (!process.env.SHADOW_SLASH_COMMANDS_PATH) {
+      process.env.SHADOW_SLASH_COMMANDS_PATH = slashIndexPath.trim()
+      console.log(`[entrypoint] Slash command index: ${slashIndexPath.trim()}`)
+    } else {
+      console.log(`[entrypoint] Additional slash command index: ${slashIndexPath.trim()}`)
+    }
   }
 }
 

@@ -67,6 +67,7 @@ export type ShadowSlashCommand = {
   packId?: string
   sourcePath?: string
   body?: string
+  dispatch?: 'agent' | 'passthrough'
   interaction?: ShadowSlashCommandInteraction
 }
 

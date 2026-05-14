@@ -1,0 +1,51 @@
+import { ccConnectNativeCommandCatalog, type NativeSlashCommandSpec } from './types.js'
+
+export const CLAUDE_CODE_SLASH_COMMANDS_SOURCE = 'https://code.claude.com/docs/en/commands'
+
+export const claudeCodeNativeSlashCommandSpecs: NativeSlashCommandSpec[] = [
+  { name: 'add-dir', description: 'Add working directories to the Claude Code session.' },
+  { name: 'agents', description: 'Create and manage Claude Code agents.' },
+  { name: 'clear', description: 'Clear visible conversation context.' },
+  { name: 'compact', description: 'Compact conversation context.' },
+  { name: 'config', description: 'Open Claude Code configuration.' },
+  { name: 'cost', description: 'Show cost and usage information.' },
+  { name: 'doctor', description: 'Run Claude Code diagnostics.' },
+  { name: 'exit', description: 'Exit Claude Code.', aliases: ['quit'] },
+  { name: 'hooks', description: 'Configure Claude Code hooks.' },
+  { name: 'init', description: 'Initialize CLAUDE.md project memory.' },
+  { name: 'login', description: 'Sign in to Claude Code.' },
+  { name: 'logout', description: 'Sign out of Claude Code.' },
+  { name: 'mcp', description: 'Manage MCP server connections.' },
+  { name: 'memory', description: 'Edit or inspect Claude Code memory files.' },
+  { name: 'model', description: 'Show or switch the active Claude model.' },
+  { name: 'permissions', description: 'Inspect or update tool permissions.' },
+  { name: 'pr_comments', description: 'Fetch pull request comments.' },
+  { name: 'review', description: 'Review pending changes.' },
+  { name: 'security-review', description: 'Review current changes for security issues.' },
+  { name: 'setup-bedrock', description: 'Configure Amazon Bedrock authentication.' },
+  { name: 'setup-vertex', description: 'Configure Google Vertex AI authentication.' },
+  { name: 'simplify', description: 'Run code quality simplification review.' },
+  { name: 'skills', description: 'List and manage Claude Code skills.' },
+  { name: 'status', description: 'Open the Claude Code status interface.' },
+  { name: 'statusline', description: 'Configure the Claude Code status line.' },
+  { name: 'stop', description: 'Stop the attached background session.' },
+  { name: 'tasks', description: 'List and manage background tasks.' },
+  { name: 'team-onboarding', description: 'Generate a team onboarding guide.' },
+  { name: 'teleport', description: 'Pull a Claude Code web session into the terminal.' },
+  { name: 'terminal-setup', description: 'Configure terminal keybindings.' },
+  { name: 'theme', description: 'Change the terminal theme.' },
+  { name: 'tui', description: 'Switch Claude Code terminal UI renderer.' },
+  { name: 'ultraplan', description: 'Draft and review an ultraplan session.' },
+  { name: 'ultrareview', description: 'Run a deep multi-agent code review.' },
+  { name: 'usage', description: 'Show plan usage limits and cost data.' },
+  { name: 'vim', description: 'Legacy Vim mode command.' },
+  { name: 'voice', description: 'Toggle voice dictation mode.' },
+  { name: 'web-setup', description: 'Connect GitHub for Claude Code on the web.' },
+]
+
+export const claudeCodeSlashCommands = ccConnectNativeCommandCatalog({
+  packId: 'claude-code',
+  runtimeName: 'Claude Code',
+  sourcePath: CLAUDE_CODE_SLASH_COMMANDS_SOURCE,
+  commands: claudeCodeNativeSlashCommandSpecs,
+})

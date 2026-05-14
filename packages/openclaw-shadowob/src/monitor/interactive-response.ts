@@ -58,6 +58,8 @@ export async function buildInteractiveResponseContext(params: {
 
   const lines = [
     'Shadow interactive response received.',
+    'Use the submitted values once. Do not separately restate or grade the submitted form unless the source command explicitly asks for an evaluation.',
+    'If the next step is another Shadow interactive dialog, send that dialog only and do not add a separate normal text reply for the same step.',
     `Source message: ${source?.content ?? '(unavailable)'}`,
     typeof sourcePrompt === 'string' && sourcePrompt.trim()
       ? `Source prompt: ${sourcePrompt.trim()}`
