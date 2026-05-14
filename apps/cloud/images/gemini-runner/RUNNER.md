@@ -15,9 +15,10 @@ Shadow transport should come from the cc-connect ShadowOB platform.
 
 ## Current repository state
 
-The current runtime adapter still configures OpenClaw ACPX and an OpenClaw
-gateway process. The current runner image should be replaced by a cc-connect
-based image for this runtime.
+The Gemini adapter and image now use the cc-connect fork path. The runtime
+package emits `cc-connect-config.toml`, `.gemini/settings.json`, `GEMINI.md`,
+workspace bootstrap files, and ShadowOB skill files through
+`runtime-files.json`.
 
 ## Native Gemini CLI configuration
 
@@ -54,6 +55,25 @@ skill standard exists.
 - cc-connect type anchor: `../cc-connect/agent/gemini/gemini.go`.
 - Test rule: generated `.gemini/settings.json` must validate against the schema
   and then survive a Gemini CLI startup smoke test.
+
+## Provider and authentication notes
+
+- Gemini CLI has three primary auth families: Google login, Gemini API key, and
+  Vertex AI. Google login is recommended for AI Pro/Ultra subscription usage but
+  requires browser/localhost interaction, so it is not the default Cloud
+  bootstrap path.
+- AI Studio API-key mode uses `GEMINI_API_KEY`. Store it as a Kubernetes Secret
+  and never bake it into `.gemini/settings.json`.
+- Vertex AI needs `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`, then one
+  of ADC, a service-account JSON key, or `GOOGLE_API_KEY`. The docs require
+  unsetting `GOOGLE_API_KEY`/`GEMINI_API_KEY` when using ADC/service-account
+  flows.
+- Gemini CLI settings do not expose a generic OpenAI-compatible provider block.
+  A Cloud adapter that needs non-Google models must use a different runner or a
+  separate gateway integration instead of faking Gemini config keys.
+- Headless smoke tests should assert the selected auth mode and required env
+  keys without making a provider call unless the test environment explicitly
+  supplies real credentials.
 
 ## Security, audit, cost, network, and tools
 
@@ -126,15 +146,15 @@ type = "shadowob"
 
 ## Migration implications
 
-- Remove OpenClaw, ACPX, and `@shadowob/openclaw-shadowob` from the Gemini
+- OpenClaw, ACPX, and `@shadowob/openclaw-shadowob` are not used by the Gemini
   runner image.
-- Embed cc-connect fork plus `@google/gemini-cli`.
+- The image embeds the cc-connect fork plus `@google/gemini-cli`.
 - Generate `~/.gemini/settings.json`, project `.gemini/settings.json`,
   `GEMINI.md`, custom command files, and MCP/telemetry settings as native
   artifacts.
-- Add a runtime smoke test that verifies Gemini CLI can start in the image,
-  authenticate with the mounted provider secret, and emit stream JSON through
-  cc-connect.
+- Runtime package smoke tests verify native config/file generation; a Docker
+  smoke should still verify Gemini CLI startup and stream JSON through
+  cc-connect before publishing an image tag.
 
 ## Adapter and smoke tests
 
@@ -161,6 +181,8 @@ Container smoke:
 
 - Gemini CLI configuration:
   https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md
+- Gemini CLI authentication:
+  https://google-gemini.github.io/gemini-cli/docs/get-started/authentication.html
 - Gemini CLI commands:
   https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/commands.md
 - Gemini CLI repository: https://github.com/google-gemini/gemini-cli

@@ -33,7 +33,7 @@ const skillSources = [
     url: 'https://github.com/jackwener/opencli.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/opencli',
+    targetPath: '/workspace/.agents/plugin-skills/opencli',
     include: [
       'opencli-adapter-author',
       'opencli-autofix',
@@ -51,7 +51,7 @@ const verificationChecks = [
     id: 'opencli-skills-mounted',
     label: 'OpenCLI skills mounted',
     kind: 'command' as const,
-    command: ['test', '-f', '/app/plugin-skills/opencli/opencli-usage/SKILL.md'],
+    command: ['test', '-f', '/workspace/.agents/plugin-skills/opencli/opencli-usage/SKILL.md'],
     timeoutMs: 5_000,
     risk: 'safe' as const,
   },
@@ -76,5 +76,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/opencli',
+  skillsMountPath: '/workspace/.agents/plugin-skills/opencli',
 })

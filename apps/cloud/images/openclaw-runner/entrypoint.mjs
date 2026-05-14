@@ -23,11 +23,14 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { createServer } from 'node:http'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 
-const OPENCLAW_STATE_DIR = '/home/openclaw/.openclaw'
-const CONFIG_MOUNT = '/etc/openclaw'
+const RUNNER_HOME = process.env.HOME ?? '/home/shadow'
+const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR ?? join(RUNNER_HOME, '.openclaw')
+const CONFIG_MOUNT =
+  process.env.SHADOW_RUNNER_CONFIG_MOUNT ?? process.env.OPENCLAW_CONFIG_MOUNT ?? '/etc/openclaw'
 const EXTENSIONS_DIR = '/app/extensions'
+const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
 const RUNTIME_CONFIG_DIR = process.env.OPENCLAW_RUNTIME_CONFIG_DIR || '/tmp/openclaw/config'
 const RUNTIME_CONFIG_PATH = join(RUNTIME_CONFIG_DIR, 'openclaw.json')
@@ -54,6 +57,7 @@ const RUNTIME_DEPS_WARM_SCRIPT = '/app/warm-runtime-deps.mjs'
 const DEFAULT_PLUGIN_STAGE_DIR = '/opt/openclaw-runtime-deps'
 let runtimeDepsStageDir = process.env.OPENCLAW_PLUGIN_STAGE_DIR || DEFAULT_PLUGIN_STAGE_DIR
 const OPENCLAW_VERSION = resolveOpenClawVersion()
+const ALLOWED_RUNTIME_FILE_ROOTS = [RUNNER_HOME, '/home/openclaw', '/workspace', '/etc/shadowob']
 
 function installFileLogging() {
   try {
@@ -121,6 +125,68 @@ function loadRuntimeExtensions() {
   } catch (err) {
     console.warn(`[entrypoint] Failed to parse runtime extensions: ${err.message}`)
     return {}
+  }
+}
+
+function loadRuntimeFiles() {
+  if (!existsSync(RUNTIME_FILES_PATH)) {
+    return {}
+  }
+
+  try {
+    const raw = readFileSync(RUNTIME_FILES_PATH, 'utf-8')
+    const files = JSON.parse(raw)
+    if (!files || typeof files !== 'object' || Array.isArray(files)) {
+      console.warn('[entrypoint] Ignoring invalid runtime files payload')
+      return {}
+    }
+    console.log('[entrypoint] Loaded runtime files from ConfigMap')
+    return files
+  } catch (err) {
+    console.warn(`[entrypoint] Failed to parse runtime files: ${err.message}`)
+    return {}
+  }
+}
+
+function resolveRuntimeFilePlaceholders(value) {
+  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, key) => process.env[key] ?? '')
+}
+
+function assertAllowedRuntimeFilePath(path) {
+  const absolute = resolve(path)
+  if (
+    !ALLOWED_RUNTIME_FILE_ROOTS.some((root) => absolute === root || absolute.startsWith(`${root}/`))
+  ) {
+    throw new Error(`Refusing to materialize runtime file outside allowed roots: ${path}`)
+  }
+  return absolute
+}
+
+function modeForRuntimeFile(path) {
+  if (
+    path.endsWith('/.env') ||
+    path.endsWith('.toml') ||
+    path.endsWith('.yaml') ||
+    path.endsWith('.json')
+  ) {
+    return 0o600
+  }
+  return 0o644
+}
+
+function materializeRuntimeFiles() {
+  const files = loadRuntimeFiles()
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string') continue
+    const absolute = assertAllowedRuntimeFilePath(path)
+    const mode = modeForRuntimeFile(absolute)
+    mkdirSync(dirname(absolute), { recursive: true })
+    writeFileSync(absolute, resolveRuntimeFilePlaceholders(content), {
+      encoding: 'utf-8',
+      mode,
+    })
+    chmodSync(absolute, mode)
+    console.log(`[entrypoint] Wrote runtime file: ${absolute}`)
   }
 }
 
@@ -675,7 +741,7 @@ function runRuntimeDepsWarmup(configPath, stageDir) {
     OPENCLAW_CONFIG_PATH: configPath,
     OPENCLAW_STATE_DIR,
     OPENCLAW_PLUGIN_STAGE_DIR: stageDir,
-    HOME: '/home/openclaw',
+    HOME: RUNNER_HOME,
     NODE_ENV: 'production',
     npm_config_cache: '/tmp/npm-cache',
   }
@@ -940,6 +1006,7 @@ async function main() {
   // 1. Load config
   const mountedConfig = loadMountedConfig()
   const runtimeExtensions = loadRuntimeExtensions()
+  materializeRuntimeFiles()
   applyRuntimeArtifacts(runtimeExtensions)
   materializeCredentialFiles(runtimeExtensions)
   const baseConfig = generateOpenClawConfig(mountedConfig)
@@ -975,7 +1042,7 @@ async function main() {
   mkdirSync(workspaceDir, { recursive: true })
   console.log(`[entrypoint] Initializing workspace: ${workspaceDir}`)
   const setupResult = spawnSync('openclaw', ['setup', '--workspace', workspaceDir], {
-    env: { ...process.env, OPENCLAW_CONFIG_PATH: configPath, HOME: '/home/openclaw' },
+    env: { ...process.env, OPENCLAW_CONFIG_PATH: configPath, HOME: RUNNER_HOME },
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 30000,
   })

@@ -67,7 +67,7 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
     sharedWorkspaceMountPath: options.sharedWorkspaceMountPath,
     skillsInstallDir: options.skillsInstallDir,
     podTemplateAnnotations: options.podTemplateAnnotations,
-    openclawDataVolume: 'emptyDir',
+    stateVolume: 'emptyDir',
   })
   const { pluginArtifacts } = pod
   const pluginConfigMaps = pluginArtifacts.configMaps.map(

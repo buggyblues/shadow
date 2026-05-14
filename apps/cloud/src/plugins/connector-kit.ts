@@ -1,4 +1,9 @@
-import { buildRuntimeAssetK8sProvider } from './runtime-assets.js'
+import {
+  buildRuntimeAssetK8sProvider,
+  PLUGIN_RUNTIME_DEPS_ROOT,
+  PLUGIN_SKILLS_ROOT,
+  PLUGIN_SUBAGENTS_ROOT,
+} from './runtime-assets.js'
 import type {
   PluginAuthField,
   PluginCategory,
@@ -80,6 +85,18 @@ export function npmGlobalDependency(
     binPath: `/runtime-deps/bin/${id}`,
     description,
   }
+}
+
+export function pluginRuntimeMountPath(pluginId: string): string {
+  return `${PLUGIN_RUNTIME_DEPS_ROOT}/${pluginId}`
+}
+
+export function pluginSkillsMountPath(pluginId: string): string {
+  return `${PLUGIN_SKILLS_ROOT}/${pluginId}`
+}
+
+export function pluginSubagentsMountPath(pluginId: string): string {
+  return `${PLUGIN_SUBAGENTS_ROOT}/${pluginId}`
 }
 
 export function installedCheck(

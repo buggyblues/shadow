@@ -11,7 +11,7 @@ import type { UseEntry } from './shadow.schema.js'
 /**
  * Agent runtime types.
  */
-export type AgentRuntime = 'openclaw' | 'claude-code' | 'codex' | 'gemini' | 'opencode'
+export type AgentRuntime = 'openclaw' | 'claude-code' | 'codex' | 'gemini' | 'opencode' | 'hermes'
 
 /**
  * Agent model configuration — mirrors gitagent's model section.
@@ -177,7 +177,7 @@ export type SandboxWarmPoolUpdateStrategy = 'OnReplenish' | 'Recreate'
 export interface AgentSandboxStateConfig {
   /** Enable the per-agent OpenClaw state PVC. Defaults to true for agent-sandbox. */
   enabled?: boolean
-  /** PVC size for /home/openclaw/.openclaw. */
+  /** PVC size for /home/shadow/.openclaw. */
   size?: string
   /** Storage class name (empty for cluster default). */
   storageClassName?: string

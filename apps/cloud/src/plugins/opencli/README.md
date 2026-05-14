@@ -8,7 +8,7 @@ deterministic CLI commands that agents can call from the runtime container.
 - Installs `@jackwener/opencli` globally into the plugin runtime dependency
   volume.
 - Mounts the OpenCLI agent skills from `jackwener/opencli` into
-  `/app/plugin-skills/opencli`.
+  `/workspace/.agents/plugin-skills/opencli`.
 - Exposes the `opencli` binary on `PATH` for enabled agents.
 
 ## Notes

@@ -33,7 +33,7 @@ const skillSources = [
     url: 'https://github.com/vercel-labs/skills.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/skill-discovery',
+    targetPath: '/workspace/.agents/plugin-skills/skill-discovery',
     include: ['find-skills'],
     description: 'Find Skills discovery workflow',
   },
@@ -55,7 +55,11 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'find-skills-mounted',
       label: 'Find Skills skill mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/skill-discovery/find-skills/SKILL.md'],
+      command: [
+        'test',
+        '-f',
+        '/workspace/.agents/plugin-skills/skill-discovery/find-skills/SKILL.md',
+      ],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -67,5 +71,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/skill-discovery',
+  skillsMountPath: '/workspace/.agents/plugin-skills/skill-discovery',
 })

@@ -4,6 +4,9 @@
 
 import * as pulumi from '@pulumi/pulumi'
 import type { CloudConfig } from '../config/schema.js'
+import '../runtimes/loader.js'
+import { runtimeStatePvcName } from '../runtimes/container.js'
+import { getRuntime } from '../runtimes/index.js'
 import {
   type DeploymentRuntimeContext,
   normalizeDeploymentRuntimeContext,
@@ -20,10 +23,7 @@ import {
 } from './agent-sandbox.js'
 import { createConfigResources } from './config-resources.js'
 import {
-  DEFAULT_IMAGES,
-  DEFAULT_OPENCLAW_RUNNER_IMAGE,
   HEALTH_PORT,
-  healthPortForRuntime,
   PULUMI_MANAGED_ANNOTATIONS,
   PULUMI_SKIP_AWAIT_ANNOTATIONS,
 } from './constants.js'
@@ -89,7 +89,8 @@ export function createInfraProgram(options: InfraOptions) {
 
     for (const agent of agents) {
       const agentName = agent.id
-      const healthPort = healthPortForRuntime(agent.runtime)
+      const runtime = getRuntime(agent.runtime)
+      const healthPort = runtime.container.healthPort
 
       // Build env vars from agent-level env (populated by plugin onProvision hooks)
       const env = {
@@ -110,7 +111,7 @@ export function createInfraProgram(options: InfraOptions) {
         extraEnv: env,
         runtimeContext,
       })
-      const image = agent.image ?? DEFAULT_IMAGES[agent.runtime] ?? DEFAULT_OPENCLAW_RUNNER_IMAGE
+      const image = agent.image ?? runtime.defaultImage
       const runtimePackageHash = stableHash({
         configData: runtimePackage.configData,
         secretData: runtimePackage.secretData,
@@ -159,7 +160,7 @@ export function createInfraProgram(options: InfraOptions) {
         workloadName = sandbox.sandboxClaim.metadata.name
         outputs[`${agentName}-sandbox-claim-name`] = sandbox.sandboxClaim.metadata.name
         outputs[`${agentName}-sandbox-template-name`] = sandbox.sandboxTemplate.metadata.name
-        outputs[`${agentName}-state-pvc`] = pulumi.output(`openclaw-data-${agentName}`)
+        outputs[`${agentName}-state-pvc`] = pulumi.output(runtimeStatePvcName(agentName))
       } else {
         const deployment = createAgentDeployment({
           agentName,
@@ -310,13 +311,14 @@ export function buildManifests(options: InfraOptions) {
       stringData: runtimePackage.secretData,
     })
 
-    const image = agent.image ?? DEFAULT_IMAGES[agent.runtime] ?? DEFAULT_OPENCLAW_RUNNER_IMAGE
+    const runtime = getRuntime(agent.runtime)
+    const image = agent.image ?? runtime.defaultImage
     const runtimePackageHash = stableHash({
       configData: runtimePackage.configData,
       secretData: runtimePackage.secretData,
       image,
     })
-    const healthPort = healthPortForRuntime(agent.runtime)
+    const healthPort = runtime.container.healthPort
     const podTemplateAnnotations = {
       'shadowob.cloud/runtime-package-hash': runtimePackageHash,
       'shadowob.cloud/runner-image': image,
@@ -335,7 +337,7 @@ export function buildManifests(options: InfraOptions) {
       sharedWorkspaceMountPath: sharedMountPath,
       skillsInstallDir,
       podTemplateAnnotations,
-      openclawDataVolume:
+      stateVolume:
         workloadBackend(config) === 'agent-sandbox' && sandboxConfig.state.enabled
           ? 'volumeClaimTemplate'
           : 'emptyDir',

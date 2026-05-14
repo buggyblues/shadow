@@ -41,7 +41,7 @@ const skillSources = [
     url: 'https://github.com/alibaba-flyai/flyai-skill.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/flyai',
+    targetPath: '/workspace/.agents/plugin-skills/flyai',
     includePattern: 'flyai',
     description: 'Official FlyAI travel skill',
   },
@@ -63,7 +63,7 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'flyai-skill-mounted',
       label: 'FlyAI skill mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/flyai/flyai/SKILL.md'],
+      command: ['test', '-f', '/workspace/.agents/plugin-skills/flyai/flyai/SKILL.md'],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -75,5 +75,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/flyai',
+  skillsMountPath: '/workspace/.agents/plugin-skills/flyai',
 })

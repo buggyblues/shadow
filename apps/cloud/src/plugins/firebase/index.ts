@@ -49,7 +49,7 @@ const skillSources = [
     url: 'https://github.com/firebase/agent-skills.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/firebase',
+    targetPath: '/workspace/.agents/plugin-skills/firebase',
     include: [
       'firebase-basics',
       'firebase-auth-basics',
@@ -93,7 +93,7 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'firebase-skills-mounted',
       label: 'Firebase skills mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/firebase/firebase-basics/SKILL.md'],
+      command: ['test', '-f', '/workspace/.agents/plugin-skills/firebase/firebase-basics/SKILL.md'],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -105,5 +105,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/firebase',
+  skillsMountPath: '/workspace/.agents/plugin-skills/firebase',
 })

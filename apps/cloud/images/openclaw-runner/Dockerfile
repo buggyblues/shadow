@@ -3,9 +3,9 @@
 # ─── OpenClaw Runner ──────────────────────────────────────────────────────
 # Container image for OpenClaw gateway runtime.
 #
-# User:   openclaw:1000
-# Home:   /home/openclaw
-# State:  /home/openclaw/.openclaw   (emptyDir mount)
+# User:   shadow:1000
+# Home:   /home/shadow
+# State:  /home/shadow/.openclaw   (emptyDir mount)
 # Config: /etc/openclaw              (ConfigMap mount, read-only)
 # Logs:   /var/log/openclaw          (emptyDir mount)
 #
@@ -41,6 +41,8 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm install --prefer-offline --no-audit --fund=false \
       "openclaw@${OPENCLAW_VERSION}" \
       "@shadowob/openclaw-shadowob@${SHADOWOB_OPENCLAW_PLUGIN_VERSION}" \
+      "@shadowob/cli@latest" \
+      "@shadowob/connector@latest" \
       "playwright-core@${PLAYWRIGHT_VERSION}"
 
 # Cleanup dev artifacts to reduce image size. This depends only on npm deps,
@@ -136,43 +138,46 @@ RUN apt-get update && \
     npx -y "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium && \
     chmod -R 755 /ms-playwright
 
-# Create non-root user openclaw:1000
+# Create non-root user shadow:1000
 # node images ship with node:node at UID/GID 1000 — remove it first
 RUN userdel -r node 2>/dev/null || true; \
     groupdel node 2>/dev/null || true; \
-    groupadd -g 1000 openclaw; \
-    useradd -u 1000 -g openclaw -m -d /home/openclaw -s /usr/sbin/nologin openclaw
+    groupadd -g 1000 shadow; \
+    useradd -u 1000 -g shadow -m -d /home/shadow -s /usr/sbin/nologin shadow
 
 # Setup directories
 WORKDIR /app
-RUN mkdir -p /home/openclaw/.openclaw /etc/openclaw /var/log/openclaw /tmp/openclaw /tmp/npm-cache && \
-    chown -R openclaw:openclaw /home/openclaw /var/log/openclaw /tmp/openclaw /tmp/npm-cache /app
+RUN mkdir -p /home/shadow/.openclaw /etc/openclaw /var/log/openclaw /tmp/openclaw /tmp/npm-cache && \
+    ln -s /home/shadow /home/openclaw && \
+    chown -R shadow:shadow /home/shadow /var/log/openclaw /tmp/openclaw /tmp/npm-cache /app
 
 # Copy stable OpenClaw runtime deps first.
-COPY --from=builder --chown=openclaw:openclaw /build/node_modules ./node_modules
-COPY --from=builder --chown=openclaw:openclaw /build/package.json ./package.json
+COPY --from=builder --chown=shadow:shadow /build/node_modules ./node_modules
+COPY --from=builder --chown=shadow:shadow /build/package.json ./package.json
 
 # Symlink openclaw to PATH (local install only, no global npm install)
-RUN ln -s /app/node_modules/.bin/openclaw /usr/local/bin/openclaw
+RUN ln -s /app/node_modules/.bin/openclaw /usr/local/bin/openclaw && \
+    ln -s /app/node_modules/.bin/shadowob /usr/local/bin/shadowob && \
+    ln -s /app/node_modules/.bin/shadowob-connector /usr/local/bin/shadowob-connector
 
 # Copy local extensions before dependency warmup so the image carries the exact
 # plugin runtime dependency set used at startup. The extension layer is still
 # after node_modules, so ordinary plugin edits do not invalidate the large
 # pnpm install/build layers.
-COPY --from=builder --chown=openclaw:openclaw /build/extensions ./extensions
+COPY --from=builder --chown=shadow:shadow /build/extensions ./extensions
 
 # Stage bundled plugin runtime deps in the image so the first real Buddy reply
 # does not spend minutes installing optional tool/provider packages.
-COPY --chown=openclaw:openclaw apps/cloud/images/openclaw-runner/warm-runtime-deps.mjs ./warm-runtime-deps.mjs
+COPY --chown=shadow:shadow apps/cloud/images/openclaw-runner/warm-runtime-deps.mjs ./warm-runtime-deps.mjs
 ENV OPENCLAW_PLUGIN_STAGE_DIR=/opt/openclaw-runtime-deps
 ENV npm_config_cache=/tmp/npm-cache
 RUN --mount=type=cache,target=/tmp/npm-cache,sharing=locked \
     mkdir -p /opt/openclaw-runtime-deps && \
     node /app/warm-runtime-deps.mjs && \
-    chown -R openclaw:openclaw /opt/openclaw-runtime-deps
+    chown -R shadow:shadow /opt/openclaw-runtime-deps
 
 # Copy entrypoint (small, changes often → last COPY for cache)
-COPY --chown=openclaw:openclaw apps/cloud/images/openclaw-runner/entrypoint.mjs ./entrypoint.mjs
+COPY --chown=shadow:shadow apps/cloud/images/openclaw-runner/entrypoint.mjs ./entrypoint.mjs
 
 # Health check
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
@@ -181,6 +186,7 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
 EXPOSE 3100
 
 ENV NODE_ENV=production
+ENV HOME=/home/shadow
 ENV OPENCLAW_HEALTH_PORT=3100
 ENV OPENCLAW_GATEWAY_PORT=3101
 ENV OPENCLAW_NO_RESPAWN=1
@@ -192,7 +198,7 @@ ENV CHROMIUM_PATH=/usr/bin/chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Run as non-root
-USER openclaw
+USER shadow
 
 # Use tini as PID 1 for proper signal handling
 ENTRYPOINT ["tini", "--"]

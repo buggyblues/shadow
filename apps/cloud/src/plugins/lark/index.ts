@@ -53,7 +53,7 @@ const skillSources = [
     url: 'https://github.com/larksuite/cli.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/lark',
+    targetPath: '/workspace/.agents/plugin-skills/lark',
     includePattern: 'lark-*',
     description: 'Official Lark CLI agent skills',
   },
@@ -83,7 +83,7 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'lark-skills-mounted',
       label: 'Lark skills mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/lark/lark-im/SKILL.md'],
+      command: ['test', '-f', '/workspace/.agents/plugin-skills/lark/lark-im/SKILL.md'],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -98,5 +98,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/lark',
+  skillsMountPath: '/workspace/.agents/plugin-skills/lark',
 })

@@ -45,7 +45,7 @@ const skillSources = [
     url: 'https://github.com/figma/mcp-server-guide.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/figma',
+    targetPath: '/workspace/.agents/plugin-skills/figma',
     include: [
       'figma-code-connect',
       'figma-create-design-system-rules',
@@ -80,7 +80,11 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'figma-skills-mounted',
       label: 'Figma skills mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/figma/figma-implement-design/SKILL.md'],
+      command: [
+        'test',
+        '-f',
+        '/workspace/.agents/plugin-skills/figma/figma-implement-design/SKILL.md',
+      ],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -92,5 +96,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/figma',
+  skillsMountPath: '/workspace/.agents/plugin-skills/figma',
 })

@@ -51,7 +51,7 @@ const skillSources = [
     url: 'https://github.com/cloudflare/skills.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/cloudflare',
+    targetPath: '/workspace/.agents/plugin-skills/cloudflare',
     include: [
       'cloudflare',
       'wrangler',
@@ -69,7 +69,7 @@ const verificationChecks = [
     id: 'cloudflare-skills-mounted',
     label: 'Cloudflare skills mounted',
     kind: 'command' as const,
-    command: ['test', '-f', '/app/plugin-skills/cloudflare/cloudflare/SKILL.md'],
+    command: ['test', '-f', '/workspace/.agents/plugin-skills/cloudflare/cloudflare/SKILL.md'],
     timeoutMs: 5_000,
     risk: 'safe' as const,
   },
@@ -107,5 +107,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/cloudflare',
+  skillsMountPath: '/workspace/.agents/plugin-skills/cloudflare',
 })

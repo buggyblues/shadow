@@ -2,10 +2,10 @@
 
 Research date: 2026-05-14.
 
-This document is the cross-runner index for the next `apps/cloud` runtime
-refactor. It intentionally separates the current implementation from the target
-runner contract, because the current code still treats OpenClaw as the implicit
-configuration and process boundary for every non-OpenClaw runtime.
+This document is the cross-runner index for the `apps/cloud` runtime refactor.
+It separates runner families by their native process and configuration boundary
+so OpenClaw remains a first-class adapter without becoming the implicit contract
+for every other runner.
 
 ## Target runner set
 
@@ -27,14 +27,39 @@ it.
 
 ## Current state in this repository
 
-The current `apps/cloud/src/runtimes/*` adapters still document and generate an
-`openclaw gateway -> ACPX plugin -> CLI harness process` topology for
-`claude-code`, `codex`, `opencode`, and `gemini`. The shared config builder is
-`apps/cloud/src/config/openclaw-builder.ts`, and
-`apps/cloud/src/infra/runtime-package.ts` always emits `/etc/openclaw/config.json`.
+`apps/cloud/src/runtimes/*` now owns runtime-specific package builders and
+container layout. `apps/cloud/src/infra/runtime-package.ts` only orchestrates
+plugin extension collection, env/secret splitting, and dispatch to the selected
+runtime adapter. The OpenClaw adapter emits `config.json`; Claude Code, Codex,
+OpenCode, and Gemini emit `cc-connect-config.toml` plus native CLI config files
+through `runtime-files.json`; Hermes emits native Hermes files through the same
+runner file materialization contract.
 
-That design is the main refactor target. OpenClaw should become one runtime
-adapter among several, not the only config output format.
+The remaining refactor target is to keep moving plugin APIs away from
+OpenClaw-shaped fragments wherever the capability is not OpenClaw-specific. The
+runtime package layer already consumes runner-neutral ShadowOB runtime
+extensions for cc-connect and Hermes.
+
+## Runtime filesystem baseline
+
+All phase-1 runner images now run as the non-root `shadow` user with
+`HOME=/home/shadow`. Runtime state and generated home-scoped config must use
+that home:
+
+| Runtime family | Home/state baseline | Compatibility |
+| --- | --- | --- |
+| OpenClaw | `/home/shadow/.openclaw` | `/home/openclaw` is a compatibility symlink only. |
+| cc-connect based | `/home/shadow/.cc-connect` plus the native CLI home config, such as `/home/shadow/.codex` or `/home/shadow/.gemini` | Legacy plugin credential paths should migrate to `/home/shadow`; the symlink exists only for old images/configs. |
+| Hermes | `/home/shadow/.hermes` | `/home/openclaw` is not a first-class Hermes path. |
+
+ShadowOB assets are installed in two explicit places:
+
+- CLI and helper binaries: `shadowob` and `shadowob-connector` on `PATH`.
+- Runner skills: `/workspace/.agents/skills/shadowob/SKILL.md`, plus native
+  homes where the CLI supports a skill directory, such as
+  `/home/shadow/.codex/skills/shadowob/SKILL.md`,
+  `/home/shadow/.gemini/skills/shadowob/SKILL.md`, and
+  `/home/shadow/.hermes/skills/shadowob/SKILL.md`.
 
 ## Adapter boundary required by the refactor
 
@@ -62,7 +87,7 @@ schemas when a runtime publishes one.
 | --- | --- | --- | --- |
 | OpenClaw | JSON5/YAML-compatible config object | No fixed public schema URL found; official source is `openclaw config schema` and gateway `config.schema.lookup`. | OpenClaw CLI live schema plus Cloud `OpenClawConfig` types. |
 | Claude Code | JSON settings | `https://json.schemastore.org/claude-code-settings.json` is documented by Claude Code as its official settings schema, with a lag warning. | Settings docs table, `~/.claude.json` global config, `.mcp.json`, `.claude/agents/*.md`. |
-| Codex | TOML | No official JSON Schema URL found; official source is the Codex config reference. | Codex config reference key/type table; generated TOML must parse through Codex. |
+| Codex | TOML | Generated schema source in the official repo: `https://raw.githubusercontent.com/openai/codex/main/codex-rs/core/config.schema.json`; docs source is the Codex config reference. | Codex config reference key/type table plus generated schema; generated TOML must parse through Codex. |
 | OpenCode | JSON/JSONC | `https://opencode.ai/config.json`; TUI config also uses `https://opencode.ai/tui.json`. | OpenCode config schema and docs for permissions, MCP, agents, commands, skills. |
 | Gemini CLI | JSON settings | `https://raw.githubusercontent.com/google-gemini/gemini-cli/main/schemas/settings.schema.json`. | Gemini CLI settings schema plus docs reference. |
 | Hermes | YAML | No fixed public JSON Schema URL found; web dashboard exposes `GET /api/config/schema` from `DEFAULT_CONFIG`. | Hermes config docs and runtime-discovered schema endpoint. |
@@ -76,6 +101,21 @@ Validation expectation:
   or source type, not by ad hoc string assertions.
 - Runtime adapters must snapshot the generated files in tests so schema drift is
   visible in code review.
+
+## Provider and authentication matrix
+
+The model/provider adapter must be runner-native. Do not translate every
+provider into OpenClaw `models.providers`, and do not assume all CLIs can use a
+headless subscription login.
+
+| Runtime | Headless-safe auth | Subscription/OAuth auth | Custom provider/gateway support | Adapter requirement |
+| --- | --- | --- | --- | --- |
+| OpenClaw | API keys through OpenClaw provider config and env-backed secrets. | Depends on provider/plugin; not the baseline for non-OpenClaw runners. | OpenClaw provider/failover config. | Keep OpenClaw provider config only in the OpenClaw adapter. |
+| Claude Code | `ANTHROPIC_API_KEY`, Bedrock/Vertex/Foundry envs, or gateway token envs. | Claude Pro/Max/Team/Enterprise login is interactive/user-account based and should not be assumed in a fresh container. | `ANTHROPIC_BASE_URL` routes requests; gateway model discovery and `ANTHROPIC_CUSTOM_MODEL_OPTION` handle custom model IDs. | Generate Claude `env`/settings and cc-connect options; do not write OpenClaw model config. |
+| Codex | API key auth with `OPENAI_API_KEY` plus `preferred_auth_method = "apikey"` when needed. Custom providers use `[model_providers.<id>]`, `base_url`, `env_key`, optional auth command, and Responses API `wire_api`. | ChatGPT Plus/Pro/Business/Edu/Enterprise login can work interactively but is not suitable as the only Kubernetes bootstrap path. | Built-in `openai`, local `ollama`/`lmstudio`, and custom provider tables. | Generate `$CODEX_HOME/config.toml` with provider/profile tables and keep `auth.json` out of ConfigMaps. |
+| OpenCode | Provider API keys stored by `/connect` in `~/.local/share/opencode/auth.json`, or `provider.<id>.options.apiKey` only when Cloud intentionally materializes a secret file. | Provider-specific OAuth flows may exist through `/connect`; not a generic headless default. | `provider.<id>` supports custom AI SDK packages, `baseURL`, headers, and model catalogs, including OpenAI-compatible APIs. | Generate `opencode.json` provider blocks and mount credentials separately. |
+| Gemini CLI | `GEMINI_API_KEY` for AI Studio, `GOOGLE_API_KEY` for Vertex API-key mode, or Vertex ADC/service-account material. | Google login is recommended for Pro/Ultra subscriptions but needs a browser/localhost callback, so it is not a default container bootstrap. | Vertex AI project/location and API-key/ADC modes; no generic OpenAI-compatible provider in Gemini CLI settings. | Generate `.gemini/settings.json` plus explicit env requirements; unset conflicting API-key vars for ADC. |
+| Hermes | `.env` keys such as `OPENROUTER_API_KEY`, `AI_GATEWAY_API_KEY`, provider-specific keys, or configured OpenAI-compatible `model.base_url`. | `hermes model` supports Nous Portal OAuth/subscription, Codex ChatGPT OAuth, GitHub Copilot OAuth, and Claude OAuth paths. | Hermes provider routing/fallback, OpenRouter, AI Gateway, and OpenAI-compatible endpoints. | Generate `~/.hermes/config.yaml` and `~/.hermes/.env` natively; keep gateway/platform auth separate from model auth. |
 
 ## Security and audit dimensions
 
@@ -123,20 +163,20 @@ Local fork research used `../cc-connect`. Important implementation facts:
 
 ## Shared migration checklist
 
-- Replace the current `RuntimeAdapter.applyConfig(... OpenClawConfig)` contract
-  with a runner package contract that can emit multiple native config files.
-- Keep `buildOpenClawConfig` only inside the OpenClaw adapter path.
-- Add a cc-connect image/binary build that embeds the ShadowOB platform and only
-  exposes `claudecode`, `codex`, `opencode`, and `gemini`.
-- Generate per-runtime native config files instead of translating everything into
-  OpenClaw `agents.defaults`.
-- Keep logs and session paths native; normalize only the Cloud collection labels.
-- Add `hermes` to the runtime schema and loader after the Hermes runner package
-  contract is implemented.
+- Runtime adapters now declare a runtime family and the package generator emits
+  multiple native config files where needed.
+- `buildOpenClawConfig` is used only by the OpenClaw runtime package path.
+- The cc-connect runner images build the ShadowOB fork and narrow the exposed
+  agent set to `claudecode`, `codex`, `opencode`, and `gemini`.
+- Per-runtime native config files are generated instead of translating
+  non-OpenClaw runtimes into OpenClaw `agents.defaults`.
+- Logs and session paths stay native; Cloud normalizes only collection labels.
+- `hermes` is now present in the runtime schema, loader, runner package, and
+  image directory.
 
-## Adapter unit tests required
+## Adapter unit tests
 
-When the multi-runner adapter contract is implemented, add unit tests that cover:
+The multi-runner adapter tests cover:
 
 - Each adapter emits the expected config files, env vars, secret refs, workspace
   files, and plugin/runtime resources.
@@ -156,7 +196,14 @@ When the multi-runner adapter contract is implemented, add unit tests that cover
 - Cost/audit settings are present for model, small/auxiliary model, telemetry,
   context/tool-output budget, cron frequency, and log paths where supported.
 
-## Container smoke tests required
+## Smoke tests
+
+The current smoke tests inspect generated runtime packages, parsed native
+configs, secret separation, runtime file materialization inputs, and workspace
+writes for every runner. Full Docker image build-and-run smoke should still be
+run before publishing new image tags.
+
+Target container smoke assertions:
 
 Add smoke tests per runner image after implementation:
 
@@ -178,10 +225,19 @@ assert that the process exits successfully.
   https://docs.openclaw.ai/llms.txt,
   https://docs.openclaw.ai/gateway/configuration
 - Claude Code docs: https://code.claude.com/docs/en/settings
+- Claude Code model/env docs:
+  https://code.claude.com/docs/en/model-config,
+  https://code.claude.com/docs/en/env-vars
 - Codex docs: https://developers.openai.com/codex/config-basic
+- Codex CLI/config reference:
+  https://developers.openai.com/codex/cli,
+  https://developers.openai.com/codex/config-reference
 - OpenCode docs: https://opencode.ai/docs/config
+- OpenCode providers: https://dev.opencode.ai/docs/providers/
 - Gemini CLI docs:
-  https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md
+  https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md,
+  https://google-gemini.github.io/gemini-cli/docs/get-started/authentication.html
 - Hermes Agent docs:
-  https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+  https://hermes-agent.nousresearch.com/docs/user-guide/configuration,
+  https://hermes-agent.nousresearch.com/docs/integrations/providers
 - cc-connect fork source: https://github.com/buggyblues/cc-connect

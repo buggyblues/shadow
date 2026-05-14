@@ -10,6 +10,7 @@
  */
 
 import type { CloudApiClient } from '@shadowob/cloud-ui/lib/api-context'
+import { runtimeStatePvcName } from '../../runtimes/container.js'
 import {
   BASE,
   type ResourceTier,
@@ -66,6 +67,7 @@ type TemplateDeployments = {
   namespace?: string
   agents?: Array<Record<string, unknown>>
 }
+type DeploymentAgentEntry = { name: string; replicas: number; runtime: string | undefined }
 
 const deploymentCacheByNamespace = new Map<string, SaasDeployment>()
 const deploymentCacheById = new Map<string, SaasDeployment>()
@@ -130,9 +132,7 @@ async function resolveDeploymentByNamespace(namespace: string): Promise<SaasDepl
   return rows.find((row) => row.namespace === namespace) ?? null
 }
 
-function getDeploymentAgentEntries(
-  deployment: SaasDeployment,
-): Array<{ name: string; replicas: number }> {
+function getDeploymentAgentEntries(deployment: SaasDeployment): DeploymentAgentEntry[] {
   const deployments = deployment.configSnapshot?.deployments as TemplateDeployments | undefined
   const agents = Array.isArray(deployments?.agents) ? deployments.agents : []
   const mapped = agents
@@ -142,6 +142,7 @@ function getDeploymentAgentEntries(
 
       return {
         name,
+        runtime: typeof agent?.runtime === 'string' ? agent.runtime : undefined,
         replicas:
           typeof agent?.replicas === 'number' &&
           Number.isFinite(agent.replicas) &&
@@ -150,16 +151,24 @@ function getDeploymentAgentEntries(
             : 1,
       }
     })
-    .filter((entry): entry is { name: string; replicas: number } => Boolean(entry))
+    .filter((entry): entry is DeploymentAgentEntry => Boolean(entry))
 
   if (mapped.length > 0) return mapped
 
   return [
     {
       name: deployment.name,
+      runtime: undefined,
       replicas: Math.max(deployment.agentCount ?? 1, 1),
     },
   ]
+}
+
+function deploymentAgentRuntime(deployment: SaasDeployment, agentName: string): string {
+  return (
+    getDeploymentAgentEntries(deployment).find((agent) => agent.name === agentName)?.runtime ??
+    'openclaw'
+  )
 }
 
 function deploymentRuntimeState(row: SaasDeployment): NonNullable<Deployment['runtimeState']> {
@@ -208,7 +217,7 @@ function expandDeploymentRows(deployment: SaasDeployment): Deployment[] {
       workloadKind === 'agent-sandbox'
         ? `${agent.name}-svc.${deployment.namespace}.svc.cluster.local`
         : undefined,
-    statePvc: workloadKind === 'agent-sandbox' ? `openclaw-data-${agent.name}` : undefined,
+    statePvc: workloadKind === 'agent-sandbox' ? runtimeStatePvcName(agent.name) : undefined,
     pausedAt: deployment.status === 'paused' ? deployment.updatedAt : undefined,
     lastActiveAt: deployment.lastActiveAt ?? deployment.updatedAt,
   }))
@@ -633,9 +642,10 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
       if (!deployment) {
         return `${BASE}/deployments/${encodeURIComponent(namespace)}/logs`
       }
+      const container = deploymentAgentRuntime(deployment, agent)
       return `${BASE}/deployments/${encodeURIComponent(
         deployment.id,
-      )}/pod-logs?agent=${encodeURIComponent(agent)}&container=openclaw`
+      )}/pod-logs?agent=${encodeURIComponent(agent)}&container=${encodeURIComponent(container)}`
     },
     logsHistory: async (namespace: string, agent: string, page = 1, limit = 200) => {
       const deployment = await resolveDeploymentByNamespace(namespace)

@@ -1,15 +1,15 @@
 import type * as k8s from '@pulumi/kubernetes'
 import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import '../runtimes/loader.js'
-import { getRuntime } from '../runtimes/index.js'
 import {
-  baseEnvVars,
-  baseVolumeMounts,
-  baseVolumes,
-  DEFAULT_RESOURCES,
-  healthPortForRuntime,
-  probesForRuntime,
-} from './constants.js'
+  RUNNER_CONFIG_MOUNT_PATH,
+  RUNNER_CONFIG_VOLUME_NAME,
+  RUNNER_LOG_VOLUME_NAME,
+  RUNNER_STATE_VOLUME_NAME,
+  RUNNER_TMP_VOLUME_NAME,
+} from '../runtimes/container.js'
+import { getRuntime, type RuntimeAdapter } from '../runtimes/index.js'
+import { DEFAULT_RESOURCES, probesForPort } from './constants.js'
 import { assertNoReservedEnvOverrides, dedupeEnvVars } from './env-vars.js'
 import { resolveImagePullPolicy } from './image-pull-policy.js'
 import { type CollectedK8sArtifacts, collectPluginK8sArtifacts } from './plugin-k8s.js'
@@ -28,11 +28,8 @@ export interface AgentPodSpecOptions {
   sharedWorkspaceMountPath?: string
   skillsInstallDir?: string
   podTemplateAnnotations?: Record<string, string>
-  /**
-   * In Sandbox pod templates, openclaw-data is provided by volumeClaimTemplates
-   * and must not be declared as an emptyDir volume.
-   */
-  openclawDataVolume?: 'emptyDir' | 'volumeClaimTemplate'
+  /** In Sandbox pod templates, runtime state is provided by volumeClaimTemplates. */
+  stateVolume?: 'emptyDir' | 'volumeClaimTemplate'
 }
 
 export interface BuiltAgentPodSpec {
@@ -60,24 +57,53 @@ export function validatePluginK8sArtifacts(pluginArtifacts: CollectedK8sArtifact
   }
 }
 
+function baseEnvVars(agentName: string, runtime: RuntimeAdapter): k8s.types.input.core.v1.EnvVar[] {
+  return [
+    { name: 'AGENT_ID', value: agentName },
+    { name: 'NODE_ENV', value: 'production' },
+    { name: 'HOME', value: runtime.container.homeDir },
+    ...runtime.container.env,
+  ]
+}
+
+function baseVolumeMounts(runtime: RuntimeAdapter): k8s.types.input.core.v1.VolumeMount[] {
+  return [
+    { name: RUNNER_STATE_VOLUME_NAME, mountPath: runtime.container.statePath },
+    { name: RUNNER_CONFIG_VOLUME_NAME, mountPath: RUNNER_CONFIG_MOUNT_PATH, readOnly: true },
+    { name: RUNNER_LOG_VOLUME_NAME, mountPath: runtime.container.logPath },
+    { name: RUNNER_TMP_VOLUME_NAME, mountPath: '/tmp' },
+  ]
+}
+
+function baseVolumes(configMapName: string): k8s.types.input.core.v1.Volume[] {
+  return [
+    { name: RUNNER_STATE_VOLUME_NAME, emptyDir: {} },
+    { name: RUNNER_CONFIG_VOLUME_NAME, configMap: { name: configMapName } },
+    { name: RUNNER_LOG_VOLUME_NAME, emptyDir: {} },
+    { name: RUNNER_TMP_VOLUME_NAME, emptyDir: {} },
+  ]
+}
+
 export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSpec {
-  const image = options.agent.image ?? getRuntime(options.agent.runtime).defaultImage
-  const healthPort = healthPortForRuntime(options.agent.runtime)
-  const { livenessProbe, readinessProbe, startupProbe } = probesForRuntime(options.agent.runtime)
+  const runtime = getRuntime(options.agent.runtime)
+  const image = options.agent.image ?? runtime.defaultImage
+  const healthPort = runtime.container.healthPort
+  const { livenessProbe, readinessProbe, startupProbe } = probesForPort(healthPort)
   const imagePullPolicy = resolveImagePullPolicy(options.imagePullPolicy, image)
 
-  const runtimeEnv = getRuntime(options.agent.runtime).extraEnv(options.agent)
-  const mergedExtraEnv = { ...runtimeEnv, ...options.extraEnv }
+  const mergedExtraEnv = { ...options.extraEnv }
 
   const envVars: k8s.types.input.core.v1.EnvVar[] = [
-    ...baseEnvVars(options.agentName, options.agent.runtime),
+    ...baseEnvVars(options.agentName, runtime),
     ...Object.entries(mergedExtraEnv).map(([name, value]) => ({ name, value })),
   ]
 
-  const volumeMounts: k8s.types.input.core.v1.VolumeMount[] = baseVolumeMounts()
+  const volumeMounts: k8s.types.input.core.v1.VolumeMount[] = baseVolumeMounts(runtime)
   const volumes: k8s.types.input.core.v1.Volume[] = baseVolumes(options.configMapName).filter(
     (volume) =>
-      options.openclawDataVolume === 'volumeClaimTemplate' ? volume.name !== 'openclaw-data' : true,
+      options.stateVolume === 'volumeClaimTemplate'
+        ? volume.name !== RUNNER_STATE_VOLUME_NAME
+        : true,
   )
   const initContainers: k8s.types.input.core.v1.Container[] = []
 

@@ -47,7 +47,7 @@ const skillSources = [
     url: 'https://github.com/supabase/agent-skills.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/supabase',
+    targetPath: '/workspace/.agents/plugin-skills/supabase',
     include: ['supabase', 'supabase-postgres-best-practices'],
     description: 'Supabase official agent skills',
   },
@@ -58,7 +58,7 @@ const verificationChecks = [
     id: 'supabase-skills-mounted',
     label: 'Supabase skills mounted',
     kind: 'command' as const,
-    command: ['test', '-f', '/app/plugin-skills/supabase/supabase/SKILL.md'],
+    command: ['test', '-f', '/workspace/.agents/plugin-skills/supabase/supabase/SKILL.md'],
     timeoutMs: 5_000,
     risk: 'safe' as const,
   },
@@ -90,5 +90,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/supabase',
+  skillsMountPath: '/workspace/.agents/plugin-skills/supabase',
 })

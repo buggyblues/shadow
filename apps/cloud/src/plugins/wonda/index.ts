@@ -41,7 +41,7 @@ const skillSources = [
     url: 'https://github.com/degausai/wonda.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/wonda',
+    targetPath: '/workspace/.agents/plugin-skills/wonda',
     include: ['wonda-cli'],
     description: 'Wonda CLI skill',
   },
@@ -63,7 +63,7 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'wonda-cli-skill-mounted',
       label: 'Wonda skill mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/wonda/wonda-cli/SKILL.md'],
+      command: ['test', '-f', '/workspace/.agents/plugin-skills/wonda/wonda-cli/SKILL.md'],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -75,5 +75,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/wonda',
+  skillsMountPath: '/workspace/.agents/plugin-skills/wonda',
 })

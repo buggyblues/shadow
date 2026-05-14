@@ -186,7 +186,7 @@ describe('parser', () => {
       expect(result.models!.providers!.openai.api).toBe('openai-completions')
     })
 
-    it('should configure ACP for claude-code runtime', () => {
+    it('should not configure OpenClaw ACP for claude-code runtime', () => {
       const config: CloudConfig = {
         version: '1',
         deployments: {
@@ -203,16 +203,9 @@ describe('parser', () => {
       const agent = config.deployments!.agents[0]
       const result = buildOpenClawConfig(agent, config)
 
-      // ACP should be enabled
-      expect(result.acp?.enabled).toBe(true)
-      expect(result.acp?.backend).toBe('acpx')
-
-      // Agent should have ACP runtime
-      expect(result.agents?.list?.[0]?.runtime?.type).toBe('acp')
-      expect(result.agents?.list?.[0]?.runtime?.acp?.agent).toBe('claude')
-
-      // ACPX plugin should be enabled
-      expect(result.plugins?.entries?.acpx?.enabled).toBe(true)
+      expect(result.acp).toBeUndefined()
+      expect(result.agents?.list?.[0]?.runtime).toBeUndefined()
+      expect(result.plugins?.entries?.acpx).toBeUndefined()
     })
 
     it('should not inject shadowob channel config when no shadowob plugin is enabled', () => {

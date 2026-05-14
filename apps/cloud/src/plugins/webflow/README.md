@@ -22,7 +22,7 @@ Webflow supports site operations for CMS updates, landing pages, SEO pages, comp
 
 - Installs `@webflow/webflow-cli`.
 - Registers the hosted Webflow MCP endpoint.
-- Mounts Webflow site, CLI, and code component skills under `/app/plugin-skills/webflow`.
+- Mounts Webflow site, CLI, and code component skills under `/workspace/.agents/plugin-skills/webflow`.
 - Adds verification checks for the CLI and mounted skills.
 
 ## References

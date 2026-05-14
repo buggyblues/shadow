@@ -16,11 +16,10 @@ use its own config, skills, MCP, hooks, subagents, sessions, and logs.
 
 ## Current repository state
 
-The current `apps/cloud/images/codex-runner` entrypoint starts an OpenClaw
-gateway, injects the ShadowOB OpenClaw plugin, and enables ACPX. The current
-runtime adapter sets `agentEntry.runtime = { type: "acp", acp: ... }`.
-
-That whole path should be removed for the Codex runtime.
+The Codex adapter and image now use the cc-connect fork path. The runtime
+package emits `cc-connect-config.toml`, `$CODEX_HOME/config.toml`, project
+`.codex/config.toml`, workspace bootstrap files, and ShadowOB skill files
+through `runtime-files.json`.
 
 ## Native Codex configuration
 
@@ -45,8 +44,10 @@ Codex reads layered TOML configuration:
 
 ## Schema and type anchors
 
-- Static JSON Schema URL: none found in official Codex docs. Codex config is
-  TOML, not JSON.
+- Generated JSON Schema source:
+  `https://raw.githubusercontent.com/openai/codex/main/codex-rs/core/config.schema.json`.
+  Codex config is TOML on disk, but this schema is the official repo-generated
+  shape for config keys.
 - Official type source: Codex Config Reference key/type table at
   `https://developers.openai.com/codex/config-reference`.
 - Config layers: `$CODEX_HOME/config.toml`, trusted project `.codex/config.toml`,
@@ -55,6 +56,25 @@ Codex reads layered TOML configuration:
   CLI in a container smoke test; do not use a handwritten JSON schema as source
   of truth.
 - cc-connect type anchor: `../cc-connect/agent/codex/codex.go`.
+
+## Provider and authentication notes
+
+- Codex CLI supports first-run authentication with either a ChatGPT account or
+  an API key. In Cloud, the reliable headless path is API-key or custom-provider
+  auth, not an interactive ChatGPT subscription login.
+- For OpenAI API-key mode, set `OPENAI_API_KEY` through Secret data and use
+  `preferred_auth_method = "apikey"` when the runner profile could otherwise
+  prefer stored ChatGPT auth.
+- Custom providers belong in `[model_providers.<id>]`. The official config
+  reference defines `base_url`, `env_key`, `query_params`, static/env headers,
+  command-backed bearer-token auth, `requires_openai_auth`, retry/timeouts, and
+  `wire_api`.
+- Current Codex config reference lists `responses` as the supported
+  `wire_api`, so custom OpenAI-compatible gateways must support the Responses
+  API or be fronted by a gateway that translates correctly.
+- Built-in local providers such as `ollama`/`lmstudio` are provider IDs, but
+  remote Cloud runners must not silently point them at localhost unless the
+  container actually runs that model service.
 
 ## Security, audit, cost, network, and tools
 
@@ -103,7 +123,7 @@ type = "codex"
 
 [projects.agent.options]
 work_dir = "/workspace"
-codex_home = "/home/runner/.codex"
+codex_home = "/home/shadow/.codex"
 
 [[projects.platforms]]
 type = "shadowob"
@@ -127,9 +147,9 @@ type = "shadowob"
 
 ## Migration implications
 
-- Remove OpenClaw, ACPX, and `@shadowob/openclaw-shadowob` from the Codex runner
-  image.
-- Embed the cc-connect fork binary plus Codex CLI.
+- OpenClaw, ACPX, and `@shadowob/openclaw-shadowob` have been removed from the
+  Codex runner image path.
+- The image builds the cc-connect fork binary and installs the Codex CLI.
 - Generate `$CODEX_HOME/config.toml`, project `.codex/config.toml`,
   `AGENTS.md`, `.agents/skills`, and MCP config as native artifacts.
 - Keep current redaction patterns for container logs, but do not assume
@@ -159,9 +179,12 @@ Container smoke:
 
 ## Sources
 
+- CLI auth/setup: https://developers.openai.com/codex/cli
 - Config basics: https://developers.openai.com/codex/config-basic
 - Advanced config: https://developers.openai.com/codex/config-advanced
 - Config reference: https://developers.openai.com/codex/config-reference
+- Generated config schema:
+  https://raw.githubusercontent.com/openai/codex/main/codex-rs/core/config.schema.json
 - Agent approvals and security:
   https://developers.openai.com/codex/agent-approvals-security
 - MCP: https://developers.openai.com/codex/mcp

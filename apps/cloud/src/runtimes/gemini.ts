@@ -1,64 +1,76 @@
 /**
  * Gemini CLI runtime adapter.
  *
- * Architecture: openclaw gateway → ACPX plugin → gemini CLI process
- *
- * Package: @google/gemini-cli
- * CLI: gemini -p "prompt" --output-format stream-json
- * Auth: GEMINI_API_KEY or GOOGLE_API_KEY env var, or Google OAuth
- * Docs: https://geminicli.com/docs/
+ * Architecture: cc-connect fork -> gemini agent -> gemini CLI process.
  */
 
-import type {
-  AgentDeployment,
-  OpenClawAcpRuntime,
-  OpenClawAgentConfig,
-  OpenClawConfig,
-} from '../config/schema.js'
+import type { AgentDeployment } from '../config/schema.js'
+import type { PluginRuntimeExtension } from '../plugins/types.js'
+import { buildCcConnectPackage } from './cc-connect-package.js'
+import { ccConnectContainerSpec } from './container.js'
 import { type RuntimeAdapter, registerRuntime } from './index.js'
+import { geminiMcpServers } from './mcp.js'
+import {
+  json,
+  modelName,
+  nativePermissionMode,
+  runtimeExtensionsForKind,
+  WORKSPACE_DIR,
+} from './package-common.js'
+
+function buildGeminiSettings(
+  agent: AgentDeployment,
+  runtimeExtensions: PluginRuntimeExtension,
+): string {
+  const mode = nativePermissionMode(agent)
+  const mcpServers = geminiMcpServers(runtimeExtensions)
+  return json({
+    $schema:
+      'https://raw.githubusercontent.com/google-gemini/gemini-cli/main/schemas/settings.schema.json',
+    ...(modelName(agent) ? { model: { name: modelName(agent) } } : {}),
+    ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
+    general: {
+      defaultApprovalMode: mode === 'allow' ? 'auto_edit' : mode === 'deny' ? 'plan' : 'default',
+    },
+    tools: {
+      exclude: mode === 'deny' ? ['run_shell_command', 'web_fetch', 'web_search'] : [],
+    },
+    security: {
+      folderTrust: { enabled: false },
+      environmentVariableRedaction: { enabled: true },
+    },
+    telemetry: {
+      enabled: false,
+      logPrompts: false,
+    },
+  })
+}
 
 const geminiAdapter: RuntimeAdapter = {
   id: 'gemini',
   name: 'Gemini CLI (Google)',
-  defaultImage: 'ghcr.io/shadowob/gemini-runner:latest',
-  packages: ['@google/gemini-cli'],
-  requiresGit: false,
+  runtimeKind: 'cc-connect',
+  defaultImage: 'ghcr.io/buggyblues/gemini-runner:latest',
+  container: ccConnectContainerSpec(),
 
-  acpRuntime(_agent: AgentDeployment): OpenClawAcpRuntime {
-    return {
-      agent: 'gemini',
-      backend: 'acpx',
-      mode: 'persistent',
-      cwd: '/workspace',
-    }
-  },
-
-  applyConfig(agent: AgentDeployment, agentEntry: OpenClawAgentConfig, config: OpenClawConfig) {
-    const acpRuntime = this.acpRuntime(agent)!
-    if (agentEntry.runtime?.acp) {
-      Object.assign(acpRuntime, agentEntry.runtime.acp)
-    }
-    agentEntry.runtime = { type: 'acp', acp: acpRuntime }
-
-    config.acp = {
-      enabled: true,
-      backend: 'acpx',
-      defaultAgent: agent.id,
-      allowedAgents: [agent.id],
-      maxConcurrentSessions: 8,
-      ...config.acp,
-    }
-
-    if (!config.plugins) config.plugins = {}
-    if (!config.plugins.entries) config.plugins.entries = {}
-    config.plugins.entries.acpx = {
-      enabled: true,
-      ...config.plugins.entries.acpx,
-    }
-  },
-
-  extraEnv() {
-    return {}
+  buildPackage(context) {
+    return buildCcConnectPackage(context, {
+      agentType: 'gemini',
+      agentOptions: () => ({
+        timeout_mins: 30,
+      }),
+      nativeFiles: (context) => {
+        const runtimeExtensions = runtimeExtensionsForKind(context.runtimeExtensions, 'cc-connect')
+        return {
+          [`${WORKSPACE_DIR}/.gemini/settings.json`]: buildGeminiSettings(
+            context.agent,
+            runtimeExtensions,
+          ),
+          [`${WORKSPACE_DIR}/GEMINI.md`]:
+            'This project is connected to Shadow through the generated cc-connect ShadowOB platform.\n',
+        }
+      },
+    })
   },
 }
 

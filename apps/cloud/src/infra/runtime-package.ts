@@ -2,9 +2,11 @@ import {
   collectPluginBuildEnvVars,
   collectPluginRuntimeExtensions,
 } from '../config/openclaw-builder.js'
-import { buildOpenClawConfig } from '../config/parser.js'
 import type { AgentDeployment, CloudConfig, OpenClawConfig } from '../config/schema.js'
-import type { PluginRuntimeExtension } from '../plugins/types.js'
+import '../runtimes/loader.js'
+import { RUNNER_CONFIG_MOUNT_PATH, SHADOWOB_CONFIG_MOUNT_PATH } from '../runtimes/container.js'
+import { getRuntime, type RuntimeKind } from '../runtimes/index.js'
+import { hasRuntimeExtensions, SHADOW_SLASH_COMMANDS_PATH } from '../runtimes/package-common.js'
 import { toProviderSecretEnvKey, withLegacyEnvAliases } from '../utils/env-names.js'
 import type { DeploymentRuntimeContext } from '../utils/runtime-context.js'
 
@@ -22,8 +24,11 @@ const SECRET_ENV_MARKERS = [
   'AUTH',
 ]
 
+type RuntimeEnv = Record<string, string | undefined>
+
 export interface AgentRuntimePackage {
-  openclawConfig: OpenClawConfig
+  runtimeKind: RuntimeKind
+  openclawConfig?: OpenClawConfig
   configData: Record<string, string>
   plainEnv: Record<string, string>
   secretData: Record<string, string>
@@ -70,77 +75,10 @@ function collectRegistrySecretEnv(
   return secretEnv
 }
 
-function hasRuntimeExtensions(extension: PluginRuntimeExtension): boolean {
-  return Boolean(
-    extension.openclaw?.manifestPatches?.length ||
-      extension.artifacts?.length ||
-      extension.runtimeDependencies?.length ||
-      extension.skillSources?.length ||
-      extension.subagentSources?.length ||
-      extension.mcpServers?.length ||
-      extension.credentialFiles?.length ||
-      extension.verificationChecks?.length,
-  )
-}
-
-export function buildAgentRuntimePackage(options: {
-  agent: AgentDeployment
-  config: CloudConfig
-  extraEnv?: Record<string, string>
-  cwd?: string
-  runtimeContext?: DeploymentRuntimeContext
-}): AgentRuntimePackage {
-  const { agent, config, extraEnv, cwd, runtimeContext } = options
-  const registrySecretEnv = collectRegistrySecretEnv(agent, config)
-  const runtimeEnv = {
-    ...registrySecretEnv,
-    ...(agent.env ?? {}),
-    ...(extraEnv ?? {}),
-  }
-  const openclawConfig = buildOpenClawConfig(agent, config, cwd, runtimeEnv, runtimeContext)
-  const runtimeExtensions = collectPluginRuntimeExtensions(agent, config, cwd, runtimeEnv)
-
-  const workspaceFiles = (openclawConfig._workspaceFiles ?? {}) as Record<string, string>
-  delete openclawConfig._workspaceFiles
-
-  const pluginResources = (openclawConfig._pluginResources ?? []) as Record<string, unknown>[]
-  delete openclawConfig._pluginResources
-
-  const pluginProvisions = (openclawConfig._pluginProvisions ?? []) as Array<{
-    pluginId: string
-    secrets?: Record<string, string>
-  }>
-  delete openclawConfig._pluginProvisions
-
-  const mergedEnv: Record<string, string> = {
-    ...collectPluginBuildEnvVars(agent, config, cwd, runtimeEnv),
-    ...(agent.env ?? {}),
-    ...(extraEnv ?? {}),
-  }
-
-  const slashCommandArtifact = runtimeExtensions.artifacts?.find(
-    (artifact) => artifact.kind === 'shadow.slashCommands',
-  )
-  if (slashCommandArtifact?.path && !mergedEnv.SHADOW_SLASH_COMMANDS_PATH) {
-    mergedEnv.SHADOW_SLASH_COMMANDS_PATH = slashCommandArtifact.path
-  }
-  if (hasRuntimeExtensions(runtimeExtensions) && !mergedEnv.SHADOW_RUNTIME_EXTENSIONS_PATH) {
-    mergedEnv.SHADOW_RUNTIME_EXTENSIONS_PATH = '/etc/openclaw/runtime-extensions.json'
-  }
-
-  for (const provision of pluginProvisions) {
-    if (provision.secrets) {
-      Object.assign(mergedEnv, provision.secrets)
-    }
-  }
-
-  const configData: Record<string, string> = {
-    'config.json': JSON.stringify(openclawConfig, null, 2),
-    ...workspaceFiles,
-  }
-  if (hasRuntimeExtensions(runtimeExtensions)) {
-    configData['runtime-extensions.json'] = JSON.stringify(runtimeExtensions, null, 2)
-  }
+function classifyEnv(
+  registrySecretEnv: Record<string, string>,
+  mergedEnv: Record<string, string>,
+): { plainEnv: Record<string, string>; secretData: Record<string, string> } {
   const plainEnv: Record<string, string> = {}
   const secretData: Record<string, string> = { ...registrySecretEnv }
 
@@ -154,11 +92,95 @@ export function buildAgentRuntimePackage(options: {
     }
   }
 
+  return { plainEnv, secretData }
+}
+
+function runtimePackageEnvDefaults(options: {
+  runtimeKind: RuntimeKind
+  hasExtensions: boolean
+  slashCommandsPath?: string
+  currentEnv: Record<string, string>
+}): Record<string, string> {
+  const env: Record<string, string> = {}
+  const hasSlashCommandsPath = () =>
+    Boolean(options.currentEnv.SHADOW_SLASH_COMMANDS_PATH ?? env.SHADOW_SLASH_COMMANDS_PATH)
+
+  if (options.slashCommandsPath && !options.currentEnv.SHADOW_SLASH_COMMANDS_PATH) {
+    env.SHADOW_SLASH_COMMANDS_PATH = options.slashCommandsPath
+  }
+  if (options.runtimeKind !== 'openclaw' && !hasSlashCommandsPath()) {
+    env.SHADOW_SLASH_COMMANDS_PATH = SHADOW_SLASH_COMMANDS_PATH
+  }
+  if (options.runtimeKind === 'hermes' && !options.currentEnv.SHADOW_SLASH_COMMANDS_JSON) {
+    env.SHADOW_SLASH_COMMANDS_JSON = '[]'
+  }
+  if (options.hasExtensions && !options.currentEnv.SHADOW_RUNTIME_EXTENSIONS_PATH) {
+    env.SHADOW_RUNTIME_EXTENSIONS_PATH =
+      options.runtimeKind === 'openclaw'
+        ? `${RUNNER_CONFIG_MOUNT_PATH}/runtime-extensions.json`
+        : `${SHADOWOB_CONFIG_MOUNT_PATH}/runtime-extensions.json`
+  }
+
+  return env
+}
+
+export function buildAgentRuntimePackage(options: {
+  agent: AgentDeployment
+  config: CloudConfig
+  extraEnv?: Record<string, string>
+  cwd?: string
+  runtimeContext?: DeploymentRuntimeContext
+}): AgentRuntimePackage {
+  const { agent, config, extraEnv, cwd, runtimeContext } = options
+  const runtime = getRuntime(agent.runtime)
+  const registrySecretEnv = collectRegistrySecretEnv(agent, config)
+  const runtimeEnv: RuntimeEnv = {
+    ...registrySecretEnv,
+    ...(agent.env ?? {}),
+    ...(extraEnv ?? {}),
+  }
+  const runtimeExtensions = collectPluginRuntimeExtensions(agent, config, cwd, runtimeEnv)
+
+  const mergedEnv: Record<string, string> = {
+    ...collectPluginBuildEnvVars(agent, config, cwd, runtimeEnv),
+    ...(agent.env ?? {}),
+    ...(extraEnv ?? {}),
+  }
+
+  const slashCommandArtifact = runtimeExtensions.artifacts?.find(
+    (artifact) => artifact.kind === 'shadow.slashCommands',
+  )
+  Object.assign(
+    mergedEnv,
+    runtimePackageEnvDefaults({
+      runtimeKind: runtime.runtimeKind,
+      hasExtensions: hasRuntimeExtensions(runtimeExtensions),
+      slashCommandsPath: slashCommandArtifact?.path,
+      currentEnv: mergedEnv,
+    }),
+  )
+
+  const runtimeArtifacts = runtime.buildPackage({
+    agent,
+    config,
+    cwd,
+    runtimeEnv,
+    runtimeExtensions,
+    runtimeContext,
+  })
+
+  if (runtimeArtifacts.provisionSecrets) {
+    Object.assign(mergedEnv, runtimeArtifacts.provisionSecrets)
+  }
+
+  const { plainEnv, secretData } = classifyEnv(registrySecretEnv, mergedEnv)
+
   return {
-    openclawConfig,
-    configData,
+    runtimeKind: runtime.runtimeKind,
+    openclawConfig: runtimeArtifacts.openclawConfig,
+    configData: runtimeArtifacts.configData,
     plainEnv,
     secretData,
-    pluginResources,
+    pluginResources: runtimeArtifacts.pluginResources,
   }
 }

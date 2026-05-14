@@ -71,7 +71,7 @@ const skillSources = [
     url: 'https://github.com/vercel-labs/agent-browser.git',
     ref: 'main',
     from: 'skills',
-    targetPath: '/app/plugin-skills/agent-browser',
+    targetPath: '/workspace/.agents/plugin-skills/agent-browser',
     include: ['agent-browser'],
     description: 'Agent Browser skill stub and runtime workflow loader',
   },
@@ -96,7 +96,11 @@ const plugin = defineConnectorPlugin(manifest, {
       id: 'agent-browser-skill-mounted',
       label: 'Agent Browser skill mounted',
       kind: 'command',
-      command: ['test', '-f', '/app/plugin-skills/agent-browser/agent-browser/SKILL.md'],
+      command: [
+        'test',
+        '-f',
+        '/workspace/.agents/plugin-skills/agent-browser/agent-browser/SKILL.md',
+      ],
       timeoutMs: 5_000,
       risk: 'safe',
     },
@@ -108,5 +112,5 @@ const plugin = defineConnectorPlugin(manifest, {
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources,
-  skillsMountPath: '/app/plugin-skills/agent-browser',
+  skillsMountPath: '/workspace/.agents/plugin-skills/agent-browser',
 })

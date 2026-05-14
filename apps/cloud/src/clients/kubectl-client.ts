@@ -6,6 +6,7 @@
  */
 
 import { execSync, spawn, spawnSync } from 'node:child_process'
+import { runtimeStatePvcName } from '../runtimes/container.js'
 
 export interface PodStatus {
   name: string
@@ -178,7 +179,7 @@ export function getAgentSandboxDeployments(namespace: string): DeploymentStatus[
           (sandboxStatus.serviceFQDN as string | undefined) ??
           (status.serviceFQDN as string | undefined) ??
           `${sandboxName}.${namespace}.svc.cluster.local`,
-        statePvc: annotations['shadowob.cloud/state-pvc'] ?? `openclaw-data-${sandboxName}`,
+        statePvc: annotations['shadowob.cloud/state-pvc'] ?? runtimeStatePvcName(sandboxName),
       } satisfies DeploymentStatus
     })
   } catch {
