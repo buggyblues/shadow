@@ -34,7 +34,7 @@
   "dependencies": {
     "@shadowob/flash-types": "workspace:*",
     "bitecs": "^0.4.0",
-    "katex": "^0.16.45",
+    "katex": "^0.16.46",
     "lottie-web": "^5.13.0",
     "matter-js": "^0.20.0",
     "pixi-live2d-display": "^0.4.0",

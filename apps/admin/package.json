@@ -29,7 +29,7 @@
     "lucide-react": "^0.513.0",
     "react": "^19.2.5",
     "react-diff-viewer-continued": "^4.2.2",
-    "react-dom": "^19.2.5",
+    "react-dom": "^19.2.6",
     "recharts": "^3.8.1",
     "react-i18next": "^16.5.4",
     "tailwind-merge": "^3.3.0",
