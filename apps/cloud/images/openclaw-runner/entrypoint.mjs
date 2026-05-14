@@ -32,6 +32,7 @@ const CONFIG_MOUNT =
 const EXTENSIONS_DIR = '/app/extensions'
 const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
+const DEFAULT_SHADOW_SLASH_COMMANDS_PATH = '/etc/shadowob/slash-commands.json'
 const RUNTIME_CONFIG_DIR = process.env.OPENCLAW_RUNTIME_CONFIG_DIR || '/tmp/openclaw/config'
 const RUNTIME_CONFIG_PATH = join(RUNTIME_CONFIG_DIR, 'openclaw.json')
 const OPENCLAW_PACKAGE_DIR = '/app/node_modules/openclaw'
@@ -197,16 +198,16 @@ function runtimeArtifactPath(runtimeExtensions, kind) {
 }
 
 function applyRuntimeArtifacts(runtimeExtensions) {
+  if (!process.env.SHADOW_SLASH_COMMANDS_PATH && existsSync(DEFAULT_SHADOW_SLASH_COMMANDS_PATH)) {
+    process.env.SHADOW_SLASH_COMMANDS_PATH = DEFAULT_SHADOW_SLASH_COMMANDS_PATH
+    console.log(`[entrypoint] Slash command index: ${DEFAULT_SHADOW_SLASH_COMMANDS_PATH}`)
+  }
+
   const slashIndexPath =
     runtimeArtifactPath(runtimeExtensions, 'shadow.slashCommands') ??
     runtimeExtensions?.slashCommands?.indexPath
   if (typeof slashIndexPath === 'string' && slashIndexPath.trim()) {
-    if (!process.env.SHADOW_SLASH_COMMANDS_PATH) {
-      process.env.SHADOW_SLASH_COMMANDS_PATH = slashIndexPath.trim()
-      console.log(`[entrypoint] Slash command index: ${slashIndexPath.trim()}`)
-    } else {
-      console.log(`[entrypoint] Additional slash command index: ${slashIndexPath.trim()}`)
-    }
+    console.log(`[entrypoint] Additional slash command index: ${slashIndexPath.trim()}`)
   }
 }
 
