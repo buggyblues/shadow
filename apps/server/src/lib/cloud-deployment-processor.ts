@@ -60,10 +60,12 @@ const CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS = Number(process.env.CLOUD_IDLE_AUTOPAUSE
 
 type CloudDeploymentRecord = NonNullable<Awaited<ReturnType<CloudDeploymentDao['findByIdOnly']>>>
 type DeploymentStatus = CloudDeploymentRecord['status']
+type OperationCancellationStatus = 'cancelling' | 'destroying'
 type RunningOperationToken = {
   cancelled: boolean
   stack?: { cancel: () => Promise<void> }
   cancelSignalled?: boolean
+  cancellationStatus?: OperationCancellationStatus
 }
 type NamespaceDeletionWaitResult = 'deleted' | 'cancelled' | 'timeout'
 type NamespaceExistsFn = (namespace: string, kubeconfig?: string) => boolean | null
@@ -628,8 +630,10 @@ async function signalRunningOperationCancel(
   deploymentId: string,
   token: RunningOperationToken,
   reason: string,
+  cancellationStatus?: OperationCancellationStatus,
 ): Promise<boolean> {
   token.cancelled = true
+  if (cancellationStatus) token.cancellationStatus = cancellationStatus
   if (!token.stack || token.cancelSignalled) return true
 
   token.cancelSignalled = true
@@ -647,7 +651,21 @@ async function signalRunningOperationCancel(
 export async function requestCloudDeploymentCancellation(deploymentId: string): Promise<boolean> {
   const token = runningOperations.get(deploymentId)
   if (!token) return false
-  await signalRunningOperationCancel(deploymentId, token, 'user request')
+  await signalRunningOperationCancel(deploymentId, token, 'user request', 'cancelling')
+  return true
+}
+
+export async function requestCloudDeploymentDestroyInterruption(
+  deploymentId: string,
+): Promise<boolean> {
+  const token = runningOperations.get(deploymentId)
+  if (!token) return false
+  await signalRunningOperationCancel(
+    deploymentId,
+    token,
+    'destroy requested while operation is running',
+    'destroying',
+  )
   return true
 }
 
@@ -655,17 +673,20 @@ function watchCancellationRequest(
   deployment: CloudDeploymentRecord,
   deploymentDao: CloudDeploymentDao,
   token: RunningOperationToken,
+  statuses: readonly OperationCancellationStatus[] = ['cancelling'],
 ): () => void {
+  const cancellableStatuses = new Set<DeploymentStatus>(statuses)
   const interval = setInterval(() => {
     if (token.cancelled) return
 
     void (async () => {
       const latest = await deploymentDao.findByIdOnly(deployment.id).catch(() => null)
-      if (latest?.status === 'cancelling') {
+      if (latest && cancellableStatuses.has(latest.status)) {
         await signalRunningOperationCancel(
           deployment.id,
           token,
-          'deployment status changed to cancelling',
+          `deployment status changed to ${latest.status}`,
+          latest.status as OperationCancellationStatus,
         )
       }
     })()
@@ -1477,12 +1498,30 @@ async function processDeployment(
       return
     }
 
-    await deploymentDao.updateStatus(deployment.id, 'deploying')
+    const deploying = await deploymentDao.updateStatusIfStatus(
+      deployment.id,
+      'pending',
+      'deploying',
+    )
+    if (!deploying) {
+      const latest = await deploymentDao.findByIdOnly(deployment.id).catch(() => null)
+      if (latest?.status === 'destroying') {
+        await deploymentDao.appendLog(
+          deployment.id,
+          '[destroy] Deploy task was interrupted before startup so destroy can proceed',
+          'warn',
+        )
+      }
+      return
+    }
     await deploymentDao.appendLog(deployment.id, `Starting deployment: ${deployment.name}`, 'info')
 
     // Register once the task is claimed so /cancel can signal the live stack.
     runningOperations.set(deployment.id, cancelToken)
-    stopWatchingCancellation = watchCancellationRequest(deployment, deploymentDao, cancelToken)
+    stopWatchingCancellation = watchCancellationRequest(deployment, deploymentDao, cancelToken, [
+      'cancelling',
+      'destroying',
+    ])
 
     const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao)
     activeKubeconfig = cluster?.kubeconfig
@@ -1610,7 +1649,25 @@ async function processDeployment(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     const cancelled = isUserCancelledDeploymentError(cancelToken, msg)
-    logger.error({ deploymentId: deployment.id, error: msg }, 'Deployment failed')
+
+    if (cancelled) {
+      const latest = await deploymentDao.findByIdOnly(deployment.id).catch(() => null)
+      if (latest?.status === 'destroying') {
+        await deploymentDao.appendLog(
+          deployment.id,
+          `[destroy] Cancelled active deploy so destroy can proceed: ${msg}`,
+          'warn',
+        )
+        logger.warn({ deploymentId: deployment.id }, 'Deployment interrupted by destroy request')
+        return
+      }
+    }
+
+    if (cancelled) {
+      logger.warn({ deploymentId: deployment.id, error: msg }, 'Deployment cancelled')
+    } else {
+      logger.error({ deploymentId: deployment.id, error: msg }, 'Deployment failed')
+    }
 
     if (!cancelled && isCloudDeploymentRecoveryEnabled()) {
       const recovered = await recoverDeploymentFromReadyRuntimeResources(
@@ -1689,7 +1746,12 @@ async function processDestroy(
   await deploymentDao.appendLog(deployment.id, `Starting destroy: ${deployment.name}`, 'info')
   const cancelToken: RunningOperationToken = { cancelled: false }
   runningOperations.set(deployment.id, cancelToken)
-  const stopWatchingCancellation = watchCancellationRequest(deployment, deploymentDao, cancelToken)
+  const stopWatchingCancellation = watchCancellationRequest(
+    deployment,
+    deploymentDao,
+    cancelToken,
+    ['cancelling'],
+  )
 
   try {
     const newer = await deploymentDao.findNewerCurrentInNamespace(deployment)
@@ -1845,7 +1907,12 @@ async function processDestroy(
 async function processCancel(deployment: CloudDeploymentRecord, deploymentDao: CloudDeploymentDao) {
   const live = runningOperations.get(deployment.id)
   if (live) {
-    await signalRunningOperationCancel(deployment.id, live, 'worker cancellation pass')
+    await signalRunningOperationCancel(
+      deployment.id,
+      live,
+      'worker cancellation pass',
+      'cancelling',
+    )
     await deploymentDao.appendLog(
       deployment.id,
       '[cancel] Signal sent to in-progress operation',

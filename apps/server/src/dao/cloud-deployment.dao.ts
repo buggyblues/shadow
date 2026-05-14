@@ -353,6 +353,28 @@ export class CloudDeploymentDao {
     return result[0] ?? null
   }
 
+  async updateStatusIfStatus(
+    id: string,
+    currentStatus: CloudDeploymentStatus,
+    nextStatus: CloudDeploymentStatus,
+    errorMessage?: string | null,
+  ) {
+    const now = new Date()
+    const activityPatch =
+      nextStatus === 'deployed' || nextStatus === 'resuming' ? { lastActiveAt: now } : {}
+    const result = await this.db
+      .update(cloudDeployments)
+      .set({
+        status: nextStatus,
+        errorMessage: errorMessage ?? null,
+        updatedAt: now,
+        ...activityPatch,
+      })
+      .where(and(eq(cloudDeployments.id, id), eq(cloudDeployments.status, currentStatus)))
+      .returning()
+    return result[0] ?? null
+  }
+
   async failIfStatus(id: string, status: CloudDeploymentStatus, errorMessage: string) {
     const result = await this.db
       .update(cloudDeployments)

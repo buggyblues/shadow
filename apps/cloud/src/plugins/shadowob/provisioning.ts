@@ -175,9 +175,15 @@ export async function provisionShadowResources(
   }
 
   // 3. Provision buddies
+  const buddyAllowedServerIds = buildBuddyAllowedServerIds(plugin, result)
   if (plugin.buddies?.length) {
     for (const buddyDef of plugin.buddies) {
-      const buddyInfo = await provisionBuddy(client, buddyDef, state)
+      const buddyInfo = await provisionBuddy(
+        client,
+        buddyDef,
+        state,
+        buddyAllowedServerIds.get(buddyDef.id) ?? [],
+      )
       result.buddies.set(buddyDef.id, buddyInfo)
     }
   }
@@ -487,6 +493,7 @@ async function provisionBuddy(
   client: ShadowClient,
   buddyDef: ShadowBuddy,
   state: ShadowobState | null,
+  allowedServerIds: string[],
 ): Promise<{ agentId: string; token: string; userId: string }> {
   // Check state first, but mint a fresh token so restarted/community servers
   // do not keep handing old runtimes an expired JWT.
@@ -494,6 +501,7 @@ async function provisionBuddy(
   if (existingBuddy?.agentId) {
     log.dim(`  Buddy "${buddyDef.name}" found in state (agent: ${existingBuddy.agentId})`)
     try {
+      await ensureBuddyServerAccess(client, existingBuddy.agentId, allowedServerIds)
       const tokenResult = await client.generateAgentToken(existingBuddy.agentId)
       return {
         agentId: existingBuddy.agentId,
@@ -550,6 +558,12 @@ async function provisionBuddy(
   })
   if (existing) {
     agentId = existing.id
+    await ensureBuddyServerAccess(
+      client,
+      agentId,
+      allowedServerIds,
+      (existing as { config?: Record<string, unknown> }).config,
+    )
     const tokenResult = await client.generateAgentToken(agentId)
     token = tokenResult.token
     userId =
@@ -566,6 +580,8 @@ async function provisionBuddy(
       username,
       displayName: buddyDef.name,
       avatarUrl: buddyDef.avatarUrl,
+      buddyMode: 'private',
+      allowedServerIds,
       config: { shadowob: { buddyId: buddyDef.id } },
     })
     agentId = agent.id
@@ -584,6 +600,12 @@ async function provisionBuddy(
       if (!fallback) throw new Error(`Cannot find existing buddy "${buddyDef.name}": ${msg}`)
 
       agentId = fallback.id
+      await ensureBuddyServerAccess(
+        client,
+        agentId,
+        allowedServerIds,
+        (fallback as { config?: Record<string, unknown> }).config,
+      )
       // Generate a fresh token for the existing agent
       const tokenResult = await client.generateAgentToken(agentId)
       token = tokenResult.token
@@ -617,11 +639,25 @@ async function processBinding(
     }
 
     try {
-      await client.addAgentsToServer(serverId, [buddyInfo.agentId])
+      const result = await client.addAgentsToServer(serverId, [buddyInfo.agentId])
+      const failed = Array.isArray(result?.failed) ? result.failed : []
+      const blockingFailures = failed.filter(
+        (item) => !/already (a )?server member/i.test(String(item?.error ?? '')),
+      )
+      if (blockingFailures.length > 0) {
+        throw new Error(
+          blockingFailures
+            .map((item) => item?.error)
+            .filter(Boolean)
+            .join('; '),
+        )
+      }
       log.success(`  Added buddy "${binding.targetId}" to server "${serverConfigId}"`)
     } catch (err) {
-      log.dim(
-        `  Buddy already in server "${serverConfigId}" (or error: ${formatErrorMessage(err)})`,
+      throw new Error(
+        `Could not add buddy "${binding.targetId}" to server "${serverConfigId}": ${formatErrorMessage(
+          err,
+        )}`,
       )
     }
   }
@@ -697,6 +733,45 @@ async function processBinding(
       }
     }
   }
+}
+
+function buildBuddyAllowedServerIds(
+  plugin: import('../../config/schema.js').ShadowobPluginConfig,
+  result: ProvisionResult,
+): Map<string, string[]> {
+  const allowed = new Map<string, Set<string>>()
+  for (const binding of plugin.bindings ?? []) {
+    if (binding.targetType !== 'buddy') continue
+    const servers = allowed.get(binding.targetId) ?? new Set<string>()
+    for (const serverConfigId of binding.servers) {
+      const serverId = result.servers.get(serverConfigId) ?? serverConfigId
+      if (serverId) servers.add(serverId)
+    }
+    allowed.set(binding.targetId, servers)
+  }
+  return new Map([...allowed].map(([buddyId, serverIds]) => [buddyId, [...serverIds]]))
+}
+
+function configuredAllowedServerIds(config: Record<string, unknown> | undefined): string[] {
+  const raw = config?.allowedServerIds ?? config?.serverWhitelist
+  if (!Array.isArray(raw)) return []
+  return raw.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+}
+
+async function ensureBuddyServerAccess(
+  client: ShadowClient,
+  agentId: string,
+  allowedServerIds: string[],
+  currentConfig?: Record<string, unknown>,
+): Promise<void> {
+  if (allowedServerIds.length === 0) return
+  const merged = Array.from(
+    new Set([...configuredAllowedServerIds(currentConfig), ...allowedServerIds]),
+  )
+  await client.updateAgent(agentId, {
+    buddyMode: 'private',
+    allowedServerIds: merged,
+  })
 }
 
 async function listAccessibleServers(client: ShadowClient): Promise<AccessibleShadowServer[]> {
