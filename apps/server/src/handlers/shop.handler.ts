@@ -493,9 +493,11 @@ export function createShopHandler(container: AppContainer) {
     }
     const viewerUserId = viewerUserIdQuery || user.userId
     if (viewerUserId !== user.userId) {
-      const { offer } = await commerceOfferService.getOfferBundle(c.req.param('offerId'))
+      const { offer, shop } = await commerceOfferService.getOfferBundle(c.req.param('offerId'))
       const canInspectViewer =
-        offer.sellerUserId === user.userId || offer.sellerBuddyUserId === user.userId
+        offer.sellerUserId === user.userId ||
+        offer.sellerBuddyUserId === user.userId ||
+        shop.ownerUserId === user.userId
       if (!canInspectViewer) {
         return errorResponse(c, 'COMMERCE_VIEWER_STATE_FORBIDDEN', 403)
       }

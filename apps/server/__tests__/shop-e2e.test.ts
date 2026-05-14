@@ -47,6 +47,7 @@ let buddyUserId: string
 let buddyUsername: string
 let adminToken: string
 let buyerToken: string
+let buddyToken: string
 let serverId: string
 let serverSlug: string
 
@@ -161,6 +162,18 @@ beforeAll(async () => {
     userId: buyerUserId,
     email: buyer!.email,
     username: buyer!.username,
+  })
+  buddyToken = signAccessToken({
+    userId: buddyUserId,
+    email: buddy!.email,
+    username: buddy!.username,
+  })
+
+  await container.resolve('agentDao').create({
+    userId: buddyUserId,
+    ownerId: adminUserId,
+    kernelType: 'test',
+    config: { shadowob: { buddyId: 'shop-e2e-buddy' } },
   })
 
   // Create a server + admin membership
@@ -466,6 +479,52 @@ describe('Products — CRUD & listing', () => {
     const data = await json<{ products: unknown[]; total: number }>(res)
     expect(data.products).toHaveLength(0)
     expect(data.total).toBe(0)
+  })
+
+  it('buddy shop owner can preview checkout state for a buyer', async () => {
+    const shopRes = await req('GET', `/api/users/${buddyUserId}/shop/manage`, {
+      token: adminToken,
+    })
+    expect(shopRes.status).toBe(200)
+    const buddyShop = await json<{ id: string; ownerUserId: string }>(shopRes)
+    expect(buddyShop.ownerUserId).toBe(buddyUserId)
+
+    const productRes = await req('POST', `/api/shops/${buddyShop.id}/products`, {
+      token: adminToken,
+      body: {
+        name: 'Buddy Paid File',
+        slug: `buddy-paid-file-${Date.now()}`,
+        type: 'entitlement',
+        status: 'active',
+        summary: 'A Buddy-owned paid file entitlement',
+        basePrice: 8,
+        entitlementConfig: {
+          resourceType: 'service',
+          resourceId: 'buddy-paid-file',
+          capability: 'use',
+          durationSeconds: 86400,
+        },
+      },
+    })
+    expect(productRes.status).toBe(201)
+    const product = await json<{ id: string }>(productRes)
+
+    const offersRes = await req('GET', `/api/shops/${buddyShop.id}/offers`, {
+      token: adminToken,
+    })
+    expect(offersRes.status).toBe(200)
+    const offersBody = await json<{ offers: Array<{ id: string; productId: string }> }>(offersRes)
+    const offer = offersBody.offers.find((item) => item.productId === product.id)
+    expect(offer?.id).toBeDefined()
+
+    const previewRes = await req('GET', `/api/commerce/offers/${offer!.id}/checkout-preview`, {
+      token: buddyToken,
+      query: { viewerUserId: buyerUserId },
+    })
+    expect(previewRes.status).toBe(200)
+    const preview = await json<{ viewerState: string; nextAction: string }>(previewRes)
+    expect(preview.viewerState).toBe('not_purchased')
+    expect(preview.nextAction).toBe('purchase')
   })
 })
 

@@ -33,13 +33,17 @@ import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { cloudDeployments, cloudTemplates } from '../db/schema'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
-import { requestCloudDeploymentCancellation } from '../lib/cloud-deployment-processor'
+import {
+  requestCloudDeploymentCancellation,
+  requestCloudDeploymentDestroyInterruption,
+} from '../lib/cloud-deployment-processor'
 import { extractShadowProvisionTarget } from '../lib/cloud-shadow-target'
 import { validateJsonLimits } from '../lib/json-limits'
 import { decrypt, encrypt } from '../lib/kms'
 import {
   assertOfficialModelProxyAvailable,
   officialModelProxyEnvVars,
+  officialModelProxyMissingConfig,
   shouldCopyServerRuntimeEnvKey,
 } from '../lib/model-proxy-config'
 import { assertSafeHttpUrl } from '../lib/ssrf'
@@ -432,6 +436,20 @@ function readCloudStoreModelProviderMode(
   }
   if (runtime.officialModelProxy === true) return 'official'
   return null
+}
+
+function resolveModelProviderMode(input: {
+  configSnapshot: unknown
+  explicitProviderProfileIds: string[]
+  modelProviderMode?: CloudStoreModelProviderMode | null
+  runtimeServerUrl?: string
+  usesModelProvider: boolean
+}): CloudStoreModelProviderMode | null {
+  const configuredMode =
+    input.modelProviderMode ?? readCloudStoreModelProviderMode(input.configSnapshot)
+  if (configuredMode) return configuredMode
+  if (!input.usesModelProvider || input.explicitProviderProfileIds.length > 0) return null
+  return officialModelProxyMissingConfig(input.runtimeServerUrl).length === 0 ? 'official' : null
 }
 const CLOUD_DEPLOYMENT_HOURLY_COST = 1
 const CLOUD_DEPLOYMENT_BILLING_PRECISION_MINUTES = 15
@@ -2296,11 +2314,19 @@ export function createCloudSaasHandler(container: AppContainer) {
       collectRuntimeEnvRefPolicy(configSnapshot),
     ])
     const usesModelProvider = configUsesPlugin(configSnapshot, 'model-provider')
-    const modelProviderMode =
-      options.modelProviderMode ?? readCloudStoreModelProviderMode(configSnapshot)
+    const explicitProviderProfileIds = [...collectProviderProfileIds(configSnapshot)]
+      .map(normalizeProviderProfileId)
+      .filter(Boolean)
+    const runtimeServerUrl = shadowAgentServerUrl ?? shadowServerUrl
+    const modelProviderMode = resolveModelProviderMode({
+      configSnapshot,
+      explicitProviderProfileIds,
+      modelProviderMode: options.modelProviderMode,
+      runtimeServerUrl,
+      usesModelProvider,
+    })
     const usesOfficialModelProxy = usesModelProvider && modelProviderMode === 'official'
     if (usesOfficialModelProxy) {
-      const runtimeServerUrl = shadowAgentServerUrl ?? shadowServerUrl
       assertOfficialModelProxyAvailable(runtimeServerUrl)
       const proxyEnvVars = officialModelProxyEnvVars({
         runtimeServerUrl,
@@ -2315,9 +2341,6 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
       Object.assign(envVars, proxyEnvVars)
     }
-    const explicitProviderProfileIds = [...collectProviderProfileIds(configSnapshot)]
-      .map(normalizeProviderProfileId)
-      .filter(Boolean)
     const providerProfileIds = usesOfficialModelProxy
       ? []
       : explicitProviderProfileIds.length > 0
@@ -4125,6 +4148,14 @@ export function createCloudSaasHandler(container: AppContainer) {
       `[destroy] Queued Pulumi destroy for deployment ${current.id} in namespace "${current.namespace}"`,
       'info',
     )
+    const interrupted = await requestCloudDeploymentDestroyInterruption(destroyTask.id)
+    if (interrupted) {
+      await dao.appendLog(
+        destroyTask.id,
+        '[destroy] Signal sent to in-progress operation so destroy can proceed',
+        'warn',
+      )
+    }
 
     const blocker = await dao.findActiveOperationInNamespace({
       userId: user.userId,

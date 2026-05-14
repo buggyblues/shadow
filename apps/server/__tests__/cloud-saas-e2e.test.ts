@@ -43,6 +43,7 @@ import { closeRedisClient } from '../src/lib/redis'
 const cloudRuntimeMocks = vi.hoisted(() => ({
   applyKubernetesManifestAsync: vi.fn(async () => undefined),
   createVolumeSnapshotBackupAsync: vi.fn(async () => undefined),
+  deleteNamespace: vi.fn(() => undefined),
   deleteKubernetesResourceAsync: vi.fn(async () => undefined),
   execInPodAsync: vi.fn(async () => ({
     exitCode: 0,
@@ -58,7 +59,9 @@ const cloudRuntimeMocks = vi.hoisted(() => ({
   })),
   isPvcBackedByCsiProvisioner: vi.fn(async () => false),
   isVolumeSnapshotApiAvailable: vi.fn(async () => false),
+  listManagedNamespaces: vi.fn(() => []),
   listPodsAsync: vi.fn(async () => []),
+  namespaceExists: vi.fn(() => false),
   restorePvcFromVolumeSnapshot: vi.fn(async () => undefined),
   scaleAgentSandboxAsync: vi.fn(async () => undefined),
   waitForAgentSandboxPaused: vi.fn(async () => undefined),
@@ -995,6 +998,115 @@ describe('Cloud SaaS — deployment state consistency', () => {
       expect(logs.some((log) => log.message.includes('fake pulumi deploy output'))).toBe(true)
       expect(logs.some((log) => log.message.includes('Deployment complete'))).toBe(true)
       expect(logs.some((log) => log.message.includes('first hourly runtime unit'))).toBe(true)
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('interrupts an active deploy when DELETE queues destroy for the same deployment', async () => {
+    const namespace = uniqueName('e2e-state-destroy-active')
+    let resolveDeployStarted: (() => void) | undefined
+    const deployStarted = new Promise<void>((resolve) => {
+      resolveDeployStarted = resolve
+    })
+    let stackCancelCalls = 0
+    let destroyCalls = 0
+    const slowContainer = {
+      deploymentRuntime: {
+        deployFromSnapshot: async (options: DeployFromSnapshotOptions): Promise<DeployResult> => {
+          options.onStackReady?.({
+            cancel: async () => {
+              stackCancelCalls += 1
+            },
+          })
+          options.onOutput?.('[test] fake slow deploy output\n')
+          resolveDeployStarted?.()
+
+          const deadline = Date.now() + 1_500
+          while (!options.isCancelled?.()) {
+            if (Date.now() > deadline) {
+              throw new Error('timed out waiting for destroy cancellation')
+            }
+            await new Promise((resolve) => setTimeout(resolve, 10))
+          }
+
+          return {
+            namespace: options.namespace,
+            agentCount: 1,
+            config: options.configSnapshot as DeployResult['config'],
+          }
+        },
+        destroy: async () => {
+          destroyCalls += 1
+        },
+      },
+    } as unknown as ServiceContainer
+
+    try {
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: `${namespace}-agent`,
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: makeConfigSnapshot('state-destroy-active-secret'),
+      })
+      expect(createRes.status).toBe(201)
+      const created = (await createRes.json()) as {
+        id: string
+        namespace: string
+        status: string
+      }
+      expect(created).toMatchObject({ namespace, status: 'pending' })
+
+      const tick = processCloudDeploymentQueueOnce({
+        database: db,
+        container: slowContainer,
+        reconcile: false,
+        deploymentIds: [created.id],
+      })
+      await deployStarted
+
+      const destroyRes = await req('DELETE', `/api/cloud-saas/deployments/${created.id}`)
+      expect(destroyRes.status).toBe(200)
+      const destroyBody = (await destroyRes.json()) as {
+        ok: boolean
+        taskId: string
+        status: string
+      }
+      expect(destroyBody).toMatchObject({
+        ok: true,
+        taskId: created.id,
+        status: 'destroying',
+      })
+
+      await tick
+
+      const detailRes = await req('GET', `/api/cloud-saas/deployments/${created.id}`)
+      expect(detailRes.status).toBe(200)
+      const detail = (await detailRes.json()) as {
+        status: string
+        errorMessage?: string | null
+      }
+      expect(detail).toMatchObject({ status: 'destroyed', errorMessage: null })
+      expect(stackCancelCalls).toBe(1)
+      expect(destroyCalls).toBe(1)
+
+      const logs = await db
+        .select()
+        .from(schema.cloudDeploymentLogs)
+        .where(eq(schema.cloudDeploymentLogs.deploymentId, created.id))
+      expect(
+        logs.some((log) =>
+          log.message.includes('Signal sent to in-progress operation so destroy can proceed'),
+        ),
+      ).toBe(true)
+      expect(
+        logs.some((log) => log.message.includes('Cancelled active deploy so destroy can proceed')),
+      ).toBe(true)
+      expect(logs.some((log) => log.message.includes('Starting destroy'))).toBe(true)
     } finally {
       await db
         .delete(schema.cloudDeployments)
@@ -2047,6 +2159,9 @@ describe('Cloud SaaS — deployment + billing', () => {
       configSnapshot: {
         ...makeConfigSnapshot('provider-runtime-secret'),
         use: [{ plugin: 'model-provider' }],
+        [CLOUD_SAAS_RUNTIME_KEY]: {
+          modelProviderMode: 'custom',
+        },
       },
     })
 
@@ -2063,6 +2178,73 @@ describe('Cloud SaaS — deployment + billing', () => {
     expect(runtime.OPENAI_COMPATIBLE_API_KEY).toBe('saved-compatible-key')
     expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBe(modelId)
     expect(runtime.DEEPSEEK_API_KEY).toBeUndefined()
+  })
+
+  it('POST /api/cloud-saas/deployments defaults model-provider templates to official proxy when configured', async () => {
+    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
+    const previousModel = process.env.SHADOW_MODEL_PROXY_MODEL
+    const previousProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOW_SERVER_URL = 'http://shadow.test'
+    process.env.SHADOW_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
+    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+
+    try {
+      const saveBaseUrlRes = await req('PUT', '/api/cloud-saas/global-envvars', {
+        key: 'OPENAI_COMPATIBLE_BASE_URL',
+        value: 'https://stale-compatible.example.test/v1',
+      })
+      expect(saveBaseUrlRes.status).toBe(200)
+
+      const saveApiKeyRes = await req('PUT', '/api/cloud-saas/global-envvars', {
+        key: 'OPENAI_COMPATIBLE_API_KEY',
+        value: 'stale-compatible-key',
+      })
+      expect(saveApiKeyRes.status).toBe(200)
+
+      const namespace = uniqueName('e2e-official-default-provider-ns')
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: uniqueName('e2e-official-default-provider-deploy'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: {
+          ...makeConfigSnapshot('official-default-provider-secret'),
+          use: [{ plugin: 'model-provider' }],
+        },
+      })
+
+      expect(createRes.status).toBe(201)
+      const deployment = (await createRes.json()) as { id: string }
+      const [stored] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment.id))
+        .limit(1)
+
+      const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
+      expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBe('http://shadow.test/api/ai/v1')
+      expect(runtime.OPENAI_COMPATIBLE_API_KEY).toMatch(/^smp_/)
+      expect(runtime.OPENAI_COMPATIBLE_API_KEY).not.toBe('stale-compatible-key')
+      expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBeUndefined()
+      expect(runtime.OPENAI_API_KEY).toBeUndefined()
+    } finally {
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
+      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
+      if (previousModel === undefined) delete process.env.SHADOW_MODEL_PROXY_MODEL
+      else process.env.SHADOW_MODEL_PROXY_MODEL = previousModel
+      if (previousProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
+      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousProxyEnabled
+      if (previousUpstreamBaseUrl === undefined)
+        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+      if (previousUpstreamApiKey === undefined)
+        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+    }
   })
 
   it('POST /api/cloud-saas/deployments injects official proxy env for official model mode', async () => {

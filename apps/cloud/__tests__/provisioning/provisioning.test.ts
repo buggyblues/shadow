@@ -11,16 +11,24 @@ const shadowClientMocks = vi.hoisted(() => ({
   addChannelMember: vi.fn(),
   createAgent: vi.fn(),
   createChannel: vi.fn(),
+  createCommerceDeliverable: vi.fn(),
+  createCommerceOffer: vi.fn(),
+  createShopProduct: vi.fn(),
   createListing: vi.fn(),
   createServer: vi.fn(),
+  createWorkspaceFile: vi.fn(),
   generateAgentToken: vi.fn(),
   getChannel: vi.fn(),
+  getManagedUserShop: vi.fn(),
   getServer: vi.fn(),
   getServerChannels: vi.fn(),
   listAgents: vi.fn(),
+  listCommerceOffers: vi.fn(),
   listServers: vi.fn(),
   toggleListing: vi.fn(),
+  updateAgent: vi.fn(),
   updateListing: vi.fn(),
+  uploadMedia: vi.fn(),
   upsertPolicy: vi.fn(),
 }))
 
@@ -97,6 +105,8 @@ describe('provisioning', () => {
         username: 'strategy-buddy',
         displayName: 'Strategy Buddy',
         avatarUrl: undefined,
+        buddyMode: 'private',
+        allowedServerIds: [],
         config: { shadowob: { buddyId: 'strategy-buddy' } },
       })
       expect(shadowClientMocks.generateAgentToken).toHaveBeenNthCalledWith(2, 'new-agent')
@@ -105,6 +115,236 @@ describe('provisioning', () => {
         userId: 'new-user',
         token: 'fresh-agent-token',
       })
+    })
+
+    it('binds paid-file commerce offers to the seller buddy', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [
+                {
+                  id: 'match-server',
+                  name: 'Match Server',
+                  channels: [{ id: 'match-channel', title: 'match-channel' }],
+                },
+              ],
+              buddies: [{ id: 'match-girl', name: 'Match Girl' }],
+              bindings: [
+                {
+                  targetId: 'match-girl',
+                  targetType: 'buddy',
+                  servers: ['match-server'],
+                  channels: ['match-channel'],
+                  agentId: 'agent-1',
+                },
+              ],
+              commerce: {
+                paidFiles: [
+                  {
+                    id: 'match-animation',
+                    serverId: 'match-server',
+                    shop: { kind: 'buddy', buddyId: 'match-girl' },
+                    sellerBuddyId: 'match-girl',
+                    name: 'Glowing Matches',
+                    slug: 'glowing-matches',
+                    price: 8,
+                    fileName: 'match.html',
+                    html: '<html></html>',
+                    offerSurfaces: ['dm', 'channel'],
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      }
+
+      shadowClientMocks.listServers.mockResolvedValue([])
+      shadowClientMocks.createServer.mockResolvedValue({ id: 'server-real', name: 'Match Server' })
+      shadowClientMocks.getServerChannels.mockResolvedValue([])
+      shadowClientMocks.createChannel.mockResolvedValue({
+        id: 'channel-real',
+        serverId: 'server-real',
+        name: 'match-channel',
+      })
+      shadowClientMocks.listAgents.mockResolvedValue([])
+      shadowClientMocks.createAgent.mockResolvedValue({
+        id: 'agent-real',
+        userId: 'buddy-user-real',
+      })
+      shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'buddy-token' })
+      shadowClientMocks.addAgentsToServer.mockResolvedValue({ added: ['agent-real'], failed: [] })
+      shadowClientMocks.addChannelMember.mockResolvedValue(undefined)
+      shadowClientMocks.getManagedUserShop.mockResolvedValue({ id: 'buddy-shop-real' })
+      shadowClientMocks.uploadMedia.mockResolvedValue({
+        url: '/shadow/uploads/match.html',
+        size: 13,
+      })
+      shadowClientMocks.createWorkspaceFile.mockResolvedValue({ id: 'file-real' })
+      shadowClientMocks.createShopProduct.mockResolvedValue({ id: 'product-real' })
+      shadowClientMocks.listCommerceOffers.mockResolvedValue({ offers: [] })
+      shadowClientMocks.createCommerceOffer.mockResolvedValue({ id: 'offer-real' })
+      shadowClientMocks.createCommerceDeliverable.mockResolvedValue({ id: 'deliverable-real' })
+
+      const result = await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.createCommerceOffer).toHaveBeenCalledWith(
+        'buddy-shop-real',
+        expect.objectContaining({
+          productId: 'product-real',
+          sellerBuddyUserId: 'buddy-user-real',
+        }),
+      )
+      expect(shadowClientMocks.createAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          buddyMode: 'private',
+          allowedServerIds: ['server-real'],
+        }),
+      )
+      expect(shadowClientMocks.createCommerceDeliverable).toHaveBeenCalledWith(
+        'buddy-shop-real',
+        'offer-real',
+        expect.objectContaining({
+          senderBuddyUserId: 'buddy-user-real',
+        }),
+      )
+      expect(result.commerce.get('match-animation')).toEqual({
+        shopId: 'buddy-shop-real',
+        productId: 'product-real',
+        offerId: 'offer-real',
+        fileId: 'file-real',
+        deliverableId: 'deliverable-real',
+      })
+    })
+
+    it('updates reused private buddy allowlists before binding them to servers', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [{ id: 'server-a', name: 'Server A' }],
+              buddies: [{ id: 'buddy-a', name: 'Buddy A' }],
+              bindings: [
+                {
+                  targetId: 'buddy-a',
+                  targetType: 'buddy',
+                  servers: ['server-a'],
+                  channels: [],
+                  agentId: 'agent-1',
+                },
+              ],
+            },
+          },
+        ],
+      }
+
+      shadowClientMocks.listServers.mockResolvedValue([])
+      shadowClientMocks.createServer.mockResolvedValue({ id: 'server-real', name: 'Server A' })
+      shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'fresh-token' })
+      shadowClientMocks.addAgentsToServer.mockResolvedValue({
+        added: ['agent-real'],
+        failed: [],
+      })
+
+      await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        existingState: {
+          buddies: {
+            'buddy-a': {
+              agentId: 'agent-real',
+              userId: 'buddy-user-real',
+            },
+          },
+        },
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.updateAgent).toHaveBeenCalledWith('agent-real', {
+        buddyMode: 'private',
+        allowedServerIds: ['server-real'],
+      })
+      expect(shadowClientMocks.addAgentsToServer).toHaveBeenCalledWith('server-real', [
+        'agent-real',
+      ])
+    })
+
+    it('fails provisioning when server binding rejects the buddy', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [{ id: 'server-a', name: 'Server A' }],
+              buddies: [{ id: 'buddy-a', name: 'Buddy A' }],
+              bindings: [
+                {
+                  targetId: 'buddy-a',
+                  targetType: 'buddy',
+                  servers: ['server-a'],
+                  channels: [],
+                  agentId: 'agent-1',
+                },
+              ],
+            },
+          },
+        ],
+      }
+
+      shadowClientMocks.listServers.mockResolvedValue([])
+      shadowClientMocks.createServer.mockResolvedValue({ id: 'server-real', name: 'Server A' })
+      shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'fresh-token' })
+      shadowClientMocks.addAgentsToServer.mockResolvedValue({
+        added: [],
+        failed: [{ agentId: 'agent-real', error: 'Buddy is not allowed in this server' }],
+      })
+
+      await expect(
+        provisionShadowResources(config, {
+          serverUrl: 'http://shadow.local',
+          userToken: 'user-token',
+          existingState: {
+            buddies: {
+              'buddy-a': {
+                agentId: 'agent-real',
+                userId: 'buddy-user-real',
+              },
+            },
+          },
+          logger: {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            success: vi.fn(),
+            step: vi.fn(),
+            dim: vi.fn(),
+          },
+        }),
+      ).rejects.toThrow('Buddy is not allowed in this server')
     })
   })
 
