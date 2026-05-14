@@ -98,17 +98,11 @@ function classifyEnv(
 function runtimePackageEnvDefaults(options: {
   runtimeKind: RuntimeKind
   hasExtensions: boolean
-  slashCommandsPath?: string
   currentEnv: Record<string, string>
 }): Record<string, string> {
   const env: Record<string, string> = {}
-  const hasSlashCommandsPath = () =>
-    Boolean(options.currentEnv.SHADOW_SLASH_COMMANDS_PATH ?? env.SHADOW_SLASH_COMMANDS_PATH)
 
-  if (options.slashCommandsPath && !options.currentEnv.SHADOW_SLASH_COMMANDS_PATH) {
-    env.SHADOW_SLASH_COMMANDS_PATH = options.slashCommandsPath
-  }
-  if (options.runtimeKind !== 'openclaw' && !hasSlashCommandsPath()) {
+  if (!options.currentEnv.SHADOW_SLASH_COMMANDS_PATH) {
     env.SHADOW_SLASH_COMMANDS_PATH = SHADOW_SLASH_COMMANDS_PATH
   }
   if (options.runtimeKind === 'hermes' && !options.currentEnv.SHADOW_SLASH_COMMANDS_JSON) {
@@ -147,15 +141,11 @@ export function buildAgentRuntimePackage(options: {
     ...(extraEnv ?? {}),
   }
 
-  const slashCommandArtifact = runtimeExtensions.artifacts?.find(
-    (artifact) => artifact.kind === 'shadow.slashCommands',
-  )
   Object.assign(
     mergedEnv,
     runtimePackageEnvDefaults({
       runtimeKind: runtime.runtimeKind,
       hasExtensions: hasRuntimeExtensions(runtimeExtensions),
-      slashCommandsPath: slashCommandArtifact?.path,
       currentEnv: mergedEnv,
     }),
   )

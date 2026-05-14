@@ -42,6 +42,35 @@ Codex reads layered TOML configuration:
 | Automation | Codex app automations exist, but they are app-level background jobs rather than a simple CLI runner cron store. |
 | Logs and sessions | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`, `history.jsonl`, `auth.json`, local state/cache files. |
 
+## Shadow slash command bridge
+
+The runner package always materializes `/etc/shadowob/slash-commands.json` so
+Shadow can load a stable command index. The Codex runner owns its catalog in
+`apps/cloud/src/runtimes/slash-commands/codex.ts`; this is intentionally not a
+common runtime artifact.
+
+Official Codex CLI commands researched from the Codex docs include
+`/permissions`, `/sandbox-add-read-dir`, `/agent`, `/apps`, `/plugins`,
+`/clear`, `/compact`, `/copy`, `/diff`, `/exit`, `/experimental`, `/feedback`,
+`/init`, `/logout`, `/mcp`, `/mention`, `/model`, `/fast`, `/plan`, `/goal`,
+`/personality`, `/ps`, `/stop`, `/fork`, `/side`, `/resume`, `/new`, `/quit`,
+`/review`, `/status`, `/debug-config`, `/statusline`, `/title`, and `/keymap`.
+
+Current Cloud injection registers only names that do not collide with
+cc-connect's own universal control commands:
+
+- Injected local Codex catalog: `/permissions`, `/sandbox-add-read-dir`,
+  `/agent`, `/apps`, `/plugins`, `/clear`, `/copy`, `/exit`, `/experimental`,
+  `/feedback`, `/init`, `/logout`, `/mcp`, `/mention`, `/fast`, `/plan`,
+  `/goal`, `/personality`, `/fork`, `/side`, `/resume`, `/review`,
+  `/debug-config`, `/statusline`, `/title`, and `/keymap`.
+- Left to cc-connect control flow: `/new`, `/compact`, `/status`, `/diff`,
+  `/model`, `/ps`, `/stop`, and overlapping management/help commands.
+
+cc-connect local commands are prompt-backed, not full Codex TUI passthrough.
+Adding true native passthrough/discovery belongs in the cc-connect Codex agent,
+where it can distinguish cc-connect management commands from Codex CLI commands.
+
 ## Schema and type anchors
 
 - Generated JSON Schema source:

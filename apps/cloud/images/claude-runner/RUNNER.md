@@ -43,6 +43,32 @@ agent defaults:
 | Subagents | `~/.claude/agents/` and `.claude/agents/`; settings can run the main thread as a named subagent. |
 | Logs and telemetry | Claude Code monitoring/usage and OpenTelemetry settings; session retention via `cleanupPeriodDays`, `CLAUDE_CODE_SKIP_PROMPT_HISTORY`, and non-interactive session persistence flags. |
 
+## Shadow slash command bridge
+
+The runner package always materializes `/etc/shadowob/slash-commands.json` so
+Shadow can load a stable command index. The Claude Code runner owns its catalog
+in `apps/cloud/src/runtimes/slash-commands/claude-code.ts`; this is
+intentionally not a common runtime artifact.
+
+Official Claude Code commands researched from the Claude Code command reference
+include `/add-dir`, `/agents`, `/clear`, `/compact`, `/config`, `/cost`,
+`/doctor`, `/hooks`, `/init`, `/login`, `/logout`, `/mcp`, `/memory`,
+`/model`, `/permissions`, `/pr_comments`, `/review`, `/security-review`,
+`/setup-bedrock`, `/setup-vertex`, `/simplify`, `/skills`, `/status`,
+`/statusline`, `/tasks`, `/terminal-setup`, `/theme`, `/tui`, `/ultraplan`,
+`/ultrareview`, `/usage`, `/voice`, and `/web-setup`.
+
+Current Cloud injection registers only names that do not collide with
+cc-connect's universal bot commands. For example, `/review`, `/permissions`,
+`/hooks`, `/mcp`, `/login`, `/logout`, `/security-review`, `/setup-bedrock`,
+`/setup-vertex`, and `/terminal-setup` are injected; `/model`, `/status`,
+`/usage`, `/skills`, `/config`, `/doctor`, `/stop`, `/help`, and `/compact`
+remain cc-connect management commands.
+
+cc-connect local commands are prompt-backed. True Claude Code TUI passthrough
+requires a cc-connect agent enhancement so colliding command names do not break
+session, provider, and permission management.
+
 ## Schema and type anchors
 
 - Settings schema URL:
@@ -188,6 +214,7 @@ Container smoke:
 - Sandboxing: https://code.claude.com/docs/en/sandboxing
 - Skills and custom commands:
   https://code.claude.com/docs/en/skills
+- Slash commands: https://code.claude.com/docs/en/commands
 - MCP: https://code.claude.com/docs/en/mcp
 - Hooks: https://code.claude.com/docs/en/hooks
 - Subagents: https://code.claude.com/docs/en/sub-agents

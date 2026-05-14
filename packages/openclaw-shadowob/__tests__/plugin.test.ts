@@ -448,6 +448,212 @@ describe('Slash Commands', () => {
       vi.useRealTimers()
     }
   })
+
+  it('should pass OpenClaw-native slash commands through without prompt rewriting', async () => {
+    vi.useFakeTimers()
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const dispatch = vi.fn(async () => undefined)
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: null,
+            sessionKey: null,
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      await processShadowMessage({
+        message: {
+          id: 'msg-slash',
+          content: '/model status',
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          createdAt: '2026-05-08T09:07:40.000Z',
+          updatedAt: '2026-05-08T09:07:40.000Z',
+          author: {
+            id: 'user-1',
+            username: 'alice',
+            displayName: 'Alice',
+            isBot: false,
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime: {},
+        core,
+        botUserId: 'bot-1',
+        botUsername: 'gstack-bot',
+        agentId: 'strategy-buddy',
+        channelPolicies: new Map(),
+        channelServerMap: new Map(),
+        slashCommands: [
+          {
+            name: 'model',
+            description: 'OpenClaw model command',
+            dispatch: 'passthrough',
+          },
+        ],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ctx: expect.objectContaining({
+            CommandBody: '/model status',
+            BodyForAgent: expect.not.stringContaining('Slash command /model was invoked.'),
+            SlashCommand: '/model',
+            SlashCommandArgs: 'status',
+          }),
+        }),
+      )
+      vi.runOnlyPendingTimers()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('should not duplicate visible form echo in interactive response context', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('/api/messages/source-form')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'source-form',
+            content: 'What are you building?',
+            channelId: 'ch-1',
+            authorId: 'bot-1',
+            createdAt: '2026-05-08T09:07:00.000Z',
+            updatedAt: '2026-05-08T09:07:00.000Z',
+            metadata: {
+              interactive: {
+                kind: 'form',
+                prompt: 'Describe the idea.',
+                responsePrompt: 'Use the submitted values to continue the office-hours command.',
+              },
+              slashCommand: {
+                name: 'office-hours',
+              },
+            },
+          }),
+          text: async () => '',
+        }
+      }
+      return { ok: true, json: async () => ({}), text: async () => '' }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const dispatch = vi.fn(async () => undefined)
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: null,
+            sessionKey: null,
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      await processShadowMessage({
+        message: {
+          id: 'response-msg',
+          content: [
+            'Use the submitted values as answers to this slash command.',
+            '- Q1: Demand Reality: 1',
+          ].join('\n'),
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          createdAt: '2026-05-08T09:08:00.000Z',
+          updatedAt: '2026-05-08T09:08:00.000Z',
+          author: {
+            id: 'user-1',
+            username: 'alice',
+            displayName: 'Alice',
+            isBot: false,
+          },
+          metadata: {
+            interactiveResponse: {
+              sourceMessageId: 'source-form',
+              blockId: 'office-hours',
+              actionId: 'submit',
+              values: {
+                demand: '1',
+              },
+            },
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime: {},
+        core,
+        botUserId: 'bot-1',
+        botUsername: 'gstack-bot',
+        agentId: 'strategy-buddy',
+        channelPolicies: new Map(),
+        channelServerMap: new Map(),
+        slashCommands: [
+          {
+            name: 'office-hours',
+            body: '# Office hours\nAsk the next question only when more input is needed.',
+          },
+        ],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ctx: expect.objectContaining({
+            BodyForAgent: expect.stringContaining('Submitted values'),
+            InteractiveSourceMessage: 'What are you building?',
+          }),
+        }),
+      )
+      const ctx = dispatch.mock.calls[0]?.[0]?.ctx as { BodyForAgent?: string }
+      expect(ctx.BodyForAgent).toContain('Use the submitted values once.')
+      expect(ctx.BodyForAgent).not.toContain('User message:')
+      expect(ctx.BodyForAgent).not.toContain('- Q1: Demand Reality: 1')
+      vi.runOnlyPendingTimers()
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 // ── Plugin entry point ─────────────────────────────────────────

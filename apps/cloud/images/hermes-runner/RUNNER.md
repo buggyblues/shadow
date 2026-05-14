@@ -116,8 +116,31 @@ The repository already includes a Hermes ShadowOB platform plugin at
 - typing/activity and heartbeat status
 - dynamic channel and policy discovery through Shadow APIs
 - optional slash command registration through `SHADOW_SLASH_COMMANDS_JSON`
+- the runner package materializes `/etc/shadowob/slash-commands.json` from the
+  Hermes-owned catalog in `apps/cloud/src/runtimes/slash-commands/hermes.ts`
 - interactive component metadata forwarding
 - cron/send_message delivery through `SHADOW_HOME_CHANNEL`
+
+Hermes publishes both CLI and messaging slash command surfaces. Researched CLI
+commands include session commands such as `/new`, `/clear`, `/history`,
+`/save`, `/retry`, `/undo`, `/compress`, `/rollback`, `/queue`, `/steer`,
+`/goal`, `/resume`, `/sessions`, `/agents`, `/background`, and `/branch`;
+configuration commands such as `/model`, `/codex-runtime`, `/personality`,
+`/verbose`, `/fast`, `/reasoning`, `/skin`, `/statusbar`, `/voice`, `/yolo`,
+`/footer`, and `/busy`; tool commands such as `/tools`, `/toolsets`,
+`/browser`, `/skills`, `/cron`, `/curator`, `/kanban`, `/reload-mcp`,
+`/reload-skills`, and `/plugins`; and info/exit commands such as `/usage`,
+`/platforms`, `/paste`, `/copy`, `/image`, `/debug`, `/profile`, `/gquota`,
+and `/quit`.
+
+Current Cloud injection exposes the messaging-safe subset documented by Hermes:
+`/new`, `/reset`, `/status`, `/stop`, `/model`, `/codex-runtime`,
+`/personality`, `/fast`, `/retry`, `/undo`, `/sethome`, `/compress`, `/title`,
+`/resume`, `/usage`, `/insights`, `/reasoning`, `/voice`, `/rollback`,
+`/background`, `/queue`, `/steer`, `/goal`, `/footer`, `/curator`, `/kanban`,
+`/reload-mcp`, `/yolo`, `/commands`, `/approve`, `/deny`, `/update`,
+`/restart`, `/debug`, and `/help`. Hermes documents `/cron` as CLI-only, so it
+is not registered into Shadow until the gateway supports messaging cron safely.
 
 Example generated config:
 
@@ -216,3 +239,5 @@ Container smoke:
 - Delegation:
   https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation
 - Sessions: https://hermes-agent.nousresearch.com/docs/user-guide/sessions
+- Slash commands:
+  https://github.com/NousResearch/hermes-agent/blob/main/website/docs/reference/slash-commands.md

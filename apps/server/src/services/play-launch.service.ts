@@ -556,14 +556,17 @@ export class PlayLaunchService {
     })
     await this.deps.channelService.addMember(channel.id, userId)
     if (buddies.length > 0) {
+      const launchUser = await this.getLaunchUserProfile(userId)
       await this.addBuddiesAndGreet(server.id, channel.id, buddies, action, {
         greeting:
-          action.greeting ??
-          defaultLaunchGreeting({
-            title: localizedPlayTitle(play, input.locale),
-            locale: input.locale,
-            kind: 'community',
-          }),
+          action.greeting !== undefined
+            ? personalizeGreeting(action.greeting, launchUser.friendlyName, input.locale)
+            : defaultLaunchGreeting({
+                title: localizedPlayTitle(play, input.locale),
+                locale: input.locale,
+                kind: 'community',
+                userName: launchUser.friendlyName,
+              }),
         metadata: {
           playLaunch: {
             kind: 'public_channel',
@@ -990,12 +993,16 @@ export class PlayLaunchService {
     }
 
     const runtime = extractPlayLaunchRuntimeMetadata(deployment.configSnapshot)
+    const launchUser = await this.getLaunchUserProfile(userId)
     const greeting =
-      runtime.greeting ??
-      defaultLaunchGreeting({
-        title: deployment.name ?? deployment.templateSlug ?? 'Buddy',
-        kind: 'cloud',
-      })
+      runtime.greeting !== undefined
+        ? personalizeGreeting(runtime.greeting, launchUser.friendlyName, runtime.locale)
+        : defaultLaunchGreeting({
+            title: deployment.name ?? deployment.templateSlug ?? 'Buddy',
+            locale: runtime.locale,
+            kind: 'cloud',
+            userName: launchUser.friendlyName,
+          })
     await this.deps.messageService.send(target.channelId, buddyUserId, {
       content: greeting,
       metadata: {

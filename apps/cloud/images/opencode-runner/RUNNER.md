@@ -39,6 +39,28 @@ OpenCode uses JSON/JSONC config and keeps several extensibility surfaces native:
 | Hooks/plugins | OpenCode plugins under `.opencode/plugins` or `~/.config/opencode/plugins`, plus npm-loaded plugins. |
 | Logs and sessions | OpenCode native session data plus cc-connect session state; exact collection should be verified during implementation. |
 
+## Shadow slash command bridge
+
+The runner package always materializes `/etc/shadowob/slash-commands.json` so
+Shadow can load a stable command index. The OpenCode runner owns its catalog in
+`apps/cloud/src/runtimes/slash-commands/opencode.ts`; this is intentionally not
+a common runtime artifact.
+
+Official OpenCode TUI commands researched from the docs include `/connect`,
+`/compact`, `/details`, `/editor`, `/exit`, `/export`, `/help`, `/init`,
+`/models`, `/new`, `/redo`, `/sessions`, `/share`, `/themes`, `/thinking`,
+`/undo`, and `/unshare`.
+
+Current Cloud injection registers only names that do not collide with
+cc-connect's universal bot commands: `/connect`, `/details`, `/editor`,
+`/exit`, `/export`, `/init`, `/models`, `/redo`, `/share`, `/themes`,
+`/thinking`, `/undo`, and `/unshare`. Overlapping control commands such as
+`/new`, `/compact`, `/help`, and `/sessions` remain cc-connect-managed.
+
+cc-connect local commands are prompt-backed. Direct OpenCode TUI passthrough
+should be added in the cc-connect OpenCode agent only after the collision policy
+is explicit and tested.
+
 ## Schema and type anchors
 
 - Main schema URL: `https://opencode.ai/config.json`.
@@ -170,6 +192,7 @@ Container smoke:
 - Config: https://opencode.ai/docs/config
 - Providers: https://dev.opencode.ai/docs/providers/
 - Permissions: https://opencode.ai/docs/permissions
+- TUI slash commands: https://opencode.ai/docs/tui/
 - Agents: https://opencode.ai/docs/agents
 - Commands: https://opencode.ai/docs/commands
 - MCP servers: https://opencode.ai/docs/mcp-servers

@@ -25,6 +25,7 @@ import {
   SHADOW_SLASH_COMMANDS_PATH,
   shadowBinding,
 } from './package-common.js'
+import { hermesSlashCommands } from './slash-commands/hermes.js'
 
 function readHermesPluginFile(cwd: string | undefined, file: string, fallback: string): string {
   const root = resolve(cwd ?? process.cwd(), 'packages/connector/hermes-shadowob-plugin')
@@ -57,7 +58,7 @@ function buildHermesConfig(options: {
           rest_only: false,
           catchup_minutes: 0,
           download_media: true,
-          slash_commands: [],
+          slash_commands: hermesSlashCommands,
         },
       },
     },
@@ -86,10 +87,9 @@ const hermesAdapter: RuntimeAdapter = {
         `SHADOW_TOKEN=${envPlaceholder(shadow.tokenEnvKey)}`,
         'SHADOW_ALLOW_ALL_USERS=true',
         'SHADOW_HEARTBEAT_INTERVAL_SECONDS=30',
-        `SHADOW_SLASH_COMMANDS_JSON=${envPlaceholder('SHADOW_SLASH_COMMANDS_JSON')}`,
         '',
       ].join('\n'),
-      [SHADOW_SLASH_COMMANDS_PATH]: '[]\n',
+      [SHADOW_SLASH_COMMANDS_PATH]: json(hermesSlashCommands),
     }
     addShadowobSkill(files, 'hermes', 'hermes')
 

@@ -2,7 +2,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { loadShadowSlashCommands } from '../src/monitor/slash-commands.js'
+import {
+  loadShadowSlashCommands,
+  registerAgentSlashCommands,
+} from '../src/monitor/slash-commands.js'
 
 const originalShadowSlashCommandsPath = process.env.SHADOW_SLASH_COMMANDS_PATH
 const originalRuntimeExtensionsPath = process.env.SHADOW_RUNTIME_EXTENSIONS_PATH
@@ -10,6 +13,8 @@ const originalOpenClawRuntimeExtensionsPath = process.env.OPENCLAW_RUNTIME_EXTEN
 const tempDirs: string[] = []
 
 afterEach(async () => {
+  vi.unstubAllGlobals()
+
   if (originalShadowSlashCommandsPath === undefined) delete process.env.SHADOW_SLASH_COMMANDS_PATH
   else process.env.SHADOW_SLASH_COMMANDS_PATH = originalShadowSlashCommandsPath
 
@@ -41,7 +46,13 @@ describe('OpenClaw slash command discovery', () => {
     const manifestPath = join(dir, 'runtime-extensions.json')
     await writeFile(
       commandsPath,
-      JSON.stringify([{ name: '/deploy', description: 'Deploy from official runtime' }]),
+      JSON.stringify([
+        {
+          name: '/deploy',
+          description: 'Deploy from official runtime',
+          dispatch: 'passthrough',
+        },
+      ]),
     )
     await writeFile(
       manifestPath,
@@ -60,6 +71,7 @@ describe('OpenClaw slash command discovery', () => {
       {
         name: 'deploy',
         description: 'Deploy from official runtime',
+        dispatch: 'passthrough',
       },
     ])
   })
@@ -101,5 +113,34 @@ describe('OpenClaw slash command discovery', () => {
       ['local-only', 'Local only'],
       ['official-only', 'Official only'],
     ])
+  })
+
+  it('does not publish internal dispatch metadata to Shadow', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await registerAgentSlashCommands({
+      account: { serverUrl: 'https://shadow.example.com', token: 'shadow-token' },
+      agentId: 'agent-1',
+      commands: [
+        {
+          name: 'model',
+          description: 'OpenClaw native model command',
+          dispatch: 'passthrough',
+          body: 'internal prompt body',
+        },
+      ],
+    })
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as { body?: unknown } | undefined
+    const body = JSON.parse(String(requestInit?.body))
+    expect(body.commands).toEqual([
+      {
+        name: 'model',
+        description: 'OpenClaw native model command',
+      },
+    ])
+
+    vi.unstubAllGlobals()
   })
 })

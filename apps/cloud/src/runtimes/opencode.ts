@@ -17,6 +17,7 @@ import {
   runtimeExtensionsForKind,
   WORKSPACE_DIR,
 } from './package-common.js'
+import { openCodeSlashCommands } from './slash-commands/opencode.js'
 
 function buildOpenCodeConfig(
   agent: AgentDeployment,
@@ -51,6 +52,7 @@ const opencodeAdapter: RuntimeAdapter = {
   buildPackage(context) {
     return buildCcConnectPackage(context, {
       agentType: 'opencode',
+      shadowSlashCommands: openCodeSlashCommands,
       nativeFiles: (context) => {
         const runtimeExtensions = runtimeExtensionsForKind(context.runtimeExtensions, 'cc-connect')
         return {

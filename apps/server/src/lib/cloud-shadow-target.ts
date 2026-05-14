@@ -3,6 +3,7 @@ import { CLOUD_SAAS_RUNTIME_KEY, extractCloudSaasRuntime } from '@shadowob/cloud
 type PlayLaunchRuntimeMetadata = {
   defaultChannelName?: string
   greeting?: string
+  locale?: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,9 +62,20 @@ function playLaunchRuntimeMetadata(configSnapshot: unknown): PlayLaunchRuntimeMe
   if (!isRecord(configSnapshot)) return {}
   const shadowobPlayLaunch = shadowobPlayLaunchMetadata(configSnapshot)
   const runtime = configSnapshot[CLOUD_SAAS_RUNTIME_KEY]
-  if (!isRecord(runtime) || !isRecord(runtime.playLaunch)) return shadowobPlayLaunch
+  if (!isRecord(runtime)) return shadowobPlayLaunch
+  const contextLocale =
+    isRecord(runtime.context) && typeof runtime.context.locale === 'string'
+      ? runtime.context.locale
+      : undefined
+  if (!isRecord(runtime.playLaunch)) {
+    return {
+      ...shadowobPlayLaunch,
+      ...(contextLocale ? { locale: contextLocale } : {}),
+    }
+  }
   return {
     ...shadowobPlayLaunch,
+    ...(contextLocale ? { locale: contextLocale } : {}),
     ...(typeof runtime.playLaunch.defaultChannelName === 'string'
       ? { defaultChannelName: runtime.playLaunch.defaultChannelName }
       : {}),

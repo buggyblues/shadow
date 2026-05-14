@@ -84,9 +84,22 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
     )
     expect(openclawConfig.plugins.entries['openclaw-shadowob'].enabled).toBe(true)
     expect(openclawConfig.skills.load.extraDirs).toContain('/home/shadow/.openclaw/skills')
-    expect(runtimeFiles(pkg)['/home/shadow/.openclaw/skills/shadowob/SKILL.md']).toBe(
-      shadowobCliSkill(),
+    const files = runtimeFiles(pkg)
+    expect(files['/home/shadow/.openclaw/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
+    expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'help',
+          dispatch: 'passthrough',
+          sourcePath: 'https://docs.openclaw.ai/tools/slash-commands',
+        }),
+        expect.objectContaining({
+          name: 'model',
+          dispatch: 'passthrough',
+        }),
+      ]),
     )
+    expect(pkg.plainEnv.SHADOW_SLASH_COMMANDS_PATH).toBe('/etc/shadowob/slash-commands.json')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
   })
@@ -96,11 +109,11 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
   beforeEach(registerShadowobOnly)
 
   it.each([
-    ['claude-code', 'claudecode', '/workspace/.claude/settings.json'],
-    ['codex', 'codex', '/home/shadow/.codex/config.toml'],
-    ['opencode', 'opencode', '/workspace/opencode.json'],
-    ['gemini', 'gemini', '/workspace/.gemini/settings.json'],
-  ] as const)('emits cc-connect native package for %s without OpenClaw artifacts', (runtime, agentType, nativeConfigPath) => {
+    ['claude-code', 'claudecode', '/workspace/.claude/settings.json', 'review'],
+    ['codex', 'codex', '/home/shadow/.codex/config.toml', 'init'],
+    ['opencode', 'opencode', '/workspace/opencode.json', 'connect'],
+    ['gemini', 'gemini', '/workspace/.gemini/settings.json', 'agents'],
+  ] as const)('emits cc-connect native package for %s without OpenClaw artifacts', (runtime, agentType, nativeConfigPath, commandName) => {
     const pkg = runtimePackageFor(runtime)
 
     expect(pkg.runtimeKind).toBe('cc-connect')
@@ -121,6 +134,14 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     const runtimeExtensions = JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}')
     expect(runtimeExtensions.openclaw).toBeUndefined()
     expect(files['/home/shadow/.cc-connect/config.toml']).toBe(ccConnectConfig)
+    expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: commandName,
+          packId: runtime,
+        }),
+      ]),
+    )
     expect(files[nativeConfigPath]).toBeTypeOf('string')
     expect(files['/workspace/AGENTS.md']).toContain(`${runtime} Buddy`)
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('# Shadow CLI')
@@ -147,6 +168,16 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(hermesConfig).toContain('${SHADOW_TOKEN_BUDDY_1}')
     expect(files['/home/shadow/.hermes/plugins/shadowob/plugin.yaml']).toContain('shadowob')
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
+    expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'commands',
+          packId: 'hermes',
+          sourcePath:
+            'https://github.com/NousResearch/hermes-agent/blob/main/website/docs/reference/slash-commands.md',
+        }),
+      ]),
+    )
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('# Shadow CLI')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
@@ -174,7 +205,16 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       },
     })
 
-    expect(pkg.plainEnv.SHADOW_SLASH_COMMANDS_PATH).toBe('/agent-packs/.shadow/slash-commands.json')
+    expect(pkg.plainEnv.SHADOW_SLASH_COMMANDS_PATH).toBe('/etc/shadowob/slash-commands.json')
+    const runtimeExtensions = JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}')
+    expect(runtimeExtensions.artifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'shadow.slashCommands',
+          path: '/agent-packs/.shadow/slash-commands.json',
+        }),
+      ]),
+    )
     expect(pkg.configData['cc-connect-config.toml']).toContain(
       'slash_commands_path = "${SHADOW_SLASH_COMMANDS_PATH}"',
     )

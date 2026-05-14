@@ -217,7 +217,13 @@ describe('play launch orchestration', () => {
     ).mockResolvedValue({
       id: 'world-pulse',
       status: 'available',
-      action: { kind: 'public_channel', serverSlug: 'community', channelName: 'general' },
+      action: {
+        kind: 'public_channel',
+        serverSlug: 'community',
+        channelName: 'general',
+        buddyUserIds: ['buddy-user-1'],
+        greeting: '{userName}, welcome to World Pulse.',
+      },
     })
 
     const result = await service.launch('user-1', {
@@ -233,6 +239,13 @@ describe('play launch orchestration', () => {
       serverId: 'server-1',
       channelId: 'channel-1',
     })
+    expect(deps.messageService.send).toHaveBeenCalledWith(
+      'channel-1',
+      'buddy-user-1',
+      expect.objectContaining({
+        content: 'Alice, welcome to World Pulse.',
+      }),
+    )
   })
 
   it('does not fall back to an arbitrary public server for incomplete play actions', async () => {
@@ -567,7 +580,7 @@ describe('play launch orchestration', () => {
       __shadowobRuntime: {
         playLaunch: {
           defaultChannelName: 'delivery',
-          greeting: '欢迎来到 BMAD 方法空间。',
+          greeting: '{userName}，欢迎来到 BMAD 方法空间。',
         },
         provisionState: {
           plugins: {
@@ -644,7 +657,7 @@ describe('play launch orchestration', () => {
       'channel-1',
       'buddy-user-1',
       expect.objectContaining({
-        content: '欢迎来到 BMAD 方法空间。',
+        content: 'Alice，欢迎来到 BMAD 方法空间。',
         metadata: expect.objectContaining({
           playLaunch: expect.objectContaining({
             kind: 'cloud_deploy',

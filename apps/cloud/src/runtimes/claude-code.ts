@@ -16,6 +16,7 @@ import {
   runtimeExtensionsForKind,
   WORKSPACE_DIR,
 } from './package-common.js'
+import { claudeCodeSlashCommands } from './slash-commands/claude-code.js'
 
 function buildClaudeSettings(agent: AgentDeployment): string {
   return json({
@@ -46,6 +47,7 @@ const claudeCodeAdapter: RuntimeAdapter = {
   buildPackage(context) {
     return buildCcConnectPackage(context, {
       agentType: 'claudecode',
+      shadowSlashCommands: claudeCodeSlashCommands,
       nativeFiles: (context) => {
         const runtimeExtensions = runtimeExtensionsForKind(context.runtimeExtensions, 'cc-connect')
         return {
