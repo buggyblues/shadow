@@ -179,18 +179,26 @@ shadowob workspace stats <server-id> --json
 shadowob workspace children <server-id> [--parent-id <id>] --json
 
 # Files
-shadowob workspace files get <file-id> --json
-shadowob workspace files create <server-id> --name <name> [--content <text>] [--parent-id <id>] --json
-shadowob workspace files update <file-id> [--name <name>] [--content <text>] --json
-shadowob workspace files delete <file-id>
+shadowob workspace files get <server-id> <file-id> --json
 shadowob workspace files upload <server-id> --file <path> [--name <name>] [--parent-id <id>] --json
-shadowob workspace files download <file-id> [--output <path>]
+shadowob workspace files update <server-id> <file-id> [--name <name>] [--parent-id <id>] --json
+shadowob workspace files delete <server-id> <file-id>
+shadowob workspace files search <server-id> [--search-text <text>] [--ext <ext>] [--parent-id <id>] --json
+# Note: files download is not yet implemented in CLI; download via contentRef URL instead.
 
 # Folders
 shadowob workspace folders create <server-id> --name <name> [--parent-id <id>] --json
-shadowob workspace folders update <folder-id> --name <name> --json
-shadowob workspace folders delete <folder-id>
+shadowob workspace folders update <server-id> <folder-id> [--name <name>] [--parent-id <id>] --json
+shadowob workspace folders delete <server-id> <folder-id>
 ```
+
+### Workspace Node Metadata
+
+Each workspace node has a `flags` JSONB field with optional metadata:
+
+- **Access control**: `flags.access = { scope: "server" | "channel", serverId, channelId? }`. All nodes have at least `scope: "server"` + `serverId`. Channel-scoped nodes require channel membership for access.
+- **Traceability**: `flags.source = "channel_message_attachment"` with `channelId` and `messageId` for files uploaded via channel messages, enabling reverse lookup to the originating message.
+- **Path is server-computed**: `path` is derived from parent path + name, maintained server-side. Do not set path manually — it is auto-updated on rename/move.
 
 ## Shop
 

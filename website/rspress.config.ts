@@ -237,8 +237,8 @@ export default defineConfig({
             text: 'Platform',
             items: [
               { text: 'Developer Platform', link: '/platform/introduction' },
-              { text: 'Shadow Cloud', link: '/platform/cloud' },
-              { text: 'Cloud CLI', link: '/platform/cloud-cli' },
+              { text: 'Cloud API Reference', link: '/platform/cloud-api' },
+              { text: 'SDKs & CLI', link: '/platform/sdks' },
               { text: 'Templates', link: '/platform/cloud-templates' },
               { text: 'Plugins', link: '/platform/cloud-plugins' },
               { text: 'Model Proxy', link: '/platform/model-proxy' },
@@ -313,6 +313,7 @@ export default defineConfig({
               text: 'Shadow Cloud',
               items: [
                 { text: 'Cloud Overview', link: '/platform/cloud' },
+                { text: 'Cloud API Reference', link: '/platform/cloud-api' },
                 { text: 'Cloud SaaS Runtime', link: '/platform/cloud-saas' },
                 { text: 'Cloud CLI', link: '/platform/cloud-cli' },
                 { text: 'Templates', link: '/platform/cloud-templates' },
@@ -320,9 +321,9 @@ export default defineConfig({
               ],
             },
             {
-              text: 'Core',
+              text: 'Core API',
               items: [
-                { text: 'Authentication', link: '/platform/auth' },
+                { text: 'Auth', link: '/platform/auth' },
                 { text: 'Servers', link: '/platform/servers' },
                 { text: 'Channels', link: '/platform/channels' },
                 { text: 'Messages', link: '/platform/messages' },
@@ -339,7 +340,7 @@ export default defineConfig({
               ],
             },
             {
-              text: 'Agents',
+              text: 'AI Agents',
               items: [
                 { text: 'Agents', link: '/platform/agents' },
                 { text: 'Marketplace', link: '/platform/marketplace' },
@@ -366,11 +367,8 @@ export default defineConfig({
                 { text: 'Discover', link: '/platform/discover' },
                 { text: 'Voice Enhance', link: '/platform/voice-enhance' },
                 { text: 'Profile Comments', link: '/platform/profile-comments' },
+                { text: 'WebSocket Events', link: '/platform/websocket' },
               ],
-            },
-            {
-              text: 'Real-time',
-              items: [{ text: 'WebSocket Events', link: '/platform/websocket' }],
             },
           ],
         },
@@ -392,8 +390,8 @@ export default defineConfig({
             text: '开放平台',
             items: [
               { text: '开发者平台', link: '/zh/platform/introduction' },
-              { text: '虾豆 Cloud', link: '/zh/platform/cloud' },
-              { text: 'Cloud CLI', link: '/zh/platform/cloud-cli' },
+              { text: 'Cloud API 参考', link: '/zh/platform/cloud-api' },
+              { text: 'SDK 与 CLI', link: '/zh/platform/sdks' },
               { text: '模版', link: '/zh/platform/cloud-templates' },
               { text: '插件', link: '/zh/platform/cloud-plugins' },
               { text: '模型代理', link: '/zh/platform/model-proxy' },
@@ -468,6 +466,7 @@ export default defineConfig({
               text: '虾豆 Cloud',
               items: [
                 { text: 'Cloud 概览', link: '/zh/platform/cloud' },
+                { text: 'Cloud API 参考', link: '/zh/platform/cloud-api' },
                 { text: 'Cloud SaaS 运行时', link: '/zh/platform/cloud-saas' },
                 { text: 'Cloud CLI', link: '/zh/platform/cloud-cli' },
                 { text: '模版', link: '/zh/platform/cloud-templates' },
@@ -475,9 +474,9 @@ export default defineConfig({
               ],
             },
             {
-              text: '核心',
+              text: '核心 API',
               items: [
-                { text: '认证', link: '/zh/platform/auth' },
+                { text: 'Auth', link: '/zh/platform/auth' },
                 { text: '服务器', link: '/zh/platform/servers' },
                 { text: '频道', link: '/zh/platform/channels' },
                 { text: '消息', link: '/zh/platform/messages' },
@@ -521,11 +520,8 @@ export default defineConfig({
                 { text: '发现', link: '/zh/platform/discover' },
                 { text: '语音增强', link: '/zh/platform/voice-enhance' },
                 { text: '主页留言', link: '/zh/platform/profile-comments' },
+                { text: 'WebSocket 事件', link: '/zh/platform/websocket' },
               ],
-            },
-            {
-              text: '实时通信',
-              items: [{ text: 'WebSocket 事件', link: '/zh/platform/websocket' }],
             },
           ],
         },

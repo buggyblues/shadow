@@ -2,6 +2,10 @@ import { and, asc, desc, eq, ilike, inArray, isNull, like, sql } from 'drizzle-o
 import type { Database } from '../db'
 import { workspaceNodes } from '../db/schema'
 
+function escapeLike(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
+
 export class WorkspaceNodeDao {
   constructor(private deps: { db: Database }) {}
 
@@ -47,7 +51,7 @@ export class WorkspaceNodeDao {
 
   async listDescendants(workspaceId: string, pathPrefix: string) {
     const normalizedPrefix = pathPrefix === '/' ? '' : pathPrefix
-    const likePrefix = normalizedPrefix ? `${normalizedPrefix}/%` : '/%'
+    const likePrefix = normalizedPrefix ? `${escapeLike(normalizedPrefix)}/%` : '/%'
     return this.db
       .select()
       .from(workspaceNodes)
@@ -156,7 +160,7 @@ export class WorkspaceNodeDao {
       .where(
         and(
           eq(workspaceNodes.workspaceId, workspaceId),
-          like(workspaceNodes.path, `${pathPrefix}/%`),
+          like(workspaceNodes.path, `${escapeLike(pathPrefix)}/%`),
         ),
       )
   }
@@ -262,7 +266,7 @@ export class WorkspaceNodeDao {
       conditions.push(isNull(workspaceNodes.parentId))
     }
     if (namePrefix) {
-      conditions.push(ilike(workspaceNodes.name, `${namePrefix}%`))
+      conditions.push(ilike(workspaceNodes.name, `${escapeLike(namePrefix)}%`))
     }
     const rows = await this.db
       .select({ name: workspaceNodes.name })
@@ -274,7 +278,7 @@ export class WorkspaceNodeDao {
   /** Rewrite paths of all descendants when a folder is renamed or moved. */
   async rewriteDescendantPaths(workspaceId: string, oldPrefix: string, newPrefix: string) {
     await this.db.execute(
-      sql`UPDATE workspace_nodes SET path = ${newPrefix} || substring(path from ${oldPrefix.length + 1}), updated_at = now() WHERE workspace_id = ${workspaceId} AND path LIKE ${`${oldPrefix}/%`}`,
+      sql`UPDATE workspace_nodes SET path = ${newPrefix} || substring(path from ${oldPrefix.length + 1}), updated_at = now() WHERE workspace_id = ${workspaceId} AND path LIKE ${`${escapeLike(oldPrefix)}/%`}`,
     )
   }
 }

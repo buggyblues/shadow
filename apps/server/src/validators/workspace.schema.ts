@@ -1,5 +1,12 @@
 import { z } from 'zod'
 
+const nodeName = () =>
+  z
+    .string()
+    .min(1, 'Name is required')
+    .max(500)
+    .regex(/^[^\x00/\\]+$/, 'Name cannot contain /, \\, or null bytes')
+
 // ─── Workspace ───
 
 export const createWorkspaceSchema = z.object({
@@ -16,11 +23,11 @@ export const updateWorkspaceSchema = z.object({
 
 export const createFolderSchema = z.object({
   parentId: z.string().uuid().nullable().optional().default(null),
-  name: z.string().min(1, 'Folder name is required').max(500),
+  name: nodeName(),
 })
 
 export const updateFolderSchema = z.object({
-  name: z.string().min(1).max(500).optional(),
+  name: nodeName().optional(),
   parentId: z.string().uuid().nullable().optional(),
   pos: z.number().int().min(0).optional(),
 })
@@ -29,7 +36,7 @@ export const updateFolderSchema = z.object({
 
 export const createFileSchema = z.object({
   parentId: z.string().uuid().nullable().optional().default(null),
-  name: z.string().min(1, 'File name is required').max(500),
+  name: nodeName(),
   ext: z.string().max(50).nullable().optional(),
   mime: z.string().max(255).nullable().optional(),
   sizeBytes: z.number().int().min(0).nullable().optional(),
@@ -39,7 +46,7 @@ export const createFileSchema = z.object({
 })
 
 export const updateFileSchema = z.object({
-  name: z.string().min(1).max(500).optional(),
+  name: nodeName().optional(),
   parentId: z.string().uuid().nullable().optional(),
   pos: z.number().int().min(0).optional(),
   ext: z.string().max(50).nullable().optional(),
@@ -88,12 +95,12 @@ const commandSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('create-folder'),
     parentId: z.string().uuid().nullable().optional(),
-    name: z.string().min(1).max(500),
+    name: nodeName(),
   }),
   z.object({
     action: z.literal('rename-folder'),
     folderId: z.string().uuid(),
-    name: z.string().min(1).max(500),
+    name: nodeName(),
   }),
   z.object({
     action: z.literal('move-folder'),
@@ -104,7 +111,7 @@ const commandSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('create-file'),
     parentId: z.string().uuid().nullable().optional(),
-    name: z.string().min(1).max(500),
+    name: nodeName(),
     ext: z.string().max(50).nullable().optional(),
     mime: z.string().max(255).nullable().optional(),
     contentRef: z.string().nullable().optional(),
@@ -112,7 +119,7 @@ const commandSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('rename-file'),
     fileId: z.string().uuid(),
-    name: z.string().min(1).max(500),
+    name: nodeName(),
   }),
   z.object({
     action: z.literal('move-file'),
@@ -122,7 +129,7 @@ const commandSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('update-file'),
     fileId: z.string().uuid(),
-    name: z.string().min(1).max(500).optional(),
+    name: nodeName().optional(),
     ext: z.string().max(50).nullable().optional(),
     mime: z.string().max(255).nullable().optional(),
     contentRef: z.string().nullable().optional(),
