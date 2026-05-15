@@ -44,6 +44,8 @@ interface BuddyListItemProps {
   showRoleBadge?: boolean
   /** Whether to show online rank for bots */
   showOnlineRank?: boolean
+  /** Whether to render online rank as compact emoji */
+  onlineRankCompact?: boolean
   /** Custom element to show instead of default layout */
   children?: React.ReactNode
 }
@@ -72,6 +74,7 @@ export function BuddyListItem({
   showBotBadge = true,
   showRoleBadge = true,
   showOnlineRank = true,
+  onlineRankCompact = false,
   children,
 }: BuddyListItemProps) {
   const { t } = useTranslation()
@@ -194,7 +197,9 @@ export function BuddyListItem({
           {buddy.isBot &&
             showOnlineRank &&
             buddy.totalOnlineSeconds != null &&
-            buddy.totalOnlineSeconds > 0 && <OnlineRank totalSeconds={buddy.totalOnlineSeconds} />}
+            buddy.totalOnlineSeconds > 0 && (
+              <OnlineRank totalSeconds={buddy.totalOnlineSeconds} compact={onlineRankCompact} />
+            )}
         </div>
 
         {/* Right element (actions, select button, etc.) */}

@@ -32,7 +32,8 @@
     "done": "完了",
     "unknown": "不明",
     "buddy": "Buddy",
-    "search": "検索"
+    "search": "検索",
+    "noResults": "結果が見つかりませんでした"
   },
   "nav": {
     "features": "機能紹介",
@@ -1311,6 +1312,7 @@
   "agentMgmt": {
     "title": "Buddy 管理",
     "subtitle": "AI Buddy の作成・管理、OpenClawなどのプラットフォーム用トークンの取得",
+    "searchPlaceholder": "Buddy を検索",
     "newAgent": "新規 Buddy",
     "noAgents": "Buddy なし",
     "buddyLevel": "レベル {{level}}",
@@ -1388,7 +1390,7 @@
     "setupManual": "手動設定",
     "setupChat": "AI チャット設定",
     "setupBashTitle": "ワンクリック設定（ターミナルに貼り付け）",
-    "setupTokenWarning": "設定コマンドをコピーする前にトークンを生成してください",
+    "connectButton": "接続",
     "setupStepByStep": "ステップバイステップ設定",
     "setupConfigToken": "トークンを設定",
     "setupConfigServer": "サーバーURLを設定",
@@ -1443,7 +1445,11 @@
     "defaultReplyPolicyDesc": "Buddy はデフォルトでオーナーと有効な借り手のメッセージにのみ返信します。DM とサーバーチャンネルを区別せず、@ は不要です。",
     "privateListingDisabled": "プライベート Buddy はレンタルできません",
     "privateListingDisabledDesc": "公開レンタル出品を作成するには共有可能に切り替えてください。",
-    "rentingAccessBadge": "レンタル利用権"
+    "rentingAccessBadge": "レンタル利用権",
+    "offlineGuideTitle": "Buddy オフライン設定",
+    "offlineGuideDesc": "この Buddy は現在オフラインです。詳細を確認するには先にオンライン状態にしてください。",
+    "offlineGuideWait": "Buddy がオンラインになるまで待機してください。オンラインになれば設定を続けられます。",
+    "offlineGuideNoManage": "この Buddy を管理する権限がありません。所有者に Buddy の起動を依頼してください。"
   },
   "appCenter": {
     "proxyBySubdomain": "サブドメインプロキシでアクセス（絶対パス、SSE、WebSocket に対応）",
@@ -1539,9 +1545,15 @@
     "outContracts": "契約",
     "myListings": "マイ出品",
     "createListing": "出品を作成",
+    "listingLeaseAction": "レンタル",
     "privateBuddyCannotList": "プライベート Buddy は公開レンタル出品を作成できません。",
+    "offlineListings": "オフライン Buddy",
     "noContracts": "レンタル契約なし",
+    "totalCost": "合計費用",
+    "expectedCost": "予測費用",
     "noListings": "出品がありません — 作成しましょう！",
+    "unlimitedUsage": "無制限に使用",
+    "useBuddy": "今すぐ使う",
     "unknownListing": "不明な出品",
     "unlimited": "無制限",
     "statusUpdated": "ステータスが更新されました",

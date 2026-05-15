@@ -150,9 +150,9 @@ function isAgentOnline(agent?: MyListing['agent']): boolean {
 }
 
 function formatOnlineDuration(seconds: number, t: TranslateFn): string {
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}${t('time.minutes', '分钟')}`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}${t('time.hours', '小时')}`
-  return `${Math.floor(seconds / 86400)}${t('time.days', '天')}${Math.floor((seconds % 86400) / 3600)}${t('time.hours', '小时')}`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}${t('time.minutes')}`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}${t('time.hours')}`
+  return `${Math.floor(seconds / 86400)}${t('time.days')}${Math.floor((seconds % 86400) / 3600)}${t('time.hours')}`
 }
 
 function getBuddyLevel(totalSeconds: number): number {
@@ -297,7 +297,6 @@ export function BuddyManagementContent({
   } | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [generatedToken, setGeneratedToken] = useState<string | null>(null)
-  const [tokenCopied, setTokenCopied] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -369,7 +368,6 @@ export function BuddyManagementContent({
       fetchApi<TokenResponse>(`/api/agents/${id}/token`, { method: 'POST' }),
     onSuccess: (data) => {
       setGeneratedToken(data.token)
-      setTokenCopied(false)
       queryClient.invalidateQueries({ queryKey: ['agents'] })
     },
   })
@@ -429,7 +427,6 @@ export function BuddyManagementContent({
 
   const copyToken = async (token: string) => {
     await navigator.clipboard.writeText(token)
-    setTokenCopied(true)
     showMsg(t('agentMgmt.tokenCopied'), true)
   }
 
@@ -447,7 +444,7 @@ export function BuddyManagementContent({
               />
               <input
                 type="text"
-                placeholder={t('agentMgmt.searchPlaceholder', '搜索 Buddy')}
+                placeholder={t('agentMgmt.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-bg-tertiary/50 border border-border-subtle rounded-xl pl-8 pr-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow"
@@ -478,7 +475,7 @@ export function BuddyManagementContent({
                     showCreateMode ? 'text-primary' : 'text-text-primary',
                   )}
                 >
-                  {t('agentMgmt.newAgent', '新建 Buddy')}
+                  {t('agentMgmt.newAgent')}
                 </span>
               </div>
               <ArrowRight
@@ -511,7 +508,7 @@ export function BuddyManagementContent({
                     isMarketActive ? 'text-warning' : 'text-text-primary',
                   )}
                 >
-                  {t('marketplace.title', 'Buddy 集市')}
+                  {t('marketplace.title')}
                 </span>
               </div>
               <ArrowRight
@@ -543,11 +540,11 @@ export function BuddyManagementContent({
               </div>
             ) : agents.length === 0 ? (
               <div className="text-center p-4">
-                <p className="text-sm text-text-muted">{t('agentMgmt.noAgents', '暂无节点')}</p>
+                <p className="text-sm text-text-muted">{t('agentMgmt.noAgents')}</p>
               </div>
             ) : filteredAgents.length === 0 ? (
               <div className="text-center p-4">
-                <p className="text-sm text-text-muted">{t('common.noResults', '未找到结果')}</p>
+                <p className="text-sm text-text-muted">{t('common.noResults')}</p>
               </div>
             ) : (
               filteredAgents.map((agent) => {
@@ -630,7 +627,7 @@ export function BuddyManagementContent({
         {/*
          * 统一三类子页面（Buddy 详情 / 新建 / 集市）右侧内容区 padding，避免状态切换时出现视觉抖动。
          */}
-        <div className="bg-[var(--glass-bg)] backdrop-blur-3xl border border-[var(--glass-line)] rounded-2xl flex-1 overflow-y-auto shadow-sm relative p-4 md:p-6 lg:p-8">
+        <div className="bg-[var(--glass-bg)] backdrop-blur-3xl border border-[var(--glass-line)] rounded-2xl flex-1 overflow-y-auto shadow-sm relative px-3 py-4 md:px-4 md:py-6 lg:px-5 lg:py-8">
           {effectiveSection === 'market' ? (
             <BuddyRentalsPanel />
           ) : showCreateMode ? (
@@ -661,8 +658,8 @@ export function BuddyManagementContent({
                       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
                       setMessage({
                         text: activeListingAgent.listingId
-                          ? t('marketplace.listingUpdated', '挂单已更新')
-                          : t('marketplace.listingCreated', '挂单已创建'),
+                          ? t('marketplace.listingUpdated')
+                          : t('marketplace.listingCreated'),
                         success: true,
                       })
                       setTimeout(() => setMessage(null), 3000)
@@ -677,7 +674,6 @@ export function BuddyManagementContent({
                   <AgentDetail
                     agent={selectedAgent}
                     generatedToken={generatedToken}
-                    tokenCopied={tokenCopied}
                     tokenMutation={tokenMutation}
                     onCopyToken={copyToken}
                     onDelete={() => setDeleteConfirmId(selectedAgent.id)}
@@ -715,11 +711,9 @@ export function BuddyManagementContent({
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-8 animate-in fade-in duration-300">
                     <Terminal size={48} className="mx-auto mb-4" strokeWidth={1} />
                     <p className="text-sm font-black uppercase tracking-[0.2em] mb-2">
-                      {t('agentMgmt.selectBuddy', '选择 Buddy')}
+                      {t('agentMgmt.selectBuddy')}
                     </p>
-                    <p className="text-xs text-text-muted">
-                      {t('agentMgmt.selectBuddyDesc', '从左侧选择一个 Buddy 管理配置。')}
-                    </p>
+                    <p className="text-xs text-text-muted">{t('agentMgmt.selectBuddyDesc')}</p>
                   </div>
                 </div>
               )}
@@ -729,11 +723,9 @@ export function BuddyManagementContent({
               <div className="text-center opacity-40">
                 <Terminal size={48} className="mx-auto mb-4" strokeWidth={1} />
                 <p className="text-sm font-black uppercase tracking-[0.2em] mb-2">
-                  {t('agentMgmt.selectBuddy', '选择 Buddy')}
+                  {t('agentMgmt.selectBuddy')}
                 </p>
-                <p className="text-xs text-text-muted">
-                  {t('agentMgmt.selectBuddyDesc', '从左侧选择一个 Buddy 管理配置。')}
-                </p>
+                <p className="text-xs text-text-muted">{t('agentMgmt.selectBuddyDesc')}</p>
               </div>
             </div>
           )}
@@ -758,7 +750,7 @@ export function BuddyManagementContent({
 
       <Modal open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
         <ModalContent maxWidth="max-w-md">
-          <ModalHeader title={t('common.confirm')} closeLabel={t('common.close', '关闭')} />
+          <ModalHeader title={t('common.confirm')} closeLabel={t('common.close')} />
           <ModalBody className="py-5">
             <p className="text-sm font-bold italic text-text-muted">
               {t('agentMgmt.deleteConfirm')}
@@ -820,7 +812,7 @@ function BuddyRentalsPanel() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.statusUpdated', '状态已更新'), 'success')
+      showToast(t('marketplace.statusUpdated'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -830,7 +822,7 @@ function BuddyRentalsPanel() {
     mutationFn: (id: string) => fetchApi(`/api/marketplace/listings/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.listingDeleted', '挂单已删除'), 'success')
+      showToast(t('marketplace.listingDeleted'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -845,7 +837,7 @@ function BuddyRentalsPanel() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.delistSuccess', 'Buddy 已下架'), 'success')
+      showToast(t('marketplace.delistSuccess'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -860,7 +852,7 @@ function BuddyRentalsPanel() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.relistSuccess', 'Buddy 已重新上架'), 'success')
+      showToast(t('marketplace.relistSuccess'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -893,18 +885,17 @@ function BuddyRentalsPanel() {
           }
           className="w-full md:w-auto rounded-xl border border-border-subtle bg-bg-secondary/60 px-3 py-2.5 text-sm font-black text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
-          <option value="marketplace">{t('marketplace.title', 'Buddy 集市')}</option>
+          <option value="marketplace">{t('marketplace.title')}</option>
           <option value="myRented">
-            {t('marketplace.renting', '我的租入')} (
-            {isLoadingRenting ? t('common.loading', '加载中') : myRentedCount})
+            {t('marketplace.renting')} ({isLoadingRenting ? t('common.loading') : myRentedCount})
           </option>
           <option value="outContracts">
-            {t('marketplace.outContracts', '租赁合同')} (
-            {isLoadingOut ? t('common.loading', '加载中') : outContractCount})
+            {t('marketplace.outContracts')} ({isLoadingOut ? t('common.loading') : outContractCount}
+            )
           </option>
           <option value="myListings">
-            {t('marketplace.myListings', '我的挂单')} (
-            {isLoadingListings ? t('common.loading', '加载中') : myListingsCount})
+            {t('marketplace.myListings')} (
+            {isLoadingListings ? t('common.loading') : myListingsCount})
           </option>
         </select>
       </div>
@@ -913,7 +904,6 @@ function BuddyRentalsPanel() {
         {activeWorkspaceTab === 'myRented' ? (
           <RentalContractSection
             titleKey="marketplace.renting"
-            titleFallback="我的租入"
             contracts={rentingContracts?.contracts}
             isLoading={isLoadingRenting}
             startChatMutation={startChatMutation}
@@ -925,7 +915,6 @@ function BuddyRentalsPanel() {
         {activeWorkspaceTab === 'outContracts' ? (
           <RentalContractSection
             titleKey="marketplace.outContracts"
-            titleFallback="租赁合同"
             contracts={rentingOutContracts?.contracts}
             isLoading={isLoadingOut}
             t={t}
@@ -936,14 +925,14 @@ function BuddyRentalsPanel() {
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black uppercase tracking-[0.15em] text-text-secondary">
-                {t('marketplace.myListings', '我的挂单')}
+                {t('marketplace.myListings')}
               </h3>
               <Link
                 to="/settings/buddy/create"
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-text-primary font-bold hover:from-amber-500 hover:to-amber-600 transition-all shadow-sm hover:shadow-md"
               >
                 <Store className="w-4 h-4" />
-                {t('marketplace.createListing', '出租')}
+                {t('marketplace.createListing')}
               </Link>
             </div>
             <ListingsSection
@@ -966,7 +955,6 @@ function BuddyRentalsPanel() {
 
 function RentalContractSection({
   titleKey,
-  titleFallback,
   contracts,
   isLoading,
   isTenantView,
@@ -974,7 +962,6 @@ function RentalContractSection({
   t,
 }: {
   titleKey: string
-  titleFallback: string
   contracts: Contract[] | undefined
   isLoading: boolean
   isTenantView?: boolean
@@ -988,7 +975,7 @@ function RentalContractSection({
     <section className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-black uppercase tracking-[0.15em] text-text-secondary">
-          {t(titleKey, titleFallback)}
+          {t(titleKey)}
         </h3>
       </div>
 
@@ -1003,9 +990,7 @@ function RentalContractSection({
         ) : !contracts?.length ? (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">📋</div>
-            <p className="text-text-muted font-bold">
-              {t('marketplace.noContracts', '暂无租赁合同')}
-            </p>
+            <p className="text-text-muted font-bold">{t('marketplace.noContracts')}</p>
           </div>
         ) : (
           contracts.map((c) => {
@@ -1014,7 +999,7 @@ function RentalContractSection({
             const contractMeta =
               c.startsAt && c.expiresAt
                 ? `${Math.round((new Date(c.expiresAt).getTime() - new Date(c.startsAt).getTime()) / 3600000)}h`
-                : t('marketplace.unlimited', '不限时')
+                : t('marketplace.unlimited')
             const priceText =
               c.pricingVersion === 2 ? `${c.baseDailyRate ?? 0} 🦐/d` : `${c.hourlyRate} 🦐/h`
             const cardAvatarUserId = c.agentUserId || c.ownerId || c.id
@@ -1059,7 +1044,7 @@ function RentalContractSection({
                               </span>
                             </div>
                             <h3 className="font-black text-base line-clamp-2">
-                              {c.listing?.title || t('marketplace.unknownListing', '未知挂单')}
+                              {c.listing?.title || t('marketplace.unknownListing')}
                             </h3>
                             <p className="mt-1 text-xs text-text-muted">
                               {new Date(c.createdAt).toLocaleDateString()}
@@ -1069,9 +1054,7 @@ function RentalContractSection({
 
                         <div className="text-right">
                           <p className="text-[11px] text-text-muted font-bold uppercase tracking-[0.14em]">
-                            {isActive
-                              ? t('marketplace.totalCost', '总费用')
-                              : t('marketplace.expectedCost', '预估费用')}
+                            {isActive ? t('marketplace.totalCost') : t('marketplace.expectedCost')}
                           </p>
                           <p className="text-lg font-black text-warning leading-tight">
                             {c.totalCost} 🦐
@@ -1082,7 +1065,7 @@ function RentalContractSection({
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         <div className="rounded-xl border border-border-subtle bg-bg-secondary/70 p-2.5">
                           <p className="text-[10px] uppercase tracking-[0.15em] text-text-muted font-black">
-                            {t('marketplace.duration', '时长')}
+                            {t('marketplace.duration')}
                           </p>
                           <div className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold">
                             <Clock className="w-3.5 h-3.5" />
@@ -1091,7 +1074,7 @@ function RentalContractSection({
                         </div>
                         <div className="rounded-xl border border-border-subtle bg-bg-secondary/70 p-2.5">
                           <p className="text-[10px] uppercase tracking-[0.15em] text-text-muted font-black">
-                            {t('marketplace.rate', '单价')}
+                            {t('marketplace.rate')}
                           </p>
                           <p className="mt-1 text-sm font-black">{priceText}</p>
                         </div>
@@ -1106,7 +1089,7 @@ function RentalContractSection({
                           <RentalCountdown expiresAt={c.expiresAt} />
                         ) : (
                           <span className="text-xs text-text-muted font-medium">
-                            {t('marketplace.unlimitedUsage', '不限时使用')}
+                            {t('marketplace.unlimitedUsage')}
                           </span>
                         )}
                       </div>
@@ -1121,7 +1104,7 @@ function RentalContractSection({
                           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-primary to-primary text-white text-sm font-bold hover:from-primary hover:to-primary transition-all shadow-md hover:shadow-lg disabled:opacity-50"
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
-                          {t('marketplace.useBuddy', '开始使用')}
+                          {t('marketplace.useBuddy')}
                         </button>
                       ) : null}
                     </div>
@@ -1172,9 +1155,7 @@ function ListingsSection({
     return (
       <div className="text-center py-16">
         <div className="text-5xl mb-4">📦</div>
-        <p className="text-text-muted font-bold">
-          {t('marketplace.noListings', '还没有挂单，快去创建一个吧')}
-        </p>
+        <p className="text-text-muted font-bold">{t('marketplace.noListings')}</p>
       </div>
     )
   }
@@ -1206,7 +1187,7 @@ function ListingsSection({
             <ChevronDown
               className={`w-4 h-4 transition-transform ${showOffline ? 'rotate-180' : ''}`}
             />
-            {t('marketplace.offlineListings', '离线 Buddy')} ({offlineListings.length})
+            {t('marketplace.offlineListings')} ({offlineListings.length})
           </button>
           {showOffline &&
             offlineListings.map((l) => (
@@ -1246,13 +1227,13 @@ function ListingCard({
   let statusBadge: { label: string; bg: string; text: string }
   if (l.isRented) {
     statusBadge = {
-      label: t('marketplace.listingRented', '出租中'),
+      label: t('marketplace.listingRented'),
       bg: 'bg-warning/10',
       text: 'text-warning',
     }
   } else if (!l.isListed && l.listingStatus === 'active') {
     statusBadge = {
-      label: t('marketplace.listingUnlisted', '已下架'),
+      label: t('marketplace.listingUnlisted'),
       bg: 'bg-bg-secondary',
       text: 'text-text-muted',
     }
@@ -1276,14 +1257,13 @@ function ListingCard({
                 className={`w-2 h-2 rounded-full ${online ? 'bg-success animate-pulse' : 'bg-text-muted/30'}`}
               />
               <span className={online ? 'text-success font-bold' : 'text-text-muted'}>
-                {online ? t('marketplace.online', '在线') : t('marketplace.offline', '离线')}
+                {online ? t('marketplace.online') : t('marketplace.offline')}
               </span>
             </span>
             {l.agent?.totalOnlineSeconds ? (
               <span className="text-xs text-text-muted flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                {t('marketplace.totalOnline', '累计')}{' '}
-                {formatOnlineDuration(l.agent.totalOnlineSeconds, t)}
+                {t('marketplace.totalOnline')} {formatOnlineDuration(l.agent.totalOnlineSeconds, t)}
               </span>
             ) : null}
             <span className="text-xs text-text-muted">
@@ -1314,12 +1294,12 @@ function ListingCard({
                 <button
                   type="button"
                   onClick={() => {
-                    if (window.confirm(t('marketplace.confirmDelist', '确定要下架此 Buddy 吗？'))) {
+                    if (window.confirm(t('marketplace.confirmDelist'))) {
                       delistMutation.mutate(l.id)
                     }
                   }}
                   className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                  title={t('marketplace.delistBuddy', '下架 Buddy')}
+                  title={t('marketplace.delistBuddy')}
                 >
                   <PackageMinus className="w-4 h-4" />
                 </button>
@@ -1329,7 +1309,7 @@ function ListingCard({
                   type="button"
                   onClick={() => relistMutation.mutate(l.id)}
                   className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
-                  title={t('marketplace.relistBuddy', '重新上架')}
+                  title={t('marketplace.relistBuddy')}
                 >
                   <Play className="w-4 h-4" />
                 </button>
@@ -1339,7 +1319,7 @@ function ListingCard({
                   type="button"
                   onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'paused' })}
                   className="p-2 rounded-lg text-warning hover:bg-warning/10 transition-colors"
-                  title={t('marketplace.pause', '暂停')}
+                  title={t('marketplace.pause')}
                 >
                   <Pause className="w-4 h-4" />
                 </button>
@@ -1349,7 +1329,7 @@ function ListingCard({
                   type="button"
                   onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'active' })}
                   className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
-                  title={t('marketplace.resume', '恢复')}
+                  title={t('marketplace.resume')}
                 >
                   <Play className="w-4 h-4" />
                 </button>
@@ -1359,7 +1339,7 @@ function ListingCard({
           <Link
             to={`/marketplace/edit/${l.id}`}
             className="p-2 rounded-lg text-text-muted hover:bg-bg-secondary transition-colors"
-            title={t('marketplace.edit', '编辑')}
+            title={t('marketplace.edit')}
           >
             <Edit className="w-4 h-4" />
           </Link>
@@ -1369,12 +1349,12 @@ function ListingCard({
             <button
               type="button"
               onClick={() => {
-                if (window.confirm(t('marketplace.confirmDelete', '确定删除此挂单？'))) {
+                if (window.confirm(t('marketplace.confirmDelete'))) {
                   deleteMutation.mutate(l.id)
                 }
               }}
               className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-              title={t('marketplace.delete', '删除')}
+              title={t('marketplace.delete')}
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -1397,9 +1377,7 @@ function RentalCountdown({ expiresAt }: { expiresAt: string }) {
   }, [expiresAt])
 
   if (remaining <= 0) {
-    return (
-      <span className="text-xs font-bold text-danger">{t('marketplace.expired', '已到期')}</span>
-    )
+    return <span className="text-xs font-bold text-danger">{t('marketplace.expired')}</span>
   }
 
   return (
@@ -1420,9 +1398,7 @@ function formatCountdown(ms: number, t: TranslateFn): string {
   const h = Math.floor((totalSec % 86400) / 3600)
   const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
-  if (d > 0)
-    return `${d}${t('time.dayShort', '天')} ${h}${t('time.hourShort', '时')} ${m}${t('time.minShort', '分')}`
-  if (h > 0)
-    return `${h}${t('time.hourShort', '时')} ${m}${t('time.minShort', '分')} ${s}${t('time.secShort', '秒')}`
-  return `${m}${t('time.minShort', '分')} ${s}${t('time.secShort', '秒')}`
+  if (d > 0) return `${d}${t('time.dayShort')} ${h}${t('time.hourShort')} ${m}${t('time.minShort')}`
+  if (h > 0) return `${h}${t('time.hourShort')} ${m}${t('time.minShort')} ${s}${t('time.secShort')}`
+  return `${m}${t('time.minShort')} ${s}${t('time.secShort')}`
 }
