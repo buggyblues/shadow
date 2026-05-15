@@ -32,6 +32,7 @@ COPY packages/openclaw-shadowob/package.json ./packages/openclaw-shadowob/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/
+COPY packages/views/package.json ./packages/views/
 COPY website/package.json ./website/
 
 RUN pnpm install --frozen-lockfile --ignore-scripts
