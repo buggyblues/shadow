@@ -65,6 +65,18 @@ const users = {
   },
 }
 
+const serverApps = {
+  demoDesk: {
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    serverId: servers.alpha.id,
+    appKey: 'demo-desk',
+    name: 'Demo Desk',
+    description: 'Ticket operations',
+    iconUrl: 'https://example.test/demo.png',
+    status: 'active',
+  },
+}
+
 function createMentionService() {
   const channelDao = {
     findById: vi.fn(async (id: string) => {
@@ -130,6 +142,14 @@ function createMentionService() {
       return Object.values(users).find((user) => user.username === username) ?? null
     }),
   }
+  const appIntegrationDao = {
+    listByServer: vi.fn(async (serverId: string) => {
+      return Object.values(serverApps).filter((app) => app.serverId === serverId)
+    }),
+    findById: vi.fn(async (id: string) => {
+      return Object.values(serverApps).find((app) => app.id === id) ?? null
+    }),
+  }
   const notificationService = {
     create: vi.fn(async (input: { userId: string }) => ({ id: `n-${input.userId}`, ...input })),
   }
@@ -137,9 +157,10 @@ function createMentionService() {
   return new MentionService({
     channelDao: channelDao as never,
     channelMemberDao: channelMemberDao as never,
+    appIntegrationDao: appIntegrationDao as never,
     serverDao: serverDao as never,
     userDao: userDao as never,
-    notificationService: notificationService as never,
+    notificationTriggerService: notificationService as never,
   })
 }
 
@@ -270,5 +291,45 @@ describe('MentionService', () => {
     ])
     expect(input.metadata?.mentions?.[0]?.range?.start).toBe(5)
     expect(input.content).toBe(`Ping <@server:${servers.alpha.id}> now`)
+  })
+
+  it('suggests and canonicalizes installed server app mentions', async () => {
+    const service = createMentionService()
+
+    const suggestions = await service.suggest({
+      userId: users.alice.id,
+      channelId: channels.general.id,
+      trigger: '@',
+      query: 'demo',
+    })
+
+    expect(suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'app',
+          targetId: serverApps.demoDesk.id,
+          token: '@demo-desk',
+          appKey: 'demo-desk',
+        }),
+      ]),
+    )
+
+    const input = await service.prepareMessageInput(channels.general.id, users.alice.id, {
+      content: 'Ask @demo-desk to create a high priority ticket',
+    })
+
+    expect(input.content).toBe(
+      `Ask <@app:${serverApps.demoDesk.id}> to create a high priority ticket`,
+    )
+    expect(input.metadata?.mentions).toEqual([
+      expect.objectContaining({
+        kind: 'app',
+        targetId: serverApps.demoDesk.id,
+        token: `<@app:${serverApps.demoDesk.id}>`,
+        sourceToken: '@demo-desk',
+        appKey: 'demo-desk',
+        appName: 'Demo Desk',
+      }),
+    ])
   })
 })

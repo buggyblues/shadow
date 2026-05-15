@@ -459,6 +459,7 @@ describe('MessageService', () => {
           id: 'u1',
           username: 'testuser',
           displayName: 'Test',
+          avatarUrl: 'data:image/svg+xml,test-avatar',
           isBot: false,
         }),
       })
@@ -473,6 +474,8 @@ describe('MessageService', () => {
       const result = await service.send('ch1', 'u1', { content: longContent })
       expect(result.content).toBe(longContent)
       expect(result.content.length).toBe(16000)
+      expect(result.author?.avatarUrl).toBe('data:image/svg+xml,test-avatar')
+      expect(result.author).not.toHaveProperty('avatarName')
     })
 
     it('should send message with 8KB agent response', async () => {

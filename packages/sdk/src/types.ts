@@ -182,6 +182,162 @@ export interface ShadowSignedMediaUrl {
   expiresAt: string
 }
 
+export type ShadowServerAppAction = 'read' | 'write' | 'manage' | 'delete' | 'generate'
+export type ShadowServerAppDataClass =
+  | 'public'
+  | 'server-private'
+  | 'channel-private'
+  | 'financial'
+  | 'secret'
+  | 'cloud-secret'
+
+export interface ShadowServerAppCommand {
+  name: string
+  title?: string
+  description?: string
+  path: string
+  method?: 'POST'
+  input?: 'json' | 'multipart'
+  inputSchema?: Record<string, unknown>
+  permission: string
+  action: ShadowServerAppAction
+  dataClass: ShadowServerAppDataClass
+  approvalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+  binary?: {
+    supported?: boolean
+    field?: string
+    maxBytes?: number
+    contentTypes?: string[]
+  }
+}
+
+export interface ShadowServerAppManifest {
+  schemaVersion: 'shadow.app/1'
+  appKey: string
+  name: string
+  description?: string
+  version?: string
+  iconUrl: string
+  iframe?: {
+    entry: string
+    allowedOrigins: string[]
+  }
+  api: {
+    baseUrl: string
+    auth?: { type: 'oauth2-bearer' | 'hmac-sha256' | 'none' }
+  }
+  commands: ShadowServerAppCommand[]
+  skills?: Array<{
+    name: string
+    description: string
+    commandHints?: string[]
+  }>
+  events?: string[]
+  binary?: {
+    supported: boolean
+    maxBytes?: number
+    contentTypes?: string[]
+  }
+}
+
+export interface ShadowServerAppIntegration {
+  id: string
+  serverId: string
+  appKey: string
+  name: string
+  description?: string | null
+  iconUrl?: string | null
+  manifestUrl?: string | null
+  manifest: ShadowServerAppManifest
+  iframeEntry?: string | null
+  allowedOrigins: string[]
+  apiBaseUrl: string
+  status: string
+  installedByUserId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ShadowServerAppDiscovery {
+  manifest: ShadowServerAppManifest
+  installed: ShadowServerAppIntegration | null
+  permissions: Array<{
+    name: string
+    title: string
+    description?: string | null
+    permission: string
+    action: ShadowServerAppAction
+    dataClass: ShadowServerAppDataClass
+    approvalMode: 'none' | 'first_time' | 'every_time' | 'policy'
+  }>
+}
+
+export interface ShadowServerAppCatalogEntry {
+  id: string
+  appKey: string
+  name: string
+  description?: string | null
+  iconUrl?: string | null
+  manifestUrl?: string | null
+  manifest: ShadowServerAppManifest
+  status: string
+  hasSharedSecret: boolean
+  installed?: ShadowServerAppIntegration | null
+  permissions?: ShadowServerAppDiscovery['permissions']
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ShadowServerAppLaunchContext {
+  serverId: string
+  serverAppId: string
+  appKey: string
+  iframeEntry: string | null
+  allowedOrigins: string[]
+  launchToken: string
+  eventStreamPath: string
+  expiresIn: number
+}
+
+export interface ShadowServerAppSkillDocument {
+  appKey: string
+  markdown: string
+  skills: Array<{
+    name: string
+    description: string
+    commandHints?: string[]
+  }>
+}
+
+export interface ShadowServerAppTokenIntrospection {
+  active: boolean
+  token_type?: 'Bearer'
+  iss?: string
+  aud?: string
+  sub?: string
+  scope?: string
+  client_id?: string
+  exp?: number
+  iat?: number
+  shadow?: {
+    protocol: 'shadow.app/1'
+    serverId: string
+    serverAppId: string
+    appKey: string
+    command?: string
+    actor: {
+      kind?: string
+      userId?: string | null
+      buddyAgentId?: string | null
+      ownerId?: string | null
+    }
+    channelId?: string | null
+    permission?: string
+    action?: string
+    dataClass?: string
+  }
+}
+
 export interface ShadowChannel {
   id: string
   name: string

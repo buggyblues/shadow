@@ -3,3 +3,5 @@
 @import "./web.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+@source "../../../../packages/views/src/**/*.{ts,tsx,js,jsx}";

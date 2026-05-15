@@ -1,0 +1,351 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppIntegrationService } from '../src/services/app-integration.service'
+import type { ServerAppManifestInput } from '../src/validators/app-integration.schema'
+
+const manifest: ServerAppManifestInput = {
+  schemaVersion: 'shadow.app/1',
+  appKey: 'demo-desk',
+  name: 'Demo Desk',
+  iconUrl: 'http://localhost:4199/assets/icon.svg',
+  api: {
+    baseUrl: 'http://localhost:4199',
+    auth: { type: 'oauth2-bearer' },
+  },
+  iframe: {
+    entry: 'http://localhost:4199/shadow/server',
+    allowedOrigins: ['http://localhost:4199'],
+  },
+  commands: [
+    {
+      name: 'tickets.list',
+      path: '/api/shadow/commands/tickets.list',
+      permission: 'demo.tickets:read',
+      action: 'read',
+      dataClass: 'server-private',
+    },
+    {
+      name: 'tickets.create',
+      path: '/api/shadow/commands/tickets.create',
+      permission: 'demo.tickets:write',
+      action: 'write',
+      dataClass: 'server-private',
+      inputSchema: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          title: { type: 'string' },
+          priority: { enum: ['low', 'normal', 'high'] },
+        },
+      },
+    },
+  ],
+  skills: [
+    {
+      name: 'demo-desk-ticket-ops',
+      description: 'Use when working with tickets.',
+    },
+  ],
+}
+
+function createService(overrides: Record<string, unknown> = {}) {
+  const appRow = {
+    id: 'app-1',
+    serverId: 'srv-1',
+    appKey: 'demo-desk',
+    name: 'Demo Desk',
+    description: null,
+    iconUrl: manifest.iconUrl,
+    manifestUrl: null,
+    manifest,
+    iframeEntry: manifest.iframe!.entry,
+    allowedOrigins: manifest.iframe!.allowedOrigins,
+    apiBaseUrl: manifest.api.baseUrl,
+    sharedSecretEncrypted: null,
+    status: 'active',
+    installedByUserId: 'user-1',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+  const deps = {
+    appIntegrationDao: {
+      upsert: vi.fn().mockResolvedValue(appRow),
+      listByServer: vi.fn().mockResolvedValue([appRow]),
+      findById: vi.fn().mockResolvedValue(appRow),
+      findByServerAndKey: vi.fn().mockResolvedValue(appRow),
+      listBuddyGrants: vi.fn().mockResolvedValue([]),
+      findBuddyGrant: vi.fn().mockResolvedValue({
+        id: 'grant-1',
+        permissions: ['demo.tickets:read'],
+        expiresAt: null,
+      }),
+      upsertBuddyGrant: vi.fn().mockResolvedValue({ id: 'grant-1' }),
+      deleteByServerAndKey: vi.fn(),
+      listCatalogEntries: vi.fn().mockResolvedValue([
+        {
+          id: 'catalog-1',
+          appKey: 'demo-desk',
+          name: 'Demo Desk',
+          description: null,
+          iconUrl: manifest.iconUrl,
+          manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+          manifest,
+          sharedSecretEncrypted: null,
+          status: 'active',
+          createdByUserId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]),
+      findCatalogEntryById: vi.fn().mockResolvedValue({
+        id: 'catalog-1',
+        appKey: 'demo-desk',
+        name: 'Demo Desk',
+        description: null,
+        iconUrl: manifest.iconUrl,
+        manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+        manifest,
+        sharedSecretEncrypted: null,
+        status: 'active',
+        createdByUserId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      findCatalogEntryByAppKey: vi.fn().mockResolvedValue(null),
+      upsertCatalogEntry: vi.fn().mockResolvedValue({
+        id: 'catalog-1',
+        appKey: 'demo-desk',
+        name: 'Demo Desk',
+        description: null,
+        iconUrl: manifest.iconUrl,
+        manifestUrl: null,
+        manifest,
+        sharedSecretEncrypted: null,
+        status: 'active',
+        createdByUserId: 'user-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      deleteCatalogEntryById: vi.fn(),
+    },
+    agentDao: {
+      findById: vi.fn().mockResolvedValue({ id: 'agent-1', userId: 'bot-1', ownerId: 'user-1' }),
+      findByUserId: vi.fn().mockResolvedValue({ id: 'agent-1', userId: 'bot-1' }),
+    },
+    appIntegrationEventBus: {
+      publish: vi.fn(),
+      subscribe: vi.fn(),
+    },
+    serverDao: {
+      findBySlug: vi.fn().mockResolvedValue({ id: 'srv-1' }),
+    },
+    policyService: {
+      requireServerRole: vi.fn().mockResolvedValue({ role: 'admin' }),
+      requireServerMember: vi.fn().mockResolvedValue({ role: 'member' }),
+    },
+    safeHttpClient: {
+      fetch: vi.fn(),
+    },
+    logger: {
+      warn: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    },
+    ...overrides,
+  }
+  return { service: new AppIntegrationService(deps as never), deps, appRow }
+}
+
+describe('AppIntegrationService', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('installs an OAuth manifest without storing a shared secret', async () => {
+    const { service, deps } = createService()
+
+    const result = await service.install(
+      'srv-1',
+      {
+        kind: 'user',
+        userId: 'user-1',
+        authMethod: 'jwt',
+        scopes: [],
+      },
+      {
+        manifest,
+        sharedSecret: 'dev-demo-secret-change-me-please',
+      },
+    )
+
+    expect(result.appKey).toBe('demo-desk')
+    expect(result.sharedSecret).toBeNull()
+    expect(deps.policyService.requireServerRole).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1' }),
+      'srv-1',
+      'admin',
+    )
+    expect(deps.appIntegrationDao.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverId: 'srv-1',
+        appKey: 'demo-desk',
+        apiBaseUrl: 'http://localhost:4199',
+        sharedSecretEncrypted: null,
+      }),
+    )
+  })
+
+  it('rejects grants for permissions not declared by the manifest', async () => {
+    const { service } = createService()
+
+    await expect(
+      service.grant(
+        'srv-1',
+        'demo-desk',
+        { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+        {
+          buddyAgentId: 'agent-1',
+          permissions: ['demo.unknown:write'],
+          approvalMode: 'none',
+        },
+      ),
+    ).rejects.toThrow('Unknown app permission')
+  })
+
+  it('lets a granted Buddy call a command through the app proxy', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { tickets: [] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService()
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: {
+        kind: 'agent',
+        userId: 'bot-1',
+        agentId: 'agent-1',
+        ownerId: 'user-1',
+        scopes: [],
+      },
+      body: { input: {} },
+    })
+
+    expect(result).toEqual({ ok: true, result: { tickets: [] } })
+    expect(deps.appIntegrationEventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'server_app.command.completed',
+        appKey: 'demo-desk',
+        command: 'tickets.list',
+      }),
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL('http://localhost:4199/api/shadow/commands/tickets.list'),
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const headers = init.headers as Record<string, string>
+    expect(headers.Authorization).toMatch(/^Bearer /)
+    expect(headers['X-Shadow-Signature']).toBeUndefined()
+
+    const introspection = await service.introspectCommandToken(
+      'srv-1',
+      'demo-desk',
+      headers.Authorization.replace(/^Bearer /, ''),
+    )
+    expect(introspection).toMatchObject({
+      active: true,
+      token_type: 'Bearer',
+      client_id: 'demo-desk',
+      shadow: {
+        serverId: 'srv-1',
+        serverAppId: 'app-1',
+        appKey: 'demo-desk',
+        command: 'tickets.list',
+        actor: {
+          kind: 'agent',
+          userId: 'bot-1',
+          buddyAgentId: 'agent-1',
+          ownerId: 'user-1',
+        },
+        permission: 'demo.tickets:read',
+      },
+    })
+  })
+
+  it('emits raw json-input guidance and command schemas for app skills', async () => {
+    const { service } = createService()
+
+    const result = await service.skills('srv-1', 'demo-desk', {
+      kind: 'user',
+      userId: 'user-1',
+      authMethod: 'jwt',
+      scopes: [],
+    })
+
+    expect(result.markdown).toContain('raw command input object')
+    expect(result.markdown).toContain('The CLI wraps the HTTP request for you')
+    expect(result.markdown).toContain('Do not call this App through curl')
+    expect(result.markdown).toContain('demo-desk tickets.create')
+    expect(result.markdown).toContain('"required":["title"]')
+  })
+
+  it('creates a scoped launch token for iframe event streams', async () => {
+    const { service } = createService()
+
+    const launch = await service.createLaunch('srv-1', 'demo-desk', {
+      kind: 'user',
+      userId: 'user-1',
+      authMethod: 'jwt',
+      scopes: [],
+    })
+    const context = await service.getEventStreamContext('srv-1', 'demo-desk', launch.launchToken)
+
+    expect(launch.eventStreamPath).toContain('/api/servers/srv-1/apps/demo-desk/events?token=')
+    expect(context.app.id).toBe('app-1')
+  })
+
+  it('lists catalog entries with installed state for a server', async () => {
+    const { service } = createService()
+
+    const catalog = await service.listCatalog('srv-1', {
+      kind: 'user',
+      userId: 'user-1',
+      authMethod: 'jwt',
+      scopes: [],
+    })
+
+    expect(catalog[0]).toMatchObject({
+      id: 'catalog-1',
+      appKey: 'demo-desk',
+      installed: expect.objectContaining({ id: 'app-1' }),
+      hasSharedSecret: false,
+    })
+  })
+
+  it('installs an app from a catalog entry', async () => {
+    const { service, deps } = createService()
+
+    await service.installFromCatalog(
+      'srv-1',
+      'catalog-1',
+      {
+        kind: 'user',
+        userId: 'user-1',
+        authMethod: 'jwt',
+        scopes: [],
+      },
+      { sharedSecret: 'dev-demo-secret-change-me-please' },
+    )
+
+    expect(deps.appIntegrationDao.findCatalogEntryById).toHaveBeenCalledWith('catalog-1')
+    expect(deps.appIntegrationDao.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ appKey: 'demo-desk', serverId: 'srv-1' }),
+    )
+  })
+})

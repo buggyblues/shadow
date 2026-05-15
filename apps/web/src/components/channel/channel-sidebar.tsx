@@ -13,8 +13,9 @@ import {
   Switch,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useParams } from '@tanstack/react-router'
 import {
+  AppWindow,
   Archive,
   Check,
   ChevronDown,
@@ -97,6 +98,13 @@ interface ServerMember {
   } | null
 }
 
+interface ServerAppSummary {
+  id: string
+  appKey: string
+  name: string
+  iconUrl?: string | null
+}
+
 const channelIcons = {
   text: Hash,
   voice: Volume2,
@@ -106,11 +114,15 @@ const channelIcons = {
 export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { appKey } = useParams({ strict: false }) as { appKey?: string }
   const queryClient = useQueryClient()
   const { activeChannelId, setActiveChannel } = useChatStore()
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [showCreate, setShowCreate] = useState(false)
   const [showServerEdit, setShowServerEdit] = useState(false)
+  const [serverSettingsInitialTab, setServerSettingsInitialTab] = useState<'basic' | 'apps'>(
+    'basic',
+  )
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
   const [newIsPrivate, setNewIsPrivate] = useState(false)
@@ -155,6 +167,12 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const { data: rawChannels = [] } = useQuery<Channel[]>({
     queryKey: ['channels', serverSlug],
     queryFn: () => fetchApi<Channel[]>(`/api/servers/${serverSlug}/channels`),
+  })
+
+  const { data: serverApps = [] } = useQuery<ServerAppSummary[]>({
+    queryKey: ['server-apps', serverSlug],
+    queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps`),
+    enabled: !!serverSlug,
   })
 
   // Channel sorting and filter
@@ -252,6 +270,12 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   )
 
   const openServerEdit = () => {
+    setServerSettingsInitialTab('basic')
+    setShowServerEdit(true)
+  }
+
+  const openAppSettings = () => {
+    setServerSettingsInitialTab('apps')
     setShowServerEdit(true)
   }
 
@@ -340,6 +364,18 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
       })
     },
     [setMobileView, server?.slug, serverSlug, navigate, requestMarkScopeRead, updateLastAccessed],
+  )
+
+  const handleSelectApp = useCallback(
+    (selectedAppKey: string) => {
+      setActiveChannel(null)
+      setMobileView('chat')
+      navigate({
+        to: '/servers/$serverSlug/apps/$appKey',
+        params: { serverSlug: server?.slug ?? serverSlug, appKey: selectedAppKey },
+      })
+    },
+    [navigate, server?.slug, serverSlug, setActiveChannel, setMobileView],
   )
 
   // Rejoin active channel room on socket reconnect
@@ -553,11 +589,62 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
         className="flex-1 overflow-y-auto pt-4 scrollbar-hidden"
         onContextMenu={(e) => {
           // Only trigger if clicking on the blank area (not on a channel item)
-          if ((e.target as HTMLElement).closest('[data-channel-item]')) return
+          if ((e.target as HTMLElement).closest('[data-channel-item], [data-app-item]')) return
           e.preventDefault()
           setBlankContextMenu({ x: e.clientX, y: e.clientY })
         }}
       >
+        <div className="mb-3">
+          <div className="flex items-center justify-between px-3 py-1.5">
+            <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
+              {t('serverApps.group')}
+            </span>
+            <button
+              type="button"
+              onClick={openAppSettings}
+              className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-full"
+              title={t('serverApps.addApp')}
+            >
+              <Plus size={14} strokeWidth={3} />
+            </button>
+          </div>
+          <div className="px-2 space-y-0.5">
+            {serverApps.map((app) => {
+              const isActive = appKey === app.appKey
+              return (
+                <button
+                  type="button"
+                  key={app.id}
+                  data-app-item
+                  onClick={() => handleSelectApp(app.appKey)}
+                  className={cn(
+                    'group flex items-center gap-2 px-2 py-[6px] rounded-xl text-sm font-medium w-full text-left transition-all duration-300',
+                    isActive
+                      ? 'channel-pill-active text-primary ring-1 ring-primary/20'
+                      : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-all duration-300 overflow-hidden',
+                      isActive
+                        ? 'bg-primary/20 text-primary'
+                        : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
+                    )}
+                  >
+                    {app.iconUrl ? (
+                      <img src={app.iconUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <AppWindow size={14} />
+                    )}
+                  </div>
+                  <span className="truncate">{app.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Channel filter and sort bar */}
         {server?.id && (
           <div className="flex items-center justify-between px-3 py-1.5 mb-1">
@@ -697,6 +784,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
         onClose={() => setShowServerEdit(false)}
         server={server}
         serverSlug={serverSlug}
+        initialTab={serverSettingsInitialTab}
       />
 
       {/* Channel context menu */}

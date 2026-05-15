@@ -25,16 +25,34 @@ interface ShadowBuddy {
 interface ShadowBinding {
   agentId: string
   targetId: string
+  targetType?: string
+  servers?: string[]
+  channels?: string[]
   replyPolicy?: {
     mode: string
     custom?: Record<string, unknown>
   }
 }
 
+interface ShadowServerApp {
+  id: string
+  serverId: string
+  manifestUrl?: string
+  manifest?: Record<string, unknown>
+  sharedSecret?: string
+  grants?: Array<{
+    buddyId: string
+    permissions?: string[]
+    approvalMode?: string
+    resourceRules?: Record<string, unknown>
+  }>
+}
+
 interface ShadowobPluginConfig {
   buddies?: ShadowBuddy[]
   bindings?: ShadowBinding[]
-  servers?: Array<{ url: string }>
+  servers?: Array<{ id: string; name?: string }>
+  serverApps?: ShadowServerApp[]
   commerce?: {
     paidFiles?: Array<{
       id: string
@@ -51,7 +69,7 @@ const SHADOWOB_OPENCLAW_EXTENSION_ID = 'shadowob'
 const SHADOWOB_OPENCLAW_PLUGIN_ID = 'openclaw-shadowob'
 const SHADOWOB_OPENCLAW_EXTENSION_PATH = `/app/extensions/${SHADOWOB_OPENCLAW_EXTENSION_ID}`
 const SHADOWOB_CLI_SKILL_INTRO =
-  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, or to send/manage Shadow content. Keep reads narrow and prefer `--json`.'
+  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, server App resources, or to send/manage Shadow content. For installed server Apps, use the CLI path only: run `shadowob app discover --server "$SHADOWOB_SERVER_ID" --json`, then `shadowob app call <app-key> <command> --server "$SHADOWOB_SERVER_ID" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for server App commands. Keep reads narrow and prefer `--json`.'
 
 function shadowEnvKey(prefix: string, id: string) {
   return `${prefix}_${id.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
@@ -152,6 +170,25 @@ function shadowobChannelConfigMetadata(): Record<string, unknown> {
                   },
                 },
               },
+              serverApps: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  additionalProperties: true,
+                  properties: {
+                    id: { type: 'string' },
+                    serverConfigId: { type: 'string' },
+                    manifestUrl: { type: 'string' },
+                    serverId: { type: 'string' },
+                    serverAppId: { type: 'string' },
+                    appKey: { type: 'string' },
+                    permissions: {
+                      type: 'array',
+                      items: { type: 'string' },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -222,6 +259,25 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
       account.commerceOffers = commerceOffers
     }
 
+    const serverApps = shadowConfig.serverApps
+      ?.flatMap((app) =>
+        (app.grants ?? [])
+          .filter((grant) => grant.buddyId === binding.targetId)
+          .map((grant) => ({
+            id: app.id,
+            serverConfigId: app.serverId,
+            ...(app.manifestUrl ? { manifestUrl: app.manifestUrl } : {}),
+            serverId: shadowEnvRef(shadowEnvKey('SHADOW_SERVER_APP_SERVER', app.id)),
+            serverAppId: shadowEnvRef(shadowEnvKey('SHADOW_SERVER_APP_ID', app.id)),
+            appKey: shadowEnvRef(shadowEnvKey('SHADOW_SERVER_APP_KEY', app.id)),
+            permissions: grant.permissions ?? ['*'],
+          })),
+      )
+      .filter((item) => item.serverAppId)
+    if (serverApps?.length) {
+      account.serverApps = serverApps
+    }
+
     if (binding.replyPolicy) {
       const policy = binding.replyPolicy
       account.replyPolicy = {
@@ -266,6 +322,20 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
           buddyName: buddy.name,
           ...(buddy.description ? { buddyDescription: buddy.description } : {}),
           tokenEnvKey: shadowobRuntimeTokenEnvKey(binding.targetId),
+          serverApps: shadowConfig.serverApps
+            ?.flatMap((app) =>
+              (app.grants ?? [])
+                .filter((grant) => grant.buddyId === binding.targetId)
+                .map((grant) => ({
+                  id: app.id,
+                  serverConfigId: app.serverId,
+                  ...(app.manifestUrl ? { manifestUrl: app.manifestUrl } : {}),
+                  appKeyEnvKey: shadowEnvKey('SHADOW_SERVER_APP_KEY', app.id),
+                  serverIdEnvKey: shadowEnvKey('SHADOW_SERVER_APP_SERVER', app.id),
+                  permissions: grant.permissions ?? ['*'],
+                })),
+            )
+            .filter((item) => item.appKeyEnvKey),
           ...(binding.replyPolicy ? { replyPolicy: binding.replyPolicy } : {}),
         }
       })
@@ -310,6 +380,7 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
     // Error if bindings reference non-existent buddies
     const shadowConfig = context.agentConfig as unknown as ShadowobPluginConfig
     const buddyIds = new Set((shadowConfig.buddies ?? []).map((b) => b.id))
+    const serverIds = new Set((shadowConfig.servers ?? []).map((s) => s.id))
     for (const binding of shadowConfig.bindings ?? []) {
       if (!buddyIds.has(binding.targetId)) {
         errors.push({
@@ -317,6 +388,31 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
           message: `Binding references non-existent buddy "${binding.targetId}"`,
           severity: 'error',
         })
+      }
+    }
+    for (const app of shadowConfig.serverApps ?? []) {
+      if (!serverIds.has(app.serverId)) {
+        errors.push({
+          path: `serverApps.${app.id}.serverId`,
+          message: `Server App "${app.id}" references non-existent server "${app.serverId}"`,
+          severity: 'error',
+        })
+      }
+      if (!app.manifestUrl && !app.manifest) {
+        errors.push({
+          path: `serverApps.${app.id}`,
+          message: `Server App "${app.id}" must provide a manifestUrl or manifest`,
+          severity: 'error',
+        })
+      }
+      for (const grant of app.grants ?? []) {
+        if (!buddyIds.has(grant.buddyId)) {
+          errors.push({
+            path: `serverApps.${app.id}.grants.${grant.buddyId}`,
+            message: `Server App "${app.id}" grants non-existent buddy "${grant.buddyId}"`,
+            severity: 'error',
+          })
+        }
       }
     }
 
@@ -352,6 +448,7 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
         servers?: Record<string, string>
         channels?: Record<string, string>
         buddies?: Record<string, { agentId: string; userId: string }>
+        serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
         listings?: Record<string, string>
         commerce?: Record<
           string,
@@ -383,6 +480,11 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
       secrets[shadowEnvKey('SHADOW_COMMERCE_FILE', seedId)] = ids.fileId
       secrets[shadowEnvKey('SHADOW_COMMERCE_DELIVERABLE', seedId)] = ids.deliverableId
     }
+    for (const [appId, ids] of result.serverApps) {
+      secrets[shadowEnvKey('SHADOW_SERVER_APP_SERVER', appId)] = ids.serverId
+      secrets[shadowEnvKey('SHADOW_SERVER_APP_ID', appId)] = ids.serverAppId
+      secrets[shadowEnvKey('SHADOW_SERVER_APP_KEY', appId)] = ids.appKey
+    }
 
     return {
       state: {
@@ -397,6 +499,9 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
         ),
         ...(result.listings.size > 0 ? { listings: Object.fromEntries(result.listings) } : {}),
         ...(result.commerce.size > 0 ? { commerce: Object.fromEntries(result.commerce) } : {}),
+        ...(result.serverApps.size > 0
+          ? { serverApps: Object.fromEntries(result.serverApps) }
+          : {}),
       },
       secrets,
     }

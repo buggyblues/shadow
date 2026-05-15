@@ -5,6 +5,12 @@ export {
 } from './agent-dashboard'
 export { agentPolicies } from './agent-policies'
 export { agentStatusEnum, agents } from './agents'
+export {
+  type ServerAppManifest,
+  serverAppBuddyGrants,
+  serverAppCatalogEntries,
+  serverAppIntegrations,
+} from './app-integrations'
 export { attachments } from './attachments'
 export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'

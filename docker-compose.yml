@@ -49,6 +49,19 @@ services:
       retries: 5
 
   # ── Application ───────────────────────────────────
+  shadow-server-app-demo:
+    build:
+      context: ./examples/shadow-server-app-demo
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4199:4199"
+    environment:
+      PORT: 4199
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_APP_DEMO_SHADOW_SERVER_URL:-http://server:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${SHADOW_SERVER_APP_DEMO_PUBLIC_BASE_URL:-http://localhost:4199}
+      SHADOW_APP_API_BASE_URL: ${SHADOW_SERVER_APP_DEMO_API_BASE_URL:-http://shadow-server-app-demo:4199}
+
   server:
     image: shadow/runtime:dev
     build:
@@ -104,6 +117,9 @@ services:
       RECONCILE_INTERVAL_MS: ${RECONCILE_INTERVAL_MS:-60000}
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://server:3002}
       SHADOW_AGENT_SERVER_URL: ${SHADOW_AGENT_SERVER_URL:-http://host.lima.internal:3002}
+      SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS: ${SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS:-shadow-server-app-demo}
+      SHADOW_SERVER_APP_DEMO_MANIFEST_URL: ${SHADOW_SERVER_APP_DEMO_MANIFEST_URL:-http://shadow-server-app-demo:4199/.well-known/shadow-app.json}
+      SHADOW_SERVER_APP_DEMO_SECRET: ${SHADOW_SERVER_APP_DEMO_SECRET:-dev-demo-secret-change-me-please}
       SHADOWOB_OPENCLAW_RUNNER_IMAGE: ${SHADOWOB_OPENCLAW_RUNNER_IMAGE:-ghcr.io/buggyblues/openclaw-runner:latest}
       SHADOW_MODEL_PROXY_ENABLED: ${SHADOW_MODEL_PROXY_ENABLED:-true}
       SHADOW_MODEL_PROXY_MODEL: ${SHADOW_MODEL_PROXY_MODEL:-deepseek-v4-flash}
@@ -131,6 +147,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      shadow-server-app-demo:
+        condition: service_started
 
   web:
     build:

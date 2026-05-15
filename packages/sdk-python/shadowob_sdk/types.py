@@ -172,6 +172,20 @@ class ShadowSignedMediaUrl:
 
 
 @dataclass
+class ShadowServerAppTokenIntrospection:
+    active: bool
+    token_type: str | None = None
+    iss: str | None = None
+    aud: str | None = None
+    sub: str | None = None
+    scope: str | None = None
+    client_id: str | None = None
+    exp: int | None = None
+    iat: int | None = None
+    shadow: dict[str, Any] | None = None
+
+
+@dataclass
 class ShadowMessageMention:
     kind: str
     target_id: str
@@ -184,6 +198,10 @@ class ShadowMessageMention:
     server_name: str | None = None
     channel_id: str | None = None
     channel_name: str | None = None
+    app_id: str | None = None
+    app_key: str | None = None
+    app_name: str | None = None
+    icon_url: str | None = None
     user_id: str | None = None
     username: str | None = None
     display_name: str | None = None
@@ -205,6 +223,10 @@ class ShadowMentionSuggestion:
     server_name: str | None = None
     channel_id: str | None = None
     channel_name: str | None = None
+    app_id: str | None = None
+    app_key: str | None = None
+    app_name: str | None = None
+    icon_url: str | None = None
     user_id: str | None = None
     username: str | None = None
     display_name: str | None = None

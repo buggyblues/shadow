@@ -86,7 +86,7 @@ export function LoginPanel({ variant, redirect, onClose, onComplete }: LoginPane
       redirect={routerRedirect}
       oauthRedirect={oauthRedirect}
       apiBase={apiBase}
-      logoSrc="/logo.png"
+      logoSrc="/Logo.svg"
       brandSuffix="OwnBuddy"
       termsHref={legalHref('terms', i18n.language)}
       privacyHref={legalHref('privacy', i18n.language)}

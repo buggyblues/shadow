@@ -5,6 +5,7 @@ import { AgentDashboardDao } from './dao/agent-dashboard.dao'
 import { AgentListingDao } from './dao/agent-listing.dao'
 import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { ApiTokenDao } from './dao/api-token.dao'
+import { AppIntegrationDao } from './dao/app-integration.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelJoinRequestDao } from './dao/channel-join-request.dao'
@@ -52,6 +53,8 @@ import { AccessService } from './security/access.service'
 import { AgentService } from './services/agent.service'
 import { AgentDashboardService } from './services/agent-dashboard.service'
 import { AgentPolicyService } from './services/agent-policy.service'
+import { AppIntegrationService } from './services/app-integration.service'
+import { AppIntegrationEventBus } from './services/app-integration-event-bus'
 import { AuditLogService } from './services/audit-log.service'
 // Service classes
 import { AuthService } from './services/auth.service'
@@ -165,6 +168,7 @@ export interface Cradle {
   messageDao: MessageDao
   notificationDao: NotificationDao
   agentDao: AgentDao
+  appIntegrationDao: AppIntegrationDao
   agentPolicyDao: AgentPolicyDao
   agentDashboardDao: AgentDashboardDao
   friendshipDao: FriendshipDao
@@ -249,6 +253,8 @@ export interface Cradle {
   friendshipService: FriendshipService
   mediaService: MediaService
   agentService: AgentService
+  appIntegrationService: AppIntegrationService
+  appIntegrationEventBus: AppIntegrationEventBus
   agentPolicyService: AgentPolicyService
   shopService: ShopService
   shopScopeService: ShopScopeService
@@ -321,6 +327,7 @@ export function createAppContainer(db: Database): AppContainer {
     messageDao: asClass(MessageDao).singleton(),
     notificationDao: asClass(NotificationDao).singleton(),
     agentDao: asClass(AgentDao).singleton(),
+    appIntegrationDao: asClass(AppIntegrationDao).singleton(),
     agentPolicyDao: asClass(AgentPolicyDao).singleton(),
     friendshipDao: asClass(FriendshipDao).singleton(),
     inviteCodeDao: asClass(InviteCodeDao).singleton(),
@@ -402,6 +409,8 @@ export function createAppContainer(db: Database): AppContainer {
     friendshipService: asClass(FriendshipService).singleton(),
     mediaService: asClass(MediaService).singleton(),
     agentService: asClass(AgentService).singleton(),
+    appIntegrationService: asClass(AppIntegrationService).singleton(),
+    appIntegrationEventBus: asClass(AppIntegrationEventBus).singleton(),
     agentPolicyService: asClass(AgentPolicyService).singleton(),
     shopService: asClass(ShopService).singleton(),
     shopScopeService: asClass(ShopScopeService).singleton(),

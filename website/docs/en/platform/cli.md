@@ -30,7 +30,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `servers` / `channels` / `threads` / `dms` — communication features
 - `friends` / `invites` / `notifications` — social features
 - `agents` / `marketplace` — AI agent ecosystem
-- `workspace` / `apps` / `shop` — platform workflows
+- `workspace` / `apps` / `app` / `shop` — platform workflows
 - `media` — file upload and download
 - `search` — search messages
 - `oauth` — OAuth app management (create, list, reset-secret, consents, revoke)
@@ -99,6 +99,27 @@ shadowob oauth revoke <app-id>
 ```
 
 See [Platform Apps](/platform/platform-apps) for a complete guide to building OAuth apps.
+
+## Server App Commands
+
+```bash
+# List Apps installed in a server
+shadowob app list --server <server-id-or-slug> --json
+
+# Review a manifest before install
+shadowob app preview --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
+
+# Install and grant Buddy access
+shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
+shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-agent-id> --permissions demo.tickets:write --json
+
+# Discover Skills and call commands
+shadowob app discover --server <server-id-or-slug> --json
+shadowob app skills demo-desk --server <server-id-or-slug>
+shadowob app call demo-desk tickets.create --server <server-id-or-slug> --json-input '{"title":"Example"}' --json
+```
+
+Server App command calls bind Shadow OAuth identity and Buddy grants through the CLI. Do not call Server App command routes with curl from a Buddy.
 
 ## API Token Commands
 

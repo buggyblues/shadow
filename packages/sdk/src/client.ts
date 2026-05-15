@@ -68,6 +68,13 @@ import type {
   ShadowScopedUnread,
   ShadowServer,
   ShadowServerAccess,
+  ShadowServerAppCatalogEntry,
+  ShadowServerAppDiscovery,
+  ShadowServerAppIntegration,
+  ShadowServerAppLaunchContext,
+  ShadowServerAppManifest,
+  ShadowServerAppSkillDocument,
+  ShadowServerAppTokenIntrospection,
   ShadowServerJoinRequestResult,
   ShadowServerJoinRequestStatus,
   ShadowSettlementLine,
@@ -155,12 +162,13 @@ export class ShadowClient {
     const url = `${this.baseUrl}${path}`
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 60_000)
+    const isFormData = init?.body instanceof FormData
     try {
       const res = await fetch(url, {
         ...init,
         signal: init?.signal ?? controller.signal,
         headers: {
-          'Content-Type': 'application/json',
+          ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
           Authorization: `Bearer ${this.token}`,
           ...init?.headers,
         },
@@ -586,6 +594,179 @@ export class ShadowClient {
 
   async getServerAccess(serverIdOrSlug: string): Promise<ShadowServerAccess> {
     return this.request<ShadowServerAccess>(`/api/servers/${serverIdOrSlug}/access`)
+  }
+
+  // ── Server App Integrations ───────────────────────────────────────────
+
+  async listServerApps(serverIdOrSlug: string): Promise<ShadowServerAppIntegration[]> {
+    return this.request(`/api/servers/${serverIdOrSlug}/apps`)
+  }
+
+  async listServerAppCatalog(serverIdOrSlug: string): Promise<ShadowServerAppCatalogEntry[]> {
+    return this.request(`/api/servers/${serverIdOrSlug}/apps/catalog`)
+  }
+
+  async discoverServerApp(
+    serverIdOrSlug: string,
+    data: {
+      manifestUrl?: string
+      manifest?: ShadowServerAppManifest
+    },
+  ): Promise<ShadowServerAppDiscovery> {
+    return this.request(`/api/servers/${serverIdOrSlug}/apps/discover`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async installServerApp(
+    serverIdOrSlug: string,
+    data: {
+      manifestUrl?: string
+      manifest?: ShadowServerAppManifest
+      sharedSecret?: string
+    },
+  ): Promise<ShadowServerAppIntegration & { sharedSecret?: string | null }> {
+    return this.request(`/api/servers/${serverIdOrSlug}/apps`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async installServerAppFromCatalog(
+    serverIdOrSlug: string,
+    catalogEntryId: string,
+    data: {
+      sharedSecret?: string
+    } = {},
+  ): Promise<ShadowServerAppIntegration & { sharedSecret?: string | null }> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/apps/catalog/${encodeURIComponent(catalogEntryId)}/install`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async getServerApp(
+    serverIdOrSlug: string,
+    appKey: string,
+  ): Promise<ShadowServerAppIntegration & { grants?: Record<string, unknown>[] }> {
+    return this.request(`/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}`)
+  }
+
+  async deleteServerApp(serverIdOrSlug: string, appKey: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async grantServerAppToBuddy(
+    serverIdOrSlug: string,
+    appKey: string,
+    data: {
+      buddyAgentId: string
+      permissions: string[]
+      resourceRules?: Record<string, unknown>
+      approvalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+      expiresAt?: string
+    },
+  ): Promise<Record<string, unknown>> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/grants`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async getServerAppSkills(
+    serverIdOrSlug: string,
+    appKey: string,
+  ): Promise<ShadowServerAppSkillDocument> {
+    return this.request(`/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/skills`)
+  }
+
+  async createServerAppLaunch(
+    serverIdOrSlug: string,
+    appKey: string,
+  ): Promise<ShadowServerAppLaunchContext> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/launch`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async introspectServerAppToken(
+    serverIdOrSlug: string,
+    appKey: string,
+    token: string,
+  ): Promise<ShadowServerAppTokenIntrospection> {
+    const url = `${this.baseUrl}/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(
+      appKey,
+    )}/oauth/introspect`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      const message = sanitizeErrorBody(body)
+      throw new Error(`Shadow API POST /oauth/introspect failed (${res.status}): ${message}`)
+    }
+    return (await res.json()) as ShadowServerAppTokenIntrospection
+  }
+
+  async callServerAppCommand(
+    serverIdOrSlug: string,
+    appKey: string,
+    commandName: string,
+    data?: { input?: unknown; channelId?: string },
+  ): Promise<unknown> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/commands/${encodeURIComponent(
+        commandName,
+      )}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data ?? {}),
+      },
+    )
+  }
+
+  async callServerAppCommandMultipart(
+    serverIdOrSlug: string,
+    appKey: string,
+    commandName: string,
+    data: {
+      input?: unknown
+      channelId?: string
+      file: Blob
+      filename: string
+      field?: string
+    },
+  ): Promise<unknown> {
+    const form = new FormData()
+    form.set('input', JSON.stringify(data.input ?? {}))
+    if (data.channelId) form.set('channelId', data.channelId)
+    form.set(data.field ?? 'file', data.file, data.filename)
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/commands/${encodeURIComponent(
+        commandName,
+      )}`,
+      {
+        method: 'POST',
+        body: form,
+      },
+    )
   }
 
   async updateServer(

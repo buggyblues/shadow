@@ -8,6 +8,7 @@ import { assignMentionRanges, canonicalMentionToken } from '@shadowob/shared'
 import { Button, cn, InputValley } from '@shadowob/ui'
 import { type InfiniteData, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AppWindow,
   AtSign,
   Bot,
   Command as CommandIcon,
@@ -121,6 +122,10 @@ function mentionFromSuggestion(
     serverName: suggestion.serverName,
     channelId: suggestion.channelId,
     channelName: suggestion.channelName,
+    appId: suggestion.appId,
+    appKey: suggestion.appKey,
+    appName: suggestion.appName,
+    iconUrl: suggestion.iconUrl,
     userId: suggestion.userId,
     username: suggestion.username,
     displayName: suggestion.displayName,
@@ -1006,6 +1011,14 @@ export function MessageInput({
                   displayName={suggestion.displayName ?? suggestion.username ?? suggestion.label}
                   size="sm"
                 />
+              ) : suggestion.kind === 'app' ? (
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                  {suggestion.iconUrl ? (
+                    <img src={suggestion.iconUrl} alt="" className="h-5 w-5 rounded object-cover" />
+                  ) : (
+                    <AppWindow size={16} />
+                  )}
+                </span>
               ) : (
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
                   {suggestion.kind === 'channel' ? (

@@ -228,7 +228,23 @@ shadowob shop wallet balance --json
 ## Apps
 
 ```bash
-# List apps
+# Server App integrations
+shadowob app list --server <server-id-or-slug> --json
+shadowob app preview --server <server-id-or-slug> --manifest-url <manifest-url> --json
+shadowob app discover --server <server-id-or-slug> --json
+shadowob app inspect <app-key> --server <server-id-or-slug> --json
+shadowob app skills <app-key> --server <server-id-or-slug>
+shadowob app call <app-key> <command> --server <server-id-or-slug> --json-input '<raw-command-input-json>' --json
+```
+
+For server App commands, use the `shadowob app` CLI path only. Do not use curl, fetch, raw HTTP
+routes, or the JavaScript SDK to call server App commands. Pass the command input object directly
+to `--json-input`, for example `{"title":"Example","priority":"high"}`; the CLI wraps the HTTP
+request for you and binds Shadow OAuth identity, server membership, App grants, and command policy.
+When a channel message mentions a server App, use the mentioned app key/server id directly.
+
+```bash
+# Legacy workspace apps
 shadowob apps list <server-id> --json
 
 # Get app

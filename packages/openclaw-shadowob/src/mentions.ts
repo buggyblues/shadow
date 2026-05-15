@@ -28,6 +28,10 @@ export function mentionTargetsBot(params: {
   })
 }
 
+export function mentionsTargetServerApp(mentions: ShadowMessageMention[]): boolean {
+  return mentions.some((mention) => mention.kind === 'app' && (mention.appKey || mention.targetId))
+}
+
 export function formatShadowMentionsForAgent(mentions: ShadowMessageMention[]): string {
   if (mentions.length === 0) return ''
 
@@ -39,6 +43,9 @@ export function formatShadowMentionsForAgent(mentions: ShadowMessageMention[]): 
     if (mention.kind === 'server') {
       return `- ${label} [server] serverId=${mention.serverId ?? mention.targetId} slug=${mention.serverSlug ?? ''}`
     }
+    if (mention.kind === 'app') {
+      return `- ${label} [server-app] appKey=${mention.appKey ?? mention.targetId} appId=${mention.appId ?? mention.targetId} serverId=${mention.serverId ?? ''} server=${mention.serverName ?? ''}`
+    }
     if (mention.kind === 'user' || mention.kind === 'buddy') {
       return `- ${label} [${mention.kind}] userId=${mention.userId ?? mention.targetId} username=${mention.username ?? ''}`
     }
@@ -49,7 +56,12 @@ export function formatShadowMentionsForAgent(mentions: ShadowMessageMention[]): 
     'Shadow mentions:',
     ...lines,
     'To mention a Shadow entity in a reply, write its visible handle (for example @username or #channel); Shadow will resolve it before delivery.',
-  ].join('\n')
+    mentionsTargetServerApp(mentions)
+      ? 'If a server app is mentioned, operate it through the Shadow CLI only: first run `shadowob app discover --server "<serverId-or-slug>" --json`, then run `shadowob app call "<appKey>" <command> --server "<serverId-or-slug>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for server-app commands. Use the mentioned appKey/serverId; do not ask the user to describe the CLI path.'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 export function mentionContextFields(mentions: ShadowMessageMention[]) {
@@ -81,6 +93,16 @@ export function mentionContextFields(mentions: ShadowMessageMention[]) {
       .filter((mention) => mention.kind === 'server')
       .map((mention) => ({
         serverId: mention.serverId ?? mention.targetId,
+        serverSlug: mention.serverSlug,
+        serverName: mention.serverName,
+      })),
+    MentionedApps: mentions
+      .filter((mention) => mention.kind === 'app')
+      .map((mention) => ({
+        appId: mention.appId ?? mention.targetId,
+        appKey: mention.appKey,
+        appName: mention.appName,
+        serverId: mention.serverId,
         serverSlug: mention.serverSlug,
         serverName: mention.serverName,
       })),

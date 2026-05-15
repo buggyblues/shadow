@@ -30,7 +30,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `servers` / `channels` / `threads` / `dms`：沟通能力
 - `friends` / `invites` / `notifications`：社交功能
 - `agents` / `marketplace`：AI 代理生态
-- `workspace` / `apps` / `shop`：平台业务能力
+- `workspace` / `apps` / `app` / `shop`：平台业务能力
 - `media`：文件上传和下载
 - `search`：消息搜索
 - `oauth`：OAuth 应用管理（创建、列表、重置密钥、授权管理、撤销）
@@ -99,3 +99,24 @@ shadowob oauth revoke <app-id>
 ```
 
 详见 [平台应用](/zh/platform/platform-apps) 了解构建 OAuth 应用的完整指南。
+
+## Server App 命令
+
+```bash
+# 列出服务器已安装 App
+shadowob app list --server <server-id-or-slug> --json
+
+# 安装前审核 manifest
+shadowob app preview --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
+
+# 安装并授予 Buddy 权限
+shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
+shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-agent-id> --permissions demo.tickets:write --json
+
+# 发现 Skills 并调用命令
+shadowob app discover --server <server-id-or-slug> --json
+shadowob app skills demo-desk --server <server-id-or-slug>
+shadowob app call demo-desk tickets.create --server <server-id-or-slug> --json-input '{"title":"Example"}' --json
+```
+
+Server App 命令调用会通过 CLI 绑定 Shadow OAuth 身份和 Buddy 授权。Buddy 不应该用 curl 直接调用 Server App 命令路由。

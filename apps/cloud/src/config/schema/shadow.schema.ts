@@ -170,6 +170,30 @@ export interface ShadowCommerceConfig {
   paidFiles?: ShadowCommercePaidFile[]
 }
 
+export interface ShadowServerAppGrant {
+  /** References the buddy id in the `buddies` array. */
+  buddyId: string
+  /** App permissions to grant. Use ["*"] to grant every command declared by the manifest. */
+  permissions?: string[]
+  approvalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+  resourceRules?: Record<string, unknown>
+}
+
+export interface ShadowServerApp {
+  /** Unique id for this Server App integration in the template. */
+  id: string
+  /** Server config id that should own the app. */
+  serverId: string
+  /** Manifest URL reachable by the Shadow API server during provisioning. */
+  manifestUrl?: string
+  /** Inline manifest, useful for fully self-contained templates. */
+  manifest?: Record<string, unknown>
+  /** Optional legacy HMAC secret. New server Apps should use oauth2-bearer auth. */
+  sharedSecret?: string
+  /** Buddy grants to apply after installation. */
+  grants?: ShadowServerAppGrant[]
+}
+
 export interface ShadowobPluginConfig {
   /** Shadow servers to provision */
   servers?: ShadowServer[]
@@ -184,4 +208,6 @@ export interface ShadowobPluginConfig {
   listings?: ShadowListing[]
   /** Commerce seed data for Offer-driven paid-file MVPs. */
   commerce?: ShadowCommerceConfig
+  /** Server App integrations to install and grant to buddies. */
+  serverApps?: ShadowServerApp[]
 }

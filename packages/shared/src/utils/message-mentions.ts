@@ -29,6 +29,7 @@ export function canonicalMentionToken(
 ): string {
   if (mention.kind === 'channel') return `<#${mention.channelId ?? mention.targetId}>`
   if (mention.kind === 'server') return `<@server:${mention.serverId ?? mention.targetId}>`
+  if (mention.kind === 'app') return `<@app:${mention.appId ?? mention.targetId}>`
   if (mention.kind === 'here' || mention.kind === 'everyone') {
     const scope = mention.serverId ?? mention.targetId
     return scope ? `<!${mention.kind}:${scope}>` : `<!${mention.kind}>`
@@ -40,10 +41,14 @@ export function parseCanonicalMentionToken(
   token: string,
 ):
   | { kind: 'user'; targetId: string }
+  | { kind: 'app'; targetId: string }
   | { kind: 'channel'; targetId: string }
   | { kind: 'server'; targetId: string }
   | { kind: 'here' | 'everyone'; targetId?: string }
   | null {
+  const app = token.match(/^<@app:([^>]+)>$/u)
+  if (app?.[1]) return { kind: 'app', targetId: app[1] }
+
   const user = token.match(/^<@([^>:]+)>$/u)
   if (user?.[1]) return { kind: 'user', targetId: user[1] }
 

@@ -63,25 +63,30 @@ WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json .npmrc ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/sdk/package.json packages/sdk/package.json
+COPY packages/cli/package.json packages/cli/package.json
 COPY packages/openclaw-shadowob/package.json packages/openclaw-shadowob/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
     pnpm config set store-dir /pnpm/store && \
-    pnpm install --frozen-lockfile --ignore-scripts --filter @shadowob/openclaw-shadowob...
+    pnpm install --frozen-lockfile --ignore-scripts \
+      --filter @shadowob/openclaw-shadowob... \
+      --filter @shadowob/cli...
 
 # Build local packages in-container. This makes the image reproducible in CI and
 # keeps it independent from whatever dist/ happens to exist on the host.
 COPY packages/shared packages/shared
 COPY packages/sdk packages/sdk
+COPY packages/cli packages/cli
 COPY packages/openclaw-shadowob packages/openclaw-shadowob
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
     pnpm --filter @shadowob/shared build && \
     pnpm --filter @shadowob/sdk build && \
+    pnpm --filter @shadowob/cli build && \
     pnpm --filter @shadowob/openclaw-shadowob build
 
 # Overlay the freshly built local Shadow packages into the runtime dependency
 # tree, preventing the bundled extension from resolving older published code.
 WORKDIR /build
-RUN for pkg in shared sdk; do \
+RUN for pkg in shared sdk cli; do \
       rm -rf "node_modules/@shadowob/${pkg}" && \
       mkdir -p "node_modules/@shadowob/${pkg}" && \
       cp -r "/workspace/packages/${pkg}/package.json" "/workspace/packages/${pkg}/dist" "node_modules/@shadowob/${pkg}/"; \

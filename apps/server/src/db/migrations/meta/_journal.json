@@ -491,6 +491,20 @@
       "when": 1779541200000,
       "tag": "0069_rebuild_cloud_deployment_namespace_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1779627600000,
+      "tag": "0070_add_server_app_integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1779714000000,
+      "tag": "0071_add_server_app_catalog",
+      "breakpoints": true
     }
   ]
 }

@@ -404,6 +404,130 @@ class ShadowClient:
     def get_server_access(self, server_id_or_slug: str) -> dict[str, Any]:
         return self._get(f"/api/servers/{server_id_or_slug}/access")
 
+    def list_server_apps(self, server_id_or_slug: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id_or_slug}/apps")
+
+    def list_server_app_catalog(self, server_id_or_slug: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id_or_slug}/apps/catalog")
+
+    def discover_server_app(
+        self,
+        server_id_or_slug: str,
+        *,
+        manifest_url: str | None = None,
+        manifest: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if manifest_url:
+            payload["manifestUrl"] = manifest_url
+        if manifest is not None:
+            payload["manifest"] = manifest
+        return self._post(f"/api/servers/{server_id_or_slug}/apps/discover", json=payload)
+
+    def install_server_app(
+        self,
+        server_id_or_slug: str,
+        *,
+        manifest_url: str | None = None,
+        manifest: dict[str, Any] | None = None,
+        shared_secret: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if manifest_url:
+            payload["manifestUrl"] = manifest_url
+        if manifest is not None:
+            payload["manifest"] = manifest
+        if shared_secret:
+            payload["sharedSecret"] = shared_secret
+        return self._post(f"/api/servers/{server_id_or_slug}/apps", json=payload)
+
+    def install_server_app_from_catalog(
+        self,
+        server_id_or_slug: str,
+        catalog_entry_id: str,
+        *,
+        shared_secret: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if shared_secret:
+            payload["sharedSecret"] = shared_secret
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/apps/catalog/{catalog_entry_id}/install",
+            json=payload,
+        )
+
+    def get_server_app(self, server_id_or_slug: str, app_key: str) -> dict[str, Any]:
+        return self._get(f"/api/servers/{server_id_or_slug}/apps/{app_key}")
+
+    def delete_server_app(self, server_id_or_slug: str, app_key: str) -> dict[str, Any]:
+        return self._delete(f"/api/servers/{server_id_or_slug}/apps/{app_key}")
+
+    def grant_server_app_to_buddy(
+        self,
+        server_id_or_slug: str,
+        app_key: str,
+        *,
+        buddy_agent_id: str,
+        permissions: list[str],
+        resource_rules: dict[str, Any] | None = None,
+        approval_mode: str = "none",
+        expires_at: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "buddyAgentId": buddy_agent_id,
+            "permissions": permissions,
+            "approvalMode": approval_mode,
+        }
+        if resource_rules is not None:
+            payload["resourceRules"] = resource_rules
+        if expires_at:
+            payload["expiresAt"] = expires_at
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/apps/{app_key}/grants",
+            json=payload,
+        )
+
+    def get_server_app_skills(
+        self, server_id_or_slug: str, app_key: str
+    ) -> dict[str, Any]:
+        return self._get(f"/api/servers/{server_id_or_slug}/apps/{app_key}/skills")
+
+    def create_server_app_launch(
+        self, server_id_or_slug: str, app_key: str
+    ) -> dict[str, Any]:
+        return self._post(f"/api/servers/{server_id_or_slug}/apps/{app_key}/launch")
+
+    def introspect_server_app_token(
+        self, server_id_or_slug: str, app_key: str, token: str
+    ) -> dict[str, Any]:
+        response = self._http.post(
+            f"/api/servers/{server_id_or_slug}/apps/{app_key}/oauth/introspect",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json={"token": token},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def call_server_app_command(
+        self,
+        server_id_or_slug: str,
+        app_key: str,
+        command_name: str,
+        *,
+        input: Any | None = None,
+        channel_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"input": input if input is not None else {}}
+        if channel_id:
+            payload["channelId"] = channel_id
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/apps/{app_key}/commands/{command_name}",
+            json=payload,
+        )
+
     def update_server(self, server_id: str, **kwargs: Any) -> dict[str, Any]:
         return self._patch(f"/api/servers/{server_id}", json=kwargs)
 

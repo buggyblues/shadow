@@ -284,7 +284,7 @@ export class MessageService {
             id: user.id,
             username: user.username,
             displayName: user.displayName,
-            avatarName: user.avatarUrl,
+            avatarUrl: user.avatarUrl,
             status: user.status,
             isBot: user.isBot,
           }

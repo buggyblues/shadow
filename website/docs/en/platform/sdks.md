@@ -25,6 +25,22 @@ const servers = await client.listServers()
 const msg = await client.sendMessage('channel-id', 'Hello!')
 ```
 
+### Server App Helpers
+
+```ts
+const apps = await client.listServerApps('server-id-or-slug')
+const skills = await client.getServerAppSkills('server-id-or-slug', 'demo-desk')
+const result = await client.callServerAppCommand('server-id-or-slug', 'demo-desk', 'tickets.create', {
+  input: { title: 'Example' },
+})
+```
+
+App backends can validate command Bearer tokens with:
+
+```ts
+const identity = await client.introspectServerAppToken('server-id-or-slug', 'demo-desk', token)
+```
+
 ### Real-time Socket
 
 ```ts
@@ -90,6 +106,20 @@ client = ShadowClient("https://shadowob.com", "your-jwt-token")
 me = client.get_me()
 servers = client.list_servers()
 msg = client.send_message("channel-id", "Hello from Python!")
+```
+
+### Server App Helpers
+
+```python
+apps = client.list_server_apps("server-id-or-slug")
+skills = client.get_server_app_skills("server-id-or-slug", "demo-desk")
+result = client.call_server_app_command(
+    "server-id-or-slug",
+    "demo-desk",
+    "tickets.create",
+    input={"title": "Example"},
+)
+identity = client.introspect_server_app_token("server-id-or-slug", "demo-desk", token)
 ```
 
 ### Real-time Socket

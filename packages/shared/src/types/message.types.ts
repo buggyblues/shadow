@@ -21,7 +21,14 @@ export interface Message {
   metadata?: MessageMetadata | null
 }
 
-export type MessageMentionKind = 'user' | 'buddy' | 'channel' | 'server' | 'here' | 'everyone'
+export type MessageMentionKind =
+  | 'user'
+  | 'buddy'
+  | 'app'
+  | 'channel'
+  | 'server'
+  | 'here'
+  | 'everyone'
 
 export interface MessageMentionRange {
   start: number
@@ -45,6 +52,10 @@ export interface MessageMention {
   serverName?: string | null
   channelId?: string
   channelName?: string | null
+  appId?: string
+  appKey?: string
+  appName?: string | null
+  iconUrl?: string | null
   userId?: string
   username?: string | null
   displayName?: string | null
@@ -150,6 +161,10 @@ export interface MentionSuggestion {
   serverName?: string | null
   channelId?: string
   channelName?: string | null
+  appId?: string
+  appKey?: string
+  appName?: string | null
+  iconUrl?: string | null
   userId?: string
   username?: string | null
   displayName?: string | null

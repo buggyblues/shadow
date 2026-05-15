@@ -128,11 +128,11 @@ function FormTitle({
   if (modal) {
     return (
       <>
-        <DialogTitle className="text-[26px] normal-case leading-tight tracking-normal sm:text-[34px]">
+        <DialogTitle className="text-[24px] normal-case leading-tight tracking-normal sm:text-[28px]">
           {title}
         </DialogTitle>
         {description ? (
-          <DialogDescription className="mt-3 text-[15px] not-italic leading-6">
+          <DialogDescription className="mt-2 text-[14px] not-italic leading-6">
             {description}
           </DialogDescription>
         ) : null}
@@ -142,11 +142,11 @@ function FormTitle({
 
   return (
     <>
-      <h1 className="text-[32px] font-black leading-tight tracking-normal text-text-primary sm:text-[36px]">
+      <h1 className="text-[24px] font-black leading-tight tracking-normal text-text-primary sm:text-[28px]">
         {title}
       </h1>
       {description ? (
-        <p className="mt-5 text-[15px] font-bold leading-7 text-text-muted">{description}</p>
+        <p className="mt-2 text-[14px] font-bold leading-6 text-text-muted">{description}</p>
       ) : null}
     </>
   )
@@ -357,7 +357,7 @@ export function LoginView({
       <div
         className={cn(
           'flex max-w-full items-center gap-2 py-2 font-black tracking-normal text-text-primary',
-          isModal ? 'mb-4 text-[20px] sm:mb-6 sm:py-3 sm:text-[22px]' : 'mb-10 text-[24px]',
+          isModal ? 'mb-3 text-[18px] sm:mb-5 sm:py-2 sm:text-[20px]' : 'mb-5 text-[20px]',
         )}
       >
         <img src={logoSrc} alt={text.brand} className="h-7 w-7 rounded-full sm:h-8 sm:w-8" />
@@ -369,7 +369,7 @@ export function LoginView({
 
       {step === 'choose' ? (
         <>
-          <div className={cn('text-center', isModal ? 'mb-4 sm:mb-5' : 'mb-8')}>
+          <div className={cn('text-center', isModal ? 'mb-4 sm:mb-5' : 'mb-5')}>
             <FormTitle
               modal={isModal}
               title={text.welcomeTitle}
@@ -402,7 +402,7 @@ export function LoginView({
             </Button>
           </div>
 
-          <Divider label={text.or} className={cn('w-full', isModal ? 'my-3 sm:my-4' : '')} />
+          <Divider label={text.or} className="my-3 w-full sm:my-4" />
 
           <form
             className={cn('w-full', isModal ? 'space-y-3' : 'space-y-4')}
@@ -427,7 +427,7 @@ export function LoginView({
             />
             <Button
               type="submit"
-              size={isModal ? 'lg' : 'xl'}
+              size="lg"
               className="w-full"
               loading={sending}
               disabled={!trimmedEmail || sending}
@@ -448,8 +448,8 @@ export function LoginView({
 
           <p
             className={cn(
-              'max-w-[430px] text-center text-[12px] font-bold leading-5 text-text-muted',
-              isModal ? 'mt-4 sm:mt-5' : 'mt-7',
+              'max-w-[390px] text-center text-[11px] font-semibold leading-4 text-text-muted sm:text-[12px] sm:leading-5',
+              isModal ? 'mt-3 sm:mt-4' : 'mt-4',
             )}
           >
             {text.termsPrefix}{' '}
@@ -464,7 +464,7 @@ export function LoginView({
         </>
       ) : step === 'code' ? (
         <>
-          <div className={cn('text-center', isModal ? 'mb-5 sm:mb-6' : 'mb-9')}>
+          <div className={cn('text-center', isModal ? 'mb-5 sm:mb-6' : 'mb-6')}>
             <FormTitle
               modal={isModal}
               title={text.checkEmailTitle}
@@ -508,7 +508,7 @@ export function LoginView({
             ))}
           </div>
 
-          <div className={cn('min-h-8 text-center', isModal ? 'mt-5' : 'mt-8')}>
+          <div className={cn('min-h-8 text-center', isModal ? 'mt-5' : 'mt-6')}>
             {verifying ? (
               <div className="inline-flex items-center gap-2 text-[15px] font-black text-text-muted">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -529,7 +529,7 @@ export function LoginView({
           <div
             className={cn(
               'inline-flex items-center gap-2 text-[13px] font-bold text-text-muted',
-              isModal ? 'mt-5' : 'mt-6',
+              isModal ? 'mt-5' : 'mt-5',
             )}
           >
             <Mail size={15} aria-hidden="true" />
@@ -548,7 +548,7 @@ export function LoginView({
         </>
       ) : (
         <>
-          <div className={cn('text-center', isModal ? 'mb-5 sm:mb-6' : 'mb-9')}>
+          <div className={cn('text-center', isModal ? 'mb-5 sm:mb-6' : 'mb-6')}>
             <FormTitle
               modal={isModal}
               title={text.passwordTab}
@@ -591,7 +591,7 @@ export function LoginView({
             />
             <Button
               type="submit"
-              size={isModal ? 'lg' : 'xl'}
+              size="lg"
               className="w-full"
               loading={verifying}
               disabled={!trimmedEmail || !password || verifying}
@@ -620,7 +620,7 @@ export function LoginView({
         <DialogContent
           hideCloseButton
           maxWidth="max-w-[560px]"
-          className="max-h-[calc(80dvh+80px)] w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-[28px] border-white/70 px-4 py-5 sm:max-h-[calc(78dvh+80px)] sm:w-full sm:rounded-[40px] sm:px-9 sm:py-7"
+          className="max-h-[calc(100dvh-24px)] w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-[28px] border-white/70 px-4 py-5 sm:w-full sm:rounded-[34px] sm:px-8 sm:py-6"
         >
           {step !== 'choose' ? (
             <Button
@@ -656,8 +656,8 @@ export function LoginView({
     <Card
       variant="glass"
       className={cn(
-        'relative w-full overflow-hidden px-5 py-8 text-text-primary sm:px-10 sm:py-10',
-        'rounded-[40px] border-white/70 dark:border-white/10',
+        'relative w-full overflow-hidden px-4 py-6 text-text-primary sm:px-8 sm:py-7',
+        'rounded-[34px] border-white/70 dark:border-white/10',
         'shadow-[0_28px_90px_rgba(0,0,0,0.28)]',
       )}
     >

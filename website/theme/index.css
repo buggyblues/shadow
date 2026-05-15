@@ -14,6 +14,7 @@
 @source "../theme/**/*.{css,ts,tsx,js,jsx}";
 @source "../plugins/**/*.{ts,tsx,js,jsx,mjs,cjs}";
 @source "../../packages/ui/src/**/*.{ts,tsx,js,jsx}";
+@source "../../packages/views/src/**/*.{ts,tsx,js,jsx}";
 
 /* Safelist dynamic classes composed at runtime (e.g. `bg-gradient-to-r ${tier.color}`) */
 @source inline("from-amber-400 to-orange-500 from-blue-400 to-cyan-500 from-gray-400 to-gray-500");
