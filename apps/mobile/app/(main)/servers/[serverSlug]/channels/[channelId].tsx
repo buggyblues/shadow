@@ -676,6 +676,12 @@ export default function ChannelViewScreen() {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false })
   }, [channelId])
 
+  // Auto-focus input when channel changes
+  useEffect(() => {
+    const timer = setTimeout(() => inputRef.current?.focus(), 100)
+    return () => clearTimeout(timer)
+  }, [channelId])
+
   // ---------- WebSocket: join/leave ----------
   const joinChannelWithAck = useCallback((chId: string) => {
     const socket = getSocket()

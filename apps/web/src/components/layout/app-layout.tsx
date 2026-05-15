@@ -1,4 +1,4 @@
-import { Button, cn } from '@shadowob/ui'
+import { Button, cn, GlassPanel } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Outlet, useLocation } from '@tanstack/react-router'
 import { Menu } from 'lucide-react'
@@ -113,11 +113,11 @@ export function AppLayout() {
       {/* ── Main content area ── */}
       <div className="relative z-10 flex flex-1 flex-col min-w-0 overflow-hidden">
         {isLoadingMe && !me ? (
-          <div className="desktop-loading-state flex-1 bg-bg-deep/60 backdrop-blur-xl">
+          <GlassPanel className="flex-1 flex items-center justify-center">
             <div className="inline-flex items-center gap-2 text-sm text-white/50 animate-pulse">
               {t('common.loading')}
             </div>
-          </div>
+          </GlassPanel>
         ) : (
           <Outlet />
         )}

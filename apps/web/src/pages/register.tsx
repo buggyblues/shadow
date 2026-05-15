@@ -20,7 +20,7 @@ import {
   webRedirectFromRouterPath,
 } from '../lib/auth-redirect'
 import { applyAuthenticatedSession } from '../lib/auth-session'
-import { generateRandomCatConfig, renderCatSvg } from '../lib/avatar-generator'
+import { generateRandomCatConfig, renderCatSvg } from '@shadowob/shared'
 
 export function RegisterPage() {
   const { t } = useTranslation()

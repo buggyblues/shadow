@@ -655,7 +655,17 @@ export function DiyCloudPage() {
       if (!receivedDraft) throw new Error(t('diyCloud.errors.generateFailed'))
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        if (err instanceof ApiError && err.code === 'INVITE_REQUIRED') {
+          setGate({
+            kind: 'membership',
+            title: t('diyCloud.gates.membershipTitle'),
+            body: t('diyCloud.gates.membershipBody'),
+            primaryHref: '/app/settings/invite',
+            primaryLabel: t('diyCloud.gates.goInvite'),
+          })
+        } else {
+          setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        }
         setActiveStep(null)
       }
     } finally {
@@ -694,7 +704,17 @@ export function DiyCloudPage() {
       if (!receivedDraft) throw new Error(t('diyCloud.errors.generateFailed'))
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        if (err instanceof ApiError && err.code === 'INVITE_REQUIRED') {
+          setGate({
+            kind: 'membership',
+            title: t('diyCloud.gates.membershipTitle'),
+            body: t('diyCloud.gates.membershipBody'),
+            primaryHref: '/app/settings/invite',
+            primaryLabel: t('diyCloud.gates.goInvite'),
+          })
+        } else {
+          setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        }
         setActiveStep(null)
       }
     } finally {

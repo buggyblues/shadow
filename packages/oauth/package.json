@@ -2,6 +2,7 @@
   "name": "@shadowob/oauth",
   "version": "1.1.3",
   "description": "Shadow OAuth SDK — typed client for integrating Shadow OAuth login into third-party applications",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

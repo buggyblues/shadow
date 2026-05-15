@@ -81,17 +81,17 @@ export function ChannelView() {
 
   if (isAccessLoading || (!access && !isAccessError)) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-bg-primary/70 text-text-muted backdrop-blur-xl">
+      <GlassPanel className="flex flex-1 items-center justify-center text-text-muted">
         <Loader2 size={18} className="animate-spin opacity-60" />
-      </div>
+      </GlassPanel>
     )
   }
 
   if (isAccessError || !access) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-bg-primary/70 px-6 text-center text-sm font-bold text-text-muted backdrop-blur-xl">
+      <GlassPanel className="flex flex-1 items-center justify-center px-6 text-center text-sm font-bold text-text-muted">
         {t('channel.accessUnavailable', '无法查看此频道')}
-      </div>
+      </GlassPanel>
     )
   }
 

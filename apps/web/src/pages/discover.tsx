@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
-import { getCatAvatar } from '../lib/pixel-cats'
+import { getCatAvatar } from '@shadowob/shared'
 
 type FeedItemType = 'server' | 'channel' | 'rental'
 type FilterType = 'all' | 'servers' | 'channels' | 'rentals'

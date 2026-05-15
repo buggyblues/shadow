@@ -28,7 +28,10 @@ function DarkModeToggle() {
   const [dark, setDark] = useState(false)
 
   useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark')
+    const stored = localStorage.getItem('shadow-theme') || localStorage.getItem('rspress-theme-appearance')
+    const isDark = stored === 'system'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : stored !== 'light'
     setDark(isDark)
   }, [])
 
@@ -37,7 +40,7 @@ function DarkModeToggle() {
     setDark(next)
     document.documentElement.classList.toggle('dark', next)
     document.documentElement.style.colorScheme = next ? 'dark' : 'light'
-    localStorage.setItem('rspress-theme-appearance', next ? 'dark' : 'light')
+    localStorage.setItem('shadow-theme', next ? 'dark' : 'light')
   }
 
   return (
@@ -192,7 +195,14 @@ function FooterLanguageSwitcher({ lang }: { lang: 'zh' | 'en' }) {
       </button>
       <div className="shadow-footer-language-menu">
         <span className="shadow-footer-language-item is-current">{currentLabel}</span>
-        <a href={otherUrl} className="shadow-footer-language-item">
+        <a
+          href={otherUrl}
+          className="shadow-footer-language-item"
+          onClick={() => {
+            const nextLang = lang === 'zh' ? 'en' : 'zh-CN'
+            localStorage.setItem('shadow-lang', nextLang)
+          }}
+        >
           {otherLabel}
         </a>
       </div>

@@ -1,4 +1,4 @@
-import { EmptyState } from '@shadowob/ui'
+import { EmptyState, GlassPanel } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { Hash, Loader2 } from 'lucide-react'
@@ -55,19 +55,19 @@ export function ServerHomeView() {
 
   if (isLoading || firstChannel) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-bg-primary/70 text-text-muted backdrop-blur-xl">
+      <GlassPanel className="flex flex-1 items-center justify-center text-text-muted">
         <Loader2 size={18} className="animate-spin opacity-60" />
-      </div>
+      </GlassPanel>
     )
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-bg-primary/70 px-6 backdrop-blur-xl">
+    <GlassPanel className="flex flex-1 items-center justify-center px-6">
       <EmptyState
         icon={Hash}
         title={t('serverHome.noChannelsTitle')}
         description={t('serverHome.noChannelsDesc')}
       />
-    </div>
+    </GlassPanel>
   )
 }

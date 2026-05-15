@@ -186,7 +186,7 @@ export default defineConfig({
     (route) => ['meta', { name: 'twitter:title', content: routeSeo(route).title }],
     (route) => ['meta', { name: 'twitter:description', content: routeSeo(route).description }],
     ['meta', { name: 'twitter:image', content: ABSOLUTE_SITE_IMAGE }],
-    `<script>(function(){try{var s=localStorage.getItem('rspress-theme-appearance');if(s==='light'){document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light';}else{document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';if(!s)localStorage.setItem('rspress-theme-appearance','dark');}}catch(e){document.documentElement.classList.add('dark');}})();</script>`,
+    `<script>(function(){try{var s=localStorage.getItem('shadow-theme')||localStorage.getItem('rspress-theme-appearance');if(s==='light'){document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light';}else if(s==='system'){var d=window.matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.classList.toggle('dark',d);document.documentElement.style.colorScheme=d?'dark':'light';}else{document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';if(!s)localStorage.setItem('shadow-theme','dark');}}catch(e){document.documentElement.classList.add('dark');}})();</script>`,
   ] as never,
   builderConfig: {
     source: {

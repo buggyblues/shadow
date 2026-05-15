@@ -1,4 +1,4 @@
-import { getCatAvatarByUserId } from '../../lib/pixel-cats'
+import { getCatAvatarByUserId } from '@shadowob/shared'
 
 interface AvatarProps {
   userId?: string

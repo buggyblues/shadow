@@ -166,6 +166,11 @@ export function MessageInput({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Auto-focus textarea when channel changes
+  useEffect(() => {
+    textareaRef.current?.focus()
+  }, [channelId])
+
   // Draft storage for persistent input
   const { scheduleSave, clear: clearDraft } = useDraftStorage(channelId, (savedText) => {
     setContent(savedText)
@@ -1211,6 +1216,7 @@ export function MessageInput({
             channelName: channelName ?? t('chat.channelFallback'),
           })}
           rows={1}
+          autoFocus
           className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted outline-none resize-none text-[15px] leading-[24px] max-h-[50vh] min-h-[24px] py-[7px]"
         />
 

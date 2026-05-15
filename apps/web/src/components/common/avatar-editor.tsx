@@ -3,16 +3,19 @@ import { Check, Dices, Upload, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { generateRandomCatConfig, renderCatSvg } from '../../lib/avatar-generator'
+import { generateRandomCatConfig, getCatAvatarByUserId, renderCatSvg } from '@shadowob/shared'
 
 interface AvatarEditorProps {
   value?: string
+  userId?: string
   onChange: (url: string) => void
 }
 
-export function AvatarEditor({ value, onChange }: AvatarEditorProps) {
+export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
   const { t } = useTranslation()
-  const [initialSvg] = useState(() => renderCatSvg(generateRandomCatConfig()))
+  const [initialSvg] = useState(() =>
+    userId ? getCatAvatarByUserId(userId) : renderCatSvg(generateRandomCatConfig()),
+  )
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)

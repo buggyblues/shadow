@@ -13,6 +13,7 @@ import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
 import { type Actor, actorHasScope } from '../security/actor'
 import { getBuddyMode } from './buddy-policy'
+import { effectiveAgentStatus } from './agent.service'
 import type { LedgerService } from './ledger.service'
 
 /* ──────────────── Pricing Constants ──────────────── */
@@ -403,61 +404,67 @@ export class RentalService {
 
     if (!contract) throw new Error('Failed to create contract')
 
-    // Deduct deposit from tenant if configured
-    if (listing.depositAmount > 0) {
-      await this.deps.ledgerService.debit({
-        userId: tenantId,
-        amount: listing.depositAmount,
-        type: 'purchase',
-        referenceId: contract.id,
-        referenceType: 'rental_deposit',
-        note: `租赁押金 - 合同 ${contractNo}`,
-      })
-    }
+    try {
+      // Deduct deposit from tenant if configured
+      if (listing.depositAmount > 0) {
+        await this.deps.ledgerService.debit({
+          userId: tenantId,
+          amount: listing.depositAmount,
+          type: 'purchase',
+          referenceId: contract.id,
+          referenceType: 'rental_deposit',
+          note: `租赁押金 - 合同 ${contractNo}`,
+        })
+      }
 
-    // For v2 pricing, charge the first day's base daily fee immediately
-    const isV2 = (listing.pricingVersion ?? 1) >= 2
-    if (isV2 && (listing.baseDailyRate ?? 0) > 0) {
-      const firstDayCost = listing.baseDailyRate!
-      const firstDayPlatformFee = Math.ceil((firstDayCost * DEFAULT_PLATFORM_FEE_BPS) / 10000)
-      const firstDayTotal = firstDayCost + firstDayPlatformFee
+      // For v2 pricing, charge the first day's base daily fee immediately
+      const isV2 = (listing.pricingVersion ?? 1) >= 2
+      if (isV2 && (listing.baseDailyRate ?? 0) > 0) {
+        const firstDayCost = listing.baseDailyRate!
+        const firstDayPlatformFee = Math.ceil((firstDayCost * DEFAULT_PLATFORM_FEE_BPS) / 10000)
+        const firstDayTotal = firstDayCost + firstDayPlatformFee
 
-      await this.deps.ledgerService.debit({
-        userId: tenantId,
-        amount: firstDayTotal,
-        type: 'purchase',
-        referenceId: contract.id,
-        referenceType: 'rental_usage',
-        note: `Buddy 基础租赁费（首日）- 合同 ${contractNo}`,
-      })
+        await this.deps.ledgerService.debit({
+          userId: tenantId,
+          amount: firstDayTotal,
+          type: 'purchase',
+          referenceId: contract.id,
+          referenceType: 'rental_usage',
+          note: `Buddy 基础租赁费（首日）- 合同 ${contractNo}`,
+        })
 
-      const ownerPayout = firstDayCost // platform fee is NOT paid to owner
-      await this.deps.ledgerService.credit({
-        userId: listing.ownerId,
-        amount: ownerPayout,
-        type: 'settlement',
-        referenceId: contract.id,
-        referenceType: 'rental_usage',
-        note: `Buddy 出租收入（首日）- 合同 ${contractNo}`,
-      })
+        const ownerPayout = firstDayCost // platform fee is NOT paid to owner
+        await this.deps.ledgerService.credit({
+          userId: listing.ownerId,
+          amount: ownerPayout,
+          type: 'settlement',
+          referenceId: contract.id,
+          referenceType: 'rental_usage',
+          note: `Buddy 出租收入（首日）- 合同 ${contractNo}`,
+        })
 
-      await this.deps.rentalUsageDao.create({
-        contractId: contract.id,
-        startedAt: startsAt,
-        endedAt: startsAt,
-        durationMinutes: 0,
-        tokensConsumed: 0,
-        tokenCost: 0,
-        electricityCost: 0,
-        rentalCost: 0,
-        platformFee: firstDayPlatformFee,
-        totalCost: firstDayTotal,
-        baseRentalCost: firstDayCost,
-        usageMessageCount: 0,
-        messageCost: 0,
-      })
+        await this.deps.rentalUsageDao.create({
+          contractId: contract.id,
+          startedAt: startsAt,
+          endedAt: startsAt,
+          durationMinutes: 0,
+          tokensConsumed: 0,
+          tokenCost: 0,
+          electricityCost: 0,
+          rentalCost: 0,
+          platformFee: firstDayPlatformFee,
+          totalCost: firstDayTotal,
+          baseRentalCost: firstDayCost,
+          usageMessageCount: 0,
+          messageCost: 0,
+        })
 
-      await this.deps.rentalContractDao.addCost(contract.id, firstDayTotal)
+        await this.deps.rentalContractDao.addCost(contract.id, firstDayTotal)
+      }
+    } catch (err) {
+      // Clean up orphan contract if payment fails
+      await this.deps.rentalContractDao.update(contract.id, { status: 'cancelled' })
+      throw err
     }
 
     // Initialize lastBilledOnlineSeconds with agent's current totalOnlineSeconds
@@ -893,12 +900,19 @@ export class RentalService {
     hourlyRate: number
     platformFeeRate: number
     lastBilledOnlineSeconds: number
+    expiresAt: Date | null
   }) {
+    // Skip billing if contract has expired
+    if (contract.expiresAt && new Date(contract.expiresAt) <= new Date()) return 0
+
     const listing = await this.deps.agentListingDao.findById(contract.listingId)
     if (!listing?.agentId) return 0
 
     const agent = await this.deps.agentDao.findById(listing.agentId)
     if (!agent) return 0
+
+    // Only bill if agent is currently online
+    if (effectiveAgentStatus(agent) !== 'running') return 0
 
     const currentOnlineSeconds = agent.totalOnlineSeconds ?? 0
     const lastBilled = contract.lastBilledOnlineSeconds ?? 0
@@ -974,18 +988,31 @@ export class RentalService {
     messageCount: number
     lastBilledMessageCount: number
     startsAt: Date
+    expiresAt: Date | null
   }) {
     const now = new Date()
 
-    // Calculate daily base cost
+    // Skip billing if contract has expired
+    if (contract.expiresAt && new Date(contract.expiresAt) <= now) return 0
+
+    // Check agent online status before charging daily base rate
+    const listing = await this.deps.agentListingDao.findById(contract.listingId)
+    let agentOnline = false
+    if (listing?.agentId) {
+      const agent = await this.deps.agentDao.findById(listing.agentId)
+      agentOnline = agent ? effectiveAgentStatus(agent) === 'running' : false
+    }
+
+    // Calculate daily base cost — only charge for days agent was online
     const lastBilledDaily = contract.lastBilledDailyAt
       ? new Date(contract.lastBilledDailyAt)
       : new Date(contract.startsAt)
     const msSinceLastBilled = now.getTime() - lastBilledDaily.getTime()
     const daysSinceLastBilled = Math.floor(msSinceLastBilled / (24 * 3600 * 1000))
 
+    // If agent is offline, only bill for messages, skip base daily rate
     const baseRentalCost =
-      daysSinceLastBilled > 0 ? contract.baseDailyRate * daysSinceLastBilled : 0
+      daysSinceLastBilled > 0 && agentOnline ? contract.baseDailyRate * daysSinceLastBilled : 0
 
     // Calculate message cost
     const unbilledMessages = (contract.messageCount ?? 0) - (contract.lastBilledMessageCount ?? 0)
