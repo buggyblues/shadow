@@ -52,6 +52,7 @@ import { CommunityEconomySendModal } from '../community-economy/community-econom
 import { formatFileSize } from '../workspace/workspace-utils'
 import { FileCard } from './file-card'
 import { ImageContextMenu } from './image-context-menu'
+import { ImageViewer } from './image-viewer'
 import { OAuthLinkCardView, type OAuthLinkPreview } from './oauth-link-card'
 
 function lowerText(value: unknown) {
@@ -1092,11 +1093,13 @@ function AttachmentView({
   onPreviewFile,
   onSaveToWorkspace,
   onImageContextMenu,
+  onOpenImage,
 }: {
   attachment: Attachment
   onPreviewFile?: (attachment: Attachment) => void
   onSaveToWorkspace?: (attachment: Attachment) => void
   onImageContextMenu: (event: React.MouseEvent, attachment: Attachment) => void
+  onOpenImage: (attachment: Attachment, src: string) => void
 }) {
   const [inlineUrl, setInlineUrl] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
@@ -1129,8 +1132,14 @@ function AttachmentView({
     return resolved.url
   }, [attachment.id])
 
+  const resolveInline = useCallback(async () => {
+    const resolved = await resolveAttachmentMediaUrl(attachment.id, 'inline')
+    setInlineUrl(resolved.url)
+    return resolved.url
+  }, [attachment.id])
+
   if (isImage) {
-    const href = downloadUrl ?? inlineUrl ?? '#'
+    const href = inlineUrl ?? '#'
     const src = inlineUrl ?? undefined
     return (
       <div className="relative">
@@ -1138,19 +1147,22 @@ function AttachmentView({
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="block max-w-xs rounded-xl overflow-hidden border border-border-subtle"
+          className="block max-w-xs overflow-hidden rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-primary/60"
           onClick={async (event) => {
-            if (downloadUrl) return
             event.preventDefault()
-            const url = await resolveDownload()
-            window.open(url, '_blank', 'noopener,noreferrer')
+            const url = src ?? (await resolveInline())
+            onOpenImage(attachment, url)
           }}
           onContextMenu={(event) => onImageContextMenu(event, attachment)}
         >
           {src ? (
-            <img src={src} alt={attachment.filename} className="max-h-60 object-contain" />
+            <img
+              src={src}
+              alt={attachment.filename}
+              className="block max-h-60 max-w-full rounded-xl object-contain"
+            />
           ) : (
-            <div className="h-40 w-60 bg-surface-2" />
+            <div className="h-40 w-60 rounded-xl bg-surface-2" />
           )}
         </a>
       </div>
@@ -1214,6 +1226,11 @@ function MessageBubbleInner({
     x: number
     y: number
     att: Attachment
+  } | null>(null)
+  const [imageViewer, setImageViewer] = useState<{
+    src: string
+    filename?: string
+    size?: number
   } | null>(null)
   const avatarHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1825,6 +1842,13 @@ function MessageBubbleInner({
                   event.preventDefault()
                   setImageContextMenu({ x: event.clientX, y: event.clientY, att: attachment })
                 }}
+                onOpenImage={(attachment, src) =>
+                  setImageViewer({
+                    src,
+                    filename: attachment.filename,
+                    size: attachment.size,
+                  })
+                }
               />
             ))}
             {imageContextMenu &&
@@ -1842,6 +1866,16 @@ function MessageBubbleInner({
               )}
           </div>
         )}
+        {imageViewer &&
+          createPortal(
+            <ImageViewer
+              src={imageViewer.src}
+              filename={imageViewer.filename}
+              size={imageViewer.size}
+              onClose={() => setImageViewer(null)}
+            />,
+            document.body,
+          )}
 
         {/* Interactive block (Phase 2 POC — buttons / select) */}
         {message.metadata?.interactive && (

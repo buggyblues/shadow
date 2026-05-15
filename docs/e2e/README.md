@@ -15,7 +15,6 @@ The current web screenshot flow captures:
 - viewer registers with the invite code
 - viewer joins a server from the invite page
 - team channel conversation
-- server home
 - discover communities
 - buddy marketplace
 - workspace page
@@ -71,7 +70,6 @@ README image assets are now refreshed by scripts:
 - `03-viewer-server-invite.png` — viewer lands on server invite page
 - `04-team-general-channel.png` — real team channel activity
 - `05-owner-dm-thread.png` — owner / viewer DM thread
-- `06-server-home.png` — server home surface
-- `07-discover-communities.png` — discover page
-- `08-buddy-marketplace.png` — buddy marketplace page
-- `09-workspace.png` — shared workspace page
+- `06-discover-communities.png` — discover page
+- `07-buddy-marketplace.png` — buddy marketplace page
+- `08-workspace.png` — shared workspace page

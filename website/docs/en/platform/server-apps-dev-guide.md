@@ -1,6 +1,6 @@
 # Server App Development Guide
 
-This guide walks through a Server App integration from zero to one. A complete runnable example lives in `examples/shadow-server-app-demo`.
+This guide walks through a Server App integration from zero to one. A complete runnable example lives in `skills/shadow-server-app/example-app`.
 
 ## 1. Publish a Manifest
 

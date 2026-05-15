@@ -15,12 +15,12 @@ type ChannelMeta = {
   isArchived?: boolean | null
 }
 
-export function ServerHomeView() {
+export function ServerIndexView() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { serverSlug } = useParams({ strict: false }) as { serverSlug: string }
   const { data: channels, isLoading } = useQuery({
-    queryKey: ['server-home-channels', serverSlug],
+    queryKey: ['server-index-channels', serverSlug],
     queryFn: () =>
       fetchApi<ChannelMeta[]>(`/api/servers/${encodeURIComponent(serverSlug)}/channels`),
     enabled: !!serverSlug,
@@ -35,7 +35,7 @@ export function ServerHomeView() {
     )
   }, [channels])
 
-  // Clear channel state when entering server home
+  // Clear channel state when entering the server index
   useLayoutEffect(() => {
     const prev = useChatStore.getState().activeChannelId
     if (prev) {
@@ -65,8 +65,8 @@ export function ServerHomeView() {
     <GlassPanel className="flex flex-1 items-center justify-center px-6">
       <EmptyState
         icon={Hash}
-        title={t('serverHome.noChannelsTitle')}
-        description={t('serverHome.noChannelsDesc')}
+        title={t('channel.noChannels')}
+        description={t('channel.noChannelsDesc')}
       />
     </GlassPanel>
   )

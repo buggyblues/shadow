@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Input } from '@shadowob/ui'
+import { Badge, Button, Card, cn, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
@@ -22,7 +22,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
@@ -59,29 +59,61 @@ interface AdminOrder {
 
 export interface ShopAdminProps {
   serverId: string
-  onBack: () => void
+  onBack?: () => void
+  embedded?: boolean
 }
 
-export function ShopAdmin({ serverId, onBack }: ShopAdminProps) {
+export function ShopAdmin({ serverId, onBack, embedded = false }: ShopAdminProps) {
+  const { t } = useTranslation()
   const [section, setSection] = useState<AdminSection>('products')
 
-  const sections: { key: AdminSection; label: string; icon: React.ReactNode }[] = [
-    { key: 'products', label: '商品管理', icon: <Package size={16} /> },
-    { key: 'categories', label: '分类管理', icon: <Layers size={16} /> },
-    { key: 'orders', label: '订单管理', icon: <Tag size={16} /> },
-    { key: 'settings', label: '店铺设置', icon: <ShoppingBag size={16} /> },
+  const sections: { key: AdminSection; label: string; icon: ReactNode }[] = [
+    { key: 'products', label: t('shop.adminProducts', 'Products'), icon: <Package size={16} /> },
+    {
+      key: 'categories',
+      label: t('shop.adminCategories', 'Categories'),
+      icon: <Layers size={16} />,
+    },
+    { key: 'orders', label: t('shop.adminOrders', 'Orders'), icon: <Tag size={16} /> },
+    {
+      key: 'settings',
+      label: t('shop.adminSettings', 'Settings'),
+      icon: <ShoppingBag size={16} />,
+    },
   ]
 
   return (
-    <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full font-sans">
+    <div
+      className={cn(
+        'flex h-full flex-1 flex-col overflow-hidden font-sans',
+        embedded ? 'bg-transparent' : 'bg-bg-primary',
+      )}
+    >
       {/* ── Header ── */}
-      <div className="h-14 px-5 flex items-center bg-bg-tertiary/50 backdrop-blur-xl border-b border-border-subtle shrink-0 gap-3 z-20 transition-colors">
-        <Button variant="ghost" size="icon" icon={ArrowLeft} onClick={onBack} className="-ml-2" />
-        <h2 className="font-black text-text-primary text-base">店铺管理</h2>
-      </div>
+      {(!embedded || onBack) && (
+        <div className="z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle bg-bg-tertiary/50 px-5 backdrop-blur-xl transition-colors">
+          {onBack && (
+            <Button
+              variant="ghost"
+              size="icon"
+              icon={ArrowLeft}
+              onClick={onBack}
+              className="-ml-2"
+            />
+          )}
+          <h2 className="text-base font-black text-text-primary">
+            {t('shop.adminTitle', 'Shop Admin')}
+          </h2>
+        </div>
+      )}
 
       {/* ── Section Tabs ── */}
-      <div className="flex bg-bg-tertiary/50 backdrop-blur-xl px-3 py-2 sticky top-0 z-10 shadow-sm border-b border-border-subtle gap-1 overflow-x-auto scrollbar-hidden">
+      <div
+        className={cn(
+          'sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-border-subtle px-3 py-2 scrollbar-hidden',
+          embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/50 shadow-sm backdrop-blur-xl',
+        )}
+      >
         {sections.map((s) => (
           <Button
             key={s.key}
@@ -97,8 +129,8 @@ export function ShopAdmin({ serverId, onBack }: ShopAdminProps) {
       </div>
 
       {/* ── Section Content ── */}
-      <div className="flex-1 overflow-y-auto scrollbar-hidden">
-        <div className="max-w-4xl mx-auto w-full">
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hidden">
+        <div className={cn('w-full', embedded ? 'max-w-none' : 'mx-auto max-w-4xl')}>
           {section === 'products' && <ProductManager serverId={serverId} />}
           {section === 'categories' && <CategoryManager serverId={serverId} />}
           {section === 'orders' && <OrderManager serverId={serverId} />}

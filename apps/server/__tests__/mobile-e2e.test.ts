@@ -239,10 +239,10 @@ describe('Server channels for mobile', () => {
 })
 
 /* ══════════════════════════════════════════════════════════
-   2. Members list — mobile server home
+   2. Members list — mobile server surface
    ══════════════════════════════════════════════════════════ */
 
-describe('Members list for mobile server home', () => {
+describe('Members list for mobile server surface', () => {
   it('should list members with roles', async () => {
     const res = await req('GET', `/api/servers/${serverId}/members`, { token: ownerToken })
     expect(res.status).toBe(200)

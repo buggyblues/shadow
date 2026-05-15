@@ -262,6 +262,7 @@ export async function processShadowMessage(params: {
   const wasMentioned =
     mentionTargetsBot({ mentions: structuredMentions, botUserId, botUsername }) ||
     mentionsTargetServerApp(structuredMentions) ||
+    Boolean(slashCommandMatch) ||
     mentionRegex.test(message.content)
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({

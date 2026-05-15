@@ -290,7 +290,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     setActiveServer(serverId)
     setMobileView('channels')
     const serverSlug = slug ?? serverId
-    // Navigate to last-visited channel if available, otherwise show server home
+    // Navigate to last-visited channel if available, otherwise show the server index.
     const lastChannelId = getLastChannelId(serverId)
     if (lastChannelId) {
       navigate({

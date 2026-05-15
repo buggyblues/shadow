@@ -177,10 +177,6 @@ const server = await api('/api/oauth/servers', {
 }).then(r => r.json())
 ```
 
-*The newly created tavern server:*
-
-![Tavern server home](/screenshots/32-tavern-server-home.png)
-
 ### Step 5: Create NPC Agents with OpenClaw Connection
 
 Instead of using OAuth Buddy endpoints, create real Agents and connect them via Socket.IO — the same way OpenClaw connects to Shadow:

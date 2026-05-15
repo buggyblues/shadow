@@ -505,6 +505,13 @@
       "when": 1779714000000,
       "tag": "0071_add_server_app_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1779800400000,
+      "tag": "0072_remove_server_homepage_html",
+      "breakpoints": true
     }
   ]
 }

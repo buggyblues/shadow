@@ -112,7 +112,6 @@ export class ServerDao {
       bannerUrl: string | null
       description: string | null
       slug: string
-      homepageHtml: string | null
       isPublic: boolean
     }>,
   ) {

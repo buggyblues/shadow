@@ -51,7 +51,7 @@ services:
   # ── Application ───────────────────────────────────
   shadow-server-app-demo:
     build:
-      context: ./examples/shadow-server-app-demo
+      context: ./skills/shadow-server-app/example-app
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:

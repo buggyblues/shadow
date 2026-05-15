@@ -27,8 +27,7 @@ import { OAuthCallbackPage } from '@web/pages/oauth-callback'
 
 import { RegisterPage } from '@web/pages/register'
 import { ServerLayout } from '@web/pages/server'
-import { ServerHomePage } from '@web/pages/server-home'
-import { ServerHomeView } from '@web/pages/server-home-view'
+import { ServerIndexView } from '@web/pages/server-index-view'
 import { SettingsPage } from '@web/pages/settings'
 import { ShopPageRoute } from '@web/pages/shop'
 import { ShopAdminPageRoute } from '@web/pages/shop-admin'
@@ -192,7 +191,7 @@ const serverLayoutRoute = createRoute({
 const serverIndexRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/',
-  component: ServerHomeView,
+  component: ServerIndexView,
 })
 
 const channelRoute = createRoute({
@@ -217,17 +216,6 @@ const serverWorkspaceRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/workspace',
   component: WorkspacePageRoute,
-})
-
-const serverHomeRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/s/$serverId',
-  component: ServerHomePage,
-  beforeLoad: () => {
-    if (!useAuthStore.getState().isAuthenticated) {
-      throw redirect({ to: '/login' })
-    }
-  },
 })
 
 const settingsRoute = createRoute({
@@ -353,7 +341,6 @@ const routeTree = rootRoute.addChildren([
   marketplaceRoute,
   oauthCallbackRoute,
   oauthAuthorizeRoute,
-  serverHomeRoute,
   appRoute.addChildren([
     appIndexRoute,
     serverLayoutRoute.addChildren([

@@ -395,15 +395,13 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
       <div
         className={cn(
           'flex flex-1 min-h-0 overflow-hidden',
-          embedded ? 'gap-3 px-4 pb-4' : 'server-page-content',
+          embedded ? 'gap-0' : 'server-page-content',
         )}
       >
         <div
           className={cn(
             'flex w-64 shrink-0 flex-col overflow-hidden border-r border-border-subtle',
-            embedded
-              ? 'rounded-[28px] border border-border-subtle bg-[var(--glass-bg)]/70 shadow-[var(--shadow-soft)]'
-              : 'bg-bg-tertiary/30 backdrop-blur-xl',
+            embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/30 backdrop-blur-xl',
           )}
           onContextMenu={handleBlankContextMenu}
         >
@@ -426,13 +424,7 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
         </div>
 
         {activeFileNode ? (
-          <div
-            className={cn(
-              'flex-1 min-w-0 overflow-hidden',
-              embedded &&
-                'rounded-[28px] border border-border-subtle bg-[var(--glass-bg)]/70 shadow-[var(--shadow-soft)]',
-            )}
-          >
+          <div className={cn('flex-1 min-w-0 overflow-hidden', embedded && 'bg-bg-primary/5')}>
             <WorkspaceWorkbench
               node={activeFileNode}
               serverId={serverId}
@@ -440,20 +432,12 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
             />
           </div>
         ) : (
-          <div
-            className={cn(
-              'flex-1 min-w-0 overflow-hidden',
-              embedded &&
-                'rounded-[28px] border border-border-subtle bg-[var(--glass-bg)]/70 shadow-[var(--shadow-soft)]',
-            )}
-          >
-            <div className="flex h-full flex-col p-4 text-text-muted">
+          <div className={cn('flex-1 min-w-0 overflow-hidden', embedded && 'bg-bg-primary/5')}>
+            <div className={cn('flex h-full flex-col text-text-muted', embedded ? 'p-0' : 'p-4')}>
               <div
                 className={cn(
-                  'flex h-full min-h-[320px] flex-col items-center justify-center gap-3 rounded-[28px] border border-dashed px-6 text-center',
-                  embedded
-                    ? 'border-border-subtle/80 bg-bg-secondary/10'
-                    : 'border-border-subtle bg-bg-tertiary/20',
+                  'flex h-full min-h-[320px] flex-col items-center justify-center gap-3 px-6 text-center',
+                  embedded ? 'border-0 bg-transparent' : 'border-border-subtle bg-bg-tertiary/20',
                 )}
               >
                 <div

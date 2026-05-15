@@ -521,6 +521,7 @@ describe('Slash Commands', () => {
             BodyForAgent: expect.not.stringContaining('Slash command /model was invoked.'),
             SlashCommand: '/model',
             SlashCommandArgs: 'status',
+            WasMentioned: true,
           }),
         }),
       )

@@ -13,7 +13,7 @@ Demo Desk is a small TypeScript App that behaves like a real Shadow Server App:
 ## Run
 
 ```bash
-cd examples/shadow-server-app-demo
+cd skills/shadow-server-app/example-app
 pnpm install
 SHADOW_SERVER_URL="http://localhost:3002" pnpm dev
 ```
@@ -31,7 +31,7 @@ shadowob app preview \
 ```bash
 shadowob app install \
   --server <server-id-or-slug> \
-  --manifest-file examples/shadow-server-app-demo/shadow-app.local.json
+  --manifest-file skills/shadow-server-app/example-app/shadow-app.local.json
 ```
 
 Grant a Buddy:

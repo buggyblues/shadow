@@ -123,7 +123,6 @@ describe('CLI Functional Tests', () => {
       expect(stdout).toContain('join')
       expect(stdout).toContain('leave')
       expect(stdout).toContain('members')
-      expect(stdout).toContain('homepage')
       expect(stdout).toContain('discover')
     })
   })

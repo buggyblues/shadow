@@ -56,9 +56,13 @@ shadowob app call <app-key> <command> \
 - `iframe.entry`: user-facing server App UI
 - `iframe.allowedOrigins`: exact iframe origins
 - `api.baseUrl`: App backend base URL
-- `api.auth.type`: use `oauth2-bearer`; `hmac-sha256` is legacy-only
+- `api.auth.type`: use `oauth2-bearer`
 - `commands`: small command surface with JSON schemas and permissions
 - `skills`: concise Buddy instructions, not full API docs
+
+## Example App
+
+A complete TypeScript Demo Desk app lives at `./example-app`. It includes the manifest, iframe UI, OAuth token introspection, JSON commands, multipart upload handling, and event-stream refresh behavior.
 
 ## Recommended Buddy Behavior
 

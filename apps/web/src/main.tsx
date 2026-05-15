@@ -32,8 +32,7 @@ import { PlayLaunchPage } from './pages/play-launch'
 import { RegisterPage } from './pages/register'
 import { ServerLayout } from './pages/server'
 import { ServerAppsPageRoute } from './pages/server-apps'
-import { ServerHomePage } from './pages/server-home'
-import { ServerHomeView } from './pages/server-home-view'
+import { ServerIndexView } from './pages/server-index-view'
 import { SettingsPage } from './pages/settings'
 import { ShopPageRoute } from './pages/shop'
 import { ShopAdminPageRoute } from './pages/shop-admin'
@@ -153,7 +152,7 @@ const serverLayoutRoute = createRoute({
 const serverIndexRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/',
-  component: ServerHomeView,
+  component: ServerIndexView,
 })
 
 const channelRoute = createRoute({
@@ -190,13 +189,6 @@ const serverAppDetailRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/apps/$appKey',
   component: ServerAppsPageRoute,
-})
-
-const serverHomeRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/s/$serverId',
-  component: ServerHomePage,
-  beforeLoad: requireAuthenticatedRoute,
 })
 
 const settingsRoute = createRoute({
@@ -457,7 +449,6 @@ const routeTree = rootRoute.addChildren([
   inviteRoute,
   oauthCallbackRoute,
   oauthAuthorizeRoute,
-  serverHomeRoute,
   appRoute.addChildren([
     serverLayoutRoute.addChildren([
       serverIndexRoute,

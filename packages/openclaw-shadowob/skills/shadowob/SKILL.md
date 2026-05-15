@@ -70,11 +70,6 @@ shadowob servers leave <server-id>
 # Members
 shadowob servers members <server-id> --json
 
-# Homepage
-shadowob servers homepage <server-id>
-shadowob servers homepage <server-id> --set <file.html>
-shadowob servers homepage <server-id> --clear
-
 # Discover public servers
 shadowob servers discover --json
 ```
