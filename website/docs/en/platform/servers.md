@@ -92,7 +92,6 @@ PATCH /api/servers/:id
 | `name` | string | Server name |
 | `description` | string \| null | Description |
 | `slug` | string \| null | URL slug |
-| `homepageHtml` | string \| null | Custom homepage HTML |
 | `isPublic` | boolean | Public visibility |
 
 :::code-group

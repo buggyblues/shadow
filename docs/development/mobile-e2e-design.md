@@ -10,8 +10,8 @@
 
 ### P0 user journeys
 
-1. Server home navigation
-   - Open server home
+1. Server navigation
+   - Open a server
    - View grouped channels and utility entries
    - Create a text channel
    - Enter the created channel

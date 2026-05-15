@@ -94,7 +94,7 @@ Install an App into a server:
 ```bash
 shadowob app install \
   --server <server-id-or-slug> \
-  --manifest-file examples/shadow-server-app-demo/shadow-app.local.json
+  --manifest-file skills/shadow-server-app/example-app/shadow-app.local.json
 ```
 
 Grant a Buddy permission:
@@ -246,7 +246,7 @@ The App iframe can open `new EventSource(shadow_event_stream)`. Shadow emits:
 - `server_app.command.completed`: a Buddy or user completed a CLI/API command through Shadow.
 - `ping`: heartbeat.
 
-Apps should reload their local data when `server_app.command.completed` arrives. The launch token is HMAC signed by Shadow and scoped to the server App.
+Apps should reload their local data when `server_app.command.completed` arrives. The launch token is short-lived and scoped to the server App.
 
 ## Cloud Template
 
@@ -274,7 +274,7 @@ The provisioner installs/updates the App, grants the Buddy, and exports runtime 
 
 ## Demo
 
-See `examples/shadow-server-app-demo`. It is a TypeScript Hono app with:
+See `skills/shadow-server-app/example-app`. It is a TypeScript Hono app with:
 
 - `/.well-known/shadow-app.json`
 - `/shadow/server` iframe UI

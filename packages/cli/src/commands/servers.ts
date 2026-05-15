@@ -140,62 +140,6 @@ export function createServersCommand(): Command {
     })
 
   servers
-    .command('homepage')
-    .description('Get or set server homepage')
-    .argument('<server-id>', 'Server ID or slug')
-    .option('--set <file>', 'Set homepage from HTML file (use "-" for stdin)')
-    .option('--clear', 'Clear homepage (reset to default)')
-    .option('--profile <name>', 'Profile to use')
-    .option('--json', 'Output as JSON')
-    .action(
-      async (
-        serverId: string,
-        options: { set?: string; clear?: boolean; profile?: string; json?: boolean },
-      ) => {
-        try {
-          const client = await getClient(options.profile)
-
-          if (options.clear) {
-            const result = await client.updateServerHomepage(serverId, null)
-            output(result, { json: options.json })
-            return
-          }
-
-          if (options.set) {
-            let html: string
-            if (options.set === '-') {
-              // Read from stdin
-              const chunks: Buffer[] = []
-              for await (const chunk of process.stdin) {
-                chunks.push(Buffer.from(chunk))
-              }
-              html = Buffer.concat(chunks).toString('utf-8')
-            } else {
-              const { readFile } = await import('node:fs/promises')
-              html = await readFile(options.set, 'utf-8')
-            }
-            const result = await client.updateServerHomepage(serverId, html)
-            output(result, { json: options.json })
-            return
-          }
-
-          // Get homepage
-          const server = await client.getServer(serverId)
-          if (options.json) {
-            output({ homepageHtml: server.homepageHtml }, { json: true })
-          } else {
-            console.log(server.homepageHtml ?? '(default homepage)')
-          }
-        } catch (error) {
-          outputError(error instanceof Error ? error.message : String(error), {
-            json: options.json,
-          })
-          process.exit(1)
-        }
-      },
-    )
-
-  servers
     .command('discover')
     .description('Discover public servers')
     .option('--profile <name>', 'Profile to use')

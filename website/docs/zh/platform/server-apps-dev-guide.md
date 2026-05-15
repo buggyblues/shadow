@@ -1,6 +1,6 @@
 # Server App 开发接入
 
-这份指南从零开始接入一个服务器 App。完整可运行示例在 `examples/shadow-server-app-demo`。
+这份指南从零开始接入一个服务器 App。完整可运行示例在 `skills/shadow-server-app/example-app`。
 
 ## 1. 准备 Manifest
 

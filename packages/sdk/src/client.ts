@@ -772,7 +772,6 @@ export class ShadowClient {
       name?: string
       description?: string | null
       slug?: string | null
-      homepageHtml?: string | null
       isPublic?: boolean
     },
   ): Promise<ShadowServer> {
@@ -780,13 +779,6 @@ export class ShadowClient {
       method: 'PATCH',
       body: JSON.stringify(data),
     })
-  }
-
-  async updateServerHomepage(
-    serverIdOrSlug: string,
-    homepageHtml: string | null,
-  ): Promise<ShadowServer> {
-    return this.updateServer(serverIdOrSlug, { homepageHtml })
   }
 
   async deleteServer(serverId: string): Promise<{ success: boolean }> {

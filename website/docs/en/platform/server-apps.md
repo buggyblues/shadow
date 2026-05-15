@@ -9,7 +9,7 @@ The server management modal owns App add, list, and grant flows. Installed Apps 
 ```bash
 shadowob app install \
   --server <server-id-or-slug> \
-  --manifest-file examples/shadow-server-app-demo/shadow-app.local.json
+  --manifest-file skills/shadow-server-app/example-app/shadow-app.local.json
 ```
 
 Apps are server-scoped. A server can install many Apps, and each Buddy needs an explicit grant before it can call App commands.
@@ -57,4 +57,4 @@ The `shadowob` Cloud plugin supports `serverApps` in templates. Provisioning cre
 
 The Shadow Admin “App Integrations” tab manages the global App catalog and lists every installed server App, command count, Skill count, Buddy grant count, iframe entry, and API endpoint. Global admins can add catalog entries from manifest URLs and uninstall an integration during an incident or support workflow.
 
-See [Server App development guide](./server-apps-dev-guide), `docs/api/server-app-integrations.md`, and `examples/shadow-server-app-demo` for the full protocol and demo project.
+See [Server App development guide](./server-apps-dev-guide), `docs/api/server-app-integrations.md`, and `skills/shadow-server-app/example-app` for the full protocol and demo project.

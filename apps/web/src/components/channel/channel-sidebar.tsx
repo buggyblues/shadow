@@ -69,7 +69,6 @@ interface Server {
   slug: string
   iconUrl: string | null
   bannerUrl: string | null
-  homepageHtml: string | null
   isPublic: boolean
   inviteCode: string
   ownerId: string
@@ -292,7 +291,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
         if (remaining.length > 0) {
           handleSelectChannel(remaining[0]!.id)
         } else {
-          // No channels left — go to server home
+          // No channels left; return to the server index.
           setActiveChannel(null)
           navigate({
             to: '/servers/$serverSlug',

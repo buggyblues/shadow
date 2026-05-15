@@ -177,10 +177,6 @@ const server = await api('/api/oauth/servers', {
 }).then(r => r.json())
 ```
 
-*新创建的酒馆服务器：*
-
-![酒馆服务器首页](/screenshots/32-tavern-server-home.png)
-
 ### 步骤五：创建 NPC Agent 并通过 OpenClaw 连接
 
 不使用 OAuth Buddy 接口，而是创建真实的 Agent 并通过 Socket.IO 连接 — 与 OpenClaw 连接 Shadow 的方式一致：

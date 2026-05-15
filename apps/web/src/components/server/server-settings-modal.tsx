@@ -41,6 +41,7 @@ import {
 } from '../../pages/settings/_shared'
 import { useAuthStore } from '../../stores/auth.store'
 import { useConfirmStore } from '../common/confirm-dialog'
+import { ShopAdmin } from '../shop/shop-admin'
 import { ShopPage } from '../shop/shop-page'
 import { WorkspacePage } from '../workspace/workspace-page'
 import { ServerAppsSettingsPanel } from './server-apps-settings-panel'
@@ -52,7 +53,6 @@ interface Server {
   slug: string
   iconUrl: string | null
   bannerUrl: string | null
-  homepageHtml: string | null
   isPublic: boolean
   inviteCode: string
   ownerId: string
@@ -109,7 +109,6 @@ export function ServerSettingsModal({
     description: '',
     slug: '',
     isPublic: false,
-    homepageHtml: '',
     iconUrl: null as string | null,
     bannerUrl: null as string | null,
   })
@@ -130,7 +129,6 @@ export function ServerSettingsModal({
         description: server.description ?? '',
         slug: server.slug ?? '',
         isPublic: server.isPublic,
-        homepageHtml: server.homepageHtml ?? '',
         iconUrl: server.iconUrl,
         bannerUrl: server.bannerUrl,
       })
@@ -152,7 +150,6 @@ export function ServerSettingsModal({
       formDraft.description !== (server.description ?? '') ||
       formDraft.slug !== (server.slug ?? '') ||
       formDraft.isPublic !== server.isPublic ||
-      formDraft.homepageHtml !== (server.homepageHtml ?? '') ||
       formDraft.iconUrl !== server.iconUrl ||
       formDraft.bannerUrl !== server.bannerUrl
     )
@@ -165,7 +162,6 @@ export function ServerSettingsModal({
       slug?: string
       iconUrl?: string | null
       bannerUrl?: string | null
-      homepageHtml?: string | null
       isPublic?: boolean
     }) =>
       fetchApi<Server>(`/api/servers/${serverSlug}`, {
@@ -244,7 +240,6 @@ export function ServerSettingsModal({
         description: nextDraft.description.trim() || null,
         slug: nextDraft.slug.trim() || undefined,
         isPublic: nextDraft.isPublic,
-        homepageHtml: nextDraft.homepageHtml.trim() || null,
         iconUrl: nextDraft.iconUrl,
         bannerUrl: nextDraft.bannerUrl,
       },
@@ -436,19 +431,6 @@ export function ServerSettingsModal({
                       />
                       <p className="text-xs text-text-muted mt-1">{t('channel.slugDesc')}</p>
                     </SettingsGroup>
-
-                    <SettingsGroup labelKey="channel.homepageHtml" labelFallback="Homepage HTML">
-                      <Textarea
-                        value={formDraft.homepageHtml}
-                        onChange={(e) => updateDraftField('homepageHtml', e.target.value)}
-                        rows={6}
-                        placeholder={t('channel.homepageHtmlPlaceholder', '<h1>Welcome!</h1>')}
-                        className="resize-y font-mono text-xs"
-                      />
-                      <p className="text-xs text-text-muted mt-1">
-                        {t('channel.homepageHtmlDesc', 'Custom HTML for the server homepage.')}
-                      </p>
-                    </SettingsGroup>
                   </div>
                 </SettingsCard>
 
@@ -524,7 +506,11 @@ export function ServerSettingsModal({
             {/* Shop page */}
             {activeTab === 'shop' && (
               <div className="flex h-full min-h-0 flex-col">
-                <ShopPage serverId={serverSlug} isAdmin={isOwner} embedded />
+                {isOwner ? (
+                  <ShopAdmin serverId={serverSlug} embedded />
+                ) : (
+                  <ShopPage serverId={serverSlug} isAdmin={false} embedded />
+                )}
               </div>
             )}
 

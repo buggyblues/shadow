@@ -411,10 +411,10 @@ test.describe
 
         // ── Phase 8: UI Verification — Browse the tavern ──
 
-        // Navigate to the tavern server
+        // Navigate to the tavern server entry
         await page.goto(`servers/${tavernServer.slug ?? tavernServer.id}`)
         await page.waitForTimeout(2000)
-        await screenshot(page, '32-tavern-server-home.png')
+        await screenshot(page, '32-tavern-server-entry.png')
 
         // Navigate to 大厅 channel
         const lobbyChannel = channels['大厅']

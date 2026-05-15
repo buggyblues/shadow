@@ -92,7 +92,6 @@ PATCH /api/servers/:id
 | `name` | string | 服务器名称 |
 | `description` | string \| null | 描述 |
 | `slug` | string \| null | URL 标识符 |
-| `homepageHtml` | string \| null | 自定义首页 HTML |
 | `isPublic` | boolean | 公开可见性 |
 
 :::code-group

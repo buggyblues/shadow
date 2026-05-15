@@ -9,6 +9,7 @@ import {
   AppWindow,
   Bot,
   Check,
+  ChevronDown,
   ChevronRight,
   CirclePlus,
   Search,
@@ -16,10 +17,9 @@ import {
   Terminal,
   UserRound,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { SettingsCard, SettingsPanel } from '../../pages/settings/_shared'
 
 interface ServerAccess {
   canManage: boolean
@@ -316,8 +316,8 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
   }
 
   return (
-    <SettingsPanel className="grid min-h-0 max-w-none gap-4 p-5 lg:grid-cols-[260px_minmax(0,1fr)]">
-      <SettingsCard className="min-h-0 overflow-hidden p-0">
+    <div className="grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)]">
+      <aside className="flex min-h-0 flex-col border-r border-border-subtle bg-bg-secondary/10">
         <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-black text-text-primary">
             <AppWindow size={16} />
@@ -328,7 +328,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
               type="button"
               onClick={openAdd}
               className={cn(
-                'grid h-7 w-7 place-items-center rounded-full text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary',
+                'grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary',
                 mode === 'add' && 'bg-primary/15 text-primary',
               )}
               aria-label={t('serverApps.addApp')}
@@ -338,7 +338,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
             </button>
           )}
         </div>
-        <div className="max-h-[560px] overflow-y-auto p-2">
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {apps.map((app) => {
             const isActive = mode === 'detail' && selectedApp?.appKey === app.appKey
             return (
@@ -347,7 +347,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
                 key={app.id}
                 onClick={() => openDetail(app.appKey)}
                 className={cn(
-                  'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition',
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition',
                   isActive
                     ? 'bg-primary/15 text-primary ring-1 ring-primary/25'
                     : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
@@ -363,14 +363,14 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
             )
           })}
           {apps.length === 0 && (
-            <div className="rounded-lg border border-border-subtle bg-bg-tertiary/40 p-4 text-sm text-text-muted">
+            <div className="rounded-xl border border-dashed border-border-subtle p-4 text-sm text-text-muted">
               {t('serverApps.noInstalled')}
             </div>
           )}
         </div>
-      </SettingsCard>
+      </aside>
 
-      <div className="min-h-0 overflow-y-auto pb-6">
+      <main className="min-h-0 overflow-y-auto px-5 py-5">
         {mode === 'add' && access?.canManage ? (
           <AddAppView
             addMode={addMode}
@@ -398,16 +398,16 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
             grantBuddy={grantBuddy}
           />
         ) : (
-          <SettingsCard className="grid min-h-[280px] place-items-center text-center">
+          <div className="grid min-h-[280px] place-items-center text-center">
             <div>
               <AppWindow className="mx-auto mb-3 text-text-muted" size={28} />
               <p className="text-sm font-bold text-text-primary">{t('serverApps.selectApp')}</p>
               <p className="mt-1 text-sm text-text-muted">{t('serverApps.selectFromSidebar')}</p>
             </div>
-          </SettingsCard>
+          </div>
         )}
-      </div>
-    </SettingsPanel>
+      </main>
+    </div>
   )
 }
 
@@ -424,20 +424,20 @@ function AddAppView(props: {
 }) {
   const { t } = useTranslation()
   return (
-    <SettingsCard className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <div className="mx-auto w-full max-w-5xl space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
           <h3 className="text-base font-black text-text-primary">{t('serverApps.addApp')}</h3>
           <p className="mt-1 text-sm leading-6 text-text-muted">{t('serverApps.addDescription')}</p>
         </div>
-        <div className="inline-flex rounded-lg border border-border-subtle bg-bg-primary/50 p-1">
+        <div className="inline-flex rounded-xl border border-border-subtle bg-bg-primary/50 p-1">
           {(['catalog', 'custom'] as AddMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
               onClick={() => props.setAddMode(mode)}
               className={cn(
-                'rounded-md px-3 py-1.5 text-xs font-black transition',
+                'rounded-lg px-3 py-1.5 text-xs font-black transition',
                 props.addMode === mode
                   ? 'bg-primary text-bg-primary'
                   : 'text-text-muted hover:text-text-primary',
@@ -450,12 +450,12 @@ function AddAppView(props: {
       </div>
 
       {props.addMode === 'catalog' ? (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
           {props.catalog.map((entry) => {
             return (
               <div
                 key={entry.id}
-                className="rounded-lg border border-border-subtle bg-bg-primary/45 p-3"
+                className="flex min-h-[260px] flex-col rounded-xl border border-border-subtle bg-bg-primary/30 p-4"
               >
                 <div className="flex items-start gap-3">
                   <AppIcon app={entry} />
@@ -481,7 +481,7 @@ function AddAppView(props: {
                   disabled={Boolean(entry.installed) || props.installCatalogApp.isPending}
                   loading={props.installCatalogApp.isPending}
                   onClick={() => props.installCatalogApp.mutate(entry)}
-                  className="mt-3 w-full"
+                  className="mt-auto w-full"
                 >
                   <Check size={14} />
                   {entry.installed
@@ -492,7 +492,7 @@ function AddAppView(props: {
             )
           })}
           {props.catalog.length === 0 && (
-            <div className="rounded-lg border border-border-subtle bg-bg-primary/45 p-4 text-sm text-text-muted md:col-span-2">
+            <div className="rounded-xl border border-dashed border-border-subtle p-4 text-sm text-text-muted md:col-span-2">
               {t('serverApps.catalogEmpty')}
             </div>
           )}
@@ -504,7 +504,7 @@ function AddAppView(props: {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={props.manifestUrl}
               onChange={(event) => props.setManifestUrl(event.target.value)}
@@ -516,6 +516,7 @@ function AddAppView(props: {
               disabled={!props.manifestUrl.trim() || props.discoverApp.isPending}
               loading={props.discoverApp.isPending}
               onClick={() => props.discoverApp.mutate()}
+              className="shrink-0"
             >
               <Search size={14} />
               {t('serverApps.discoverButton')}
@@ -525,7 +526,7 @@ function AddAppView(props: {
             <p className="text-xs text-danger">{props.discoverApp.error.message}</p>
           )}
           {props.discovery && (
-            <div className="rounded-lg border border-primary/25 bg-primary/10 p-4">
+            <div className="rounded-xl border border-primary/25 bg-primary/10 p-4">
               <div className="flex items-start gap-3">
                 <AppIcon app={{ iconUrl: props.discovery.manifest.iconUrl }} />
                 <div className="min-w-0 flex-1">
@@ -562,7 +563,7 @@ function AddAppView(props: {
           )}
         </div>
       )}
-    </SettingsCard>
+    </div>
   )
 }
 
@@ -577,9 +578,11 @@ function DetailView(props: {
   grantBuddy: UseMutationResult<unknown, Error, void>
 }) {
   const { t } = useTranslation()
+  const [commandsOpen, setCommandsOpen] = useState(false)
+  const [accessOpen, setAccessOpen] = useState(false)
   const grantPermissions = uniquePermissions(props.app.manifest.commands)
   return (
-    <SettingsCard className="space-y-5">
+    <div className="mx-auto w-full max-w-5xl space-y-5">
       <div className="flex items-start gap-3">
         <AppIcon app={props.app} />
         <div className="min-w-0 flex-1">
@@ -594,96 +597,139 @@ function DetailView(props: {
       </div>
 
       <section>
-        <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-text-muted">
-          <Terminal size={14} />
-          {t('serverApps.commands')}
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          {props.app.manifest.commands.map((command) => (
-            <div
-              key={command.name}
-              className="rounded-lg border border-border-subtle bg-bg-tertiary/35 p-3"
-            >
-              <div className="text-sm font-black text-text-primary">{command.name}</div>
-              <p className="mt-1 text-xs leading-5 text-text-muted">
-                {command.description ?? command.permission}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1 text-[11px] text-text-muted">
-                <span className="rounded-full bg-bg-primary/60 px-2 py-0.5">{command.action}</span>
-                <span className="rounded-full bg-bg-primary/60 px-2 py-0.5">
-                  {command.dataClass}
-                </span>
+        <SectionToggle
+          open={commandsOpen}
+          onToggle={() => setCommandsOpen((value) => !value)}
+          icon={<Terminal size={14} />}
+          title={t('serverApps.commands')}
+          count={props.app.manifest.commands.length}
+        />
+        {commandsOpen && (
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {props.app.manifest.commands.map((command) => (
+              <div
+                key={command.name}
+                className="rounded-xl border border-border-subtle bg-bg-tertiary/25 p-3"
+              >
+                <div className="text-sm font-black text-text-primary">{command.name}</div>
+                <p className="mt-1 text-xs leading-5 text-text-muted">
+                  {command.description ?? command.permission}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1 text-[11px] text-text-muted">
+                  <span className="rounded-full bg-bg-primary/60 px-2 py-0.5">
+                    {command.action}
+                  </span>
+                  <span className="rounded-full bg-bg-primary/60 px-2 py-0.5">
+                    {command.dataClass}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {props.access?.canManage && (
-        <section className="rounded-lg border border-border-subtle bg-bg-tertiary/35 p-3">
-          <div className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-text-muted">
-            <Bot size={14} />
-            {t('serverApps.accessTitle')}
-          </div>
-          <p className="mb-3 text-xs leading-5 text-text-muted">
-            {t('serverApps.accessDescription')}
-          </p>
-          {props.buddies.length > 0 ? (
-            <div className="space-y-3">
-              <select
-                value={props.selectedBuddyAgentId}
-                onChange={(event) => props.setSelectedBuddyAgentId(event.target.value)}
-                className="h-9 w-full rounded-lg border border-border-subtle bg-bg-primary px-3 text-sm text-text-primary outline-none focus:border-primary"
-              >
-                {props.buddies.map((buddy) => (
-                  <option key={buddy.agent!.id} value={buddy.agent!.id}>
-                    {buddy.nickname}
-                  </option>
-                ))}
-              </select>
-              <div className="grid gap-1 md:grid-cols-2">
-                {grantPermissions.map((permission) => (
-                  <label
-                    key={permission}
-                    className="flex items-center gap-2 rounded-md bg-bg-primary/50 px-2 py-2 text-xs text-text-secondary"
+        <section>
+          <SectionToggle
+            open={accessOpen}
+            onToggle={() => setAccessOpen((value) => !value)}
+            icon={<Bot size={14} />}
+            title={t('serverApps.accessTitle')}
+            count={props.app.grants?.length ?? 0}
+          />
+          {accessOpen && (
+            <div className="mt-3 rounded-xl border border-border-subtle bg-bg-tertiary/20 p-3">
+              <p className="mb-3 text-xs leading-5 text-text-muted">
+                {t('serverApps.accessDescription')}
+              </p>
+              {props.buddies.length > 0 ? (
+                <div className="space-y-3">
+                  <select
+                    value={props.selectedBuddyAgentId}
+                    onChange={(event) => props.setSelectedBuddyAgentId(event.target.value)}
+                    className="h-9 w-full rounded-lg border border-border-subtle bg-bg-primary px-3 text-sm text-text-primary outline-none focus:border-primary"
                   >
-                    <input
-                      type="checkbox"
-                      checked={props.selectedPermissions.includes(permission)}
-                      onChange={() => props.togglePermission(permission)}
-                      className="h-4 w-4 accent-primary"
-                    />
-                    <span className="min-w-0 break-all">{permission}</span>
-                  </label>
-                ))}
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={
-                  !props.selectedBuddyAgentId ||
-                  props.selectedPermissions.length === 0 ||
-                  props.grantBuddy.isPending
-                }
-                loading={props.grantBuddy.isPending}
-                onClick={() => props.grantBuddy.mutate()}
-              >
-                <UserRound size={14} />
-                {t('serverApps.grantButton')}
-              </Button>
-              {props.grantBuddy.isSuccess && (
-                <p className="text-xs text-primary">{t('serverApps.grantSuccess')}</p>
-              )}
-              {props.grantBuddy.error instanceof Error && (
-                <p className="text-xs text-danger">{props.grantBuddy.error.message}</p>
+                    {props.buddies.map((buddy) => (
+                      <option key={buddy.agent!.id} value={buddy.agent!.id}>
+                        {buddy.nickname}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="grid gap-1 md:grid-cols-2">
+                    {grantPermissions.map((permission) => (
+                      <label
+                        key={permission}
+                        className="flex items-center gap-2 rounded-md bg-bg-primary/50 px-2 py-2 text-xs text-text-secondary"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={props.selectedPermissions.includes(permission)}
+                          onChange={() => props.togglePermission(permission)}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span className="min-w-0 break-all">{permission}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={
+                      !props.selectedBuddyAgentId ||
+                      props.selectedPermissions.length === 0 ||
+                      props.grantBuddy.isPending
+                    }
+                    loading={props.grantBuddy.isPending}
+                    onClick={() => props.grantBuddy.mutate()}
+                  >
+                    <UserRound size={14} />
+                    {t('serverApps.grantButton')}
+                  </Button>
+                  {props.grantBuddy.isSuccess && (
+                    <p className="text-xs text-primary">{t('serverApps.grantSuccess')}</p>
+                  )}
+                  {props.grantBuddy.error instanceof Error && (
+                    <p className="text-xs text-danger">{props.grantBuddy.error.message}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-text-muted">{t('serverApps.noBuddies')}</p>
               )}
             </div>
-          ) : (
-            <p className="text-sm text-text-muted">{t('serverApps.noBuddies')}</p>
           )}
         </section>
       )}
-    </SettingsCard>
+    </div>
+  )
+}
+
+function SectionToggle({
+  open,
+  onToggle,
+  icon,
+  title,
+  count,
+}: {
+  open: boolean
+  onToggle: () => void
+  icon: ReactNode
+  title: string
+  count: number
+}) {
+  const Icon = open ? ChevronDown : ChevronRight
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onToggle}
+      className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-black uppercase tracking-wider text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+    >
+      <Icon size={14} />
+      {icon}
+      <span className="min-w-0 flex-1 truncate">{title}</span>
+      <span className="rounded-full bg-bg-tertiary px-2 py-0.5 text-[11px]">{count}</span>
+    </button>
   )
 }
 

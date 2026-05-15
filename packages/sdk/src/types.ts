@@ -442,7 +442,6 @@ export interface ShadowServer {
   description: string | null
   iconUrl: string | null
   bannerUrl: string | null
-  homepageHtml: string | null
   isPublic: boolean
 }
 

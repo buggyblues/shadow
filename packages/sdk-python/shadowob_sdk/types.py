@@ -114,7 +114,6 @@ class ShadowServer:
     description: str | None = None
     icon_url: str | None = None
     banner_url: str | None = None
-    homepage_html: str | None = None
     is_public: bool = False
 
 
