@@ -375,6 +375,9 @@ export function createChannelHandler(container: AppContainer) {
           reviewerId: userId,
           approved: result.approved,
         })
+        await container
+          .resolve('notificationService')
+          .markReferenceAsRead(userId, 'channel_join_request', requestId)
       } catch {
         /* non-critical */
       }

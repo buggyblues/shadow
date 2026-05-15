@@ -26,7 +26,7 @@ export type ServerAppManifest = {
   api: {
     baseUrl: string
     auth?: {
-      type: 'oauth2-bearer' | 'hmac-sha256' | 'none'
+      type: 'oauth2-bearer'
     }
   }
   commands: Array<{
@@ -83,7 +83,6 @@ export const serverAppIntegrations = pgTable(
     iframeEntry: text('iframe_entry'),
     allowedOrigins: jsonb('allowed_origins').$type<string[]>().notNull().default([]),
     apiBaseUrl: text('api_base_url').notNull(),
-    sharedSecretEncrypted: text('shared_secret_encrypted'),
     status: varchar('status', { length: 24 }).notNull().default('active'),
     installedByUserId: uuid('installed_by_user_id')
       .notNull()
@@ -107,7 +106,6 @@ export const serverAppCatalogEntries = pgTable(
     iconUrl: text('icon_url'),
     manifestUrl: text('manifest_url'),
     manifest: jsonb('manifest').$type<ServerAppManifest>().notNull(),
-    sharedSecretEncrypted: text('shared_secret_encrypted'),
     status: varchar('status', { length: 24 }).notNull().default('active'),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, {
       onDelete: 'set null',
@@ -120,6 +118,44 @@ export const serverAppCatalogEntries = pgTable(
       'server_app_catalog_entries_app_key_unique',
     ).on(t.appKey),
     serverAppCatalogEntriesStatusIdx: index('server_app_catalog_entries_status_idx').on(t.status),
+  }),
+)
+
+export const serverAppCommandTokens = pgTable(
+  'server_app_command_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tokenHash: text('token_hash').notNull(),
+    serverAppId: uuid('server_app_id')
+      .notNull()
+      .references(() => serverAppIntegrations.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
+    appKey: varchar('app_key', { length: 80 }).notNull(),
+    command: varchar('command', { length: 120 }).notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    actorKind: varchar('actor_kind', { length: 24 }).notNull(),
+    buddyAgentId: uuid('buddy_agent_id').references(() => agents.id, { onDelete: 'set null' }),
+    ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
+    channelId: uuid('channel_id'),
+    permission: text('permission').notNull(),
+    action: varchar('action', { length: 24 }).notNull(),
+    dataClass: varchar('data_class', { length: 32 }).notNull(),
+    scopes: jsonb('scopes').$type<string[]>().notNull().default([]),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    serverAppCommandTokensHashUnique: uniqueIndex('server_app_command_tokens_hash_unique').on(
+      t.tokenHash,
+    ),
+    serverAppCommandTokensAppExpiresIdx: index('server_app_command_tokens_app_expires_idx').on(
+      t.serverAppId,
+      t.expiresAt,
+    ),
   }),
 )
 

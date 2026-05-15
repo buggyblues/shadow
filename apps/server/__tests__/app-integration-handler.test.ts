@@ -96,7 +96,7 @@ describe('app integration handler', () => {
           appKey: 'demo-desk',
           name: 'Demo Desk',
           iconUrl: 'http://localhost:4199/assets/icon.svg',
-          api: { baseUrl: 'http://localhost:4199', auth: { type: 'none' } },
+          api: { baseUrl: 'http://localhost:4199', auth: { type: 'oauth2-bearer' } },
           commands: [
             {
               name: 'tickets.list',
@@ -164,7 +164,7 @@ describe('app integration handler', () => {
         Authorization: 'Bearer access-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ sharedSecret: 'dev-demo-secret-change-me-please' }),
+      body: JSON.stringify({}),
     })
     expect(installResponse.status).toBe(201)
     expect(await installResponse.json()).toEqual({ id: 'app-1', appKey: 'demo-desk' })
@@ -172,7 +172,7 @@ describe('app integration handler', () => {
       'srv-1',
       'catalog-1',
       expect.objectContaining({ kind: 'user', userId: 'user-1' }),
-      { sharedSecret: 'dev-demo-secret-change-me-please' },
+      {},
     )
   })
 

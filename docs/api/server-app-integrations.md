@@ -70,9 +70,9 @@ The server management modal uses a two-step Apps flow similar to OAuth consent:
 4. Admin authorizes installation.
 5. Admin grants selected permissions to one or more Buddy agents.
 
-The discovery response does not persist anything. Installation stores a manifest snapshot. The default command auth mode is `oauth2-bearer`, which does not require a static shared secret.
+The discovery response does not persist anything. Installation stores a manifest snapshot. Command auth is `oauth2-bearer`; Shadow sends an opaque bearer token that the App must introspect, so the App never receives a user JWT or a shared secret.
 
-Admins can also publish manifests into the global App catalog. Server admins can install from that catalog without pasting a manifest URL each time. `hmac-sha256` exists only for legacy Apps and requires an encrypted shared secret.
+Admins can also publish manifests into the global App catalog. Server admins can install from that catalog without pasting a manifest URL each time.
 
 ## Channel @App Mentions
 
@@ -229,7 +229,7 @@ Active responses include `active`, `token_type`, `sub`, `scope`, `exp`, `iat`, a
 }
 ```
 
-Legacy `hmac-sha256` Apps receive `X-Shadow-Signature: v1=<hmac_sha256(timestamp + "." + body)>` for JSON command calls. New Apps should use `oauth2-bearer`.
+The bearer token is opaque (`sat_cmd_v1_...`) and short-lived. App backends use the introspection endpoint to resolve the user or Buddy identity, scopes, command, channel, action, and data class.
 
 Binary is supported at the protocol layer through multipart commands. A command can set `input: "multipart"` and `binary.supported: true`; the CLI sends `input` as JSON plus a file field.
 

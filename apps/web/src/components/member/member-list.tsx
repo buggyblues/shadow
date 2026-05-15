@@ -141,6 +141,14 @@ export function MemberList() {
       queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
     }
   })
+  useSocketEvent('member:joined', (data: { serverId?: string; channelId?: string }) => {
+    if (
+      (activeChannelId && data.channelId === activeChannelId) ||
+      (!activeChannelId && data.serverId === activeServerId)
+    ) {
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+    }
+  })
   useSocketEvent('channel:member-removed', (data: { channelId: string }) => {
     if (data.channelId === activeChannelId) {
       queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })

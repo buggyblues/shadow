@@ -119,7 +119,6 @@ services:
       SHADOW_AGENT_SERVER_URL: ${SHADOW_AGENT_SERVER_URL:-http://host.lima.internal:3002}
       SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS: ${SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS:-shadow-server-app-demo}
       SHADOW_SERVER_APP_DEMO_MANIFEST_URL: ${SHADOW_SERVER_APP_DEMO_MANIFEST_URL:-http://shadow-server-app-demo:4199/.well-known/shadow-app.json}
-      SHADOW_SERVER_APP_DEMO_SECRET: ${SHADOW_SERVER_APP_DEMO_SECRET:-dev-demo-secret-change-me-please}
       SHADOWOB_OPENCLAW_RUNNER_IMAGE: ${SHADOWOB_OPENCLAW_RUNNER_IMAGE:-ghcr.io/buggyblues/openclaw-runner:latest}
       SHADOW_MODEL_PROXY_ENABLED: ${SHADOW_MODEL_PROXY_ENABLED:-true}
       SHADOW_MODEL_PROXY_MODEL: ${SHADOW_MODEL_PROXY_MODEL:-deepseek-v4-flash}
@@ -147,8 +146,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      shadow-server-app-demo:
-        condition: service_started
 
   web:
     build:

@@ -4,6 +4,7 @@ import {
   type ServerAppManifest,
   serverAppBuddyGrants,
   serverAppCatalogEntries,
+  serverAppCommandTokens,
   serverAppIntegrations,
 } from '../db/schema'
 
@@ -53,7 +54,6 @@ export class AppIntegrationDao {
     iframeEntry?: string | null
     allowedOrigins: string[]
     apiBaseUrl: string
-    sharedSecretEncrypted?: string | null
     installedByUserId: string
   }) {
     const rows = await this.db
@@ -69,7 +69,6 @@ export class AppIntegrationDao {
         iframeEntry: data.iframeEntry ?? null,
         allowedOrigins: data.allowedOrigins,
         apiBaseUrl: data.apiBaseUrl,
-        sharedSecretEncrypted: data.sharedSecretEncrypted ?? null,
         installedByUserId: data.installedByUserId,
         status: 'active',
       })
@@ -84,7 +83,6 @@ export class AppIntegrationDao {
           iframeEntry: data.iframeEntry ?? null,
           allowedOrigins: data.allowedOrigins,
           apiBaseUrl: data.apiBaseUrl,
-          sharedSecretEncrypted: data.sharedSecretEncrypted ?? null,
           status: 'active',
           installedByUserId: data.installedByUserId,
           updatedAt: sql`NOW()`,
@@ -142,7 +140,6 @@ export class AppIntegrationDao {
     iconUrl?: string | null
     manifestUrl?: string | null
     manifest: ServerAppManifest
-    sharedSecretEncrypted?: string | null
     status?: string
     createdByUserId?: string | null
   }) {
@@ -155,7 +152,6 @@ export class AppIntegrationDao {
         iconUrl: data.iconUrl ?? null,
         manifestUrl: data.manifestUrl ?? null,
         manifest: data.manifest,
-        sharedSecretEncrypted: data.sharedSecretEncrypted ?? null,
         status: data.status ?? 'active',
         createdByUserId: data.createdByUserId ?? null,
       })
@@ -167,7 +163,6 @@ export class AppIntegrationDao {
           iconUrl: data.iconUrl ?? null,
           manifestUrl: data.manifestUrl ?? null,
           manifest: data.manifest,
-          sharedSecretEncrypted: data.sharedSecretEncrypted ?? null,
           status: data.status ?? 'active',
           updatedAt: sql`NOW()`,
         },
@@ -234,5 +229,35 @@ export class AppIntegrationDao {
       .from(serverAppBuddyGrants)
       .where(eq(serverAppBuddyGrants.serverAppId, serverAppId))
       .orderBy(serverAppBuddyGrants.createdAt)
+  }
+
+  async createCommandToken(data: {
+    tokenHash: string
+    serverAppId: string
+    serverId: string
+    appKey: string
+    command: string
+    userId: string
+    actorKind: string
+    buddyAgentId?: string | null
+    ownerId?: string | null
+    channelId?: string | null
+    permission: string
+    action: string
+    dataClass: string
+    scopes: string[]
+    expiresAt: Date
+  }) {
+    const rows = await this.db.insert(serverAppCommandTokens).values(data).returning()
+    return rows[0]!
+  }
+
+  async findCommandTokenByHash(tokenHash: string) {
+    const rows = await this.db
+      .select()
+      .from(serverAppCommandTokens)
+      .where(eq(serverAppCommandTokens.tokenHash, tokenHash))
+      .limit(1)
+    return rows[0] ?? null
   }
 }

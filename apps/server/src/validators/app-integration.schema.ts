@@ -85,7 +85,7 @@ export const serverAppManifestSchema = z.object({
     baseUrl: httpUrlSchema,
     auth: z
       .object({
-        type: z.enum(['oauth2-bearer', 'hmac-sha256', 'none']).default('oauth2-bearer'),
+        type: z.literal('oauth2-bearer').default('oauth2-bearer'),
       })
       .optional(),
   }),
@@ -119,7 +119,6 @@ export const installServerAppSchema = z
   .object({
     manifestUrl: httpUrlSchema.optional(),
     manifest: serverAppManifestSchema.optional(),
-    sharedSecret: z.string().min(16).max(512).optional(), // legacy hmac-sha256 only
   })
   .refine((value) => Boolean(value.manifestUrl || value.manifest), {
     message: 'manifestUrl or manifest is required',
@@ -138,16 +137,13 @@ export const createServerAppCatalogEntrySchema = z
   .object({
     manifestUrl: httpUrlSchema.optional(),
     manifest: serverAppManifestSchema.optional(),
-    sharedSecret: z.string().min(16).max(512).optional(),
     status: z.enum(['active', 'disabled']).default('active').optional(),
   })
   .refine((value) => Boolean(value.manifestUrl || value.manifest), {
     message: 'manifestUrl or manifest is required',
   })
 
-export const installServerAppFromCatalogSchema = z.object({
-  sharedSecret: z.string().min(16).max(512).optional(),
-})
+export const installServerAppFromCatalogSchema = z.object({}).optional().default({})
 
 export const grantServerAppBuddySchema = z.object({
   buddyAgentId: z.string().uuid(),

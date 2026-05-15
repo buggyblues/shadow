@@ -203,6 +203,10 @@ export class NotificationService {
     return this.deps.notificationDao.markAsRead(userId, id)
   }
 
+  async markReferenceAsRead(userId: string, referenceType: string, referenceId: string) {
+    await this.deps.notificationDao.markReferenceAsRead(userId, referenceType, referenceId)
+  }
+
   async markAllAsRead(userId: string) {
     await this.deps.notificationDao.markAllAsRead(userId)
   }

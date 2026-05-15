@@ -13,7 +13,7 @@ shadowob app install \
 ```
 
 Apps are server-scoped. A server can install many Apps, and each Buddy needs an explicit grant before it can call App commands.
-Command calls use short-lived Shadow-issued OAuth Bearer tokens by default. The App backend introspects the token to resolve the user/Buddy identity and does not need a static shared secret; `hmac-sha256` remains only for legacy integrations.
+Command calls use short-lived opaque Shadow-issued OAuth Bearer tokens. The App backend introspects the token to resolve the user/Buddy identity and does not receive user JWTs or static shared secrets.
 
 ## Buddy Access
 

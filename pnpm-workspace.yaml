@@ -3,4 +3,5 @@ packages:
   - "apps/cloud/packages/*"
   - "apps/flash/packages/*"
   - "packages/*"
+  - "packages/views"
   - "website"

@@ -407,6 +407,9 @@ export function createServerHandler(container: AppContainer) {
           reviewerId,
           approved: result.approved,
         })
+        await container
+          .resolve('notificationService')
+          .markReferenceAsRead(reviewerId, 'server_join_request', requestId)
       } catch {
         /* non-critical */
       }

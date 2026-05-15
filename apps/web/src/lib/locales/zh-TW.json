@@ -540,14 +540,10 @@
       "custom": "自訂"
     },
     "auth": {
-      "oauth2-bearer": "OAuth Bearer",
-      "hmac-sha256": "舊版 HMAC",
-      "none": "無鑑權"
+      "oauth2-bearer": "OAuth Bearer"
     },
     "install": "安裝應用",
     "manifestUrl": "Manifest URL",
-    "sharedSecret": "共享密鑰（可選）",
-    "legacySharedSecret": "舊版 HMAC 共享密鑰",
     "installButton": "安裝",
     "selectApp": "選擇一個應用",
     "selectFromSidebar": "從左側選擇一個 App",

@@ -1,14 +1,15 @@
-import type { Actor } from '../security/actor'
-import { actorUserId } from '../security/actor'
-import type { AccessService } from '../security/access.service'
 import type { AgentDao } from '../dao/agent.dao'
-import type { UserDao } from '../dao/user.dao'
 import type { ServerDao } from '../dao/server.dao'
-import type { MediaService } from '../services/media.service'
-import type { WalletService } from '../services/wallet.service'
-import type { TaskCenterService } from '../services/task-center.service'
+import type { UserDao } from '../dao/user.dao'
 import { logger } from '../lib/logger'
 import { getRedisClient, presenceKeys } from '../lib/redis'
+import type { AccessService } from '../security/access.service'
+import type { Actor } from '../security/actor'
+import { actorUserId } from '../security/actor'
+import { getBuddyMode } from '../services/buddy-policy'
+import type { MediaService } from '../services/media.service'
+import type { TaskCenterService } from '../services/task-center.service'
+import type { WalletService } from '../services/wallet.service'
 
 async function resolveLiveUserStatus(
   userId: string,
@@ -40,6 +41,7 @@ export class AuthUseCase {
 
   async getUserPublicProfile(actor: Actor, targetUserId: string) {
     const { userDao, agentDao, mediaService } = this.deps
+    const viewerUserId = actorUserId(actor)
 
     const user = await userDao.findById(targetUserId)
     if (!user) return null
@@ -60,6 +62,14 @@ export class AuthUseCase {
     } | null = null
     if (user.isBot) {
       const foundAgent = await agentDao.findByUserId(user.id)
+      if (
+        foundAgent &&
+        getBuddyMode(foundAgent.config) === 'private' &&
+        viewerUserId !== foundAgent.ownerId &&
+        viewerUserId !== foundAgent.userId
+      ) {
+        return null
+      }
       if (foundAgent?.ownerId) {
         const owner = await userDao.findById(foundAgent.ownerId)
         if (owner) {
@@ -102,23 +112,25 @@ export class AuthUseCase {
     if (!user.isBot) {
       const agents = await agentDao.findByOwnerId(user.id)
       ownedAgents = await Promise.all(
-        agents.map(async (a) => {
-          const botUser = await userDao.findById(a.userId)
-          return {
-            id: a.id,
-            userId: a.userId,
-            status: a.status,
-            totalOnlineSeconds: a.totalOnlineSeconds ?? 0,
-            botUser: botUser
-              ? {
-                  id: botUser.id,
-                  username: botUser.username,
-                  displayName: botUser.displayName ?? botUser.username,
-                  avatarUrl: mediaService.resolveMediaUrl(botUser.avatarUrl),
-                }
-              : undefined,
-          }
-        }),
+        agents
+          .filter((a) => viewerUserId === user.id || getBuddyMode(a.config) !== 'private')
+          .map(async (a) => {
+            const botUser = await userDao.findById(a.userId)
+            return {
+              id: a.id,
+              userId: a.userId,
+              status: a.status,
+              totalOnlineSeconds: a.totalOnlineSeconds ?? 0,
+              botUser: botUser
+                ? {
+                    id: botUser.id,
+                    username: botUser.username,
+                    displayName: botUser.displayName ?? botUser.username,
+                    avatarUrl: mediaService.resolveMediaUrl(botUser.avatarUrl),
+                  }
+                : undefined,
+            }
+          }),
       )
     }
 
@@ -173,9 +185,8 @@ export class AuthUseCase {
       buddyCount: agents.length,
       buddyOnlineHours: Math.round(totalBuddyOnlineSeconds / 3600),
       walletBalance: (wallet as { balance: number }).balance ?? 0,
-      tasksCompleted: (
-        taskCenter as { summary: { completedTasks: number } }
-      ).summary?.completedTasks ?? 0,
+      tasksCompleted:
+        (taskCenter as { summary: { completedTasks: number } }).summary?.completedTasks ?? 0,
       tasksTotal: (taskCenter as { summary: { totalTasks: number } }).summary?.totalTasks ?? 0,
       referralCount: (referral as { successfulInvites: number }).successfulInvites ?? 0,
       referralRewards: (referral as { totalInviteRewards: number }).totalInviteRewards ?? 0,

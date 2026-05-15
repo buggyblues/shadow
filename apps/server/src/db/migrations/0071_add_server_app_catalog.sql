@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS "server_app_catalog_entries" (
   "icon_url" text,
   "manifest_url" text,
   "manifest" jsonb NOT NULL,
-  "shared_secret_encrypted" text,
   "status" varchar(24) NOT NULL DEFAULT 'active',
   "created_by_user_id" uuid REFERENCES "users"("id") ON DELETE SET NULL,
   "created_at" timestamp with time zone NOT NULL DEFAULT now(),

@@ -1,12 +1,10 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AppIntegrationDao } from '../dao/app-integration.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { validateJsonLimits } from '../lib/json-limits'
-import { signServerAppToken, verifyToken } from '../lib/jwt'
-import { decrypt, encrypt } from '../lib/kms'
 import type { Actor } from '../security/actor'
 import {
   type CallServerAppCommandInput,
@@ -116,7 +114,6 @@ function redactCatalogEntry(row: Awaited<ReturnType<AppIntegrationDao['findCatal
     manifestUrl: row.manifestUrl,
     manifest: row.manifest,
     status: row.status,
-    hasSharedSecret: Boolean(row.sharedSecretEncrypted),
     createdByUserId: row.createdByUserId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -130,10 +127,14 @@ interface LaunchTokenPayload {
   exp: number
 }
 
-type ServerAppAuthType = 'oauth2-bearer' | 'hmac-sha256' | 'none'
+type ServerAppAuthType = 'oauth2-bearer'
 
 function serverAppAuthType(manifest: { api: { auth?: { type?: ServerAppAuthType } } }) {
   return manifest.api.auth?.type ?? 'oauth2-bearer'
+}
+
+function hashOpaqueToken(token: string) {
+  return createHash('sha256').update(token).digest('hex')
 }
 
 export class AppIntegrationService {
@@ -323,16 +324,6 @@ export class AppIntegrationService {
 
   async upsertCatalogEntry(actor: Actor, input: CreateServerAppCatalogEntryInput) {
     const preview = await this.buildCatalogPreview(input)
-    const existing = await this.deps.appIntegrationDao.findCatalogEntryByAppKey(
-      preview.manifest.appKey,
-    )
-    const authType = serverAppAuthType(preview.manifest)
-    const sharedSecretEncrypted =
-      authType === 'hmac-sha256'
-        ? input.sharedSecret
-          ? encrypt(input.sharedSecret)
-          : (existing?.sharedSecretEncrypted ?? null)
-        : null
     const row = await this.deps.appIntegrationDao.upsertCatalogEntry({
       appKey: preview.manifest.appKey,
       name: preview.manifest.name,
@@ -340,7 +331,6 @@ export class AppIntegrationService {
       iconUrl: preview.manifest.iconUrl,
       manifestUrl: input.manifestUrl ?? null,
       manifest: preview.manifest,
-      sharedSecretEncrypted,
       status: input.status ?? 'active',
       createdByUserId: actor.kind === 'system' ? null : actor.userId,
     })
@@ -365,10 +355,6 @@ export class AppIntegrationService {
       iconUrl: preview.manifest.iconUrl,
       manifestUrl: input.manifestUrl ?? null,
       manifest: preview.manifest,
-      sharedSecretEncrypted:
-        serverAppAuthType(preview.manifest) === 'hmac-sha256' && input.sharedSecret
-          ? encrypt(input.sharedSecret)
-          : null,
       status: input.status ?? 'active',
       createdByUserId: null,
     })
@@ -386,22 +372,16 @@ export class AppIntegrationService {
     actor: Actor,
     input: InstallServerAppFromCatalogInput,
   ) {
+    void input
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.requireServerAdmin(actor, serverId)
     const entry = await this.deps.appIntegrationDao.findCatalogEntryById(catalogEntryId)
     if (!entry || entry.status !== 'active') {
       throw Object.assign(new Error('App catalog entry not found'), { status: 404 })
     }
-    const authType = serverAppAuthType(entry.manifest)
-    const sharedSecret =
-      authType === 'hmac-sha256'
-        ? (input.sharedSecret ??
-          (entry.sharedSecretEncrypted ? decrypt(entry.sharedSecretEncrypted) : undefined))
-        : undefined
     return this.install(serverId, actor, {
       manifestUrl: entry.manifestUrl ?? undefined,
       manifest: serverAppManifestSchema.parse(entry.manifest),
-      sharedSecret,
     })
   }
 
@@ -414,11 +394,6 @@ export class AppIntegrationService {
     const iframeEntry = manifest.iframe?.entry ?? null
     const allowedOrigins =
       manifest.iframe?.allowedOrigins ?? (iframeEntry ? [normalizeOrigin(iframeEntry)] : [])
-    const authType = serverAppAuthType(manifest)
-    const sharedSecret =
-      authType === 'hmac-sha256'
-        ? (input.sharedSecret ?? randomBytes(32).toString('base64url'))
-        : null
     const app = await this.deps.appIntegrationDao.upsert({
       serverId,
       appKey: manifest.appKey,
@@ -430,14 +405,10 @@ export class AppIntegrationService {
       iframeEntry,
       allowedOrigins,
       apiBaseUrl: manifest.api.baseUrl.replace(/\/$/, ''),
-      sharedSecretEncrypted: sharedSecret ? encrypt(sharedSecret) : null,
       installedByUserId: requireUserBoundActor(actor),
     })
 
-    return {
-      ...redactApp(app)!,
-      sharedSecret,
-    }
+    return redactApp(app)!
   }
 
   async createLaunch(serverIdOrSlug: string, appKey: string, actor: Actor) {
@@ -571,21 +542,25 @@ export class AppIntegrationService {
       throw Object.assign(new Error('System actor cannot call server apps'), { status: 403 })
     }
     const buddyAgentId = await this.actorBuddyAgentId(input.actor)
-    return signServerAppToken({
-      userId: input.actor.userId,
+    const token = `sat_cmd_v1_${randomBytes(32).toString('base64url')}`
+    await this.deps.appIntegrationDao.createCommandToken({
+      tokenHash: hashOpaqueToken(token),
       scopes: [input.permission],
+      userId: input.actor.userId,
       serverId: input.serverId,
       serverAppId: input.serverAppId,
       appKey: input.appKey,
       command: input.command,
       actorKind: input.actor.kind,
-      agentId: buddyAgentId ?? undefined,
-      ownerId: input.actor.kind === 'agent' ? input.actor.ownerId : undefined,
-      channelId: input.channelId ?? undefined,
+      buddyAgentId,
+      ownerId: input.actor.kind === 'agent' ? input.actor.ownerId : null,
+      channelId: input.channelId,
       permission: input.permission,
       action: input.action,
       dataClass: input.dataClass,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
     })
+    return token
   }
 
   private async requireCommandGrant(actor: Actor, serverAppId: string, permission: string) {
@@ -617,15 +592,6 @@ export class AppIntegrationService {
       return fetch(url, { ...init, redirect: 'manual' })
     }
     return this.deps.safeHttpClient.fetch(url.toString(), init, { maxRedirects: 0 })
-  }
-
-  private signRequest(input: { secret: string | null; timestamp: string; body: Buffer }) {
-    if (!input.secret) return null
-    return `v1=${createHmac('sha256', input.secret)
-      .update(input.timestamp)
-      .update('.')
-      .update(input.body)
-      .digest('hex')}`
   }
 
   private assertSignature(signature: string, expected: string) {
@@ -706,10 +672,6 @@ export class AppIntegrationService {
     }
 
     const authType = serverAppAuthType(app.manifest)
-    const secret =
-      authType === 'hmac-sha256' && app.sharedSecretEncrypted
-        ? decrypt(app.sharedSecretEncrypted)
-        : null
     const timestamp = new Date().toISOString()
     const url = this.commandUrl(app.apiBaseUrl, command.path)
     const headers: Record<string, string> = {
@@ -750,9 +712,6 @@ export class AppIntegrationService {
           context,
         }),
       )
-      const signature =
-        authType === 'hmac-sha256' ? this.signRequest({ secret, timestamp, body: payload }) : null
-      if (signature) headers['X-Shadow-Signature'] = signature
       headers['Content-Type'] = 'application/json'
       body = payload
     }
@@ -805,17 +764,6 @@ export class AppIntegrationService {
       })
       return { ok: true, result }
     }
-    if (authType === 'hmac-sha256' && typeof result.shadowSignature === 'string' && secret) {
-      const body = Buffer.from(JSON.stringify(result.result ?? result))
-      const expected = this.signRequest({
-        secret,
-        timestamp: String(result.timestamp ?? timestamp),
-        body,
-      })
-      if (expected && !this.assertSignature(result.shadowSignature, expected)) {
-        throw Object.assign(new Error('Invalid app response signature'), { status: 502 })
-      }
-    }
     this.publishCommandEvent({
       serverId,
       serverAppId: app.id,
@@ -833,16 +781,8 @@ export class AppIntegrationService {
     const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
     if (!app) return { active: false }
 
-    let payload: ReturnType<typeof verifyToken> & { exp?: number; iat?: number }
-    try {
-      payload = verifyToken(token, 'server_app') as ReturnType<typeof verifyToken> & {
-        exp?: number
-        iat?: number
-      }
-    } catch {
-      return { active: false }
-    }
-
+    const payload = await this.deps.appIntegrationDao.findCommandTokenByHash(hashOpaqueToken(token))
+    if (!payload || payload.expiresAt.getTime() <= Date.now()) return { active: false }
     if (
       payload.serverId !== serverId ||
       payload.serverAppId !== app.id ||
@@ -854,16 +794,16 @@ export class AppIntegrationService {
     return {
       active: true,
       token_type: 'Bearer',
-      iss: payload.iss ?? 'shadow',
-      aud: payload.aud ?? 'shadow:server_app',
+      iss: 'shadow',
+      aud: 'shadow:server_app',
       sub:
-        payload.actorKind === 'agent' && payload.agentId
-          ? `agent:${payload.agentId}`
+        payload.actorKind === 'agent' && payload.buddyAgentId
+          ? `agent:${payload.buddyAgentId}`
           : `user:${payload.userId}`,
-      scope: (payload.scopes ?? []).join(' '),
+      scope: payload.scopes.join(' '),
       client_id: app.appKey,
-      exp: payload.exp,
-      iat: payload.iat,
+      exp: Math.floor(payload.expiresAt.getTime() / 1000),
+      iat: Math.floor(payload.createdAt.getTime() / 1000),
       shadow: {
         protocol: 'shadow.app/1',
         serverId,
@@ -873,7 +813,7 @@ export class AppIntegrationService {
         actor: {
           kind: payload.actorKind,
           userId: payload.userId,
-          buddyAgentId: payload.agentId ?? null,
+          buddyAgentId: payload.buddyAgentId ?? null,
           ownerId: payload.ownerId ?? null,
         },
         channelId: payload.channelId ?? null,

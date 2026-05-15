@@ -48,6 +48,7 @@ const manifest: ServerAppManifestInput = {
 }
 
 function createService(overrides: Record<string, unknown> = {}) {
+  const commandTokens: any[] = []
   const appRow = {
     id: 'app-1',
     serverId: 'srv-1',
@@ -60,7 +61,6 @@ function createService(overrides: Record<string, unknown> = {}) {
     iframeEntry: manifest.iframe!.entry,
     allowedOrigins: manifest.iframe!.allowedOrigins,
     apiBaseUrl: manifest.api.baseUrl,
-    sharedSecretEncrypted: null,
     status: 'active',
     installedByUserId: 'user-1',
     createdAt: new Date(),
@@ -79,6 +79,16 @@ function createService(overrides: Record<string, unknown> = {}) {
         expiresAt: null,
       }),
       upsertBuddyGrant: vi.fn().mockResolvedValue({ id: 'grant-1' }),
+      createCommandToken: vi.fn().mockImplementation(async (data) => {
+        const row = { id: 'token-1', ...data, createdAt: new Date() }
+        commandTokens.push(row)
+        return row
+      }),
+      findCommandTokenByHash: vi
+        .fn()
+        .mockImplementation(
+          async (tokenHash) => commandTokens.find((token) => token.tokenHash === tokenHash) ?? null,
+        ),
       deleteByServerAndKey: vi.fn(),
       listCatalogEntries: vi.fn().mockResolvedValue([
         {
@@ -89,7 +99,6 @@ function createService(overrides: Record<string, unknown> = {}) {
           iconUrl: manifest.iconUrl,
           manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
           manifest,
-          sharedSecretEncrypted: null,
           status: 'active',
           createdByUserId: null,
           createdAt: new Date(),
@@ -104,7 +113,6 @@ function createService(overrides: Record<string, unknown> = {}) {
         iconUrl: manifest.iconUrl,
         manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
         manifest,
-        sharedSecretEncrypted: null,
         status: 'active',
         createdByUserId: null,
         createdAt: new Date(),
@@ -119,7 +127,6 @@ function createService(overrides: Record<string, unknown> = {}) {
         iconUrl: manifest.iconUrl,
         manifestUrl: null,
         manifest,
-        sharedSecretEncrypted: null,
         status: 'active',
         createdByUserId: 'user-1',
         createdAt: new Date(),
@@ -174,12 +181,10 @@ describe('AppIntegrationService', () => {
       },
       {
         manifest,
-        sharedSecret: 'dev-demo-secret-change-me-please',
       },
     )
 
     expect(result.appKey).toBe('demo-desk')
-    expect(result.sharedSecret).toBeNull()
     expect(deps.policyService.requireServerRole).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user-1' }),
       'srv-1',
@@ -190,7 +195,6 @@ describe('AppIntegrationService', () => {
         serverId: 'srv-1',
         appKey: 'demo-desk',
         apiBaseUrl: 'http://localhost:4199',
-        sharedSecretEncrypted: null,
       }),
     )
   })
@@ -251,7 +255,6 @@ describe('AppIntegrationService', () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     const headers = init.headers as Record<string, string>
     expect(headers.Authorization).toMatch(/^Bearer /)
-    expect(headers['X-Shadow-Signature']).toBeUndefined()
 
     const introspection = await service.introspectCommandToken(
       'srv-1',
@@ -324,7 +327,6 @@ describe('AppIntegrationService', () => {
       id: 'catalog-1',
       appKey: 'demo-desk',
       installed: expect.objectContaining({ id: 'app-1' }),
-      hasSharedSecret: false,
     })
   })
 
@@ -340,7 +342,7 @@ describe('AppIntegrationService', () => {
         authMethod: 'jwt',
         scopes: [],
       },
-      { sharedSecret: 'dev-demo-secret-change-me-please' },
+      {},
     )
 
     expect(deps.appIntegrationDao.findCatalogEntryById).toHaveBeenCalledWith('catalog-1')

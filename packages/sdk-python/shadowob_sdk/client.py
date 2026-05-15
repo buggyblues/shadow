@@ -430,27 +430,20 @@ class ShadowClient:
         *,
         manifest_url: str | None = None,
         manifest: dict[str, Any] | None = None,
-        shared_secret: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         if manifest_url:
             payload["manifestUrl"] = manifest_url
         if manifest is not None:
             payload["manifest"] = manifest
-        if shared_secret:
-            payload["sharedSecret"] = shared_secret
         return self._post(f"/api/servers/{server_id_or_slug}/apps", json=payload)
 
     def install_server_app_from_catalog(
         self,
         server_id_or_slug: str,
         catalog_entry_id: str,
-        *,
-        shared_secret: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
-        if shared_secret:
-            payload["sharedSecret"] = shared_secret
         return self._post(
             f"/api/servers/{server_id_or_slug}/apps/catalog/{catalog_entry_id}/install",
             json=payload,

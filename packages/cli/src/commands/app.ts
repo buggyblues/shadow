@@ -95,7 +95,6 @@ export function createAppCommand(): Command {
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--manifest-url <url>', 'Manifest URL')
     .option('--manifest-file <path>', 'Local manifest JSON file')
-    .option('--shared-secret <secret>', 'Legacy HMAC shared secret for app command calls')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
@@ -103,7 +102,6 @@ export function createAppCommand(): Command {
         server: string
         manifestUrl?: string
         manifestFile?: string
-        sharedSecret?: string
         profile?: string
         json?: boolean
       }) => {
@@ -118,7 +116,6 @@ export function createAppCommand(): Command {
           const result = await client.installServerApp(resolveServer(options.server), {
             manifestUrl: options.manifestUrl,
             manifest: manifest as never,
-            sharedSecret: options.sharedSecret,
           })
           output(result, { json: options.json })
         } catch (error) {

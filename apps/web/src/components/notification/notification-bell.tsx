@@ -1,3 +1,4 @@
+import { cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Bell, Check, CheckCheck, X } from 'lucide-react'
@@ -15,6 +16,8 @@ interface Notification {
   body: string | null
   referenceId: string | null
   referenceType: string | null
+  scopeServerId?: string | null
+  scopeChannelId?: string | null
   metadata?: Record<string, unknown> | null
   aggregatedCount?: number | null
   isRead: boolean
@@ -111,6 +114,11 @@ function getNotificationDisplay(
   }
 }
 
+function metaString(n: Notification, key: string) {
+  const value = n.metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
 export function NotificationBell() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -130,9 +138,20 @@ export function NotificationBell() {
           const message = await fetchApi<{ id: string; channelId: string }>(
             `/api/messages/${n.referenceId}`,
           )
-          const channel = await fetchApi<{ id: string; name: string; serverId: string }>(
-            `/api/channels/${message.channelId}`,
-          )
+          const channel = await fetchApi<{
+            id: string
+            name: string
+            serverId?: string | null
+            kind?: string
+          }>(`/api/channels/${message.channelId}`)
+          if (channel.kind === 'dm' || !channel.serverId) {
+            setShowPanel(false)
+            navigate({
+              to: '/dm/$dmChannelId',
+              params: { dmChannelId: message.channelId },
+            })
+            return
+          }
           const server = await fetchApi<{ id: string; slug: string }>(
             `/api/servers/${channel.serverId}`,
           )
@@ -144,11 +163,22 @@ export function NotificationBell() {
         } catch {
           // Message may have been deleted
         }
-      } else if (n.referenceType === 'channel_invite' && n.referenceId) {
+      } else if (
+        (n.referenceType === 'channel_invite' || n.referenceType === 'channel') &&
+        n.referenceId
+      ) {
         try {
-          const channel = await fetchApi<{ id: string; name: string; serverId: string }>(
-            `/api/channels/${n.referenceId}`,
-          )
+          const channel = await fetchApi<{
+            id: string
+            name: string
+            serverId?: string | null
+            kind?: string
+          }>(`/api/channels/${n.referenceId}`)
+          if (channel.kind === 'dm' || !channel.serverId) {
+            setShowPanel(false)
+            navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: channel.id } })
+            return
+          }
           const server = await fetchApi<{ id: string; slug: string }>(
             `/api/servers/${channel.serverId}`,
           )
@@ -160,7 +190,10 @@ export function NotificationBell() {
         } catch {
           // Channel may have been deleted
         }
-      } else if (n.referenceType === 'server_join' && n.referenceId) {
+      } else if (
+        (n.referenceType === 'server_join' || n.referenceType === 'server_invite') &&
+        n.referenceId
+      ) {
         try {
           const server = await fetchApi<{ id: string; slug: string }>(
             `/api/servers/${n.referenceId}`,
@@ -172,6 +205,25 @@ export function NotificationBell() {
           })
         } catch {
           // Server may have been deleted
+        }
+      } else if (n.scopeChannelId || metaString(n, 'channelId')) {
+        const channelId = n.scopeChannelId ?? metaString(n, 'channelId')
+        const serverId = n.scopeServerId ?? metaString(n, 'serverId')
+        if (!channelId) return
+        if (!serverId) {
+          setShowPanel(false)
+          navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: channelId } })
+          return
+        }
+        try {
+          const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
+          setShowPanel(false)
+          navigate({
+            to: '/servers/$serverSlug/channels/$channelId',
+            params: { serverSlug: server.slug ?? server.id, channelId },
+          })
+        } catch {
+          // Scope may no longer be visible.
         }
       }
     },
@@ -325,7 +377,7 @@ export function NotificationBell() {
                             </p>
                           )}
                           {n.referenceType === 'channel_join_request' && n.referenceId && (
-                            <div className="mt-2 flex gap-2">
+                            <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
                               <button
                                 type="button"
                                 className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
@@ -359,7 +411,7 @@ export function NotificationBell() {
                             </div>
                           )}
                           {n.referenceType === 'server_join_request' && n.referenceId && (
-                            <div className="mt-2 flex gap-2">
+                            <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
                               <button
                                 type="button"
                                 className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
@@ -399,7 +451,10 @@ export function NotificationBell() {
                         {!n.isRead && (
                           <button
                             type="button"
-                            onClick={() => markRead.mutate(n.id)}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              markRead.mutate(n.id)
+                            }}
                             className="shrink-0 p-1 text-text-muted hover:text-primary transition"
                             title={t('notification.markRead')}
                           >
