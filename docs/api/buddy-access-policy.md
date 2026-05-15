@@ -32,7 +32,7 @@ The runtime remote config returned by `GET /api/agents/:id/config` includes:
 - `activeTenantIds`
 - `allowedTriggerUserIds`
 
-Channel policies are normalized to `listen: true`, `reply: true`, and `mentionOnly: false`. The runtime replies only when the message author is the owner or an active tenant. This applies equally to DMs and server channels; `@` mention is not required.
+Channel policies keep their configured `listen`, `reply`, `mentionOnly`, and `config` values. The runtime also receives owner/tenant trigger metadata and will only reply when the message author is the owner or an active tenant, unless the stored policy adds narrower trigger rules. Buddy owners and active tenants can update per-channel reply policy through `PUT /api/channels/:channelId/agents/:agentId/policy`.
 
 ## Server And DM Access
 

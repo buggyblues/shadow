@@ -38,9 +38,17 @@ export default defineConfig({
       'Access-Control-Allow-Origin': '*',
     },
     proxy: {
+      '/api': {
+        target: process.env.VITE_API_BASE || 'https://shadowob.com',
+        changeOrigin: true,
+      },
       '/shadow': {
         target: 'https://shadowob.com',
         changeOrigin: true,
+      },
+      '/socket.io': {
+        target: process.env.VITE_API_BASE || 'https://shadowob.com',
+        ws: true,
       },
     },
   },

@@ -113,3 +113,149 @@ describe('channel slash command registry', () => {
     expect(agentDao.findByUserIds).not.toHaveBeenCalled()
   })
 })
+
+describe('channel Buddy reply policy routes', () => {
+  it('lets an active tenant store a custom channel policy', async () => {
+    const agentPolicyService = {
+      upsertPolicies: vi.fn().mockResolvedValue([{ id: 'policy-1' }]),
+    }
+    const agentService = {
+      getById: vi.fn().mockResolvedValue({
+        id: 'agent-1',
+        userId: 'bot-user-1',
+        ownerId: 'owner-1',
+      }),
+    }
+    const channelService = {
+      getById: vi.fn().mockResolvedValue({ id: 'channel-1', kind: 'server', serverId: 'server-1' }),
+    }
+    const rentalService = {
+      canUseAgent: vi.fn().mockResolvedValue({ canUse: true, role: 'tenant' }),
+    }
+
+    const app = createChannelHandler(
+      createMockContainer({
+        agentPolicyService,
+        agentService,
+        channelService,
+        rentalService,
+      }),
+    )
+
+    const res = await app.request('/channels/channel-1/agents/agent-1/policy', {
+      method: 'PUT',
+      headers: { ...authHeaders('tenant-1'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'custom',
+        config: {
+          mentionOnly: true,
+          replyToUsers: ['alice'],
+          keywords: ['urgent'],
+          replyToBuddy: true,
+          maxBuddyChainDepth: 2,
+          smartReply: false,
+        },
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(rentalService.canUseAgent).toHaveBeenCalledWith('agent-1', 'tenant-1')
+    expect(agentPolicyService.upsertPolicies).toHaveBeenCalledWith('agent-1', [
+      {
+        serverId: 'server-1',
+        channelId: 'channel-1',
+        listen: true,
+        reply: true,
+        mentionOnly: true,
+        config: {
+          mentionOnly: true,
+          replyToUsers: ['alice'],
+          keywords: ['urgent'],
+          replyToBuddy: true,
+          maxBuddyChainDepth: 2,
+          smartReply: false,
+        },
+      },
+    ])
+  })
+
+  it('rejects policy updates from users who are not the Buddy owner or tenant', async () => {
+    const agentPolicyService = {
+      upsertPolicies: vi.fn(),
+    }
+    const agentService = {
+      getById: vi.fn().mockResolvedValue({
+        id: 'agent-1',
+        userId: 'bot-user-1',
+        ownerId: 'owner-1',
+      }),
+    }
+    const channelService = {
+      getById: vi.fn().mockResolvedValue({ id: 'channel-1', kind: 'server', serverId: 'server-1' }),
+    }
+    const rentalService = {
+      canUseAgent: vi.fn().mockResolvedValue({ canUse: false, role: null }),
+    }
+
+    const app = createChannelHandler(
+      createMockContainer({
+        agentPolicyService,
+        agentService,
+        channelService,
+        rentalService,
+      }),
+    )
+
+    const res = await app.request('/channels/channel-1/agents/agent-1/policy', {
+      method: 'PUT',
+      headers: { ...authHeaders('user-2'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'disabled' }),
+    })
+
+    expect(res.status).toBe(403)
+    expect(agentPolicyService.upsertPolicies).not.toHaveBeenCalled()
+  })
+
+  it('returns the stored channel policy instead of a fixed default', async () => {
+    const agentPolicyDao = {
+      findByChannel: vi.fn().mockResolvedValue({
+        listen: true,
+        reply: false,
+        mentionOnly: true,
+        config: { replyToBuddy: true },
+      }),
+      findServerDefault: vi.fn(),
+    }
+    const agentService = {
+      getById: vi.fn().mockResolvedValue({
+        id: 'agent-1',
+        userId: 'bot-user-1',
+        ownerId: 'owner-1',
+      }),
+    }
+    const channelService = {
+      getById: vi.fn().mockResolvedValue({ id: 'channel-1', kind: 'server', serverId: 'server-1' }),
+    }
+
+    const app = createChannelHandler(
+      createMockContainer({
+        agentPolicyDao,
+        agentService,
+        channelService,
+      }),
+    )
+
+    const res = await app.request('/channels/channel-1/agents/agent-1/policy', {
+      headers: authHeaders('owner-1'),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toEqual({
+      listen: true,
+      reply: false,
+      mentionOnly: true,
+      config: { replyToBuddy: true },
+    })
+  })
+})
