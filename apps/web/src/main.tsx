@@ -74,6 +74,15 @@ async function redirectIfAuthenticatedRoute() {
   }
 }
 
+function marketplaceSearch(search: Record<string, unknown>) {
+  return {
+    q: (search.q as string) || undefined,
+    device: (search.device as string) || undefined,
+    os: (search.os as string) || undefined,
+    sort: (search.sort as string) || undefined,
+  }
+}
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
@@ -200,7 +209,7 @@ const settingsRoute = createRoute({
   }),
 })
 
-const settingsSubRoutes: Array<{ path: string }> = [
+const settingsSubRoutes = [
   { path: '/settings/quickstart' },
   { path: '/settings/profile' },
   { path: '/settings/account' },
@@ -266,12 +275,7 @@ const settingsBuddyMarketRoute = createRoute({
     if (staleSectionState) {
       throw redirect({
         to: '/settings/buddy/market',
-        search: {
-          ...(search.q ? { q: search.q as string } : {}),
-          ...(search.device ? { device: search.device as string } : {}),
-          ...(search.os ? { os: search.os as string } : {}),
-          ...(search.sort ? { sort: search.sort as string } : {}),
-        },
+        search: marketplaceSearch(search as Record<string, unknown>),
       })
     }
   },
@@ -280,6 +284,7 @@ const settingsBuddyMarketRoute = createRoute({
     view: (search.view as string) || undefined,
     agent: (search.agent as string) || undefined,
     agentId: (search.agentId as string) || undefined,
+    ...marketplaceSearch(search),
   }),
 })
 
@@ -323,16 +328,11 @@ const discoverRoute = createRoute({
 const marketplaceRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/marketplace',
+  validateSearch: marketplaceSearch,
   beforeLoad: ({ search }) => {
-    const cleanedSearch = {
-      ...(search.q ? { q: search.q as string } : {}),
-      ...(search.device ? { device: search.device as string } : {}),
-      ...(search.os ? { os: search.os as string } : {}),
-      ...(search.sort ? { sort: search.sort as string } : {}),
-    }
     throw redirect({
       to: '/settings/buddy/market',
-      search: cleanedSearch,
+      search,
     })
   },
   component: () => null,

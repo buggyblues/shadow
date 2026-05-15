@@ -5,6 +5,7 @@ import {
   Button,
   GlassHeader,
   GlassPanel,
+  Input,
   Progress,
   Textarea,
 } from '@shadowob/ui'
@@ -54,6 +55,11 @@ import {
 } from './diy-cloud-model'
 
 const ALWAYS_KEEP_PLUGIN_IDS = new Set(['model-provider', 'shadowob'])
+
+type DiyPendingGateAction =
+  | { kind: 'generate'; prompt: string; feedback: string }
+  | { kind: 'resume'; runId: string }
+  | { kind: 'deploy' }
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -468,6 +474,7 @@ export function DiyCloudPage() {
     (typeof search.debug === 'string' ? search.debug : searchParams.get('debug')) === 'true'
   const autoStartedRef = useRef(false)
   const generationAbortRef = useRef<AbortController | null>(null)
+  const pendingGateActionRef = useRef<DiyPendingGateAction | null>(null)
   const sectionRefs = useRef<Partial<Record<StepId, HTMLElement | null>>>({})
   const [prompt, setPrompt] = useState(initialPrompt)
   const [runId, setRunId] = useState(initialRunId)
@@ -487,6 +494,9 @@ export function DiyCloudPage() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [deployGuideOpen, setDeployGuideOpen] = useState(false)
   const [deployGuideIndex, setDeployGuideIndex] = useState(0)
+  const [inviteCode, setInviteCode] = useState('')
+  const [inviteRedeeming, setInviteRedeeming] = useState(false)
+  const [inviteError, setInviteError] = useState('')
   const [gate, setGate] = useState<{
     kind: 'membership' | 'wallet' | 'generic'
     title: string
@@ -549,6 +559,17 @@ export function DiyCloudPage() {
     setSelectedStep('review')
     setFeedback('')
     setFeedbackOpen(false)
+  }
+
+  const showMembershipGate = (action: DiyPendingGateAction) => {
+    pendingGateActionRef.current = action
+    setInviteError('')
+    setGate({
+      kind: 'membership',
+      title: t('diyCloud.gates.membershipTitle'),
+      body: t('diyCloud.gates.membershipBody'),
+      primaryLabel: t('playLaunch.redeemInvite'),
+    })
   }
 
   const consumeGenerationStream = async (response: Response) => {
@@ -622,6 +643,7 @@ export function DiyCloudPage() {
     setGenerationError('')
     setDeployError('')
     setGate(null)
+    pendingGateActionRef.current = null
     setDraft(null)
     setRunId('')
     setGenerationEvents([])
@@ -655,7 +677,11 @@ export function DiyCloudPage() {
       if (!receivedDraft) throw new Error(t('diyCloud.errors.generateFailed'))
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        if (err instanceof ApiError && err.code === 'INVITE_REQUIRED') {
+          showMembershipGate({ kind: 'generate', prompt: trimmed, feedback: nextFeedback })
+        } else {
+          setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        }
         setActiveStep(null)
       }
     } finally {
@@ -677,6 +703,7 @@ export function DiyCloudPage() {
     setGenerationError('')
     setDeployError('')
     setGate(null)
+    pendingGateActionRef.current = null
     setDraft(null)
     setRunId(trimmed)
     setGenerationEvents([])
@@ -694,7 +721,11 @@ export function DiyCloudPage() {
       if (!receivedDraft) throw new Error(t('diyCloud.errors.generateFailed'))
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        if (err instanceof ApiError && err.code === 'INVITE_REQUIRED') {
+          showMembershipGate({ kind: 'resume', runId: trimmed })
+        } else {
+          setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        }
         setActiveStep(null)
       }
     } finally {
@@ -774,6 +805,7 @@ export function DiyCloudPage() {
     setDeployPhase('saving')
     setDeployError('')
     setGate(null)
+    pendingGateActionRef.current = null
     try {
       const prunedTemplate = templateWithoutSkippedPlugins(draft.template, skippedPluginIds)
       const savedTemplate = await saveDraftTemplate(draft, prunedTemplate)
@@ -811,13 +843,7 @@ export function DiyCloudPage() {
     } catch (err) {
       setDeployPhase('error')
       if (err instanceof ApiError && err.code === 'INVITE_REQUIRED') {
-        setGate({
-          kind: 'membership',
-          title: t('diyCloud.gates.membershipTitle'),
-          body: t('diyCloud.gates.membershipBody'),
-          primaryHref: '/app/settings/invite',
-          primaryLabel: t('diyCloud.gates.goInvite'),
-        })
+        showMembershipGate({ kind: 'deploy' })
         return
       }
       if (
@@ -842,6 +868,38 @@ export function DiyCloudPage() {
       setDeployError(
         isInfrastructureError(message) ? t('diyCloud.errors.deployInfrastructureFailed') : message,
       )
+    }
+  }
+
+  const redeemInviteAndContinue = async () => {
+    const code = inviteCode.trim()
+    if (!code || inviteRedeeming) {
+      setInviteError(t('playLaunch.inviteCodePlaceholder'))
+      return
+    }
+    const action = pendingGateActionRef.current
+    setInviteRedeeming(true)
+    setInviteError('')
+    try {
+      await fetchApi<{ ok: boolean }>('/api/membership/redeem-invite', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      })
+      pendingGateActionRef.current = null
+      setInviteCode('')
+      setGate(null)
+      if (!action) return
+      if (action.kind === 'generate') {
+        await runGeneration(action.prompt, action.feedback)
+      } else if (action.kind === 'resume') {
+        await resumeGeneration(action.runId)
+      } else {
+        await deployDraft()
+      }
+    } catch (err) {
+      setInviteError(getApiErrorMessage(err, t, 'settings.membershipRedeemFailed'))
+    } finally {
+      setInviteRedeeming(false)
     }
   }
 
@@ -916,6 +974,63 @@ export function DiyCloudPage() {
     }
     return map
   }, [progressByStep])
+
+  const renderGate = () => {
+    if (!gate) return null
+    return (
+      <Alert variant={gate.kind === 'wallet' ? 'warning' : 'info'}>
+        {gate.kind === 'wallet' ? <Rocket size={18} /> : <ShieldCheck size={18} />}
+        <AlertDescription>
+          <strong className="block text-sm">{gate.title}</strong>
+          <span className="mt-1 block">{gate.body}</span>
+          {gate.kind === 'membership' ? (
+            <form
+              className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void redeemInviteAndContinue()
+              }}
+            >
+              <Input
+                value={inviteCode}
+                onChange={(event) => {
+                  setInviteCode(event.currentTarget.value)
+                  setInviteError('')
+                }}
+                placeholder={t('playLaunch.inviteCodePlaceholder')}
+                aria-label={t('auth.inviteCodeLabel')}
+                disabled={inviteRedeeming}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                loading={inviteRedeeming}
+                disabled={!inviteCode.trim() || inviteRedeeming}
+              >
+                {inviteRedeeming ? t('playLaunch.redeemingInvite') : t('playLaunch.redeemInvite')}
+              </Button>
+              {inviteError && (
+                <span className="text-xs font-bold text-danger sm:col-span-2">{inviteError}</span>
+              )}
+            </form>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {gate.primaryHref && gate.primaryLabel && (
+                <Button asChild variant="primary" size="sm">
+                  <a href={gate.primaryHref}>{gate.primaryLabel}</a>
+                </Button>
+              )}
+              {gate.secondaryHref && gate.secondaryLabel && (
+                <Button asChild variant="glass" size="sm">
+                  <a href={gate.secondaryHref}>{gate.secondaryLabel}</a>
+                </Button>
+              )}
+            </div>
+          )}
+        </AlertDescription>
+      </Alert>
+    )
+  }
 
   const renderLiveStepState = (id: StepId) => {
     const latestEvent = progressByStep.get(id)
@@ -1360,6 +1475,8 @@ export function DiyCloudPage() {
               </Alert>
             )}
 
+            {gate && !draft && renderGate()}
+
             {draft && (
               <div className="overflow-hidden rounded-[28px] border border-white/10 bg-black/15">
                 <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -1736,17 +1853,22 @@ export function DiyCloudPage() {
         draft={draft}
         gate={gate}
         generating={generating}
+        inviteCode={inviteCode}
+        inviteError={inviteError}
+        inviteRedeeming={inviteRedeeming}
         keyValues={keyValues}
         preparedKeyCount={preparedKeyCount}
         requiredKeysReady={requiredKeysReady}
         saveTemplate={saveTemplate}
         setDeployGuideIndex={setDeployGuideIndex}
+        setInviteCode={setInviteCode}
         setKeyValues={setKeyValues}
         setSaveTemplate={setSaveTemplate}
         setSkippedKeys={setSkippedKeys}
         skippedKeys={skippedKeys}
         onClose={() => (deployBusy ? undefined : setDeployGuideOpen(false))}
         onDeploy={() => void deployDraft()}
+        onRedeemInvite={() => void redeemInviteAndContinue()}
       />
     </main>
   )

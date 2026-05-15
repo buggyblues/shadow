@@ -2,6 +2,7 @@
   "name": "@shadowob/cli",
   "version": "1.1.3",
   "description": "Shadow CLI — command-line interface for Shadow servers",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "shadowob": "./dist/index.js"

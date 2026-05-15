@@ -50,6 +50,8 @@ interface ShadowobPluginConfig {
 const SHADOWOB_OPENCLAW_EXTENSION_ID = 'shadowob'
 const SHADOWOB_OPENCLAW_PLUGIN_ID = 'openclaw-shadowob'
 const SHADOWOB_OPENCLAW_EXTENSION_PATH = `/app/extensions/${SHADOWOB_OPENCLAW_EXTENSION_ID}`
+const SHADOWOB_CLI_SKILL_INTRO =
+  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, or to send/manage Shadow content. Keep reads narrow and prefer `--json`.'
 
 function shadowEnvKey(prefix: string, id: string) {
   return `${prefix}_${id.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
@@ -250,6 +252,8 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
 }
 
 export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig, (api) => {
+  api.onBuildPrompt(() => SHADOWOB_CLI_SKILL_INTRO)
+
   api.onBuildRuntime((context) => {
     const shadowConfig = context.agentConfig as unknown as ShadowobPluginConfig
     const bindings = shadowConfig.bindings?.filter((b) => b.agentId === context.agent.id) ?? []

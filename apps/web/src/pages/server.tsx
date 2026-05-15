@@ -1,3 +1,4 @@
+import { GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useParams } from '@tanstack/react-router'
 import { Clock, Loader2, Lock, Send } from 'lucide-react'
@@ -164,9 +165,9 @@ export function ServerLayout() {
 
   if (isServerAccessLoading || (canAccessServer && isServerLoading)) {
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
+      <GlassPanel className="flex-1 flex items-center justify-center text-text-muted">
         <Loader2 size={20} className="animate-spin opacity-60" />
-      </div>
+      </GlassPanel>
     )
   }
 
@@ -234,9 +235,9 @@ export function ServerLayout() {
         } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
       >
         {routeChannelBlocked ? (
-          <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary/70 backdrop-blur-xl">
+          <GlassPanel className="flex-1 flex items-center justify-center text-text-muted">
             <Loader2 size={18} className="animate-spin opacity-60" />
-          </div>
+          </GlassPanel>
         ) : (
           <Outlet />
         )}

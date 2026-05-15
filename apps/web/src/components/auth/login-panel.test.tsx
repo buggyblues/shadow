@@ -14,8 +14,8 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en' },
-    t: (key: string, params?: Record<string, unknown>) => {
-      if (key === 'auth.codeDigitLabel') return `code digit ${params?.index}`
+    t: (key: string) => {
+      if (key === 'loginModal.codeDigit') return 'code digit {{index}}'
       return key
     },
   }),
@@ -52,8 +52,8 @@ describe('LoginPanel email code flow', () => {
       </React.StrictMode>,
     )
 
-    await userEvent.type(screen.getByRole('textbox', { name: 'auth.emailLabel' }), 'a@b.com')
-    await userEvent.click(screen.getByRole('button', { name: 'auth.continueWithEmail' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'loginModal.emailLabel' }), 'a@b.com')
+    await userEvent.click(screen.getByRole('button', { name: 'loginModal.continueEmail' }))
 
     const firstDigit = await screen.findByRole('textbox', { name: 'code digit 1' })
     fireEvent.change(firstDigit, { target: { value: '852494' } })

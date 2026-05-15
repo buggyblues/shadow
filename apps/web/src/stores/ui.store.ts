@@ -1,3 +1,9 @@
+import {
+  applyThemePreference,
+  persistThemePreference,
+  readThemePreference,
+  type ShadowThemePreference,
+} from '@shadowob/views/preferences'
 import { create } from 'zustand'
 import {
   DEFAULT_BACKGROUND_IMAGE,
@@ -7,7 +13,7 @@ import {
 } from '../lib/backgrounds'
 
 type MobileView = 'servers' | 'channels' | 'chat'
-export type ThemeMode = 'dark' | 'light' | 'system'
+export type ThemeMode = ShadowThemePreference
 
 const BACKGROUND_NONE_SENTINEL = 'none'
 const LEGACY_BACKGROUND_NONE_SENTINEL = '__none__'
@@ -44,16 +50,8 @@ interface UIState {
 
 /** Apply theme class to document root and persist to localStorage */
 function applyTheme(theme: ThemeMode) {
-  const root = document.documentElement
-  let effective: 'dark' | 'light'
-  if (theme === 'system') {
-    effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-  } else {
-    effective = theme
-  }
-  root.classList.toggle('light', effective === 'light')
-  root.classList.toggle('dark', effective === 'dark')
-  localStorage.setItem('shadow-theme', theme)
+  applyThemePreference(theme)
+  persistThemePreference(theme)
 }
 
 function persistBackgroundImage(url: string | null) {
@@ -70,7 +68,7 @@ function readSavedBackgroundImage() {
   )
 }
 
-const savedTheme = (localStorage.getItem('shadow-theme') as ThemeMode) || 'dark'
+const savedTheme = readThemePreference()
 const savedBgImage = readSavedBackgroundImage()
 const savedBgMovement = localStorage.getItem('shadow-bg-movement') !== 'false'
 

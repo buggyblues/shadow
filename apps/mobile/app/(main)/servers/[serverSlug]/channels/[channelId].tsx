@@ -34,6 +34,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  InteractionManager,
   Keyboard,
   Modal,
   Platform,
@@ -674,6 +675,21 @@ export default function ChannelViewScreen() {
   // Reset scroll position when channel changes
   useEffect(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false })
+  }, [channelId])
+
+  // Auto-focus input when channel changes
+  useEffect(() => {
+    let cancelled = false
+    const focusInput = () => {
+      if (!cancelled) inputRef.current?.focus()
+    }
+    const interaction = InteractionManager.runAfterInteractions(focusInput)
+    const timers = [120, 360, 720].map((delay) => setTimeout(focusInput, delay))
+    return () => {
+      cancelled = true
+      interaction.cancel?.()
+      timers.forEach(clearTimeout)
+    }
   }, [channelId])
 
   // ---------- WebSocket: join/leave ----------

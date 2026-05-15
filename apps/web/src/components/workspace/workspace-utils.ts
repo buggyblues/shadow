@@ -9,6 +9,7 @@ import {
   FileVideo,
   FolderClosed,
   FolderOpen,
+  type LucideIcon,
 } from 'lucide-react'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import type { FileCategory, VisibleRow } from './workspace-types'
@@ -80,7 +81,7 @@ export function getFileCategory(node: WorkspaceNode): FileCategory {
 
 /* ─── Icon component for a node ─── */
 
-export function getNodeIcon(node: WorkspaceNode, isExpanded?: boolean) {
+export function getNodeIcon(node: WorkspaceNode, isExpanded?: boolean): LucideIcon {
   if (node.kind === 'dir') return isExpanded ? FolderOpen : FolderClosed
   const cat = getFileCategory(node)
   switch (cat) {

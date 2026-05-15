@@ -1,3 +1,10 @@
+import {
+  applyThemePreference,
+  persistLanguagePreference,
+  persistThemePreference,
+  readThemePreference,
+  websiteLanguagePreference,
+} from '@shadowob/views/preferences'
 import { useEffect, useState } from 'react'
 import { useI18n } from 'rspress/runtime'
 import { GlobeIcon } from './Icons'
@@ -28,16 +35,16 @@ function DarkModeToggle() {
   const [dark, setDark] = useState(false)
 
   useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark')
-    setDark(isDark)
+    const effective = applyThemePreference(readThemePreference())
+    setDark(effective === 'dark')
   }, [])
 
   const toggle = () => {
     const next = !dark
     setDark(next)
-    document.documentElement.classList.toggle('dark', next)
-    document.documentElement.style.colorScheme = next ? 'dark' : 'light'
-    localStorage.setItem('rspress-theme-appearance', next ? 'dark' : 'light')
+    const preference = next ? 'dark' : 'light'
+    applyThemePreference(preference)
+    persistThemePreference(preference)
   }
 
   return (
@@ -192,7 +199,14 @@ function FooterLanguageSwitcher({ lang }: { lang: 'zh' | 'en' }) {
       </button>
       <div className="shadow-footer-language-menu">
         <span className="shadow-footer-language-item is-current">{currentLabel}</span>
-        <a href={otherUrl} className="shadow-footer-language-item">
+        <a
+          href={otherUrl}
+          className="shadow-footer-language-item"
+          onClick={() => {
+            const nextLang = lang === 'zh' ? 'en' : 'zh'
+            persistLanguagePreference(websiteLanguagePreference(nextLang))
+          }}
+        >
           {otherLabel}
         </a>
       </div>

@@ -339,7 +339,7 @@ export function PlayLaunchPage() {
         : t('playLaunch.communityPlay')
 
   return (
-    <div className="min-h-screen bg-bg-deep px-4 py-8 text-white">
+    <div className="min-h-screen bg-bg-deep px-4 py-8 text-text-primary">
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center">
         <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
           <Card variant="glass" className="overflow-hidden border-white/10">
@@ -357,7 +357,7 @@ export function PlayLaunchPage() {
               <div className="relative flex h-full min-h-[540px] flex-col justify-between p-7 sm:p-9">
                 <a
                   href="/"
-                  className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm font-semibold text-white/75 no-underline transition hover:bg-white/10 hover:text-white"
+                  className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-bg-secondary/30 px-4 py-2 text-sm font-semibold text-text-secondary no-underline transition hover:bg-white/10 hover:text-text-primary"
                 >
                   <ArrowLeft size={16} />
                   {t('playLaunch.backHome')}
@@ -372,21 +372,21 @@ export function PlayLaunchPage() {
                       >
                         {category}
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold text-white/75">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold text-text-secondary">
                         {kind === 'cloud' ? <Cloud size={13} /> : <Users size={13} />}
                         {kindLabel}
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold text-white/75">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold text-text-secondary">
                         <CheckCircle2 size={13} />
                         {statusLabel}
                       </span>
                     </div>
                   ) : null}
 
-                  <h1 className="text-4xl font-black leading-tight tracking-normal text-white sm:text-5xl">
+                  <h1 className="text-4xl font-black leading-tight tracking-normal text-text-primary sm:text-5xl">
                     {phase === 'loading' ? t('playLaunch.loadingPlay') : title}
                   </h1>
-                  <p className="mt-5 max-w-xl text-base font-medium leading-7 text-white/70 sm:text-lg">
+                  <p className="mt-5 max-w-xl text-base font-medium leading-7 text-text-secondary sm:text-lg">
                     {phase === 'loading' ? t('playLaunch.loadingPlayDesc') : description}
                   </p>
                 </div>
@@ -401,10 +401,10 @@ export function PlayLaunchPage() {
                   <Rocket className="animate-pulse text-primary" size={36} />
                 </div>
                 <h2 className="text-2xl font-black">{t('playLaunch.animatingTitle')}</h2>
-                <p className="mt-3 text-sm font-medium leading-6 text-white/55">
+                <p className="mt-3 text-sm font-medium leading-6 text-text-muted">
                   {t('playLaunch.animatingSubtitle')}
                 </p>
-                <div className="mt-8 rounded-3xl border border-white/10 bg-black/20 p-5 text-left">
+                <div className="mt-8 rounded-3xl border border-white/10 bg-bg-secondary/20 p-5 text-left">
                   {launchSteps.map((step, index) => {
                     const active = index === stepIndex
                     const done = index < stepIndex
@@ -412,7 +412,7 @@ export function PlayLaunchPage() {
                       <div
                         key={step.label}
                         className={`flex items-center gap-3 rounded-2xl px-3 py-3 transition ${
-                          active ? 'bg-primary/15 text-white' : 'text-white/45'
+                          active ? 'bg-primary/15 text-text-primary' : 'text-text-muted'
                         }`}
                       >
                         <span
@@ -444,7 +444,7 @@ export function PlayLaunchPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-black">{t('playLaunch.inviteRequiredTitle')}</h2>
-                  <p className="mt-2 text-sm font-medium leading-6 text-white/55">
+                  <p className="mt-2 text-sm font-medium leading-6 text-text-muted">
                     {t('playLaunch.inviteRequiredBody')}
                   </p>
                 </div>
@@ -476,25 +476,27 @@ export function PlayLaunchPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-black">{t('playLaunch.walletRequiredTitle')}</h2>
-                  <p className="mt-2 text-sm font-medium leading-6 text-white/55">
+                  <p className="mt-2 text-sm font-medium leading-6 text-text-muted">
                     {t('playLaunch.walletRequiredBody')}
                   </p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-xs font-bold text-white/40">{t('playLaunch.walletCost')}</p>
+                    <p className="text-xs font-bold text-text-muted">
+                      {t('playLaunch.walletCost')}
+                    </p>
                     <p className="mt-2 text-xl font-black">
                       {formatCoins(walletGate?.requiredAmount)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-xs font-bold text-white/40">
+                    <p className="text-xs font-bold text-text-muted">
                       {t('playLaunch.walletBalance')}
                     </p>
                     <p className="mt-2 text-xl font-black">{formatCoins(walletGate?.balance)}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-xs font-bold text-white/40">
+                    <p className="text-xs font-bold text-text-muted">
                       {t('playLaunch.walletShortfall')}
                     </p>
                     <p className="mt-2 text-xl font-black">{formatCoins(walletGate?.shortfall)}</p>
@@ -526,7 +528,7 @@ export function PlayLaunchPage() {
                     {t('playLaunch.landingEyebrow')}
                   </p>
                   <h2 className="text-2xl font-black">{t('playLaunch.landingTitle')}</h2>
-                  <p className="mt-3 text-sm font-medium leading-6 text-white/55">
+                  <p className="mt-3 text-sm font-medium leading-6 text-text-muted">
                     {isCloud
                       ? t('playLaunch.cloudLandingBody')
                       : kind === 'private'
@@ -538,13 +540,13 @@ export function PlayLaunchPage() {
                 {play ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs font-bold text-white/40">
+                      <p className="text-xs font-bold text-text-muted">
                         {t('playLaunch.popularity')}
                       </p>
                       <p className="mt-2 text-xl font-black">{play.starts}</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs font-bold text-white/40">{t('playLaunch.access')}</p>
+                      <p className="text-xs font-bold text-text-muted">{t('playLaunch.access')}</p>
                       <p className="mt-2 text-xl font-black">{statusLabel}</p>
                     </div>
                   </div>
@@ -572,7 +574,7 @@ export function PlayLaunchPage() {
                         : t('playLaunch.start')}
                 </Button>
 
-                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm font-medium leading-6 text-white/55">
+                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-bg-secondary/20 p-4 text-sm font-medium leading-6 text-text-muted">
                   <Shield className="mt-0.5 shrink-0 text-primary" size={18} />
                   <span>{t('playLaunch.noConfigHint')}</span>
                 </div>

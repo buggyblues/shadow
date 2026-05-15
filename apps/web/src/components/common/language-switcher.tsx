@@ -1,4 +1,5 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shadowob/ui'
+import { persistLanguagePreference } from '@shadowob/views/preferences'
 import { useTranslation } from 'react-i18next'
 import { type SupportedLanguage, supportedLanguages } from '../../lib/i18n'
 
@@ -11,7 +12,10 @@ export function LanguageSwitcher() {
   return (
     <Select
       value={currentLang.code}
-      onValueChange={(code: string) => i18n.changeLanguage(code as SupportedLanguage)}
+      onValueChange={(code: string) => {
+        persistLanguagePreference(code)
+        void i18n.changeLanguage(code as SupportedLanguage)
+      }}
     >
       <SelectTrigger aria-label="Switch language">
         <SelectValue>

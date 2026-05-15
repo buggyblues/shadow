@@ -19,6 +19,7 @@
     "@shadowob/connector": "workspace:*",
     "@shadowob/shared": "workspace:*",
     "@shadowob/ui": "workspace:*",
+    "@shadowob/views": "workspace:*",
     "@stripe/react-stripe-js": "^6.1.0",
     "@stripe/stripe-js": "^9.0.1",
     "@tanstack/react-query": "^5.80.7",

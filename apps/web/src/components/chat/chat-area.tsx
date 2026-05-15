@@ -1086,9 +1086,9 @@ export function ChatArea({
 
   if (!activeChannelId) {
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary/70 backdrop-blur-xl">
+      <GlassPanel className="flex-1 flex items-center justify-center text-text-muted">
         <Loader2 size={16} className="animate-spin text-primary opacity-60" />
-      </div>
+      </GlassPanel>
     )
   }
 

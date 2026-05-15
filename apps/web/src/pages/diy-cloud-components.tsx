@@ -6,6 +6,7 @@ import {
   Checkbox,
   cn,
   GlassPanel,
+  Input,
   Modal,
   ModalBody,
   ModalButtonGroup,
@@ -312,6 +313,9 @@ export function DiyDeployWizardModal({
   draft,
   gate,
   generating,
+  inviteCode,
+  inviteError,
+  inviteRedeeming,
   keyValues,
   preparedKeyCount,
   requiredKeysReady,
@@ -321,8 +325,10 @@ export function DiyDeployWizardModal({
   setSaveTemplate,
   setSkippedKeys,
   skippedKeys,
+  setInviteCode,
   onClose,
   onDeploy,
+  onRedeemInvite,
 }: {
   deployBusy: boolean
   deployError: string
@@ -333,6 +339,9 @@ export function DiyDeployWizardModal({
   draft: DiyCloudDraft | null
   gate: DeployGate | null
   generating: boolean
+  inviteCode: string
+  inviteError: string
+  inviteRedeeming: boolean
   keyValues: Record<string, string>
   preparedKeyCount: number
   requiredKeysReady: boolean
@@ -341,9 +350,11 @@ export function DiyDeployWizardModal({
   setKeyValues: Dispatch<SetStateAction<Record<string, string>>>
   setSaveTemplate: Dispatch<SetStateAction<boolean>>
   setSkippedKeys: Dispatch<SetStateAction<Set<string>>>
+  setInviteCode: Dispatch<SetStateAction<string>>
   skippedKeys: Set<string>
   onClose: () => void
   onDeploy: () => void
+  onRedeemInvite: () => void
 }) {
   const { t } = useTranslation()
   const deployWizardItems = useMemo<DeployWizardItem[]>(() => {
@@ -529,18 +540,52 @@ export function DiyDeployWizardModal({
                       <AlertDescription>
                         <strong className="block text-sm">{gate.title}</strong>
                         <span className="mt-1 block">{gate.body}</span>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {gate.primaryHref && gate.primaryLabel && (
-                            <Button asChild variant="primary" size="sm">
-                              <a href={gate.primaryHref}>{gate.primaryLabel}</a>
+                        {gate.kind === 'membership' ? (
+                          <form
+                            className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                            onSubmit={(event) => {
+                              event.preventDefault()
+                              onRedeemInvite()
+                            }}
+                          >
+                            <Input
+                              value={inviteCode}
+                              onChange={(event) => setInviteCode(event.currentTarget.value)}
+                              placeholder={t('playLaunch.inviteCodePlaceholder')}
+                              aria-label={t('auth.inviteCodeLabel')}
+                              disabled={inviteRedeeming}
+                            />
+                            <Button
+                              type="submit"
+                              variant="primary"
+                              size="sm"
+                              loading={inviteRedeeming}
+                              disabled={!inviteCode.trim() || inviteRedeeming}
+                            >
+                              {inviteRedeeming
+                                ? t('playLaunch.redeemingInvite')
+                                : t('playLaunch.redeemInvite')}
                             </Button>
-                          )}
-                          {gate.secondaryHref && gate.secondaryLabel && (
-                            <Button asChild variant="glass" size="sm">
-                              <a href={gate.secondaryHref}>{gate.secondaryLabel}</a>
-                            </Button>
-                          )}
-                        </div>
+                            {inviteError && (
+                              <span className="text-xs font-bold text-danger sm:col-span-2">
+                                {inviteError}
+                              </span>
+                            )}
+                          </form>
+                        ) : (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {gate.primaryHref && gate.primaryLabel && (
+                              <Button asChild variant="primary" size="sm">
+                                <a href={gate.primaryHref}>{gate.primaryLabel}</a>
+                              </Button>
+                            )}
+                            {gate.secondaryHref && gate.secondaryLabel && (
+                              <Button asChild variant="glass" size="sm">
+                                <a href={gate.secondaryHref}>{gate.secondaryLabel}</a>
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </AlertDescription>
                     </Alert>
                   )}

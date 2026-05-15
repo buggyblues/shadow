@@ -159,12 +159,11 @@ export function ContractDetailPage() {
   const st = STATUS_STYLES[contract.status] ?? STATUS_STYLES.pending!
   const isOwner = userId === contract.ownerId
   const isTenant = userId === contract.tenantId
-  const canTerminate =
-    (contract.status === 'active' || contract.status === 'pending') && (isOwner || isTenant)
+  const canTerminate = contract.status === 'active' && (isOwner || isTenant)
 
   return (
     <div
-      className="min-h-screen bg-bg-primary text-text-primary"
+      className="min-h-screen overflow-y-auto bg-bg-primary text-text-primary"
       style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}
     >
       <div className="max-w-4xl mx-auto px-6 py-8">
