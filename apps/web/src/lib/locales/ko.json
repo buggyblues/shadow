@@ -32,7 +32,8 @@
     "done": "완료",
     "unknown": "알 수 없음",
     "buddy": "Buddy",
-    "search": "검색"
+    "search": "검색",
+    "noResults": "결과가 없습니다"
   },
   "nav": {
     "features": "기능 소개",
@@ -1311,6 +1312,7 @@
   "agentMgmt": {
     "title": "Buddy 관리",
     "subtitle": "AI Buddy를 생성하고 관리하며, OpenClaw 등 플랫폼용 토큰을 받으세요",
+    "searchPlaceholder": "Buddy 검색",
     "newAgent": "새 Buddy",
     "noAgents": "Buddy 없음",
     "buddyLevel": "레벨 {{level}}",
@@ -1388,7 +1390,7 @@
     "setupManual": "수동 설정",
     "setupChat": "AI 채팅 설정",
     "setupBashTitle": "원클릭 설정 (터미널에 붙여넣기)",
-    "setupTokenWarning": "설정 명령을 복사하기 전에 먼저 토큰을 생성하세요",
+    "connectButton": "연결",
     "setupStepByStep": "단계별 설정",
     "setupConfigToken": "토큰 설정",
     "setupConfigServer": "서버 URL 설정",
@@ -1443,7 +1445,11 @@
     "defaultReplyPolicyDesc": "Buddy는 기본적으로 소유자와 유효한 임차인의 메시지에만 답장합니다. DM과 서버 채널을 구분하지 않으며 @가 필요 없습니다.",
     "privateListingDisabled": "비공개 Buddy는 임대할 수 없습니다",
     "privateListingDisabledDesc": "공개 임대 등록을 만들려면 공유 가능으로 전환하세요.",
-    "rentingAccessBadge": "임대 사용 권한"
+    "rentingAccessBadge": "임대 사용 권한",
+    "offlineGuideTitle": "Buddy 오프라인 설정",
+    "offlineGuideDesc": "이 Buddy는 현재 오프라인입니다. 상세 정보를 확인하려면 먼저 온라인 상태로 전환하세요.",
+    "offlineGuideWait": "Buddy가 온라인이 될 때까지 기다려 주세요. 온라인이 되면 설정이 다시 표시됩니다.",
+    "offlineGuideNoManage": "이 Buddy를 관리할 수 있는 권한이 없습니다. 소유자에게 온라인 전환을 요청하세요."
   },
   "appCenter": {
     "proxyBySubdomain": "서브도메인 프록시로 접근(절대 경로, SSE, WebSocket 지원)",
@@ -1539,9 +1545,15 @@
     "outContracts": "계약",
     "myListings": "내 등록",
     "createListing": "등록 만들기",
+    "listingLeaseAction": "대여",
     "privateBuddyCannotList": "비공개 Buddy는 공개 임대 등록을 만들 수 없습니다.",
+    "offlineListings": "오프라인 Buddy",
     "noContracts": "대여 계약 없음",
+    "totalCost": "총 비용",
+    "expectedCost": "예상 비용",
     "noListings": "등록 항목이 없습니다 — 만들어보세요!",
+    "unlimitedUsage": "무제한 이용",
+    "useBuddy": "지금 사용하기",
     "unknownListing": "알 수 없는 등록",
     "unlimited": "무제한",
     "statusUpdated": "상태가 업데이트되었습니다",
