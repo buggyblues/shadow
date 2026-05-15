@@ -1,20 +1,17 @@
 import { globalShortcut } from 'electron'
-import { getMainWindow } from './window'
+import { getPetWindow, showPetWindow } from './window'
 
-export function registerGlobalShortcuts(): void {
-  // Toggle window visibility
-  globalShortcut.register('CommandOrControl+Shift+S', () => {
-    const win = getMainWindow()
-    if (!win) return
-    if (win.isVisible() && win.isFocused()) {
+export function registerGlobalShortcuts() {
+  globalShortcut.register('CommandOrControl+Shift+Space', () => {
+    const win = getPetWindow()
+    if (win?.isVisible()) {
       win.hide()
-    } else {
-      win.show()
-      win.focus()
+      return
     }
+    showPetWindow()
   })
 }
 
-export function unregisterAllShortcuts(): void {
+export function unregisterGlobalShortcuts() {
   globalShortcut.unregisterAll()
 }

@@ -1,153 +1,582 @@
-/* Desktop globals: own Tailwind instance with desktop + web source scanning */
 @import "tailwindcss";
-@import "../../../../../packages/ui/src/styles/shared.css";
-@source "../../../../web/src";
+@import "@shadowob/ui/styles/shared.css";
+@source "../../../../../packages/views/src";
+@source "../../../../../packages/ui/src";
 
-/* ===== Desktop Window Chrome ===== */
-
-/* Unified draggable title bars */
-html.desktop-app .desktop-drag-titlebar {
-  -webkit-app-region: drag;
-  app-region: drag;
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: transparent;
+  color: #f8f1df;
+  line-height: 1.4;
 }
 
-/* Standard desktop drag strip for top spacing under system controls */
-html.desktop-app .desktop-drag-strip {
-  height: 1.75rem;
-  flex-shrink: 0;
+* {
+  box-sizing: border-box;
 }
 
-html.desktop-app .desktop-loading-state {
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+.app-shell.compact {
+  place-items: center;
+  padding: 0;
+}
+
+.app-shell.expanded {
+  grid-template-rows: 300px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+}
+
+.no-drag,
+button,
+input,
+select,
+textarea,
+a {
+  -webkit-app-region: no-drag;
+}
+
+.pet-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.app-shell.expanded .pet-stage {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.pet-title {
+  width: 100%;
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted, rgb(156 163 175));
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 4px 0;
+  color: #fff6d7;
+  text-shadow: 0 2px 8px rgba(7, 18, 28, 0.8);
 }
 
-/* Exclude interactive elements from drag */
-html.desktop-app .desktop-drag-titlebar button,
-html.desktop-app .desktop-drag-titlebar a,
-html.desktop-app .desktop-drag-titlebar input,
-html.desktop-app .desktop-drag-titlebar select,
-html.desktop-app .desktop-drag-titlebar textarea,
-html.desktop-app .desktop-drag-titlebar [role="button"],
-html.desktop-app .desktop-drag-titlebar [role="switch"],
-html.desktop-app .desktop-drag-titlebar [data-no-drag] {
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
+.pet-title strong {
+  display: block;
+  font-size: 18px;
 }
 
-/* macOS: push server sidebar content below traffic lights */
-html.desktop-darwin .w-\[72px\].bg-bg-tertiary {
-  padding-top: 1.75rem;
-  position: relative;
+.pet-title span {
+  font-size: 12px;
+  color: #d8e7ee;
 }
 
-/* macOS: drag region in the server sidebar above icons */
-html.desktop-darwin .w-\[72px\].bg-bg-tertiary::before {
-  content: "";
+.pet-button {
+  width: min(100%, 292px);
+  max-height: 100%;
+  aspect-ratio: 1;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  user-select: none;
+}
+
+.app-shell.expanded .pet-button {
+  width: min(100%, 260px);
+}
+
+.pet-button:focus,
+.pet-button:focus-visible {
+  outline: 0;
+}
+
+.pet-button.dragging {
+  cursor: grabbing;
+}
+
+.pet-sprite {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+  border: 0;
+  outline: 0;
+}
+
+.pet-button:active .pet-sprite {
+  transform: scale(0.99);
+}
+
+.quick-actions {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1.75rem;
-  -webkit-app-region: drag;
-  app-region: drag;
+  left: 50%;
+  bottom: 8px;
+  width: min(96%, 330px);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(7, 18, 28, 0.78);
+  backdrop-filter: blur(14px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 6px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
-/* ===== OpenClaw Animations ===== */
-
-@keyframes sparkle-float {
-  0%,
-  100% {
-    opacity: 0;
-    transform: translateY(0) scale(0.5);
-  }
-  25% {
-    opacity: 0.8;
-    transform: translateY(-8px) scale(1);
-  }
-  50% {
-    opacity: 0.4;
-    transform: translateY(-4px) scale(0.8);
-  }
-  75% {
-    opacity: 0.7;
-    transform: translateY(-12px) scale(1.1);
-  }
+.pet-stage:hover .quick-actions,
+.pet-stage:focus-within .quick-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
 }
 
-@keyframes glow-pulse {
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.1);
-  }
+.action,
+.secondary-button,
+.chat-form button,
+.subscribe-row button,
+.notification-actions button {
+  min-height: 32px;
+  border: 1px solid rgba(245, 206, 116, 0.34);
+  border-radius: 8px;
+  background: rgba(24, 45, 61, 0.9);
+  color: #fff3cd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
 }
 
-@keyframes glow-pulse-slow {
-  0%,
-  100% {
-    opacity: 0.2;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(1.15);
-  }
+.action:hover,
+.secondary-button:hover,
+.chat-form button:hover,
+.subscribe-row button:hover,
+.notification-actions button:hover {
+  transform: translateY(-1px);
+  background: rgba(45, 74, 88, 0.96);
+  border-color: rgba(249, 214, 135, 0.68);
 }
 
-@keyframes bounce-subtle {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-3px);
-  }
+.action span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 800;
 }
 
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.control-panel {
+  min-height: 0;
+  border: 1px solid rgba(248, 211, 139, 0.2);
+  border-radius: 8px;
+  background: rgba(8, 19, 30, 0.88);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.animate-sparkle-float {
-  animation: sparkle-float var(--duration, 3s) ease-in-out infinite;
+.panel-header h1 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0;
 }
-.animate-glow-pulse {
-  animation: glow-pulse 2.5s ease-in-out infinite;
+
+.panel-header p,
+.hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #bdd3d8;
 }
-.animate-glow-pulse-slow {
-  animation: glow-pulse-slow 4s ease-in-out infinite;
+
+.icon-button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8f1df;
+  display: inline-grid;
+  place-items: center;
 }
-.animate-bounce-subtle {
-  animation: bounce-subtle 3s ease-in-out infinite;
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 6px;
 }
-.animate-fade-in-up {
-  animation: fade-in-up 0.4s ease-out both;
+
+.tabs button {
+  min-width: 0;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #bcd0d4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
 }
-.animate-shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(229, 57, 69, 0.06) 50%, transparent 100%);
-  background-size: 200% 100%;
-  animation: shimmer 3s ease-in-out infinite;
+
+.tabs button.active {
+  background: rgba(242, 186, 85, 0.16);
+  color: #ffe8aa;
+}
+
+.panel-body {
+  height: 296px;
+  padding: 8px 10px 10px;
+  overflow: auto;
+}
+
+.messages {
+  height: 238px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.message {
+  max-width: 86%;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.message.pet {
+  align-self: flex-start;
+  background: rgba(54, 84, 88, 0.7);
+  color: #f8f1df;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: rgba(196, 128, 64, 0.7);
+  color: #fff8e9;
+}
+
+.chat-form,
+.subscribe-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chat-form input,
+.subscribe-row select {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8f1df;
+  padding: 0 10px;
+  outline: none;
+}
+
+.chat-form input::placeholder {
+  color: #8fa7ad;
+}
+
+.level-row,
+.traits,
+.community-toolbar,
+.inventory-item,
+.inventory-wallet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.level-row {
+  margin-bottom: 8px;
+  color: #ffe8aa;
+}
+
+.level-row span {
+  color: #bcd0d4;
+  font-size: 12px;
+}
+
+.game-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.game-summary div {
+  min-width: 0;
+  border-radius: 8px;
+  padding: 7px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.game-summary span {
+  display: block;
+  color: #9fb8bd;
+  font-size: 11px;
+}
+
+.game-summary strong {
+  display: block;
+  margin-top: 2px;
+  color: #fff3cd;
+  font-size: 13px;
+}
+
+.stat-meter {
+  margin: 8px 0;
+}
+
+.stat-meter div,
+.quest-row div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.stat-meter meter,
+.quest-row meter {
+  width: 100%;
+  height: 9px;
+  vertical-align: top;
+}
+
+.traits {
+  margin: 12px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.traits dt {
+  color: #9fb8bd;
+  font-size: 11px;
+}
+
+.traits dd {
+  margin: 2px 0 0;
+  color: #fff3cd;
+  font-weight: 800;
+}
+
+.quest-section,
+.achievement-section {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.quest-section h2,
+.achievement-section h2 {
+  margin: 0;
+  color: #f8f1df;
+  font-size: 13px;
+}
+
+.quest-row {
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.quest-row.completed {
+  border: 1px solid rgba(147, 215, 191, 0.36);
+}
+
+.quest-row span {
+  color: #bcd0d4;
+}
+
+.auth-panel {
+  padding: 10px;
+}
+
+.login-view-shell {
+  color: #f8f1df;
+}
+
+.login-view-shell > * {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.login-view-shell input {
+  color: #f8f1df;
+}
+
+.login-view-shell a {
+  color: #9ce9ef;
+}
+
+.community-toolbar {
+  margin-bottom: 8px;
+}
+
+.community-toolbar div {
+  min-width: 0;
+  display: grid;
+}
+
+.community-toolbar strong,
+.notification strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.community-toolbar span {
+  color: #93d7bf;
+  font-size: 12px;
+}
+
+.subscribe-row {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.notification-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.notification {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.notification.read {
+  opacity: 0.68;
+}
+
+.notification p {
+  margin: 3px 0 0;
+  color: #c4d7d9;
+  font-size: 12px;
+}
+
+.notification-actions {
+  display: grid;
+  gap: 5px;
+  align-content: start;
+}
+
+.notification-actions button {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.empty {
+  margin: 10px 0;
+  color: #9fb8bd;
+  text-align: center;
+  font-size: 13px;
+}
+
+.inventory-panel {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.inventory-wallet,
+.inventory-item,
+.achievement-chip {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.inventory-wallet strong,
+.inventory-item strong {
+  color: #ffe8aa;
+}
+
+.achievement-chip {
+  display: inline-flex;
+  align-items: center;
+  color: #fff3cd;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-height: 620px) {
+  .app-shell.expanded {
+    grid-template-rows: 250px minmax(0, 1fr);
+  }
+
+  .panel-body {
+    height: 236px;
+  }
+
+  .messages {
+    height: 178px;
+  }
 }

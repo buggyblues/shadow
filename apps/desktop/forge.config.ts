@@ -15,11 +15,8 @@ const shouldSignAndNotarize = isMac && hasNotaryApiKey
 // Resolve icon path absolutely so it works regardless of cwd
 const iconPath = resolve(__dirname, 'assets', 'icon')
 
-// Collect extraResource entries for OpenClaw bundles (created by scripts/bundle-openclaw.mjs)
 const extraResource: string[] = []
-if (existsSync('./build/openclaw')) extraResource.push('./build/openclaw')
-if (existsSync('./build/shadowob')) extraResource.push('./build/shadowob')
-if (existsSync('./build/openclaw-config')) extraResource.push('./build/openclaw-config')
+if (existsSync('./assets/pet')) extraResource.push('./assets/pet')
 
 // macOS localization: lproj directories for display name per locale
 if (isMac) {
@@ -32,10 +29,10 @@ if (isMac) {
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    name: 'Shadow',
-    executableName: isLinux ? 'shadow' : 'Shadow',
+    name: 'XiaDou',
+    executableName: isLinux ? 'xiadou' : 'XiaDou',
     icon: iconPath,
-    appBundleId: 'com.shadowob.app',
+    appBundleId: 'com.shadowob.xiadou',
     appCopyright: `Copyright © ${new Date().getFullYear()} ShadowOB Team`,
     appCategoryType: 'public.app-category.social-networking',
     darwinDarkModeSupport: true,
@@ -65,7 +62,7 @@ const config: ForgeConfig = {
       : {}),
     protocols: [
       {
-        name: 'Shadow',
+        name: 'XiaDou',
         schemes: ['shadow'],
       },
     ],
@@ -78,7 +75,7 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
-      name: 'Shadow',
+      name: 'XiaDou',
       setupIcon: resolve(__dirname, 'assets', 'icon.ico'),
       iconUrl:
         'https://raw.githubusercontent.com/buggyblues/shadow/main/apps/desktop/assets/icon.ico',

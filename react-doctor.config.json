@@ -1,0 +1,28 @@
+{
+  "ignore": {
+    "rules": [],
+    "files": [],
+    "overrides": [
+      {
+        "files": ["**/arenaSystem.ts"],
+        "rules": ["react-doctor/no-eval"]
+      },
+      {
+        "files": ["**/channels/[channelId].tsx"],
+        "rules": [
+          "react-doctor/effect-needs-cleanup",
+          "react-doctor/rn-no-raw-text",
+          "react-doctor/rn-no-scroll-state"
+        ]
+      },
+      {
+        "files": ["**/+not-found.tsx", "**/(tabs)/index.tsx"],
+        "rules": ["react-doctor/rn-no-raw-text"]
+      },
+      {
+        "files": ["**/hooks/use-oauth.ts", "**/chat/chat-composer.tsx"],
+        "rules": ["react-doctor/effect-needs-cleanup"]
+      }
+    ]
+  }
+}

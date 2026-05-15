@@ -366,14 +366,18 @@ export function ChatArea({
     if (msgId) {
       setHighlightMsgId(msgId)
       // Scroll to the message after a short delay
-      setTimeout(() => {
+      const scrollTimer = setTimeout(() => {
         const el = document.getElementById(`msg-${msgId}`)
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }
       }, 500)
       // Clear highlight after animation
-      setTimeout(() => setHighlightMsgId(null), 3000)
+      const clearTimer = setTimeout(() => setHighlightMsgId(null), 3000)
+      return () => {
+        clearTimeout(scrollTimer)
+        clearTimeout(clearTimer)
+      }
     }
   }, [activeChannelId])
 

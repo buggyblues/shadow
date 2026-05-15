@@ -1,95 +1,107 @@
 import { join } from 'node:path'
-import { BrowserWindow, screen, shell } from 'electron'
-import { getWindowState, saveWindowState } from './window-state'
+import { BrowserWindow, shell } from 'electron'
+import { readWindowState, saveWindowState } from './window-state'
 
-let mainWindow: BrowserWindow | null = null
+let petWindow: BrowserWindow | null = null
+let allowClose = false
 
-const isDev = !!process.env.DESKTOP_DEV_URL
+const isDev = Boolean(process.env.DESKTOP_DEV_URL)
 
-function getPreloadPath(): string {
+function preloadPath() {
   return join(__dirname, '../preload/index.js')
 }
 
-function getRendererURL(): string {
-  if (process.env.DESKTOP_DEV_URL) {
-    return process.env.DESKTOP_DEV_URL
-  }
-  // Use custom app:// protocol so absolute paths (e.g., /Logo.svg) resolve correctly
-  return 'app://shadow/index.html'
+function rendererUrl() {
+  return process.env.DESKTOP_DEV_URL || 'app://shadow/index.html'
 }
 
-export function createWindow(): BrowserWindow {
-  const savedState = getWindowState()
-  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
+export function createPetWindow() {
+  const bounds = readWindowState()
 
-  mainWindow = new BrowserWindow({
-    width: savedState?.width ?? Math.min(1280, screenWidth),
-    height: savedState?.height ?? Math.min(800, screenHeight),
-    x: savedState?.x,
-    y: savedState?.y,
-    minWidth: 940,
-    minHeight: 560,
-    title: 'Shadow',
-    titleBarStyle:
-      process.platform === 'linux'
-        ? 'default'
-        : process.platform === 'darwin'
-          ? 'hiddenInset'
-          : 'hidden',
-    ...(process.platform === 'darwin' && { trafficLightPosition: { x: 8, y: 8 } }),
-    ...(process.platform === 'win32' && {
-      titleBarOverlay: { color: '#1a1a2e', symbolColor: '#e1e1e6', height: 48 },
-    }),
+  petWindow = new BrowserWindow({
+    ...bounds,
+    minWidth: 320,
+    minHeight: 380,
+    width: bounds.width,
+    height: bounds.height,
+    title: 'XiaDou Desktop Pet',
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: true,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    acceptFirstMouse: true,
     icon: join(__dirname, '../../assets/icon.png'),
     webPreferences: {
-      preload: getPreloadPath(),
+      preload: preloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
     show: false,
-    backgroundColor: '#1a1a2e',
   })
 
-  // Load the renderer
-  mainWindow.loadURL(getRendererURL())
+  petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  petWindow.setAlwaysOnTop(true, 'screen-saver')
+  petWindow.loadURL(rendererUrl())
 
-  // Open external links (target="_blank") in system browser
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      shell.openExternal(url)
+  petWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://') || url.startsWith('http://')) {
+      void shell.openExternal(url)
     }
     return { action: 'deny' }
   })
 
-  // Open DevTools in development only
   if (isDev) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
+    petWindow.webContents.openDevTools({ mode: 'detach' })
   }
 
-  // Show when ready to prevent visual flash
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
+  petWindow.once('ready-to-show', () => {
+    petWindow?.showInactive()
   })
 
-  // Save window state on resize/move
-  const saveState = () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    const bounds = mainWindow.getBounds()
-    const isMaximized = mainWindow.isMaximized()
-    saveWindowState({ ...bounds, isMaximized })
+  const persist = () => {
+    if (!petWindow || petWindow.isDestroyed()) return
+    saveWindowState(petWindow.getBounds())
   }
-
-  mainWindow.on('resize', saveState)
-  mainWindow.on('move', saveState)
-
-  mainWindow.on('closed', () => {
-    mainWindow = null
+  petWindow.on('resize', persist)
+  petWindow.on('move', persist)
+  petWindow.on('close', (event) => {
+    if (allowClose) return
+    event.preventDefault()
+    petWindow?.hide()
+  })
+  petWindow.on('closed', () => {
+    petWindow = null
   })
 
-  return mainWindow
+  return petWindow
 }
 
-export function getMainWindow(): BrowserWindow | null {
-  return mainWindow
+export function getPetWindow() {
+  return petWindow
+}
+
+export function showPetWindow() {
+  if (!petWindow || petWindow.isDestroyed()) {
+    createPetWindow()
+    return
+  }
+  petWindow.show()
+  petWindow.focus()
+}
+
+export function setPetPanelMode(mode: 'compact' | 'expanded') {
+  const win = getPetWindow()
+  if (!win || win.isDestroyed()) return
+  const [width, height] = mode === 'compact' ? [300, 380] : [460, 700]
+  win.setSize(width, height, true)
+}
+
+export function allowPetWindowClose() {
+  allowClose = true
 }

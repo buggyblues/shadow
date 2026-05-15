@@ -2444,6 +2444,8 @@ export function Playground() {
   useLayoutEffect(() => {
     if (!canvasRef.current || !deskRef.current) return
 
+    const cmdResultTimerRef = { current: null as ReturnType<typeof setTimeout> | null }
+
     const loop = new DeskLoop({ renderer: { backend: 'webgl' } })
     deskLoopRef.current = loop
     loop.mount(canvasRef.current, deskRef.current, visibleCards, {
@@ -2485,7 +2487,8 @@ export function Playground() {
         setCmdLog((prev) =>
           [...prev, { ts: Date.now(), input: `/link ${fromId} ${toId}`, ok, msg }].slice(-50),
         )
-        setTimeout(() => setCmdResult(null), 2500)
+        if (cmdResultTimerRef.current) clearTimeout(cmdResultTimerRef.current)
+        cmdResultTimerRef.current = setTimeout(() => setCmdResult(null), 2500)
       },
     })
 
@@ -2510,6 +2513,7 @@ export function Playground() {
     arenaListDirtyRef.current = true
 
     return () => {
+      if (cmdResultTimerRef.current) clearTimeout(cmdResultTimerRef.current)
       loop.destroy()
       deskLoopRef.current = null
     }

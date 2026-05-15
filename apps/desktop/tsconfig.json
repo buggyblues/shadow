@@ -8,10 +8,9 @@
     "jsx": "react-jsx",
     "types": ["node"],
     "paths": {
-      "@/*": ["./src/*"],
-      "@web/*": ["../web/src/*"]
+      "@/*": ["./src/*"]
     },
-    "rootDirs": ["./src", "../web/src"],
+    "rootDirs": ["./src"],
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,

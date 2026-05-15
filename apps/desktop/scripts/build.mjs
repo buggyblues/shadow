@@ -21,11 +21,10 @@ execSync('npx rspack build -c rspack.preload.config.mjs --mode production', {
   env,
 })
 
+console.log('[build] Processing pet sprites...')
+execSync('node scripts/process-pet-sprites.mjs', { cwd: root, stdio: 'inherit', env })
+
 console.log('[build] Building renderer (rsbuild)...')
 execSync('npx rsbuild build -c rsbuild.renderer.config.ts', { cwd: root, stdio: 'inherit', env })
-
-// Bundle OpenClaw gateway + plugins (skip if SKIP_OPENCLAW_BUNDLE=1)
-console.log('[build] Bundling OpenClaw...')
-execSync('node scripts/bundle-openclaw.mjs', { cwd: root, stdio: 'inherit', env })
 
 console.log('[build] Done!')

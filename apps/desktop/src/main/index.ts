@@ -1,31 +1,22 @@
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
-
-// Suppress EPIPE errors that occur when a child process dies while the main
-// process writes to its stdio pipe (e.g. gateway process exit).
-process.on('uncaughtException', (err) => {
-  if ((err as NodeJS.ErrnoException).code === 'EPIPE') return
-  throw err
-})
-
-import { setupAutoUpdater } from './auto-updater'
+import { app, net, protocol } from 'electron'
+import { setupIpcHandlers } from './ipc'
 import { createAppMenu } from './menu'
-import { setupNotificationHandler } from './notifications'
-import { closeOnboardingWindow, createOnboardingWindow } from './onboarding-window'
-import { cleanupOpenClaw, initOpenClaw } from './openclaw'
-import { killAllAgents, setupProcessManager } from './process-manager'
-import { registerGlobalShortcuts, unregisterAllShortcuts } from './shortcuts'
+import { CommunityService } from './services/community'
+import { SessionService } from './services/session'
+import { ShadowApiService } from './services/shadow-api'
+import { registerGlobalShortcuts, unregisterGlobalShortcuts } from './shortcuts'
 import { createTray } from './tray'
-import { createWindow, getMainWindow } from './window'
+import { allowPetWindowClose, createPetWindow, getPetWindow, showPetWindow } from './window'
 
-// Handle Squirrel events on Windows install/uninstall
-if (process.platform === 'win32' && process.argv.some((a) => a.startsWith('--squirrel'))) {
-  app.quit()
+const WEB_ORIGIN =
+  process.env.DESKTOP_WEB_ORIGIN || process.env.VITE_API_BASE || 'https://shadowob.app'
+
+if (process.env.DESKTOP_USER_DATA_DIR) {
+  app.setPath('userData', process.env.DESKTOP_USER_DATA_DIR)
 }
 
-// Register custom protocol for serving renderer files (must be before app.ready)
-// This makes absolute paths like /Logo.svg work correctly in production
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'app',
@@ -38,107 +29,82 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
-const API_ORIGIN =
-  process.env.DESKTOP_API_ORIGIN || process.env.VITE_API_BASE || 'https://shadowob.com'
-
-// Check if onboarding is needed
-function needsOnboarding(): boolean {
-  // Check if user has completed onboarding
-  const completed = app.getPath('userData') + '/.onboarding-completed'
-  const fs = require('fs')
-  return !fs.existsSync(completed)
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
 }
 
-function markOnboardingCompleted(): void {
-  const completed = app.getPath('userData') + '/.onboarding-completed'
-  const fs = require('fs')
-  fs.writeFileSync(completed, new Date().toISOString())
-}
+let sessionService: SessionService
+let communityService: CommunityService
 
-app.on('ready', async () => {
-  // Handle app:// protocol — serve renderer files from dist/renderer/
+function registerStaticProtocol() {
   const rendererDir = join(__dirname, '../renderer')
   protocol.handle('app', (request) => {
     const url = new URL(request.url)
     let filePath = decodeURIComponent(url.pathname)
-
-    // Proxy server-hosted API/media paths to the remote server
-    if (
-      filePath.startsWith('/api/') ||
-      filePath === '/api' ||
-      filePath.startsWith('/socket.io/') ||
-      filePath === '/socket.io' ||
-      filePath.startsWith('/shadow/')
-    ) {
-      return net.fetch(`${API_ORIGIN}${filePath}`)
-    }
-
-    if (filePath === '/' || filePath === '') {
-      filePath = '/index.html'
-    }
-    const fullPath = join(rendererDir, filePath)
-    return net.fetch(pathToFileURL(fullPath).toString())
+    if (!filePath || filePath === '/') filePath = '/index.html'
+    return net.fetch(pathToFileURL(join(rendererDir, filePath)).toString())
   })
+}
 
-  // Check if onboarding is needed
-  if (needsOnboarding()) {
-    const result = await createOnboardingWindow()
-    if (result.completed) {
-      markOnboardingCompleted()
-    }
+async function handleDeepLink(rawUrl: string) {
+  try {
+    await sessionService?.importCallback(rawUrl)
+    showPetWindow()
+  } catch {
+    showPetWindow()
+  }
+}
+
+app.on('second-instance', (_event, argv) => {
+  const deepLink = argv.find((arg) => arg.startsWith('shadow://'))
+  if (deepLink) void handleDeepLink(deepLink)
+  showPetWindow()
+})
+
+app.on('open-url', (event, rawUrl) => {
+  event.preventDefault()
+  void handleDeepLink(rawUrl)
+})
+
+app.whenReady().then(() => {
+  app.setName('XiaDou')
+  if (process.defaultApp) {
+    app.setAsDefaultProtocolClient('shadow', process.execPath, [process.argv[1] ?? ''])
+  } else {
+    app.setAsDefaultProtocolClient('shadow')
   }
 
-  // Create main window after onboarding or if skipped
-  createWindow()
-  createTray()
-  createAppMenu()
+  registerStaticProtocol()
+
+  sessionService = new SessionService(WEB_ORIGIN)
+  const apiService = new ShadowApiService(WEB_ORIGIN, sessionService)
+  communityService = new CommunityService(WEB_ORIGIN, sessionService, apiService, getPetWindow)
+
+  setupIpcHandlers({
+    webOrigin: WEB_ORIGIN,
+    session: sessionService,
+    community: communityService,
+  })
+
+  createPetWindow()
+  createTray(WEB_ORIGIN)
+  createAppMenu(WEB_ORIGIN)
   registerGlobalShortcuts()
-  setupNotificationHandler()
-  setupProcessManager()
-  setupAutoUpdater()
-  initOpenClaw()
-
-  ipcMain.handle('desktop:minimizeToTray', () => {
-    const win = getMainWindow()
-    if (win) {
-      win.hide()
-    }
-  })
-
-  // Handle onboarding completion from renderer
-  ipcMain.handle('onboarding:complete', (_event, result: { completed: boolean }) => {
-    if (result.completed) {
-      markOnboardingCompleted()
-    }
-    closeOnboardingWindow()
-    // Show main window
-    const mainWindow = getMainWindow()
-    if (mainWindow) {
-      mainWindow.show()
-    } else {
-      createWindow()
-    }
-    return { success: true }
-  })
+  communityService.start()
 })
+
+app.on('activate', () => showPetWindow())
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  // The tray owns the app lifecycle; closing the pet window hides it.
 })
 
-app.on('activate', () => {
-  // On macOS, re-create a window when dock icon is clicked and no windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
-  } else {
-    getMainWindow()?.show()
-  }
+app.on('before-quit', () => {
+  allowPetWindowClose()
 })
 
 app.on('will-quit', () => {
-  unregisterAllShortcuts()
-  killAllAgents()
-  cleanupOpenClaw()
+  unregisterGlobalShortcuts()
+  communityService?.stop()
 })

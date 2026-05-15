@@ -36,6 +36,8 @@ export default {
   },
   externals: {
     electron: 'commonjs electron',
+    bufferutil: 'commonjs bufferutil',
+    'utf-8-validate': 'commonjs utf-8-validate',
   },
   node: {
     __dirname: false,

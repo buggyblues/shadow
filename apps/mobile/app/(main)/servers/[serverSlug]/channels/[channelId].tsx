@@ -166,6 +166,7 @@ export default function ChannelViewScreen() {
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
   const [showProductPicker, setShowProductPicker] = useState(false)
   const [showScrollBottom, setShowScrollBottom] = useState(false)
+  const showScrollBottomRef = useRef(false)
   const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
   const [showInvitePanel, setShowInvitePanel] = useState(false)
@@ -1746,7 +1747,11 @@ export default function ChannelViewScreen() {
           onScroll={(e) => {
             const { contentOffset } = e.nativeEvent
             // In inverted list, offset > 0 means scrolled away from bottom (newest)
-            setShowScrollBottom(contentOffset.y > 200)
+            const shouldShow = contentOffset.y > 200
+            if (shouldShow !== showScrollBottomRef.current) {
+              showScrollBottomRef.current = shouldShow
+              setShowScrollBottom(shouldShow)
+            }
             if (channelId) scrollOffsetRef.current[channelId] = contentOffset.y
           }}
           scrollEventThrottle={100}

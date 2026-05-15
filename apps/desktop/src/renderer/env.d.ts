@@ -1,8 +1,9 @@
-interface ImportMetaEnv {
-  readonly VITE_API_BASE?: string
-  readonly [key: string]: string | undefined
+import type { ShadowPetBridge } from '../preload'
+
+declare global {
+  interface Window {
+    shadowPet: ShadowPetBridge
+  }
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
+export {}

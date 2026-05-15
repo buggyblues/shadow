@@ -13,24 +13,19 @@ export default defineConfig({
     },
     define: {
       'import.meta.env.VITE_API_BASE': JSON.stringify(
-        process.env.VITE_API_BASE || 'https://shadowob.com',
+        process.env.VITE_API_BASE || 'https://shadowob.app',
       ),
-    },
-    alias: {
-      '@': resolve(__dirname, 'src/renderer'),
-      '@web': resolve(__dirname, '../web/src'),
-      // Desktop-specific overrides
-      [resolve(__dirname, '../web/src/lib/socket')]: resolve(
-        __dirname,
-        'src/renderer/lib/socket.ts',
-      ),
-      [resolve(__dirname, '../web/src/lib/api')]: resolve(__dirname, 'src/renderer/lib/api.ts'),
     },
     conditionNames: ['development', 'import', 'module', 'default'],
   },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src/renderer'),
+    },
+  },
   html: {
     template: './src/renderer/index.html',
-    title: 'Shadow',
+    title: 'XiaDou',
   },
   server: {
     port: 3100,
@@ -39,15 +34,15 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE || 'https://shadowob.com',
+        target: process.env.VITE_API_BASE || 'https://shadowob.app',
         changeOrigin: true,
       },
       '/shadow': {
-        target: 'https://shadowob.com',
+        target: 'https://shadowob.app',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: process.env.VITE_API_BASE || 'https://shadowob.com',
+        target: process.env.VITE_API_BASE || 'https://shadowob.app',
         ws: true,
       },
     },
@@ -62,8 +57,12 @@ export default defineConfig({
     },
     copy: [
       {
-        from: resolve(__dirname, '../web/public'),
-        to: '.',
+        from: resolve(__dirname, 'assets/pet/animations'),
+        to: 'pet/animations',
+      },
+      {
+        from: resolve(__dirname, 'assets/pet/manifest.json'),
+        to: 'pet/manifest.json',
       },
     ],
   },

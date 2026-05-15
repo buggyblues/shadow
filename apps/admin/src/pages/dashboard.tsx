@@ -2807,10 +2807,7 @@ function DashboardContent() {
                     </div>
                     <div className="space-y-2.5 text-xs">
                       {[
-                        [
-                          'Slug',
-                          <span className="font-mono text-zinc-300">{tplSelected.slug}</span>,
-                        ],
+                        ['Slug', tplSelected.slug],
                         ['Source', tplSelected.source],
                         ['Category', tplSelected.category ?? '—'],
                         [
@@ -2821,9 +2818,13 @@ function DashboardContent() {
                         ['Created', new Date(tplSelected.createdAt).toLocaleString()],
                         ['Updated', new Date(tplSelected.updatedAt).toLocaleString()],
                       ].map(([label, val]) => (
-                        <div key={String(label)}>
+                        <div key={label}>
                           <span className="text-zinc-500">{label}</span>
-                          <div className="mt-0.5 text-zinc-300">{val}</div>
+                          <div
+                            className={`mt-0.5 text-zinc-300 ${label === 'Slug' ? 'font-mono' : ''}`}
+                          >
+                            {val}
+                          </div>
                         </div>
                       ))}
                       {tplSelected.tags.length > 0 && (

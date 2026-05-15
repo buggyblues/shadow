@@ -1,27 +1,25 @@
 import { app, Menu, shell } from 'electron'
+import { showPetWindow } from './window'
 
-export function createAppMenu(): void {
-  const isMac = process.platform === 'darwin'
-
+export function createAppMenu(webOrigin: string) {
   const template: Electron.MenuItemConstructorOptions[] = [
-    ...(isMac
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: 'about' as const },
-              { type: 'separator' as const },
-              { role: 'services' as const },
-              { type: 'separator' as const },
-              { role: 'hide' as const },
-              { role: 'hideOthers' as const },
-              { role: 'unhide' as const },
-              { type: 'separator' as const },
-              { role: 'quit' as const },
-            ],
+    {
+      label: app.name,
+      submenu: [
+        {
+          label: 'Show XiaDou',
+          click: () => showPetWindow(),
+        },
+        {
+          label: 'Open Shadow',
+          click: () => {
+            void shell.openExternal(`${webOrigin}/app/discover`)
           },
-        ]
-      : []),
+        },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
     {
       label: 'Edit',
       submenu: [
@@ -31,46 +29,17 @@ export function createAppMenu(): void {
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
-        { role: 'selectAll' },
       ],
     },
     {
       label: 'View',
       submenu: [
         { role: 'reload' },
-        { role: 'forceReload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
-      ],
-    },
-    {
-      label: 'Window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
-        ...(isMac
-          ? [{ type: 'separator' as const }, { role: 'front' as const }]
-          : [{ role: 'close' as const }]),
-      ],
-    },
-    {
-      label: 'Help',
-      submenu: [
-        {
-          label: 'Documentation',
-          click: () => {
-            shell.openExternal('https://shadowob.com')
-          },
-        },
       ],
     },
   ]
-
-  const menu = Menu.buildFromTemplate(template)
-  Menu.setApplicationMenu(menu)
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }

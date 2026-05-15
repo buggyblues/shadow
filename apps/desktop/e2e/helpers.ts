@@ -1,4 +1,5 @@
-// Shared helpers for desktop E2E tests
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { type ElectronApplication, _electron as electron, type Page } from 'playwright'
 
@@ -8,34 +9,21 @@ export async function launchDesktopApp(): Promise<{
 }> {
   const electronBin = require('electron') as unknown as string
   const projectRoot = path.resolve(__dirname, '..')
+  const userDataDir = mkdtempSync(path.join(tmpdir(), 'xiadou-e2e-'))
 
   const app = await electron.launch({
     executablePath: electronBin,
     args: [projectRoot],
     env: {
       ...process.env,
-      NODE_ENV: 'development',
+      NODE_ENV: 'test',
+      DESKTOP_WEB_ORIGIN: 'https://shadowob.app',
+      DESKTOP_USER_DATA_DIR: userDataDir,
     },
   })
 
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
-
+  await page.locator('.pet-sprite').waitFor({ state: 'visible' })
   return { app, page }
-}
-
-/**
- * Collect console errors during a callback execution.
- * Returns array of error messages.
- */
-export async function collectConsoleErrors(
-  page: Page,
-  action: () => Promise<void>,
-): Promise<string[]> {
-  const errors: string[] = []
-  const handler = (err: Error) => errors.push(err.message)
-  page.on('pageerror', handler)
-  await action()
-  page.removeListener('pageerror', handler)
-  return errors
 }

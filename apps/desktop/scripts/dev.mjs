@@ -1,4 +1,4 @@
-// Dev script: bundle openclaw, build main+preload, start renderer dev server (HMR), then launch Electron
+// Dev script: build main+preload, start renderer dev server (HMR), then launch Electron
 import { execSync, spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -6,14 +6,6 @@ import { fileURLToPath } from 'node:url'
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const root = resolve(__dirname, '..')
 const env = { ...process.env, NODE_ENV: 'development' }
-
-// 0. Bundle OpenClaw gateway + plugin (ensures build/ is up to date)
-console.log('[dev] Bundling OpenClaw resources...')
-execSync('node scripts/bundle-openclaw.mjs', {
-  cwd: root,
-  stdio: 'inherit',
-  env,
-})
 
 // 1. Build main and preload (one-shot)
 console.log('[dev] Building main process...')
