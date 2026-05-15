@@ -37,6 +37,8 @@ let tenantToken: string
 
 let v2ListingId: string
 let v2ContractId: string
+let agentBotUserId: string
+let agentId: string
 
 async function req(
   method: string,
@@ -108,13 +110,37 @@ beforeAll(async () => {
 
   const walletService = container.resolve('walletService')
   await walletService.topUp(tenantUserId, 50000, 'Test balance for billing v2 E2E')
+
+  const agentDao = container.resolve('agentDao')
+  const botUser = await agentDao.createBotUser({
+    username: `billingv2bot${ts}`,
+    displayName: 'Billing V2 Test Bot',
+  })
+  agentBotUserId = botUser!.id
+
+  const agent = await agentDao.create({
+    userId: agentBotUserId,
+    kernelType: 'docker',
+    config: { buddyMode: 'shareable', allowedServerIds: [] },
+    ownerId: ownerUserId,
+  })
+  agentId = agent!.id
+  await agentDao.updateStatus(agentId, 'running')
+  await agentDao.updateHeartbeat(agentId)
 }, 30_000)
 
 afterAll(async () => {
   try {
     const { eq, inArray } = await import('drizzle-orm')
-    const { agentListings, rentalContracts, rentalUsageRecords, rentalViolations, wallets, users } =
-      schema
+    const {
+      agentListings,
+      agents,
+      rentalContracts,
+      rentalUsageRecords,
+      rentalViolations,
+      wallets,
+      users,
+    } = schema
 
     if (v2ContractId) {
       await db.delete(rentalViolations).where(eq(rentalViolations.contractId, v2ContractId))
@@ -124,7 +150,10 @@ afterAll(async () => {
     if (ownerUserId) {
       await db.delete(agentListings).where(eq(agentListings.ownerId, ownerUserId))
     }
-    const userIds = [ownerUserId, tenantUserId].filter(Boolean)
+    if (agentId) {
+      await db.delete(agents).where(eq(agents.id, agentId))
+    }
+    const userIds = [ownerUserId, tenantUserId, agentBotUserId].filter(Boolean)
     if (userIds.length > 0) {
       await db.delete(wallets).where(inArray(wallets.userId, userIds))
       await db.delete(users).where(inArray(users.id, userIds))
@@ -144,6 +173,7 @@ describe('Rental Billing V2 E2E', () => {
       body: {
         title: 'V2 Billing Test Buddy',
         description: 'Testing new billing model',
+        agentId,
         deviceTier: 'mid_range',
         osType: 'macos',
         baseDailyRate: 500,
