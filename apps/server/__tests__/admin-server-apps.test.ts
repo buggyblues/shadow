@@ -54,7 +54,7 @@ describe('admin server apps handler', () => {
           appKey: 'demo-desk',
           name: 'Demo Desk',
           iconUrl: 'http://localhost:4199/assets/icon.svg',
-          api: { baseUrl: 'http://localhost:4199', auth: { type: 'none' } },
+          api: { baseUrl: 'http://localhost:4199', auth: { type: 'oauth2-bearer' } },
           commands: [
             {
               name: 'tickets.list',
