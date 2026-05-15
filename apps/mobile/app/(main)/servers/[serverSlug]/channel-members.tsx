@@ -88,6 +88,7 @@ interface ServerMember {
 interface BuddyAgent {
   id: string
   ownerId: string
+  accessRole?: 'owner' | 'tenant'
   userId: string
   status: string
   totalOnlineSeconds?: number
@@ -111,6 +112,8 @@ interface BuddyAgent {
     avatarUrl?: string | null
   } | null
 }
+
+type PolicyMode = 'replyAll' | 'mentionOnly' | 'disabled'
 
 type AddAgentsResponse = {
   added?: Array<string | { agentId: string }>
@@ -406,14 +409,50 @@ export default function ChannelMembersScreen() {
   // Buddy policy
   const { data: buddyAgents = [] } = useQuery({
     queryKey: ['channel-buddy-agents'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
+  })
+
+  const selectedAgent = policySheet?.user.isBot
+    ? buddyAgents.find((a) => a.botUser?.id === policySheet.user.id)
+    : null
+
+  const { data: currentPolicy } = useQuery({
+    queryKey: ['agent-policy', channelId, selectedAgent?.id],
+    queryFn: () =>
+      fetchApi<{ mentionOnly: boolean; reply: boolean; config: Record<string, unknown> }>(
+        `/api/channels/${channelId}/agents/${selectedAgent!.id}/policy`,
+      ),
+    enabled: !!channelId && !!selectedAgent,
+  })
+
+  const currentMode: PolicyMode = (() => {
+    if (!currentPolicy) return 'replyAll'
+    if (!currentPolicy.reply) return 'disabled'
+    if (currentPolicy.mentionOnly) return 'mentionOnly'
+    return 'replyAll'
+  })()
+
+  const updatePolicy = useMutation({
+    mutationFn: ({ mode }: { mode: PolicyMode }) =>
+      fetchApi(`/api/channels/${channelId}/agents/${selectedAgent!.id}/policy`, {
+        method: 'PUT',
+        body: JSON.stringify({ mode }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent-policy', channelId, selectedAgent?.id] })
+      setPolicySheet(null)
+    },
   })
 
   const canManagePolicy = (member: ChannelMember) => {
     if (!member.user.isBot) return false
     const agent = buddyAgents.find((a) => a.botUser?.id === member.user.id)
     if (!agent) return false
-    return agent.ownerId === currentUser?.id || server?.id != null
+    return (
+      agent.ownerId === currentUser?.id ||
+      agent.accessRole === 'owner' ||
+      agent.accessRole === 'tenant'
+    )
   }
 
   useEffect(() => {
@@ -888,20 +927,50 @@ export default function ChannelMembersScreen() {
               {policySheet?.user.displayName || policySheet?.user.username}
             </Text>
 
-            <View style={[styles.policyOption, { borderBottomColor: colors.border }]}>
+            <Pressable
+              style={[styles.policyOption, { borderBottomColor: colors.border }]}
+              onPress={() => updatePolicy.mutate({ mode: 'replyAll' })}
+            >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  {t('member.policyOwnerTenantOnly', '固定回复策略')}
+                  {t('member.policyReplyAll', '回复所有消息')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t(
-                    'member.policyOwnerTenantOnlyDesc',
-                    '默认只回复拥有者和允许互动的成员，无需 @ Buddy。',
-                  )}
+                  {t('member.policyReplyAllDesc', 'Buddy 会回复频道中的所有消息')}
                 </Text>
               </View>
-              <Check size={18} color="#23a559" />
-            </View>
+              {currentMode === 'replyAll' && <Check size={18} color="#23a559" />}
+            </Pressable>
+
+            <Pressable
+              style={[styles.policyOption, { borderBottomColor: colors.border }]}
+              onPress={() => updatePolicy.mutate({ mode: 'mentionOnly' })}
+            >
+              <View style={styles.policyOptionContent}>
+                <Text style={[styles.policyLabel, { color: colors.text }]}>
+                  {t('member.policyMentionOnly', '仅回复 @提及')}
+                </Text>
+                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
+                  {t('member.policyMentionOnlyDesc', '仅在被 @ 时回复')}
+                </Text>
+              </View>
+              {currentMode === 'mentionOnly' && <Check size={18} color="#23a559" />}
+            </Pressable>
+
+            <Pressable
+              style={[styles.policyOption, { borderBottomColor: colors.border }]}
+              onPress={() => updatePolicy.mutate({ mode: 'disabled' })}
+            >
+              <View style={styles.policyOptionContent}>
+                <Text style={[styles.policyLabel, { color: colors.error }]}>
+                  {t('member.policyDisabled', '静默（不回复）')}
+                </Text>
+                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
+                  {t('member.policyDisabledDesc', 'Buddy 将不会在此频道回复任何消息')}
+                </Text>
+              </View>
+              {currentMode === 'disabled' && <Check size={18} color={colors.error} />}
+            </Pressable>
 
             <Pressable
               style={[styles.sheetCancel, { backgroundColor: colors.background }]}

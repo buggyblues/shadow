@@ -38,7 +38,8 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
-const API_ORIGIN = 'https://shadowob.com'
+const API_ORIGIN =
+  process.env.DESKTOP_API_ORIGIN || process.env.VITE_API_BASE || 'https://shadowob.com'
 
 // Check if onboarding is needed
 function needsOnboarding(): boolean {
@@ -61,8 +62,14 @@ app.on('ready', async () => {
     const url = new URL(request.url)
     let filePath = decodeURIComponent(url.pathname)
 
-    // Proxy server-hosted media and API paths to the remote server
-    if (filePath.startsWith('/shadow/')) {
+    // Proxy server-hosted API/media paths to the remote server
+    if (
+      filePath.startsWith('/api/') ||
+      filePath === '/api' ||
+      filePath.startsWith('/socket.io/') ||
+      filePath === '/socket.io' ||
+      filePath.startsWith('/shadow/')
+    ) {
       return net.fetch(`${API_ORIGIN}${filePath}`)
     }
 

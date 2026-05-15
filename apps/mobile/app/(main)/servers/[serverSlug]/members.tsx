@@ -38,6 +38,7 @@ interface Member {
 interface BuddyAgent {
   id: string
   ownerId: string
+  accessRole?: 'owner' | 'tenant'
   botUser?: { id: string; username: string } | null
 }
 
@@ -94,7 +95,7 @@ export default function MembersScreen() {
   // Buddy agents for reply policy
   const { data: buddyAgents = [] } = useQuery({
     queryKey: ['members-buddy-agents'],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
   })
 
   // Find the agent for the selected buddy
@@ -144,8 +145,14 @@ export default function MembersScreen() {
 
   // Can current user manage buddy policy?
   const canManagePolicy = (member: Member) => {
-    void member
-    return false
+    if (!channelId || !member.user.isBot) return false
+    const agent = buddyAgents.find((a) => a.botUser?.id === member.user.id)
+    if (!agent) return false
+    return (
+      agent.ownerId === currentUser?.id ||
+      agent.accessRole === 'owner' ||
+      agent.accessRole === 'tenant'
+    )
   }
 
   // Open custom policy sheet with current values

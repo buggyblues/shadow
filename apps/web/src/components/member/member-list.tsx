@@ -48,6 +48,7 @@ interface Member {
 interface BuddyAgent {
   id: string
   ownerId: string
+  accessRole?: 'owner' | 'tenant'
   totalOnlineSeconds?: number
   config?: Record<string, unknown>
   owner?: {
@@ -111,7 +112,7 @@ export function MemberList() {
 
   const { data: buddyAgents = [] } = useQuery({
     queryKey: ['members-buddy-agents', activeServerId],
-    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
     enabled: !!activeServerId,
   })
 
@@ -177,7 +178,14 @@ export function MemberList() {
       channelId: string
       agentId: string
       mode: string
-      config?: { replyToUsers?: string[]; keywords?: string[]; mentionOnly?: boolean }
+      config?: {
+        replyToUsers?: string[]
+        keywords?: string[]
+        mentionOnly?: boolean
+        replyToBuddy?: boolean
+        maxBuddyChainDepth?: number
+        smartReply?: boolean
+      }
     }) =>
       fetchApi(`/api/channels/${channelId}/agents/${agentId}/policy`, {
         method: 'PUT',
@@ -547,8 +555,21 @@ function BotContextMenu({
     if (!currentPolicy) return 'replyAll'
     if (!currentPolicy.reply) return 'disabled'
     if (currentPolicy.mentionOnly) return 'mentionOnly'
-    const cfg = currentPolicy.config as { replyToUsers?: string[]; keywords?: string[] } | undefined
-    if (cfg?.replyToUsers?.length || cfg?.keywords?.length) return 'custom'
+    const cfg = currentPolicy.config as
+      | {
+          replyToUsers?: string[]
+          keywords?: string[]
+          replyToBuddy?: boolean
+          smartReply?: boolean
+        }
+      | undefined
+    if (
+      cfg?.replyToUsers?.length ||
+      cfg?.keywords?.length ||
+      cfg?.replyToBuddy ||
+      cfg?.smartReply === false
+    )
+      return 'custom'
     return 'replyAll'
   })()
 
@@ -586,14 +607,15 @@ function BotContextMenu({
   const isOwner = contextMenu.member.role === 'owner'
   // Check if current user is the Buddy's owner
   const isBuddyOwner = isBot && agent && currentUser?.id === agent.ownerId
-  const showPolicySummary = Boolean(isBot && activeChannelId && agent)
-  const showPolicySubmenu = Boolean(
+  const isBuddyPolicyManager = Boolean(
     isBot &&
-      activeChannelId &&
       agent &&
-      (canKick || isBuddyOwner) &&
-      currentPolicy?.config?.legacyPolicyEditor === true,
+      currentUser &&
+      (agent.ownerId === currentUser.id ||
+        agent.accessRole === 'owner' ||
+        agent.accessRole === 'tenant'),
   )
+  const showPolicySubmenu = Boolean(isBot && activeChannelId && agent && isBuddyPolicyManager)
   // Only Buddy owner, server owner, or admin can remove a bot from a channel
   const showRemoveFromChannel =
     isBot && activeChannelId && !isSelf && !isOwner && (canKick || isBuddyOwner)
@@ -630,23 +652,6 @@ function BotContextMenu({
           <User size={14} />
           {t('member.viewProfile')}
         </button>
-
-        {showPolicySummary && (
-          <>
-            <div className="h-px bg-border-subtle my-1" />
-            <div className="flex items-start gap-2 w-full px-3 py-2 text-sm text-text-secondary">
-              <MessageSquare size={14} className="mt-0.5 shrink-0" />
-              <div>
-                <div className="font-bold text-text-primary">
-                  {t('member.policyOwnerTenantOnly')}
-                </div>
-                <div className="text-[11px] leading-4 text-text-muted">
-                  {t('member.policyOwnerTenantOnlyDesc')}
-                </div>
-              </div>
-            </div>
-          </>
-        )}
 
         {/* Policy submenu — only for bots in a channel */}
         {showPolicySubmenu && (

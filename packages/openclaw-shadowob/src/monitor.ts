@@ -641,9 +641,7 @@ export async function monitorShadowProvider(
                   channelName: ch.name,
                 })
                 channelPolicies.set(ch.id, {
-                  listen: true,
-                  reply: true,
-                  mentionOnly: false,
+                  ...ch.policy,
                   config: { ...ch.policy.config, ...accessConfig },
                 })
                 if (!allChannelIds.includes(ch.id)) {
@@ -666,9 +664,6 @@ export async function monitorShadowProvider(
               if (channelServerMap.has(channelId)) continue
               channelPolicies.set(channelId, {
                 ...existing,
-                listen: true,
-                reply: true,
-                mentionOnly: false,
                 config: { ...existing.config, ...accessConfig },
               })
             }
@@ -679,23 +674,24 @@ export async function monitorShadowProvider(
         })()
         return
       }
-      const mentionOnly = false
+      const existing = channelPolicies.get(data.channelId)
+      const mentionOnly = data.mentionOnly ?? existing?.mentionOnly ?? false
+      const reply = data.reply ?? existing?.reply ?? true
       const accessConfig = buildAccessPolicyConfig(remoteConfig)
       runtime.log?.(
-        `[ws] Received agent:policy-changed for channel ${data.channelId}: mentionOnly=${mentionOnly}, reply=${data.reply}, config=${JSON.stringify(data.config ?? {})}`,
+        `[ws] Received agent:policy-changed for channel ${data.channelId}: mentionOnly=${mentionOnly}, reply=${reply}, config=${JSON.stringify(data.config ?? {})}`,
       )
-      const existing = channelPolicies.get(data.channelId)
       if (existing) {
         channelPolicies.set(data.channelId, {
           ...existing,
           mentionOnly,
-          reply: true,
+          reply,
           config: { ...existing.config, ...accessConfig, ...(data.config ?? {}) },
         })
       } else {
         channelPolicies.set(data.channelId, {
           listen: true,
-          reply: true,
+          reply,
           mentionOnly,
           config: { ...accessConfig, ...(data.config ?? {}) },
         })

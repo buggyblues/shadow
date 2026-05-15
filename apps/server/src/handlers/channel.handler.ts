@@ -17,6 +17,21 @@ const reviewJoinRequestSchema = z.object({
   status: z.enum(['approved', 'rejected']),
 })
 
+type ChannelAgentPolicyBody = {
+  mentionOnly?: boolean
+  mode?: 'replyAll' | 'mentionOnly' | 'custom' | 'disabled'
+  config?: {
+    replyToUsers?: string[]
+    keywords?: string[]
+    mentionOnly?: boolean
+    replyToBuddy?: boolean
+    maxBuddyChainDepth?: number
+    buddyBlacklist?: string[]
+    buddyWhitelist?: string[]
+    smartReply?: boolean
+  }
+}
+
 async function resolveSignedMediaUrl(
   mediaService: {
     resolveMediaUrl: (
@@ -683,40 +698,72 @@ export function createChannelHandler(container: AppContainer) {
     const agentPolicyService = container.resolve('agentPolicyService')
     const agentService = container.resolve('agentService')
     const channelService = container.resolve('channelService')
+    const rentalService = container.resolve('rentalService')
     const user = c.get('user')
     const channelId = c.req.param('channelId')
     const agentId = c.req.param('agentId')
-    await c.req.json().catch(() => ({}))
+    const body = await c.req
+      .json<ChannelAgentPolicyBody>()
+      .catch(() => ({}) as ChannelAgentPolicyBody)
 
     // Verify channel exists
     const channel = await channelService.getById(channelId)
     const serverId = requireServerChannel(channel)
 
-    // Verify agent exists and user owns it OR user is server admin/owner
+    // Verify agent exists and the requester can use this Buddy as owner or active tenant.
     const agent = await agentService.getById(agentId)
     if (!agent) {
       return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
-    const serverService = container.resolve('serverService')
-    const serverMembers = await serverService.getMembers(serverId)
-    const requester = serverMembers.find((m) => m.userId === user.userId)
-    const isAdminOrOwner = requester?.role === 'owner' || requester?.role === 'admin'
-    if (agent.ownerId !== user.userId && !isAdminOrOwner) {
-      return c.json({ ok: false, error: 'Not authorized' }, 403)
+    const access = await rentalService.canUseAgent(agentId, user.userId)
+    if (!access.canUse) {
+      return c.json({ ok: false, error: 'Not the Buddy owner or active tenant' }, 403)
     }
 
+    // Determine policy fields based on mode.
     const listen = true
-    const reply = true
-    const mentionOnly = false
-    const rentalService = container.resolve('rentalService')
-    const activeTenantIds = await rentalService.getActiveTenantIdsForAgent(agentId)
-    const allowedTriggerUserIds = [agent.ownerId, ...activeTenantIds]
-    const config: Record<string, unknown> = {
-      allowedTriggerUserIds,
-      triggerUserIds: allowedTriggerUserIds,
-      ownerId: agent.ownerId,
-      activeTenantIds,
-      replyRequiresMention: false,
+    let reply = true
+    let mentionOnly = body.mentionOnly ?? false
+    const config: Record<string, unknown> = {}
+
+    if (body.mode) {
+      switch (body.mode) {
+        case 'replyAll':
+          mentionOnly = false
+          break
+        case 'mentionOnly':
+          mentionOnly = true
+          break
+        case 'disabled':
+          mentionOnly = false
+          reply = false
+          break
+        case 'custom':
+          mentionOnly = body.config?.mentionOnly === true
+          if (body.config?.replyToUsers?.length) {
+            config.replyToUsers = body.config.replyToUsers
+          }
+          if (body.config?.keywords?.length) {
+            config.keywords = body.config.keywords
+          }
+          if (typeof body.config?.replyToBuddy === 'boolean') {
+            config.replyToBuddy = body.config.replyToBuddy
+          }
+          if (typeof body.config?.maxBuddyChainDepth === 'number') {
+            config.maxBuddyChainDepth = body.config.maxBuddyChainDepth
+          }
+          if (body.config?.buddyBlacklist?.length) {
+            config.buddyBlacklist = body.config.buddyBlacklist
+          }
+          if (body.config?.buddyWhitelist?.length) {
+            config.buddyWhitelist = body.config.buddyWhitelist
+          }
+          if (typeof body.config?.smartReply === 'boolean') {
+            config.smartReply = body.config.smartReply
+          }
+          config.mentionOnly = mentionOnly
+          break
+      }
     }
 
     // Upsert channel-level policy
@@ -768,19 +815,19 @@ export function createChannelHandler(container: AppContainer) {
     const channelPolicy = await agentPolicyDao.findByChannel(agentId, serverId, channelId)
     if (channelPolicy) {
       return c.json({
-        mentionOnly: false,
-        listen: true,
-        reply: true,
-        config: {},
+        mentionOnly: channelPolicy.mentionOnly,
+        listen: channelPolicy.listen,
+        reply: channelPolicy.reply,
+        config: channelPolicy.config ?? {},
       })
     }
 
-    await agentPolicyDao.findServerDefault(agentId, serverId)
+    const serverDefault = await agentPolicyDao.findServerDefault(agentId, serverId)
     return c.json({
-      mentionOnly: false,
-      listen: true,
-      reply: true,
-      config: {},
+      mentionOnly: serverDefault?.mentionOnly ?? false,
+      listen: serverDefault?.listen ?? true,
+      reply: serverDefault?.reply ?? true,
+      config: serverDefault?.config ?? {},
     })
   })
 

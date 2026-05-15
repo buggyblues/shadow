@@ -218,10 +218,15 @@ export class AgentPolicyService {
       }
     }
 
-    const buildFixedPolicy = (base?: { config?: unknown }) => ({
-      listen: true,
-      reply: true,
-      mentionOnly: false,
+    const buildRuntimePolicy = (base?: {
+      listen?: boolean
+      reply?: boolean
+      mentionOnly?: boolean
+      config?: unknown
+    }) => ({
+      listen: base?.listen ?? true,
+      reply: base?.reply ?? true,
+      mentionOnly: base?.mentionOnly ?? false,
       config: {
         ...(((base?.config as Record<string, unknown> | undefined) ?? {}) as Record<
           string,
@@ -258,7 +263,7 @@ export class AgentPolicyService {
 
         // Find server-wide default policy (channelId is null)
         const serverDefault = serverPolicies.find((p) => p.channelId === null)
-        const defaultPolicy = buildFixedPolicy(serverDefault)
+        const defaultPolicy = buildRuntimePolicy(serverDefault)
 
         return {
           id: server.id,
@@ -272,7 +277,7 @@ export class AgentPolicyService {
               id: ch.id,
               name: ch.name,
               type: ch.type,
-              policy: channelPolicy ? buildFixedPolicy(channelPolicy) : defaultPolicy,
+              policy: channelPolicy ? buildRuntimePolicy(channelPolicy) : defaultPolicy,
             }
           }),
         }
