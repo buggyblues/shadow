@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agentListings, rentalContracts, rentalUsageRecords, rentalViolations } from '../db/schema'
 import { agents } from '../db/schema/agents'
@@ -121,9 +121,18 @@ export class RentalContractDao {
       )
   }
 
-  /** Find all active contracts (for scheduled billing) */
+  /** Find all active contracts (for scheduled billing). Excludes expired contracts. */
   async findAllActive() {
-    return this.db.select().from(rentalContracts).where(eq(rentalContracts.status, 'active'))
+    const now = new Date()
+    return this.db
+      .select()
+      .from(rentalContracts)
+      .where(
+        and(
+          eq(rentalContracts.status, 'active'),
+          or(isNull(rentalContracts.expiresAt), gt(rentalContracts.expiresAt, now)),
+        ),
+      )
   }
 
   /** Find contracts by listing IDs */

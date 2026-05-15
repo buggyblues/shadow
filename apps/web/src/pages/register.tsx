@@ -1,3 +1,4 @@
+import { generateRandomCatConfig, renderCatSvg } from '@shadowob/shared'
 import {
   Alert,
   AlertDescription,
@@ -20,7 +21,6 @@ import {
   webRedirectFromRouterPath,
 } from '../lib/auth-redirect'
 import { applyAuthenticatedSession } from '../lib/auth-session'
-import { generateRandomCatConfig, renderCatSvg } from '../lib/avatar-generator'
 
 export function RegisterPage() {
   const { t } = useTranslation()

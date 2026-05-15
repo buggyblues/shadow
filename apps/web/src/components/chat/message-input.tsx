@@ -166,6 +166,25 @@ export function MessageInput({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const focusComposer = useCallback(() => {
+    const textarea = textareaRef.current
+    if (!textarea || textarea.disabled) return
+    if (document.querySelector('[role="dialog"]')) return
+    textarea.focus({ preventScroll: true })
+    const cursor = textarea.value.length
+    textarea.setSelectionRange(cursor, cursor)
+  }, [])
+
+  // Auto-focus textarea when channel changes
+  useEffect(() => {
+    let animationFrame = window.requestAnimationFrame(focusComposer)
+    const timers = [80, 220, 520].map((delay) => window.setTimeout(focusComposer, delay))
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      for (const timer of timers) window.clearTimeout(timer)
+    }
+  }, [channelId, focusComposer])
+
   // Draft storage for persistent input
   const { scheduleSave, clear: clearDraft } = useDraftStorage(channelId, (savedText) => {
     setContent(savedText)
@@ -1211,6 +1230,7 @@ export function MessageInput({
             channelName: channelName ?? t('chat.channelFallback'),
           })}
           rows={1}
+          autoFocus
           className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted outline-none resize-none text-[15px] leading-[24px] max-h-[50vh] min-h-[24px] py-[7px]"
         />
 

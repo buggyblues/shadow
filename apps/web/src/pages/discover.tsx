@@ -1,3 +1,4 @@
+import { getCatAvatar } from '@shadowob/shared'
 import { Badge, Button, Card, cn, EmptyState, GlassHeader, GlassPanel, Input } from '@shadowob/ui'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -8,7 +9,6 @@ import { useTranslation } from 'react-i18next'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
-import { getCatAvatar } from '../lib/pixel-cats'
 
 type FeedItemType = 'server' | 'channel' | 'rental'
 type FilterType = 'all' | 'servers' | 'channels' | 'rentals'

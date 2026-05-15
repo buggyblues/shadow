@@ -13,6 +13,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
 COPY .npmrc ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/ui/package.json packages/ui/
+COPY packages/views/package.json packages/views/
 COPY apps/web/package.json apps/web/
 COPY apps/cloud/package.json apps/cloud/
 COPY apps/cloud/packages/ui/package.json apps/cloud/packages/ui/

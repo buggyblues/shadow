@@ -26,7 +26,8 @@ export function Avatar({
   const colors = useColors()
 
   const resolvedUri = getImageUrl(uri)
-  const src = resolvedUri || (userId ? getCatAvatarByUserId(userId) : null)
+  const fallbackSeed = userId?.trim() || name.trim() || 'default'
+  const src = resolvedUri || getCatAvatarByUserId(fallbackSeed)
   const dotSize = Math.max(10, Math.round(size * 0.28))
   const statusColor = getStatusColor(colors, status)
   const borderRadius = shape === 'server' ? Math.max(12, Math.round(size * 0.28)) : size / 2

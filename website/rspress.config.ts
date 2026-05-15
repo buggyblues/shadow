@@ -19,6 +19,7 @@ const withSiteUrl = (pathName: string) => (SITE_URL ? `${SITE_URL}${pathName}` :
 const ABSOLUTE_SITE_IMAGE = withSiteUrl(SITE_IMAGE)
 const SITE_KEYWORDS =
   'Shadow OwnBuddy, AI community, AI Buddy, Shadow Cloud, Cloud templates, DIY Cloud, developer platform, community workspace'
+const THEME_BOOT_SCRIPT = `<script>(function(){try{var shadowKey='shadow-theme';var rspressKey='rspress-theme-appearance';var raw=localStorage.getItem(shadowKey)||localStorage.getItem(rspressKey);var theme=raw==='auto'?'system':raw;if(theme!=='light'&&theme!=='dark'&&theme!=='system')theme='dark';var effective=theme==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):theme;document.documentElement.classList.toggle('dark',effective==='dark');document.documentElement.classList.toggle('light',effective==='light');document.documentElement.style.colorScheme=effective;localStorage.setItem(shadowKey,theme);localStorage.setItem(rspressKey,theme==='system'?'auto':theme);}catch(e){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';}})();</script>`
 
 type SeoRoute = {
   routePath?: string
@@ -186,7 +187,7 @@ export default defineConfig({
     (route) => ['meta', { name: 'twitter:title', content: routeSeo(route).title }],
     (route) => ['meta', { name: 'twitter:description', content: routeSeo(route).description }],
     ['meta', { name: 'twitter:image', content: ABSOLUTE_SITE_IMAGE }],
-    `<script>(function(){try{var s=localStorage.getItem('rspress-theme-appearance');if(s==='light'){document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light';}else{document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';if(!s)localStorage.setItem('rspress-theme-appearance','dark');}}catch(e){document.documentElement.classList.add('dark');}})();</script>`,
+    THEME_BOOT_SCRIPT,
   ] as never,
   builderConfig: {
     source: {

@@ -18,7 +18,7 @@ export type AgentSlashCommand = {
   interaction?: Record<string, unknown>
 }
 
-function effectiveAgentStatus(agent: AgentRecord): 'running' | 'stopped' | 'error' {
+export function effectiveAgentStatus(agent: AgentRecord): 'running' | 'stopped' | 'error' {
   if (!agent) return 'stopped'
   if (agent.status !== 'running') return agent.status
   if (!agent.lastHeartbeat) return 'stopped'

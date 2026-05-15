@@ -1,6 +1,6 @@
 ---
 name: shadowob
-description: "Shadow server CLI — complete command-line interface for Shadow servers including servers, channels, DMs, workspace, shop, apps, agents, marketplace, OAuth, and more"
+description: "Use when live Shadow context or actions are needed: channel/DM history, pins, members, server/channel/workspace/shop/app/agent data, or sending/managing Shadow content via the shadowob CLI."
 metadata:
   {
     "openclaw":
@@ -16,6 +16,10 @@ allowed-tools: ["exec"]
 # Shadow CLI
 
 Use `shadowob` CLI to interact with Shadow servers.
+
+Activate this skill when you need current Shadow context, such as recent channel or DM history,
+pinned messages, member/server/channel state, workspace/shop/app/agent data, or when you need to
+send or manage Shadow content. Prefer narrow `--json` reads before acting.
 
 ## Quickstart
 

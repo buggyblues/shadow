@@ -1,4 +1,4 @@
-import { getCatAvatarByUserId } from '../../lib/pixel-cats'
+import { getCatAvatarByUserId } from '@shadowob/shared'
 
 interface AvatarProps {
   userId?: string
@@ -24,7 +24,8 @@ export function UserAvatar({
   className = '',
 }: AvatarProps) {
   const sizeClass = sizeMap[size]
-  const src = avatarUrl || (userId ? getCatAvatarByUserId(userId) : getCatAvatarByUserId('default'))
+  const fallbackSeed = userId?.trim() || displayName?.trim() || 'default'
+  const src = avatarUrl?.trim() || getCatAvatarByUserId(fallbackSeed)
 
   return (
     <img
