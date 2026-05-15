@@ -540,14 +540,10 @@
       "custom": "사용자 정의"
     },
     "auth": {
-      "oauth2-bearer": "OAuth Bearer",
-      "hmac-sha256": "레거시 HMAC",
-      "none": "인증 없음"
+      "oauth2-bearer": "OAuth Bearer"
     },
     "install": "앱 설치",
     "manifestUrl": "Manifest URL",
-    "sharedSecret": "공유 시크릿(선택)",
-    "legacySharedSecret": "레거시 HMAC 공유 시크릿",
     "installButton": "설치",
     "selectApp": "앱 선택",
     "selectFromSidebar": "사이드바에서 앱을 선택하세요",

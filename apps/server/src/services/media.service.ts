@@ -293,7 +293,10 @@ export class MediaService {
     const object = parseContentRef(input.contentRef)
     if (!object) throw Object.assign(new Error('Invalid media reference'), { status: 400 })
 
-    const exp = Math.floor(Date.now() / 1000) + SIGNED_MEDIA_TTL_SECONDS
+    const now = Math.floor(Date.now() / 1000)
+    const exp =
+      Math.ceil(now / SIGNED_MEDIA_TTL_SECONDS) * SIGNED_MEDIA_TTL_SECONDS +
+      SIGNED_MEDIA_TTL_SECONDS
     const disposition =
       input.disposition === 'inline' && allowInline(input.contentType) ? 'inline' : 'attachment'
     const payload: MediaTokenPayload = {

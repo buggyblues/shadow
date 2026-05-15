@@ -224,7 +224,7 @@ export interface ShadowServerAppManifest {
   }
   api: {
     baseUrl: string
-    auth?: { type: 'oauth2-bearer' | 'hmac-sha256' | 'none' }
+    auth?: { type: 'oauth2-bearer' }
   }
   commands: ShadowServerAppCommand[]
   skills?: Array<{
@@ -281,7 +281,6 @@ export interface ShadowServerAppCatalogEntry {
   manifestUrl?: string | null
   manifest: ShadowServerAppManifest
   status: string
-  hasSharedSecret: boolean
   installed?: ShadowServerAppIntegration | null
   permissions?: ShadowServerAppDiscovery['permissions']
   createdAt: string

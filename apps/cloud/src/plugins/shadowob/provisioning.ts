@@ -310,7 +310,6 @@ async function provisionServerApp(
   const installed = await client.installServerApp(serverId, {
     manifestUrl: appDef.manifestUrl,
     manifest: appDef.manifest as never,
-    sharedSecret: appDef.sharedSecret,
   })
   log.success(`  Installed server App "${installed.appKey}" on server "${appDef.serverId}"`)
 

@@ -32,6 +32,7 @@ const WORKSPACE_DIRS = [
   'packages/sdk-python',
   'packages/shared',
   'packages/ui',
+  'packages/views',
   'website',
 ]
 

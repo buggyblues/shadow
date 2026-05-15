@@ -9,6 +9,7 @@ export {
   type ServerAppManifest,
   serverAppBuddyGrants,
   serverAppCatalogEntries,
+  serverAppCommandTokens,
   serverAppIntegrations,
 } from './app-integrations'
 export { attachments } from './attachments'

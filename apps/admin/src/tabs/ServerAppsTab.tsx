@@ -1,4 +1,4 @@
-import { BookOpen, ExternalLink, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react'
+import { BookOpen, ExternalLink, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { apiFetch, type ServerAppCatalogEntry, type ServerAppIntegration } from '../lib/admin-api'
 
@@ -19,7 +19,6 @@ export function ServerAppsTab() {
   const [query, setQuery] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [catalogManifestUrl, setCatalogManifestUrl] = useState('')
-  const [catalogSharedSecret, setCatalogSharedSecret] = useState('')
   const [catalogError, setCatalogError] = useState('')
   const [catalogSaving, setCatalogSaving] = useState(false)
 
@@ -65,7 +64,6 @@ export function ServerAppsTab() {
         method: 'POST',
         body: JSON.stringify({
           manifestUrl: catalogManifestUrl.trim(),
-          ...(catalogSharedSecret.trim() ? { sharedSecret: catalogSharedSecret.trim() } : {}),
         }),
       })
       setCatalog((current) => {
@@ -73,7 +71,6 @@ export function ServerAppsTab() {
         return [...withoutExisting, entry].sort((a, b) => a.name.localeCompare(b.name))
       })
       setCatalogManifestUrl('')
-      setCatalogSharedSecret('')
     } catch (error) {
       setCatalogError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -155,12 +152,7 @@ export function ServerAppsTab() {
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate font-medium text-white">{entry.name}</p>
-                      {entry.hasSharedSecret && (
-                        <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-green-300" />
-                      )}
-                    </div>
+                    <p className="truncate font-medium text-white">{entry.name}</p>
                     <p className="font-mono text-xs text-zinc-500">{entry.appKey}</p>
                     {entry.description && (
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-400">
@@ -199,12 +191,6 @@ export function ServerAppsTab() {
               value={catalogManifestUrl}
               onChange={(e) => setCatalogManifestUrl(e.target.value)}
               placeholder="Manifest URL"
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <input
-              value={catalogSharedSecret}
-              onChange={(e) => setCatalogSharedSecret(e.target.value)}
-              placeholder="Shared secret（可选）"
               className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button

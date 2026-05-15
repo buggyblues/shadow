@@ -169,6 +169,20 @@ export class NotificationDao {
     await this.db.update(notifications).set({ isRead: true }).where(inArray(notifications.id, ids))
   }
 
+  async markReferenceAsRead(userId: string, referenceType: string, referenceId: string) {
+    await this.db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.referenceType, referenceType),
+          eq(notifications.referenceId, referenceId),
+          eq(notifications.isRead, false),
+        ),
+      )
+  }
+
   async getUnreadCount(userId: string) {
     const result = await this.db
       .select({ value: count() })

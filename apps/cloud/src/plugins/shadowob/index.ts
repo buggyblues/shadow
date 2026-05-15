@@ -39,7 +39,6 @@ interface ShadowServerApp {
   serverId: string
   manifestUrl?: string
   manifest?: Record<string, unknown>
-  sharedSecret?: string
   grants?: Array<{
     buddyId: string
     permissions?: string[]

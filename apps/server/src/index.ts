@@ -123,7 +123,6 @@ async function main() {
       const appIntegrationService = container.resolve('appIntegrationService')
       const result = await appIntegrationService.seedCatalogEntry({
         manifestUrl: process.env.SHADOW_SERVER_APP_DEMO_MANIFEST_URL,
-        sharedSecret: process.env.SHADOW_SERVER_APP_DEMO_SECRET,
         status: 'active',
       })
       logger.info({ result }, 'Server app catalog seeded')

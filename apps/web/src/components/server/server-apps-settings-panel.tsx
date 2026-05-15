@@ -11,7 +11,6 @@ import {
   Check,
   ChevronRight,
   CirclePlus,
-  KeyRound,
   Search,
   ShieldCheck,
   Terminal,
@@ -61,7 +60,7 @@ interface ServerAppManifest {
   iconUrl: string
   api: {
     baseUrl: string
-    auth?: { type: 'oauth2-bearer' | 'hmac-sha256' | 'none' }
+    auth?: { type: 'oauth2-bearer' }
   }
   commands: ServerAppCommand[]
   skills?: Array<{ name: string; description: string }>
@@ -107,7 +106,6 @@ interface ServerAppCatalogEntry {
   iconUrl?: string | null
   manifestUrl?: string | null
   manifest: ServerAppManifest
-  hasSharedSecret: boolean
   installed: ServerAppIntegration | null
   permissions: ServerAppDiscovery['permissions']
 }
@@ -130,14 +128,10 @@ function AuthBadge({ manifest }: { manifest: ServerAppManifest }) {
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold',
-        type === 'oauth2-bearer'
-          ? 'border-primary/25 bg-primary/10 text-primary'
-          : type === 'hmac-sha256'
-            ? 'border-warning/30 bg-warning/10 text-warning'
-            : 'border-border-subtle bg-bg-tertiary text-text-muted',
+        'border-primary/25 bg-primary/10 text-primary',
       )}
     >
-      {type === 'oauth2-bearer' ? <ShieldCheck size={12} /> : <KeyRound size={12} />}
+      <ShieldCheck size={12} />
       {t(`serverApps.auth.${type}`)}
     </span>
   )
@@ -169,8 +163,6 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
   const [addMode, setAddMode] = useState<AddMode>('catalog')
   const [selectedAppKey, setSelectedAppKey] = useState('')
   const [manifestUrl, setManifestUrl] = useState('')
-  const [sharedSecret, setSharedSecret] = useState('')
-  const [catalogSharedSecrets, setCatalogSharedSecrets] = useState<Record<string, string>>({})
   const [discovery, setDiscovery] = useState<ServerAppDiscovery | null>(null)
   const [selectedBuddyAgentId, setSelectedBuddyAgentId] = useState('')
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
@@ -251,14 +243,10 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
         body: JSON.stringify({
           manifestUrl: manifestUrl.trim(),
           manifest: discovery?.manifest,
-          ...(manifestAuthType(discovery!.manifest) === 'hmac-sha256' && sharedSecret.trim()
-            ? { sharedSecret: sharedSecret.trim() }
-            : {}),
         }),
       }),
     onSuccess: (app) => {
       setManifestUrl('')
-      setSharedSecret('')
       setDiscovery(null)
       setSelectedAppKey(app.appKey)
       setMode('detail')
@@ -268,20 +256,15 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
   })
 
   const installCatalogApp = useMutation({
-    mutationFn: (entry: ServerAppCatalogEntry) => {
-      const legacySecret = catalogSharedSecrets[entry.id]?.trim()
-      return fetchApi<ServerAppIntegration>(
+    mutationFn: (entry: ServerAppCatalogEntry) =>
+      fetchApi<ServerAppIntegration>(
         `/api/servers/${serverSlug}/apps/catalog/${entry.id}/install`,
         {
           method: 'POST',
-          body: JSON.stringify({
-            ...(legacySecret ? { sharedSecret: legacySecret } : {}),
-          }),
+          body: JSON.stringify({}),
         },
-      )
-    },
+      ),
     onSuccess: (app) => {
-      setCatalogSharedSecrets({})
       setSelectedAppKey(app.appKey)
       setMode('detail')
       queryClient.invalidateQueries({ queryKey: ['server-apps', serverSlug] })
@@ -393,16 +376,12 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
             addMode={addMode}
             setAddMode={setAddMode}
             catalog={catalog}
-            catalogSharedSecrets={catalogSharedSecrets}
-            setCatalogSharedSecrets={setCatalogSharedSecrets}
             installCatalogApp={installCatalogApp}
             manifestUrl={manifestUrl}
             setManifestUrl={(value) => {
               setManifestUrl(value)
               setDiscovery(null)
             }}
-            sharedSecret={sharedSecret}
-            setSharedSecret={setSharedSecret}
             discovery={discovery}
             discoverApp={discoverApp}
             installApp={installApp}
@@ -436,13 +415,9 @@ function AddAppView(props: {
   addMode: AddMode
   setAddMode: (mode: AddMode) => void
   catalog: ServerAppCatalogEntry[]
-  catalogSharedSecrets: Record<string, string>
-  setCatalogSharedSecrets: (value: Record<string, string>) => void
   installCatalogApp: UseMutationResult<ServerAppIntegration, Error, ServerAppCatalogEntry>
   manifestUrl: string
   setManifestUrl: (value: string) => void
-  sharedSecret: string
-  setSharedSecret: (value: string) => void
   discovery: ServerAppDiscovery | null
   discoverApp: UseMutationResult<ServerAppDiscovery, Error, void>
   installApp: UseMutationResult<ServerAppIntegration, Error, void>
@@ -477,9 +452,6 @@ function AddAppView(props: {
       {props.addMode === 'catalog' ? (
         <div className="grid gap-3 md:grid-cols-2">
           {props.catalog.map((entry) => {
-            const isLegacyHmac =
-              manifestAuthType(entry.manifest) === 'hmac-sha256' && !entry.hasSharedSecret
-            const legacySecret = props.catalogSharedSecrets[entry.id] ?? ''
             return (
               <div
                 key={entry.id}
@@ -503,27 +475,10 @@ function AddAppView(props: {
                 <PermissionChips
                   permissions={(entry.permissions ?? []).map((item) => item.permission)}
                 />
-                {isLegacyHmac && (
-                  <Input
-                    value={legacySecret}
-                    onChange={(event) =>
-                      props.setCatalogSharedSecrets({
-                        ...props.catalogSharedSecrets,
-                        [entry.id]: event.target.value,
-                      })
-                    }
-                    placeholder={t('serverApps.legacySharedSecret')}
-                    className="mt-3"
-                  />
-                )}
                 <Button
                   variant={entry.installed ? 'glass' : 'primary'}
                   size="sm"
-                  disabled={
-                    Boolean(entry.installed) ||
-                    props.installCatalogApp.isPending ||
-                    (isLegacyHmac && !legacySecret.trim())
-                  }
+                  disabled={Boolean(entry.installed) || props.installCatalogApp.isPending}
                   loading={props.installCatalogApp.isPending}
                   onClick={() => props.installCatalogApp.mutate(entry)}
                   className="mt-3 w-full"
@@ -589,14 +544,6 @@ function AddAppView(props: {
                 label={t('serverApps.requestedPermissions')}
                 permissions={props.discovery.permissions.map((permission) => permission.permission)}
               />
-              {manifestAuthType(props.discovery.manifest) === 'hmac-sha256' && (
-                <Input
-                  value={props.sharedSecret}
-                  onChange={(event) => props.setSharedSecret(event.target.value)}
-                  placeholder={t('serverApps.legacySharedSecret')}
-                  className="mt-3"
-                />
-              )}
               <Button
                 variant="primary"
                 size="sm"

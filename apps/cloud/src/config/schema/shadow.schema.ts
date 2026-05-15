@@ -188,8 +188,6 @@ export interface ShadowServerApp {
   manifestUrl?: string
   /** Inline manifest, useful for fully self-contained templates. */
   manifest?: Record<string, unknown>
-  /** Optional legacy HMAC secret. New server Apps should use oauth2-bearer auth. */
-  sharedSecret?: string
   /** Buddy grants to apply after installation. */
   grants?: ShadowServerAppGrant[]
 }

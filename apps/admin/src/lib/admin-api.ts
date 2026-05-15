@@ -178,7 +178,6 @@ export interface ServerAppCatalogEntry {
   iconUrl: string | null
   manifestUrl: string | null
   status: 'active' | 'disabled'
-  hasSharedSecret: boolean
   commandCount: number
   skillCount: number
   createdAt: string

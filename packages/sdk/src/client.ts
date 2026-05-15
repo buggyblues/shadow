@@ -624,9 +624,8 @@ export class ShadowClient {
     data: {
       manifestUrl?: string
       manifest?: ShadowServerAppManifest
-      sharedSecret?: string
     },
-  ): Promise<ShadowServerAppIntegration & { sharedSecret?: string | null }> {
+  ): Promise<ShadowServerAppIntegration> {
     return this.request(`/api/servers/${serverIdOrSlug}/apps`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -636,10 +635,8 @@ export class ShadowClient {
   async installServerAppFromCatalog(
     serverIdOrSlug: string,
     catalogEntryId: string,
-    data: {
-      sharedSecret?: string
-    } = {},
-  ): Promise<ShadowServerAppIntegration & { sharedSecret?: string | null }> {
+    data: Record<string, never> = {},
+  ): Promise<ShadowServerAppIntegration> {
     return this.request(
       `/api/servers/${serverIdOrSlug}/apps/catalog/${encodeURIComponent(catalogEntryId)}/install`,
       {

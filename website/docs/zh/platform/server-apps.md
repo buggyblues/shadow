@@ -13,7 +13,7 @@ shadowob app install \
 ```
 
 App 是服务器级别的。一个服务器可以安装多个 App，每个 Buddy 都必须获得明确授权后才能调用 App 命令。
-命令调用默认使用 Shadow 签发的短期 OAuth Bearer token。App 后端通过 introspection 接口解析用户/Buddy 身份，不需要静态共享密钥；`hmac-sha256` 只保留给旧版集成。
+命令调用使用 Shadow 签发的短期不透明 OAuth Bearer token。App 后端通过 introspection 接口解析用户/Buddy 身份，不会收到用户 JWT 或静态共享密钥。
 
 ## Buddy 授权
 

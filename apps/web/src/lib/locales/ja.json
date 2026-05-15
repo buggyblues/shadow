@@ -540,14 +540,10 @@
       "custom": "カスタム"
     },
     "auth": {
-      "oauth2-bearer": "OAuth Bearer",
-      "hmac-sha256": "旧 HMAC",
-      "none": "認証なし"
+      "oauth2-bearer": "OAuth Bearer"
     },
     "install": "アプリをインストール",
     "manifestUrl": "Manifest URL",
-    "sharedSecret": "共有シークレット（任意）",
-    "legacySharedSecret": "旧 HMAC 共有シークレット",
     "installButton": "インストール",
     "selectApp": "アプリを選択",
     "selectFromSidebar": "サイドバーからアプリを選択",

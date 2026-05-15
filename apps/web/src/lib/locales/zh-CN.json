@@ -738,14 +738,10 @@
       "custom": "自定义"
     },
     "auth": {
-      "oauth2-bearer": "OAuth Bearer",
-      "hmac-sha256": "旧版 HMAC",
-      "none": "无鉴权"
+      "oauth2-bearer": "OAuth Bearer"
     },
     "install": "安装应用",
     "manifestUrl": "Manifest URL",
-    "sharedSecret": "共享密钥（可选）",
-    "legacySharedSecret": "旧版 HMAC 共享密钥",
     "installButton": "安装",
     "selectApp": "选择一个应用",
     "selectFromSidebar": "从左侧选择一个 App",

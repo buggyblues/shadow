@@ -738,14 +738,10 @@
       "custom": "Custom"
     },
     "auth": {
-      "oauth2-bearer": "OAuth Bearer",
-      "hmac-sha256": "Legacy HMAC",
-      "none": "No auth"
+      "oauth2-bearer": "OAuth Bearer"
     },
     "install": "Install App",
     "manifestUrl": "Manifest URL",
-    "sharedSecret": "Shared secret (optional)",
-    "legacySharedSecret": "Legacy HMAC shared secret",
     "installButton": "Install",
     "selectApp": "Select an App",
     "selectFromSidebar": "Select an App from the sidebar",

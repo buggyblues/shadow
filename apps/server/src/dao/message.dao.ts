@@ -107,21 +107,26 @@ export class MessageDao {
     const trimmed = rows.slice(0, limit).reverse() // oldest-to-newest for display
     const msgList = trimmed.map((r) => ({ ...r.message, author: r.author }))
 
-    // Batch-fetch attachments for all messages
+    // Batch-fetch attachments and reactions for all messages
     if (msgList.length > 0) {
       const msgIds = msgList.map((m) => m.id)
-      const atts = await this.db
-        .select()
-        .from(attachments)
-        .where(inArray(attachments.messageId, msgIds))
+      const [atts, reacts] = await Promise.all([
+        this.db.select().from(attachments).where(inArray(attachments.messageId, msgIds)),
+        this.db.select().from(reactions).where(inArray(reactions.messageId, msgIds)),
+      ])
       const attMap = new Map<string, typeof atts>()
       for (const att of atts) {
         const list = attMap.get(att.messageId) ?? []
         list.push(att)
         attMap.set(att.messageId, list)
       }
+      const reactionMap = this.groupReactionsByMessage(reacts)
       return {
-        messages: msgList.map((m) => ({ ...m, attachments: attMap.get(m.id) ?? [] })),
+        messages: msgList.map((m) => ({
+          ...m,
+          attachments: attMap.get(m.id) ?? [],
+          reactions: reactionMap.get(m.id) ?? [],
+        })),
         hasMore,
       }
     }
@@ -130,9 +135,34 @@ export class MessageDao {
       messages: msgList.map((m) => ({
         ...m,
         attachments: [] as (typeof attachments.$inferSelect)[],
+        reactions: [] as Array<{ emoji: string; count: number; userIds: string[] }>,
       })),
       hasMore,
     }
+  }
+
+  private groupReactionsByMessage(rows: (typeof reactions.$inferSelect)[]) {
+    const byMessage = new Map<
+      string,
+      Map<string, { emoji: string; count: number; userIds: string[] }>
+    >()
+    for (const row of rows) {
+      let grouped = byMessage.get(row.messageId)
+      if (!grouped) {
+        grouped = new Map()
+        byMessage.set(row.messageId, grouped)
+      }
+      const current = grouped.get(row.emoji)
+      if (current) {
+        current.count += 1
+        current.userIds.push(row.userId)
+      } else {
+        grouped.set(row.emoji, { emoji: row.emoji, count: 1, userIds: [row.userId] })
+      }
+    }
+    return new Map(
+      [...byMessage.entries()].map(([messageId, grouped]) => [messageId, [...grouped.values()]]),
+    )
   }
 
   async findByThreadId(threadId: string, limit = 50, cursor?: string) {
