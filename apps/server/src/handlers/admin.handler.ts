@@ -1,14 +1,24 @@
 import { randomBytes } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
-import { and, eq, gte, isNotNull, lt, sql } from 'drizzle-orm'
+import { and, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import type { ServerDao } from '../dao/server.dao'
-import { channels, cloudTemplates, inviteCodes, messages, users } from '../db/schema'
+import {
+  channels,
+  cloudTemplates,
+  inviteCodes,
+  messages,
+  serverAppBuddyGrants,
+  serverAppIntegrations,
+  servers as serversTable,
+  users,
+} from '../db/schema'
 import { resolveCloudTemplatesDir } from '../lib/cloud-templates'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { createActorContext } from '../security/actor-context'
+import { createServerAppCatalogEntrySchema } from '../validators/app-integration.schema'
 import { updateServerSchema } from '../validators/server.schema'
 
 function generateCode(length = 8): string {
@@ -392,6 +402,101 @@ export function createAdminHandler(container: AppContainer) {
       serverId: id,
     })
     return c.json({ ok: true })
+  })
+
+  // ── Server App Integrations ───────────────────────
+  // Actor: user admin
+  // Resource: server_app_integration
+  // Action: read/manage
+  // Data class: server-private
+  adminHandler.get('/server-apps', async (c) => {
+    const db = container.resolve('db')
+    const limitQuery = Number(c.req.query('limit') ?? '100')
+    const offsetQuery = Number(c.req.query('offset') ?? '0')
+    const limit = Number.isFinite(limitQuery) ? Math.max(1, Math.min(200, limitQuery)) : 100
+    const offset = Number.isFinite(offsetQuery) ? Math.max(0, offsetQuery) : 0
+
+    const rows = await db
+      .select({
+        app: serverAppIntegrations,
+        server: {
+          id: serversTable.id,
+          name: serversTable.name,
+          slug: serversTable.slug,
+        },
+      })
+      .from(serverAppIntegrations)
+      .innerJoin(serversTable, eq(serverAppIntegrations.serverId, serversTable.id))
+      .orderBy(serverAppIntegrations.createdAt)
+      .limit(limit)
+      .offset(offset)
+
+    const appIds = rows.map((row) => row.app.id)
+    const grantCounts =
+      appIds.length > 0
+        ? await db
+            .select({
+              serverAppId: serverAppBuddyGrants.serverAppId,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(serverAppBuddyGrants)
+            .where(inArray(serverAppBuddyGrants.serverAppId, appIds))
+            .groupBy(serverAppBuddyGrants.serverAppId)
+        : []
+    const grantCountMap = new Map(grantCounts.map((row) => [row.serverAppId, Number(row.count)]))
+
+    return c.json(
+      rows.map((row) => ({
+        id: row.app.id,
+        serverId: row.app.serverId,
+        serverName: row.server.name,
+        serverSlug: row.server.slug,
+        appKey: row.app.appKey,
+        name: row.app.name,
+        description: row.app.description,
+        iconUrl: row.app.iconUrl,
+        manifestUrl: row.app.manifestUrl,
+        iframeEntry: row.app.iframeEntry,
+        apiBaseUrl: row.app.apiBaseUrl,
+        status: row.app.status,
+        commandCount: row.app.manifest.commands.length,
+        skillCount: row.app.manifest.skills?.length ?? 0,
+        grantCount: grantCountMap.get(row.app.id) ?? 0,
+        createdAt: row.app.createdAt,
+        updatedAt: row.app.updatedAt,
+      })),
+    )
+  })
+
+  adminHandler.delete('/server-apps/:id', async (c) => {
+    const appIntegrationDao = container.resolve('appIntegrationDao')
+    await appIntegrationDao.deleteById(c.req.param('id'))
+    return c.json({ ok: true })
+  })
+
+  adminHandler.get('/server-app-catalog', async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const entries = await appIntegrationService.listAdminCatalog()
+    return c.json(entries)
+  })
+
+  adminHandler.post(
+    '/server-app-catalog',
+    zValidator('json', createServerAppCatalogEntrySchema),
+    async (c) => {
+      const appIntegrationService = container.resolve('appIntegrationService')
+      const entry = await appIntegrationService.upsertCatalogEntry(
+        c.get('actor'),
+        c.req.valid('json'),
+      )
+      return c.json(entry, 201)
+    },
+  )
+
+  adminHandler.delete('/server-app-catalog/:id', async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const result = await appIntegrationService.deleteCatalogEntry(c.req.param('id'))
+    return c.json(result)
   })
 
   // ── Messages ──────────────────────────────────────

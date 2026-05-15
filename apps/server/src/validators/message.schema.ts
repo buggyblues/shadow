@@ -2,7 +2,7 @@ import { LIMITS } from '@shadowob/shared'
 import { z } from 'zod'
 
 const idLikeSchema = z.string().min(1)
-const mentionKindSchema = z.enum(['user', 'buddy', 'channel', 'server', 'here', 'everyone'])
+const mentionKindSchema = z.enum(['user', 'buddy', 'app', 'channel', 'server', 'here', 'everyone'])
 
 export const messageMentionSchema = z.object({
   kind: mentionKindSchema,
@@ -20,6 +20,10 @@ export const messageMentionSchema = z.object({
   serverName: z.string().max(100).nullable().optional(),
   channelId: z.string().uuid().optional(),
   channelName: z.string().max(100).nullable().optional(),
+  appId: z.string().uuid().optional(),
+  appKey: z.string().max(100).optional(),
+  appName: z.string().max(120).nullable().optional(),
+  iconUrl: z.string().nullable().optional(),
   userId: z.string().uuid().optional(),
   username: z.string().max(32).nullable().optional(),
   displayName: z.string().max(64).nullable().optional(),

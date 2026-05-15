@@ -20,6 +20,8 @@ export type {
   ShadowReplyPolicy,
   ShadowReplyPolicyMode,
   ShadowServer,
+  ShadowServerApp,
+  ShadowServerAppGrant,
   UseEntry,
 } from './schema.js'
 export { assertCloudConfig, getCloudConfigJsonSchema, validateCloudConfig } from './schema.js'

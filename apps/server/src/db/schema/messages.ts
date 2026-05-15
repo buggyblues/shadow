@@ -21,7 +21,7 @@ export interface MessageAgentChainMetadata {
 }
 
 export interface MessageMentionMetadata {
-  kind: 'user' | 'buddy' | 'channel' | 'server' | 'here' | 'everyone'
+  kind: 'user' | 'buddy' | 'app' | 'channel' | 'server' | 'here' | 'everyone'
   targetId: string
   token: string
   label: string
@@ -31,6 +31,10 @@ export interface MessageMentionMetadata {
   serverName?: string | null
   channelId?: string
   channelName?: string | null
+  appId?: string
+  appKey?: string
+  appName?: string | null
+  iconUrl?: string | null
   userId?: string
   username?: string | null
   displayName?: string | null

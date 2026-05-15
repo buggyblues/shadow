@@ -1,6 +1,10 @@
 import type { ShadowMessage } from '@shadowob/sdk'
 import { describe, expect, it, vi } from 'vitest'
-import { formatShadowMentionsForAgent, mentionTargetsBot } from '../src/mentions.js'
+import {
+  formatShadowMentionsForAgent,
+  mentionsTargetServerApp,
+  mentionTargetsBot,
+} from '../src/mentions.js'
 import { evaluateShadowMessagePreflight } from '../src/monitor/preflight.js'
 
 function baseMessage(input: Partial<ShadowMessage>): ShadowMessage {
@@ -89,6 +93,39 @@ describe('Shadow OpenClaw mentions', () => {
     expect(mentionTargetsBot({ mentions, botUserId: 'bot-1', botUsername: 'buddy' })).toBe(false)
     expect(formatShadowMentionsForAgent(mentions)).toContain(
       '#general [channel] channelId=channel-2',
+    )
+  })
+
+  it('treats server app mentions as explicit triggers and CLI context', () => {
+    const mention = {
+      kind: 'app' as const,
+      targetId: 'app-1',
+      appId: 'app-1',
+      appKey: 'demo-desk',
+      appName: 'Demo Desk',
+      serverId: 'server-1',
+      serverName: 'Demo Desk Ops',
+      token: '<@app:app-1>',
+      label: '@Demo Desk',
+    }
+    const result = evaluateShadowMessagePreflight({
+      message: baseMessage({
+        content: 'create a ticket in <@app:app-1>',
+        metadata: { mentions: [mention] },
+      }),
+      botUserId: 'bot-1',
+      botUsername: 'workspace-buddy',
+      channelPolicies: new Map([
+        ['channel-1', { listen: true, reply: true, mentionOnly: true }],
+      ] as never),
+      runtime: { log: vi.fn(), error: vi.fn() },
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.wasMentionedExplicitly).toBe(true)
+    expect(mentionsTargetServerApp([mention])).toBe(true)
+    expect(formatShadowMentionsForAgent([mention])).toContain(
+      'shadowob app call "<appKey>" <command>',
     )
   })
 })

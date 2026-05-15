@@ -31,6 +31,7 @@ import { OAuthCallbackPage } from './pages/oauth-callback'
 import { PlayLaunchPage } from './pages/play-launch'
 import { RegisterPage } from './pages/register'
 import { ServerLayout } from './pages/server'
+import { ServerAppsPageRoute } from './pages/server-apps'
 import { ServerHomePage } from './pages/server-home'
 import { ServerHomeView } from './pages/server-home-view'
 import { SettingsPage } from './pages/settings'
@@ -177,6 +178,18 @@ const serverWorkspaceRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/workspace',
   component: WorkspacePageRoute,
+})
+
+const serverAppsRoute = createRoute({
+  getParentRoute: () => serverLayoutRoute,
+  path: '/apps',
+  component: ServerAppsPageRoute,
+})
+
+const serverAppDetailRoute = createRoute({
+  getParentRoute: () => serverLayoutRoute,
+  path: '/apps/$appKey',
+  component: ServerAppsPageRoute,
 })
 
 const serverHomeRoute = createRoute({
@@ -452,6 +465,8 @@ const routeTree = rootRoute.addChildren([
       serverShopAdminRoute,
       serverShopRoute,
       serverWorkspaceRoute,
+      serverAppsRoute,
+      serverAppDetailRoute,
     ]),
     settingsRoute,
     ...settingsSubRoutes,

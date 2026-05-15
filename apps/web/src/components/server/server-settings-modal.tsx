@@ -20,6 +20,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  AppWindow,
   Check,
   Copy,
   FolderClosed,
@@ -42,6 +43,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ShopPage } from '../shop/shop-page'
 import { WorkspacePage } from '../workspace/workspace-page'
+import { ServerAppsSettingsPanel } from './server-apps-settings-panel'
 
 interface Server {
   id: string
@@ -56,7 +58,7 @@ interface Server {
   ownerId: string
 }
 
-type ModalTab = 'basic' | 'advanced' | 'shop' | 'workspace'
+type ModalTab = 'basic' | 'advanced' | 'apps' | 'shop' | 'workspace'
 
 const MODAL_TABS: {
   id: ModalTab
@@ -71,6 +73,7 @@ const MODAL_TABS: {
     labelKey: 'server.settingsAdvanced',
     labelFallback: '进阶设置',
   },
+  { id: 'apps', icon: AppWindow, labelKey: 'server.settingsApps', labelFallback: 'Apps' },
   { id: 'shop', icon: ShoppingBag, labelKey: 'server.settingsShop', labelFallback: '店铺' },
   {
     id: 'workspace',
@@ -522,6 +525,12 @@ export function ServerSettingsModal({
             {activeTab === 'shop' && (
               <div className="flex h-full min-h-0 flex-col">
                 <ShopPage serverId={serverSlug} isAdmin={isOwner} embedded />
+              </div>
+            )}
+
+            {activeTab === 'apps' && (
+              <div className="flex h-full min-h-0 flex-col">
+                <ServerAppsSettingsPanel serverSlug={serverSlug} />
               </div>
             )}
 

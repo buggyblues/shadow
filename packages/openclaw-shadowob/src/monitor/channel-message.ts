@@ -7,6 +7,7 @@ import {
   formatShadowMentionsForAgent,
   getShadowMessageMentions,
   mentionContextFields,
+  mentionsTargetServerApp,
   mentionTargetsBot,
 } from '../mentions.js'
 import type {
@@ -48,6 +49,56 @@ function buildChannelContextForAgent(info: ChannelServerInfo | undefined, channe
     `Shadow server slug: ${info.serverSlug}`,
     `Shadow channel: #${info.channelName}`,
     `Shadow channel id: ${channelId}`,
+  ].join('\n')
+}
+
+async function buildMentionedServerAppSkillsContext(params: {
+  mentions: ReturnType<typeof getShadowMessageMentions>
+  client: ShadowClient
+  serverInfo: ChannelServerInfo | undefined
+  runtime: ShadowRuntimeLogger
+}) {
+  const appRefs = new Map<string, { appKey: string; server: string; label: string }>()
+  for (const mention of params.mentions) {
+    if (mention.kind !== 'app') continue
+    const appKey = mention.appKey ?? mention.targetId
+    const server = mention.serverId ?? mention.serverSlug ?? params.serverInfo?.serverId
+    if (!appKey || !server) continue
+    appRefs.set(`${server}:${appKey}`, {
+      appKey,
+      server,
+      label: mention.label || mention.sourceToken || mention.token || appKey,
+    })
+  }
+  if (appRefs.size === 0) return ''
+
+  const documents = await Promise.all(
+    Array.from(appRefs.values()).map(async (ref) => {
+      try {
+        const skill = await params.client.getServerAppSkills(ref.server, ref.appKey)
+        return [
+          `## ${ref.label}`,
+          `Server reference: ${ref.server}`,
+          `App key: ${ref.appKey}`,
+          '',
+          skill.markdown,
+        ].join('\n')
+      } catch (err) {
+        params.runtime.error?.(
+          `[server-app] Failed loading skills for ${ref.appKey} on ${ref.server}: ${String(err)}`,
+        )
+        return ''
+      }
+    }),
+  )
+
+  const loaded = documents.filter(Boolean)
+  if (loaded.length === 0) return ''
+  return [
+    'Injected Shadow Server App Skills:',
+    'These instructions are authoritative for mentioned server apps in this message. Use the Shadow CLI path described below so Shadow can bind identity, app grants, and policy.',
+    '',
+    ...loaded,
   ].join('\n')
 }
 
@@ -177,6 +228,12 @@ export async function processShadowMessage(params: {
   const conversationLabel = serverInfo ? `${serverInfo.serverName} ${channelLabel}` : peerId
   const messageBodyForAgent = interactiveResponseContext.text || baseBodyForAgent
   const client = new ShadowClient(account.serverUrl, account.token)
+  const serverAppSkillsContext = await buildMentionedServerAppSkillsContext({
+    mentions: structuredMentions,
+    client,
+    serverInfo,
+    runtime,
+  })
   const viewerCommerceContext = await buildCommerceViewerContextForAgent({
     account,
     client,
@@ -187,6 +244,7 @@ export async function processShadowMessage(params: {
     buildCommerceContextForAgent(account),
     viewerCommerceContext,
     mentionContext,
+    serverAppSkillsContext,
     messageBodyForAgent,
   ]
     .filter(Boolean)
@@ -203,6 +261,7 @@ export async function processShadowMessage(params: {
   const mentionRegex = new RegExp(`@${escapedBotUsername}(?:\\s|$)`, 'i')
   const wasMentioned =
     mentionTargetsBot({ mentions: structuredMentions, botUserId, botUsername }) ||
+    mentionsTargetServerApp(structuredMentions) ||
     mentionRegex.test(message.content)
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({

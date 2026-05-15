@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "shadow.app/1",
+  "appKey": "demo-desk",
+  "name": "Demo Desk",
+  "description": "A server-scoped ticket desk used to demonstrate Shadow App iframe and Buddy CLI operations.",
+  "version": "0.1.0",
+  "iconUrl": "http://localhost:4199/assets/icon.svg",
+  "iframe": {
+    "entry": "http://localhost:4199/shadow/server",
+    "allowedOrigins": ["http://localhost:4199"]
+  },
+  "api": {
+    "baseUrl": "http://localhost:4199",
+    "auth": { "type": "oauth2-bearer" }
+  },
+  "commands": [
+    {
+      "name": "tickets.list",
+      "description": "List tickets in this server's Demo Desk.",
+      "path": "/api/shadow/commands/tickets.list",
+      "permission": "demo.tickets:read",
+      "action": "read",
+      "dataClass": "server-private"
+    },
+    {
+      "name": "tickets.create",
+      "description": "Create a new ticket.",
+      "path": "/api/shadow/commands/tickets.create",
+      "permission": "demo.tickets:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string" },
+          "priority": { "type": "string", "enum": ["low", "normal", "high"] },
+          "body": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "tickets.update_status",
+      "description": "Update ticket status.",
+      "path": "/api/shadow/commands/tickets.update_status",
+      "permission": "demo.tickets:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "type": "string", "enum": ["open", "in_progress", "done"] }
+        }
+      }
+    },
+    {
+      "name": "files.summarize_upload",
+      "description": "Accept a binary upload and return file metadata.",
+      "path": "/api/shadow/commands/files.summarize_upload",
+      "permission": "demo.files:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "input": "multipart",
+      "binary": {
+        "supported": true,
+        "field": "file",
+        "maxBytes": 5242880,
+        "contentTypes": ["text/*", "application/pdf", "image/*"]
+      }
+    }
+  ],
+  "skills": [
+    {
+      "name": "demo-desk-ticket-ops",
+      "description": "Use when the Buddy needs to list, create, or update tickets in Demo Desk.",
+      "commandHints": [
+        "demo-desk tickets.list",
+        "demo-desk tickets.create",
+        "demo-desk tickets.update_status"
+      ]
+    }
+  ],
+  "events": ["ticket.created", "ticket.updated"],
+  "binary": {
+    "supported": true,
+    "maxBytes": 5242880,
+    "contentTypes": ["text/*", "application/pdf", "image/*"]
+  }
+}

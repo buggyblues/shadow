@@ -11,6 +11,7 @@ import { format, formatDistanceToNow, type Locale } from 'date-fns'
 import { enUS, ja, ko, zhCN, zhTW } from 'date-fns/locale'
 import {
   AlertCircle,
+  AppWindow,
   AtSign,
   Check,
   CheckCircle2,
@@ -2839,6 +2840,10 @@ function EntityMentionSpan({ mention }: { mention: MessageMention }) {
       const serverSegment = mention.serverSlug || mention.serverId
       return `/app/servers/${serverSegment}/channels/${mention.channelId}`
     }
+    if (mention.kind === 'app' && mention.appKey && mention.serverId) {
+      const serverSegment = mention.serverSlug || mention.serverId
+      return `/app/servers/${serverSegment}/apps/${mention.appKey}`
+    }
     if (mention.kind === 'server' && mention.serverId) {
       const serverSegment = mention.serverSlug || mention.serverId
       return `/app/servers/${serverSegment}`
@@ -2955,6 +2960,12 @@ function EntityMentionSpan({ mention }: { mention: MessageMention }) {
     mention.label?.replace(/^@/, '') ??
     mention.sourceToken?.replace(/^@/, '') ??
     mention.token
+  const appName =
+    mention.appName ??
+    mention.label?.replace(/^@/, '') ??
+    mention.sourceToken?.replace(/^@/, '') ??
+    mention.appKey ??
+    mention.token
   const displayLabel = isUnknownPrivateChannel
     ? prefixedEntityLabel('#', t('channel.privateChannel'))
     : mention.label || mention.sourceToken || mention.token
@@ -2962,14 +2973,27 @@ function EntityMentionSpan({ mention }: { mention: MessageMention }) {
     ? prefixedEntityLabel('#', t('channel.privateChannel'))
     : mention.kind === 'channel'
       ? prefixedEntityLabel('#', channelName)
-      : prefixedEntityLabel('@', serverName)
+      : mention.kind === 'app'
+        ? prefixedEntityLabel('@', appName)
+        : prefixedEntityLabel('@', serverName)
   const subtitle =
     mention.kind === 'channel'
       ? (mention.serverName ?? '')
-      : (mention.serverSlug ?? mention.serverId ?? '')
-  const openLabel = mention.kind === 'channel' ? t('channel.openChannel') : t('server.openServer')
+      : mention.kind === 'app'
+        ? (mention.appKey ?? mention.serverName ?? '')
+        : (mention.serverSlug ?? mention.serverId ?? '')
+  const openLabel =
+    mention.kind === 'channel'
+      ? t('channel.openChannel')
+      : mention.kind === 'app'
+        ? t('serverApps.openApp')
+        : t('server.openServer')
   const copyLabel =
-    mention.kind === 'channel' ? t('channel.copyChannelLink') : t('server.copyServerLink')
+    mention.kind === 'channel'
+      ? t('channel.copyChannelLink')
+      : mention.kind === 'app'
+        ? t('serverApps.copyAppLink')
+        : t('server.copyServerLink')
 
   const icon =
     mention.kind === 'channel' ? (
@@ -2977,6 +3001,12 @@ function EntityMentionSpan({ mention }: { mention: MessageMention }) {
         <Lock size={22} strokeWidth={2.4} />
       ) : (
         <Hash size={24} strokeWidth={2.6} />
+      )
+    ) : mention.kind === 'app' ? (
+      mention.iconUrl ? (
+        <img src={mention.iconUrl} alt="" className="h-6 w-6 rounded-md object-cover" />
+      ) : (
+        <AppWindow size={24} strokeWidth={2.4} />
       )
     ) : (
       <AtSign size={24} strokeWidth={2.6} />

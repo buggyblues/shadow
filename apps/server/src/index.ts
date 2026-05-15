@@ -118,6 +118,20 @@ async function main() {
     logger.warn({ err }, 'Cloud template seeding skipped')
   }
 
+  if (process.env.SHADOW_SERVER_APP_DEMO_MANIFEST_URL) {
+    try {
+      const appIntegrationService = container.resolve('appIntegrationService')
+      const result = await appIntegrationService.seedCatalogEntry({
+        manifestUrl: process.env.SHADOW_SERVER_APP_DEMO_MANIFEST_URL,
+        sharedSecret: process.env.SHADOW_SERVER_APP_DEMO_SECRET,
+        status: 'active',
+      })
+      logger.info({ result }, 'Server app catalog seeded')
+    } catch (err) {
+      logger.warn({ err }, 'Server app catalog seeding skipped')
+    }
+  }
+
   try {
     const result = await seedPlayCatalogResources(container)
     logger.info({ result }, 'Play catalog resources seeded')

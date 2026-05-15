@@ -1069,7 +1069,7 @@ export class RentalService {
 
     // Update running total and billing checkpoints
     await this.deps.rentalContractDao.addCost(contract.id, totalCost)
-    const updateData: Record<string, unknown> = {}
+    const updateData: { lastBilledDailyAt?: Date; lastBilledMessageCount?: number } = {}
     if (daysSinceLastBilled > 0) {
       updateData.lastBilledDailyAt = new Date(
         lastBilledDaily.getTime() + daysSinceLastBilled * 24 * 3600 * 1000,
@@ -1079,10 +1079,7 @@ export class RentalService {
       updateData.lastBilledMessageCount = contract.messageCount
     }
     if (Object.keys(updateData).length > 0) {
-      await this.deps.rentalContractDao.update(
-        contract.id,
-        updateData as Parameters<typeof this.deps.rentalContractDao.update>[1],
-      )
+      await this.deps.rentalContractDao.update(contract.id, updateData)
     }
 
     return totalCost

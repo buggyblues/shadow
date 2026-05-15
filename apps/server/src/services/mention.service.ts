@@ -9,6 +9,7 @@ import {
   canonicalMentionToken,
   parseCanonicalMentionToken,
 } from '@shadowob/shared'
+import type { AppIntegrationDao } from '../dao/app-integration.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
@@ -34,6 +35,7 @@ type SendMessageInputLike = {
 type ChannelRecord = NonNullable<Awaited<ReturnType<ChannelDao['findById']>>>
 type ServerRecord = NonNullable<Awaited<ReturnType<ServerDao['findById']>>>
 type ServerMemberRecord = NonNullable<Awaited<ReturnType<ServerDao['getMember']>>>
+type ServerAppRecord = Awaited<ReturnType<AppIntegrationDao['listByServer']>>[number]
 
 interface ChannelScope {
   channel: ChannelRecord
@@ -56,6 +58,10 @@ function makeSlugish(value: string): string {
 
 function serverToken(server: Pick<ServerRecord, 'id' | 'slug' | 'name'>): string {
   return server.slug ?? makeSlugish(server.name) ?? server.id
+}
+
+function appToken(app: Pick<ServerAppRecord, 'appKey' | 'name'>): string {
+  return app.appKey || makeSlugish(app.name)
 }
 
 function normalizeQuery(value: string | null | undefined): string {
@@ -146,6 +152,7 @@ export class MentionService {
     private deps: {
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
+      appIntegrationDao: AppIntegrationDao
       serverDao: ServerDao
       userDao: UserDao
       notificationTriggerService: NotificationTriggerService
@@ -291,6 +298,27 @@ export class MentionService {
         serverId: currentScope.server.id,
         serverSlug: currentScope.server.slug,
         serverName: currentScope.server.name,
+      })
+    }
+
+    const serverApps = await this.deps.appIntegrationDao.listByServer(currentScope.server.id)
+    for (const app of serverApps) {
+      if (app.status !== 'active') continue
+      if (!includesQuery([app.name, app.appKey, app.description], query)) continue
+      suggestions.push({
+        id: `app:${app.id}`,
+        kind: 'app',
+        targetId: app.id,
+        token: `@${appToken(app)}`,
+        label: `@${app.name}`,
+        description: currentScope.server.name,
+        serverId: currentScope.server.id,
+        serverSlug: currentScope.server.slug,
+        serverName: currentScope.server.name,
+        appId: app.id,
+        appKey: app.appKey,
+        appName: app.name,
+        iconUrl: app.iconUrl,
       })
     }
 
@@ -465,6 +493,12 @@ export class MentionService {
       return this.normalizeChannelMention(parsed.targetId, authorId, token, start)
     }
 
+    if (parsed.kind === 'app') {
+      const mention = await this.normalizeAppMention(parsed.targetId, authorId, currentScope, token)
+      if (!mention) return null
+      return { ...mention, range: { start, end: start + token.length } }
+    }
+
     if (parsed.kind === 'server') {
       const serverId = parsed.targetId
       const [member, server] = await Promise.all([
@@ -529,6 +563,12 @@ export class MentionService {
     const user = await this.deps.userDao.findByUsername(rawToken)
     if (user) {
       const mention = await this.normalizeUserMention(user.id, authorId, currentScope, token)
+      if (mention) return { ...mention, range: { start, end: start + token.length } }
+    }
+
+    const app = await this.inferCurrentServerApp(rawToken, currentScope)
+    if (app) {
+      const mention = await this.normalizeAppMention(app.id, authorId, currentScope, token)
       if (mention) return { ...mention, range: { start, end: start + token.length } }
     }
 
@@ -622,6 +662,21 @@ export class MentionService {
         authorId,
         canonicalMentionToken(mention),
       )
+    }
+
+    if (mention.kind === 'app') {
+      const normalized = await this.normalizeAppMention(
+        mention.appId ?? mention.targetId,
+        authorId,
+        currentScope,
+        canonicalMentionToken(mention),
+      )
+      if (!normalized) {
+        throw Object.assign(new Error('Mentioned app is not available in this server'), {
+          status: 403,
+        })
+      }
+      return normalized
     }
 
     if (mention.kind === 'server') {
@@ -728,6 +783,43 @@ export class MentionService {
     }
   }
 
+  private async normalizeAppMention(
+    appId: string,
+    _authorId: string,
+    currentScope: ChannelScope,
+    token: string,
+  ): Promise<MessageMention | null> {
+    const app = await this.deps.appIntegrationDao.findById(appId)
+    if (!app || app.serverId !== currentScope.server.id || app.status !== 'active') return null
+
+    return {
+      kind: 'app',
+      targetId: app.id,
+      token,
+      label: `@${app.name}`,
+      serverId: currentScope.server.id,
+      serverSlug: currentScope.server.slug,
+      serverName: currentScope.server.name,
+      appId: app.id,
+      appKey: app.appKey,
+      appName: app.name,
+      iconUrl: app.iconUrl,
+    }
+  }
+
+  private async inferCurrentServerApp(rawToken: string, currentScope: ChannelScope) {
+    const normalized = rawToken.toLocaleLowerCase()
+    const apps = await this.deps.appIntegrationDao.listByServer(currentScope.server.id)
+    return (
+      apps.find(
+        (app) =>
+          app.status === 'active' &&
+          (app.appKey.toLocaleLowerCase() === normalized ||
+            makeSlugish(app.name).toLocaleLowerCase() === normalized),
+      ) ?? null
+    )
+  }
+
   private async assertCanAccessChannel(channelId: string, userId: string): Promise<ChannelScope> {
     const channel = await this.deps.channelDao.findById(channelId)
     if (!channel) throw Object.assign(new Error('Channel not found'), { status: 404 })
@@ -832,11 +924,12 @@ export class MentionService {
 
     const kindOrder = new Map<MessageMentionKind, number>([
       ['buddy', 0],
-      ['user', 1],
-      ['channel', 2],
-      ['server', 3],
-      ['here', 4],
-      ['everyone', 5],
+      ['app', 1],
+      ['user', 2],
+      ['channel', 3],
+      ['server', 4],
+      ['here', 5],
+      ['everyone', 6],
     ])
     return (kindOrder.get(a.kind) ?? 99) - (kindOrder.get(b.kind) ?? 99)
   }

@@ -17,6 +17,7 @@ import type {
   ShadowCommercePaidFile,
   ShadowListing,
   ShadowServer,
+  ShadowServerApp,
 } from '../../config/schema.js'
 import { log as defaultLog, type Logger } from '../../utils/logger.js'
 import type { ProvisionState } from '../../utils/state.js'
@@ -40,6 +41,8 @@ type ShadowobState = {
   buddies?: Record<string, { agentId: string; userId: string }>
   /** buddyId → listingId on the marketplace */
   listings?: Record<string, string>
+  /** server app config id → provisioned app ids */
+  serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
   /** commerce seed id → provisioned product/offer/file ids */
   commerce?: Record<
     string,
@@ -70,6 +73,7 @@ export interface ProvisionResult {
   buddies: Map<string, { agentId: string; token: string; userId: string }>
   /** buddyId → listingId on the marketplace */
   listings: Map<string, string>
+  serverApps: Map<string, { serverAppId: string; appKey: string; serverId: string }>
   commerce: Map<
     string,
     {
@@ -116,6 +120,7 @@ export async function provisionShadowResources(
     channels: new Map(),
     buddies: new Map(),
     listings: new Map(),
+    serverApps: new Map(),
     commerce: new Map(),
   }
 
@@ -141,6 +146,9 @@ export async function provisionShadowResources(
     }
     if (plugin.bindings?.length) {
       log.dim(`  ${plugin.bindings.length} binding(s)`)
+    }
+    if (plugin.serverApps?.length) {
+      log.dim(`  ${plugin.serverApps.length} server app(s)`)
     }
     if (plugin.listings?.length) {
       log.dim(`  ${plugin.listings.length} rental listing(s)`)
@@ -195,7 +203,15 @@ export async function provisionShadowResources(
     }
   }
 
-  // 5. Provision rental listings on the marketplace
+  // 5. Provision server Apps and Buddy grants
+  if (plugin.serverApps?.length) {
+    for (const appDef of plugin.serverApps) {
+      const installed = await provisionServerApp(client, appDef, result, state)
+      if (installed) result.serverApps.set(appDef.id, installed)
+    }
+  }
+
+  // 6. Provision rental listings on the marketplace
   if (plugin.listings?.length) {
     for (const listingDef of plugin.listings) {
       const listingId = await provisionListing(client, listingDef, result, state)
@@ -205,7 +221,7 @@ export async function provisionShadowResources(
     }
   }
 
-  // 6. Provision commerce paid-file seeds for MVP templates
+  // 7. Provision commerce paid-file seeds for MVP templates
   if (plugin.commerce?.paidFiles?.length) {
     for (const paidFileDef of plugin.commerce.paidFiles) {
       const commerceIds = await provisionPaidFileCommerce(client, paidFileDef, result, state)
@@ -231,6 +247,7 @@ function detectOrphans(
     plugin.servers?.flatMap((s) => s.channels?.map((c) => c.id) ?? []) ?? [],
   )
   const configBuddyIds = new Set(plugin.buddies?.map((b) => b.id) ?? [])
+  const configServerAppIds = new Set(plugin.serverApps?.map((app) => app.id) ?? [])
 
   for (const id of Object.keys(state.servers ?? {})) {
     if (!configServerIds.has(id)) {
@@ -245,6 +262,12 @@ function detectOrphans(
   for (const id of Object.keys(state.buddies ?? {})) {
     if (!configBuddyIds.has(id)) {
       log.warn(`  Orphaned buddy in state: "${id}" (not in current config)`)
+    }
+  }
+
+  for (const id of Object.keys(state.serverApps ?? {})) {
+    if (!configServerAppIds.has(id)) {
+      log.warn(`  Orphaned server app in state: "${id}" (not in current config)`)
     }
   }
 
@@ -263,6 +286,50 @@ function detectOrphans(
       log.warn(`  Orphaned commerce seed in state: "${id}" (not in current config)`)
     }
   }
+}
+
+async function provisionServerApp(
+  client: ShadowClient,
+  appDef: ShadowServerApp,
+  result: ProvisionResult,
+  state: ShadowobState | null,
+): Promise<{ serverAppId: string; appKey: string; serverId: string } | null> {
+  const serverId = result.servers.get(appDef.serverId) ?? appDef.serverId
+  const existing = state?.serverApps?.[appDef.id]
+  if (existing) {
+    log.dim(`  Server App "${appDef.id}" found in state (${existing.appKey}); refreshing install`)
+  } else {
+    log.step(`Provisioning server App: ${appDef.id}`)
+  }
+
+  if (!appDef.manifestUrl && !appDef.manifest) {
+    log.warn(`  Server App "${appDef.id}" skipped: manifestUrl or manifest is required`)
+    return null
+  }
+
+  const installed = await client.installServerApp(serverId, {
+    manifestUrl: appDef.manifestUrl,
+    manifest: appDef.manifest as never,
+    sharedSecret: appDef.sharedSecret,
+  })
+  log.success(`  Installed server App "${installed.appKey}" on server "${appDef.serverId}"`)
+
+  for (const grant of appDef.grants ?? []) {
+    const buddy = result.buddies.get(grant.buddyId)
+    if (!buddy) {
+      log.warn(`  Server App "${appDef.id}" grant skipped: buddy "${grant.buddyId}" not found`)
+      continue
+    }
+    await client.grantServerAppToBuddy(serverId, installed.appKey, {
+      buddyAgentId: buddy.agentId,
+      permissions: grant.permissions ?? ['*'],
+      resourceRules: grant.resourceRules,
+      approvalMode: grant.approvalMode ?? 'none',
+    })
+    log.success(`  Granted server App "${installed.appKey}" to buddy "${grant.buddyId}"`)
+  }
+
+  return { serverAppId: installed.id, appKey: installed.appKey, serverId }
 }
 
 async function provisionPaidFileCommerce(
@@ -923,6 +990,12 @@ export function buildProvisionedEnvVars(
     env[shadowEnvKey('SHADOW_COMMERCE_DELIVERABLE', seedId)] = ids.deliverableId
   }
 
+  for (const [appId, ids] of provision.serverApps ?? new Map()) {
+    env[shadowEnvKey('SHADOW_SERVER_APP_SERVER', appId)] = ids.serverId
+    env[shadowEnvKey('SHADOW_SERVER_APP_ID', appId)] = ids.serverAppId
+    env[shadowEnvKey('SHADOW_SERVER_APP_KEY', appId)] = ids.appKey
+  }
+
   // Inject plugin credentials from agent's use entries as env vars
   const agent = config.deployments?.agents?.find((a) => a.id === agentId)
   if (agent?.use) {
@@ -970,6 +1043,9 @@ export function provisionResultToState(
         ),
         ...(result.listings?.size > 0 ? { listings: Object.fromEntries(result.listings) } : {}),
         ...(result.commerce?.size > 0 ? { commerce: Object.fromEntries(result.commerce) } : {}),
+        ...(result.serverApps?.size > 0
+          ? { serverApps: Object.fromEntries(result.serverApps) }
+          : {}),
       },
     },
   }
@@ -985,6 +1061,7 @@ export function stateToProvisionResult(state: ProvisionState): ProvisionResult {
     channels?: Record<string, string>
     buddies?: Record<string, { agentId: string; userId: string; token?: string }>
     listings?: Record<string, string>
+    serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
     commerce?: Record<
       string,
       {
@@ -1006,6 +1083,7 @@ export function stateToProvisionResult(state: ProvisionState): ProvisionResult {
       ]),
     ),
     listings: new Map(Object.entries(s.listings ?? {})),
+    serverApps: new Map(Object.entries(s.serverApps ?? {})),
     commerce: new Map(Object.entries(s.commerce ?? {})),
   }
 }

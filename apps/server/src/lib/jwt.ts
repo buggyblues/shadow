@@ -24,10 +24,23 @@ export interface JwtPayload {
   aud?: string
   iss?: string
   jti?: string
+  exp?: number
+  iat?: number
   scopes?: string[]
+  serverId?: string
+  serverAppId?: string
+  appKey?: string
+  command?: string
+  actorKind?: string
+  agentId?: string
+  ownerId?: string
+  channelId?: string
+  permission?: string
+  action?: string
+  dataClass?: string
 }
 
-export type JwtTokenType = 'access' | 'refresh' | 'agent'
+export type JwtTokenType = 'access' | 'refresh' | 'agent' | 'server_app'
 
 function audienceForType(type: JwtTokenType) {
   return `shadow:${type}`
@@ -58,6 +71,11 @@ export function signRefreshToken(payload: JwtPayload): string {
 /** Sign a long-lived token for an Agent (bot user) */
 export function signAgentToken(payload: JwtPayload): string {
   return signTypedToken(payload, 'agent', JWT_AGENT_EXPIRES_IN)
+}
+
+/** Sign a short-lived OAuth-style bearer token for a server App command call. */
+export function signServerAppToken(payload: JwtPayload, expiresIn = '5m'): string {
+  return signTypedToken(payload, 'server_app', expiresIn)
 }
 
 export function verifyToken(

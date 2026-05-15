@@ -20,6 +20,7 @@ const ABSOLUTE_SITE_IMAGE = withSiteUrl(SITE_IMAGE)
 const SITE_KEYWORDS =
   'Shadow OwnBuddy, AI community, AI Buddy, Shadow Cloud, Cloud templates, DIY Cloud, developer platform, community workspace'
 const THEME_BOOT_SCRIPT = `<script>(function(){try{var shadowKey='shadow-theme';var rspressKey='rspress-theme-appearance';var raw=localStorage.getItem(shadowKey)||localStorage.getItem(rspressKey);var theme=raw==='auto'?'system':raw;if(theme!=='light'&&theme!=='dark'&&theme!=='system')theme='dark';var effective=theme==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):theme;document.documentElement.classList.toggle('dark',effective==='dark');document.documentElement.classList.toggle('light',effective==='light');document.documentElement.style.colorScheme=effective;localStorage.setItem(shadowKey,theme);localStorage.setItem(rspressKey,theme==='system'?'auto':theme);}catch(e){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';}})();</script>`
+const LANGUAGE_BOOT_SCRIPT = `<script>(function(){try{var base=${JSON.stringify(BASE)}.replace(/\\/$/,'');var root=base||'/';var path=window.location.pathname;var atRoot=path===root||path===(root==='/'?'/index.html':root+'/index.html');if(!atRoot)return;var stored=localStorage.getItem('shadow-lang');var preferred=stored||navigator.language||'';if(/^zh\\b|^zh-/i.test(preferred)){window.location.replace((base||'')+'/zh/');}}catch(e){}})();</script>`
 
 type SeoRoute = {
   routePath?: string
@@ -81,6 +82,16 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       description:
         'Configure official Shadow Cloud plugins for model providers, Shadow provisioning, Git agent packs, Google Workspace, SEO, browser automation, and more.',
     },
+    '/platform/server-apps': {
+      title: 'Shadow Server Apps - iframe Apps and Buddy CLI Operations',
+      description:
+        'Install server-scoped Apps, grant Buddy access, inject App Skills, and operate App resources through the shadowob CLI.',
+    },
+    '/platform/server-apps-dev-guide': {
+      title: 'Build a Shadow Server App from Zero to One',
+      description:
+        'Create a Server App manifest, verify Shadow OAuth Bearer tokens, implement command routes, and refresh iframe data from event streams.',
+    },
   },
   zh: {
     '/': DEFAULT_SEO.zh,
@@ -116,6 +127,15 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       title: '虾豆 Cloud 官方插件',
       description:
         '配置模型供应商、Shadow 资源编排、Git agent packs、Google Workspace、SEO、浏览器自动化等官方插件。',
+    },
+    '/platform/server-apps': {
+      title: '虾豆 Server Apps - iframe 应用与 Buddy CLI 操作',
+      description: '安装服务器级 App、授权 Buddy、注入 App Skills，并通过 shadowob CLI 操作资源。',
+    },
+    '/platform/server-apps-dev-guide': {
+      title: '从零到一开发虾豆 Server App',
+      description:
+        '创建 Server App manifest、验证 Shadow OAuth Bearer token、实现命令接口和事件流刷新。',
     },
   },
 }
@@ -187,6 +207,7 @@ export default defineConfig({
     (route) => ['meta', { name: 'twitter:title', content: routeSeo(route).title }],
     (route) => ['meta', { name: 'twitter:description', content: routeSeo(route).description }],
     ['meta', { name: 'twitter:image', content: ABSOLUTE_SITE_IMAGE }],
+    LANGUAGE_BOOT_SCRIPT,
     THEME_BOOT_SCRIPT,
   ] as never,
   builderConfig: {
@@ -361,6 +382,8 @@ export default defineConfig({
                 { text: 'OAuth', link: '/platform/oauth' },
                 { text: 'API Tokens', link: '/platform/api-tokens' },
                 { text: 'Platform Apps', link: '/platform/platform-apps' },
+                { text: 'Server Apps', link: '/platform/server-apps' },
+                { text: 'Server App Guide', link: '/platform/server-apps-dev-guide' },
                 { text: 'Workspace', link: '/platform/workspace' },
                 { text: 'Search', link: '/platform/search' },
                 { text: 'Media', link: '/platform/media' },
@@ -514,6 +537,8 @@ export default defineConfig({
                 { text: 'OAuth', link: '/zh/platform/oauth' },
                 { text: 'API 令牌', link: '/zh/platform/api-tokens' },
                 { text: '平台应用', link: '/zh/platform/platform-apps' },
+                { text: '服务器应用', link: '/zh/platform/server-apps' },
+                { text: 'Server App 接入指南', link: '/zh/platform/server-apps-dev-guide' },
                 { text: '工作区', link: '/zh/platform/workspace' },
                 { text: '搜索', link: '/zh/platform/search' },
                 { text: '媒体', link: '/zh/platform/media' },

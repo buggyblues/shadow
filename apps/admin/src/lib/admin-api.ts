@@ -149,3 +149,38 @@ export interface CloudTemplateRefreshResult {
   skippedFiles: Array<{ file: string; reason: string }>
   prunedSlugs: string[]
 }
+
+export interface ServerAppIntegration {
+  id: string
+  serverId: string
+  serverName: string
+  serverSlug: string | null
+  appKey: string
+  name: string
+  description: string | null
+  iconUrl: string | null
+  manifestUrl: string | null
+  iframeEntry: string | null
+  apiBaseUrl: string
+  status: string
+  commandCount: number
+  skillCount: number
+  grantCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ServerAppCatalogEntry {
+  id: string
+  appKey: string
+  name: string
+  description: string | null
+  iconUrl: string | null
+  manifestUrl: string | null
+  status: 'active' | 'disabled'
+  hasSharedSecret: boolean
+  commandCount: number
+  skillCount: number
+  createdAt: string
+  updatedAt: string
+}
