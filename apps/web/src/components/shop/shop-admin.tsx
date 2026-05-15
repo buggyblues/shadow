@@ -68,16 +68,20 @@ export function ShopAdmin({ serverId, onBack, embedded = false }: ShopAdminProps
   const [section, setSection] = useState<AdminSection>('products')
 
   const sections: { key: AdminSection; label: string; icon: ReactNode }[] = [
-    { key: 'products', label: t('shop.adminProducts', 'Products'), icon: <Package size={16} /> },
+    {
+      key: 'products',
+      label: t('shop.adminProducts', '商品管理'),
+      icon: <Package size={16} />,
+    },
     {
       key: 'categories',
-      label: t('shop.adminCategories', 'Categories'),
+      label: t('shop.adminCategories', '分类管理'),
       icon: <Layers size={16} />,
     },
-    { key: 'orders', label: t('shop.adminOrders', 'Orders'), icon: <Tag size={16} /> },
+    { key: 'orders', label: t('shop.adminOrders', '订单管理'), icon: <Tag size={16} /> },
     {
       key: 'settings',
-      label: t('shop.adminSettings', 'Settings'),
+      label: t('shop.adminSettings', '店铺设置'),
       icon: <ShoppingBag size={16} />,
     },
   ]
@@ -102,7 +106,7 @@ export function ShopAdmin({ serverId, onBack, embedded = false }: ShopAdminProps
             />
           )}
           <h2 className="text-base font-black text-text-primary">
-            {t('shop.adminTitle', 'Shop Admin')}
+            {t('shop.adminTitle', '店铺管理')}
           </h2>
         </div>
       )}
