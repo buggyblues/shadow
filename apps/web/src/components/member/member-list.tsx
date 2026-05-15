@@ -288,6 +288,7 @@ export function MemberList() {
                     showBotBadge={true}
                     showRoleBadge={true}
                     showOnlineRank={true}
+                    onlineRankCompact={true}
                   />
                 </div>
               </div>

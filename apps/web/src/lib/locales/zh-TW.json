@@ -32,7 +32,8 @@
     "done": "完成",
     "unknown": "未知",
     "buddy": "Buddy",
-    "search": "搜尋"
+    "search": "搜尋",
+    "noResults": "沒有結果"
   },
   "nav": {
     "features": "特色功能",
@@ -1311,6 +1312,7 @@
   "agentMgmt": {
     "title": "Buddy 管理",
     "subtitle": "建立和管理你的 AI Buddy，取得 Token 接入 OpenClaw 等平台",
+    "searchPlaceholder": "搜尋 Buddy",
     "newAgent": "新建 Buddy",
     "noAgents": "還沒有 Buddy",
     "buddyLevel": "等級 {{level}}",
@@ -1388,12 +1390,12 @@
     "setupManual": "手動配置",
     "setupChat": "AI 對話配置",
     "setupBashTitle": "一鍵配置（複製到終端執行）",
-    "setupTokenWarning": "請先產生 Token 後再複製配置命令",
+    "connectButton": "連線",
     "setupStepByStep": "手動分步配置",
     "setupConfigToken": "配置 Token",
     "setupConfigServer": "配置伺服器地址",
     "setupChatDesc": "複製以下提示詞到 OpenClaw 對話中，AI 會自動為你完成配置：",
-    "connectorGuideTitle": "Buddy 連線指南",
+    "connectorGuideTitle": "Buddy 連線向導",
     "connectorGuideDesc": "使用同一個 Shadow Token，將此 Buddy 接入 OpenClaw、Hermes Agent 或 cc-connect。",
     "connectorOpenClaw": "OpenClaw",
     "connectorOpenClawDesc": "面向 OpenClaw 閘道的原生 Shadow 外掛。",
@@ -1443,7 +1445,11 @@
     "defaultReplyPolicyDesc": "Buddy 預設只回覆主人和有效租客的訊息，不區分 DM 和伺服器頻道，也不需要 @。",
     "privateListingDisabled": "私有 Buddy 不能出租",
     "privateListingDisabledDesc": "切換為可共享後才能建立公開租賃掛單。",
-    "rentingAccessBadge": "租入使用權"
+    "rentingAccessBadge": "租入使用權",
+    "offlineGuideTitle": "Buddy 離線設定",
+    "offlineGuideDesc": "該 Buddy 目前離線，暫時無法查看詳情，請先完成連線。",
+    "offlineGuideWait": "請先等待 Buddy 上線，完成後即可繼續配置。",
+    "offlineGuideNoManage": "你沒有管理這個 Buddy 的權限，請聯絡擁有者先將其上線。"
   },
   "contract": {
     "contractTitle": "Buddy 聘用合約",
@@ -1465,7 +1471,7 @@
   "marketplace": {
     "title": "Buddy 集市",
     "subtitle": "在 P2P 市場探索和租賃 Buddy 裝置",
-    "searchPlaceholder": "搜尋 Buddy 裝置、技能、工具...",
+    "searchPlaceholder": "搜尋 Buddy、技能、工具...",
     "filter": "篩選",
     "allDevices": "全部裝置",
     "highEnd": "🔥 頂配",
@@ -1527,9 +1533,15 @@
     "outContracts": "租賃合約",
     "myListings": "我的掛單",
     "createListing": "出租",
+    "listingLeaseAction": "租賃",
     "privateBuddyCannotList": "私有 Buddy 不能建立公開租賃掛單。",
+    "offlineListings": "離線 Buddy",
     "noContracts": "暫無租賃合約",
+    "totalCost": "總費用",
+    "expectedCost": "預估費用",
     "noListings": "還沒有掛單，快去創建一個吧",
+    "unlimitedUsage": "無限制使用",
+    "useBuddy": "立即使用",
     "unknownListing": "未知掛單",
     "unlimited": "不限時",
     "statusUpdated": "狀態已更新",

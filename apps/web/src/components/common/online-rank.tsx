@@ -1,5 +1,10 @@
 /** QQ-style online rank: stars (<100h) → moons (100-500h) → suns (500h+) */
-export function OnlineRank({ totalSeconds }: { totalSeconds: number }) {
+interface OnlineRankProps {
+  totalSeconds: number
+  compact?: boolean
+}
+
+export function OnlineRank({ totalSeconds, compact = false }: OnlineRankProps) {
   const hours = totalSeconds / 3600
   let suns = 0
   let moons = 0
@@ -24,6 +29,20 @@ export function OnlineRank({ totalSeconds }: { totalSeconds: number }) {
   }
 
   if (suns === 0 && moons === 0 && stars === 0) return null
+
+  if (compact) {
+    const icon = suns > 0 ? '☀️' : moons > 0 ? '🌙' : '⭐'
+    return (
+      <span className="inline-flex items-center gap-0.5">
+        <span
+          className="text-xs text-warning"
+          title={suns > 0 ? '太阳' : moons > 0 ? '月亮' : '星星'}
+        >
+          {icon}
+        </span>
+      </span>
+    )
+  }
 
   return (
     <span className="inline-flex items-center gap-0.5">

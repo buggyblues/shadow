@@ -1,51 +1,19 @@
-import { Button, cn } from '@shadowob/ui'
-import { BookOpen, Bot, Check, Copy, Key, MessageSquare, PlugZap, Terminal } from 'lucide-react'
-import { useState } from 'react'
 import {
-  createConnectorPlans,
   type ConnectorPlan,
+  createConnectorPlans,
   type ShadowConnectorTarget,
 } from '@shadowob/connector'
+import { Button, cn } from '@shadowob/ui'
+import { ArrowRight, BookOpen, Bot, Check, MessageSquare, PlugZap, Terminal } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ConfigCodeBlock } from './config-code-block'
 import type { Agent } from './types'
 
 /* ── OpenClaw Setup Guide ─────────────────────────────── */
 
-function CopyBlock({
-  content,
-  label,
-  t,
-}: {
-  content: string
-  label?: string
-  t: (key: string) => string
-}) {
-  const [copied, setCopied] = useState(false)
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(content)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  return (
-    <div className="relative group">
-      {label && (
-        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-          {label}
-        </p>
-      )}
-      <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-2xl p-3 pr-10 font-mono text-xs text-text-secondary border border-border-subtle overflow-x-auto whitespace-pre-wrap break-all">
-        {content}
-      </pre>
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-bg-tertiary/50 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition opacity-0 group-hover:opacity-100"
-        title={t('common.copy')}
-      >
-        {copied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
-      </button>
-    </div>
-  )
-}
+const HAS_TOKEN = /\b(?:token|secret|api[_-]?key|authorization)\b/i
+
+const hasTokenConfig = (content: string): boolean => HAS_TOKEN.test(content)
 
 export function OpenClawSetupGuide({
   agent,
@@ -53,12 +21,16 @@ export function OpenClawSetupGuide({
   onGenerateToken,
   generatingToken,
   t,
+  compact = false,
+  focusConnectButton = false,
 }: {
   agent: Agent
   generatedToken: string | null
   onGenerateToken: () => void
   generatingToken: boolean
   t: (key: string) => string
+  compact?: boolean
+  focusConnectButton?: boolean
 }) {
   const token = (agent.config?.lastToken as string | undefined) ?? generatedToken ?? ''
   const hasToken = !!token.trim()
@@ -74,6 +46,31 @@ export function OpenClawSetupGuide({
   const activePlan =
     plans.find((plan) => plan.target === activeTarget) ?? (plans[0] as ConnectorPlan | undefined)
   const connectorCliCommand = activePlan?.connectCommand ?? ''
+  const connectArrowRef = useRef<SVGSVGElement | null>(null)
+
+  useEffect(() => {
+    if (hasToken) return
+    const arrow = connectArrowRef.current
+    if (!arrow) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    const animation = arrow.animate(
+      [
+        { transform: 'translateX(0px)' },
+        { transform: 'translateX(4px)' },
+        { transform: 'translateX(0px)' },
+      ],
+      {
+        duration: 1100,
+        easing: 'ease-in-out',
+        iterations: Number.POSITIVE_INFINITY,
+      },
+    )
+
+    return () => {
+      animation.cancel()
+    }
+  }, [hasToken])
   const targetMeta: Record<
     ShadowConnectorTarget,
     { icon: typeof Terminal; label: string; desc: string }
@@ -96,42 +93,68 @@ export function OpenClawSetupGuide({
   }
 
   if (!hasToken) {
-    return (
-      <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
-        <div className="flex items-center gap-2 mb-3">
-          <BookOpen size={16} className="text-primary" />
-          <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
-            {t('agentMgmt.connectorGuideTitle')}
-          </h3>
-        </div>
-        <p className="text-sm text-text-muted font-bold italic mb-5">
-          {t('agentMgmt.setupTokenWarning')}
-        </p>
+    const connectButton = (
+      <div className="relative">
+        {focusConnectButton ? (
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 56 56"
+            className="pointer-events-none absolute -left-1.5 -top-1.5 h-11 w-11 text-primary/55"
+          >
+            <circle cx="28" cy="28" r="6" fill="none" stroke="currentColor" strokeWidth="2">
+              <animate attributeName="r" values="6;18;6" dur="2.2s" repeatCount="indefinite" />
+              <animate
+                attributeName="opacity"
+                values="0.55;0;0.55"
+                dur="2.2s"
+                repeatCount="indefinite"
+              />
+            </circle>
+          </svg>
+        ) : null}
         <Button
-          variant="primary"
+          variant="secondary"
           size="sm"
           onClick={onGenerateToken}
           disabled={generatingToken}
-          className="rounded-[12px]"
+          className="relative flex w-full min-h-12 items-center justify-center gap-2 rounded-[14px] border-0 px-5 py-2.5 text-[15px] font-semibold shadow-sm transition-transform duration-200 will-change-transform hover:translate-y-[-1px] active:translate-y-[0px]"
         >
-          <Key size={14} />
-          {generatingToken ? t('agentMgmt.generating') : t('agentMgmt.generateToken')}
+          {generatingToken ? t('agentMgmt.generating') : t('agentMgmt.connectButton')}
+          <ArrowRight ref={connectArrowRef} size={16} className="opacity-70" strokeWidth={2.25} />
         </Button>
+      </div>
+    )
+    if (compact) return <div className="space-y-1.5">{connectButton}</div>
+    const content = (
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-text-primary">
+          {t('agentMgmt.connectorGuideTitle')}
+        </h3>
+        <p className="text-sm text-text-secondary leading-6">{t('agentMgmt.connectorGuideDesc')}</p>
+        <div className="pt-1">{connectButton}</div>
+      </div>
+    )
+    return (
+      <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
+        {content}
       </div>
     )
   }
 
-  return (
-    <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
-      <div className="flex items-center gap-2 mb-3">
-        <BookOpen size={16} className="text-primary" />
-        <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
-          {t('agentMgmt.connectorGuideTitle')}
-        </h3>
-      </div>
-      <p className="text-sm text-text-muted font-bold italic mb-5">
-        {t('agentMgmt.connectorGuideDesc')}
-      </p>
+  const content = (
+    <>
+      {!compact ? (
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
+            {t('agentMgmt.connectorGuideTitle')}
+          </h3>
+        </div>
+      ) : null}
+      {!compact && (
+        <p className="text-sm text-text-muted font-bold italic mb-5">
+          {t('agentMgmt.connectorGuideDesc')}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
         {plans.map((plan) => {
@@ -197,14 +220,22 @@ export function OpenClawSetupGuide({
             <p className="text-xs font-black text-text-secondary mb-2 uppercase tracking-widest">
               {t('agentMgmt.connectorCliTitle')}
             </p>
-            <CopyBlock content={connectorCliCommand} t={t} />
+            <ConfigCodeBlock
+              content={connectorCliCommand}
+              mode={hasTokenConfig(connectorCliCommand) ? 'single' : 'multi'}
+              t={t}
+            />
           </div>
 
           <div className="mb-4">
             <p className="text-xs font-black text-text-secondary mb-2 uppercase tracking-widest">
               {t('agentMgmt.setupBashTitle')}
             </p>
-            <CopyBlock content={activePlan.quickCommand} t={t} />
+            <ConfigCodeBlock
+              content={activePlan.quickCommand}
+              mode={hasTokenConfig(activePlan.quickCommand) ? 'single' : 'multi'}
+              t={t}
+            />
           </div>
 
           <div className="h-px bg-bg-tertiary/50 my-4" />
@@ -224,7 +255,12 @@ export function OpenClawSetupGuide({
                 </span>
               </div>
               <div className="ml-7">
-                <CopyBlock content={command.command} t={t} />
+                <ConfigCodeBlock
+                  content={command.command}
+                  mode={hasTokenConfig(command.command) ? 'single' : 'multi'}
+                  foldMode="expanded"
+                  t={t}
+                />
               </div>
             </div>
           ))}
@@ -232,11 +268,13 @@ export function OpenClawSetupGuide({
           <div className="h-px bg-bg-tertiary/50 my-4" />
           <div className="space-y-3">
             {activePlan.configBlocks.map((block) => (
-              <CopyBlock
+              <ConfigCodeBlock
                 key={`${activePlan.target}-${block.label}`}
                 content={block.content}
                 label={block.label}
                 t={t}
+                mode={hasTokenConfig(block.content) ? 'single' : 'multi'}
+                foldMode="expanded"
               />
             ))}
           </div>
@@ -246,7 +284,11 @@ export function OpenClawSetupGuide({
           <p className="text-xs text-text-muted font-bold italic mb-3">
             {t('agentMgmt.setupChatDesc')}
           </p>
-          <CopyBlock content={activePlan.aiPrompt} t={t} />
+          <ConfigCodeBlock
+            content={activePlan.aiPrompt}
+            mode={hasTokenConfig(activePlan.aiPrompt) ? 'single' : 'multi'}
+            t={t}
+          />
         </>
       ) : null}
 
@@ -284,6 +326,12 @@ export function OpenClawSetupGuide({
           </a>
         </div>
       )}
+    </>
+  )
+  if (compact) return <div className="space-y-4">{content}</div>
+  return (
+    <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
+      {content}
     </div>
   )
 }
