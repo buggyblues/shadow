@@ -661,8 +661,19 @@ export function ChannelSidebar({
         </button>
 
         {isConnectedChannel && voiceErrorMessage && (
-          <div className="ml-8 rounded-lg border border-danger/20 bg-danger/10 px-2 py-1.5 text-xs font-bold text-danger">
-            {voiceErrorMessage}
+          <div className="ml-8 space-y-2 rounded-lg border border-danger/20 bg-danger/10 px-2 py-1.5 text-xs font-bold text-danger">
+            <div>{voiceErrorMessage}</div>
+            {voice.status === 'error' && (
+              <button
+                type="button"
+                onClick={() => void voice.join()}
+                className="h-7 rounded-md bg-danger/15 px-2 text-[11px] font-black text-danger transition hover:bg-danger/25"
+              >
+                {voice.errorKey === 'microphonePermission'
+                  ? t('voice.requestMicrophone')
+                  : t('voice.retryJoin')}
+              </button>
+            )}
           </div>
         )}
 
@@ -1122,6 +1133,18 @@ export function ChannelSidebar({
                   </div>
                 </div>
               </div>
+            )}
+
+            {voice.status === 'error' && (
+              <button
+                type="button"
+                onClick={() => void voice.join()}
+                className="mt-2 h-8 w-full rounded-lg bg-danger/15 text-xs font-black text-danger transition hover:bg-danger/25"
+              >
+                {voice.errorKey === 'microphonePermission'
+                  ? t('voice.requestMicrophone')
+                  : t('voice.retryJoin')}
+              </button>
             )}
           </div>
         </div>

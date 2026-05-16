@@ -127,6 +127,72 @@ function ParticipantTile({
   )
 }
 
+function VoiceErrorRecovery({
+  errorKey,
+  errorMessage,
+  isRetrying,
+  onLeave,
+  onRetry,
+}: {
+  errorKey: string | null
+  errorMessage: string | null
+  isRetrying: boolean
+  onLeave: () => void
+  onRetry: () => void
+}) {
+  const { t } = useTranslation()
+  const title =
+    errorKey === 'microphonePolicy' || errorKey === 'screenPolicy'
+      ? t('voice.permissionPolicyTitle')
+      : errorKey === 'microphoneNotFound'
+        ? t('voice.microphoneMissingTitle')
+        : errorKey === 'microphonePermission'
+          ? t('voice.microphonePermissionTitle')
+          : t('voice.connectionError')
+  const hint =
+    errorKey === 'microphonePolicy'
+      ? t('voice.microphonePolicyHint')
+      : errorKey === 'screenPolicy'
+        ? t('voice.screenPolicyHint')
+        : errorKey === 'microphonePermission'
+          ? t('voice.microphonePermissionHint')
+          : null
+  const retryLabel =
+    errorKey === 'microphonePermission' ? t('voice.requestMicrophone') : t('voice.retryJoin')
+
+  return (
+    <div className="flex h-full min-h-[520px] items-center justify-center">
+      <div className="w-full max-w-lg rounded-2xl border border-danger/30 bg-[#151015]/95 p-6 text-center shadow-2xl">
+        <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-danger/15 text-danger">
+          <MicOff size={32} />
+        </div>
+        <h2 className="text-xl font-black">{title}</h2>
+        {errorMessage && <p className="mt-3 text-sm font-bold text-danger">{errorMessage}</p>}
+        {hint && <p className="mt-3 text-sm font-bold leading-relaxed text-white/55">{hint}</p>}
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+          <button
+            type="button"
+            disabled={isRetrying}
+            onClick={onRetry}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-success px-4 text-sm font-black text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Phone size={17} />
+            {isRetrying ? t('voice.connecting') : retryLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onLeave}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white/8 px-4 text-sm font-black text-white/75 transition hover:bg-white/14 hover:text-white"
+          >
+            <PhoneOff size={17} />
+            {t('voice.disconnect')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ControlButton({
   active,
   danger,
@@ -230,7 +296,17 @@ export function VoiceChannelPanel({
           </div>
         )}
 
-        {connectedToThisChannel && (
+        {connectedToThisChannel && voice.status === 'error' && (
+          <VoiceErrorRecovery
+            errorKey={voice.errorKey}
+            errorMessage={errorMessage}
+            isRetrying={connecting}
+            onLeave={() => void leaveVoiceChannel()}
+            onRetry={() => void joinVoiceChannel({ id: channelId, name: channelName })}
+          />
+        )}
+
+        {connectedToThisChannel && voice.status !== 'error' && (
           <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center gap-4 pb-20">
             {localScreenTrack && (
               <div className="relative min-h-[420px] overflow-hidden rounded-lg bg-[#050607] ring-1 ring-primary/35">

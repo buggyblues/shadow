@@ -2737,6 +2737,14 @@
     "speaker": "스피커",
     "earpiece": "수화기",
     "joinFailed": "음성 채널 참여 실패",
+    "permissionPolicyTitle": "페이지 권한 정책이 음성을 차단했습니다",
+    "microphoneMissingTitle": "사용 가능한 마이크가 없습니다",
+    "microphonePermissionTitle": "마이크 권한이 필요합니다",
+    "microphonePolicyHint": "현재 배포의 Permissions-Policy 또는 임베드 컨테이너가 마이크 캡처를 차단해 브라우저 권한 창이 표시되지 않습니다. 배포 설정을 업데이트한 뒤 새로고침하세요.",
+    "screenPolicyHint": "현재 페이지 정책이 화면 공유를 차단해 브라우저 공유 선택 창이 표시되지 않습니다. 배포 설정을 업데이트한 뒤 다시 시도하세요.",
+    "microphonePermissionHint": "브라우저 권한 창이 표시되지 않으면 주소창 옆 사이트 권한에서 마이크를 허용한 뒤 다시 요청하세요.",
+    "requestMicrophone": "마이크 권한 다시 요청",
+    "retryJoin": "다시 참여",
     "network": {
       "unknown": "네트워크 상태 알 수 없음",
       "excellent": "네트워크 매우 좋음",
@@ -2747,7 +2755,10 @@
     "errors": {
       "rtcNotConfigured": "서버에 음성 서비스가 설정되지 않았습니다.",
       "microphonePermission": "브라우저에서 마이크 권한을 허용한 뒤 다시 참여하세요.",
-      "screenPermission": "브라우저에서 화면 공유를 허용한 뒤 다시 시도하세요."
+      "microphonePolicy": "이 페이지가 마이크 접근을 차단해 권한 창을 표시할 수 없습니다.",
+      "microphoneNotFound": "사용 가능한 마이크를 감지하지 못했습니다.",
+      "screenPermission": "브라우저에서 화면 공유를 허용한 뒤 다시 시도하세요.",
+      "screenPolicy": "이 페이지가 화면 공유를 차단해 공유 선택 창을 표시할 수 없습니다."
     }
   }
 }

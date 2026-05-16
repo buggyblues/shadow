@@ -2737,6 +2737,14 @@
     "speaker": "揚聲器",
     "earpiece": "聽筒",
     "joinFailed": "加入語音頻道失敗",
+    "permissionPolicyTitle": "頁面權限策略阻止了語音",
+    "microphoneMissingTitle": "找不到可用麥克風",
+    "microphonePermissionTitle": "需要麥克風權限",
+    "microphonePolicyHint": "目前部署的 Permissions-Policy 或嵌入容器禁止了麥克風，瀏覽器不會顯示授權視窗。請更新部署設定後重新整理頁面。",
+    "screenPolicyHint": "目前頁面策略禁止螢幕分享，瀏覽器不會顯示分享視窗。請更新部署設定後重試。",
+    "microphonePermissionHint": "如果瀏覽器沒有彈出視窗，請點擊網址列旁的網站權限，將麥克風改為允許，然後重新請求。",
+    "requestMicrophone": "重新請求麥克風權限",
+    "retryJoin": "重新加入",
     "network": {
       "unknown": "網路狀態未知",
       "excellent": "網路極佳",
@@ -2747,7 +2755,10 @@
     "errors": {
       "rtcNotConfigured": "服務端尚未設定語音服務。",
       "microphonePermission": "請在瀏覽器中允許麥克風權限，然後重新加入。",
-      "screenPermission": "請在瀏覽器中允許螢幕共享，然後重試。"
+      "microphonePolicy": "目前頁面禁止使用麥克風，無法顯示授權視窗。",
+      "microphoneNotFound": "未偵測到可用麥克風。",
+      "screenPermission": "請在瀏覽器中允許螢幕共享，然後重試。",
+      "screenPolicy": "目前頁面禁止螢幕分享，無法顯示分享視窗。"
     }
   }
 }
