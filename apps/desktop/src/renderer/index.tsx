@@ -151,7 +151,7 @@ const oauthCallbackRoute = createRoute({
 
 const oauthAuthorizeRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/oauth/authorize',
+  path: '/app/oauth/authorize',
   component: OAuthAuthorizePage,
   beforeLoad: () => {
     if (!useAuthStore.getState().isAuthenticated) {
