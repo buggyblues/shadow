@@ -1,4 +1,5 @@
 import { Download, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import {
   AudioRenderer,
@@ -24,32 +25,33 @@ interface WorkspaceWorkbenchProps {
  * Inspired by the slide-arsenal WorkshopViewer pattern of dispatching to resource-type workbenches.
  */
 export function WorkspaceWorkbench({ node, serverId, onClose }: WorkspaceWorkbenchProps) {
+  const { t } = useTranslation()
   const Icon = getNodeIcon(node)
   const category = getFileCategory(node)
   const { data: downloadUrl } = useWorkspaceMediaUrl(serverId, node, 'attachment')
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       {/* Header bar */}
-      <div className="h-11 px-4 flex items-center gap-3 bg-bg-secondary/80 backdrop-blur-sm border-b border-border-subtle shrink-0">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border-subtle bg-bg-secondary/45 px-4 backdrop-blur-xl">
         <Icon size={16} className="text-text-muted shrink-0" />
-        <span className="font-medium text-text-primary text-[13px] truncate">{node.name}</span>
+        <span className="font-medium text-text-primary text-[13px] truncate" title={node.path}>
+          {node.name}
+        </span>
         {node.sizeBytes != null && (
-          <span className="text-[11px] text-text-muted bg-bg-tertiary/60 px-1.5 py-0.5 rounded">
+          <span className="rounded-lg bg-bg-tertiary/60 px-2 py-1 text-[11px] text-text-muted">
             {formatFileSize(node.sizeBytes)}
           </span>
         )}
-        <span className="text-[11px] text-text-muted/60 hidden sm:block truncate flex-1">
-          {node.path}
-        </span>
+        <span className="hidden flex-1 sm:block" />
         <div className="flex items-center gap-0.5 ml-auto">
           {node.contentRef && (
             <a
               href={downloadUrl ?? '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
-              title="下载"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+              title={t('workspace.download', { defaultValue: '下载' })}
               aria-disabled={!downloadUrl}
               onClick={(event) => {
                 if (!downloadUrl) event.preventDefault()
@@ -61,8 +63,8 @@ export function WorkspaceWorkbench({ node, serverId, onClose }: WorkspaceWorkben
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
-            title="关闭"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+            title={t('common.close', { defaultValue: '关闭' })}
           >
             <X size={15} />
           </button>
@@ -70,7 +72,7 @@ export function WorkspaceWorkbench({ node, serverId, onClose }: WorkspaceWorkben
       </div>
 
       {/* Renderer area */}
-      <div className="flex-1 overflow-auto flex items-center justify-center bg-bg-primary">
+      <div className="flex flex-1 items-center justify-center overflow-auto bg-bg-primary/30">
         <FileRenderer node={node} category={category} serverId={serverId} />
       </div>
     </div>

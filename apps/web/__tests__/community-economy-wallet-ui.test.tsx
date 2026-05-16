@@ -208,13 +208,12 @@ describe('Community economy wallet UI', () => {
     })
   })
 
-  it('submits gifts through the recipient picker with selected assets', async () => {
-    renderWithQuery(<WalletSettings initialSection="actions" />)
+  it('submits gifts from the asset scene with selected assets', async () => {
+    renderWithQuery(<WalletSettings initialSection="assets" />)
 
+    expect(await screen.findByText('Founding Badge')).toBeTruthy()
     await userEvent.click(screen.getAllByRole('button', { name: 'communityEconomy.sendGift' })[0]!)
     await userEvent.click(await screen.findByText('Recipient Two'))
-    await userEvent.click(screen.getByRole('button', { name: '50' }))
-    await userEvent.click(screen.getByText('Founding Badge'))
     const giftButtons = screen.getAllByRole('button', { name: 'communityEconomy.sendGift' })
     await userEvent.click(giftButtons[giftButtons.length - 1]!)
 
@@ -224,7 +223,6 @@ describe('Community economy wallet UI', () => {
       expect(JSON.parse(String(giftCall?.[1]?.body))).toEqual(
         expect.objectContaining({
           recipientUserId: 'recipient-2',
-          currencies: [{ currencyCode: 'shrimp_coin', amount: 50 }],
           assets: [{ assetGrantId: 'grant-1', quantity: 1 }],
           idempotencyKey: expect.any(String),
         }),

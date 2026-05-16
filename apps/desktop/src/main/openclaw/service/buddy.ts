@@ -106,7 +106,14 @@ export class BuddyService {
   update(id: string, updates: Partial<BuddyConnection>): void {
     const idx = this.connections.findIndex((c) => c.id === id)
     if (idx === -1) throw new Error(`Connection '${id}' not found`)
-    this.connections[idx] = { ...this.connections[idx], ...updates, id } as BuddyConnection
+    const previous = this.connections[idx]!
+    this.connections[idx] = { ...previous, ...updates, id } as BuddyConnection
+    if (updates.agentId && updates.agentId !== previous.agentId) {
+      this.config.removeAgentBindings({ channel: 'shadowob', accountId: id })
+      if (this.connections[idx]?.status === 'connected') {
+        this.config.addAgentBinding(updates.agentId, 'shadowob', id)
+      }
+    }
     this.saveConnections()
     this.emitStatus()
   }

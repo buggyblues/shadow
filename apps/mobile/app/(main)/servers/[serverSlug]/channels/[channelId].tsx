@@ -90,6 +90,28 @@ const PAGE_SIZE = 50
 const TYPING_STATUS_TIMEOUT_MS = 3000
 const ACTIVITY_STATUS_TIMEOUT_MS = 120_000
 
+interface NotificationEvent {
+  referenceId?: string | null
+  referenceType?: string | null
+  scopeChannelId?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+function metaString(event: NotificationEvent, key: string) {
+  const value = event.metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function getNotificationChannelId(event: NotificationEvent) {
+  return (
+    event.scopeChannelId ??
+    metaString(event, 'channelId') ??
+    (event.referenceType === 'channel' || event.referenceType === 'channel_invite'
+      ? event.referenceId
+      : null)
+  )
+}
+
 function mentionFromSuggestion(
   suggestion: MentionSuggestion,
   range?: MessageMention['range'],
@@ -167,9 +189,17 @@ export default function ChannelViewScreen() {
     serverSlug?: string
     channelId?: string
     dmChannelId?: string
+    msg?: string
+    messageId?: string
   }>()
   const serverSlug = params.serverSlug
   const channelId = params.channelId ?? params.dmChannelId
+  const targetMessageId =
+    typeof params.msg === 'string'
+      ? params.msg
+      : typeof params.messageId === 'string'
+        ? params.messageId
+        : null
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
@@ -219,6 +249,8 @@ export default function ChannelViewScreen() {
   const showScrollBottomRef = useRef(false)
   const pendingShowScrollBottomRef = useRef(false)
   const hasRestoredDraft = useRef(false)
+  const readScopeCooldownRef = useRef<Map<string, number>>(new Map())
+  const readScopeInFlightRef = useRef<Set<string>>(new Set())
   const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
 
   // Draft storage for persistent input
@@ -338,6 +370,28 @@ export default function ChannelViewScreen() {
   })
   const access = bootstrap?.access ?? accessFallback
   const canAccessChannel = access?.canAccess ?? false
+
+  const markChannelScopeRead = useCallback(async () => {
+    if (!channelId) return
+    const key = `channel:${channelId}`
+    const now = Date.now()
+    const last = readScopeCooldownRef.current.get(key) ?? 0
+    if (now - last < 1200 || readScopeInFlightRef.current.has(key)) return
+
+    readScopeCooldownRef.current.set(key, now)
+    readScopeInFlightRef.current.add(key)
+    try {
+      await fetchApi('/api/notifications/read-scope', {
+        method: 'POST',
+        body: JSON.stringify({ channelId }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    } finally {
+      readScopeInFlightRef.current.delete(key)
+    }
+  }, [channelId, queryClient])
 
   const requestAccessMutation = useMutation({
     mutationFn: () =>
@@ -556,12 +610,13 @@ export default function ChannelViewScreen() {
   useEffect(() => {
     if (channel && canAccessChannel) {
       setActiveChannel(channel.id)
+      void markChannelScopeRead()
       if (channel.serverId) {
         void setLastChannel(channel.serverId, channel.id)
       }
     }
     return () => setActiveChannel(null)
-  }, [canAccessChannel, channel, setActiveChannel])
+  }, [canAccessChannel, channel, markChannelScopeRead, setActiveChannel])
 
   const subscribeKeyboardVisibility = useCallback(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
@@ -748,6 +803,12 @@ export default function ChannelViewScreen() {
     [],
   )
 
+  useEffect(() => {
+    if (!targetMessageId || timeline.length === 0) return
+    const timer = setTimeout(() => scrollToMessage(targetMessageId), 350)
+    return () => clearTimeout(timer)
+  }, [scrollToMessage, targetMessageId, timeline.length])
+
   const scheduleInputFocus = useCallback(() => {
     let cancelled = false
     const focusInput = () => {
@@ -901,6 +962,7 @@ export default function ChannelViewScreen() {
           pages: [{ ...firstPage, messages: [...firstPage.messages, msg] }, ...old.pages.slice(1)],
         }
       })
+      void markChannelScopeRead()
       // Scroll to newest (offset 0 in inverted list)
       // Use requestAnimationFrame + setTimeout to ensure the VirtualizedList has processed the new data
       requestAnimationFrame(() => {
@@ -909,11 +971,20 @@ export default function ChannelViewScreen() {
         }, 150)
       })
     },
-    [channelId, queryClient, currentUser?.id],
+    [channelId, queryClient, currentUser?.id, markChannelScopeRead],
   )
 
   useSocketEvent('message:new', appendMessage)
   useSocketEvent('message:created', appendMessage)
+  useSocketEvent<NotificationEvent>('notification:new', (event) => {
+    queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    const notificationChannelId = getNotificationChannelId(event)
+    if (notificationChannelId && notificationChannelId === channelId) {
+      void markChannelScopeRead()
+    }
+  })
 
   useSocketEvent(
     'message:updated',

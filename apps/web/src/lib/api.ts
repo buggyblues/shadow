@@ -63,6 +63,10 @@ function isAuthEntryEndpoint(path: string) {
   )
 }
 
+function deviceNameHeader() {
+  return typeof navigator !== 'undefined' ? navigator.platform || 'Shadow Web' : 'Shadow Web'
+}
+
 function clearAuthState() {
   clearAuthenticatedSession({
     redirectToLogin: true,
@@ -76,7 +80,10 @@ async function refreshAccessToken(): Promise<string | null> {
   try {
     const res = await fetch(getApiUrl('/api/auth/refresh'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-shadow-device-name': deviceNameHeader(),
+      },
       body: JSON.stringify({ refreshToken }),
     })
     if (!res.ok) return null
@@ -159,6 +166,7 @@ export async function fetchApiResponse(path: string, options?: RequestInit): Pro
   const headers: Record<string, string> = {
     ...(options?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'x-shadow-device-name': deviceNameHeader(),
     ...((options?.headers as Record<string, string>) ?? {}),
   }
 

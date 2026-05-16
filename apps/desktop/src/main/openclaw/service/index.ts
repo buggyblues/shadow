@@ -20,6 +20,7 @@ import { getChannelMeta, getChannelRegistry } from '../channel-registry'
 import type { ChannelMeta } from '../types'
 import { BuddyService } from './buddy'
 import { ConfigService } from './config'
+import { ConnectorService } from './connector'
 import { CronService } from './cron'
 import { GatewayService } from './gateway'
 import { OpenClawPaths } from './paths'
@@ -32,6 +33,7 @@ export class OpenClawService {
   readonly cron: CronService
   readonly buddy: BuddyService
   readonly skillHub: SkillHubService
+  readonly connector: ConnectorService
 
   constructor() {
     this.paths = new OpenClawPaths()
@@ -40,6 +42,14 @@ export class OpenClawService {
     this.cron = new CronService(this.paths)
     this.buddy = new BuddyService(this.paths, this.config)
     this.skillHub = new SkillHubService(this.paths, this.config)
+    this.connector = new ConnectorService(
+      this.paths,
+      this.config,
+      this.cron,
+      this.buddy,
+      this.skillHub,
+      this.gateway,
+    )
   }
 
   /** Initialize all services. Call from app.ready. */

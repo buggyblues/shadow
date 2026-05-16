@@ -93,6 +93,8 @@ const RESERVED_RUNTIME_ENV_KEYS = new Set([
 
 const DEFAULT_DIY_CLOUD_DAILY_LIMIT = 24
 const DEPLOYMENT_MANIFEST_SCHEMA_VERSION = 1
+const CLOUD_SAAS_WORKLOAD_BACKEND_ENV = 'CLOUD_SAAS_WORKLOAD_BACKEND'
+const CLOUD_SAAS_WORKLOAD_BACKENDS = new Set(['agent-sandbox', 'deployment'])
 
 function isReservedRuntimeEnvKey(name: string): boolean {
   return RESERVED_RUNTIME_ENV_KEYS.has(name)
@@ -1335,6 +1337,7 @@ function applySafeDeploymentPreferences(
   clientConfigSnapshot: unknown,
 ) {
   const snapshot = structuredClone(serverTemplateSnapshot) as Record<string, unknown>
+  applyWorkloadBackendPreference(snapshot, clientConfigSnapshot)
   if (!configUsesPlugin(snapshot, 'model-provider') || !isRecord(clientConfigSnapshot)) {
     return snapshot
   }
@@ -1358,6 +1361,37 @@ function applySafeDeploymentPreferences(
   }
 
   return snapshot
+}
+
+function readWorkloadBackendPreference(value: unknown): 'agent-sandbox' | 'deployment' | null {
+  if (!isRecord(value)) return null
+  const deployments = value.deployments
+  if (!isRecord(deployments)) return null
+  const backend = deployments.backend
+  return typeof backend === 'string' && CLOUD_SAAS_WORKLOAD_BACKENDS.has(backend)
+    ? (backend as 'agent-sandbox' | 'deployment')
+    : null
+}
+
+function configuredWorkloadBackendPreference(): 'agent-sandbox' | 'deployment' | null {
+  const backend = process.env[CLOUD_SAAS_WORKLOAD_BACKEND_ENV]?.trim()
+  return backend && CLOUD_SAAS_WORKLOAD_BACKENDS.has(backend)
+    ? (backend as 'agent-sandbox' | 'deployment')
+    : null
+}
+
+function applyWorkloadBackendPreference(
+  snapshot: Record<string, unknown>,
+  clientConfigSnapshot: unknown,
+) {
+  const backend =
+    readWorkloadBackendPreference(clientConfigSnapshot) ?? configuredWorkloadBackendPreference()
+  if (!backend) return
+
+  snapshot.deployments = {
+    ...(isRecord(snapshot.deployments) ? snapshot.deployments : {}),
+    backend,
+  }
 }
 
 function providerModelMatchesSelector(

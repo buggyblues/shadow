@@ -2,15 +2,38 @@ import { Button, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { Clock, Lock, Send } from 'lucide-react'
-import { useEffect, useLayoutEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChatArea } from '../components/chat/chat-area'
 import { MemberList } from '../components/member/member-list'
+import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
 import { setLastChannelId } from '../lib/last-channel'
 import { joinChannel, leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 import { useUIStore } from '../stores/ui.store'
+
+interface NotificationEvent {
+  referenceId?: string | null
+  referenceType?: string | null
+  scopeChannelId?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+function metaString(event: NotificationEvent, key: string) {
+  const value = event.metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function getNotificationChannelId(event: NotificationEvent) {
+  return (
+    event.scopeChannelId ??
+    metaString(event, 'channelId') ??
+    (event.referenceType === 'channel' || event.referenceType === 'channel_invite'
+      ? event.referenceId
+      : null)
+  )
+}
 
 export function ChannelView() {
   const { t } = useTranslation()
@@ -18,6 +41,8 @@ export function ChannelView() {
   const activeServerId = useChatStore((s) => s.activeServerId)
   const setMobileView = useUIStore((s) => s.setMobileView)
   const queryClient = useQueryClient()
+  const readScopeCooldownRef = useRef<Map<string, number>>(new Map())
+  const readScopeInFlightRef = useRef<Set<string>>(new Set())
   const {
     data: access,
     isLoading: isAccessLoading,
@@ -60,6 +85,27 @@ export function ChannelView() {
     },
   })
 
+  const markChannelScopeRead = useCallback(async () => {
+    if (!channelId) return
+    const key = `channel:${channelId}`
+    const now = Date.now()
+    const last = readScopeCooldownRef.current.get(key) ?? 0
+    if (now - last < 1200 || readScopeInFlightRef.current.has(key)) return
+    readScopeCooldownRef.current.set(key, now)
+    readScopeInFlightRef.current.add(key)
+    try {
+      await fetchApi('/api/notifications/read-scope', {
+        method: 'POST',
+        body: JSON.stringify({ channelId }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    } finally {
+      readScopeInFlightRef.current.delete(key)
+    }
+  }, [channelId, queryClient])
+
   // Sync channel ID from URL → store before paint
   useLayoutEffect(() => {
     const prev = useChatStore.getState().activeChannelId
@@ -67,13 +113,25 @@ export function ChannelView() {
       leaveChannel(prev)
     }
     useChatStore.getState().setActiveChannel(channelId)
-    if (canAccessChannel) joinChannel(channelId)
+    if (canAccessChannel) {
+      joinChannel(channelId)
+      void markChannelScopeRead()
+    }
     setMobileView('chat')
 
     return () => {
       if (canAccessChannel) leaveChannel(channelId)
     }
-  }, [canAccessChannel, channelId, setMobileView])
+  }, [canAccessChannel, channelId, markChannelScopeRead, setMobileView])
+
+  useSocketEvent<NotificationEvent>('notification:new', (event) => {
+    queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    const notificationChannelId = getNotificationChannelId(event)
+    if (notificationChannelId === channelId) {
+      void markChannelScopeRead()
+    }
+  })
 
   useEffect(() => {
     if (activeServerId && channel?.serverId === activeServerId) {

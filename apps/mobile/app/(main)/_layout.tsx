@@ -1,7 +1,8 @@
 import { Stack, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { useEffect } from 'react'
-import { AppState } from 'react-native'
+import { useTranslation } from 'react-i18next'
+import { Alert, AppState } from 'react-native'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
 import { fetchApi } from '../../src/lib/api'
 import {
@@ -17,8 +18,9 @@ import { useColors } from '../../src/theme'
 
 export default function MainLayout() {
   const colors = useColors()
+  const { t } = useTranslation()
   const router = useRouter()
-  const { setUser, isAuthenticated, accessToken } = useAuthStore()
+  const { setUser, isAuthenticated, accessToken, logout } = useAuthStore()
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -43,6 +45,20 @@ export default function MainLayout() {
     if (accessToken) {
       connectSocket()
     }
+    const socket = getSocket()
+    const handleSessionRevoked = () => {
+      Alert.alert(t('settings.sessionRevokedTitle'), t('settings.sessionRevokedNotice'), [
+        {
+          text: t('common.ok'),
+          onPress: () => {
+            disconnectSocket()
+            logout()
+            router.replace('/(auth)/login')
+          },
+        },
+      ])
+    }
+    socket.on('auth:session-revoked', handleSessionRevoked)
 
     // Set up notifications
     setupAndroidChannel()
@@ -50,10 +66,11 @@ export default function MainLayout() {
     const cleanupResponse = setupNotificationResponseListener()
 
     return () => {
+      socket.off('auth:session-revoked', handleSessionRevoked)
       disconnectSocket()
       cleanupResponse()
     }
-  }, [accessToken, isAuthenticated, router, setUser])
+  }, [accessToken, isAuthenticated, logout, router, setUser, t])
 
   // Listen for new messages via socket and show local notifications
   useEffect(() => {

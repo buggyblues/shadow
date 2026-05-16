@@ -36,6 +36,16 @@ async function authenticateSocketUser(socket: Socket, container: AppContainer, t
     const payload = verifyToken(token, ['access', 'agent'])
     const user = await userDao.findById(payload.userId).catch(() => null)
     if (user) {
+      if (payload.typ === 'access' && payload.sessionId) {
+        const session = await container
+          .resolve('userSessionDao')
+          .findById(payload.sessionId)
+          .catch(() => null)
+        if (!session || session.userId !== payload.userId || session.revokedAt) {
+          throw new Error('Session revoked')
+        }
+        socket.data.sessionId = payload.sessionId
+      }
       await hydrateSocketUser(socket, payload.userId, user, payload.username)
       return
     }
@@ -86,10 +96,17 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
     .catch((err) => {
       logger.error({ err }, 'Failed to initialize Redis for presence — falling back to local-only')
       setupPresenceGateway(io, container, null)
-  })
+    })
 
   setupChatGateway(io, container)
   setupNotificationGateway(io)
+
+  io.on('connection', (socket) => {
+    const sessionId = socket.data.sessionId as string | undefined
+    if (sessionId) {
+      void socket.join(`session:${sessionId}`)
+    }
+  })
 
   logger.info('WebSocket gateways initialized')
 }

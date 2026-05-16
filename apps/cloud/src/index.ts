@@ -84,6 +84,9 @@ export {
   waitForPodReadyAsync,
   waitForVolumeSnapshotReady,
 } from './clients/kubectl-runtime.js'
+export { loadKubeconfigPath } from './cluster/kubeconfig.js'
+export { readClusterConfig } from './cluster/parser.js'
+export type { ClusterConfig, ClusterMeta } from './cluster/schema.js'
 export {
   assertNoReservedEnvOverrides,
   isReservedRuntimeEnvKey,

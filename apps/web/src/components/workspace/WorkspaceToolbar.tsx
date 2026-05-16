@@ -34,26 +34,32 @@ export function WorkspaceToolbar({
 }: WorkspaceToolbarProps) {
   const { t } = useTranslation()
   const { searchQuery, setSearchQuery } = useWorkspaceStore()
-  const statsText = stats ? `${stats.folderCount} 文件夹 · ${stats.fileCount} 文件` : null
+  const statsText = stats
+    ? t('workspace.statsSummary', {
+        defaultValue: '{{folders}} folders · {{files}} files',
+        folders: stats.folderCount,
+        files: stats.fileCount,
+      })
+    : null
 
   const statsBadge = statsText ? (
-    <div className="hidden items-center gap-1.5 rounded-2xl border border-border-subtle bg-bg-secondary/20 px-3 py-2 text-[11px] text-text-muted md:flex">
+    <div className="hidden h-9 items-center gap-1.5 rounded-xl border border-border-subtle bg-bg-primary/40 px-3 text-[11px] font-bold text-text-muted md:flex">
       <BarChart3 size={12} />
       <span>{statsText}</span>
     </div>
   ) : null
 
   const searchControl = (
-    <div className="relative flex items-center">
-      <Search size={13} className="pointer-events-none absolute left-2.5 text-text-muted" />
+    <div className={cn('relative flex min-w-0 items-center', embedded && 'flex-1')}>
+      <Search size={13} className="pointer-events-none absolute left-3 text-text-muted" />
       <input
         type="text"
         placeholder={t('workspace.searchPlaceholder', { defaultValue: '搜索文件...' })}
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         className={cn(
-          'h-10 rounded-2xl border border-border-subtle bg-bg-secondary/30 pl-8 pr-8 text-xs text-text-primary transition-all duration-150 placeholder:text-text-muted/60 focus:border-primary/40 focus:bg-bg-secondary/50 focus:outline-none',
-          embedded ? 'w-[220px] md:w-[260px]' : 'w-40 md:w-52',
+          'h-9 rounded-xl border border-border-subtle bg-bg-primary/45 pl-8 pr-8 text-xs font-medium text-text-primary transition-all duration-150 placeholder:text-text-muted/60 focus:border-primary/40 focus:bg-bg-primary/70 focus:outline-none',
+          embedded ? 'w-full min-w-40' : 'w-40 md:w-52',
         )}
       />
       {searchQuery && (
@@ -69,11 +75,11 @@ export function WorkspaceToolbar({
   )
 
   const actionControls = (
-    <div className="flex items-center gap-1 rounded-2xl border border-border-subtle bg-bg-secondary/20 p-1">
+    <div className="flex h-9 items-center gap-1 rounded-xl border border-border-subtle bg-bg-primary/40 p-1">
       <button
         type="button"
         onClick={onUpload}
-        className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
         title={t('workspace.uploadFile', { defaultValue: '上传文件' })}
       >
         <Upload size={15} />
@@ -82,7 +88,7 @@ export function WorkspaceToolbar({
       <button
         type="button"
         onClick={onNewFolder}
-        className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
         title={t('workspace.newFolder', { defaultValue: '新建文件夹' })}
       >
         <FolderPlus size={15} />
@@ -91,7 +97,7 @@ export function WorkspaceToolbar({
       <button
         type="button"
         onClick={onRefresh}
-        className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
         title={t('common.refresh', { defaultValue: '刷新' })}
       >
         <RefreshCw size={15} />
@@ -101,8 +107,8 @@ export function WorkspaceToolbar({
 
   if (embedded) {
     return (
-      <div className="z-20 shrink-0 bg-transparent px-4 pb-3 pt-4">
-        <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="z-20 shrink-0 border-b border-border-subtle/80 bg-bg-primary/20 px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           {statsBadge}
           {searchControl}
           {actionControls}

@@ -1,13 +1,58 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
-import { useLayoutEffect } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { ChatArea } from '../components/chat/chat-area'
+import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
 import { joinChannel, leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 
+interface NotificationEvent {
+  referenceId?: string | null
+  referenceType?: string | null
+  scopeChannelId?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+function metaString(event: NotificationEvent, key: string) {
+  const value = event.metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function getNotificationChannelId(event: NotificationEvent) {
+  return (
+    event.scopeChannelId ??
+    metaString(event, 'channelId') ??
+    (event.referenceType === 'channel' || event.referenceType === 'channel_invite'
+      ? event.referenceId
+      : null)
+  )
+}
+
 export function DirectChatView({ channelId, onBack }: { channelId: string; onBack?: () => void }) {
   const queryClient = useQueryClient()
+  const readScopeCooldownRef = useRef<Map<string, number>>(new Map())
+  const readScopeInFlightRef = useRef<Set<string>>(new Set())
+
+  const markChannelScopeRead = useCallback(async () => {
+    const key = `channel:${channelId}`
+    const now = Date.now()
+    const last = readScopeCooldownRef.current.get(key) ?? 0
+    if (now - last < 1200 || readScopeInFlightRef.current.has(key)) return
+    readScopeCooldownRef.current.set(key, now)
+    readScopeInFlightRef.current.add(key)
+    try {
+      await fetchApi('/api/notifications/read-scope', {
+        method: 'POST',
+        body: JSON.stringify({ channelId }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    } finally {
+      readScopeInFlightRef.current.delete(key)
+    }
+  }, [channelId, queryClient])
 
   useLayoutEffect(() => {
     const store = useChatStore.getState()
@@ -21,15 +66,7 @@ export function DirectChatView({ channelId, onBack }: { channelId: string; onBac
     store.setActiveServer(null)
     store.setActiveChannel(channelId)
     joinChannel(channelId)
-
-    void fetchApi('/api/notifications/read-scope', {
-      method: 'POST',
-      body: JSON.stringify({ channelId }),
-    }).finally(() => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications-scoped-unread'] })
-    })
+    void markChannelScopeRead()
 
     return () => {
       leaveChannel(channelId)
@@ -39,7 +76,16 @@ export function DirectChatView({ channelId, onBack }: { channelId: string; onBac
       }
       latest.setActiveServer(previousServerId)
     }
-  }, [channelId, queryClient])
+  }, [channelId, markChannelScopeRead])
+
+  useSocketEvent<NotificationEvent>('notification:new', (event) => {
+    queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    const notificationChannelId = getNotificationChannelId(event)
+    if (notificationChannelId === channelId) {
+      void markChannelScopeRead()
+    }
+  })
 
   return <ChatArea key={channelId} onBack={onBack} showMemberToggle={false} />
 }
@@ -48,7 +94,9 @@ export function DirectChatRoute() {
   const { dmChannelId } = useParams({ strict: false }) as { dmChannelId: string }
   const navigate = useNavigate()
 
-  return <DirectChatView channelId={dmChannelId} onBack={() => navigate({ to: '/settings/dm' })} />
+  return (
+    <DirectChatView channelId={dmChannelId} onBack={() => navigate({ to: '/settings/buddy' })} />
+  )
 }
 
 export const DirectChatPage = DirectChatRoute

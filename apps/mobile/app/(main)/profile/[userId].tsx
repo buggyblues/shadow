@@ -29,6 +29,7 @@ interface UserProfile {
     ownerId: string
     status: string
     totalOnlineSeconds: number
+    currentActivity?: string | null
     config: { description?: string }
   }
   ownerProfile?: {
@@ -42,6 +43,7 @@ interface UserProfile {
     userId: string
     status: string
     totalOnlineSeconds: number
+    currentActivity?: string | null
     botUser?: { id: string; username: string; displayName: string; avatarUrl: string | null }
   }>
 }
@@ -102,6 +104,17 @@ export default function UserProfileScreen() {
   const isFriend = myFriends.some((item) => item.user.id === profile.id)
   const isRequestSent = sentRequests.some((item) => item.user.id === profile.id)
   const addFriendDisabled = sendFriendRequest.isPending || isFriend || isRequestSent
+  const currentActivity = profile.agent?.currentActivity
+  const currentActivityLabel =
+    currentActivity === 'thinking'
+      ? t('member.activityThinking')
+      : currentActivity === 'working'
+        ? t('member.activityWorking')
+        : currentActivity === 'ready'
+          ? t('member.activityReady')
+          : currentActivity === 'preparing'
+            ? t('member.activityPreparing')
+            : currentActivity
 
   const statusColors: Record<string, string> = {
     online: colors.statusOnline,
@@ -177,6 +190,18 @@ export default function UserProfileScreen() {
               {t(`member.${profile.status ?? 'offline'}`, profile.status ?? 'offline')}
             </Text>
           </View>
+
+          {profile.isBot && currentActivityLabel ? (
+            <View style={[styles.activityPill, { backgroundColor: `${colors.primary}18` }]}>
+              <View style={[styles.activityDot, { backgroundColor: colors.primary }]} />
+              <Text style={[styles.activityText, { color: colors.primary }]}>
+                {t('member.buddyWorkStatus', {
+                  name: profile.displayName || profile.username,
+                  status: currentActivityLabel,
+                })}
+              </Text>
+            </View>
+          ) : null}
 
           {profile.bio && (
             <Text style={[styles.bio, { color: colors.textSecondary }]}>{profile.bio}</Text>
@@ -417,6 +442,25 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: fontSize.sm,
+  },
+  activityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    marginTop: spacing.sm,
+  },
+  activityDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  activityText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
   },
   bio: {
     fontSize: fontSize.sm,

@@ -1,3 +1,4 @@
+import { cn } from '@shadowob/ui'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ChevronDown,
@@ -8,6 +9,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
 import type { DragOverState, VisibleRow } from './workspace-types'
 import { buildVisibleRows, formatFileSize, getNodeIcon, isDescendantOf } from './workspace-utils'
@@ -50,6 +52,7 @@ export function WorkspaceTree({
   onMoveNodes,
   onUploadToDir,
 }: WorkspaceTreeProps) {
+  const { t } = useTranslation()
   const {
     expandedIds,
     selectedNodeId,
@@ -78,7 +81,7 @@ export function WorkspaceTree({
   const rowVirtualizer = useVirtualizer({
     count: visibleRows.length,
     getScrollElement: () => treeContainerRef.current,
-    estimateSize: () => 32,
+    estimateSize: () => 34,
     overscan: 12,
   })
 
@@ -97,14 +100,20 @@ export function WorkspaceTree({
       const ghost = document.createElement('div')
       ghost.className =
         'bg-bg-tertiary text-text-primary text-xs px-3 py-1.5 rounded-lg shadow-lg border border-border-subtle'
-      ghost.textContent = ids.size > 1 ? `移动 ${ids.size} 个项目` : node.name
+      ghost.textContent =
+        ids.size > 1
+          ? t('workspace.draggingItems', {
+              defaultValue: '移动 {{count}} 个项目',
+              count: ids.size,
+            })
+          : node.name
       ghost.style.position = 'fixed'
       ghost.style.top = '-1000px'
       document.body.appendChild(ghost)
       e.dataTransfer.setDragImage(ghost, 0, 0)
       requestAnimationFrame(() => document.body.removeChild(ghost))
     },
-    [selectedIds],
+    [selectedIds, t],
   )
 
   const handleDragOver = useCallback(
@@ -251,8 +260,7 @@ export function WorkspaceTree({
 
   const rootNodeElement = (
     <div
-      className={`flex items-center h-7 mx-1 px-1.5 cursor-pointer select-none transition-all duration-100 text-[13px] group rounded-md ${'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'}`}
-      style={{ paddingLeft: '6px' }}
+      className="mx-2 mt-2 flex h-9 cursor-pointer select-none items-center rounded-xl px-2 text-[13px] text-text-secondary transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
       onContextMenu={(e) => {
         e.preventDefault()
         e.stopPropagation()
@@ -270,12 +278,12 @@ export function WorkspaceTree({
         }
       }}
     >
-      <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0 mr-0.5">
+      <span className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center">
         <ChevronDown size={12} className="text-text-muted" />
       </span>
-      <FolderClosed size={14} className="shrink-0 mr-1.5 text-accent" />
-      <span className="flex-1 min-w-0 truncate font-medium text-[12px] uppercase tracking-wide text-text-muted">
-        {workspaceName || '工作区'}
+      <FolderClosed size={15} className="mr-2 shrink-0 text-primary" />
+      <span className="min-w-0 flex-1 truncate text-[12px] font-black text-text-primary">
+        {workspaceName || t('server.settingsWorkspace', { defaultValue: '工作区' })}
       </span>
     </div>
   )
@@ -323,18 +331,26 @@ export function WorkspaceTree({
           <div className="w-12 h-12 rounded-xl bg-bg-tertiary/60 flex items-center justify-center mb-3">
             <FolderClosed size={24} strokeWidth={1.2} className="text-text-muted/50" />
           </div>
-          <p className="text-[13px] font-medium mb-1 text-text-secondary">工作区为空</p>
-          <p className="text-[11px] text-center leading-relaxed mb-4 text-text-muted/70">
-            拖放文件上传或右键创建
+          <p className="text-[13px] font-black mb-1 text-text-primary">
+            {searchQuery.trim()
+              ? t('workspace.noSearchResults', { defaultValue: '未找到匹配文件' })
+              : t('workspace.emptyTitle', { defaultValue: '工作区为空' })}
           </p>
-          <button
-            type="button"
-            onClick={() => onNewFolder(null)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] bg-primary/90 hover:bg-primary text-white rounded-md transition-all duration-150 shadow-sm"
-          >
-            <Plus size={12} />
-            新建文件夹
-          </button>
+          <p className="text-[11px] text-center leading-relaxed mb-4 text-text-muted/70">
+            {searchQuery.trim()
+              ? t('workspace.noSearchResultsDesc', { defaultValue: '换个关键词再试试' })
+              : t('workspace.emptyDesc', { defaultValue: '拖放文件上传或右键创建' })}
+          </p>
+          {!searchQuery.trim() && (
+            <button
+              type="button"
+              onClick={() => onNewFolder(null)}
+              className="flex items-center gap-1.5 rounded-xl bg-primary/90 px-3 py-2 text-[11px] font-black text-white shadow-sm transition-all duration-150 hover:bg-primary"
+            >
+              <Plus size={12} />
+              {t('workspace.newFolder', { defaultValue: '新建文件夹' })}
+            </button>
+          )}
         </div>
       </div>
     )
@@ -345,7 +361,7 @@ export function WorkspaceTree({
   return (
     <div
       ref={treeContainerRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden py-1 scroll-smooth scrollbar-hidden relative"
+      className="relative flex-1 overflow-y-auto overflow-x-hidden py-1 scroll-smooth scrollbar-hidden"
       onContextMenu={onBlankContextMenu}
       onDragEnter={handleTreeDragEnter}
       onDragLeave={handleTreeDragLeavePanel}
@@ -467,14 +483,18 @@ function TreeRow({
   return (
     <div
       data-node-id={node.id}
-      className={`relative flex items-center h-7 mx-1 px-1.5 cursor-pointer select-none transition-all duration-100 text-[13px] group rounded-md ${
+      className={cn(
+        'group relative mx-2 flex h-8 cursor-pointer select-none items-center rounded-lg px-1.5 text-[13px] transition-all duration-100',
         isDragging
           ? 'opacity-40'
           : highlighted
-            ? 'bg-primary/15 text-text-primary'
-            : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
-      } ${dragOverState?.position === 'inside' ? 'bg-primary/10 ring-1 ring-inset ring-primary/40 rounded-md' : ''} ${isNativeDropTarget ? 'ring-1 ring-inset ring-primary/50 bg-primary/10' : ''}`}
-      style={{ paddingLeft: `${depth * 14 + 6}px` }}
+            ? 'bg-primary/15 text-text-primary ring-1 ring-inset ring-primary/20'
+            : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
+        dragOverState?.position === 'inside' &&
+          'rounded-lg bg-primary/10 ring-1 ring-inset ring-primary/40',
+        isNativeDropTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/50',
+      )}
+      style={{ paddingLeft: `${depth * 14 + 8}px` }}
       draggable={!isRenaming}
       onClick={(e) => onClick(node, e)}
       onContextMenu={(e) => onContextMenu(e, node)}
@@ -540,8 +560,9 @@ function TreeRow({
 
       {isRenaming ? (
         <input
+          autoFocus
           defaultValue={node.name}
-          className="flex-1 min-w-0 bg-bg-tertiary text-text-primary text-[13px] rounded-md px-1.5 py-0.5 outline-none border border-primary/60 focus:border-primary"
+          className="min-w-0 flex-1 rounded-lg border border-primary/60 bg-bg-tertiary px-1.5 py-0.5 text-[13px] text-text-primary outline-none focus:border-primary"
           onFocus={(e) => {
             const dotIdx = node.name.lastIndexOf('.')
             if (dotIdx > 0 && node.kind === 'file') {

@@ -15,6 +15,7 @@ import { openClawApi } from '../../lib/openclaw-api'
 import { AgentsPage } from './agents'
 import { BuddyPage } from './buddy'
 import { ChannelsPage } from './channels'
+import { ConnectorsPage } from './connectors'
 import { CronPage } from './cron'
 import { OpenClawDashboard } from './dashboard'
 import { DebugPage } from './debug'
@@ -88,6 +89,8 @@ export function OpenClawPage() {
         <AgentsPage onNavigate={navigate} />
       ) : activePage === 'cron' ? (
         <CronPage />
+      ) : activePage === 'connectors' ? (
+        <ConnectorsPage onNavigate={navigate} />
       ) : activePage === 'buddy' ? (
         <BuddyPage navContext={navContext} onNavigate={navigate} />
       ) : activePage === 'help' ? (

@@ -31,6 +31,30 @@ describe('ClusterConfigSchema', () => {
     expect(result.success).toBe(true)
   })
 
+  it('accepts optional k3s installer settings', () => {
+    const result = ClusterConfigSchema.safeParse({
+      ...validConfig,
+      install: {
+        k3sVersion: 'v1.35.4+k3s1',
+        k3sArtifactUrl: 'https://rancher-mirror.rancher.cn/k3s',
+        k3sMirror: 'cn',
+        systemDefaultRegistry: 'registry.cn-hangzhou.aliyuncs.com',
+        pauseImage: 'registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.6',
+      },
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a pause image with whitespace', () => {
+    const result = ClusterConfigSchema.safeParse({
+      ...validConfig,
+      install: {
+        pauseImage: 'registry.example.com/pause:3.6 --debug',
+      },
+    })
+    expect(result.success).toBe(false)
+  })
+
   it('defaults port to 22', () => {
     const result = ClusterConfigSchema.safeParse(validConfig)
     expect(result.success).toBe(true)

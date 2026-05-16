@@ -27,6 +27,7 @@ export interface JwtPayload {
   exp?: number
   iat?: number
   scopes?: string[]
+  sessionId?: string
 }
 
 export type JwtTokenType = 'access' | 'refresh' | 'agent'

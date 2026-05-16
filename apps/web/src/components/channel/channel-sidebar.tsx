@@ -85,6 +85,28 @@ interface ScopedUnread {
   serverUnread: Record<string, number>
 }
 
+interface NotificationEvent {
+  referenceId?: string | null
+  referenceType?: string | null
+  scopeChannelId?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+function getMetaString(event: NotificationEvent, key: string) {
+  const value = event.metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function getNotificationChannelId(event: NotificationEvent) {
+  return (
+    event.scopeChannelId ??
+    getMetaString(event, 'channelId') ??
+    (event.referenceType === 'channel' || event.referenceType === 'channel_invite'
+      ? event.referenceId
+      : null)
+  )
+}
+
 interface ServerMember {
   userId: string
   role: string
@@ -279,6 +301,7 @@ export function ChannelSidebar({
         })
         queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+        queryClient.invalidateQueries({ queryKey: ['notifications'] })
       } finally {
         scopeReadInFlightRef.current.delete(key)
       }
@@ -420,9 +443,27 @@ export function ChannelSidebar({
     }
   })
 
-  useSocketEvent('notification:new', () => {
+  useSocketEvent<NotificationEvent>('notification:new', (event) => {
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+
+    const notificationChannelId = getNotificationChannelId(event)
+    const currentChannelId = useChatStore.getState().activeChannelId
+    if (notificationChannelId && notificationChannelId === currentChannelId) {
+      void requestMarkScopeRead({ channelId: notificationChannelId })
+    }
+  })
+
+  useSocketEvent<{ channelId?: string }>('message:new', (event) => {
+    if (event.channelId && rawChannels.some((channel) => channel.id === event.channelId)) {
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+    }
+  })
+  useSocketEvent<{ channelId?: string }>('message:created', (event) => {
+    if (event.channelId && rawChannels.some((channel) => channel.id === event.channelId)) {
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+    }
   })
 
   const renderChannelItem = (ch: Channel) => {
@@ -515,7 +556,7 @@ export function ChannelSidebar({
               </Badge>
             )}
             {isUnread && (
-              <span className="ml-auto w-2 h-2 rounded-full bg-primary shadow-lg shadow-primary/30 shrink-0 animate-pulse" />
+              <span className="ml-auto w-2 h-2 rounded-full bg-danger shadow-lg shadow-danger/25 shrink-0" />
             )}
           </button>
         )}

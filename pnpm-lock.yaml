@@ -704,6 +704,9 @@ importers:
       metro-runtime:
         specifier: ^0.83.3
         version: 0.83.3
+      pinyin-pro:
+        specifier: ^3.28.1
+        version: 3.28.1
       react:
         specifier: 19.1.0
         version: 19.1.0

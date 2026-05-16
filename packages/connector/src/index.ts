@@ -132,6 +132,13 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
       'activityStatus',
       'reactions',
       'editDelete',
+      'statusChecks',
+      'usageCosts',
+      'multiAgentBinding',
+      'shadowCliLogin',
+      'notifications',
+      'officialSkills',
+      'cronTasks',
     ],
   }
 }
@@ -221,6 +228,11 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
       'typing',
       'activityStatus',
       'cronDelivery',
+      'statusChecks',
+      'usageCosts',
+      'shadowCliLogin',
+      'notifications',
+      'officialSkills',
     ],
   }
 }
@@ -307,6 +319,11 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
       'typing',
       'streamingPreviews',
       'forms',
+      'statusChecks',
+      'usageCosts',
+      'multiAgentBinding',
+      'shadowCliLogin',
+      'notifications',
     ],
   }
 }

@@ -1107,6 +1107,7 @@ describe('Cloud SaaS — deployment state consistency', () => {
         logs.some((log) => log.message.includes('Cancelled active deploy so destroy can proceed')),
       ).toBe(true)
       expect(logs.some((log) => log.message.includes('Starting destroy'))).toBe(true)
+      expect(logs.some((log) => log.message.includes('Destroy complete'))).toBe(true)
     } finally {
       await db
         .delete(schema.cloudDeployments)
@@ -1537,6 +1538,69 @@ describe('Cloud SaaS — deployment state consistency', () => {
       const detail = (await detailRes.json()) as { id: string; status: string }
       expect(detail).toMatchObject({ id: destroyed!.id, status: 'destroyed' })
     } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('keeps deployment logs readable after destroyed pods disappear', async () => {
+    const namespace = uniqueName('e2e-destroyed-logs')
+    const k8sGateway = container.resolve('kubernetesOpsGateway')
+    const listPodsSpy = vi.spyOn(k8sGateway, 'listPods').mockResolvedValue([])
+    const readPodLogsSpy = vi
+      .spyOn(k8sGateway, 'readPodLogs')
+      .mockRejectedValue(new Error('pods not found'))
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'destroyed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('destroyed-logs-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 500,
+          saasMode: true,
+        })
+        .returning()
+
+      await db.insert(schema.cloudDeploymentLogs).values([
+        {
+          deploymentId: deployment!.id,
+          level: 'info',
+          message: 'Starting destroy: stale pod test',
+        },
+        {
+          deploymentId: deployment!.id,
+          level: 'info',
+          message: 'Destroy complete!',
+        },
+      ])
+
+      const podsRes = await req('GET', `/api/cloud-saas/deployments/${deployment!.id}/pods`)
+      expect(podsRes.status).toBe(200)
+      await expect(podsRes.json()).resolves.toEqual({ pods: [] })
+
+      const logsRes = await req(
+        'GET',
+        `/api/cloud-saas/deployments/${deployment!.id}/logs/history?pod=stale-pod&limit=20`,
+      )
+      expect(logsRes.status).toBe(200)
+      const logs = (await logsRes.json()) as {
+        lines: string[]
+        warning?: string
+      }
+      expect(logs.lines).toContain('[INFO] Destroy complete!')
+      expect(logs.warning).toContain('pods not found')
+    } finally {
+      listPodsSpy.mockRestore()
+      readPodLogsSpy.mockRestore()
       await db
         .delete(schema.cloudDeployments)
         .where(eq(schema.cloudDeployments.namespace, namespace))

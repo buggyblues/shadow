@@ -137,8 +137,13 @@ services:
       KUBECONFIG: ${KUBECONFIG_CONTAINER_PATH:-/home/node/.kube/config}
       KUBECONFIG_CONTEXT: ${KUBECONFIG_CONTEXT:-}
       KUBECONFIG_LOOPBACK_HOST: ${KUBECONFIG_LOOPBACK_HOST:-host.lima.internal}
+      CLOUD_SAAS_CLUSTER_CONFIG: ${CLOUD_SAAS_CLUSTER_CONFIG:-}
+      CLOUD_SAAS_CLUSTER_KUBECONFIG: ${CLOUD_SAAS_CLUSTER_KUBECONFIG:-}
+      CLOUD_SAAS_WORKLOAD_BACKEND: ${CLOUD_SAAS_WORKLOAD_BACKEND:-deployment}
     volumes:
       - ${KUBECONFIG_HOST_PATH:-/dev/null}:${KUBECONFIG_CONTAINER_PATH:-/home/node/.kube/config}:ro
+      - ${CLOUD_SAAS_CLUSTER_CONFIG_HOST_PATH:-/dev/null}:${CLOUD_SAAS_CLUSTER_CONFIG:-/app/cluster.json}:ro
+      - ${CLOUD_SAAS_CLUSTER_KUBECONFIG_HOST_PATH:-/dev/null}:${CLOUD_SAAS_CLUSTER_KUBECONFIG:-/home/node/.shadow-cloud/clusters/cluster.yaml}:ro
     depends_on:
       postgres:
         condition: service_healthy

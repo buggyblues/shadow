@@ -184,6 +184,45 @@ export interface BuddyConnection {
   error?: string | null
 }
 
+export type ConnectorToolId = 'shadowob-cli' | 'shadowob-cloud' | 'skillhub' | 'openclaw'
+
+export interface ConnectorToolStatus {
+  id: ConnectorToolId
+  label: string
+  binary: string
+  installed: boolean
+  version: string | null
+  installCommand: string | null
+  error: string | null
+}
+
+export interface ConnectorCommandResult {
+  ok: boolean
+  code: number | null
+  stdout: string
+  stderr: string
+}
+
+export interface AgentBuddyBindingSummary {
+  connectionId: string
+  connectionLabel: string
+  remoteAgentId?: string
+  localAgentId: string
+  localAgentName: string | null
+  serverUrl: string
+  status: BuddyConnection['status']
+  autoConnect: boolean
+  bindingActive: boolean
+}
+
+export interface ConnectorOverview {
+  tools: ConnectorToolStatus[]
+  bindings: AgentBuddyBindingSummary[]
+  cronTaskCount: number
+  enabledCronTaskCount: number
+  installedSkillCount: number
+}
+
 export interface CronConfig {
   enabled?: boolean
   store?: string
@@ -323,6 +362,29 @@ interface OpenClawBridge {
   getRegistries: () => Promise<SkillHubRegistry[]>
   updateRegistries: (registries: SkillHubRegistry[]) => Promise<{ success: boolean }>
   getSkillLeaderboard: (limit?: number) => Promise<SkillHubEntry[]>
+  getConnectorOverview: () => Promise<ConnectorOverview>
+  getConnectorToolStatuses: () => Promise<ConnectorToolStatus[]>
+  installConnectorTools: (
+    tools: Array<'shadowob-cli' | 'shadowob-cloud' | 'official-skills'>,
+  ) => Promise<Record<string, ConnectorCommandResult>>
+  loginShadowCli: (input: {
+    serverUrl?: string
+    token: string
+    profile?: string
+  }) => Promise<ConnectorCommandResult>
+  getShadowCliStatus: (profile?: string) => Promise<ConnectorCommandResult>
+  listShadowNotifications: (input?: {
+    unreadOnly?: boolean
+    limit?: number
+    profile?: string
+  }) => Promise<ConnectorCommandResult>
+  markAllShadowNotificationsRead: (profile?: string) => Promise<ConnectorCommandResult>
+  getShadowCloudStatus: (args?: string[]) => Promise<ConnectorCommandResult>
+  collectShadowCloudCosts: (input?: {
+    namespace?: string
+    allNamespaces?: boolean
+  }) => Promise<ConnectorCommandResult>
+  listAgentBuddyBindings: () => Promise<AgentBuddyBindingSummary[]>
   listBuddyConnections: () => Promise<BuddyConnection[]>
   addBuddyConnection: (connection: Omit<BuddyConnection, 'status'>) => Promise<BuddyConnection>
   removeBuddyConnection: (id: string) => Promise<{ success: boolean }>
@@ -442,6 +504,23 @@ export const openClawApi = {
   updateRegistries: (registries: SkillHubRegistry[]) =>
     getOpenClawAPI()!.updateRegistries(registries),
   getSkillLeaderboard: (limit?: number) => getOpenClawAPI()!.getSkillLeaderboard(limit),
+
+  // Connector Center
+  getConnectorOverview: () => getOpenClawAPI()!.getConnectorOverview(),
+  getConnectorToolStatuses: () => getOpenClawAPI()!.getConnectorToolStatuses(),
+  installConnectorTools: (tools: Array<'shadowob-cli' | 'shadowob-cloud' | 'official-skills'>) =>
+    getOpenClawAPI()!.installConnectorTools(tools),
+  loginShadowCli: (input: { serverUrl?: string; token: string; profile?: string }) =>
+    getOpenClawAPI()!.loginShadowCli(input),
+  getShadowCliStatus: (profile?: string) => getOpenClawAPI()!.getShadowCliStatus(profile),
+  listShadowNotifications: (input?: { unreadOnly?: boolean; limit?: number; profile?: string }) =>
+    getOpenClawAPI()!.listShadowNotifications(input),
+  markAllShadowNotificationsRead: (profile?: string) =>
+    getOpenClawAPI()!.markAllShadowNotificationsRead(profile),
+  getShadowCloudStatus: (args?: string[]) => getOpenClawAPI()!.getShadowCloudStatus(args),
+  collectShadowCloudCosts: (input?: { namespace?: string; allNamespaces?: boolean }) =>
+    getOpenClawAPI()!.collectShadowCloudCosts(input),
+  listAgentBuddyBindings: () => getOpenClawAPI()!.listAgentBuddyBindings(),
 
   // Buddy Connections
   listBuddyConnections: () => getOpenClawAPI()!.listBuddyConnections(),

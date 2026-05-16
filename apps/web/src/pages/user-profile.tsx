@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Calendar,
   ChevronLeft,
-  Gift,
   HandCoins,
   QrCode,
   Shield,
@@ -44,6 +43,7 @@ interface UserProfile {
     ownerId: string
     status: string
     totalOnlineSeconds: number
+    currentActivity?: string | null
     config: { description?: string }
   }
   ownerProfile?: {
@@ -57,6 +57,7 @@ interface UserProfile {
     userId: string
     status: string
     totalOnlineSeconds: number
+    currentActivity?: string | null
     botUser?: { id: string; username: string; displayName: string; avatarUrl: string | null }
   }>
 }
@@ -112,7 +113,7 @@ export function UserProfilePage() {
   const [dashboardTab, setDashboardTab] = useState<
     'weekly' | 'hourly' | 'monthly' | 'recent' | 'rental'
   >('weekly')
-  const [economyModal, setEconomyModal] = useState<'tip' | 'gift' | null>(null)
+  const [showTipModal, setShowTipModal] = useState(false)
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['user-profile', userId],
@@ -147,6 +148,17 @@ export function UserProfilePage() {
   const biographyText = profile.isBot
     ? profile.agent?.config?.description?.trim() || ''
     : t('profile.shortProfile')
+  const currentActivity = profile.agent?.currentActivity
+  const currentActivityLabel =
+    currentActivity === 'thinking'
+      ? t('member.activityThinking')
+      : currentActivity === 'working'
+        ? t('member.activityWorking')
+        : currentActivity === 'ready'
+          ? t('member.activityReady')
+          : currentActivity === 'preparing'
+            ? t('member.activityPreparing')
+            : currentActivity
 
   return (
     <div className="flex-1 overflow-y-auto relative scrollbar-hidden">
@@ -179,17 +191,9 @@ export function UserProfilePage() {
                       size="sm"
                       variant="glass"
                       icon={HandCoins}
-                      onClick={() => setEconomyModal('tip')}
+                      onClick={() => setShowTipModal(true)}
                     >
-                      {t('communityEconomy.sendTip')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="glass"
-                      icon={Gift}
-                      onClick={() => setEconomyModal('gift')}
-                    >
-                      {t('communityEconomy.sendGift')}
+                      {t('communityEconomy.supportUser')}
                     </Button>
                     <Button size="sm" variant="outline" icon={UserPlus}>
                       {t('friends.addFriend')}
@@ -224,6 +228,15 @@ export function UserProfilePage() {
                   <p className="mt-3 text-sm text-text-primary leading-relaxed break-words">
                     {biographyText || t('profile.lowProfile')}
                   </p>
+                  {profile.isBot && currentActivityLabel ? (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                      <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      {t('member.buddyWorkStatus', {
+                        name: profile.displayName,
+                        status: currentActivityLabel,
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </GlassPanel>
@@ -553,15 +566,15 @@ export function UserProfilePage() {
           document.body,
         )}
       <CommunityEconomySendModal
-        open={economyModal !== null}
-        mode={economyModal ?? 'tip'}
+        open={showTipModal}
+        mode="tip"
         recipient={{
           id: profile.id,
           username: profile.username,
           displayName: profile.displayName,
           avatarUrl: profile.avatarUrl,
         }}
-        onClose={() => setEconomyModal(null)}
+        onClose={() => setShowTipModal(false)}
       />
     </div>
   )

@@ -12,6 +12,15 @@ export interface DestroyClusterOptions {
   onLog?: (msg: string) => void
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+function asRoot(shellCommand: string): string {
+  const quoted = shellQuote(shellCommand)
+  return `if [ "$(id -u)" -eq 0 ]; then sh -c ${quoted}; else sudo -n sh -c ${quoted}; fi`
+}
+
 async function uninstallNode(node: NodeConfig, onLog?: (m: string) => void): Promise<void> {
   const creds = resolveNodeCredentials(node)
   const client = new SSHClient()
@@ -22,8 +31,12 @@ async function uninstallNode(node: NodeConfig, onLog?: (m: string) => void): Pro
 
     const script =
       node.role === 'master'
-        ? 'if [ -f /usr/local/bin/k3s-uninstall.sh ]; then /usr/local/bin/k3s-uninstall.sh; fi'
-        : 'if [ -f /usr/local/bin/k3s-agent-uninstall.sh ]; then /usr/local/bin/k3s-agent-uninstall.sh; fi'
+        ? asRoot(
+            'if [ -f /usr/local/bin/k3s-uninstall.sh ]; then /usr/local/bin/k3s-uninstall.sh; fi',
+          )
+        : asRoot(
+            'if [ -f /usr/local/bin/k3s-agent-uninstall.sh ]; then /usr/local/bin/k3s-agent-uninstall.sh; fi',
+          )
 
     onLog?.(`[${node.role} ${creds.host}] Uninstalling k3s...`)
     const result = await client.exec(script, {

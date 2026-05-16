@@ -252,7 +252,23 @@
     "lightTheme": "Light",
     "systemTheme": "System",
     "qrCard": "Card",
-    "activityGroup": "Tasks & Buddy"
+    "activityGroup": "Tasks & Buddy",
+    "oauthAccountsTitle": "Connected accounts",
+    "oauthNotConnected": "Not connected",
+    "oauthDisconnect": "Disconnect",
+    "oauthConnect": "Connect",
+    "oauthUnlinked": "Account disconnected",
+    "oauthUnlinkFailed": "Could not disconnect account",
+    "devicesTitle": "Devices",
+    "unknownDevice": "Unknown device",
+    "currentDevice": "Current",
+    "revokedDevice": "Revoked",
+    "lastSeenAt": "Last active {{date}}",
+    "revokeDevice": "Sign out",
+    "deviceRevoked": "Device signed out",
+    "deviceRevokeFailed": "Could not sign out device",
+    "sessionRevokedTitle": "Signed out",
+    "sessionRevokedNotice": "This device was signed out. Please sign in again."
   },
   "server": {
     "home": "Home",
@@ -311,10 +327,21 @@
     "noCategory": "No category",
     "changeBanner": "Change Banner",
     "addBanner": "Add Banner",
-    "changeIcon": "Tap to change icon"
+    "changeIcon": "Tap to change icon",
+    "add": "Add",
+    "addServer": "Server",
+    "addMenuServer": "Server",
+    "addMenuBuddy": "Buddy",
+    "addMenuDm": "DM",
+    "addDm": "DM",
+    "addBuddy": "Buddy",
+    "addBuddyDm": "Buddy DM",
+    "addFriendDm": "Friend DM"
   },
   "sort": {
     "title": "Sort by",
+    "viewOptions": "View Options",
+    "order": "Sort Order",
     "byPosition": "Default",
     "byCreatedAt": "Created",
     "byUpdatedAt": "Updated",
@@ -555,7 +582,8 @@
     "policySmartReply": "Smart Reply",
     "policySmartReplyDesc": "Skip messages clearly targeting others (e.g., @mentions others but not this Buddy)",
     "policyOwnerTenantOnly": "Fixed reply policy",
-    "policyOwnerTenantOnlyDesc": "Replies only to the owner and allowed members by default. @mention is not required."
+    "policyOwnerTenantOnlyDesc": "Replies only to the owner and allowed members by default. @mention is not required.",
+    "buddyWorkStatus": "{{name}} {{status}}"
   },
   "features": {
     "pageTitle": "All the Collaboration Features You Need",
@@ -1044,6 +1072,13 @@
     "connectorCap_cronDelivery": "Cron delivery",
     "connectorCap_streamingPreviews": "Streaming previews",
     "connectorCap_forms": "Forms",
+    "connectorCap_statusChecks": "Status checks",
+    "connectorCap_usageCosts": "Usage costs",
+    "connectorCap_multiAgentBinding": "Multi-agent binding",
+    "connectorCap_shadowCliLogin": "Shadow CLI login",
+    "connectorCap_notifications": "Notifications",
+    "connectorCap_officialSkills": "Official skills",
+    "connectorCap_cronTasks": "Cron tasks",
     "myBuddies": "My Buddy",
     "selectBuddy": "Select Buddy",
     "selectBuddyDesc": "Select a Buddy from the left sidebar to manage its settings.",
@@ -1193,5 +1228,8 @@
     "wallet": "Coins",
     "claim": "Claim",
     "incomplete": "Incomplete"
+  },
+  "dm": {
+    "emptyBuddies": "No Buddies available for DM"
   }
 }

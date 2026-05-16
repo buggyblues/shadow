@@ -38,6 +38,8 @@ describe('connector plans', () => {
     expect(plan.aiPrompt).toContain('resolves the Buddy agent id and channel policy')
     expect(plan.capabilities).toContain('slashCommands')
     expect(plan.capabilities).toContain('activityStatus')
+    expect(plan.capabilities).toContain('statusChecks')
+    expect(plan.capabilities).toContain('usageCosts')
   })
 
   it('builds cc-connect TOML with ShadowOB platform options', () => {
@@ -58,6 +60,8 @@ describe('connector plans', () => {
     expect(plan.configBlocks[0]?.content).toContain('type = "codex"')
     expect(plan.configBlocks[0]?.content).toContain('server_url = "https://shadow.example.com"')
     expect(plan.configBlocks[0]?.content).toContain('work_dir = "/work/shadow"')
+    expect(plan.capabilities).toContain('multiAgentBinding')
+    expect(plan.capabilities).toContain('notifications')
   })
 
   it('returns all supported plans in stable order', () => {

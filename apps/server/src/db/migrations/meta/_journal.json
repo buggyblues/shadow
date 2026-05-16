@@ -512,6 +512,20 @@
       "when": 1779800400000,
       "tag": "0072_remove_server_homepage_html",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1779886800000,
+      "tag": "0073_ensure_cloud_deployment_status_values",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1779973200000,
+      "tag": "0074_add_user_sessions",
+      "breakpoints": true
     }
   ]
 }

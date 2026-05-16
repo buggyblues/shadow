@@ -28,6 +28,7 @@ import { TaskSettings } from './tasks'
 import { WalletSettings, type WalletSettingsSection } from './wallet'
 
 type SettingsTab = 'dm' | 'buddy' | 'tasks' | 'wallet' | 'shop'
+type SettingsModalTab = 'profile' | 'account' | 'appearance' | 'notification' | 'developer'
 type MergedSettingsSection =
   | 'invite'
   | 'entitlements'
@@ -47,7 +48,6 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'buddy', icon: PawPrint, labelKey: 'settings.tabBuddy', labelFallback: '我的 Buddy' },
-  { id: 'dm', icon: MessageCircle, labelKey: 'settings.tabDM', labelFallback: '私信' },
   { id: 'tasks', icon: Target, labelKey: 'settings.tabTasks', labelFallback: '赚取虾币' },
   { id: 'wallet', icon: Wallet, labelKey: 'settings.tabWallet', labelFallback: '钱包' },
   { id: 'shop', icon: Store, labelKey: 'settings.tabShop', labelFallback: '我的店铺' },
@@ -83,7 +83,7 @@ function resolveSettingsLocationFromPath(pathname: string): {
   }
 
   if (path === '/settings/dm') {
-    return { tab: 'dm' }
+    return { tab: 'buddy' }
   }
 
   if (path.startsWith('/settings/buddy/market')) {
@@ -139,10 +139,19 @@ function resolveSettingsLocationFromPath(pathname: string): {
     path === '/settings/friends' ||
     path === '/settings/quickstart'
   ) {
-    return { tab: 'dm' }
+    return { tab: 'buddy' }
   }
 
-  return { tab: 'dm' }
+  return { tab: 'buddy' }
+}
+
+function resolveModalTabFromPath(pathname: string): SettingsModalTab | undefined {
+  const path = normalizeSettingsPath(pathname)
+  if (path === '/settings/profile') return 'profile'
+  if (path === '/settings/account') return 'account'
+  if (path === '/settings/appearance') return 'appearance'
+  if (path === '/settings/notification') return 'notification'
+  return undefined
 }
 
 export function SettingsPage() {
@@ -153,6 +162,7 @@ export function SettingsPage() {
   const searchParams = useSearch({ strict: false }) as { dm?: string; tab?: string }
   const { user } = useAuthStore()
   const normalizedLocation = resolveSettingsLocationFromPath(location.pathname)
+  const modalTabFromPath = resolveModalTabFromPath(location.pathname)
 
   useAppStatus({
     title: t('settings.sidebarTitle'),
@@ -169,10 +179,20 @@ export function SettingsPage() {
 
   // Backward compatibility: legacy ?tab=developer URLs auto-open the SettingsModal
   useEffect(() => {
-    if (searchParams.tab === 'developer') {
+    if (searchParams.tab === 'developer' || modalTabFromPath) {
       setSettingsModalOpen(true)
     }
-  }, [searchParams.tab])
+  }, [modalTabFromPath, searchParams.tab])
+
+  useEffect(() => {
+    if (normalizeSettingsPath(location.pathname) === '/settings/dm' && searchParams.dm) {
+      navigate({
+        to: '/dm/$dmChannelId',
+        params: { dmChannelId: searchParams.dm },
+        replace: true,
+      })
+    }
+  }, [location.pathname, navigate, searchParams.dm])
 
   // Fetch wallet balance for nav display
   const { data: wallet } = useQuery({
@@ -446,15 +466,17 @@ export function SettingsPage() {
         initialTab={
           searchParams.tab === 'developer'
             ? 'developer'
-            : searchParams.tab === 'profile'
-              ? 'profile'
-              : searchParams.tab === 'account'
-                ? 'account'
-                : searchParams.tab === 'appearance'
-                  ? 'appearance'
-                  : searchParams.tab === 'notification'
-                    ? 'notification'
-                    : undefined
+            : modalTabFromPath
+              ? modalTabFromPath
+              : searchParams.tab === 'profile'
+                ? 'profile'
+                : searchParams.tab === 'account'
+                  ? 'account'
+                  : searchParams.tab === 'appearance'
+                    ? 'appearance'
+                    : searchParams.tab === 'notification'
+                      ? 'notification'
+                      : undefined
         }
       />
     </div>

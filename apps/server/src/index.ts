@@ -11,7 +11,9 @@ import { createApp } from './app'
 import { type AppContainer, createAppContainer } from './container'
 import { db } from './db'
 import { users } from './db/schema'
+import { assertCloudDeploymentStatusEnumValues } from './db/schema-invariants'
 import { startCloudDeploymentProcessor } from './lib/cloud-deployment-processor'
+import { configureCloudSaasClusterFromEnv } from './lib/cloud-saas-cluster-config'
 import { resolveCloudTemplatesDir } from './lib/cloud-templates'
 import { randomFixedDigits } from './lib/id'
 import { logger } from './lib/logger'
@@ -28,6 +30,8 @@ function parsePositiveIntegerEnv(name: string, fallback: number): number {
 }
 
 async function main() {
+  configureCloudSaasClusterFromEnv()
+
   // Database schema sync / migration
   // DB_PUSH=true → dev mode: use drizzle-kit push (direct schema sync, no migration files)
   // DB_PUSH=false (default) → production mode: apply file-based migrations
@@ -64,6 +68,7 @@ async function main() {
     await migrate(db, { migrationsFolder: migrationsPath })
     logger.info('Database migrations completed')
   }
+  await assertCloudDeploymentStatusEnumValues(db)
 
   // Create DI container
   const container = createAppContainer(db)

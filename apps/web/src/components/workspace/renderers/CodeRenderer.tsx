@@ -177,8 +177,7 @@ export function CodeRenderer({ node, serverId }: { node: WorkspaceNode; serverId
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
-        <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
+      <div className="flex items-center justify-end px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1.5">
           {isEditing && isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
           <span className="text-[11px] text-text-muted/70 bg-bg-primary/50 px-1.5 py-0.5 rounded-md">
@@ -339,8 +338,7 @@ function EmptyFileEditor({
 
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
-        <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
+      <div className="flex items-center justify-end px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1.5">
           {isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
           <span className="text-[11px] text-text-muted/70 bg-bg-primary/50 px-1.5 py-0.5 rounded-md">

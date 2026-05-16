@@ -238,6 +238,37 @@ export function setupOpenClawIPC(): void {
     return { success: true }
   })
 
+  // ─── Connector Center ─────────────────────────────────────────────────
+
+  ipcMain.handle('openclaw:connector:overview', () => svc.connector.getOverview())
+  ipcMain.handle('openclaw:connector:tools:status', () => svc.connector.getToolStatuses())
+  ipcMain.handle('openclaw:connector:tools:install', (_event, tools: unknown) =>
+    svc.connector.installTools(
+      Array.isArray(tools)
+        ? (tools as Array<'shadowob-cli' | 'shadowob-cloud' | 'official-skills'>)
+        : [],
+    ),
+  )
+  ipcMain.handle('openclaw:connector:shadow:login', (_event, input: unknown) =>
+    svc.connector.loginShadow(input as { serverUrl?: string; token: string; profile?: string }),
+  )
+  ipcMain.handle('openclaw:connector:shadow:status', (_event, profile?: string) =>
+    svc.connector.getShadowStatus(profile),
+  )
+  ipcMain.handle('openclaw:connector:notifications:list', (_event, input?: unknown) =>
+    svc.connector.listNotifications(input as { unreadOnly?: boolean; limit?: number }),
+  )
+  ipcMain.handle('openclaw:connector:notifications:mark-all-read', (_event, profile?: string) =>
+    svc.connector.markAllNotificationsRead(profile),
+  )
+  ipcMain.handle('openclaw:connector:cloud:status', (_event, args?: unknown) =>
+    svc.connector.getCloudStatus(Array.isArray(args) ? (args as string[]) : []),
+  )
+  ipcMain.handle('openclaw:connector:cloud:costs', (_event, input?: unknown) =>
+    svc.connector.collectCloudCosts(input as { namespace?: string; allNamespaces?: boolean }),
+  )
+  ipcMain.handle('openclaw:connector:bindings', () => svc.connector.getBindings())
+
   // ─── Debug CLI Execution ──────────────────────────────────────────────
 
   ipcMain.handle(

@@ -68,10 +68,12 @@ export function UnifiedContactSidebar({
   activeDirectChannelId,
   onSelectChannel,
   onStartChatWithUser,
+  filterMode = 'all',
 }: {
   activeDirectChannelId: string | null
   onSelectChannel: (id: string) => void
   onStartChatWithUser: (userId: string) => void
+  filterMode?: 'all' | 'buddy' | 'friend'
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -163,10 +165,6 @@ export function UnifiedContactSidebar({
     (f) => f.user.status === 'offline' || !['online', 'idle', 'dnd'].includes(f.user.status),
   )
 
-  // When searching and no local results, offer "add by username"
-  const hasAnyResults = filteredDirectChannels.length > 0 || filteredFriends.length > 0
-  const showAddSuggestion = q && !hasAnyResults
-
   const pendingCount = pendingReceived.length
   const privateBuddyUserIds = new Set(
     buddyAgents
@@ -175,6 +173,26 @@ export function UnifiedContactSidebar({
   )
   const isPrivateBuddyUser = (user: { id: string; isBot: boolean } | null | undefined) =>
     Boolean(user?.isBot && privateBuddyUserIds.has(user.id))
+  const isAvailableBuddy = (user: { isBot: boolean; status?: string } | null | undefined) =>
+    user?.isBot === true && ['online', 'idle', 'dnd'].includes(user.status ?? 'offline')
+  const matchesFilterMode = (user: { isBot: boolean; status?: string } | null | undefined) => {
+    if (filterMode === 'buddy') return isAvailableBuddy(user)
+    if (filterMode === 'friend') return user?.isBot !== true
+    return true
+  }
+  const visibleDirectChannels = filteredDirectChannels.filter((ch) =>
+    matchesFilterMode(ch.otherUser),
+  )
+  const visibleOnlineFriends = onlineFriends.filter((f) => matchesFilterMode(f.user))
+  const visibleOfflineFriends = offlineFriends.filter((f) => matchesFilterMode(f.user))
+  const visibleFriendsWithoutDirectChannel = friendsWithoutDirectChannel.filter((f) =>
+    matchesFilterMode(f.user),
+  )
+  const visibleHasAnyResults =
+    visibleDirectChannels.length > 0 ||
+    visibleOnlineFriends.length > 0 ||
+    visibleOfflineFriends.length > 0
+  const showAddSuggestion = q && !visibleHasAnyResults
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -261,12 +279,12 @@ export function UnifiedContactSidebar({
         ) : (
           <div className="space-y-0.5">
             {/* Recent conversations */}
-            {filteredDirectChannels.length > 0 && (
+            {visibleDirectChannels.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-2 pb-1.5">
-                  {t('dm.recentContacts', '最近联系')} · {filteredDirectChannels.length}
+                  {t('dm.recentContacts', '最近联系')} · {visibleDirectChannels.length}
                 </div>
-                {filteredDirectChannels.map((ch) => (
+                {visibleDirectChannels.map((ch) => (
                   <button
                     key={ch.id}
                     type="button"
@@ -327,12 +345,12 @@ export function UnifiedContactSidebar({
             )}
 
             {/* Friends without a direct channel (online) */}
-            {onlineFriends.length > 0 && (
+            {visibleOnlineFriends.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-3 pb-1.5">
-                  {t('member.groupOnline', '在线')} · {onlineFriends.length}
+                  {t('member.groupOnline', '在线')} · {visibleOnlineFriends.length}
                 </div>
-                {onlineFriends.map((f) => (
+                {visibleOnlineFriends.map((f) => (
                   <FriendContactItem
                     key={f.friendshipId}
                     friend={f}
@@ -344,12 +362,12 @@ export function UnifiedContactSidebar({
             )}
 
             {/* Friends without a direct channel (offline) */}
-            {offlineFriends.length > 0 && (
+            {visibleOfflineFriends.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-3 pb-1.5">
-                  {t('member.groupOffline', '离线')} · {offlineFriends.length}
+                  {t('member.groupOffline', '离线')} · {visibleOfflineFriends.length}
                 </div>
-                {offlineFriends.map((f) => (
+                {visibleOfflineFriends.map((f) => (
                   <FriendContactItem
                     key={f.friendshipId}
                     friend={f}
@@ -361,7 +379,7 @@ export function UnifiedContactSidebar({
             )}
 
             {/* Search: no local results → add friend suggestion */}
-            {showAddSuggestion && (
+            {showAddSuggestion && filterMode !== 'buddy' && (
               <div className="px-2.5 py-6 text-center space-y-3">
                 <p className="text-text-muted text-sm">
                   {t('dm.noContactFound', '未找到"{{query}}"', { query: searchQuery })}
@@ -382,12 +400,14 @@ export function UnifiedContactSidebar({
 
             {/* Truly empty: no direct channels, no friends, no search */}
             {!q &&
-              filteredDirectChannels.length === 0 &&
-              friendsWithoutDirectChannel.length === 0 && (
+              visibleDirectChannels.length === 0 &&
+              visibleFriendsWithoutDirectChannel.length === 0 && (
                 <div className="px-3 py-8 text-center">
                   <MessageCircle size={36} className="mx-auto text-text-muted/20 mb-3" />
                   <p className="text-text-muted text-sm">
-                    {t('dm.emptyContacts', '搜索用户名或点击 + 添加联系人')}
+                    {filterMode === 'buddy'
+                      ? t('dm.emptyBuddies', '没有可私信的 Buddy')
+                      : t('dm.emptyContacts', '搜索用户名或点击 + 添加联系人')}
                   </p>
                 </div>
               )}

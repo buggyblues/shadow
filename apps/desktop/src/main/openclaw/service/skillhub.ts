@@ -6,8 +6,8 @@
  */
 
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import type { SkillHubEntry, SkillHubSearchResult } from '../types'
 import type { ConfigService } from './config'
 import type { OpenClawPaths } from './paths'
@@ -52,6 +52,11 @@ export class SkillHubService {
 
   setRegistries(newRegistries: SkillHubRegistry[]): void {
     this.registries = newRegistries
+  }
+
+  getCliAvailability(): { kind: 'skillhub' | 'clawhub'; command: string } | null {
+    const resolved = this.resolveCli()
+    return resolved ? { kind: resolved.kind, command: resolved.command } : null
   }
 
   // ─── Search ───────────────────────────────────────────────────────────────
@@ -125,6 +130,52 @@ export class SkillHubService {
       const msg = err instanceof Error ? err.message : String(err)
       return { success: false, error: msg }
     }
+  }
+
+  installOfficialSkills(slugs?: string[]): {
+    installed: string[]
+    skipped: string[]
+    errors: Array<{ slug: string; error: string }>
+  } {
+    const officialRoot = this.findOfficialSkillsRoot()
+    if (!officialRoot) {
+      return {
+        installed: [],
+        skipped: slugs ?? [],
+        errors: [{ slug: '*', error: 'Official skills directory not found' }],
+      }
+    }
+
+    const requested = new Set(slugs?.filter(Boolean))
+    const entries = readdirSync(officialRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((slug) => requested.size === 0 || requested.has(slug))
+
+    const installed: string[] = []
+    const skipped: string[] = []
+    const errors: Array<{ slug: string; error: string }> = []
+
+    this.paths.ensureDirs()
+    for (const slug of entries) {
+      const source = join(officialRoot, slug)
+      if (!existsSync(join(source, 'SKILL.md'))) {
+        skipped.push(slug)
+        continue
+      }
+      try {
+        cpSync(source, this.paths.skillDir(slug), { recursive: true, force: true })
+        installed.push(slug)
+      } catch (err) {
+        errors.push({ slug, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+
+    for (const slug of requested) {
+      if (!entries.includes(slug)) skipped.push(slug)
+    }
+
+    return { installed, skipped, errors }
   }
 
   // ─── Leaderboard ──────────────────────────────────────────────────────────
@@ -202,6 +253,23 @@ export class SkillHubService {
     const clawhub = this.paths.resolveClawHubCli()
     if (clawhub) return { kind: 'clawhub', ...clawhub }
 
+    return null
+  }
+
+  private findOfficialSkillsRoot(): string | null {
+    const roots = [
+      resolve(process.resourcesPath ?? '', 'skills'),
+      resolve(process.resourcesPath ?? '', 'shadowob', 'skills'),
+      resolve(process.cwd(), 'skills'),
+      resolve(process.cwd(), 'build', 'shadowob', 'skills'),
+      resolve(process.cwd(), '..', '..', 'skills'),
+      resolve(process.cwd(), '..', 'skills'),
+      resolve(__dirname, '..', '..', '..', '..', '..', '..', 'skills'),
+    ]
+
+    for (const root of roots) {
+      if (existsSync(root)) return root
+    }
     return null
   }
 

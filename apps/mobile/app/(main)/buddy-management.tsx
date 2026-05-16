@@ -23,6 +23,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react-native'
+import { pinyin } from 'pinyin-pro'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -51,6 +52,7 @@ import {
   EmptyState,
   IconButton,
   Spinner,
+  SwitchRow,
   TextField,
 } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
@@ -121,6 +123,9 @@ function withRandomSuffix(username: string) {
 function deriveBuddyUsername(name: string) {
   const username = name
     .trim()
+    .replace(/[\u3400-\u9fff]+/g, (chunk) =>
+      pinyin(chunk, { toneType: 'none', separator: '-', v: true }),
+    )
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -153,6 +158,7 @@ function BuddyAccessEditor({
   t,
   onModeChange,
   onAllowedServerIdsChange,
+  compactModeControl = false,
 }: {
   mode: BuddyMode
   allowedServerIds: string[]
@@ -161,6 +167,7 @@ function BuddyAccessEditor({
   t: ReturnType<typeof useTranslation>['t']
   onModeChange: (mode: BuddyMode) => void
   onAllowedServerIdsChange: (ids: string[]) => void
+  compactModeControl?: boolean
 }) {
   const toggleServer = (serverId: string) => {
     onAllowedServerIdsChange(
@@ -175,48 +182,60 @@ function BuddyAccessEditor({
       <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
         {t('agentMgmt.accessSection')}
       </Text>
-      <View style={styles.modeRow}>
-        <CardPressable
-          variant="glassCard"
-          active={mode === 'private'}
-          padded={false}
-          style={[
-            styles.modeOption,
-            {
-              backgroundColor: mode === 'private' ? `${colors.primary}1A` : colors.glassSoft,
-            },
-          ]}
-          onPress={() => onModeChange('private')}
-        >
-          <Lock size={16} color={mode === 'private' ? colors.primary : colors.textMuted} />
-          <Text style={[styles.modeTitle, { color: colors.text }]}>
-            {t('agentMgmt.modePrivate')}
-          </Text>
-          <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
-            {t('agentMgmt.modePrivateDesc')}
-          </Text>
-        </CardPressable>
-        <CardPressable
-          variant="glassCard"
-          active={mode === 'shareable'}
-          padded={false}
-          style={[
-            styles.modeOption,
-            {
-              backgroundColor: mode === 'shareable' ? `${colors.primary}1A` : colors.glassSoft,
-            },
-          ]}
-          onPress={() => onModeChange('shareable')}
-        >
-          <Share2 size={16} color={mode === 'shareable' ? colors.primary : colors.textMuted} />
-          <Text style={[styles.modeTitle, { color: colors.text }]}>
-            {t('agentMgmt.modeShareable')}
-          </Text>
-          <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
-            {t('agentMgmt.modeShareableDesc')}
-          </Text>
-        </CardPressable>
-      </View>
+      {compactModeControl ? (
+        <SwitchRow
+          icon={mode === 'shareable' ? Share2 : Lock}
+          title={mode === 'shareable' ? t('agentMgmt.modeShareable') : t('agentMgmt.modePrivate')}
+          subtitle={
+            mode === 'shareable' ? t('agentMgmt.modeShareableDesc') : t('agentMgmt.modePrivateDesc')
+          }
+          value={mode === 'shareable'}
+          onValueChange={(value) => onModeChange(value ? 'shareable' : 'private')}
+        />
+      ) : (
+        <View style={styles.modeRow}>
+          <CardPressable
+            variant="glassCard"
+            active={mode === 'private'}
+            padded={false}
+            style={[
+              styles.modeOption,
+              {
+                backgroundColor: mode === 'private' ? `${colors.primary}1A` : colors.glassSoft,
+              },
+            ]}
+            onPress={() => onModeChange('private')}
+          >
+            <Lock size={16} color={mode === 'private' ? colors.primary : colors.textMuted} />
+            <Text style={[styles.modeTitle, { color: colors.text }]}>
+              {t('agentMgmt.modePrivate')}
+            </Text>
+            <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
+              {t('agentMgmt.modePrivateDesc')}
+            </Text>
+          </CardPressable>
+          <CardPressable
+            variant="glassCard"
+            active={mode === 'shareable'}
+            padded={false}
+            style={[
+              styles.modeOption,
+              {
+                backgroundColor: mode === 'shareable' ? `${colors.primary}1A` : colors.glassSoft,
+              },
+            ]}
+            onPress={() => onModeChange('shareable')}
+          >
+            <Share2 size={16} color={mode === 'shareable' ? colors.primary : colors.textMuted} />
+            <Text style={[styles.modeTitle, { color: colors.text }]}>
+              {t('agentMgmt.modeShareable')}
+            </Text>
+            <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
+              {t('agentMgmt.modeShareableDesc')}
+            </Text>
+          </CardPressable>
+        </View>
+      )}
       <View style={[styles.policyNote, { backgroundColor: colors.background }]}>
         <Text style={[styles.policyTitle, { color: colors.text }]}>
           {t('agentMgmt.defaultReplyPolicy')}
@@ -607,6 +626,7 @@ export default function BuddyManagementScreen() {
                   t={t}
                   onModeChange={setCreateBuddyMode}
                   onAllowedServerIdsChange={setCreateAllowedServerIds}
+                  compactModeControl
                 />
 
                 <View style={{ height: 72 }} />
@@ -897,43 +917,6 @@ export default function BuddyManagementScreen() {
                                       numberOfLines={5}
                                     >
                                       {activePlan.connectCommand}
-                                    </Text>
-                                  </View>
-                                </View>
-
-                                {/* Quick Command */}
-                                <View style={styles.configBlock}>
-                                  <View style={styles.configBlockHeader}>
-                                    <Text
-                                      style={[styles.configBlockLabel, { color: colors.textMuted }]}
-                                    >
-                                      {t('agentMgmt.setupBashTitle')}
-                                    </Text>
-                                    <Button
-                                      variant="ghost"
-                                      size="xs"
-                                      icon={Copy}
-                                      iconColor={colors.primary}
-                                      style={styles.copySmallBtn}
-                                      onPress={() => copyToClipboard(activePlan.quickCommand)}
-                                    >
-                                      {t('common.copy')}
-                                    </Button>
-                                  </View>
-                                  <View
-                                    style={[
-                                      styles.codeBlock,
-                                      {
-                                        backgroundColor: colors.surface,
-                                        borderColor: colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[styles.codeText, { color: colors.textSecondary }]}
-                                      numberOfLines={3}
-                                    >
-                                      {activePlan.quickCommand}
                                     </Text>
                                   </View>
                                 </View>

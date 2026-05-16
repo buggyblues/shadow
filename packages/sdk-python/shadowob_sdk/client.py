@@ -248,8 +248,22 @@ class ShadowClient:
     def list_oauth_accounts(self) -> list[dict[str, Any]]:
         return self._get("/api/auth/oauth/accounts")
 
+    def create_oauth_connect_url(
+        self, provider: str, *, redirect: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if redirect is not None:
+            payload["redirect"] = redirect
+        return self._post(f"/api/auth/oauth/{provider}/link", json=payload)
+
     def unlink_oauth_account(self, account_id: str) -> dict[str, Any]:
         return self._delete(f"/api/auth/oauth/accounts/{account_id}")
+
+    def list_auth_sessions(self) -> list[dict[str, Any]]:
+        return self._get("/api/auth/sessions")
+
+    def revoke_auth_session(self, session_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/auth/sessions/{session_id}")
 
     # ── Agents ───────────────────────────────────────────────────────────
 

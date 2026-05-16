@@ -79,6 +79,7 @@ export function ServerLayout() {
   const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
   const { mobileView } = useUIStore()
   const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
+  const [stableServerMeta, setStableServerMeta] = useState<ServerMeta | null>(null)
 
   const {
     data: serverAccess,
@@ -105,8 +106,15 @@ export function ServerLayout() {
     refetchOnWindowFocus: false,
   })
 
+  const cachedServerMeta = serverSlug
+    ? queryClient.getQueryData<ServerMeta>(['server', serverSlug])
+    : undefined
+  const stableServerMetaForRoute =
+    stableServerMeta && (stableServerMeta.slug === serverSlug || stableServerMeta.id === serverSlug)
+      ? stableServerMeta
+      : undefined
   const canAccessServer = channelId
-    ? Boolean(channelBootstrap?.server)
+    ? Boolean(channelBootstrap?.server ?? cachedServerMeta ?? stableServerMetaForRoute)
     : serverAccess?.canAccess === true
 
   const { data: server, isLoading: isServerLoading } = useQuery({
@@ -115,7 +123,14 @@ export function ServerLayout() {
     enabled: !!serverSlug && !channelId && canAccessServer,
     staleTime: 30_000,
   })
-  const serverMeta = channelBootstrap?.server ?? server ?? serverAccess?.server
+  const freshServerMeta =
+    channelBootstrap?.server ?? server ?? serverAccess?.server ?? cachedServerMeta
+  const serverMeta = freshServerMeta ?? stableServerMetaForRoute
+
+  useEffect(() => {
+    if (!freshServerMeta) return
+    setStableServerMeta(freshServerMeta)
+  }, [freshServerMeta])
 
   useEffect(() => {
     if (!channelId || !channelBootstrap) return
@@ -234,7 +249,7 @@ export function ServerLayout() {
 
   if (!serverSlug) return null
 
-  if (channelId && isRouteChannelLoading) {
+  if (channelId && isRouteChannelLoading && !serverMeta) {
     return <ServerRouteLoadingShell mobileView={mobileView} />
   }
 
@@ -312,15 +327,18 @@ export function ServerLayout() {
           mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
         } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
       >
-        {routeChannelBlocked ? (
-          <GlassPanel className="flex-1 flex items-center justify-center text-text-muted">
-            <Loader2 size={18} className="animate-spin opacity-60" />
-          </GlassPanel>
-        ) : (
-          <Outlet />
-        )}
+        {routeChannelBlocked ? <RouteChannelContentLoading /> : <Outlet />}
       </div>
     </div>
+  )
+}
+
+function RouteChannelContentLoading() {
+  return (
+    <>
+      <ChatLoadingPanel />
+      <MemberLoadingPanel />
+    </>
   )
 }
 

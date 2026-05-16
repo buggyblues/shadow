@@ -14,6 +14,7 @@ import type { ServiceContainer } from '../../services/container.js'
 import { loadEnvFiles } from '../../utils/env.js'
 import { createBuildCommand } from './build.command.js'
 import { createClusterCommand } from './cluster.command.js'
+import { createCostsCommand } from './costs.command.js'
 import { createConsoleCommand } from './dashboard.command.js'
 import { createDoctorCommand } from './doctor.command.js'
 import { createDownCommand } from './down.command.js'
@@ -62,6 +63,7 @@ export function createCLI(container: ServiceContainer): Command {
   program.addCommand(createBuildCommand(container))
   program.addCommand(createDownCommand(container))
   program.addCommand(createStatusCommand(container))
+  program.addCommand(createCostsCommand(container))
   program.addCommand(createLogsCommand(container))
   program.addCommand(createScaleCommand(container))
   program.addCommand(createSandboxCommand(container))

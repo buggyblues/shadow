@@ -17,6 +17,8 @@ import {
 } from '../validators/auth.schema'
 import { forceDisconnectUser } from '../ws/presence.gateway'
 
+const OAUTH_REDIRECT_BASE = process.env.OAUTH_BASE_URL ?? 'http://localhost:3000'
+
 async function resolveLiveUserStatus(
   userId: string,
   fallback: 'online' | 'idle' | 'dnd' | 'offline',
@@ -46,6 +48,14 @@ async function resolveSignedMediaUrl(
   return mediaService.resolveMediaUrl(mediaUrl, 'image/png', options)
 }
 
+function requestDeviceInfo(c: { req: { header: (name: string) => string | undefined } }) {
+  const userAgent = c.req.header('user-agent') ?? null
+  const forwardedFor = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+  const ipAddress = forwardedFor ?? c.req.header('x-real-ip') ?? null
+  const deviceName = c.req.header('x-shadow-device-name') ?? null
+  return { userAgent, ipAddress, deviceName }
+}
+
 export function createAuthHandler(container: AppContainer) {
   const authHandler = new Hono()
   const authEntryRateLimit = createRateLimitMiddleware({
@@ -68,7 +78,7 @@ export function createAuthHandler(container: AppContainer) {
       const authService = container.resolve('authService')
       const mediaService = container.resolve('mediaService')
       const input = c.req.valid('json')
-      const result = await authService.register(input)
+      const result = await authService.register(input, requestDeviceInfo(c))
       const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
         variant: 'avatar',
       })
@@ -90,7 +100,7 @@ export function createAuthHandler(container: AppContainer) {
     const authService = container.resolve('authService')
     const mediaService = container.resolve('mediaService')
     const input = c.req.valid('json')
-    const result = await authService.login(input)
+    const result = await authService.login(input, requestDeviceInfo(c))
     const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
       variant: 'avatar',
     })
@@ -125,7 +135,7 @@ export function createAuthHandler(container: AppContainer) {
       const authService = container.resolve('authService')
       const mediaService = container.resolve('mediaService')
       const input = c.req.valid('json')
-      const result = await authService.verifyEmailLogin(input)
+      const result = await authService.verifyEmailLogin(input, requestDeviceInfo(c))
       const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
         variant: 'avatar',
       })
@@ -147,7 +157,10 @@ export function createAuthHandler(container: AppContainer) {
     async (c) => {
       const externalOAuthService = container.resolve('externalOAuthService')
       const { credential } = c.req.valid('json')
-      const result = await externalOAuthService.handleGoogleIdToken(credential)
+      const result = await externalOAuthService.handleGoogleIdToken(
+        credential,
+        requestDeviceInfo(c),
+      )
       return c.json(result)
     },
   )
@@ -159,7 +172,7 @@ export function createAuthHandler(container: AppContainer) {
     async (c) => {
       const authService = container.resolve('authService')
       const { refreshToken } = c.req.valid('json')
-      const result = await authService.refresh(refreshToken)
+      const result = await authService.refresh(refreshToken, requestDeviceInfo(c))
       return c.json(result)
     },
   )
@@ -248,6 +261,30 @@ export function createAuthHandler(container: AppContainer) {
     return c.json(result)
   })
 
+  // GET /api/auth/sessions — list devices/sessions for the current user
+  authHandler.get('/sessions', authMiddleware, async (c) => {
+    const authService = container.resolve('authService')
+    const user = c.get('user')
+    return c.json(await authService.listSessions(user.userId, user.sessionId))
+  })
+
+  // DELETE /api/auth/sessions/:sessionId — revoke a device/session
+  authHandler.delete('/sessions/:sessionId', authMiddleware, async (c) => {
+    const authService = container.resolve('authService')
+    const io = container.resolve('io')
+    const user = c.get('user')
+    const sessionId = c.req.param('sessionId')
+    if (!sessionId) {
+      return c.json({ ok: false, error: 'Missing sessionId' }, 400)
+    }
+    const session = await authService.revokeSession(user.userId, sessionId)
+    io.to(`session:${session.id}`).emit('auth:session-revoked', {
+      sessionId: session.id,
+      current: user.sessionId === session.id,
+    })
+    return c.json({ ok: true })
+  })
+
   // POST /api/auth/disconnect — beacon-based disconnect on page close
   authHandler.post('/disconnect', async (c) => {
     try {
@@ -277,6 +314,37 @@ export function createAuthHandler(container: AppContainer) {
     return c.redirect(url)
   })
 
+  // GET /api/auth/oauth/:provider/link — connect a Google/GitHub account to the logged-in user
+  authHandler.get('/oauth/:provider/link', authMiddleware, (c) => {
+    const externalOAuthService = container.resolve('externalOAuthService')
+    const provider = c.req.param('provider')
+    const redirect = c.req.query('redirect')
+    const user = c.get('user')
+    if (!provider) {
+      return c.json({ ok: false, error: 'Missing provider' }, 400)
+    }
+    const url = externalOAuthService.getLinkAuthorizeUrl(provider, user.userId, redirect)
+    return c.redirect(url)
+  })
+
+  // POST /api/auth/oauth/:provider/link — returns a provider URL for clients using bearer auth
+  authHandler.post(
+    '/oauth/:provider/link',
+    authMiddleware,
+    zValidator('json', z.object({ redirect: z.string().optional() })),
+    (c) => {
+      const externalOAuthService = container.resolve('externalOAuthService')
+      const provider = c.req.param('provider')
+      const { redirect } = c.req.valid('json')
+      const user = c.get('user')
+      if (!provider) {
+        return c.json({ ok: false, error: 'Missing provider' }, 400)
+      }
+      const url = externalOAuthService.getLinkAuthorizeUrl(provider, user.userId, redirect)
+      return c.json({ url })
+    },
+  )
+
   // GET /api/auth/oauth/:provider/callback — provider callback
   authHandler.get('/oauth/:provider/callback', async (c) => {
     const externalOAuthService = container.resolve('externalOAuthService')
@@ -289,7 +357,23 @@ export function createAuthHandler(container: AppContainer) {
     }
 
     try {
-      const result = await externalOAuthService.handleCallback(provider, code, state)
+      const result = await externalOAuthService.handleCallback(
+        provider,
+        code,
+        state,
+        requestDeviceInfo(c),
+      )
+
+      if (result.mode === 'link') {
+        const redirectUrl = new URL(result.redirect, OAUTH_REDIRECT_BASE)
+        redirectUrl.searchParams.set('oauth', 'linked')
+        redirectUrl.searchParams.set('provider', result.provider)
+        return c.redirect(
+          result.redirect.startsWith('/')
+            ? `${redirectUrl.pathname}${redirectUrl.search}`
+            : redirectUrl.toString(),
+        )
+      }
 
       // Check if this is a mobile OAuth flow (redirect starts with custom scheme like shadow://)
       if (

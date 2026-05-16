@@ -40,10 +40,11 @@ export interface SettlementLine {
   settledAt?: string | null
 }
 
-export function useCommunityAssets() {
+export function useCommunityAssets(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['community-assets'],
     queryFn: () => fetchApi<{ assets: CommunityAsset[] }>('/api/economy/assets'),
+    enabled: options?.enabled ?? true,
   })
 }
 

@@ -26,6 +26,20 @@ async function resolveLiveUserStatus(
   }
 }
 
+async function resolveCurrentActivity(userId: string): Promise<string | null> {
+  try {
+    const redis = await getRedisClient()
+    if (!redis) return null
+    const raw = await redis.get(presenceKeys.userActivity(userId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { activity?: unknown }
+    return typeof parsed.activity === 'string' ? parsed.activity : null
+  } catch (err) {
+    logger.warn({ err, userId }, 'Failed to resolve current user activity')
+    return null
+  }
+}
+
 export class AuthUseCase {
   constructor(
     private deps: {
@@ -52,6 +66,7 @@ export class AuthUseCase {
       ownerId: string | null
       status: string
       totalOnlineSeconds: number
+      currentActivity?: string | null
       config: { description?: string }
     } | null = null
     let ownerProfile: {
@@ -89,6 +104,7 @@ export class AuthUseCase {
           ownerId: foundAgent.ownerId,
           status: foundAgent.status,
           totalOnlineSeconds: foundAgent.totalOnlineSeconds ?? 0,
+          currentActivity: await resolveCurrentActivity(user.id),
           config: {
             description: (foundAgent.config as Record<string, unknown>)?.description as
               | string
@@ -123,6 +139,7 @@ export class AuthUseCase {
               userId: a.userId,
               status: a.status,
               totalOnlineSeconds: a.totalOnlineSeconds ?? 0,
+              currentActivity: await resolveCurrentActivity(a.userId),
               botUser: botUser
                 ? {
                     id: botUser.id,
