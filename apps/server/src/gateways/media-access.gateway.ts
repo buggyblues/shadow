@@ -1,5 +1,5 @@
 import type { ActorInput } from '../security/actor'
-import type { MediaService } from '../services/media.service'
+import type { MediaService, MediaVariant } from '../services/media.service'
 
 export class MediaAccessGateway {
   constructor(private deps: { mediaService: MediaService }) {}
@@ -8,11 +8,13 @@ export class MediaAccessGateway {
     actor: ActorInput
     attachmentId: string
     disposition?: 'inline' | 'attachment'
+    variant?: MediaVariant
   }) {
     return this.deps.mediaService.resolveAttachmentMediaUrl({
       actor: input.actor,
       attachmentId: input.attachmentId,
       disposition: input.disposition ?? 'attachment',
+      variant: input.variant,
     })
   }
 

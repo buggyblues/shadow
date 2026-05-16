@@ -37,11 +37,13 @@ async function resolveSignedMediaUrl(
     resolveMediaUrl: (
       mediaUrl: string | null | undefined,
       fallbackContentType?: string,
+      options?: { variant?: 'avatar' | 'preview' | 'banner' },
     ) => string | null
   },
   mediaUrl: string | null | undefined,
+  options?: { variant?: 'avatar' | 'preview' | 'banner' },
 ): Promise<string | null> {
-  return mediaService.resolveMediaUrl(mediaUrl)
+  return mediaService.resolveMediaUrl(mediaUrl, 'image/png', options)
 }
 
 export function createChannelHandler(container: AppContainer) {
@@ -95,6 +97,73 @@ export function createChannelHandler(container: AppContainer) {
       requiresApproval: Boolean(serverMember && channel.isPrivate && !channelMember && !canManage),
       joinRequestStatus: joinRequest?.status ?? null,
       joinRequestId: joinRequest?.id ?? null,
+    }
+  }
+
+  async function getSlashCommandsForChannel(id: string, requesterId: string) {
+    const channelService = container.resolve('channelService')
+    const serverDao = container.resolve('serverDao')
+    const channelMemberDao = container.resolve('channelMemberDao')
+    const agentDao = container.resolve('agentDao')
+    const channel = await channelService.getById(id)
+
+    if (channel.kind === 'dm') {
+      await channelService.getDirectChannelById(id, requesterId)
+      const peer = await channelService.findDirectPeer(id, requesterId)
+      if (!peer?.isBot) return { commands: [] }
+
+      const agents = await agentDao.findByUserIds([peer.id])
+      return {
+        commands: agents.flatMap((agent) =>
+          normalizeSlashCommands((agent.config as Record<string, unknown>)?.slashCommands).map(
+            (command) => ({
+              ...command,
+              agentId: agent.id,
+              botUserId: agent.userId,
+              botUsername: peer.username,
+              botDisplayName: peer.displayName ?? peer.username ?? null,
+            }),
+          ),
+        ),
+      }
+    }
+
+    const serverId = requireServerChannel(channel)
+    const requesterServerMember = await serverDao.getMember(serverId, requesterId)
+    if (!requesterServerMember) {
+      throw Object.assign(new Error('Not a member of this server'), { status: 403 })
+    }
+
+    if (channel.isPrivate) {
+      const requesterInChannel = await channelMemberDao.get(id, requesterId)
+      const requesterCanManageChannel =
+        requesterServerMember.role === 'owner' || requesterServerMember.role === 'admin'
+      if (!requesterInChannel && !requesterCanManageChannel) {
+        throw Object.assign(new Error('Not a member of this channel'), { status: 403 })
+      }
+    }
+
+    const members = await channelService.getChannelMembers(id, serverId)
+    const botMembers = members.filter((member) => member.user?.isBot)
+    const botUserIds = botMembers.map((member) => member.userId)
+    const agents = await agentDao.findByUserIds(botUserIds)
+    const memberByUserId = new Map(botMembers.map((member) => [member.userId, member]))
+
+    return {
+      commands: agents.flatMap((agent) => {
+        const member = memberByUserId.get(agent.userId)
+        const memberUser = member?.user
+        if (!memberUser) return []
+        return normalizeSlashCommands((agent.config as Record<string, unknown>)?.slashCommands).map(
+          (command) => ({
+            ...command,
+            agentId: agent.id,
+            botUserId: agent.userId,
+            botUsername: memberUser.username,
+            botDisplayName: memberUser.displayName ?? memberUser.username ?? null,
+          }),
+        )
+      }),
     }
   }
 
@@ -254,6 +323,109 @@ export function createChannelHandler(container: AppContainer) {
     return c.json(await channelService.listDirectChannels(user.userId))
   })
 
+  // GET /api/channels/:id/bootstrap — aggregate first-paint channel data for chat routes.
+  channelHandler.get('/channels/:id/bootstrap', async (c) => {
+    const channelService = container.resolve('channelService')
+    const serverService = container.resolve('serverService')
+    const messageService = container.resolve('messageService')
+    const mediaService = container.resolve('mediaService')
+    const id = c.req.param('id')
+    const userId = c.get('user').userId
+    const limit = Math.min(Math.max(Number(c.req.query('messagesLimit') ?? '50') || 50, 1), 100)
+    const access = await getAccessStatus(id, userId)
+
+    if (!access.canAccess) {
+      if (access.channel.kind === 'server' && access.channel.serverId && access.isServerMember) {
+        const server = await serverService.getById(access.channel.serverId)
+        const channels = await channelService.getByServerIdForUser(access.channel.serverId, userId)
+        return c.json({
+          access,
+          channel: access.channel,
+          server: {
+            ...server,
+            iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, {
+              variant: 'avatar',
+            }),
+            bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+              variant: 'banner',
+            }),
+          },
+          channels,
+          members: [],
+          messages: { messages: [], hasMore: false },
+          slashCommands: { commands: [] },
+        })
+      }
+
+      return c.json({
+        access,
+        channel: access.channel,
+        server: null,
+        channels: [],
+        members: [],
+        messages: { messages: [], hasMore: false },
+        slashCommands: { commands: [] },
+      })
+    }
+
+    const channel =
+      access.channel.kind === 'dm'
+        ? await channelService.getDirectChannelById(id, userId)
+        : await channelService.getById(id)
+    const [messages, slashCommands] = await Promise.all([
+      messageService.getByChannelId(id, limit, undefined, userId),
+      getSlashCommandsForChannel(id, userId),
+    ])
+
+    if (access.channel.kind !== 'server' || !access.channel.serverId) {
+      return c.json({
+        access,
+        channel,
+        server: null,
+        channels: [],
+        members: [],
+        messages,
+        slashCommands,
+      })
+    }
+
+    const serverId = access.channel.serverId
+    const [server, channels, members] = await Promise.all([
+      serverService.getById(serverId),
+      channelService.getByServerIdForUser(serverId, userId),
+      channelService.getChannelMembers(id, serverId),
+    ])
+    const signedMembers = await Promise.all(
+      members.map(async (member) => ({
+        ...member,
+        user: member.user
+          ? {
+              ...member.user,
+              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl, {
+                variant: 'avatar',
+              }),
+            }
+          : null,
+      })),
+    )
+
+    return c.json({
+      access,
+      channel,
+      server: {
+        ...server,
+        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+          variant: 'banner',
+        }),
+      },
+      channels,
+      members: signedMembers,
+      messages,
+      slashCommands,
+    })
+  })
+
   // GET /api/channels/:id
   channelHandler.get('/channels/:id', async (c) => {
     const channelService = container.resolve('channelService')
@@ -295,7 +467,9 @@ export function createChannelHandler(container: AppContainer) {
         user: member.user
           ? {
               ...member.user,
-              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl),
+              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl, {
+                variant: 'avatar',
+              }),
             }
           : null,
       })),
@@ -388,74 +562,11 @@ export function createChannelHandler(container: AppContainer) {
 
   // GET /api/channels/:id/slash-commands — commands registered by Buddies in this channel
   channelHandler.get('/channels/:id/slash-commands', async (c) => {
-    const channelService = container.resolve('channelService')
-    const serverDao = container.resolve('serverDao')
-    const channelMemberDao = container.resolve('channelMemberDao')
-    const agentDao = container.resolve('agentDao')
     const id = c.req.param('id')
     const requesterId = c.get('user').userId
 
     try {
-      const channel = await channelService.getById(id)
-      if (channel.kind === 'dm') {
-        await channelService.getDirectChannelById(id, requesterId)
-        const peer = await channelService.findDirectPeer(id, requesterId)
-        if (!peer?.isBot) {
-          return c.json({ commands: [] })
-        }
-
-        const agents = await agentDao.findByUserIds([peer.id])
-        const commands = agents.flatMap((agent) =>
-          normalizeSlashCommands((agent.config as Record<string, unknown>)?.slashCommands).map(
-            (command) => ({
-              ...command,
-              agentId: agent.id,
-              botUserId: agent.userId,
-              botUsername: peer.username,
-              botDisplayName: peer.displayName ?? peer.username ?? null,
-            }),
-          ),
-        )
-
-        return c.json({ commands })
-      }
-      const serverId = requireServerChannel(channel)
-      const requesterServerMember = await serverDao.getMember(serverId, requesterId)
-      if (!requesterServerMember) {
-        return c.json({ ok: false, error: 'Not a member of this server' }, 403)
-      }
-
-      if (channel.isPrivate) {
-        const requesterInChannel = await channelMemberDao.get(id, requesterId)
-        const requesterCanManageChannel =
-          requesterServerMember.role === 'owner' || requesterServerMember.role === 'admin'
-        if (!requesterInChannel && !requesterCanManageChannel) {
-          return c.json({ ok: false, error: 'Not a member of this channel' }, 403)
-        }
-      }
-
-      const members = await channelService.getChannelMembers(id, serverId)
-      const botMembers = members.filter((member) => member.user?.isBot)
-      const botUserIds = botMembers.map((member) => member.userId)
-      const agents = await agentDao.findByUserIds(botUserIds)
-      const memberByUserId = new Map(botMembers.map((member) => [member.userId, member]))
-
-      const commands = agents.flatMap((agent) => {
-        const member = memberByUserId.get(agent.userId)
-        const memberUser = member?.user
-        if (!memberUser) return []
-        return normalizeSlashCommands((agent.config as Record<string, unknown>)?.slashCommands).map(
-          (command) => ({
-            ...command,
-            agentId: agent.id,
-            botUserId: agent.userId,
-            botUsername: memberUser.username,
-            botDisplayName: memberUser.displayName ?? memberUser.username ?? null,
-          }),
-        )
-      })
-
-      return c.json({ commands })
+      return c.json(await getSlashCommandsForChannel(id, requesterId))
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
       return c.json({ ok: false, error: (err as Error).message }, status as 403 | 404 | 500)

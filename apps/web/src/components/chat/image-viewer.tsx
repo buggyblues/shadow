@@ -221,6 +221,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
           ref={imageRef}
           src={src}
           alt={filename || 'Image'}
+          decoding="async"
           className={`max-w-full max-h-full object-contain transition-transform duration-200 ${
             isLoaded ? 'opacity-100' : 'opacity-0'
           }`}

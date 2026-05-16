@@ -311,6 +311,7 @@ type SignedMediaUrl = {
 }
 
 const signedMediaCache = new Map<string, SignedMediaUrl>()
+type SignedMediaVariant = 'preview'
 
 function isSignedMediaCacheFresh(entry: SignedMediaUrl): boolean {
   return new Date(entry.expiresAt).getTime() - 30_000 > Date.now()
@@ -319,12 +320,15 @@ function isSignedMediaCacheFresh(entry: SignedMediaUrl): boolean {
 async function resolveAttachmentMediaUrl(
   attachmentId: string,
   disposition: 'inline' | 'attachment',
+  variant?: SignedMediaVariant,
 ): Promise<SignedMediaUrl> {
-  const cacheKey = `channel:${attachmentId}:${disposition}`
+  const cacheKey = `channel:${attachmentId}:${disposition}:${variant ?? 'original'}`
   const cached = signedMediaCache.get(cacheKey)
   if (cached && isSignedMediaCacheFresh(cached)) return cached
 
-  const path = `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`
+  const params = new URLSearchParams({ disposition })
+  if (variant) params.set('variant', variant)
+  const path = `/api/attachments/${attachmentId}/media-url?${params.toString()}`
   const resolved = await fetchApi<SignedMediaUrl>(path)
   signedMediaCache.set(cacheKey, resolved)
   return resolved
@@ -1101,23 +1105,23 @@ function AttachmentView({
   onImageContextMenu: (event: React.MouseEvent, attachment: Attachment) => void
   onOpenImage: (attachment: Attachment, src: string) => void
 }) {
-  const [inlineUrl, setInlineUrl] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const isImage = isImageType(attachment.contentType)
 
   useEffect(() => {
     let cancelled = false
     const disposition = isImage ? 'inline' : 'attachment'
-    resolveAttachmentMediaUrl(attachment.id, disposition)
+    resolveAttachmentMediaUrl(attachment.id, disposition, isImage ? 'preview' : undefined)
       .then((resolved) => {
         if (!cancelled) {
-          if (isImage) setInlineUrl(resolved.url)
+          if (isImage) setPreviewUrl(resolved.url)
           else setDownloadUrl(resolved.url)
         }
       })
       .catch(() => {
         if (!cancelled) {
-          if (isImage) setInlineUrl(null)
+          if (isImage) setPreviewUrl(null)
           else setDownloadUrl(null)
         }
       })
@@ -1134,13 +1138,12 @@ function AttachmentView({
 
   const resolveInline = useCallback(async () => {
     const resolved = await resolveAttachmentMediaUrl(attachment.id, 'inline')
-    setInlineUrl(resolved.url)
     return resolved.url
   }, [attachment.id])
 
   if (isImage) {
-    const href = inlineUrl ?? '#'
-    const src = inlineUrl ?? undefined
+    const href = previewUrl ?? '#'
+    const src = previewUrl ?? undefined
     return (
       <div className="relative">
         <a
@@ -1150,7 +1153,7 @@ function AttachmentView({
           className="block max-w-xs overflow-hidden rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-primary/60"
           onClick={async (event) => {
             event.preventDefault()
-            const url = src ?? (await resolveInline())
+            const url = await resolveInline()
             onOpenImage(attachment, url)
           }}
           onContextMenu={(event) => onImageContextMenu(event, attachment)}
@@ -1159,6 +1162,9 @@ function AttachmentView({
             <img
               src={src}
               alt={attachment.filename}
+              loading="lazy"
+              decoding="async"
+              fetchPriority="low"
               className="block max-h-60 max-w-full rounded-xl object-contain"
             />
           ) : (
@@ -1583,7 +1589,13 @@ function MessageBubbleInner({
           components={{
             img: ({ src, alt }) => (
               <a href={src} target="_blank" rel="noopener noreferrer">
-                <img src={src} alt={alt ?? ''} loading="lazy" />
+                <img
+                  src={src}
+                  alt={alt ?? ''}
+                  loading="lazy"
+                  decoding="async"
+                  fetchPriority="low"
+                />
               </a>
             ),
             a: ({ href, children }) => {

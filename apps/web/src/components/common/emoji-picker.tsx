@@ -1,6 +1,4 @@
-import data from '@emoji-mart/data'
-import Picker from '@emoji-mart/react'
-import { useEffect, useRef } from 'react'
+import { type ComponentType, lazy, Suspense, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 interface EmojiPickerProps {
@@ -16,6 +14,33 @@ const i18nMapping: Record<string, string> = {
   ja: 'ja',
   ko: 'ko',
 }
+
+interface EmojiMartPickerProps {
+  locale: string
+  onEmojiSelect: (emoji: { native: string }) => void
+}
+
+const EmojiMartPicker = lazy(async () => {
+  const [{ default: data }, { default: Picker }] = await Promise.all([
+    import('@emoji-mart/data'),
+    import('@emoji-mart/react'),
+  ])
+  const PickerComponent = Picker as ComponentType<Record<string, unknown>>
+
+  return {
+    default: ({ locale, onEmojiSelect }: EmojiMartPickerProps) => (
+      <PickerComponent
+        data={data}
+        onEmojiSelect={onEmojiSelect}
+        locale={locale}
+        theme="dark"
+        previewPosition="none"
+        skinTonePosition="search"
+        set="native"
+      />
+    ),
+  }
+})
 
 export function EmojiPicker({ onSelect, onClose, position = 'top' }: EmojiPickerProps) {
   const { i18n } = useTranslation()
@@ -38,18 +63,15 @@ export function EmojiPicker({ onSelect, onClose, position = 'top' }: EmojiPicker
       ref={containerRef}
       className={`absolute z-50 ${position === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'} right-0 bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-bottom-right`}
     >
-      <Picker
-        data={data}
-        onEmojiSelect={(emoji: { native: string }) => {
-          onSelect(emoji.native)
-          onClose()
-        }}
-        locale={locale}
-        theme="dark"
-        previewPosition="none"
-        skinTonePosition="search"
-        set="native"
-      />
+      <Suspense fallback={<div className="h-[420px] w-[352px]" />}>
+        <EmojiMartPicker
+          locale={locale}
+          onEmojiSelect={(emoji) => {
+            onSelect(emoji.native)
+            onClose()
+          }}
+        />
+      </Suspense>
     </div>
   )
 }

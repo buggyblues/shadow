@@ -4,10 +4,36 @@ import type { AppContainer } from '../container'
 import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deployment-autoresume'
 import { logger } from '../lib/logger'
 
+type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
+
 async function canUseChannelRoom(container: AppContainer, channelId: string, userId: string) {
   const channelAccessService = container.resolve('channelAccessService')
   const access = await channelAccessService.getAccess(channelId, userId)
   return access.ok
+}
+
+async function emitChannelPresenceSnapshot(
+  socket: Socket,
+  container: AppContainer,
+  channelId: string,
+  currentUserId?: string,
+) {
+  // Security: actor=user socket, resource=channel:${channelId}, action=read,
+  // scope=channel room access checked by channel:join, data class=channel-private presence.
+  const channelMemberDao = container.resolve('channelMemberDao')
+  const members = await channelMemberDao.getMembersWithUsers(channelId)
+  socket.emit('presence:snapshot', {
+    channelId,
+    members: members
+      .filter((member) => member.user)
+      .map((member) => ({
+        userId: member.userId,
+        status:
+          member.userId === currentUserId && member.user?.status === 'offline'
+            ? 'online'
+            : member.user!.status,
+      })),
+  })
 }
 
 export function setupChatGateway(io: SocketIOServer, container: AppContainer): void {
@@ -39,6 +65,26 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
         }
 
         await socket.join(`channel:${channelId}`)
+        if (userId) {
+          try {
+            const userDao = container.resolve('userDao')
+            const user = await userDao.findById(userId)
+            if (user?.status === 'offline') {
+              await userDao.updateStatus(userId, 'online')
+              io.to(`channel:${channelId}`).emit('presence:change', {
+                userId,
+                status: 'online' satisfies PresenceStatus,
+              })
+            }
+          } catch (err) {
+            logger.warn({ err, userId, channelId }, 'Failed to refresh joining user presence')
+          }
+        }
+        try {
+          await emitChannelPresenceSnapshot(socket, container, channelId, userId)
+        } catch (err) {
+          logger.warn({ err, userId, channelId }, 'Failed to emit channel presence snapshot')
+        }
         logger.info({ userId, channelId, socketId: socket.id }, 'Joined channel room')
         // Send ack if client provided a callback
         if (typeof ack === 'function') {

@@ -241,6 +241,21 @@ class ShadowAsyncClient:
     async def get_channel(self, channel_id: str) -> JsonDict:
         return await self.request("GET", f"/api/channels/{quote(str(channel_id), safe='')}")
 
+    async def get_channel_bootstrap(
+        self,
+        channel_id: str,
+        *,
+        messages_limit: int | None = None,
+    ) -> JsonDict:
+        params: JsonDict = {}
+        if messages_limit is not None:
+            params["messagesLimit"] = int(messages_limit)
+        return await self.request(
+            "GET",
+            f"/api/channels/{quote(str(channel_id), safe='')}/bootstrap",
+            params=params or None,
+        )
+
     async def get_messages(
         self,
         channel_id: str,
@@ -263,11 +278,20 @@ class ShadowAsyncClient:
     async def get_message(self, message_id: str) -> JsonDict:
         return await self.request("GET", f"/api/messages/{quote(str(message_id), safe='')}")
 
-    async def resolve_attachment_media_url(self, attachment_id: str, *, disposition: str = "inline") -> JsonDict:
+    async def resolve_attachment_media_url(
+        self,
+        attachment_id: str,
+        *,
+        disposition: str = "inline",
+        variant: str | None = None,
+    ) -> JsonDict:
+        params: JsonDict = {"disposition": disposition}
+        if variant:
+            params["variant"] = variant
         return await self.request(
             "GET",
             f"/api/attachments/{quote(str(attachment_id), safe='')}/media-url",
-            params={"disposition": disposition},
+            params=params,
         )
 
     async def send_message(

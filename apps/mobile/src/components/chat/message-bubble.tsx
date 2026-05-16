@@ -72,6 +72,8 @@ type SignedMediaUrl = {
   expiresAt: string
 }
 
+type MediaVariant = 'avatar' | 'preview' | 'banner'
+
 type PaidFileState = {
   file: {
     id: string
@@ -103,11 +105,15 @@ function isSignedMediaCacheFresh(entry: SignedMediaUrl): boolean {
 async function resolveAttachmentMediaUrl(
   attachmentId: string,
   disposition: 'inline' | 'attachment',
+  variant?: MediaVariant,
 ): Promise<string> {
-  const cacheKey = `channel:${attachmentId}:${disposition}`
+  const cacheKey = `channel:${attachmentId}:${disposition}:${variant ?? 'original'}`
   const cached = signedMediaCache.get(cacheKey)
   if (cached && isSignedMediaCacheFresh(cached)) return cached.url
-  const path = `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`
+  const params = new URLSearchParams()
+  params.set('disposition', disposition)
+  if (variant) params.set('variant', variant)
+  const path = `/api/attachments/${attachmentId}/media-url?${params}`
   const resolved = await fetchApi<SignedMediaUrl>(path)
   signedMediaCache.set(cacheKey, resolved)
   return resolved.url
@@ -247,7 +253,7 @@ function SignedAttachmentImage({ attachment }: { attachment: Attachment }) {
 
   useEffect(() => {
     let cancelled = false
-    resolveAttachmentMediaUrl(attachment.id, 'inline')
+    resolveAttachmentMediaUrl(attachment.id, 'inline', 'preview')
       .then((signedUrl) => {
         if (!cancelled) setUri(getImageUrl(signedUrl) ?? signedUrl)
       })
@@ -332,9 +338,13 @@ function MessageBubbleInner({
   )
 
   const resolveAttachmentUrl = useCallback(
-    async (attachment: Pick<Attachment, 'id' | 'url'>, disposition: 'inline' | 'attachment') => {
+    async (
+      attachment: Pick<Attachment, 'id' | 'url'>,
+      disposition: 'inline' | 'attachment',
+      variant?: MediaVariant,
+    ) => {
       try {
-        const signedUrl = await resolveAttachmentMediaUrl(attachment.id, disposition)
+        const signedUrl = await resolveAttachmentMediaUrl(attachment.id, disposition, variant)
         return getImageUrl(signedUrl) ?? signedUrl
       } catch {
         return null

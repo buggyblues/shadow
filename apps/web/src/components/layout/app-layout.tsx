@@ -18,7 +18,7 @@ export function AppLayout() {
   const { t } = useTranslation()
   const location = useLocation()
   const pathname = location?.pathname ?? ''
-  const { setUser } = useAuthStore()
+  const { user, setUser } = useAuthStore()
   const { backgroundImage } = useUIStore()
   const { mobileServerSidebarOpen, closeMobileServerSidebar, openMobileServerSidebar } =
     useUIStore()
@@ -39,9 +39,12 @@ export function AppLayout() {
         username: string
         displayName: string | null
         avatarUrl: string | null
-        status: string
+        status?: string
       }>('/api/auth/me'),
+    enabled: !user,
+    initialData: user ?? undefined,
     retry: false,
+    staleTime: 300_000,
   })
 
   useEffect(() => {

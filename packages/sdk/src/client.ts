@@ -6,6 +6,7 @@ import type {
   ShadowCategory,
   ShadowChannel,
   ShadowChannelAccess,
+  ShadowChannelBootstrap,
   ShadowChannelJoinRequestResult,
   ShadowChannelJoinRequestStatus,
   ShadowChannelSlashCommand,
@@ -39,6 +40,7 @@ import type {
   ShadowInteractiveState,
   ShadowInviteCode,
   ShadowListing,
+  ShadowMediaVariant,
   ShadowMember,
   ShadowMembership,
   ShadowMentionSuggestion,
@@ -872,6 +874,18 @@ export class ShadowClient {
     return { ...ch, description: ch.topic } as unknown as ShadowChannel
   }
 
+  async getChannelBootstrap(
+    channelId: string,
+    options?: { messagesLimit?: number },
+  ): Promise<ShadowChannelBootstrap> {
+    const params = new URLSearchParams()
+    if (options?.messagesLimit) params.set('messagesLimit', String(options.messagesLimit))
+    const query = params.toString()
+    return this.request<ShadowChannelBootstrap>(
+      `/api/channels/${channelId}/bootstrap${query ? `?${query}` : ''}`,
+    )
+  }
+
   async getChannelAccess(channelId: string): Promise<ShadowChannelAccess> {
     return this.request<ShadowChannelAccess>(`/api/channels/${channelId}/access`)
   }
@@ -1264,11 +1278,13 @@ export class ShadowClient {
 
   async resolveAttachmentMediaUrl(
     attachmentId: string,
-    options?: { disposition?: 'inline' | 'attachment' },
+    options?: { disposition?: 'inline' | 'attachment'; variant?: ShadowMediaVariant },
   ): Promise<ShadowSignedMediaUrl> {
-    const disposition = options?.disposition ?? 'inline'
+    const params = new URLSearchParams()
+    params.set('disposition', options?.disposition ?? 'inline')
+    if (options?.variant) params.set('variant', options.variant)
     return this.request<ShadowSignedMediaUrl>(
-      `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`,
+      `/api/attachments/${attachmentId}/media-url?${params}`,
     )
   }
 

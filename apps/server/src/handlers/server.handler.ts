@@ -20,11 +20,13 @@ async function resolveSignedMediaUrl(
     resolveMediaUrl: (
       mediaUrl: string | null | undefined,
       fallbackContentType?: string,
+      options?: { variant?: 'avatar' | 'preview' | 'banner' },
     ) => string | null
   },
   mediaUrl: string | null | undefined,
+  options?: { variant?: 'avatar' | 'preview' | 'banner' },
 ): Promise<string | null> {
-  return mediaService.resolveMediaUrl(mediaUrl)
+  return mediaService.resolveMediaUrl(mediaUrl, 'image/png', options)
 }
 
 export function createServerHandler(container: AppContainer) {
@@ -57,8 +59,10 @@ export function createServerHandler(container: AppContainer) {
         id: server.id,
         name: server.name,
         slug: server.slug,
-        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
-        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
+        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+          variant: 'banner',
+        }),
         description: server.description,
         isPublic: server.isPublic,
         ownerId: server.ownerId,
@@ -133,8 +137,10 @@ export function createServerHandler(container: AppContainer) {
     const signedServers = await Promise.all(
       servers.map(async (server) => ({
         ...server,
-        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
-        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
+        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+          variant: 'banner',
+        }),
       })),
     )
     return c.json(signedServers)
@@ -147,7 +153,9 @@ export function createServerHandler(container: AppContainer) {
     const code = c.req.param('code')
     try {
       const server = await serverService.getByInviteCode(code)
-      const iconUrl = await resolveSignedMediaUrl(mediaService, server.iconUrl)
+      const iconUrl = await resolveSignedMediaUrl(mediaService, server.iconUrl, {
+        variant: 'avatar',
+      })
       return c.json({
         id: server.id,
         name: server.name,
@@ -195,8 +203,12 @@ export function createServerHandler(container: AppContainer) {
         ...entry,
         server: {
           ...entry.server,
-          iconUrl: await resolveSignedMediaUrl(mediaService, entry.server.iconUrl),
-          bannerUrl: await resolveSignedMediaUrl(mediaService, entry.server.bannerUrl),
+          iconUrl: await resolveSignedMediaUrl(mediaService, entry.server.iconUrl, {
+            variant: 'avatar',
+          }),
+          bannerUrl: await resolveSignedMediaUrl(mediaService, entry.server.bannerUrl, {
+            variant: 'banner',
+          }),
         },
       })),
     )
@@ -231,16 +243,18 @@ export function createServerHandler(container: AppContainer) {
         id: server.id,
         name: server.name,
         slug: server.slug,
-        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
-        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
+        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+          variant: 'banner',
+        }),
         description: server.description,
         isPublic: server.isPublic,
       })
     }
     return c.json({
       ...server,
-      iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
-      bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
+      iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+      bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, { variant: 'banner' }),
     })
   })
 
@@ -268,8 +282,8 @@ export function createServerHandler(container: AppContainer) {
     if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
     return c.json({
       ...server,
-      iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
-      bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
+      iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+      bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, { variant: 'banner' }),
     })
   })
 
@@ -479,17 +493,21 @@ export function createServerHandler(container: AppContainer) {
     const signedMembers = await Promise.all(
       members.map(async (member) => ({
         ...member,
-        avatar: await resolveSignedMediaUrl(mediaService, member.avatar),
+        avatar: await resolveSignedMediaUrl(mediaService, member.avatar, { variant: 'avatar' }),
         creator: member.creator
           ? {
               ...member.creator,
-              avatarUrl: await resolveSignedMediaUrl(mediaService, member.creator.avatarUrl),
+              avatarUrl: await resolveSignedMediaUrl(mediaService, member.creator.avatarUrl, {
+                variant: 'avatar',
+              }),
             }
           : null,
         user: member.user
           ? {
               ...member.user,
-              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl),
+              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl, {
+                variant: 'avatar',
+              }),
             }
           : null,
       })),

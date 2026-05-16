@@ -1,8 +1,8 @@
 import { GlassPanel } from '@shadowob/ui'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useParams } from '@tanstack/react-router'
 import { Clock, Loader2, Lock, Send } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
 import { useAppStatus } from '../hooks/use-app-status'
@@ -32,6 +32,9 @@ interface ChannelMeta {
 interface ChannelAccessMeta {
   canAccess: boolean
   channel: ChannelMeta
+  requiresApproval?: boolean
+  joinRequestStatus?: 'pending' | 'approved' | 'rejected' | null
+  joinRequestId?: string | null
 }
 
 interface ServerAccessMeta {
@@ -42,6 +45,21 @@ interface ServerAccessMeta {
   requiresApproval: boolean
   joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
   joinRequestId: string | null
+}
+
+interface MessagePage {
+  messages: unknown[]
+  hasMore: boolean
+}
+
+interface ChannelBootstrap {
+  access: ChannelAccessMeta
+  channel?: ChannelMeta
+  server: ServerMeta | null
+  channels: unknown[]
+  members: unknown[]
+  messages: MessagePage
+  slashCommands: { commands: unknown[] }
 }
 
 /**
@@ -60,6 +78,7 @@ export function ServerLayout() {
   }
   const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
   const { mobileView } = useUIStore()
+  const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
 
   const {
     data: serverAccess,
@@ -68,17 +87,61 @@ export function ServerLayout() {
   } = useQuery({
     queryKey: ['server-access', serverSlug],
     queryFn: () => fetchApi<ServerAccessMeta>(`/api/servers/${serverSlug}/access`),
-    enabled: !!serverSlug,
+    enabled: !!serverSlug && !channelId,
     retry: false,
   })
-  const canAccessServer = serverAccess?.canAccess === true
+
+  const {
+    data: channelBootstrap,
+    isLoading: isChannelBootstrapLoading,
+    isError: isChannelBootstrapError,
+  } = useQuery({
+    queryKey: ['channel-bootstrap', channelId],
+    queryFn: () =>
+      fetchApi<ChannelBootstrap>(`/api/channels/${channelId}/bootstrap?messagesLimit=50`),
+    enabled: !!channelId,
+    retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  })
+
+  const canAccessServer = channelId
+    ? Boolean(channelBootstrap?.server)
+    : serverAccess?.canAccess === true
 
   const { data: server, isLoading: isServerLoading } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<ServerMeta>(`/api/servers/${serverSlug}`),
-    enabled: !!serverSlug && canAccessServer,
+    enabled: !!serverSlug && !channelId && canAccessServer,
+    staleTime: 30_000,
   })
-  const serverMeta = server ?? serverAccess?.server
+  const serverMeta = channelBootstrap?.server ?? server ?? serverAccess?.server
+
+  useEffect(() => {
+    if (!channelId || !channelBootstrap) return
+    queryClient.setQueryData(['channel-access', channelId], channelBootstrap.access)
+    queryClient.setQueryData(['channel', channelId], channelBootstrap.channel)
+    queryClient.setQueryData(['channel-slash-commands', channelId], channelBootstrap.slashCommands)
+    queryClient.setQueryData<InfiniteData<MessagePage, string | null>>(['messages', channelId], {
+      pages: [channelBootstrap.messages],
+      pageParams: [null],
+    })
+
+    if (channelBootstrap.server) {
+      const serverKey = channelBootstrap.server.slug ?? serverSlug
+      queryClient.setQueryData(['server', channelBootstrap.server.id], channelBootstrap.server)
+      queryClient.setQueryData(['server', serverKey], channelBootstrap.server)
+      queryClient.setQueryData(['server', serverSlug], channelBootstrap.server)
+      queryClient.setQueryData(['channels', serverKey], channelBootstrap.channels)
+      queryClient.setQueryData(['channels', serverSlug], channelBootstrap.channels)
+      queryClient.setQueryData(
+        ['members', channelBootstrap.server.id, channelId],
+        channelBootstrap.members,
+      )
+    }
+
+    setBootstrapSeededChannelId(channelId)
+  }, [channelBootstrap, channelId, queryClient, serverSlug])
 
   const requestServerAccess = useMutation({
     mutationFn: () =>
@@ -92,16 +155,12 @@ export function ServerLayout() {
     },
   })
 
-  const {
-    data: routeChannelAccess,
-    isLoading: isRouteChannelLoading,
-    isError: isRouteChannelError,
-  } = useQuery({
-    queryKey: ['channel-access', channelId],
-    queryFn: () => fetchApi<ChannelAccessMeta>(`/api/channels/${channelId}/access`),
-    enabled: !!channelId && canAccessServer,
-    retry: false,
-  })
+  const routeChannelAccess = channelBootstrap?.access
+  const isChannelBootstrapSeedPending =
+    !!channelId && Boolean(channelBootstrap) && bootstrapSeededChannelId !== channelId
+  const isRouteChannelLoading =
+    !!channelId && (isChannelBootstrapLoading || isChannelBootstrapSeedPending)
+  const isRouteChannelError = isChannelBootstrapError
   const routeChannel = routeChannelAccess?.channel
 
   // Redirect UUID URL → slug URL
@@ -119,33 +178,45 @@ export function ServerLayout() {
 
   // Sync server to store
   useEffect(() => {
-    if (server?.id && server.id !== activeServerId) {
-      setActiveServer(server.id)
+    if (serverMeta?.id && serverMeta.id !== activeServerId) {
+      setActiveServer(serverMeta.id)
     }
-  }, [server?.id, activeServerId, setActiveServer])
+  }, [serverMeta?.id, activeServerId, setActiveServer])
 
   useEffect(() => {
-    if (!channelId || !server?.id) return
+    if (!channelId || !serverMeta?.id) return
 
-    if (isRouteChannelError || (routeChannel && routeChannel.serverId !== server.id)) {
-      clearLastChannelId(server.id)
+    if (isRouteChannelError || (routeChannel && routeChannel.serverId !== serverMeta.id)) {
+      clearLastChannelId(serverMeta.id)
       const prev = useChatStore.getState().activeChannelId
       if (prev === channelId) {
         useChatStore.getState().setActiveChannel(null)
       }
       navigate({
         to: '/servers/$serverSlug',
-        params: { serverSlug: server.slug ?? serverSlug },
+        params: { serverSlug: serverMeta.slug ?? serverSlug },
         replace: true,
       })
     }
-  }, [channelId, isRouteChannelError, navigate, routeChannel, server?.id, server?.slug, serverSlug])
+  }, [
+    channelId,
+    isRouteChannelError,
+    navigate,
+    routeChannel,
+    serverMeta?.id,
+    serverMeta?.slug,
+    serverSlug,
+  ])
 
   // Channel name for title bar
   const { data: channel } = useQuery({
     queryKey: ['channel', activeChannelId],
     queryFn: () => fetchApi<ChannelMeta>(`/api/channels/${activeChannelId}`),
-    enabled: !!activeChannelId && (!channelId || routeChannelAccess?.canAccess === true),
+    enabled:
+      !!activeChannelId &&
+      (!channelId || routeChannelAccess?.canAccess === true) &&
+      activeChannelId !== channelBootstrap?.channel?.id,
+    staleTime: 30_000,
   })
 
   const unreadCount = useUnreadCount()
@@ -163,7 +234,11 @@ export function ServerLayout() {
 
   if (!serverSlug) return null
 
-  if (isServerAccessLoading || (canAccessServer && isServerLoading)) {
+  if (channelId && isRouteChannelLoading) {
+    return <ServerRouteLoadingShell mobileView={mobileView} />
+  }
+
+  if (!channelId && (isServerAccessLoading || (canAccessServer && isServerLoading))) {
     return (
       <GlassPanel className="flex-1 flex items-center justify-center text-text-muted">
         <Loader2 size={20} className="animate-spin opacity-60" />
@@ -171,7 +246,7 @@ export function ServerLayout() {
     )
   }
 
-  if (serverAccess && !serverAccess.canAccess) {
+  if (!channelId && serverAccess && !serverAccess.canAccess) {
     const isPending = serverAccess.joinRequestStatus === 'pending' || requestServerAccess.isSuccess
     return (
       <div className="flex flex-1 items-center justify-center bg-bg-primary/70 px-6 backdrop-blur-xl">
@@ -203,7 +278,7 @@ export function ServerLayout() {
     )
   }
 
-  if (isServerAccessError || !serverMeta) {
+  if ((!channelId && isServerAccessError) || isRouteChannelError || !serverMeta) {
     return (
       <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
         {t('server.accessUnavailable')}
@@ -215,7 +290,7 @@ export function ServerLayout() {
     !!channelId &&
     (isRouteChannelLoading ||
       isRouteChannelError ||
-      (!!server?.id && !!routeChannel && routeChannel.serverId !== server.id))
+      (!!serverMeta?.id && !!routeChannel && routeChannel.serverId !== serverMeta.id))
 
   return (
     <div className="flex flex-1 min-w-0 overflow-hidden h-full gap-3 bg-transparent">
@@ -225,7 +300,10 @@ export function ServerLayout() {
           mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
         } md:flex flex-col w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
       >
-        <ChannelSidebar serverSlug={serverSlug} />
+        <ChannelSidebar
+          serverSlug={serverSlug}
+          deferInitialQueries={Boolean(channelId && bootstrapSeededChannelId !== channelId)}
+        />
       </div>
 
       {/* Content: child routes render here via Outlet */}
@@ -241,6 +319,129 @@ export function ServerLayout() {
         ) : (
           <Outlet />
         )}
+      </div>
+    </div>
+  )
+}
+
+function SkeletonBlock({ className }: { className: string }) {
+  return <div className={`animate-pulse bg-white/8 ${className}`} />
+}
+
+function ChannelSidebarLoadingPanel() {
+  return (
+    <GlassPanel className="flex h-full w-full flex-col overflow-hidden">
+      <div className="flex h-[74px] shrink-0 items-center border-b border-border-subtle/30 px-5">
+        <SkeletonBlock className="h-5 w-32 rounded-full" />
+      </div>
+      <div className="space-y-6 px-4 py-5">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <SkeletonBlock className="h-3 w-16 rounded-full" />
+            <SkeletonBlock className="h-8 w-8 rounded-xl" />
+          </div>
+          <div className="space-y-2">
+            <SkeletonBlock className="h-10 w-full rounded-2xl" />
+            <SkeletonBlock className="h-10 w-[86%] rounded-2xl" />
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <SkeletonBlock className="h-3 w-20 rounded-full" />
+            <SkeletonBlock className="h-8 w-8 rounded-xl" />
+          </div>
+          <div className="space-y-2">
+            <SkeletonBlock className="h-10 w-full rounded-2xl" />
+            <SkeletonBlock className="h-10 w-[78%] rounded-2xl" />
+            <SkeletonBlock className="h-10 w-[92%] rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    </GlassPanel>
+  )
+}
+
+function ChatLoadingPanel() {
+  return (
+    <GlassPanel
+      className="flex h-full min-w-0 flex-1 flex-col overflow-hidden"
+      style={{
+        background: 'var(--chat-panel-bg)',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+      }}
+    >
+      <div className="app-header flex items-center gap-3 border-b border-border-subtle/30 px-6">
+        <SkeletonBlock className="h-8 w-8 rounded-full" />
+        <SkeletonBlock className="h-5 w-28 rounded-full" />
+        <SkeletonBlock className="hidden h-5 w-40 rounded-full sm:block" />
+        <div className="ml-auto flex gap-2">
+          <SkeletonBlock className="h-8 w-8 rounded-full" />
+          <SkeletonBlock className="h-8 w-8 rounded-full" />
+        </div>
+      </div>
+      <div className="flex-1 space-y-6 px-6 py-7">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="flex gap-4">
+            <SkeletonBlock className="h-11 w-11 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2 pt-1">
+              <div className="flex items-center gap-3">
+                <SkeletonBlock className="h-4 w-24 rounded-full" />
+                <SkeletonBlock className="h-3 w-20 rounded-full" />
+              </div>
+              <SkeletonBlock className="h-4 w-[min(78%,34rem)] rounded-full" />
+              <SkeletonBlock className="h-4 w-[min(58%,24rem)] rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="px-5 pb-5">
+        <SkeletonBlock className="h-14 w-full rounded-[28px]" />
+      </div>
+    </GlassPanel>
+  )
+}
+
+function MemberLoadingPanel() {
+  return (
+    <GlassPanel className="hidden h-full w-[240px] shrink-0 overflow-hidden pt-4 lg:block">
+      <div className="px-4 pb-4 pt-2">
+        <SkeletonBlock className="h-[54px] w-full rounded-full" />
+      </div>
+      <div className="space-y-5 px-4">
+        <div className="space-y-3">
+          <SkeletonBlock className="h-3 w-24 rounded-full" />
+          <div className="space-y-2">
+            <SkeletonBlock className="h-[66px] w-full rounded-2xl" />
+            <SkeletonBlock className="h-[56px] w-[88%] rounded-2xl" />
+          </div>
+        </div>
+        <div className="space-y-3">
+          <SkeletonBlock className="h-3 w-24 rounded-full" />
+          <SkeletonBlock className="h-[56px] w-[78%] rounded-2xl" />
+        </div>
+      </div>
+    </GlassPanel>
+  )
+}
+
+function ServerRouteLoadingShell({ mobileView }: { mobileView: 'servers' | 'channels' | 'chat' }) {
+  return (
+    <div className="flex h-full min-w-0 flex-1 overflow-hidden bg-transparent gap-3" aria-hidden>
+      <div
+        className={`${
+          mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
+        } md:flex w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
+      >
+        <ChannelSidebarLoadingPanel />
+      </div>
+      <div
+        className={`${
+          mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
+        } md:flex min-w-0 flex-1 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
+      >
+        <ChatLoadingPanel />
+        <MemberLoadingPanel />
       </div>
     </div>
   )

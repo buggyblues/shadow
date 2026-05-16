@@ -120,6 +120,33 @@ describe('ShadowClient', () => {
       restoreStubbedGlobals()
     })
 
+    it('resolves attachment media URLs with image variants', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            url: '/api/media/signed/token',
+            expiresAt: '2026-05-13T04:00:00.000Z',
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      const result = await client.resolveAttachmentMediaUrl('attachment-1', {
+        disposition: 'inline',
+        variant: 'preview',
+      })
+
+      expect(result.url).toBe('/api/media/signed/token')
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/attachments/attachment-1/media-url?disposition=inline&variant=preview',
+        expect.any(Object),
+      )
+    })
+
     it('downloads Shadow content refs with bearer auth before re-uploading', async () => {
       const mockFetch = vi
         .fn()
@@ -203,6 +230,44 @@ describe('ShadowClient', () => {
             Authorization: 'Bearer test-token-123',
           }),
         }),
+      )
+    })
+  })
+
+  describe('channel bootstrap', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('requests channel bootstrap data with a message limit', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            access: { canAccess: true },
+            channel: { id: 'channel-1' },
+            server: null,
+            channels: [],
+            members: [],
+            messages: { messages: [], hasMore: false },
+            slashCommands: { commands: [] },
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.getChannelBootstrap('channel-1', { messagesLimit: 50 })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/channels/channel-1/bootstrap?messagesLimit=50',
+        expect.any(Object),
       )
     })
   })

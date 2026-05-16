@@ -73,6 +73,7 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.get('/', async (c) => {
     const agentService = container.resolve('agentService')
     const agentListingDao = container.resolve('agentListingDao')
+    const mediaService = container.resolve('mediaService')
     const rentalContractDao = container.resolve('rentalContractDao')
     const rentalService = container.resolve('rentalService')
     const user = c.get('user')
@@ -139,18 +140,39 @@ export function createAgentHandler(container: AppContainer) {
     }
 
     return c.json(
-      result.map((agent) => {
-        const accessRole = accessRoles.get(agent!.id) ?? 'owner'
-        const base = {
-          ...agent,
-          accessRole,
-          activeContractId: activeContractIds.get(agent!.id) ?? null,
-          isListed: listedAgentIds.has(agent!.id),
-          isRented: rentedAgentIds.has(agent!.id),
-          listingInfo: agentListingStatus.get(agent!.id) ?? null,
-        }
-        return accessRole === 'tenant' ? toTenantAgentView(base) : base
-      }),
+      await Promise.all(
+        result.map(async (agent) => {
+          const signedAgent = {
+            ...agent!,
+            botUser: agent!.botUser
+              ? {
+                  ...agent!.botUser,
+                  avatarUrl: mediaService.resolveMediaUrl(agent!.botUser.avatarUrl, 'image/png', {
+                    variant: 'avatar',
+                  }),
+                }
+              : agent!.botUser,
+            owner: agent!.owner
+              ? {
+                  ...agent!.owner,
+                  avatarUrl: mediaService.resolveMediaUrl(agent!.owner.avatarUrl, 'image/png', {
+                    variant: 'avatar',
+                  }),
+                }
+              : agent!.owner,
+          }
+          const accessRole = accessRoles.get(agent!.id) ?? 'owner'
+          const base = {
+            ...signedAgent,
+            accessRole,
+            activeContractId: activeContractIds.get(agent!.id) ?? null,
+            isListed: listedAgentIds.has(agent!.id),
+            isRented: rentedAgentIds.has(agent!.id),
+            listingInfo: agentListingStatus.get(agent!.id) ?? null,
+          }
+          return accessRole === 'tenant' ? toTenantAgentView(base) : base
+        }),
+      ),
     )
   })
 

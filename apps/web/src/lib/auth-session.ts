@@ -46,6 +46,7 @@ function isAuthPath(pathname: string) {
 
 function markAuthenticated(user: AuthenticatedUser, accessToken: string) {
   useAuthStore.setState({ user, accessToken, isAuthenticated: true })
+  queryClient.setQueryData(['me'], user)
 }
 
 async function fetchCurrentUser(accessToken: string): Promise<AuthenticatedUser | null> {

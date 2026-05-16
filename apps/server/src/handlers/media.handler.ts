@@ -1,9 +1,14 @@
 import { type Context, Hono } from 'hono'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import type { MediaVariant } from '../services/media.service'
 
 function parseDisposition(value: string | undefined): 'inline' | 'attachment' {
   return value === 'attachment' ? 'attachment' : 'inline'
+}
+
+function parseVariant(value: string | undefined): MediaVariant | undefined {
+  return value === 'avatar' || value === 'preview' || value === 'banner' ? value : undefined
 }
 
 async function serveSignedMedia(container: AppContainer, c: Context) {
@@ -97,7 +102,9 @@ export function createMediaHandler(container: AppContainer) {
                 id: author.id,
                 username: author.username,
                 displayName: author.displayName,
-                avatarUrl: mediaService.resolveMediaUrl(author.avatarUrl),
+                avatarUrl: mediaService.resolveMediaUrl(author.avatarUrl, 'image/png', {
+                  variant: 'avatar',
+                }),
                 status: author.status,
                 isBot: author.isBot,
               }
@@ -139,6 +146,7 @@ export function createAttachmentMediaHandler(container: AppContainer) {
       actor: c.get('actor'),
       attachmentId: c.req.param('id'),
       disposition: parseDisposition(c.req.query('disposition')),
+      variant: parseVariant(c.req.query('variant')),
     })
     return c.json(result)
   })

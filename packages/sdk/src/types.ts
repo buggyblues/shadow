@@ -182,6 +182,8 @@ export interface ShadowSignedMediaUrl {
   expiresAt: string
 }
 
+export type ShadowMediaVariant = 'avatar' | 'preview' | 'banner'
+
 export type ShadowServerAppAction = 'read' | 'write' | 'manage' | 'delete' | 'generate'
 export type ShadowServerAppDataClass =
   | 'public'
@@ -659,6 +661,21 @@ export interface ShadowChannelSlashCommand extends ShadowSlashCommand {
   botUserId: string
   botUsername: string
   botDisplayName?: string | null
+}
+
+export interface ShadowChannelBootstrap {
+  access: ShadowChannelAccess
+  channel: ShadowChannel
+  server: ShadowServer | null
+  channels: ShadowChannel[]
+  members: ShadowMember[]
+  messages: {
+    messages: ShadowMessage[]
+    hasMore: boolean
+  }
+  slashCommands: {
+    commands: ShadowChannelSlashCommand[]
+  }
 }
 
 export interface ShadowRemoteChannel {

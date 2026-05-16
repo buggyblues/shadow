@@ -1,7 +1,7 @@
 import { Button, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
-import { Clock, Loader2, Lock, Send } from 'lucide-react'
+import { Clock, Lock, Send } from 'lucide-react'
 import { useEffect, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChatArea } from '../components/chat/chat-area'
@@ -33,6 +33,7 @@ export function ChannelView() {
       }>(`/api/channels/${channelId}/access`),
     enabled: !!channelId,
     retry: false,
+    staleTime: 30_000,
   })
   const canAccessChannel = access?.canAccess === true
 
@@ -43,6 +44,7 @@ export function ChannelView() {
         `/api/channels/${channelId}`,
       ),
     enabled: !!channelId && canAccessChannel,
+    staleTime: 30_000,
   })
 
   const requestAccess = useMutation({
@@ -80,11 +82,7 @@ export function ChannelView() {
   }, [activeServerId, channel?.serverId, channelId])
 
   if (isAccessLoading || (!access && !isAccessError)) {
-    return (
-      <GlassPanel className="flex flex-1 items-center justify-center text-text-muted">
-        <Loader2 size={18} className="animate-spin opacity-60" />
-      </GlassPanel>
-    )
+    return <ChannelContentLoading />
   }
 
   if (isAccessError || !access) {
@@ -130,6 +128,76 @@ export function ChannelView() {
     <>
       <ChatArea key={channelId} />
       <MemberList />
+    </>
+  )
+}
+
+function LoadingShape({ className }: { className: string }) {
+  return <div className={`animate-pulse bg-white/8 ${className}`} />
+}
+
+function ChannelContentLoading() {
+  return (
+    <>
+      <GlassPanel
+        className="flex h-full min-w-0 flex-1 flex-col overflow-hidden"
+        style={{
+          background: 'var(--chat-panel-bg)',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
+        }}
+        aria-hidden
+      >
+        <div className="app-header flex items-center gap-3 border-b border-border-subtle/30 px-6">
+          <LoadingShape className="h-8 w-8 rounded-full" />
+          <LoadingShape className="h-5 w-28 rounded-full" />
+          <LoadingShape className="hidden h-5 w-40 rounded-full sm:block" />
+          <div className="ml-auto flex gap-2">
+            <LoadingShape className="h-8 w-8 rounded-full" />
+            <LoadingShape className="h-8 w-8 rounded-full" />
+          </div>
+        </div>
+        <div className="flex-1 space-y-6 px-6 py-7">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="flex gap-4">
+              <LoadingShape className="h-11 w-11 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2 pt-1">
+                <div className="flex items-center gap-3">
+                  <LoadingShape className="h-4 w-24 rounded-full" />
+                  <LoadingShape className="h-3 w-20 rounded-full" />
+                </div>
+                <LoadingShape className="h-4 w-[min(78%,34rem)] rounded-full" />
+                <LoadingShape className="h-4 w-[min(58%,24rem)] rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="px-5 pb-5">
+          <LoadingShape className="h-14 w-full rounded-[28px]" />
+        </div>
+      </GlassPanel>
+
+      <GlassPanel
+        className="hidden h-full w-[240px] shrink-0 overflow-hidden pt-4 lg:block"
+        aria-hidden
+      >
+        <div className="px-4 pb-4 pt-2">
+          <LoadingShape className="h-[54px] w-full rounded-full" />
+        </div>
+        <div className="space-y-5 px-4">
+          <div className="space-y-3">
+            <LoadingShape className="h-3 w-24 rounded-full" />
+            <div className="space-y-2">
+              <LoadingShape className="h-[66px] w-full rounded-2xl" />
+              <LoadingShape className="h-[56px] w-[88%] rounded-2xl" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <LoadingShape className="h-3 w-24 rounded-full" />
+            <LoadingShape className="h-[56px] w-[78%] rounded-2xl" />
+          </div>
+        </div>
+      </GlassPanel>
     </>
   )
 }

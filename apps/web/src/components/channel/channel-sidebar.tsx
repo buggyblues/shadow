@@ -19,7 +19,6 @@ import {
   Archive,
   Check,
   ChevronDown,
-  ChevronRight,
   Copy,
   Edit3,
   Hash,
@@ -36,6 +35,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChannelSort } from '../../hooks/use-channel-sort'
+import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { joinChannel } from '../../lib/socket'
@@ -110,13 +110,18 @@ const channelIcons = {
   announcement: Megaphone,
 }
 
-export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
+export function ChannelSidebar({
+  serverSlug,
+  deferInitialQueries = false,
+}: {
+  serverSlug: string
+  deferInitialQueries?: boolean
+}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { appKey } = useParams({ strict: false }) as { appKey?: string }
   const queryClient = useQueryClient()
   const { activeChannelId, setActiveChannel } = useChatStore()
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [showCreate, setShowCreate] = useState(false)
   const [showServerEdit, setShowServerEdit] = useState(false)
   const [serverSettingsInitialTab, setServerSettingsInitialTab] = useState<'basic' | 'apps'>(
@@ -157,21 +162,31 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const lastMarkedChannelRef = useRef<string | null>(null)
+  const canLoadInitialQueries = Boolean(serverSlug) && !deferInitialQueries
+  const loadNonCritical = useDeferredQueryEnabled({
+    enabled: !deferInitialQueries,
+    delayMs: 4000,
+  })
 
   const { data: server } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<Server>(`/api/servers/${serverSlug}`),
+    enabled: canLoadInitialQueries,
+    staleTime: 30_000,
   })
 
   const { data: rawChannels = [] } = useQuery<Channel[]>({
     queryKey: ['channels', serverSlug],
     queryFn: () => fetchApi<Channel[]>(`/api/servers/${serverSlug}/channels`),
+    enabled: canLoadInitialQueries,
+    staleTime: 30_000,
   })
 
   const { data: serverApps = [] } = useQuery<ServerAppSummary[]>({
     queryKey: ['server-apps', serverSlug],
     queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps`),
-    enabled: !!serverSlug,
+    enabled: !!serverSlug && loadNonCritical,
+    staleTime: 60_000,
   })
 
   // Channel sorting and filter
@@ -194,12 +209,15 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const { data: scopedUnread } = useQuery({
     queryKey: ['notification-scoped-unread'],
     queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
+    enabled: loadNonCritical,
     refetchInterval: 15_000,
   })
 
   const { data: notificationPreference } = useQuery({
     queryKey: ['notification-preferences'],
     queryFn: () => fetchApi<NotificationPreference>('/api/notifications/preferences'),
+    enabled: loadNonCritical,
+    staleTime: 60_000,
   })
 
   const updateNotificationPreference = useMutation({
@@ -407,134 +425,99 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
   })
 
-  const toggleGroup = (label: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }))
-  }
+  const renderChannelItem = (ch: Channel) => {
+    const Icon = channelIcons[ch.type] ?? Hash
+    const isActive = activeChannelId === ch.id
+    const isEditing = editingChannel?.id === ch.id
+    const unreadCount = scopedUnread?.channelUnread?.[ch.id] ?? 0
+    const isUnread = !isActive && unreadCount > 0
 
-  const textChannels = visibleChannels.filter((channel) => channel.type === 'text')
-  const voiceChannels = visibleChannels.filter((channel) => channel.type === 'voice')
-  const announcementChannels = visibleChannels.filter((channel) => channel.type === 'announcement')
-
-  const renderChannelGroup = (label: string, items: Channel[]) => {
-    if (items.length === 0) return null
-    const isCollapsed = searchQuery.trim() ? false : !!collapsedGroups[label]
     return (
-      <div className="mb-0.5">
-        <div className="flex items-center justify-between pr-2">
+      <div key={ch.id}>
+        {isEditing ? (
+          <div className="relative flex items-center gap-1.5 px-2 py-1 bg-primary/10 rounded-xl border border-primary/20">
+            <Icon size={16} className="shrink-0 text-text-muted" />
+            <Input
+              type="text"
+              value={editChannelName}
+              onChange={(e) => setEditChannelName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && editChannelName.trim()) {
+                  updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
+                } else if (e.key === 'Escape') {
+                  setEditingChannel(null)
+                }
+              }}
+              autoFocus
+              className="flex-1 !bg-transparent !border-none !shadow-none !ring-0 text-text-primary font-black !rounded-md !px-2 !py-1 text-sm focus:!ring-1 focus:!ring-primary pr-8"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (editChannelName.trim()) {
+                  updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
+                }
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-success/20 text-success hover:text-success/80 transition-colors"
+            >
+              <Check size={14} />
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
-            onClick={() => toggleGroup(label)}
-            className="flex items-center gap-1 px-2 py-1 text-[11px] font-black tracking-[0.1em] uppercase text-text-muted hover:text-text-primary flex-1 transition-colors"
+            data-channel-item
+            onClick={async () => {
+              if (ch.isMember === false) {
+                const result = await fetchApi<{
+                  status: 'approved' | 'pending' | 'rejected'
+                }>(`/api/channels/${ch.id}/join-requests`, {
+                  method: 'POST',
+                })
+                await queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+                await queryClient.invalidateQueries({ queryKey: ['channel-access', ch.id] })
+                queryClient.invalidateQueries({ queryKey: ['notifications'] })
+                queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+                if (result.status !== 'approved') {
+                  handleSelectChannel(ch.id)
+                  return
+                }
+              }
+              handleSelectChannel(ch.id)
+            }}
+            onContextMenu={(e) => handleContextMenu(e, ch)}
+            className={cn(
+              'group flex items-center gap-2 px-2 py-[6px] rounded-xl text-sm font-medium w-full text-left transition-all duration-300',
+              isActive
+                ? 'channel-pill-active text-primary ring-1 ring-primary/20'
+                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
+              isUnread && 'font-bold text-text-primary',
+            )}
           >
-            <div className="w-4 h-4 flex items-center justify-center shrink-0 text-text-muted/60">
-              {isCollapsed ? (
-                <ChevronRight size={10} strokeWidth={3} className="shrink-0" />
-              ) : (
-                <ChevronDown size={10} strokeWidth={3} className="shrink-0" />
+            <div
+              className={cn(
+                'w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-all duration-300',
+                isActive
+                  ? 'bg-primary/20 text-primary'
+                  : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
               )}
+            >
+              <Icon size={14} />
             </div>
-            <span className="truncate">{label}</span>
+            <span className={cn('truncate', ch.isArchived && 'text-text-muted italic')}>
+              {ch.name}
+            </span>
+            {ch.isArchived && <Archive size={12} className="text-text-muted/60 shrink-0" />}
+            {ch.isPrivate && <Lock size={12} className="text-text-muted/60 shrink-0" />}
+            {ch.isMember === false && (
+              <Badge variant="primary" size="xs" className="shrink-0">
+                {t('channel.joinButton')}
+              </Badge>
+            )}
+            {isUnread && (
+              <span className="ml-auto w-2 h-2 rounded-full bg-primary shadow-lg shadow-primary/30 shrink-0 animate-pulse" />
+            )}
           </button>
-        </div>
-        {!isCollapsed && (
-          <div className="px-2 space-y-0.5 mt-0.5">
-            {items.map((ch) => {
-              const Icon = channelIcons[ch.type]
-              const isActive = activeChannelId === ch.id
-              const isEditing = editingChannel?.id === ch.id
-              const unreadCount = scopedUnread?.channelUnread?.[ch.id] ?? 0
-              const isUnread = !isActive && unreadCount > 0
-              return isEditing ? (
-                <div
-                  key={ch.id}
-                  className="relative flex items-center gap-1.5 px-2 py-1 bg-primary/10 rounded-xl border border-primary/20"
-                >
-                  <Icon size={16} className="shrink-0 text-text-muted" />
-                  <Input
-                    type="text"
-                    value={editChannelName}
-                    onChange={(e) => setEditChannelName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && editChannelName.trim()) {
-                        updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
-                      } else if (e.key === 'Escape') {
-                        setEditingChannel(null)
-                      }
-                    }}
-                    autoFocus
-                    className="flex-1 !bg-transparent !border-none !shadow-none !ring-0 text-text-primary font-black !rounded-md !px-2 !py-1 text-sm focus:!ring-1 focus:!ring-primary pr-8"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (editChannelName.trim()) {
-                        updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
-                      }
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-success/20 text-success hover:text-success/80 transition-colors"
-                  >
-                    <Check size={14} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  key={ch.id}
-                  data-channel-item
-                  onClick={async () => {
-                    if (ch.isMember === false) {
-                      const result = await fetchApi<{
-                        status: 'approved' | 'pending' | 'rejected'
-                      }>(`/api/channels/${ch.id}/join-requests`, {
-                        method: 'POST',
-                      })
-                      await queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
-                      await queryClient.invalidateQueries({ queryKey: ['channel-access', ch.id] })
-                      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-                      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
-                      if (result.status !== 'approved') {
-                        handleSelectChannel(ch.id)
-                        return
-                      }
-                    }
-                    handleSelectChannel(ch.id)
-                  }}
-                  onContextMenu={(e) => handleContextMenu(e, ch)}
-                  className={cn(
-                    'group flex items-center gap-2 px-2 py-[6px] rounded-xl text-sm font-medium w-full text-left transition-all duration-300',
-                    isActive
-                      ? 'channel-pill-active text-primary ring-1 ring-primary/20'
-                      : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
-                    isUnread && 'font-bold text-text-primary',
-                  )}
-                >
-                  <div
-                    className={cn(
-                      'w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-all duration-300',
-                      isActive
-                        ? 'bg-primary/20 text-primary'
-                        : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
-                    )}
-                  >
-                    <Icon size={14} />
-                  </div>
-                  <span className={cn('truncate', ch.isArchived && 'text-text-muted italic')}>
-                    {ch.name}
-                  </span>
-                  {ch.isArchived && <Archive size={12} className="text-text-muted/60 shrink-0" />}
-                  {ch.isPrivate && <Lock size={12} className="text-text-muted/60 shrink-0" />}
-                  {ch.isMember === false && (
-                    <Badge variant="primary" size="xs" className="shrink-0">
-                      {t('channel.joinButton')}
-                    </Badge>
-                  )}
-                  {isUnread && (
-                    <span className="ml-auto w-2 h-2 rounded-full bg-primary shadow-lg shadow-primary/30 shrink-0 animate-pulse" />
-                  )}
-                </button>
-              )
-            })}
-          </div>
         )}
       </div>
     )
@@ -593,56 +576,58 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           setBlankContextMenu({ x: e.clientX, y: e.clientY })
         }}
       >
-        <div className="mb-3">
-          <div className="flex items-center justify-between px-3 py-1.5">
-            <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
-              {t('serverApps.group')}
-            </span>
-            <button
-              type="button"
-              onClick={openAppSettings}
-              className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-full"
-              title={t('serverApps.addApp')}
-            >
-              <Plus size={14} strokeWidth={3} />
-            </button>
-          </div>
-          <div className="px-2 space-y-0.5">
-            {serverApps.map((app) => {
-              const isActive = appKey === app.appKey
-              return (
-                <button
-                  type="button"
-                  key={app.id}
-                  data-app-item
-                  onClick={() => handleSelectApp(app.appKey)}
-                  className={cn(
-                    'group flex items-center gap-2 px-2 py-[6px] rounded-xl text-sm font-medium w-full text-left transition-all duration-300',
-                    isActive
-                      ? 'channel-pill-active text-primary ring-1 ring-primary/20'
-                      : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
-                  )}
-                >
-                  <div
+        {serverApps.length > 0 && (
+          <div className="mb-3">
+            <div className="flex items-center justify-between px-3 py-1.5">
+              <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
+                {t('serverApps.group')}
+              </span>
+              <button
+                type="button"
+                onClick={openAppSettings}
+                className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-full"
+                title={t('serverApps.addApp')}
+              >
+                <Plus size={14} strokeWidth={3} />
+              </button>
+            </div>
+            <div className="px-2 space-y-0.5">
+              {serverApps.map((app) => {
+                const isActive = appKey === app.appKey
+                return (
+                  <button
+                    type="button"
+                    key={app.id}
+                    data-app-item
+                    onClick={() => handleSelectApp(app.appKey)}
                     className={cn(
-                      'w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-all duration-300 overflow-hidden',
+                      'group flex items-center gap-2 px-2 py-[6px] rounded-xl text-sm font-medium w-full text-left transition-all duration-300',
                       isActive
-                        ? 'bg-primary/20 text-primary'
-                        : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
+                        ? 'channel-pill-active text-primary ring-1 ring-primary/20'
+                        : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
                     )}
                   >
-                    {app.iconUrl ? (
-                      <img src={app.iconUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <AppWindow size={14} />
-                    )}
-                  </div>
-                  <span className="truncate">{app.name}</span>
-                </button>
-              )
-            })}
+                    <div
+                      className={cn(
+                        'w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-all duration-300 overflow-hidden',
+                        isActive
+                          ? 'bg-primary/20 text-primary'
+                          : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
+                      )}
+                    >
+                      {app.iconUrl ? (
+                        <img src={app.iconUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <AppWindow size={14} />
+                      )}
+                    </div>
+                    <span className="truncate">{app.name}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Channel filter and sort bar */}
         {server?.id && (
@@ -670,11 +655,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           </div>
         )}
 
-        <div className="px-1 space-y-0.5">
-          {renderChannelGroup(t('channel.announcement'), announcementChannels)}
-          {renderChannelGroup(t('channel.text'), textChannels)}
-          {renderChannelGroup(t('channel.voice'), voiceChannels)}
-        </div>
+        <div className="px-2 space-y-0.5">{visibleChannels.map(renderChannelItem)}</div>
 
         {visibleChannels.length === 0 && (
           <div className="px-4 py-6 text-center">

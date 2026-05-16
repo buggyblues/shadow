@@ -134,6 +134,32 @@ interface SlashCommand {
   botDisplayName?: string | null
 }
 
+interface ChannelMember {
+  id: string
+  userId: string
+  role: 'owner' | 'admin' | 'member'
+  user: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+    status?: string
+    isBot?: boolean
+  }
+}
+
+interface ChannelBootstrap {
+  access: {
+    canAccess: boolean
+    joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
+    channel: Channel
+  }
+  channel: Channel
+  members: ChannelMember[]
+  messages: MessagesPage | Message[]
+  slashCommands: { commands: SlashCommand[] }
+}
+
 export default function ChannelViewScreen() {
   const params = useLocalSearchParams<{
     serverSlug?: string
@@ -188,6 +214,7 @@ export default function ChannelViewScreen() {
   const searchInputRef = useRef<TextInput>(null)
   const inputRef = useRef<TextInput>(null)
   const hasRestoredDraft = useRef(false)
+  const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
 
   // Draft storage for persistent input
   const { restoredDraft, scheduleSave, clear: clearDraft } = useDraftStorage(channelId || null)
@@ -248,14 +275,52 @@ export default function ChannelViewScreen() {
     getCurrentText: () => inputText,
   })
 
+  const { data: bootstrap, isError: isBootstrapError } = useQuery({
+    queryKey: ['channel-bootstrap', channelId],
+    queryFn: () =>
+      fetchApi<ChannelBootstrap>(`/api/channels/${channelId}/bootstrap?messagesLimit=${PAGE_SIZE}`),
+    enabled: !!channelId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  })
+
+  useEffect(() => {
+    if (!channelId || !bootstrap) return
+    const normalizedMessages = Array.isArray(bootstrap.messages)
+      ? {
+          messages: bootstrap.messages.map((m) =>
+            normalizeMessage(m as unknown as Record<string, unknown>),
+          ),
+          hasMore: bootstrap.messages.length >= PAGE_SIZE,
+        }
+      : {
+          messages: bootstrap.messages.messages.map((m) =>
+            normalizeMessage(m as unknown as Record<string, unknown>),
+          ),
+          hasMore: bootstrap.messages.hasMore,
+        }
+
+    queryClient.setQueryData(['channel', channelId], bootstrap.channel)
+    queryClient.setQueryData(['channel-access', channelId], bootstrap.access)
+    queryClient.setQueryData(['channel-members', channelId], bootstrap.members)
+    queryClient.setQueryData(['channel-slash-commands', channelId], bootstrap.slashCommands)
+    queryClient.setQueryData(['messages', channelId], {
+      pages: [normalizedMessages],
+      pageParams: [null],
+    })
+    setBootstrapSeededChannelId(channelId)
+  }, [bootstrap, channelId, queryClient])
+
   // ---------- Channel info ----------
-  const { data: channel } = useQuery({
+  const { data: channelFallback } = useQuery({
     queryKey: ['channel', channelId],
     queryFn: () => fetchApi<Channel>(`/api/channels/${channelId}`),
-    enabled: !!channelId,
+    enabled: !!channelId && isBootstrapError,
+    staleTime: 30_000,
   })
+  const channel = bootstrap?.channel ?? channelFallback
   const isDirectChannel = channel?.kind === 'dm' || channel?.serverId === null
-  const { data: access } = useQuery({
+  const { data: accessFallback } = useQuery({
     queryKey: ['channel-access', channelId],
     queryFn: () =>
       fetchApi<{
@@ -263,8 +328,10 @@ export default function ChannelViewScreen() {
         joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
         channel: Channel
       }>(`/api/channels/${channelId}/access`),
-    enabled: !!channelId,
+    enabled: !!channelId && isBootstrapError,
+    staleTime: 30_000,
   })
+  const access = bootstrap?.access ?? accessFallback
   const canAccessChannel = access?.canAccess ?? false
 
   const requestAccessMutation = useMutation({
@@ -279,25 +346,12 @@ export default function ChannelViewScreen() {
     },
   })
 
-  // ---------- Channel members ----------
-  interface ChannelMember {
-    id: string
-    userId: string
-    role: 'owner' | 'admin' | 'member'
-    user: {
-      id: string
-      username: string
-      displayName: string | null
-      avatarUrl: string | null
-      status?: string
-      isBot?: boolean
-    }
-  }
-
   const { data: channelMembers = [] } = useQuery({
     queryKey: ['channel-members', channelId],
     queryFn: () => fetchApi<ChannelMember[]>(`/api/channels/${channelId}/members`),
-    enabled: !!channelId && canAccessChannel,
+    enabled:
+      !!channelId && canAccessChannel && (bootstrapSeededChannelId === channelId || !bootstrap),
+    staleTime: 30_000,
   })
 
   // Server members for invite panel
@@ -366,7 +420,9 @@ export default function ChannelViewScreen() {
     queryKey: ['channel-slash-commands', channelId],
     queryFn: () =>
       fetchApi<{ commands: SlashCommand[] }>(`/api/channels/${channelId}/slash-commands`),
-    enabled: Boolean(channelId && canAccessChannel),
+    enabled: Boolean(
+      channelId && canAccessChannel && (bootstrapSeededChannelId === channelId || !bootstrap),
+    ),
     staleTime: 30_000,
   })
 
@@ -554,7 +610,9 @@ export default function ChannelViewScreen() {
       if (!lastPage.hasMore || lastPage.messages.length === 0) return undefined
       return lastPage.messages[0]?.createdAt
     },
-    enabled: !!channelId && canAccessChannel,
+    enabled:
+      !!channelId && canAccessChannel && (bootstrapSeededChannelId === channelId || !bootstrap),
+    staleTime: 30_000,
   })
 
   const messages = useMemo(() => {
