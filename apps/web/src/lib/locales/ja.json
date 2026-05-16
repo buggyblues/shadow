@@ -2737,6 +2737,14 @@
     "speaker": "スピーカー",
     "earpiece": "受話口",
     "joinFailed": "ボイスチャンネルに参加できませんでした",
+    "permissionPolicyTitle": "ページの権限ポリシーがボイスをブロックしています",
+    "microphoneMissingTitle": "利用可能なマイクが見つかりません",
+    "microphonePermissionTitle": "マイク権限が必要です",
+    "microphonePolicyHint": "現在のデプロイの Permissions-Policy または埋め込みコンテナがマイク取得を禁止しているため、ブラウザーは権限ダイアログを表示できません。デプロイ設定を更新してからページを再読み込みしてください。",
+    "screenPolicyHint": "現在のページポリシーが画面共有を禁止しているため、ブラウザーは共有ピッカーを表示できません。デプロイ設定を更新してから再試行してください。",
+    "microphonePermissionHint": "ブラウザーの確認が表示されない場合は、アドレスバー横のサイト権限でマイクを許可し、もう一度リクエストしてください。",
+    "requestMicrophone": "マイク権限を再リクエスト",
+    "retryJoin": "再参加",
     "network": {
       "unknown": "ネットワーク不明",
       "excellent": "ネットワーク良好",
@@ -2747,7 +2755,10 @@
     "errors": {
       "rtcNotConfigured": "サーバー側のボイスサービスが未設定です。",
       "microphonePermission": "ブラウザーでマイク権限を許可してから再参加してください。",
-      "screenPermission": "ブラウザーで画面共有を許可してから再試行してください。"
+      "microphonePolicy": "このページはマイクアクセスをブロックしているため、権限ダイアログを表示できません。",
+      "microphoneNotFound": "利用可能なマイクが検出されませんでした。",
+      "screenPermission": "ブラウザーで画面共有を許可してから再試行してください。",
+      "screenPolicy": "このページは画面共有をブロックしているため、共有ピッカーを表示できません。"
     }
   }
 }

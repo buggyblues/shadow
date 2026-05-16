@@ -78,10 +78,26 @@ export interface RemoteScreen {
 }
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'error'
-type VoiceErrorKey = 'rtcNotConfigured' | 'microphonePermission' | 'screenPermission' | null
+type VoiceErrorKey =
+  | 'rtcNotConfigured'
+  | 'microphonePermission'
+  | 'microphonePolicy'
+  | 'microphoneNotFound'
+  | 'screenPermission'
+  | 'screenPolicy'
+  | null
 export type NetworkQuality = 'unknown' | 'excellent' | 'good' | 'fair' | 'poor'
 
 type VoiceCue = 'join' | 'leave'
+type CaptureFeature = 'microphone' | 'display-capture'
+
+const VOICE_MICROPHONE_POLICY_BLOCKED = 'VOICE_MICROPHONE_POLICY_BLOCKED'
+const VOICE_MICROPHONE_PERMISSION_DENIED = 'VOICE_MICROPHONE_PERMISSION_DENIED'
+const VOICE_SCREEN_POLICY_BLOCKED = 'VOICE_SCREEN_POLICY_BLOCKED'
+
+interface BrowserPermissionsPolicy {
+  allowsFeature?: (feature: string, origin?: string) => boolean
+}
 
 let voiceCueContext: AudioContext | null = null
 
@@ -142,9 +158,71 @@ function socketCall<T>(event: string, payload: unknown): Promise<T> {
   })
 }
 
+function createCodedError(message: string, code: string) {
+  return Object.assign(new Error(message), { code })
+}
+
+function getDocumentPermissionsPolicy() {
+  if (typeof document === 'undefined') return null
+  const policyDocument = document as Document & {
+    permissionsPolicy?: BrowserPermissionsPolicy
+    featurePolicy?: BrowserPermissionsPolicy
+  }
+  return policyDocument.permissionsPolicy ?? policyDocument.featurePolicy ?? null
+}
+
+function isCaptureBlockedByPolicy(feature: CaptureFeature) {
+  const policy = getDocumentPermissionsPolicy()
+  if (typeof policy?.allowsFeature !== 'function') return false
+
+  try {
+    return policy.allowsFeature(feature) === false
+  } catch {
+    return false
+  }
+}
+
+async function getBrowserPermissionState(name: 'microphone') {
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return null
+
+  try {
+    const status = await navigator.permissions.query({ name: name as PermissionName })
+    return status.state
+  } catch {
+    return null
+  }
+}
+
+async function assertMicrophoneCaptureAllowed() {
+  if (isCaptureBlockedByPolicy('microphone')) {
+    throw createCodedError(
+      'Microphone capture is blocked by the page permissions policy.',
+      VOICE_MICROPHONE_POLICY_BLOCKED,
+    )
+  }
+
+  const permissionState = await getBrowserPermissionState('microphone')
+  if (permissionState === 'denied') {
+    throw createCodedError(
+      'Microphone permission has been denied by the browser.',
+      VOICE_MICROPHONE_PERMISSION_DENIED,
+    )
+  }
+}
+
+function assertScreenCaptureAllowed() {
+  if (isCaptureBlockedByPolicy('display-capture')) {
+    throw createCodedError(
+      'Screen capture is blocked by the page permissions policy.',
+      VOICE_SCREEN_POLICY_BLOCKED,
+    )
+  }
+}
+
 function voiceErrorKey(err: unknown): VoiceErrorKey {
-  const error = err as { code?: string; message?: string }
+  const error = err as { code?: string; message?: string; name?: string }
   const message = error?.message ?? ''
+  const normalized = `${error?.code ?? ''} ${error?.name ?? ''} ${message}`.toLowerCase()
   if (
     error?.code === 'VOICE_RTC_NOT_CONFIGURED' ||
     message.includes('Agora RTC is not configured')
@@ -152,21 +230,50 @@ function voiceErrorKey(err: unknown): VoiceErrorKey {
     return 'rtcNotConfigured'
   }
   if (
+    error?.code === VOICE_MICROPHONE_POLICY_BLOCKED ||
+    normalized.includes('permissions policy') ||
+    normalized.includes('permission policy') ||
+    normalized.includes('microphone is not allowed in this document')
+  ) {
+    return 'microphonePolicy'
+  }
+  if (
+    normalized.includes('notfounderror') ||
+    normalized.includes('devicesnotfounderror') ||
+    normalized.includes('requested device not found') ||
+    normalized.includes('no microphone')
+  ) {
+    return 'microphoneNotFound'
+  }
+  if (
+    error?.code === VOICE_MICROPHONE_PERMISSION_DENIED ||
     error?.code === 'PERMISSION_DENIED' ||
-    message.includes('PERMISSION_DENIED') ||
-    message.includes('NotAllowedError')
+    normalized.includes('permission_denied') ||
+    normalized.includes('notallowederror') ||
+    normalized.includes('permission denied')
   ) {
     return 'microphonePermission'
-  }
-  if (message.includes('NotAllowedError') || message.includes('Permission denied')) {
-    return 'screenPermission'
   }
   return null
 }
 
 function screenShareErrorKey(err: unknown): VoiceErrorKey {
-  const message = (err as { message?: string })?.message ?? ''
-  if (message.includes('NotAllowedError') || message.includes('Permission denied')) {
+  const error = err as { code?: string; message?: string; name?: string }
+  const normalized =
+    `${error?.code ?? ''} ${error?.name ?? ''} ${error?.message ?? ''}`.toLowerCase()
+  if (
+    error?.code === VOICE_SCREEN_POLICY_BLOCKED ||
+    normalized.includes('permissions policy') ||
+    normalized.includes('permission policy') ||
+    normalized.includes('display-capture')
+  ) {
+    return 'screenPolicy'
+  }
+  if (
+    normalized.includes('permission_denied') ||
+    normalized.includes('notallowederror') ||
+    normalized.includes('permission denied')
+  ) {
     return 'screenPermission'
   }
   return voiceErrorKey(err)
@@ -252,14 +359,25 @@ export function useVoiceChannel(channelId: string | null) {
 
   const startMicTest = useCallback(async () => {
     stopMicTest()
-    const track = await AgoraRTC.createMicrophoneAudioTrack({
-      microphoneId: selectedMicrophoneId || undefined,
-    })
-    micTestTrackRef.current = track
-    setIsTestingMic(true)
-    micTestTimerRef.current = setInterval(() => {
-      setMicTestLevel(Math.round((track.getVolumeLevel?.() ?? 0) * 100))
-    }, 120)
+    setError(null)
+    setErrorKey(null)
+    try {
+      await assertMicrophoneCaptureAllowed()
+      const track = await AgoraRTC.createMicrophoneAudioTrack({
+        microphoneId: selectedMicrophoneId || undefined,
+      })
+      micTestTrackRef.current = track
+      setIsTestingMic(true)
+      micTestTimerRef.current = setInterval(() => {
+        setMicTestLevel(Math.round((track.getVolumeLevel?.() ?? 0) * 100))
+      }, 120)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to test microphone'
+      setError(message)
+      setErrorKey(voiceErrorKey(err))
+      setIsTestingMic(false)
+      setMicTestLevel(0)
+    }
   }, [selectedMicrophoneId, stopMicTest])
 
   const clearTokenRenewal = useCallback(() => {
@@ -406,7 +524,17 @@ export function useVoiceChannel(channelId: string | null) {
     setStatus('connecting')
     setError(null)
     setErrorKey(null)
+    let localAudioTrack: Awaited<ReturnType<typeof AgoraRTC.createMicrophoneAudioTrack>> | null =
+      null
     try {
+      await assertMicrophoneCaptureAllowed()
+      localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+        microphoneId: selectedMicrophoneId || undefined,
+        encoderConfig: 'music_standard',
+      })
+      localAudioTrackRef.current = localAudioTrack
+      await localAudioTrack.setEnabled(!isMuted)
+
       const result = await socketCall<VoiceJoinResult>('voice:join', {
         channelId,
         clientId,
@@ -462,12 +590,6 @@ export function useVoiceChannel(channelId: string | null) {
         result.credentials.token,
         result.credentials.uid,
       )
-      const localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        microphoneId: selectedMicrophoneId || undefined,
-        encoderConfig: 'music_standard',
-      })
-      localAudioTrackRef.current = localAudioTrack
-      await localAudioTrack.setEnabled(!isMuted)
       await client.publish([localAudioTrack])
       setStatus('connected')
       playVoiceCue('join')
@@ -478,6 +600,11 @@ export function useVoiceChannel(channelId: string | null) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to join voice channel'
       await leave({ silent: true })
+      if (localAudioTrackRef.current === localAudioTrack) {
+        localAudioTrackRef.current = null
+      }
+      localAudioTrack?.stop?.()
+      localAudioTrack?.close?.()
       setError(message)
       setErrorKey(voiceErrorKey(err))
       setStatus('error')
@@ -556,7 +683,17 @@ export function useVoiceChannel(channelId: string | null) {
     if (!credentials || isScreenSharing) return
     setError(null)
     setErrorKey(null)
+    let screenTrack: any = null
     try {
+      assertScreenCaptureAllowed()
+      const trackResult = await AgoraRTC.createScreenVideoTrack(
+        { encoderConfig: '1080p_1' },
+        'disable',
+      )
+      screenTrack = Array.isArray(trackResult) ? trackResult[0] : trackResult
+      localScreenTrackRef.current = screenTrack
+      screenTrack.on?.('track-ended', () => void stopScreenShare())
+
       const screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
       screenClientRef.current = screenClient
       screenClient.on('token-privilege-will-expire', () => {
@@ -571,13 +708,6 @@ export function useVoiceChannel(channelId: string | null) {
         credentials.screenToken,
         credentials.screenUid,
       )
-      const trackResult = await AgoraRTC.createScreenVideoTrack(
-        { encoderConfig: '1080p_1' },
-        'disable',
-      )
-      const screenTrack = Array.isArray(trackResult) ? trackResult[0] : trackResult
-      localScreenTrackRef.current = screenTrack
-      screenTrack.on?.('track-ended', () => void stopScreenShare())
       await screenClient.publish([screenTrack])
       setLocalScreenTrack(screenTrack)
       setRemoteScreens((prev) =>
@@ -597,6 +727,8 @@ export function useVoiceChannel(channelId: string | null) {
       setError(message)
       setErrorKey(screenShareErrorKey(err))
       emitVoiceState({ screenSharing: false })
+      screenTrack?.stop?.()
+      screenTrack?.close?.()
     }
   }, [emitVoiceState, isScreenSharing, stopScreenShare])
 

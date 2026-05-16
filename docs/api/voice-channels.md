@@ -11,6 +11,16 @@ Set these on the server process:
 
 Do not set or depend on `VITE_AGORA_*` in web or mobile clients. Clients call the authenticated Shadow `join` API and receive only scoped RTC data: `appId`, `agoraChannelName`, `uid`, `screenUid`, `token`, `screenToken`, and `expiresAt`.
 
+### Web deployment headers
+
+The browser must be allowed to request capture permissions on the Shadow app document. In production, the `/app` HTML response needs a `Permissions-Policy` that allows same-origin microphone capture and screen capture:
+
+```nginx
+add_header Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), geolocation=()" always;
+```
+
+If `microphone=()` is sent for `/app`, Chrome rejects `getUserMedia` with `Permissions policy violation: microphone is not allowed in this document`. In that state the browser will not show a permission prompt, and the user cannot recover from UI retry alone until the deployment header or embedding `allow` policy is fixed and the page is refreshed.
+
 ## Authorization
 
 All voice routes require `PolicyService.requireChannelRead(actor, channelId)`. The target channel must be a server channel with `type: "voice"`.

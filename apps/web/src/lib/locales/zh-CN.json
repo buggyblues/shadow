@@ -2737,6 +2737,14 @@
     "speaker": "扬声器",
     "earpiece": "听筒",
     "joinFailed": "加入语音频道失败",
+    "permissionPolicyTitle": "页面权限策略阻止了语音",
+    "microphoneMissingTitle": "未找到可用麦克风",
+    "microphonePermissionTitle": "需要麦克风权限",
+    "microphonePolicyHint": "当前部署的 Permissions-Policy 或嵌入容器禁止了麦克风，浏览器不会弹出授权窗口。请更新部署配置后刷新页面。",
+    "screenPolicyHint": "当前页面策略禁止屏幕共享，浏览器不会弹出共享窗口。请更新部署配置后重试。",
+    "microphonePermissionHint": "如果浏览器没有弹窗，请点击地址栏旁的站点权限，将麦克风改为允许，然后再重新请求。",
+    "requestMicrophone": "重新请求麦克风权限",
+    "retryJoin": "重新加入",
     "network": {
       "unknown": "网络状态未知",
       "excellent": "网络极佳",
@@ -2747,7 +2755,10 @@
     "errors": {
       "rtcNotConfigured": "服务端尚未配置语音服务。",
       "microphonePermission": "请在浏览器中允许麦克风权限，然后重新加入。",
-      "screenPermission": "请在浏览器中允许屏幕共享，然后重试。"
+      "microphonePolicy": "当前页面禁止使用麦克风，无法弹出授权窗口。",
+      "microphoneNotFound": "未检测到可用麦克风。",
+      "screenPermission": "请在浏览器中允许屏幕共享，然后重试。",
+      "screenPolicy": "当前页面禁止屏幕共享，无法弹出共享窗口。"
     }
   }
 }

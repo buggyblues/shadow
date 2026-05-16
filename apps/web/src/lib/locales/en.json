@@ -2737,6 +2737,14 @@
     "speaker": "Speaker",
     "earpiece": "Earpiece",
     "joinFailed": "Failed to join voice channel",
+    "permissionPolicyTitle": "Page policy blocks voice",
+    "microphoneMissingTitle": "No microphone found",
+    "microphonePermissionTitle": "Microphone permission required",
+    "microphonePolicyHint": "The current deployment Permissions-Policy or embedding container blocks microphone capture, so the browser will not show a permission prompt. Update the deployment config, then refresh.",
+    "screenPolicyHint": "The current page policy blocks screen sharing, so the browser will not show the sharing picker. Update the deployment config, then retry.",
+    "microphonePermissionHint": "If no browser prompt appears, open site permissions from the address bar, allow microphone access, then request it again.",
+    "requestMicrophone": "Request microphone again",
+    "retryJoin": "Join again",
     "network": {
       "unknown": "Network unknown",
       "excellent": "Excellent network",
@@ -2747,7 +2755,10 @@
     "errors": {
       "rtcNotConfigured": "Voice service is not configured on the server.",
       "microphonePermission": "Allow microphone access in your browser, then join again.",
-      "screenPermission": "Allow screen sharing in your browser, then try again."
+      "microphonePolicy": "This page blocks microphone access, so the browser cannot show a permission prompt.",
+      "microphoneNotFound": "No available microphone was detected.",
+      "screenPermission": "Allow screen sharing in your browser, then try again.",
+      "screenPolicy": "This page blocks screen sharing, so the browser cannot show the sharing picker."
     }
   }
 }
