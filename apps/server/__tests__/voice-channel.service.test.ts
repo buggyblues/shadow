@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { VoiceChannelService } from '../src/services/voice-channel.service'
 
+vi.mock('../src/lib/redis', () => ({
+  getRedisClient: vi.fn().mockResolvedValue(null),
+}))
+
 describe('VoiceChannelService', () => {
   const originalEnv = { ...process.env }
 
