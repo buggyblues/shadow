@@ -32,7 +32,16 @@
     "@shadowob/shared": "workspace:*",
     "socket.io-client": "^4.8.1"
   },
+  "peerDependencies": {
+    "agora-rtc-sdk-ng": "^4.24.3"
+  },
+  "peerDependenciesMeta": {
+    "agora-rtc-sdk-ng": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "agora-rtc-sdk-ng": "^4.24.3",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3"
   },

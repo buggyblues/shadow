@@ -27,6 +27,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
+    permissions: ['RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS'],
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#1E1F22',

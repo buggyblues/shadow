@@ -67,6 +67,7 @@ import {
   Sheet,
   Spinner,
 } from '../../../../../src/components/ui'
+import { VoiceChannelPanel } from '../../../../../src/components/voice/voice-channel-panel'
 import { useSocketEvent } from '../../../../../src/hooks/use-socket'
 import { useVoiceInput } from '../../../../../src/hooks/use-voice-input'
 import { fetchApi } from '../../../../../src/lib/api'
@@ -1809,6 +1810,16 @@ export default function ChannelViewScreen() {
           </Button>
         </GlassPanel>
       </BackgroundSurface>
+    )
+  }
+
+  if (channel?.type === 'voice' && channelId) {
+    return (
+      <VoiceChannelPanel
+        channelId={channelId}
+        channelName={channel.name}
+        onBack={() => router.back()}
+      />
     )
   }
 

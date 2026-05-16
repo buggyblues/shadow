@@ -602,6 +602,8 @@
     "announcement": "公告頻道",
     "text": "文字頻道",
     "voice": "語音頻道",
+    "textChannels": "文字頻道",
+    "voiceChannels": "語音頻道",
     "noChannels": "暫無頻道",
     "noChannelsDesc": "頻道準備好後會顯示在這裡。",
     "createChannel": "建立頻道",
@@ -2699,6 +2701,53 @@
     "confirm": {
       "consume": "確認現在使用這份資產嗎？可用數量會減少。",
       "revoke": "確認撤銷這份資產嗎？此操作不可復原。"
+    }
+  },
+  "voice": {
+    "ready": "準備連線",
+    "connected": "語音已連線",
+    "connecting": "正在連線...",
+    "connectionError": "語音連線異常",
+    "connectedCount": "{{count}} 人已連線",
+    "join": "加入語音",
+    "leave": "離開",
+    "disconnect": "中斷連線",
+    "mute": "靜音",
+    "unmute": "取消靜音",
+    "deafen": "拒聽",
+    "undeafen": "取消拒聽",
+    "shareScreen": "共享螢幕",
+    "stopShare": "停止共享",
+    "refreshDevices": "重新整理",
+    "settings": "語音設定",
+    "outputVolume": "輸出音量",
+    "inputDevice": "輸入裝置",
+    "outputDevice": "輸出裝置",
+    "defaultDevice": "系統預設",
+    "unknownDevice": "未知裝置",
+    "testMic": "測試麥克風",
+    "stopTest": "停止測試",
+    "yourScreen": "你的螢幕",
+    "participants": "成員",
+    "noParticipants": "暫時無人連線",
+    "inviteToVoice": "邀請到語音",
+    "inVoiceChannel": "在語音頻道中",
+    "listening": "正在收聽",
+    "muted": "已靜音",
+    "speaker": "揚聲器",
+    "earpiece": "聽筒",
+    "joinFailed": "加入語音頻道失敗",
+    "network": {
+      "unknown": "網路狀態未知",
+      "excellent": "網路極佳",
+      "good": "網路良好",
+      "fair": "網路不穩定",
+      "poor": "網路較差"
+    },
+    "errors": {
+      "rtcNotConfigured": "服務端尚未設定語音服務。",
+      "microphonePermission": "請在瀏覽器中允許麥克風權限，然後重新加入。",
+      "screenPermission": "請在瀏覽器中允許螢幕共享，然後重試。"
     }
   }
 }

@@ -272,6 +272,99 @@ describe('ShadowClient', () => {
     })
   })
 
+  describe('voice channel APIs', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('joins a voice channel with RTC options', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            credentials: { appId: 'agora-app', uid: 1 },
+            participant: { userId: 'user-1' },
+            state: { participants: [] },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      const result = await client.joinVoiceChannel('channel-1', { clientId: 'sdk', muted: true })
+
+      expect(result.credentials.appId).toBe('agora-app')
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/channels/channel-1/voice/join',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ clientId: 'sdk', muted: true }),
+        }),
+      )
+    })
+
+    it('renews and leaves a voice channel with a client id', async () => {
+      const calls: Array<{ url: string; init?: RequestInit }> = []
+      const mockFetch = vi.fn().mockImplementation((url, init) => {
+        calls.push({ url: String(url), init })
+        return Promise.resolve(
+          new Response(JSON.stringify({ credentials: { appId: 'agora-app' }, state: {} }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.renewVoiceCredentials('channel-1', { clientId: 'sdk' })
+      await client.leaveVoiceChannel('channel-1', { clientId: 'sdk' })
+
+      expect(calls.map((call) => call.url)).toEqual([
+        'https://api.example.com/api/channels/channel-1/voice/renew',
+        'https://api.example.com/api/channels/channel-1/voice/leave',
+      ])
+      expect(calls.map((call) => call.init?.body)).toEqual([
+        JSON.stringify({ clientId: 'sdk' }),
+        JSON.stringify({ clientId: 'sdk' }),
+      ])
+    })
+
+    it('updates voice policy for a Buddy', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            agentId: 'agent-1',
+            channelId: 'channel-1',
+            autoJoin: true,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.updateVoicePolicy('channel-1', {
+        agentId: 'agent-1',
+        autoJoin: true,
+        consumeScreenShare: true,
+      })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/channels/channel-1/voice-policy',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            agentId: 'agent-1',
+            autoJoin: true,
+            consumeScreenShare: true,
+          }),
+        }),
+      )
+    })
+  })
+
   describe('auth methods', () => {
     beforeEach(() => {
       globalThis.fetch = vi.fn() as typeof fetch

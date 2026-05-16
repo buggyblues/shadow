@@ -53,6 +53,7 @@ let serverId: string
 
 // Tracked IDs
 let channelId: string
+let voiceChannelId: string
 let productId: string
 let skuId: string
 let cartItemId: string
@@ -101,6 +102,9 @@ function orderBody(input: {
 /* ── Setup & Teardown ── */
 
 beforeAll(async () => {
+  process.env.AGORA_APP_ID = process.env.AGORA_APP_ID ?? 'test-agora-app'
+  process.env.AGORA_APP_CERTIFICATE =
+    process.env.AGORA_APP_CERTIFICATE ?? '0123456789abcdef0123456789abcdef'
   sql = postgres(TEST_DB_URL, { max: 5 })
   db = drizzle(sql, { schema })
   container = createAppContainer(db)
@@ -217,6 +221,26 @@ describe('Server channels for mobile', () => {
     expect(res.status).toBe(201)
     const ch = await json<{ id: string; type: string }>(res)
     expect(ch.type).toBe('voice')
+    voiceChannelId = ch.id
+  })
+
+  it('member can join a voice channel and receive Agora credentials', async () => {
+    const res = await req('POST', `/api/channels/${voiceChannelId}/voice/join`, {
+      token: memberToken,
+      body: { muted: true },
+    })
+    expect(res.status).toBe(200)
+    const result = await json<{
+      credentials: { appId: string; uid: number; agoraChannelName: string; token: string | null }
+      participant: { userId: string; isMuted: boolean }
+      state: { participantCount: number }
+    }>(res)
+    expect(result.credentials.appId).toBeTruthy()
+    expect(result.credentials.uid).toBeGreaterThan(0)
+    expect(result.credentials.agoraChannelName).toContain('shadow_')
+    expect(result.participant.userId).toBe(memberUserId)
+    expect(result.participant.isMuted).toBe(true)
+    expect(result.state.participantCount).toBe(1)
   })
 
   it('member cannot create channels', async () => {

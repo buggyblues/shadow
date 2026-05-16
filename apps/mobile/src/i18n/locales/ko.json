@@ -1231,5 +1231,32 @@
   },
   "dm": {
     "emptyBuddies": "DM 가능한 Buddy가 없습니다"
+  },
+  "voice": {
+    "ready": "연결 준비됨",
+    "connectedCount": "{{count}}명 연결됨",
+    "join": "음성 참여",
+    "leave": "나가기",
+    "mute": "음소거",
+    "unmute": "음소거 해제",
+    "deafen": "듣기 끄기",
+    "undeafen": "듣기 켜기",
+    "shareScreen": "화면 공유",
+    "stopShare": "공유 중지",
+    "refreshDevices": "새로고침",
+    "inputDevice": "입력 장치",
+    "outputDevice": "출력 장치",
+    "defaultDevice": "시스템 기본값",
+    "unknownDevice": "알 수 없는 장치",
+    "testMic": "마이크 테스트",
+    "stopTest": "테스트 중지",
+    "yourScreen": "내 화면",
+    "participants": "참가자",
+    "noParticipants": "연결된 참가자가 없습니다",
+    "listening": "듣는 중",
+    "muted": "음소거됨",
+    "speaker": "스피커",
+    "earpiece": "수화기",
+    "joinFailed": "음성 채널 참여 실패"
   }
 }

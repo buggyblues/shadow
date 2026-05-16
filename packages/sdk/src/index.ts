@@ -12,7 +12,6 @@ export {
 export type { ShadowSocketOptions } from './socket'
 // Socket
 export { ShadowSocket } from './socket'
-
 // Types
 export type {
   ChannelCreatedPayload,
@@ -101,6 +100,16 @@ export type {
   ShadowTransaction,
   ShadowUsageProviderSnapshot,
   ShadowUser,
+  ShadowVoiceCredentials,
+  ShadowVoiceJoinResult,
+  ShadowVoiceLeaveResult,
+  ShadowVoiceParticipant,
+  ShadowVoicePolicy,
+  ShadowVoiceState,
   ShadowWallet,
   TypingPayload,
+  VoiceParticipantPayload,
+  VoicePolicyUpdatedPayload,
 } from './types'
+export type { ShadowVoiceConsumerOptions } from './voice'
+export { ShadowVoiceConsumer } from './voice'

@@ -9,11 +9,16 @@ describe('CLIENT_EVENTS', () => {
     expect(CLIENT_EVENTS.MESSAGE_SEND).toBe('message:send')
     expect(CLIENT_EVENTS.MESSAGE_TYPING).toBe('message:typing')
     expect(CLIENT_EVENTS.PRESENCE_UPDATE).toBe('presence:update')
+    expect(CLIENT_EVENTS.VOICE_JOIN).toBe('voice:join')
+    expect(CLIENT_EVENTS.VOICE_LEAVE).toBe('voice:leave')
+    expect(CLIENT_EVENTS.VOICE_STATE_UPDATE).toBe('voice:state:update')
+    expect(CLIENT_EVENTS.VOICE_TOKEN_RENEW).toBe('voice:token:renew')
+    expect(CLIENT_EVENTS.VOICE_HEARTBEAT).toBe('voice:heartbeat')
   })
 
   it('should be readonly', () => {
     const events = CLIENT_EVENTS
-    expect(Object.keys(events)).toHaveLength(5)
+    expect(Object.keys(events)).toHaveLength(10)
   })
 })
 
@@ -29,10 +34,15 @@ describe('SERVER_EVENTS', () => {
     expect(SERVER_EVENTS.REACTION_ADD).toBe('reaction:add')
     expect(SERVER_EVENTS.REACTION_REMOVE).toBe('reaction:remove')
     expect(SERVER_EVENTS.NOTIFICATION_NEW).toBe('notification:new')
+    expect(SERVER_EVENTS.VOICE_STATE).toBe('voice:state')
+    expect(SERVER_EVENTS.VOICE_PARTICIPANT_JOINED).toBe('voice:participant-joined')
+    expect(SERVER_EVENTS.VOICE_PARTICIPANT_LEFT).toBe('voice:participant-left')
+    expect(SERVER_EVENTS.VOICE_PARTICIPANT_UPDATED).toBe('voice:participant-updated')
+    expect(SERVER_EVENTS.VOICE_POLICY_UPDATED).toBe('voice:policy-updated')
   })
 
-  it('should have 10 server events', () => {
-    expect(Object.keys(SERVER_EVENTS)).toHaveLength(10)
+  it('should have 15 server events', () => {
+    expect(Object.keys(SERVER_EVENTS)).toHaveLength(15)
   })
 })
 

@@ -120,3 +120,38 @@ shadowob app call demo-desk tickets.create --server <server-id-or-slug> --json-i
 ```
 
 Server App 命令调用会通过 CLI 绑定 Shadow OAuth 身份和 Buddy 授权。Buddy 不应该用 curl 直接调用 Server App 命令路由。
+
+## 语音命令
+
+```bash
+# 加入语音频道并输出 Agora RTC 连接信息
+shadowob voice join <channel-id> --json
+
+# 保持连接并输出语音成员事件
+shadowob voice join <channel-id> --watch --json
+
+# 查看状态或离开语音频道
+shadowob voice status <channel-id> --json
+shadowob voice leave <channel-id>
+
+# 安装隔离的 Chromium 运行时，用于语音桥接测试
+shadowob voice browser install --json
+shadowob voice browser path --json
+
+# 通过托管浏览器桥接 RTC 媒体
+shadowob voice bridge <channel-id> --audio-out ./audio --screen-out ./screens --json
+
+# 录制完整的本地音视频归档
+shadowob voice bridge <channel-id> --record-out ./voice-recordings --json
+
+# 加入前按需安装托管浏览器
+shadowob voice bridge <channel-id> --install-browser --audio-out ./audio --json
+
+# 从音频文件向语音频道输入语音
+shadowob voice bridge <channel-id> --input ./reply.wav --duration 30
+
+# 从外部模型或进程向语音频道输入 raw PCM
+model-audio-producer | shadowob voice bridge <channel-id> --stdin-pcm --sample-rate 24000 --channels 1
+```
+
+媒体桥接不会在 `npm install` 时安装 Playwright 或下载浏览器。需要测试 Chromium 运行时时，使用 `shadowob voice browser install` 或 `--install-browser` 按需安装，这能绕开 macOS 系统 Chrome profile/keychain 提示。也可以通过 `--browser` / `SHADOWOB_BROWSER` 显式指定浏览器路径。`--record-out` 会把远端音频保存为 WAV，把远端视频/屏幕共享保存为 WebM。它还需要主机环境提供 Agora Web SDK 浏览器包：可以在 CLI 旁边安装 `agora-rtc-sdk-ng`，或通过 `--agora-sdk` / `SHADOWOB_AGORA_WEB_SDK` 指向 `AgoraRTC_N-production.js`。

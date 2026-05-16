@@ -157,12 +157,43 @@ shadowob profile-comments create --user-id <user-id> --content "Great profile!" 
 shadowob profile-comments delete <comment-id>
 ```
 
-## Voice Enhancement Commands
+## Voice Commands
 
 ```bash
+# Join a voice channel and print Agora RTC connection info
+shadowob voice join <channel-id> --json
+
+# Keep attached and print voice participant events
+shadowob voice join <channel-id> --watch --json
+
+# Inspect or leave a voice channel
+shadowob voice status <channel-id> --json
+shadowob voice leave <channel-id>
+
+# Install an isolated Chromium runtime for voice bridge tests
+shadowob voice browser install --json
+shadowob voice browser path --json
+
+# Bridge RTC media through the managed browser
+shadowob voice bridge <channel-id> --audio-out ./audio --screen-out ./screens --json
+
+# Record a complete local media archive
+shadowob voice bridge <channel-id> --record-out ./voice-recordings --json
+
+# Install the managed browser on demand before joining
+shadowob voice bridge <channel-id> --install-browser --audio-out ./audio --json
+
+# Inject speech/audio into the voice channel from an audio file
+shadowob voice bridge <channel-id> --input ./reply.wav --duration 30
+
+# Stream raw PCM into the voice channel from an external model or process
+model-audio-producer | shadowob voice bridge <channel-id> --stdin-pcm --sample-rate 24000 --channels 1
+
 # Enhance a voice transcript
 shadowob voice-enhance enhance --transcript "Um so tomorrow maybe..." --language en-US --json
 
 # Check voice enhancement config
 shadowob voice-enhance config --json
 ```
+
+The media bridge does not install Playwright or a bundled browser during `npm install`. Use `shadowob voice browser install` or `--install-browser` when a test Chromium runtime is needed. This avoids system Chrome profile/keychain prompts on macOS. You can also pass `--browser` / `SHADOWOB_BROWSER` to use an explicit executable. `--record-out` writes remote audio as WAV and remote video/screen-share tracks as WebM. The bridge expects the Agora Web SDK browser bundle to be available from the host environment; install `agora-rtc-sdk-ng` next to the CLI, or pass `--agora-sdk` / `SHADOWOB_AGORA_WEB_SDK` pointing at `AgoraRTC_N-production.js`.

@@ -25,6 +25,10 @@ from shadowob_sdk.types import (
     ShadowShop,
     ShadowUser,
     ShadowUsageProviderSnapshot,
+    ShadowVoiceCredentials,
+    ShadowVoiceParticipant,
+    ShadowVoicePolicy,
+    ShadowVoiceState,
 )
 
 __all__ = [
@@ -54,4 +58,8 @@ __all__ = [
     "ShadowSocket",
     "ShadowUser",
     "ShadowUsageProviderSnapshot",
+    "ShadowVoiceCredentials",
+    "ShadowVoiceParticipant",
+    "ShadowVoicePolicy",
+    "ShadowVoiceState",
 ]

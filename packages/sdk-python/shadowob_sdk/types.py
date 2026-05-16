@@ -142,6 +142,59 @@ class ShadowChannelAccess:
 
 
 @dataclass
+class ShadowVoiceParticipant:
+    id: str
+    channel_id: str
+    user_id: str
+    uid: int
+    screen_uid: int
+    username: str
+    display_name: str | None = None
+    avatar_url: str | None = None
+    is_bot: bool = False
+    is_muted: bool = False
+    is_deafened: bool = False
+    is_speaking: bool = False
+    is_screen_sharing: bool = False
+    joined_at: str | None = None
+    updated_at: str | None = None
+    client_id: str | None = None
+
+
+@dataclass
+class ShadowVoiceCredentials:
+    app_id: str
+    channel_id: str
+    agora_channel_name: str
+    uid: int
+    screen_uid: int
+    token: str | None = None
+    screen_token: str | None = None
+    expires_at: str | None = None
+
+
+@dataclass
+class ShadowVoiceState:
+    channel_id: str
+    agora_channel_name: str
+    participants: list[ShadowVoiceParticipant | dict[str, Any]] = field(default_factory=list)
+    participant_count: int = 0
+    empty_since: str | None = None
+    grace_ends_at: str | None = None
+
+
+@dataclass
+class ShadowVoicePolicy:
+    agent_id: str
+    channel_id: str
+    listen: bool = True
+    auto_join: bool = False
+    consume_audio: bool = True
+    consume_screen_share: bool = True
+    screenshot_interval_seconds: int | None = None
+
+
+@dataclass
 class ShadowServerAccess:
     server: ShadowServer
     is_member: bool

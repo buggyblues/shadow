@@ -16,6 +16,29 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const reviewJoinRequestSchema = z.object({
   status: z.enum(['approved', 'rejected']),
 })
+const voiceJoinSchema = z.object({
+  clientId: z.string().max(120).nullable().optional(),
+  muted: z.boolean().optional(),
+  deafened: z.boolean().optional(),
+})
+const voiceParticipantSelectorSchema = z.object({
+  clientId: z.string().max(120).nullable().optional(),
+})
+const voiceStatePatchSchema = z.object({
+  clientId: z.string().max(120).nullable().optional(),
+  muted: z.boolean().optional(),
+  deafened: z.boolean().optional(),
+  speaking: z.boolean().optional(),
+  screenSharing: z.boolean().optional(),
+})
+const voicePolicySchema = z.object({
+  agentId: z.string().uuid(),
+  listen: z.boolean().optional(),
+  autoJoin: z.boolean().optional(),
+  consumeAudio: z.boolean().optional(),
+  consumeScreenShare: z.boolean().optional(),
+  screenshotIntervalSeconds: z.number().int().min(5).max(3600).nullable().optional(),
+})
 
 type ChannelAgentPolicyBody = {
   mentionOnly?: boolean
@@ -447,6 +470,156 @@ export function createChannelHandler(container: AppContainer) {
     const userId = c.get('user').userId
     const access = await getAccessStatus(id, userId)
     return c.json(access)
+  })
+
+  // GET /api/channels/:id/voice/state — current voice presence for a voice channel.
+  channelHandler.get('/channels/:id/voice/state', async (c) => {
+    const id = c.req.param('id')
+    const state = await container.resolve('voiceChannelService').getState(c.get('actor'), id)
+    return c.json(state)
+  })
+
+  // POST /api/channels/:id/voice/join — issue Agora credentials and mark actor connected.
+  channelHandler.post('/channels/:id/voice/join', async (c) => {
+    const id = c.req.param('id')
+    const body = await c.req.json().catch(() => ({}))
+    const input = voiceJoinSchema.parse(body)
+    const result = await container.resolve('voiceChannelService').join(c.get('actor'), id, input)
+    try {
+      container
+        .resolve('io')
+        .to(`voice:${id}`)
+        .emit(result.joined ? 'voice:participant-joined' : 'voice:participant-updated', {
+          channelId: id,
+          participant: result.participant,
+          state: result.state,
+        })
+    } catch {
+      /* non-critical */
+    }
+    return c.json(result)
+  })
+
+  // POST /api/channels/:id/voice/renew — issue fresh Agora credentials for a live client.
+  channelHandler.post('/channels/:id/voice/renew', async (c) => {
+    const id = c.req.param('id')
+    const body = await c.req.json().catch(() => ({}))
+    const input = voiceParticipantSelectorSchema.parse(body)
+    const result = await container
+      .resolve('voiceChannelService')
+      .renewCredentials(c.get('actor'), id, input)
+    return c.json(result)
+  })
+
+  // POST /api/channels/:id/voice/leave — leave Agora voice state.
+  channelHandler.post('/channels/:id/voice/leave', async (c) => {
+    const id = c.req.param('id')
+    const body = await c.req.json().catch(() => ({}))
+    const input = voiceParticipantSelectorSchema.parse(body)
+    const result = await container.resolve('voiceChannelService').leave(c.get('actor'), id, input)
+    try {
+      if (result.left) {
+        container.resolve('io').to(`voice:${id}`).emit('voice:participant-left', {
+          channelId: id,
+          participant: result.participant,
+          state: result.state,
+        })
+      }
+    } catch {
+      /* non-critical */
+    }
+    return c.json(result)
+  })
+
+  // PATCH /api/channels/:id/voice/state — mute/deafen/speaking/screen-share state.
+  channelHandler.patch('/channels/:id/voice/state', async (c) => {
+    const id = c.req.param('id')
+    const input = voiceStatePatchSchema.parse(await c.req.json())
+    const result = await container.resolve('voiceChannelService').updateParticipant(
+      c.get('actor'),
+      id,
+      {
+        isMuted: input.muted,
+        isDeafened: input.deafened,
+        isSpeaking: input.speaking,
+        isScreenSharing: input.screenSharing,
+      },
+      { clientId: input.clientId },
+    )
+    try {
+      container.resolve('io').to(`voice:${id}`).emit('voice:participant-updated', {
+        channelId: id,
+        participant: result.participant,
+        state: result.state,
+      })
+    } catch {
+      /* non-critical */
+    }
+    return c.json(result)
+  })
+
+  // GET /api/channels/:id/voice-policy?agentId=... — Buddy voice standby policy.
+  channelHandler.get('/channels/:id/voice-policy', async (c) => {
+    const id = c.req.param('id')
+    const agentId = c.req.query('agentId')
+    if (!agentId) return c.json({ ok: false, error: 'agentId is required' }, 400)
+    const channelService = container.resolve('channelService')
+    const agentPolicyDao = container.resolve('agentPolicyDao')
+    const channel = await channelService.getById(id)
+    const serverId = requireServerChannel(channel)
+    await container.resolve('policyService').requireChannelRead(c.get('actor'), id)
+    const policy = await agentPolicyDao.findByChannel(agentId, serverId, id)
+    const config = (policy?.config ?? {}) as Record<string, unknown>
+    return c.json({
+      agentId,
+      channelId: id,
+      listen: Boolean(config.voiceListen ?? policy?.listen ?? true),
+      autoJoin: Boolean(config.voiceAutoJoin ?? false),
+      consumeAudio: Boolean(config.voiceConsumeAudio ?? true),
+      consumeScreenShare: Boolean(config.voiceConsumeScreenShare ?? true),
+      screenshotIntervalSeconds:
+        typeof config.voiceScreenshotIntervalSeconds === 'number'
+          ? config.voiceScreenshotIntervalSeconds
+          : null,
+    })
+  })
+
+  // PUT /api/channels/:id/voice-policy — configure Buddy voice standby policy.
+  channelHandler.put('/channels/:id/voice-policy', async (c) => {
+    const id = c.req.param('id')
+    const input = voicePolicySchema.parse(await c.req.json())
+    const channelService = container.resolve('channelService')
+    const agentPolicyService = container.resolve('agentPolicyService')
+    const channel = await channelService.getById(id)
+    const serverId = requireServerChannel(channel)
+    await container.resolve('policyService').requireChannelManage(c.get('actor'), id)
+    const [policy] = await agentPolicyService.upsertPolicies(input.agentId, [
+      {
+        serverId,
+        channelId: id,
+        listen: input.listen ?? input.consumeAudio ?? true,
+        reply: false,
+        mentionOnly: false,
+        config: {
+          voiceListen: input.listen ?? input.consumeAudio ?? true,
+          voiceAutoJoin: input.autoJoin ?? false,
+          voiceConsumeAudio: input.consumeAudio ?? true,
+          voiceConsumeScreenShare: input.consumeScreenShare ?? true,
+          ...(input.screenshotIntervalSeconds === undefined
+            ? {}
+            : { voiceScreenshotIntervalSeconds: input.screenshotIntervalSeconds }),
+        },
+      },
+    ])
+    try {
+      container.resolve('io').to(`channel:${id}`).emit('voice:policy-updated', {
+        channelId: id,
+        agentId: input.agentId,
+      })
+    } catch {
+      /* non-critical */
+    }
+    return c.json(policy)
   })
 
   // GET /api/channels/:id/members — returns channel members with full user info

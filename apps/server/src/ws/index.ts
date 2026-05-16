@@ -7,6 +7,7 @@ import { getRedisClient } from '../lib/redis'
 import { setupChatGateway } from './chat.gateway'
 import { setupNotificationGateway } from './notification.gateway'
 import { setupPresenceGateway } from './presence.gateway'
+import { setupVoiceGateway } from './voice.gateway'
 
 async function hydrateSocketUser(
   socket: Socket,
@@ -99,6 +100,7 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
     })
 
   setupChatGateway(io, container)
+  setupVoiceGateway(io, container)
   setupNotificationGateway(io)
 
   io.on('connection', (socket) => {

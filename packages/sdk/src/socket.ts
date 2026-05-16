@@ -1,5 +1,12 @@
 import { io, type Socket } from 'socket.io-client'
-import type { ClientEventMap, ServerEventMap, ShadowMessageMention } from './types'
+import type {
+  ClientEventMap,
+  ServerEventMap,
+  ShadowMessageMention,
+  ShadowVoiceJoinResult,
+  ShadowVoiceLeaveResult,
+  ShadowVoiceRenewResult,
+} from './types'
 
 export interface ShadowSocketOptions {
   /** Shadow server base URL (e.g. "https://shadowob.shadowob.com") */
@@ -149,6 +156,76 @@ export class ShadowSocket {
   /** Leave a channel room */
   leaveChannel(channelId: string): void {
     this.socket.emit('channel:leave' satisfies keyof ClientEventMap, { channelId })
+  }
+
+  joinVoiceChannel(
+    channelId: string,
+    options?: { clientId?: string; muted?: boolean; deafened?: boolean },
+  ): Promise<{ ok: boolean; data?: ShadowVoiceJoinResult; error?: string; code?: string }> {
+    return new Promise((resolve) => {
+      this.socket.emit(
+        'voice:join' satisfies keyof ClientEventMap,
+        { channelId, ...options },
+        (res: { ok: boolean; data?: ShadowVoiceJoinResult; error?: string; code?: string }) => {
+          resolve(res ?? { ok: false, error: 'Voice join failed' })
+        },
+      )
+    })
+  }
+
+  leaveVoiceChannel(
+    channelId: string,
+    options?: { clientId?: string | null },
+  ): Promise<{ ok: boolean; data?: ShadowVoiceLeaveResult; error?: string; code?: string }> {
+    return new Promise((resolve) => {
+      this.socket.emit(
+        'voice:leave' satisfies keyof ClientEventMap,
+        { channelId, ...options },
+        (res: { ok: boolean; data?: ShadowVoiceLeaveResult; error?: string; code?: string }) => {
+          resolve(res ?? { ok: true })
+        },
+      )
+    })
+  }
+
+  renewVoiceCredentials(
+    channelId: string,
+    options?: { clientId?: string | null },
+  ): Promise<{ ok: boolean; data?: ShadowVoiceRenewResult; error?: string; code?: string }> {
+    return new Promise((resolve) => {
+      this.socket.emit(
+        'voice:token:renew' satisfies keyof ClientEventMap,
+        { channelId, ...options },
+        (res: { ok: boolean; data?: ShadowVoiceRenewResult; error?: string; code?: string }) => {
+          resolve(res ?? { ok: false, error: 'Voice token renewal failed' })
+        },
+      )
+    })
+  }
+
+  updateVoiceState(
+    channelId: string,
+    data: {
+      clientId?: string | null
+      muted?: boolean
+      deafened?: boolean
+      speaking?: boolean
+      screenSharing?: boolean
+    },
+  ): Promise<{ ok: boolean; data?: unknown; error?: string; code?: string }> {
+    return new Promise((resolve) => {
+      this.socket.emit(
+        'voice:state:update' satisfies keyof ClientEventMap,
+        { channelId, ...data },
+        (res: { ok: boolean; data?: unknown; error?: string; code?: string }) => {
+          resolve(res ?? { ok: true })
+        },
+      )
+    })
+  }
+
+  sendVoiceHeartbeat(channelId: string, options?: { clientId?: string | null }): void {
+    this.socket.emit('voice:heartbeat' satisfies keyof ClientEventMap, { channelId, ...options })
   }
 
   // ── Client actions ────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { Clock, Loader2, Lock, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
+import { VoiceSessionProvider } from '../components/voice/voice-session-context'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
@@ -308,28 +309,30 @@ export function ServerLayout() {
       (!!serverMeta?.id && !!routeChannel && routeChannel.serverId !== serverMeta.id))
 
   return (
-    <div className="flex flex-1 min-w-0 overflow-hidden h-full gap-3 bg-transparent">
-      {/* Channel sidebar */}
-      <div
-        className={`${
-          mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
-        } md:flex flex-col w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
-      >
-        <ChannelSidebar
-          serverSlug={serverSlug}
-          deferInitialQueries={Boolean(channelId && bootstrapSeededChannelId !== channelId)}
-        />
-      </div>
+    <VoiceSessionProvider>
+      <div className="flex flex-1 min-w-0 overflow-hidden h-full gap-3 bg-transparent">
+        {/* Channel sidebar */}
+        <div
+          className={`${
+            mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
+          } md:flex flex-col w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
+        >
+          <ChannelSidebar
+            serverSlug={serverSlug}
+            deferInitialQueries={Boolean(channelId && bootstrapSeededChannelId !== channelId)}
+          />
+        </div>
 
-      {/* Content: child routes render here via Outlet */}
-      <div
-        className={`${
-          mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
-        } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
-      >
-        {routeChannelBlocked ? <RouteChannelContentLoading /> : <Outlet />}
+        {/* Content: child routes render here via Outlet */}
+        <div
+          className={`${
+            mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
+          } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
+        >
+          {routeChannelBlocked ? <RouteChannelContentLoading /> : <Outlet />}
+        </div>
       </div>
-    </div>
+    </VoiceSessionProvider>
   )
 }
 
