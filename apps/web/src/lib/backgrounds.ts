@@ -1,5 +1,5 @@
-import boschGardenOfEarthlyDelightsUrl from '../assets/backgrounds/bosch-garden-of-earthly-delights.jpg'
-import starryNightUrl from '../assets/backgrounds/starry-night.png'
+import boschGardenOfEarthlyDelightsUrl from '../assets/backgrounds/bosch-garden-of-earthly-delights.optimized.webp'
+import starryNightUrl from '../assets/backgrounds/starry-night.optimized.webp'
 
 export interface BackgroundOption {
   id: 'none' | 'starry-night' | 'bosch-garden-of-earthly-delights'

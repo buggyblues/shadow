@@ -37,11 +37,13 @@ async function resolveSignedMediaUrl(
     resolveMediaUrl: (
       mediaUrl: string | null | undefined,
       fallbackContentType?: string,
+      options?: { variant?: 'avatar' | 'preview' | 'banner' },
     ) => string | null
   },
   mediaUrl: string | null | undefined,
+  options?: { variant?: 'avatar' | 'preview' | 'banner' },
 ): Promise<string | null> {
-  return mediaService.resolveMediaUrl(mediaUrl)
+  return mediaService.resolveMediaUrl(mediaUrl, 'image/png', options)
 }
 
 export function createAuthHandler(container: AppContainer) {
@@ -67,7 +69,9 @@ export function createAuthHandler(container: AppContainer) {
       const mediaService = container.resolve('mediaService')
       const input = c.req.valid('json')
       const result = await authService.register(input)
-      const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl)
+      const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
+        variant: 'avatar',
+      })
       return c.json(
         {
           ...result,
@@ -87,7 +91,9 @@ export function createAuthHandler(container: AppContainer) {
     const mediaService = container.resolve('mediaService')
     const input = c.req.valid('json')
     const result = await authService.login(input)
-    const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl)
+    const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
+      variant: 'avatar',
+    })
     return c.json({
       ...result,
       user: {
@@ -120,7 +126,9 @@ export function createAuthHandler(container: AppContainer) {
       const mediaService = container.resolve('mediaService')
       const input = c.req.valid('json')
       const result = await authService.verifyEmailLogin(input)
-      const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl)
+      const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
+        variant: 'avatar',
+      })
       return c.json({
         ...result,
         user: {
@@ -163,7 +171,9 @@ export function createAuthHandler(container: AppContainer) {
     const user = c.get('user')
     const result = await authService.getMe(user.userId)
     const status = await resolveLiveUserStatus(result.id, result.status)
-    const avatarUrl = await resolveSignedMediaUrl(mediaService, result.avatarUrl)
+    const avatarUrl = await resolveSignedMediaUrl(mediaService, result.avatarUrl, {
+      variant: 'avatar',
+    })
     return c.json({ ...result, status, avatarUrl })
   })
 
@@ -189,7 +199,9 @@ export function createAuthHandler(container: AppContainer) {
           ? { avatarUrl: mediaService.normalizeMediaUrl(input.avatarUrl) }
           : {}),
       })
-      const avatarUrl = await resolveSignedMediaUrl(mediaService, result.avatarUrl)
+      const avatarUrl = await resolveSignedMediaUrl(mediaService, result.avatarUrl, {
+        variant: 'avatar',
+      })
       return c.json({ ...result, avatarUrl })
     },
   )

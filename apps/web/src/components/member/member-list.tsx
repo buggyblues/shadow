@@ -1,5 +1,6 @@
 import { GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useParams } from '@tanstack/react-router'
 import {
   Check,
   Copy,
@@ -42,8 +43,22 @@ interface Member {
   role: 'owner' | 'admin' | 'member'
   nickname: string | null
   joinedAt: string
+  totalOnlineSeconds?: number
+  agent?: {
+    ownerId?: string | null
+    totalOnlineSeconds?: number | null
+    config?: Record<string, unknown> | null
+  } | null
+  creator?: {
+    uid: string
+    nickname?: string | null
+    username?: string | null
+    avatarUrl?: string | null
+  } | null
   user?: MemberUser
 }
+
+type PresenceStatus = MemberUser['status']
 
 interface BuddyAgent {
   id: string
@@ -67,13 +82,16 @@ interface BuddyAgent {
 
 export function MemberList() {
   const { t } = useTranslation()
+  const { channelId: routeChannelId } = useParams({ strict: false }) as { channelId?: string }
   const { activeServerId, activeChannelId } = useChatStore()
+  const currentChannelId = routeChannelId ?? activeChannelId ?? null
   const currentUser = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
   const { mobileMemberListOpen, closeMobileMemberList, filePreviewOpen } = useUIStore()
   const [showInvitePanel, setShowInvitePanel] = useState(false)
   const [inviteInitialTab, setInviteInitialTab] = useState<'members' | 'buddies'>('members')
   const [inviteCopied, setInviteCopied] = useState(false)
+  const hasSeenSocketConnectRef = useRef(false)
 
   // Profile panel state (shown on "View Profile" click)
   const [profileMember, setProfileMember] = useState<Member | null>(null)
@@ -86,72 +104,99 @@ export function MemberList() {
   } | null>(null)
 
   const { data: members = [] } = useQuery({
-    queryKey: ['members', activeServerId, activeChannelId],
+    queryKey: ['members', activeServerId, currentChannelId],
     queryFn: () => {
       // Prefer channel-specific members when a channel is active
-      if (activeChannelId) {
-        return fetchApi<Member[]>(`/api/channels/${activeChannelId}/members`)
+      if (currentChannelId) {
+        return fetchApi<Member[]>(`/api/channels/${currentChannelId}/members`)
       }
       return fetchApi<Member[]>(`/api/servers/${activeServerId}/members`)
     },
     enabled: !!activeServerId,
+    staleTime: 30_000,
   })
 
   const { data: channel } = useQuery({
-    queryKey: ['channel', activeChannelId],
+    queryKey: ['channel', currentChannelId],
     queryFn: () =>
-      fetchApi<{ id: string; isArchived?: boolean }>(`/api/channels/${activeChannelId}`),
-    enabled: !!activeChannelId,
+      fetchApi<{ id: string; isArchived?: boolean }>(`/api/channels/${currentChannelId}`),
+    enabled: !!currentChannelId,
+    staleTime: 30_000,
   })
 
   const { data: server } = useQuery({
     queryKey: ['server', activeServerId],
     queryFn: () => fetchApi<{ id: string; inviteCode: string }>(`/api/servers/${activeServerId}`),
     enabled: !!activeServerId,
+    staleTime: 30_000,
   })
 
   const { data: buddyAgents = [] } = useQuery({
     queryKey: ['members-buddy-agents', activeServerId],
     queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
-    enabled: !!activeServerId,
+    enabled:
+      !!activeServerId && (showInvitePanel || Boolean(profileMember) || Boolean(contextMenu)),
+    staleTime: 60_000,
   })
 
+  const mergeMemberPresence = useCallback(
+    (updates: Map<string, PresenceStatus>) => {
+      if (updates.size === 0) return
+      queryClient.setQueriesData<Member[]>({ queryKey: ['members'] }, (old) => {
+        if (!old) return old
+
+        let changed = false
+        const next = old.map((member) => {
+          const status = updates.get(member.userId)
+          if (!status || !member.user || member.user.status === status) return member
+          changed = true
+          return { ...member, user: { ...member.user, status } }
+        })
+        return changed ? next : old
+      })
+    },
+    [queryClient],
+  )
+
   // Listen for real-time presence changes
+  useSocketEvent('presence:change', (data: { userId: string; status: PresenceStatus }) => {
+    mergeMemberPresence(new Map([[data.userId, data.status]]))
+  })
+
   useSocketEvent(
-    'presence:change',
-    (data: { userId: string; status: 'online' | 'idle' | 'dnd' | 'offline' }) => {
-      queryClient.setQueryData<Member[]>(['members', activeServerId, activeChannelId], (old = []) =>
-        old.map((m) =>
-          m.userId === data.userId && m.user
-            ? { ...m, user: { ...m.user, status: data.status } }
-            : m,
-        ),
-      )
+    'presence:snapshot',
+    (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
+      if (currentChannelId && data.channelId !== currentChannelId) return
+      mergeMemberPresence(new Map(data.members.map((member) => [member.userId, member.status])))
     },
   )
 
   // On socket reconnect, refetch members to sync bot/user statuses
   useSocketEvent('connect', () => {
-    queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+    if (!hasSeenSocketConnectRef.current) {
+      hasSeenSocketConnectRef.current = true
+      return
+    }
+    queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
   })
 
   // Listen for channel member changes (buddy added/removed from channel)
   useSocketEvent('channel:member-added', (data: { channelId: string }) => {
-    if (data.channelId === activeChannelId) {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+    if (data.channelId === currentChannelId) {
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
     }
   })
   useSocketEvent('member:joined', (data: { serverId?: string; channelId?: string }) => {
     if (
-      (activeChannelId && data.channelId === activeChannelId) ||
-      (!activeChannelId && data.serverId === activeServerId)
+      (currentChannelId && data.channelId === currentChannelId) ||
+      (!currentChannelId && data.serverId === activeServerId)
     ) {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
     }
   })
   useSocketEvent('channel:member-removed', (data: { channelId: string }) => {
-    if (data.channelId === activeChannelId) {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+    if (data.channelId === currentChannelId) {
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
     }
   })
 
@@ -160,7 +205,7 @@ export function MemberList() {
     mutationFn: ({ serverId, userId }: { serverId: string; userId: string }) =>
       fetchApi(`/api/servers/${serverId}/members/${userId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
       setContextMenu(null)
     },
   })
@@ -170,7 +215,7 @@ export function MemberList() {
     mutationFn: ({ channelId, userId }: { channelId: string; userId: string }) =>
       fetchApi(`/api/channels/${channelId}/members/${userId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
       setContextMenu(null)
     },
   })
@@ -237,6 +282,28 @@ export function MemberList() {
               totalOnlineSeconds?: number
             }
           >()
+          for (const member of items) {
+            if (!member.user?.isBot) continue
+            const botUserId = member.userId
+            const ownerId = member.agent?.ownerId ?? member.creator?.uid
+            const totalOnlineSeconds =
+              typeof member.totalOnlineSeconds === 'number'
+                ? member.totalOnlineSeconds
+                : typeof member.agent?.totalOnlineSeconds === 'number'
+                  ? member.agent.totalOnlineSeconds
+                  : undefined
+            if (ownerId) botOwnerByUserId.set(botUserId, ownerId)
+            buddyMetaByUserId.set(botUserId, {
+              ownerName: member.creator?.nickname ?? member.creator?.username ?? undefined,
+              ownerId: ownerId ?? undefined,
+              ownerAvatarUrl: member.creator?.avatarUrl ?? null,
+              description:
+                typeof member.agent?.config?.description === 'string'
+                  ? member.agent.config.description
+                  : undefined,
+              totalOnlineSeconds,
+            })
+          }
           for (const a of buddyAgents) {
             const botUserId = a.botUser?.id
             if (botUserId) botOwnerByUserId.set(botUserId, a.ownerId)
@@ -244,12 +311,13 @@ export function MemberList() {
               const ownerName = a.owner?.displayName ?? a.owner?.username ?? undefined
               const description =
                 typeof a.config?.description === 'string' ? a.config.description : undefined
+              const existing = buddyMetaByUserId.get(botUserId)
               buddyMetaByUserId.set(botUserId, {
-                ownerName,
-                ownerId: a.ownerId,
-                ownerAvatarUrl: a.owner?.avatarUrl ?? null,
-                description,
-                totalOnlineSeconds: a.totalOnlineSeconds,
+                ownerName: ownerName ?? existing?.ownerName,
+                ownerId: a.ownerId ?? existing?.ownerId,
+                ownerAvatarUrl: a.owner?.avatarUrl ?? existing?.ownerAvatarUrl ?? null,
+                description: description ?? existing?.description,
+                totalOnlineSeconds: a.totalOnlineSeconds ?? existing?.totalOnlineSeconds,
               })
             }
           }
@@ -276,9 +344,9 @@ export function MemberList() {
             if (!buddyItem) return null
 
             return (
-              <div key={member.id} className={`relative ${rowOpts?.child ? 'pl-3' : 'mx-2'}`}>
+              <div key={member.id} className={`relative ${rowOpts?.child ? 'pl-4' : 'mx-2'}`}>
                 {rowOpts?.child && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-px bg-border-dim" />
+                  <div className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 rounded-full bg-border-subtle/70" />
                 )}
                 <div onContextMenu={(e) => handleContextMenu(e, member)}>
                   <BuddyListItem
@@ -303,7 +371,7 @@ export function MemberList() {
                   <div key={member.id}>
                     {renderMemberRow(member)}
                     {children.length > 0 && (
-                      <div className="relative ml-5 border-l border-border-subtle">
+                      <div className="relative ml-8 mt-1 space-y-1 pl-1 before:absolute before:left-0 before:top-0 before:bottom-3 before:w-px before:rounded-full before:bg-border-subtle/50">
                         {children.map((child) => renderMemberRow(child, { child: true }))}
                       </div>
                     )}
@@ -390,7 +458,7 @@ export function MemberList() {
       {showInvitePanel && activeServerId && (
         <InvitePanel
           serverId={activeServerId}
-          channelId={activeChannelId}
+          channelId={currentChannelId}
           initialTab={inviteInitialTab}
           onClose={() => setShowInvitePanel(false)}
         />
@@ -403,7 +471,7 @@ export function MemberList() {
           closeContextMenu={closeContextMenu}
           setProfileMember={setProfileMember}
           setContextMenu={setContextMenu}
-          activeChannelId={activeChannelId}
+          activeChannelId={currentChannelId}
           activeServerId={activeServerId}
           buddyAgents={buddyAgents}
           members={members}

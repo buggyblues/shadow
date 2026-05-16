@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useParams } from '@tanstack/react-router'
 import {
   Check,
   Cloud,
@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { getLastChannelId } from '../../lib/last-channel'
@@ -136,6 +137,7 @@ interface ScopedUnread {
 export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { channelId } = useParams({ strict: false }) as { channelId?: string }
   const queryClient = useQueryClient()
   const { activeServerId, setActiveServer } = useChatStore()
   const [showCreate, setShowCreate] = useState(false)
@@ -153,6 +155,11 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const { user } = useAuthStore()
   const createServerNameInputRef = useRef<HTMLInputElement>(null)
+  const deferForChannelRoute = Boolean(channelId)
+  const loadServerNavigation = useDeferredQueryEnabled({
+    delayMs: deferForChannelRoute ? 500 : 0,
+  })
+  const loadNotifications = useDeferredQueryEnabled({ delayMs: 4000 })
 
   // Listen for 'create-server' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
@@ -170,20 +177,26 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     }
   }, [showCreate])
 
-  const { data: servers = [] } = useQuery({
+  const { data: servers = [], isLoading: isServersLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
+    enabled: loadServerNavigation,
+    staleTime: 30_000,
   })
+  const showServerSkeleton = servers.length === 0 && (!loadServerNavigation || isServersLoading)
 
   const { data: scopedUnread } = useQuery({
     queryKey: ['notification-scoped-unread'],
     queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
+    enabled: loadNotifications,
     refetchInterval: 15_000,
   })
 
   const { data: notificationPreference } = useQuery({
     queryKey: ['notification-preferences'],
     queryFn: () => fetchApi<NotificationPreference>('/api/notifications/preferences'),
+    enabled: loadNotifications,
+    staleTime: 60_000,
   })
 
   const updateNotificationPreference = useMutation({
@@ -341,18 +354,25 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
         {/* Scrollable server list */}
         <div className="flex-1 overflow-y-auto overflow-x-visible px-4 flex flex-col items-center gap-3 min-h-0 py-3 scrollbar-hidden w-full">
-          {servers.map((s) => (
-            <ServerItem
-              key={s.server.id}
-              server={s.server}
-              member={s.member}
-              isActive={activeServerId === s.server.id}
-              unreadCount={scopedUnread?.serverUnread?.[s.server.id] ?? 0}
-              isMuted={notificationPreference?.mutedServerIds?.includes(s.server.id) ?? false}
-              onSelect={handleSelect}
-              onContextMenu={handleContextMenu}
-            />
-          ))}
+          {showServerSkeleton
+            ? Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-[56px] w-[56px] shrink-0 animate-pulse rounded-3xl bg-white/8 ring-1 ring-white/5"
+                />
+              ))
+            : servers.map((s) => (
+                <ServerItem
+                  key={s.server.id}
+                  server={s.server}
+                  member={s.member}
+                  isActive={activeServerId === s.server.id}
+                  unreadCount={scopedUnread?.serverUnread?.[s.server.id] ?? 0}
+                  isMuted={notificationPreference?.mutedServerIds?.includes(s.server.id) ?? false}
+                  onSelect={handleSelect}
+                  onContextMenu={handleContextMenu}
+                />
+              ))}
         </div>
 
         {/* Action buttons — fixed at bottom */}

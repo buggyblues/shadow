@@ -37,6 +37,8 @@ import {
   InteractionManager,
   Keyboard,
   Modal,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   Pressable,
   StyleSheet,
@@ -134,6 +136,32 @@ interface SlashCommand {
   botDisplayName?: string | null
 }
 
+interface ChannelMember {
+  id: string
+  userId: string
+  role: 'owner' | 'admin' | 'member'
+  user: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+    status?: string
+    isBot?: boolean
+  }
+}
+
+interface ChannelBootstrap {
+  access: {
+    canAccess: boolean
+    joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
+    channel: Channel
+  }
+  channel: Channel
+  members: ChannelMember[]
+  messages: MessagesPage | Message[]
+  slashCommands: { commands: SlashCommand[] }
+}
+
 export default function ChannelViewScreen() {
   const params = useLocalSearchParams<{
     serverSlug?: string
@@ -187,7 +215,11 @@ export default function ChannelViewScreen() {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
   const searchInputRef = useRef<TextInput>(null)
   const inputRef = useRef<TextInput>(null)
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showScrollBottomRef = useRef(false)
+  const pendingShowScrollBottomRef = useRef(false)
   const hasRestoredDraft = useRef(false)
+  const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
 
   // Draft storage for persistent input
   const { restoredDraft, scheduleSave, clear: clearDraft } = useDraftStorage(channelId || null)
@@ -248,14 +280,52 @@ export default function ChannelViewScreen() {
     getCurrentText: () => inputText,
   })
 
+  const { data: bootstrap, isError: isBootstrapError } = useQuery({
+    queryKey: ['channel-bootstrap', channelId],
+    queryFn: () =>
+      fetchApi<ChannelBootstrap>(`/api/channels/${channelId}/bootstrap?messagesLimit=${PAGE_SIZE}`),
+    enabled: !!channelId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  })
+
+  useEffect(() => {
+    if (!channelId || !bootstrap) return
+    const normalizedMessages = Array.isArray(bootstrap.messages)
+      ? {
+          messages: bootstrap.messages.map((m) =>
+            normalizeMessage(m as unknown as Record<string, unknown>),
+          ),
+          hasMore: bootstrap.messages.length >= PAGE_SIZE,
+        }
+      : {
+          messages: bootstrap.messages.messages.map((m) =>
+            normalizeMessage(m as unknown as Record<string, unknown>),
+          ),
+          hasMore: bootstrap.messages.hasMore,
+        }
+
+    queryClient.setQueryData(['channel', channelId], bootstrap.channel)
+    queryClient.setQueryData(['channel-access', channelId], bootstrap.access)
+    queryClient.setQueryData(['channel-members', channelId], bootstrap.members)
+    queryClient.setQueryData(['channel-slash-commands', channelId], bootstrap.slashCommands)
+    queryClient.setQueryData(['messages', channelId], {
+      pages: [normalizedMessages],
+      pageParams: [null],
+    })
+    setBootstrapSeededChannelId(channelId)
+  }, [bootstrap, channelId, queryClient])
+
   // ---------- Channel info ----------
-  const { data: channel } = useQuery({
+  const { data: channelFallback } = useQuery({
     queryKey: ['channel', channelId],
     queryFn: () => fetchApi<Channel>(`/api/channels/${channelId}`),
-    enabled: !!channelId,
+    enabled: !!channelId && isBootstrapError,
+    staleTime: 30_000,
   })
+  const channel = bootstrap?.channel ?? channelFallback
   const isDirectChannel = channel?.kind === 'dm' || channel?.serverId === null
-  const { data: access } = useQuery({
+  const { data: accessFallback } = useQuery({
     queryKey: ['channel-access', channelId],
     queryFn: () =>
       fetchApi<{
@@ -263,8 +333,10 @@ export default function ChannelViewScreen() {
         joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
         channel: Channel
       }>(`/api/channels/${channelId}/access`),
-    enabled: !!channelId,
+    enabled: !!channelId && isBootstrapError,
+    staleTime: 30_000,
   })
+  const access = bootstrap?.access ?? accessFallback
   const canAccessChannel = access?.canAccess ?? false
 
   const requestAccessMutation = useMutation({
@@ -279,25 +351,12 @@ export default function ChannelViewScreen() {
     },
   })
 
-  // ---------- Channel members ----------
-  interface ChannelMember {
-    id: string
-    userId: string
-    role: 'owner' | 'admin' | 'member'
-    user: {
-      id: string
-      username: string
-      displayName: string | null
-      avatarUrl: string | null
-      status?: string
-      isBot?: boolean
-    }
-  }
-
   const { data: channelMembers = [] } = useQuery({
     queryKey: ['channel-members', channelId],
     queryFn: () => fetchApi<ChannelMember[]>(`/api/channels/${channelId}/members`),
-    enabled: !!channelId && canAccessChannel,
+    enabled:
+      !!channelId && canAccessChannel && (bootstrapSeededChannelId === channelId || !bootstrap),
+    staleTime: 30_000,
   })
 
   // Server members for invite panel
@@ -366,7 +425,9 @@ export default function ChannelViewScreen() {
     queryKey: ['channel-slash-commands', channelId],
     queryFn: () =>
       fetchApi<{ commands: SlashCommand[] }>(`/api/channels/${channelId}/slash-commands`),
-    enabled: Boolean(channelId && canAccessChannel),
+    enabled: Boolean(
+      channelId && canAccessChannel && (bootstrapSeededChannelId === channelId || !bootstrap),
+    ),
     staleTime: 30_000,
   })
 
@@ -502,8 +563,7 @@ export default function ChannelViewScreen() {
     return () => setActiveChannel(null)
   }, [canAccessChannel, channel, setActiveChannel])
 
-  // ---------- Keyboard visibility tracking ----------
-  useEffect(() => {
+  const subscribeKeyboardVisibility = useCallback(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
     const showSub = Keyboard.addListener(showEvent, (e) => {
@@ -526,6 +586,9 @@ export default function ChannelViewScreen() {
       hideSub.remove()
     }
   }, [channelId])
+
+  // ---------- Keyboard visibility tracking ----------
+  useEffect(() => subscribeKeyboardVisibility(), [subscribeKeyboardVisibility])
 
   // ---------- Infinite scroll messages ----------
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
@@ -554,7 +617,9 @@ export default function ChannelViewScreen() {
       if (!lastPage.hasMore || lastPage.messages.length === 0) return undefined
       return lastPage.messages[0]?.createdAt
     },
-    enabled: !!channelId && canAccessChannel,
+    enabled:
+      !!channelId && canAccessChannel && (bootstrapSeededChannelId === channelId || !bootstrap),
+    staleTime: 30_000,
   })
 
   const messages = useMemo(() => {
@@ -661,24 +726,29 @@ export default function ChannelViewScreen() {
     (messageId: string) => {
       setShowSearchPanel(false)
       setHighlightMessageId(messageId)
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
       const idx = timeline.findIndex(
         (item) => item.kind === 'message' && item.data.id === messageId,
       )
       if (idx >= 0) {
         flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 })
       }
-      setTimeout(() => setHighlightMessageId(null), 3000)
+      highlightTimeoutRef.current = setTimeout(() => {
+        setHighlightMessageId(null)
+        highlightTimeoutRef.current = null
+      }, 3000)
     },
     [timeline],
   )
 
-  // Reset scroll position when channel changes
-  useEffect(() => {
-    flatListRef.current?.scrollToOffset({ offset: 0, animated: false })
-  }, [channelId])
+  useEffect(
+    () => () => {
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
+    },
+    [],
+  )
 
-  // Auto-focus input when channel changes
-  useEffect(() => {
+  const scheduleInputFocus = useCallback(() => {
     let cancelled = false
     const focusInput = () => {
       if (!cancelled) inputRef.current?.focus()
@@ -690,7 +760,36 @@ export default function ChannelViewScreen() {
       interaction.cancel?.()
       timers.forEach(clearTimeout)
     }
+  }, [])
+
+  // Reset scroll position when channel changes
+  useEffect(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false })
+    pendingShowScrollBottomRef.current = false
+    if (showScrollBottomRef.current) {
+      showScrollBottomRef.current = false
+      setShowScrollBottom(false)
+    }
   }, [channelId])
+
+  // Auto-focus input when channel changes
+  useEffect(() => scheduleInputFocus(), [scheduleInputFocus])
+
+  const commitScrollBottomVisibility = useCallback(() => {
+    const next = pendingShowScrollBottomRef.current
+    if (showScrollBottomRef.current === next) return
+    showScrollBottomRef.current = next
+    setShowScrollBottom(next)
+  }, [])
+
+  const handleMessageListScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset } = e.nativeEvent
+      if (channelId) scrollOffsetRef.current[channelId] = contentOffset.y
+      pendingShowScrollBottomRef.current = contentOffset.y > 200
+    },
+    [channelId],
+  )
 
   // ---------- WebSocket: join/leave ----------
   const joinChannelWithAck = useCallback((chId: string) => {
@@ -1743,14 +1842,11 @@ export default function ChannelViewScreen() {
             ) : null
           }
           scrollsToTop={false}
-          onScroll={(e) => {
-            const { contentOffset } = e.nativeEvent
-            // In inverted list, offset > 0 means scrolled away from bottom (newest)
-            setShowScrollBottom(contentOffset.y > 200)
-            if (channelId) scrollOffsetRef.current[channelId] = contentOffset.y
-          }}
+          onScroll={handleMessageListScroll}
           scrollEventThrottle={100}
           onScrollBeginDrag={() => Keyboard.dismiss()}
+          onScrollEndDrag={commitScrollBottomVisibility}
+          onMomentumScrollEnd={commitScrollBottomVisibility}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
         />
@@ -1896,7 +1992,7 @@ export default function ChannelViewScreen() {
             onPress={handleCopySelectedAsMarkdown}
             disabled={selectedMessageIds.size === 0}
           >
-            Markdown
+            {t('workspaceFmt_markdown')}
           </Button>
           <Button variant="glass" size="sm" onPress={handleExitSelectionMode}>
             {t('common.cancel')}

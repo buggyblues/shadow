@@ -129,6 +129,61 @@ def test_get_wallet_transactions_with_display_filters(monkeypatch):
     client.close()
 
 
+def test_resolve_attachment_media_url_accepts_variant(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_get(path, *, params=None):
+        captured["path"] = path
+        captured["params"] = params
+        return {
+            "url": "/api/media/signed/token",
+            "expiresAt": "2026-05-13T04:00:00.000Z",
+        }
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    result = client.resolve_attachment_media_url(
+        "attachment-1", disposition="inline", variant="preview"
+    )
+
+    assert captured == {
+        "path": "/api/attachments/attachment-1/media-url",
+        "params": {"disposition": "inline", "variant": "preview"},
+    }
+    assert result["url"] == "/api/media/signed/token"
+    client.close()
+
+
+def test_get_channel_bootstrap_uses_message_limit(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_get(path, *, params=None):
+        captured["path"] = path
+        captured["params"] = params
+        return {
+            "access": {"canAccess": True},
+            "channel": {"id": "channel-1"},
+            "server": None,
+            "channels": [],
+            "members": [],
+            "messages": {"messages": [], "hasMore": False},
+            "slashCommands": {"commands": []},
+        }
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    result = client.get_channel_bootstrap("channel-1", messages_limit=50)
+
+    assert captured == {
+        "path": "/api/channels/channel-1/bootstrap",
+        "params": {"messagesLimit": 50},
+    }
+    assert result["messages"]["hasMore"] is False
+    client.close()
+
+
 def test_socket_creation():
     sock = ShadowSocket("https://example.com", "test-token")
     assert sock.connected is False

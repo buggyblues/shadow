@@ -6,6 +6,7 @@ interface AvatarProps {
   displayName?: string
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   className?: string
+  loading?: 'eager' | 'lazy'
 }
 
 const sizeMap = {
@@ -22,6 +23,7 @@ export function UserAvatar({
   displayName,
   size = 'md',
   className = '',
+  loading = 'lazy',
 }: AvatarProps) {
   const sizeClass = sizeMap[size]
   const fallbackSeed = userId?.trim() || displayName?.trim() || 'default'
@@ -31,6 +33,8 @@ export function UserAvatar({
     <img
       src={src}
       alt={displayName ?? ''}
+      loading={loading}
+      decoding="async"
       className={`${sizeClass} rounded-full bg-bg-secondary object-cover shrink-0 ${className}`}
     />
   )

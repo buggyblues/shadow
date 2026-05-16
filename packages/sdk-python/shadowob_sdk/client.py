@@ -591,6 +591,17 @@ class ShadowClient:
     def get_channel(self, channel_id: str) -> dict[str, Any]:
         return self._get(f"/api/channels/{channel_id}")
 
+    def get_channel_bootstrap(
+        self,
+        channel_id: str,
+        *,
+        messages_limit: int | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if messages_limit is not None:
+            params["messagesLimit"] = messages_limit
+        return self._get(f"/api/channels/{channel_id}/bootstrap", params=params or None)
+
     def get_channel_access(self, channel_id: str) -> dict[str, Any]:
         return self._get(f"/api/channels/{channel_id}/access")
 
@@ -975,9 +986,13 @@ class ShadowClient:
         attachment_id: str,
         *,
         disposition: str = "inline",
+        variant: str | None = None,
     ) -> dict[str, Any]:
         path = f"/api/attachments/{attachment_id}/media-url"
-        return self._get(path, params={"disposition": disposition})
+        params: dict[str, Any] = {"disposition": disposition}
+        if variant:
+            params["variant"] = variant
+        return self._get(path, params=params)
 
     def resolve_workspace_media_url(
         self,

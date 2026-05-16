@@ -237,6 +237,7 @@ export function ChatArea({
   const shouldStickToBottomRef = useRef(true)
   const stickyScrollRafRef = useRef<number | null>(null)
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
+  const hasSeenSocketConnectRef = useRef(false)
   const [previewFile, setPreviewFile] = useState<{
     id: string
     filename: string
@@ -363,17 +364,22 @@ export function ChatArea({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const msgId = params.get('msg')
-    if (msgId) {
-      setHighlightMsgId(msgId)
-      // Scroll to the message after a short delay
-      setTimeout(() => {
-        const el = document.getElementById(`msg-${msgId}`)
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-      }, 500)
-      // Clear highlight after animation
-      setTimeout(() => setHighlightMsgId(null), 3000)
+    if (!msgId) return
+
+    setHighlightMsgId(msgId)
+    // Scroll to the message after a short delay
+    const scrollTimer = window.setTimeout(() => {
+      const el = document.getElementById(`msg-${msgId}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 500)
+    // Clear highlight after animation
+    const clearTimer = window.setTimeout(() => setHighlightMsgId(null), 3000)
+
+    return () => {
+      window.clearTimeout(scrollTimer)
+      window.clearTimeout(clearTimer)
     }
   }, [activeChannelId])
 
@@ -382,12 +388,14 @@ export function ChatArea({
     queryKey: ['channel', activeChannelId],
     queryFn: () => fetchApi<Channel>(`/api/channels/${activeChannelId}`),
     enabled: !!activeChannelId,
+    staleTime: 30_000,
   })
 
   const { data: buddyAgents = [] } = useQuery({
     queryKey: ['agents', 'include-rentals', 'dm-buddy-modes'],
     queryFn: () => fetchApi<BuddyAgentAccessEntry[]>('/api/agents?includeRentals=true'),
-    enabled: !!activeChannelId,
+    enabled: channel?.kind === 'dm',
+    staleTime: 60_000,
   })
 
   const privateBuddyUserIds = useMemo(
@@ -428,6 +436,7 @@ export function ChatArea({
       return lastPage.messages[0]?.createdAt
     },
     enabled: !!activeChannelId,
+    staleTime: 30_000,
     refetchOnWindowFocus: false,
   })
 
@@ -708,6 +717,10 @@ export function ChatArea({
 
   // Refetch messages on socket reconnect to catch any missed while offline
   useSocketEvent('connect', () => {
+    if (!hasSeenSocketConnectRef.current) {
+      hasSeenSocketConnectRef.current = true
+      return
+    }
     if (activeChannelId) {
       queryClient.invalidateQueries({ queryKey: ['messages', activeChannelId] })
     }

@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { Bell, Check, CheckCheck, X } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 
@@ -231,9 +232,11 @@ export function NotificationBell() {
   )
 
   // Fetch unread count
+  const unreadEnabled = useDeferredQueryEnabled({ delayMs: 4000 })
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
     queryFn: () => fetchApi<{ count: number }>('/api/notifications/unread-count'),
+    enabled: unreadEnabled || showPanel,
     refetchInterval: 30_000,
   })
 

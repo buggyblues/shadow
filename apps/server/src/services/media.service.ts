@@ -8,16 +8,33 @@ import type { ActorInput } from '../security/actor'
 import type { PolicyService } from './policy.service'
 
 type MediaDisposition = 'inline' | 'attachment'
+export type MediaVariant = 'avatar' | 'preview' | 'banner'
+
 type MediaTokenPayload = {
   bucket: string
   key: string
   contentType: string
   disposition: MediaDisposition
   filename?: string
+  variant?: MediaVariant
+  sourceKey?: string
+  sourceContentType?: string
   exp: number
 }
 
 const SIGNED_MEDIA_TTL_SECONDS = Number(process.env.SIGNED_MEDIA_TTL_SECONDS ?? 300)
+const TRANSFORMED_MEDIA_SOURCE_MAX_BYTES = Number(
+  process.env.TRANSFORMED_MEDIA_SOURCE_MAX_BYTES ?? 25 * 1024 * 1024,
+)
+
+const mediaVariantConfig = {
+  avatar: { width: 96, height: 96, fit: 'cover' as const, quality: 76 },
+  preview: { width: 640, height: 640, fit: 'inside' as const, quality: 74 },
+  banner: { width: 1280, height: 480, fit: 'cover' as const, quality: 74 },
+} satisfies Record<
+  MediaVariant,
+  { width: number; height: number; fit: 'cover' | 'inside'; quality: number }
+>
 
 function base64UrlEncode(input: Buffer | string): string {
   return Buffer.from(input).toString('base64url')
@@ -60,8 +77,9 @@ function parseSignedMediaContentRef(value: string): string | null {
     const payload = JSON.parse(
       base64UrlDecode(encoded).toString('utf8'),
     ) as Partial<MediaTokenPayload>
-    if (!payload.bucket || !payload.key || !payload.key.startsWith('uploads/')) return null
-    return `/${payload.bucket}/${payload.key}`
+    const key = payload.sourceKey ?? payload.key
+    if (!payload.bucket || !key || !key.startsWith('uploads/')) return null
+    return `/${payload.bucket}/${key}`
   } catch {
     return null
   }
@@ -82,9 +100,25 @@ function allowInline(contentType: string): boolean {
   )
 }
 
+function canTransformImage(contentType: string): boolean {
+  return /^image\/(?:png|jpe?g|webp|avif)$/i.test(contentType)
+}
+
 function contentDisposition(disposition: MediaDisposition, filename?: string) {
   const safeName = filename?.replace(/["\r\n]/g, '_')
   return safeName ? `${disposition}; filename="${safeName}"` : disposition
+}
+
+function mediaVariantObjectKey(sourceKey: string, variant: MediaVariant): string {
+  const slashIndex = sourceKey.lastIndexOf('/')
+  const dir = slashIndex >= 0 ? sourceKey.slice(0, slashIndex) : ''
+  const filename = slashIndex >= 0 ? sourceKey.slice(slashIndex + 1) : sourceKey
+  const dotIndex = filename.lastIndexOf('.')
+  const stem = (dotIndex > 0 ? filename.slice(0, dotIndex) : filename).replace(
+    /[^A-Za-z0-9_-]/g,
+    '_',
+  )
+  return `${dir}/variants/${variant}/${stem}.webp`.replace(/^\/+/, '')
 }
 
 function parseRange(header: string | undefined, size: number) {
@@ -171,6 +205,7 @@ export class MediaService {
     await this.minioClient.putObject(bucketName, key, file, file.length, {
       'Content-Type': contentType,
     })
+    await this.createImageVariants(bucketName, key, file, contentType)
 
     const url = `/${bucketName}/${key}`
     return { url, size: file.length }
@@ -252,6 +287,7 @@ export class MediaService {
   resolveMediaUrl(
     mediaUrl: string | null | undefined,
     fallbackContentType = 'image/png',
+    options?: { variant?: MediaVariant },
   ): string | null {
     const normalized = this.normalizeMediaUrl(mediaUrl)
     if (!normalized || !isUploadedContentRef(normalized)) return normalized
@@ -260,6 +296,7 @@ export class MediaService {
         contentRef: normalized,
         contentType: (lookup(normalized) as string | false) || fallbackContentType,
         disposition: 'inline',
+        variant: options?.variant,
       }).url
     } catch {
       return normalized
@@ -270,6 +307,7 @@ export class MediaService {
     actor: ActorInput
     attachmentId: string
     disposition: MediaDisposition
+    variant?: MediaVariant
   }): Promise<{ url: string; expiresAt: string }> {
     const attachment = await this.deps.messageDao.findAttachmentById(input.attachmentId)
     if (!attachment) throw Object.assign(new Error('Attachment not found'), { status: 404 })
@@ -281,6 +319,7 @@ export class MediaService {
       contentType: attachment.contentType,
       disposition: input.disposition,
       filename: attachment.filename,
+      variant: input.variant,
     })
   }
 
@@ -289,6 +328,7 @@ export class MediaService {
     contentType: string
     disposition: MediaDisposition
     filename?: string
+    variant?: MediaVariant
   }): { url: string; expiresAt: string } {
     const object = parseContentRef(input.contentRef)
     if (!object) throw Object.assign(new Error('Invalid media reference'), { status: 400 })
@@ -299,11 +339,25 @@ export class MediaService {
       SIGNED_MEDIA_TTL_SECONDS
     const disposition =
       input.disposition === 'inline' && allowInline(input.contentType) ? 'inline' : 'attachment'
+    const variant =
+      disposition === 'inline' && input.variant && canTransformImage(input.contentType)
+        ? input.variant
+        : undefined
+    const deliveryObject = variant
+      ? { bucket: object.bucket, key: mediaVariantObjectKey(object.key, variant) }
+      : object
     const payload: MediaTokenPayload = {
-      ...object,
-      contentType: input.contentType || 'application/octet-stream',
+      ...deliveryObject,
+      contentType: variant ? 'image/webp' : input.contentType || 'application/octet-stream',
       disposition,
       filename: input.filename,
+      variant,
+      ...(variant
+        ? {
+            sourceKey: object.key,
+            sourceContentType: input.contentType || 'application/octet-stream',
+          }
+        : {}),
       exp,
     }
     const encoded = base64UrlEncode(JSON.stringify(payload))
@@ -330,8 +384,102 @@ export class MediaService {
     return payload
   }
 
-  async getSignedObjectResponse(
-    payload: MediaTokenPayload,
+  private async buildImageVariant(input: Buffer, variant: MediaVariant): Promise<Buffer> {
+    const { default: sharp } = await import('sharp')
+    const config = mediaVariantConfig[variant]
+    return sharp(input, { failOn: 'none' })
+      .rotate()
+      .resize({
+        width: config.width,
+        height: config.height,
+        fit: config.fit,
+        withoutEnlargement: true,
+      })
+      .webp({ quality: config.quality, effort: 4 })
+      .toBuffer()
+  }
+
+  private async createImageVariants(
+    bucketName: string,
+    sourceKey: string,
+    source: Buffer,
+    contentType: string,
+  ) {
+    if (!this.minioClient || !canTransformImage(contentType)) return
+    if (source.length > TRANSFORMED_MEDIA_SOURCE_MAX_BYTES) {
+      this.deps.logger.warn(
+        { key: sourceKey, size: source.length },
+        'Skipping image variants because source is too large',
+      )
+      return
+    }
+
+    await Promise.all(
+      (Object.keys(mediaVariantConfig) as MediaVariant[]).map(async (variant) => {
+        try {
+          const body = await this.buildImageVariant(source, variant)
+          await this.minioClient!.putObject(
+            bucketName,
+            mediaVariantObjectKey(sourceKey, variant),
+            body,
+            body.length,
+            {
+              'Content-Type': 'image/webp',
+              'X-Shadow-Source-Key': sourceKey,
+            },
+          )
+        } catch (err) {
+          this.deps.logger.warn(
+            { err, key: sourceKey, variant },
+            'Failed to create image variant during upload',
+          )
+        }
+      }),
+    )
+  }
+
+  private async ensureImageVariantObject(payload: MediaTokenPayload & { variant: MediaVariant }) {
+    if (!this.minioClient) {
+      throw Object.assign(new Error('File storage not available'), { status: 503 })
+    }
+    if (!payload.sourceKey) {
+      throw Object.assign(new Error('Variant source is not available'), { status: 404 })
+    }
+
+    try {
+      await this.minioClient.statObject(payload.bucket, payload.key)
+      return
+    } catch {
+      // Missing persistent variant for legacy uploads. Build it once and store it in MinIO.
+    }
+
+    const stat = await this.minioClient.statObject(payload.bucket, payload.sourceKey)
+    const sourceSize = Number(stat.size)
+    if (
+      !Number.isFinite(sourceSize) ||
+      sourceSize <= 0 ||
+      sourceSize > TRANSFORMED_MEDIA_SOURCE_MAX_BYTES
+    ) {
+      throw Object.assign(new Error('Image source is too large for variant transform'), {
+        status: 413,
+      })
+    }
+
+    const stream = await this.minioClient.getObject(payload.bucket, payload.sourceKey)
+    const chunks: Buffer[] = []
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk))
+    }
+
+    const body = await this.buildImageVariant(Buffer.concat(chunks), payload.variant)
+    await this.minioClient.putObject(payload.bucket, payload.key, body, body.length, {
+      'Content-Type': 'image/webp',
+      'X-Shadow-Source-Key': payload.sourceKey,
+    })
+  }
+
+  private async getObjectResponse(
+    payload: Omit<MediaTokenPayload, 'variant' | 'sourceKey' | 'sourceContentType'>,
     rangeHeader?: string,
   ): Promise<{
     body: ReadableStream<Uint8Array>
@@ -372,6 +520,41 @@ export class MediaService {
     }
 
     return { body: Readable.toWeb(stream) as ReadableStream<Uint8Array>, status, headers }
+  }
+
+  async getSignedObjectResponse(
+    payload: MediaTokenPayload,
+    rangeHeader?: string,
+  ): Promise<{
+    body: ReadableStream<Uint8Array>
+    status: 200 | 206
+    headers: Record<string, string>
+  }> {
+    if (payload.variant && payload.sourceKey) {
+      try {
+        await this.ensureImageVariantObject(
+          payload as MediaTokenPayload & { variant: MediaVariant },
+        )
+      } catch (err) {
+        this.deps.logger.warn(
+          { err, key: payload.sourceKey, variant: payload.variant },
+          'Failed to resolve persistent media variant; falling back to original object',
+        )
+        return this.getObjectResponse(
+          {
+            bucket: payload.bucket,
+            key: payload.sourceKey,
+            contentType: payload.sourceContentType ?? 'application/octet-stream',
+            disposition: payload.disposition,
+            filename: payload.filename,
+            exp: payload.exp,
+          },
+          rangeHeader,
+        )
+      }
+    }
+
+    return this.getObjectResponse(payload, rangeHeader)
   }
 
   async getObjectStream(
