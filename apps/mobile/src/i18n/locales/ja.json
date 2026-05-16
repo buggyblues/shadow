@@ -1231,5 +1231,32 @@
   },
   "dm": {
     "emptyBuddies": "DM できる Buddy はありません"
+  },
+  "voice": {
+    "ready": "接続できます",
+    "connectedCount": "{{count}} 人が接続中",
+    "join": "ボイスに参加",
+    "leave": "退出",
+    "mute": "ミュート",
+    "unmute": "ミュート解除",
+    "deafen": "スピーカーミュート",
+    "undeafen": "スピーカーミュート解除",
+    "shareScreen": "画面共有",
+    "stopShare": "共有停止",
+    "refreshDevices": "更新",
+    "inputDevice": "入力デバイス",
+    "outputDevice": "出力デバイス",
+    "defaultDevice": "システム既定",
+    "unknownDevice": "不明なデバイス",
+    "testMic": "マイクをテスト",
+    "stopTest": "テスト停止",
+    "yourScreen": "あなたの画面",
+    "participants": "参加者",
+    "noParticipants": "接続中の参加者はいません",
+    "listening": "リスニング中",
+    "muted": "ミュート中",
+    "speaker": "スピーカー",
+    "earpiece": "受話口",
+    "joinFailed": "ボイスチャンネルに参加できませんでした"
   }
 }

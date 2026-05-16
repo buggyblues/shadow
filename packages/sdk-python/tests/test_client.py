@@ -184,6 +184,57 @@ def test_get_channel_bootstrap_uses_message_limit(monkeypatch):
     client.close()
 
 
+def test_join_voice_channel_posts_state(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_post(path, json=None):
+        captured["path"] = path
+        captured["json"] = json
+        return {"credentials": {"appId": "agora-app", "uid": 1}, "state": {"participants": []}}
+
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    result = client.join_voice_channel("channel-1", client_id="cli", muted=True)
+
+    assert captured == {
+        "path": "/api/channels/channel-1/voice/join",
+        "json": {"clientId": "cli", "muted": True},
+    }
+    assert result["credentials"]["appId"] == "agora-app"
+    client.close()
+
+
+def test_update_voice_policy_uses_voice_policy_endpoint(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_put(path, json=None):
+        captured["path"] = path
+        captured["json"] = json
+        return {"agentId": "agent-1", "channelId": "channel-1", "autoJoin": True}
+
+    monkeypatch.setattr(client, "_put", fake_put)
+
+    result = client.update_voice_policy(
+        "channel-1",
+        agent_id="agent-1",
+        auto_join=True,
+        consume_screen_share=True,
+    )
+
+    assert captured == {
+        "path": "/api/channels/channel-1/voice-policy",
+        "json": {
+            "agentId": "agent-1",
+            "autoJoin": True,
+            "consumeScreenShare": True,
+        },
+    }
+    assert result["autoJoin"] is True
+    client.close()
+
+
 def test_socket_creation():
     sock = ShadowSocket("https://example.com", "test-token")
     assert sock.connected is False

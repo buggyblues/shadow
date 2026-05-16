@@ -23,6 +23,11 @@ const AGENT_POLICY_CONFIG_KEYS = new Set([
   'ownerId',
   'activeTenantIds',
   'replyRequiresMention',
+  'voiceListen',
+  'voiceAutoJoin',
+  'voiceConsumeAudio',
+  'voiceConsumeScreenShare',
+  'voiceScreenshotIntervalSeconds',
 ])
 
 function stringArray(value: unknown, key: string): string[] | undefined {
@@ -71,7 +76,11 @@ function validatePolicyConfig(config: Record<string, unknown> | undefined) {
       key === 'mentionOnly' ||
       key === 'replyToBuddy' ||
       key === 'smartReply' ||
-      key === 'replyRequiresMention'
+      key === 'replyRequiresMention' ||
+      key === 'voiceListen' ||
+      key === 'voiceAutoJoin' ||
+      key === 'voiceConsumeAudio' ||
+      key === 'voiceConsumeScreenShare'
     ) {
       if (typeof value !== 'boolean') {
         throw Object.assign(new Error(`Invalid policy config ${key}`), { status: 400 })
@@ -89,6 +98,18 @@ function validatePolicyConfig(config: Record<string, unknown> | undefined) {
     if (key === 'maxBuddyChainDepth') {
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 8) {
         throw Object.assign(new Error('Invalid policy config maxBuddyChainDepth'), { status: 400 })
+      }
+      sanitized[key] = value
+      continue
+    }
+    if (key === 'voiceScreenshotIntervalSeconds') {
+      if (
+        value !== null &&
+        (typeof value !== 'number' || !Number.isInteger(value) || value < 5 || value > 3600)
+      ) {
+        throw Object.assign(new Error('Invalid policy config voiceScreenshotIntervalSeconds'), {
+          status: 400,
+        })
       }
       sanitized[key] = value
     }

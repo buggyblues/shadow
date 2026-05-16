@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChatArea } from '../components/chat/chat-area'
 import { MemberList } from '../components/member/member-list'
+import { VoiceChannelPanel } from '../components/voice/voice-channel-panel'
 import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
 import { setLastChannelId } from '../lib/last-channel'
@@ -54,7 +55,7 @@ export function ChannelView() {
         canAccess: boolean
         requiresApproval: boolean
         joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
-        channel: { id: string; name: string; serverId: string; isPrivate: boolean }
+        channel: { id: string; name: string; type: string; serverId: string; isPrivate: boolean }
       }>(`/api/channels/${channelId}/access`),
     enabled: !!channelId,
     retry: false,
@@ -65,7 +66,7 @@ export function ChannelView() {
   const { data: channel } = useQuery({
     queryKey: ['channel', channelId],
     queryFn: () =>
-      fetchApi<{ id: string; name: string; serverId: string; isPrivate: boolean }>(
+      fetchApi<{ id: string; name: string; type: string; serverId: string; isPrivate: boolean }>(
         `/api/channels/${channelId}`,
       ),
     enabled: !!channelId && canAccessChannel,
@@ -180,6 +181,10 @@ export function ChannelView() {
         </GlassPanel>
       </div>
     )
+  }
+
+  if (channel?.type === 'voice') {
+    return <VoiceChannelPanel key={channelId} channelId={channelId} channelName={channel.name} />
   }
 
   return (

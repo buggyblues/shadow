@@ -1,5 +1,11 @@
 import { io, type Socket } from 'socket.io-client'
-import type { ClientEventMap, ServerEventMap, ShadowMessageMention } from './types'
+import type {
+  ClientEventMap,
+  ServerEventMap,
+  ShadowMessageMention,
+  ShadowVoiceJoinResult,
+  ShadowVoiceLeaveResult,
+} from './types'
 
 export interface ShadowSocketOptions {
   /** Shadow server base URL (e.g. "https://shadowob.shadowob.com") */
@@ -149,6 +155,54 @@ export class ShadowSocket {
   /** Leave a channel room */
   leaveChannel(channelId: string): void {
     this.socket.emit('channel:leave' satisfies keyof ClientEventMap, { channelId })
+  }
+
+  joinVoiceChannel(
+    channelId: string,
+    options?: { clientId?: string; muted?: boolean; deafened?: boolean },
+  ): Promise<{ ok: boolean; data?: ShadowVoiceJoinResult; error?: string; code?: string }> {
+    return new Promise((resolve) => {
+      this.socket.emit(
+        'voice:join' satisfies keyof ClientEventMap,
+        { channelId, ...options },
+        (res: { ok: boolean; data?: ShadowVoiceJoinResult; error?: string; code?: string }) => {
+          resolve(res ?? { ok: false, error: 'Voice join failed' })
+        },
+      )
+    })
+  }
+
+  leaveVoiceChannel(
+    channelId: string,
+  ): Promise<{ ok: boolean; data?: ShadowVoiceLeaveResult; error?: string; code?: string }> {
+    return new Promise((resolve) => {
+      this.socket.emit(
+        'voice:leave' satisfies keyof ClientEventMap,
+        { channelId },
+        (res: { ok: boolean; data?: ShadowVoiceLeaveResult; error?: string; code?: string }) => {
+          resolve(res ?? { ok: true })
+        },
+      )
+    })
+  }
+
+  updateVoiceState(
+    channelId: string,
+    data: { muted?: boolean; deafened?: boolean; speaking?: boolean; screenSharing?: boolean },
+  ): Promise<{ ok: boolean; data?: unknown; error?: string; code?: string }> {
+    return new Promise((resolve) => {
+      this.socket.emit(
+        'voice:state:update' satisfies keyof ClientEventMap,
+        { channelId, ...data },
+        (res: { ok: boolean; data?: unknown; error?: string; code?: string }) => {
+          resolve(res ?? { ok: true })
+        },
+      )
+    })
+  }
+
+  sendVoiceHeartbeat(channelId: string): void {
+    this.socket.emit('voice:heartbeat' satisfies keyof ClientEventMap, { channelId })
   }
 
   // ── Client actions ────────────────────────────────────────────────────

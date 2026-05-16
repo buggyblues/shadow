@@ -1230,5 +1230,32 @@
   },
   "dm": {
     "emptyBuddies": "暂无可私信的 Buddy"
+  },
+  "voice": {
+    "ready": "准备连接",
+    "connectedCount": "{{count}} 人已连接",
+    "join": "加入语音",
+    "leave": "离开",
+    "mute": "静音",
+    "unmute": "取消静音",
+    "deafen": "拒听",
+    "undeafen": "取消拒听",
+    "shareScreen": "共享屏幕",
+    "stopShare": "停止共享",
+    "refreshDevices": "刷新",
+    "inputDevice": "输入设备",
+    "outputDevice": "输出设备",
+    "defaultDevice": "系统默认",
+    "unknownDevice": "未知设备",
+    "testMic": "测试麦克风",
+    "stopTest": "停止测试",
+    "yourScreen": "你的屏幕",
+    "participants": "成员",
+    "noParticipants": "暂时无人连接",
+    "listening": "正在收听",
+    "muted": "已静音",
+    "speaker": "扬声器",
+    "earpiece": "听筒",
+    "joinFailed": "加入语音频道失败"
   }
 }

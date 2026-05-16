@@ -39,3 +39,62 @@ export interface ChannelSortOptions {
   by: ChannelSortBy
   direction: ChannelSortDirection
 }
+
+export interface VoiceParticipant {
+  channelId: string
+  userId: string
+  uid: number
+  screenUid: number
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  isBot: boolean
+  isMuted: boolean
+  isDeafened: boolean
+  isSpeaking: boolean
+  isScreenSharing: boolean
+  joinedAt: string
+  updatedAt: string
+  clientId: string | null
+}
+
+export interface VoiceChannelCredentials {
+  appId: string
+  channelId: string
+  agoraChannelName: string
+  uid: number
+  screenUid: number
+  token: string | null
+  screenToken: string | null
+  expiresAt: string | null
+}
+
+export interface VoiceChannelState {
+  channelId: string
+  agoraChannelName: string
+  participants: VoiceParticipant[]
+  participantCount: number
+  emptySince: string | null
+  graceEndsAt: string | null
+}
+
+export interface VoiceChannelJoinResult {
+  credentials: VoiceChannelCredentials
+  participant: VoiceParticipant
+  state: VoiceChannelState
+}
+
+export interface VoiceChannelLeaveResult {
+  participant: VoiceParticipant | null
+  state: VoiceChannelState
+}
+
+export interface VoiceChannelPolicy {
+  agentId: string
+  channelId: string
+  listen: boolean
+  autoJoin: boolean
+  consumeAudio: boolean
+  consumeScreenShare: boolean
+  screenshotIntervalSeconds: number | null
+}

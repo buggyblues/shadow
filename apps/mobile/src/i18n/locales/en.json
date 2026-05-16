@@ -1231,5 +1231,32 @@
   },
   "dm": {
     "emptyBuddies": "No Buddies available for DM"
+  },
+  "voice": {
+    "ready": "Ready to connect",
+    "connectedCount": "{{count}} connected",
+    "join": "Join Voice",
+    "leave": "Leave",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "deafen": "Deafen",
+    "undeafen": "Undeafen",
+    "shareScreen": "Share Screen",
+    "stopShare": "Stop Sharing",
+    "refreshDevices": "Refresh",
+    "inputDevice": "Input device",
+    "outputDevice": "Output device",
+    "defaultDevice": "System default",
+    "unknownDevice": "Unknown device",
+    "testMic": "Test mic",
+    "stopTest": "Stop test",
+    "yourScreen": "Your screen",
+    "participants": "Participants",
+    "noParticipants": "No one is connected",
+    "listening": "Listening",
+    "muted": "Muted",
+    "speaker": "Speaker",
+    "earpiece": "Earpiece",
+    "joinFailed": "Failed to join voice channel"
   }
 }

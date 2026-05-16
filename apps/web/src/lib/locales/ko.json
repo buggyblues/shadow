@@ -602,6 +602,8 @@
     "announcement": "공지 채널",
     "text": "텍스트 채널",
     "voice": "음성 채널",
+    "textChannels": "텍스트 채널",
+    "voiceChannels": "음성 채널",
     "noChannels": "채널이 없습니다",
     "noChannelsDesc": "채널이 준비되면 여기에 표시됩니다.",
     "createChannel": "채널 생성",
@@ -2699,6 +2701,53 @@
     "confirm": {
       "consume": "이 자산을 지금 사용하시겠습니까? 남은 수량이 줄어들 수 있습니다.",
       "revoke": "이 자산을 회수하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+    }
+  },
+  "voice": {
+    "ready": "연결 준비됨",
+    "connected": "음성 연결됨",
+    "connecting": "연결 중...",
+    "connectionError": "음성 연결 오류",
+    "connectedCount": "{{count}}명 연결됨",
+    "join": "음성 참여",
+    "leave": "나가기",
+    "disconnect": "연결 해제",
+    "mute": "음소거",
+    "unmute": "음소거 해제",
+    "deafen": "듣기 끄기",
+    "undeafen": "듣기 켜기",
+    "shareScreen": "화면 공유",
+    "stopShare": "공유 중지",
+    "refreshDevices": "새로고침",
+    "settings": "음성 설정",
+    "outputVolume": "출력 음량",
+    "inputDevice": "입력 장치",
+    "outputDevice": "출력 장치",
+    "defaultDevice": "시스템 기본값",
+    "unknownDevice": "알 수 없는 장치",
+    "testMic": "마이크 테스트",
+    "stopTest": "테스트 중지",
+    "yourScreen": "내 화면",
+    "participants": "참가자",
+    "noParticipants": "연결된 참가자가 없습니다",
+    "inviteToVoice": "음성으로 초대",
+    "inVoiceChannel": "음성 채널 참여 중",
+    "listening": "듣는 중",
+    "muted": "음소거됨",
+    "speaker": "스피커",
+    "earpiece": "수화기",
+    "joinFailed": "음성 채널 참여 실패",
+    "network": {
+      "unknown": "네트워크 상태 알 수 없음",
+      "excellent": "네트워크 매우 좋음",
+      "good": "네트워크 좋음",
+      "fair": "네트워크 불안정",
+      "poor": "네트워크 나쁨"
+    },
+    "errors": {
+      "rtcNotConfigured": "서버에 음성 서비스가 설정되지 않았습니다.",
+      "microphonePermission": "브라우저에서 마이크 권한을 허용한 뒤 다시 참여하세요.",
+      "screenPermission": "브라우저에서 화면 공유를 허용한 뒤 다시 시도하세요."
     }
   }
 }

@@ -87,6 +87,10 @@ import type {
   ShadowThread,
   ShadowTransaction,
   ShadowUser,
+  ShadowVoiceJoinResult,
+  ShadowVoiceLeaveResult,
+  ShadowVoicePolicy,
+  ShadowVoiceState,
   ShadowWallet,
 } from './types'
 
@@ -946,6 +950,63 @@ export class ShadowClient {
 
   async removeChannelMember(channelId: string, userId: string): Promise<{ success: boolean }> {
     return this.request(`/api/channels/${channelId}/members/${userId}`, { method: 'DELETE' })
+  }
+
+  async getVoiceState(channelId: string): Promise<ShadowVoiceState> {
+    return this.request<ShadowVoiceState>(`/api/channels/${channelId}/voice/state`)
+  }
+
+  async joinVoiceChannel(
+    channelId: string,
+    options?: { clientId?: string | null; muted?: boolean; deafened?: boolean },
+  ): Promise<ShadowVoiceJoinResult> {
+    return this.request<ShadowVoiceJoinResult>(`/api/channels/${channelId}/voice/join`, {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    })
+  }
+
+  async leaveVoiceChannel(channelId: string): Promise<ShadowVoiceLeaveResult> {
+    return this.request<ShadowVoiceLeaveResult>(`/api/channels/${channelId}/voice/leave`, {
+      method: 'POST',
+    })
+  }
+
+  async updateVoiceState(
+    channelId: string,
+    data: {
+      muted?: boolean
+      deafened?: boolean
+      speaking?: boolean
+      screenSharing?: boolean
+    },
+  ): Promise<{ participant: unknown; state: ShadowVoiceState }> {
+    return this.request(`/api/channels/${channelId}/voice/state`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getVoicePolicy(channelId: string, agentId: string): Promise<ShadowVoicePolicy> {
+    const params = new URLSearchParams({ agentId })
+    return this.request<ShadowVoicePolicy>(`/api/channels/${channelId}/voice-policy?${params}`)
+  }
+
+  async updateVoicePolicy(
+    channelId: string,
+    data: {
+      agentId: string
+      listen?: boolean
+      autoJoin?: boolean
+      consumeAudio?: boolean
+      consumeScreenShare?: boolean
+      screenshotIntervalSeconds?: number | null
+    },
+  ): Promise<ShadowVoicePolicy> {
+    return this.request<ShadowVoicePolicy>(`/api/channels/${channelId}/voice-policy`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
   }
 
   // ── Channel Buddy Policy ─────────────────────────────────────────────

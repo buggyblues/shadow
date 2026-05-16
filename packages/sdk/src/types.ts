@@ -371,6 +371,65 @@ export interface ShadowChannelJoinRequestResult {
   requestId?: string
 }
 
+export interface ShadowVoiceParticipant {
+  channelId: string
+  userId: string
+  uid: number
+  screenUid: number
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  isBot: boolean
+  isMuted: boolean
+  isDeafened: boolean
+  isSpeaking: boolean
+  isScreenSharing: boolean
+  joinedAt: string
+  updatedAt: string
+  clientId: string | null
+}
+
+export interface ShadowVoiceCredentials {
+  appId: string
+  channelId: string
+  agoraChannelName: string
+  uid: number
+  screenUid: number
+  token: string | null
+  screenToken: string | null
+  expiresAt: string | null
+}
+
+export interface ShadowVoiceState {
+  channelId: string
+  agoraChannelName: string
+  participants: ShadowVoiceParticipant[]
+  participantCount: number
+  emptySince: string | null
+  graceEndsAt: string | null
+}
+
+export interface ShadowVoiceJoinResult {
+  credentials: ShadowVoiceCredentials
+  participant: ShadowVoiceParticipant
+  state: ShadowVoiceState
+}
+
+export interface ShadowVoiceLeaveResult {
+  participant: ShadowVoiceParticipant | null
+  state: ShadowVoiceState
+}
+
+export interface ShadowVoicePolicy {
+  agentId: string
+  channelId: string
+  listen: boolean
+  autoJoin: boolean
+  consumeAudio: boolean
+  consumeScreenShare: boolean
+  screenshotIntervalSeconds: number | null
+}
+
 export type ShadowServerJoinRequestStatus = 'pending' | 'approved' | 'rejected'
 
 export interface ShadowServerAccess {
@@ -810,6 +869,17 @@ export interface PolicyChangedPayload {
   agentId: string
   serverId: string
   channelId?: string | null
+}
+
+export interface VoiceParticipantPayload {
+  channelId: string
+  participant: ShadowVoiceParticipant | null
+  state: ShadowVoiceState
+}
+
+export interface VoicePolicyUpdatedPayload {
+  channelId: string
+  agentId: string
 }
 
 // ─── Friendship Types ───────────────────────────────────────────────────────
@@ -1676,6 +1746,11 @@ export interface ServerEventMap {
   'channel:member-added': (payload: ChannelMemberAddedPayload) => void
   'channel:member-removed': (payload: ChannelMemberRemovedPayload) => void
   'channel:slash-commands-updated': (payload: SlashCommandsUpdatedPayload) => void
+  'voice:state': (payload: ShadowVoiceState) => void
+  'voice:participant-joined': (payload: VoiceParticipantPayload) => void
+  'voice:participant-left': (payload: VoiceParticipantPayload) => void
+  'voice:participant-updated': (payload: VoiceParticipantPayload) => void
+  'voice:policy-updated': (payload: VoicePolicyUpdatedPayload) => void
   'server:joined': (payload: ServerJoinedPayload) => void
   'agent:policy-changed': (payload: PolicyChangedPayload) => void
   error: (payload: { message: string }) => void
@@ -1685,6 +1760,35 @@ export interface ServerEventMap {
 export interface ClientEventMap {
   'channel:join': (data: { channelId: string }, ack?: (res: { ok: boolean }) => void) => void
   'channel:leave': (data: { channelId: string }) => void
+  'voice:join': (
+    data: { channelId: string; clientId?: string; muted?: boolean; deafened?: boolean },
+    ack?: (res: {
+      ok: boolean
+      data?: ShadowVoiceJoinResult
+      error?: string
+      code?: string
+    }) => void,
+  ) => void
+  'voice:leave': (
+    data: { channelId: string },
+    ack?: (res: {
+      ok: boolean
+      data?: ShadowVoiceLeaveResult
+      error?: string
+      code?: string
+    }) => void,
+  ) => void
+  'voice:state:update': (
+    data: {
+      channelId: string
+      muted?: boolean
+      deafened?: boolean
+      speaking?: boolean
+      screenSharing?: boolean
+    },
+    ack?: (res: { ok: boolean; data?: unknown; error?: string; code?: string }) => void,
+  ) => void
+  'voice:heartbeat': (data: { channelId: string }) => void
   'message:send': (data: {
     channelId: string
     content: string

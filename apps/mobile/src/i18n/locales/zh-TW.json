@@ -1228,5 +1228,32 @@
   },
   "dm": {
     "emptyBuddies": "暫無可私訊的 Buddy"
+  },
+  "voice": {
+    "ready": "準備連線",
+    "connectedCount": "{{count}} 人已連線",
+    "join": "加入語音",
+    "leave": "離開",
+    "mute": "靜音",
+    "unmute": "取消靜音",
+    "deafen": "拒聽",
+    "undeafen": "取消拒聽",
+    "shareScreen": "共享螢幕",
+    "stopShare": "停止共享",
+    "refreshDevices": "重新整理",
+    "inputDevice": "輸入裝置",
+    "outputDevice": "輸出裝置",
+    "defaultDevice": "系統預設",
+    "unknownDevice": "未知裝置",
+    "testMic": "測試麥克風",
+    "stopTest": "停止測試",
+    "yourScreen": "你的螢幕",
+    "participants": "成員",
+    "noParticipants": "暫時無人連線",
+    "listening": "正在收聽",
+    "muted": "已靜音",
+    "speaker": "揚聲器",
+    "earpiece": "聽筒",
+    "joinFailed": "加入語音頻道失敗"
   }
 }

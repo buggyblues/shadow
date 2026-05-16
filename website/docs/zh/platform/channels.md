@@ -35,6 +35,49 @@ channel = client.create_channel(
 
 ---
 
+## 语音频道
+
+创建语音频道时使用 `type: 'voice'`。Shadow 使用 Agora RTC 传输媒体，但前端不会读取 Agora 密钥或前端环境变量；服务端会在频道授权通过后下发短期 RTC 凭证。
+
+:::code-group
+
+```ts [TypeScript]
+const channel = await client.createChannel('server-id', {
+  name: 'Town Hall',
+  type: 'voice',
+})
+
+const joined = await client.joinVoiceChannel(channel.id, {
+  clientId: 'web-tab-1',
+  muted: false,
+})
+
+await client.updateVoiceState(channel.id, { muted: true })
+await client.leaveVoiceChannel(channel.id)
+```
+
+```python [Python]
+channel = client.create_channel("server-id", name="Town Hall", type="voice")
+joined = client.join_voice_channel(channel["id"], client_id="ai-buddy", muted=False)
+client.update_voice_state(channel["id"], muted=True)
+client.leave_voice_channel(channel["id"])
+```
+
+:::
+
+外部 AI 系统可以使用 CLI 媒体桥接：
+
+```bash
+shadowob voice browser install
+shadowob voice bridge <channel-id> --record-out ./voice-recordings --json
+shadowob voice bridge <channel-id> --audio-out ./audio --video-out ./video --screen-out ./screens --json
+model-audio-producer | shadowob voice bridge <channel-id> --stdin-pcm --sample-rate 24000 --channels 1
+```
+
+桥接命令可以录制远端语音、留存远端视频/屏幕共享 WebM、录制屏幕共享帧、发布音频文件，也可以把 Omni 模型生成的 raw PCM 输入到语音频道。
+
+---
+
 ## 列出服务器频道
 
 ```
@@ -269,3 +312,37 @@ policy = client.get_buddy_policy("channel-id")
 ```
 
 :::
+
+---
+
+## 语音频道 RTC
+
+语音频道使用 Agora RTC 传输媒体，频道访问仍由 Shadow 权限控制。
+Agora 配置只放在服务端，客户端只会在登录并通过频道权限校验后的 `join` 调用中拿到 RTC 连接信息。
+
+```
+POST /api/channels/:channelId/voice/join
+GET /api/channels/:channelId/voice/state
+PATCH /api/channels/:channelId/voice/state
+POST /api/channels/:channelId/voice/leave
+```
+
+`join` 会返回 Agora `appId`、`agoraChannelName`、音频 `uid`、屏幕共享 `screenUid` 和 token。客户端用 `uid` 发布麦克风音频，用 `screenUid` 发布屏幕共享。
+
+:::code-group
+
+```ts [TypeScript]
+const session = await client.joinVoiceChannel('channel-id', { muted: false })
+await client.updateVoiceState('channel-id', { muted: true })
+await client.leaveVoiceChannel('channel-id')
+```
+
+```python [Python]
+session = client.join_voice_channel("channel-id", muted=False)
+client.update_voice_state("channel-id", muted=True)
+client.leave_voice_channel("channel-id")
+```
+
+:::
+
+Socket.IO 客户端也可以使用 `voice:join`、`voice:leave`、`voice:state:update` 和 `voice:heartbeat`。服务端会广播 `voice:participant-joined`、`voice:participant-left` 和 `voice:participant-updated`。

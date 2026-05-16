@@ -800,6 +800,8 @@
     "announcement": "公告频道",
     "text": "文字频道",
     "voice": "语音频道",
+    "textChannels": "文字频道",
+    "voiceChannels": "语音频道",
     "noChannels": "暂无频道",
     "noChannelsDesc": "频道准备好后会显示在这里。",
     "createChannel": "创建频道",
@@ -2699,6 +2701,53 @@
     "confirm": {
       "consume": "确认现在使用这份资产吗？可用数量会减少。",
       "revoke": "确认撤销这份资产吗？该操作不可恢复。"
+    }
+  },
+  "voice": {
+    "ready": "准备连接",
+    "connected": "语音已连接",
+    "connecting": "正在连接...",
+    "connectionError": "语音连接异常",
+    "connectedCount": "{{count}} 人已连接",
+    "join": "加入语音",
+    "leave": "离开",
+    "disconnect": "断开连接",
+    "mute": "静音",
+    "unmute": "取消静音",
+    "deafen": "拒听",
+    "undeafen": "取消拒听",
+    "shareScreen": "共享屏幕",
+    "stopShare": "停止共享",
+    "refreshDevices": "刷新",
+    "settings": "语音设置",
+    "outputVolume": "输出音量",
+    "inputDevice": "输入设备",
+    "outputDevice": "输出设备",
+    "defaultDevice": "系统默认",
+    "unknownDevice": "未知设备",
+    "testMic": "测试麦克风",
+    "stopTest": "停止测试",
+    "yourScreen": "你的屏幕",
+    "participants": "成员",
+    "noParticipants": "暂时无人连接",
+    "inviteToVoice": "邀请到语音",
+    "inVoiceChannel": "在语音频道中",
+    "listening": "正在收听",
+    "muted": "已静音",
+    "speaker": "扬声器",
+    "earpiece": "听筒",
+    "joinFailed": "加入语音频道失败",
+    "network": {
+      "unknown": "网络状态未知",
+      "excellent": "网络极佳",
+      "good": "网络良好",
+      "fair": "网络不稳定",
+      "poor": "网络较差"
+    },
+    "errors": {
+      "rtcNotConfigured": "服务端尚未配置语音服务。",
+      "microphonePermission": "请在浏览器中允许麦克风权限，然后重新加入。",
+      "screenPermission": "请在浏览器中允许屏幕共享，然后重试。"
     }
   }
 }

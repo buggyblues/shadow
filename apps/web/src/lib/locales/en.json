@@ -800,6 +800,8 @@
     "announcement": "Announcements",
     "text": "Text Channels",
     "voice": "Voice Channels",
+    "textChannels": "Text Channels",
+    "voiceChannels": "Voice Channels",
     "noChannels": "No channels yet",
     "noChannelsDesc": "Channels will appear here as soon as they are ready.",
     "createChannel": "Create Channel",
@@ -2699,6 +2701,53 @@
     "confirm": {
       "consume": "Use this asset now? This may reduce the remaining quantity.",
       "revoke": "Revoke this asset? This action cannot be undone."
+    }
+  },
+  "voice": {
+    "ready": "Ready to connect",
+    "connected": "Voice Connected",
+    "connecting": "Connecting...",
+    "connectionError": "Voice Error",
+    "connectedCount": "{{count}} connected",
+    "join": "Join Voice",
+    "leave": "Leave",
+    "disconnect": "Disconnect",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "deafen": "Deafen",
+    "undeafen": "Undeafen",
+    "shareScreen": "Share Screen",
+    "stopShare": "Stop Sharing",
+    "refreshDevices": "Refresh",
+    "settings": "Voice Settings",
+    "outputVolume": "Output volume",
+    "inputDevice": "Input device",
+    "outputDevice": "Output device",
+    "defaultDevice": "System default",
+    "unknownDevice": "Unknown device",
+    "testMic": "Test mic",
+    "stopTest": "Stop test",
+    "yourScreen": "Your screen",
+    "participants": "Participants",
+    "noParticipants": "No one is connected",
+    "inviteToVoice": "Invite to Voice",
+    "inVoiceChannel": "In voice channel",
+    "listening": "Listening",
+    "muted": "Muted",
+    "speaker": "Speaker",
+    "earpiece": "Earpiece",
+    "joinFailed": "Failed to join voice channel",
+    "network": {
+      "unknown": "Network unknown",
+      "excellent": "Excellent network",
+      "good": "Good network",
+      "fair": "Unstable network",
+      "poor": "Poor network"
+    },
+    "errors": {
+      "rtcNotConfigured": "Voice service is not configured on the server.",
+      "microphonePermission": "Allow microphone access in your browser, then join again.",
+      "screenPermission": "Allow screen sharing in your browser, then try again."
     }
   }
 }

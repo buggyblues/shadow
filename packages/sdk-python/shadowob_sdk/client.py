@@ -658,6 +658,79 @@ class ShadowClient:
     ) -> dict[str, Any]:
         return self._delete(f"/api/channels/{channel_id}/members/{user_id}")
 
+    def get_voice_state(self, channel_id: str) -> dict[str, Any]:
+        return self._get(f"/api/channels/{channel_id}/voice/state")
+
+    def join_voice_channel(
+        self,
+        channel_id: str,
+        *,
+        client_id: str | None = None,
+        muted: bool | None = None,
+        deafened: bool | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if client_id is not None:
+            payload["clientId"] = client_id
+        if muted is not None:
+            payload["muted"] = muted
+        if deafened is not None:
+            payload["deafened"] = deafened
+        return self._post(f"/api/channels/{channel_id}/voice/join", json=payload)
+
+    def leave_voice_channel(self, channel_id: str) -> dict[str, Any]:
+        return self._post(f"/api/channels/{channel_id}/voice/leave")
+
+    def update_voice_state(
+        self,
+        channel_id: str,
+        *,
+        muted: bool | None = None,
+        deafened: bool | None = None,
+        speaking: bool | None = None,
+        screen_sharing: bool | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if muted is not None:
+            payload["muted"] = muted
+        if deafened is not None:
+            payload["deafened"] = deafened
+        if speaking is not None:
+            payload["speaking"] = speaking
+        if screen_sharing is not None:
+            payload["screenSharing"] = screen_sharing
+        return self._patch(f"/api/channels/{channel_id}/voice/state", json=payload)
+
+    def get_voice_policy(self, channel_id: str, agent_id: str) -> dict[str, Any]:
+        return self._get(
+            f"/api/channels/{channel_id}/voice-policy",
+            params={"agentId": agent_id},
+        )
+
+    def update_voice_policy(
+        self,
+        channel_id: str,
+        *,
+        agent_id: str,
+        listen: bool | None = None,
+        auto_join: bool | None = None,
+        consume_audio: bool | None = None,
+        consume_screen_share: bool | None = None,
+        screenshot_interval_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"agentId": agent_id}
+        if listen is not None:
+            payload["listen"] = listen
+        if auto_join is not None:
+            payload["autoJoin"] = auto_join
+        if consume_audio is not None:
+            payload["consumeAudio"] = consume_audio
+        if consume_screen_share is not None:
+            payload["consumeScreenShare"] = consume_screen_share
+        if screenshot_interval_seconds is not None:
+            payload["screenshotIntervalSeconds"] = screenshot_interval_seconds
+        return self._put(f"/api/channels/{channel_id}/voice-policy", json=payload)
+
     def set_buddy_policy(
         self, channel_id: str, agent_id: str, **kwargs: Any
     ) -> dict[str, Any]:
