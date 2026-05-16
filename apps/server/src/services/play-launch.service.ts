@@ -1031,7 +1031,7 @@ export class PlayLaunchService {
       ok: true as const,
       playId: playId ?? null,
       status: 'launched' as const,
-      redirectUrl: `/app/oauth/authorize?${params.toString()}`,
+      redirectUrl: `/oauth/authorize?${params.toString()}`,
     }
   }
 

@@ -123,7 +123,7 @@ const oauthCallbackRoute = createRoute({
 
 const oauthAuthorizeRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/app/oauth/authorize',
+  path: '/oauth/authorize',
   component: OAuthAuthorizePage,
   beforeLoad: requireAuthenticatedRoute,
 })

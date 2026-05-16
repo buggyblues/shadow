@@ -216,7 +216,7 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
   app.get('/community/oauth/init', (c) => {
     const cs = getCommunitySettings()
 
-    const authUrl = new URL('/app/oauth/authorize', cs.baseUrl)
+    const authUrl = new URL('/oauth/authorize', cs.baseUrl)
     authUrl.searchParams.set('client_id', 'shadowob-cloud-cli')
     authUrl.searchParams.set('response_type', 'token')
     authUrl.searchParams.set('scope', 'templates:read templates:write')
