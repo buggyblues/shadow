@@ -52,7 +52,7 @@ ARG OPENCLAW_VERSION=2026.5.7
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3-pip && \
+    apt-get install -y --no-install-recommends python3-pip=22.0.2+dfsg-1ubuntu0.7 && \
     rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
