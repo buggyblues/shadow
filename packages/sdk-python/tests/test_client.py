@@ -205,6 +205,32 @@ def test_join_voice_channel_posts_state(monkeypatch):
     client.close()
 
 
+def test_renew_and_leave_voice_channel_posts_client_id(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    def fake_post(path, json=None):
+        calls.append({"path": path, "json": json})
+        return {"credentials": {"appId": "agora-app"}, "state": {"participants": []}}
+
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    client.renew_voice_credentials("channel-1", client_id="cli")
+    client.leave_voice_channel("channel-1", client_id="cli")
+
+    assert calls == [
+        {
+            "path": "/api/channels/channel-1/voice/renew",
+            "json": {"clientId": "cli"},
+        },
+        {
+            "path": "/api/channels/channel-1/voice/leave",
+            "json": {"clientId": "cli"},
+        },
+    ]
+    client.close()
+
+
 def test_update_voice_policy_uses_voice_policy_endpoint(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}

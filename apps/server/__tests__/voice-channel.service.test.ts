@@ -35,7 +35,7 @@ describe('VoiceChannelService', () => {
           },
         }),
       } as never,
-      logger: { info: vi.fn() } as never,
+      logger: { info: vi.fn(), warn: vi.fn() } as never,
     })
   }
 
@@ -54,8 +54,58 @@ describe('VoiceChannelService', () => {
 
     expect(result.credentials.appId).toBe('test-agora-app')
     expect(result.credentials.token).toMatch(/^006/)
+    expect(result.participant.id).toBe('11111111-1111-1111-1111-111111111111:default')
     expect(result.participant.username).toBe('voice-user')
     expect(result.state.participantCount).toBe(1)
+  })
+
+  it('keeps separate participants for the same user on different clients', async () => {
+    const service = createService()
+    const actor = {
+      kind: 'user',
+      userId: '11111111-1111-1111-1111-111111111111',
+      authMethod: 'jwt',
+      scopes: [],
+    } as const
+    const channelId = '22222222-2222-2222-2222-222222222222'
+
+    const first = await service.join(actor, channelId, { clientId: 'web' })
+    const second = await service.join(actor, channelId, { clientId: 'cli' })
+    const updated = await service.updateParticipant(
+      actor,
+      channelId,
+      { isMuted: true },
+      {
+        clientId: 'web',
+      },
+    )
+    const left = await service.leave(actor, channelId, { clientId: 'web' })
+
+    expect(first.participant.id).not.toBe(second.participant.id)
+    expect(first.credentials.uid).not.toBe(second.credentials.uid)
+    expect(second.state.participantCount).toBe(2)
+    expect(updated.participant.id).toBe(first.participant.id)
+    expect(left.left).toBe(true)
+    expect(left.state.participantCount).toBe(1)
+    expect(left.state.participants[0]?.id).toBe(second.participant.id)
+  })
+
+  it('renews credentials without changing voice presence', async () => {
+    const service = createService()
+    const actor = {
+      kind: 'user',
+      userId: '11111111-1111-1111-1111-111111111111',
+      authMethod: 'jwt',
+      scopes: [],
+    } as const
+    const channelId = '22222222-2222-2222-2222-222222222222'
+
+    await service.join(actor, channelId, { clientId: 'web' })
+    const renewed = await service.renewCredentials(actor, channelId, { clientId: 'web' })
+
+    expect(renewed.credentials.uid).toBeTruthy()
+    expect(renewed.state.participantCount).toBe(1)
+    expect(renewed.state.participants[0]?.id).toBe('11111111-1111-1111-1111-111111111111:web')
   })
 
   it('rejects non-voice channels', async () => {

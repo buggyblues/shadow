@@ -26,9 +26,14 @@ async function loadAgoraRTC(): Promise<AgoraRTCModule> {
   }
 }
 
+function createVoiceClientId() {
+  return `shadow-sdk-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
+}
+
 export interface ShadowVoiceConsumerOptions {
   client: ShadowClient
   channelId: string
+  clientId?: string
   muted?: boolean
   onRemoteAudio?: (input: { uid: string | number; track: IRemoteAudioTrack }) => void
   onRemoteScreen?: (input: { uid: string | number; track: IRemoteVideoTrack }) => void
@@ -40,8 +45,12 @@ export class ShadowVoiceConsumer {
   private audioTrack: ILocalAudioTrack | null = null
   private screenTrack: ICameraVideoTrack | null = null
   private session: ShadowVoiceJoinResult | null = null
+  private readonly clientId: string
+  private tokenRenewTimer: ReturnType<typeof setTimeout> | null = null
 
-  constructor(private options: ShadowVoiceConsumerOptions) {}
+  constructor(private options: ShadowVoiceConsumerOptions) {
+    this.clientId = options.clientId ?? createVoiceClientId()
+  }
 
   get joinResult(): ShadowVoiceJoinResult | null {
     return this.session
@@ -51,12 +60,13 @@ export class ShadowVoiceConsumer {
     const AgoraRTC = await loadAgoraRTC()
     this.session = await this.options.client.joinVoiceChannel(this.options.channelId, {
       muted: this.options.muted,
-      clientId: 'shadow-sdk',
+      clientId: this.clientId,
     })
     const { credentials } = this.session
     const rtc = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
     this.rtc = rtc
     try {
+      this.bindTokenRenewal(rtc)
       rtc.on('user-published', async (user, mediaType) => {
         await rtc.subscribe(user, mediaType)
         if (mediaType === 'audio' && user.audioTrack) {
@@ -75,14 +85,18 @@ export class ShadowVoiceConsumer {
       this.audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
       await this.audioTrack.setEnabled(!this.options.muted)
       await rtc.publish([this.audioTrack])
+      this.scheduleTokenRenewal()
       return this.session
     } catch (error) {
+      this.clearTokenRenewal()
       this.audioTrack?.stop()
       this.audioTrack?.close()
       this.audioTrack = null
       await rtc.leave().catch(() => undefined)
       this.rtc = null
-      await this.options.client.leaveVoiceChannel(this.options.channelId).catch(() => undefined)
+      await this.options.client
+        .leaveVoiceChannel(this.options.channelId, { clientId: this.clientId })
+        .catch(() => undefined)
       this.session = null
       throw error
     }
@@ -90,7 +104,10 @@ export class ShadowVoiceConsumer {
 
   async setMuted(muted: boolean): Promise<void> {
     await this.audioTrack?.setEnabled(!muted)
-    await this.options.client.updateVoiceState(this.options.channelId, { muted })
+    await this.options.client.updateVoiceState(this.options.channelId, {
+      clientId: this.clientId,
+      muted,
+    })
   }
 
   async startScreenShare(): Promise<void> {
@@ -100,6 +117,7 @@ export class ShadowVoiceConsumer {
     const screenRtc = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
     this.screenRtc = screenRtc
     try {
+      this.bindTokenRenewal(screenRtc)
       await screenRtc.join(
         credentials.appId,
         credentials.agoraChannelName,
@@ -113,7 +131,10 @@ export class ShadowVoiceConsumer {
       const screenTrack = Array.isArray(trackResult) ? trackResult[0] : trackResult
       this.screenTrack = screenTrack as ICameraVideoTrack
       await screenRtc.publish([this.screenTrack])
-      await this.options.client.updateVoiceState(this.options.channelId, { screenSharing: true })
+      await this.options.client.updateVoiceState(this.options.channelId, {
+        clientId: this.clientId,
+        screenSharing: true,
+      })
     } catch (error) {
       this.screenTrack?.stop()
       this.screenTrack?.close()
@@ -121,7 +142,10 @@ export class ShadowVoiceConsumer {
       await screenRtc.leave().catch(() => undefined)
       this.screenRtc = null
       await this.options.client
-        .updateVoiceState(this.options.channelId, { screenSharing: false })
+        .updateVoiceState(this.options.channelId, {
+          clientId: this.clientId,
+          screenSharing: false,
+        })
         .catch(() => undefined)
       throw error
     }
@@ -133,17 +157,67 @@ export class ShadowVoiceConsumer {
     this.screenTrack = null
     await this.screenRtc?.leave()
     this.screenRtc = null
-    await this.options.client.updateVoiceState(this.options.channelId, { screenSharing: false })
+    await this.options.client.updateVoiceState(this.options.channelId, {
+      clientId: this.clientId,
+      screenSharing: false,
+    })
   }
 
   async leave(): Promise<void> {
+    this.clearTokenRenewal()
     await this.stopScreenShare()
     this.audioTrack?.stop()
     this.audioTrack?.close()
     this.audioTrack = null
     await this.rtc?.leave()
     this.rtc = null
-    await this.options.client.leaveVoiceChannel(this.options.channelId)
+    await this.options.client.leaveVoiceChannel(this.options.channelId, { clientId: this.clientId })
     this.session = null
+  }
+
+  private bindTokenRenewal(rtc: IAgoraRTCClient) {
+    rtc.on('token-privilege-will-expire', () => {
+      void this.renewTokens()
+    })
+    rtc.on('token-privilege-did-expire', () => {
+      void this.renewTokens()
+    })
+  }
+
+  private scheduleTokenRenewal() {
+    this.clearTokenRenewal()
+    const expiresAt = this.session?.credentials.expiresAt
+    if (!expiresAt) return
+    const renewAt = new Date(expiresAt).getTime() - 5 * 60_000
+    const delay = Math.max(30_000, renewAt - Date.now())
+    this.tokenRenewTimer = setTimeout(() => {
+      void this.renewTokens()
+    }, delay)
+  }
+
+  private clearTokenRenewal() {
+    if (this.tokenRenewTimer) {
+      clearTimeout(this.tokenRenewTimer)
+      this.tokenRenewTimer = null
+    }
+  }
+
+  private async renewTokens() {
+    if (!this.session) return
+    const result = await this.options.client.renewVoiceCredentials(this.options.channelId, {
+      clientId: this.clientId,
+    })
+    this.session = {
+      ...this.session,
+      credentials: result.credentials,
+      state: result.state,
+    }
+    if (result.credentials.token) {
+      await this.rtc?.renewToken?.(result.credentials.token)
+    }
+    if (result.credentials.screenToken) {
+      await this.screenRtc?.renewToken?.(result.credentials.screenToken)
+    }
+    this.scheduleTokenRenewal()
   }
 }

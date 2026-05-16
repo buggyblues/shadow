@@ -21,7 +21,11 @@ const voiceJoinSchema = z.object({
   muted: z.boolean().optional(),
   deafened: z.boolean().optional(),
 })
+const voiceParticipantSelectorSchema = z.object({
+  clientId: z.string().max(120).nullable().optional(),
+})
 const voiceStatePatchSchema = z.object({
+  clientId: z.string().max(120).nullable().optional(),
   muted: z.boolean().optional(),
   deafened: z.boolean().optional(),
   speaking: z.boolean().optional(),
@@ -482,27 +486,45 @@ export function createChannelHandler(container: AppContainer) {
     const input = voiceJoinSchema.parse(body)
     const result = await container.resolve('voiceChannelService').join(c.get('actor'), id, input)
     try {
-      container.resolve('io').to(`voice:${id}`).emit('voice:participant-joined', {
-        channelId: id,
-        participant: result.participant,
-        state: result.state,
-      })
+      container
+        .resolve('io')
+        .to(`voice:${id}`)
+        .emit(result.joined ? 'voice:participant-joined' : 'voice:participant-updated', {
+          channelId: id,
+          participant: result.participant,
+          state: result.state,
+        })
     } catch {
       /* non-critical */
     }
     return c.json(result)
   })
 
+  // POST /api/channels/:id/voice/renew — issue fresh Agora credentials for a live client.
+  channelHandler.post('/channels/:id/voice/renew', async (c) => {
+    const id = c.req.param('id')
+    const body = await c.req.json().catch(() => ({}))
+    const input = voiceParticipantSelectorSchema.parse(body)
+    const result = await container
+      .resolve('voiceChannelService')
+      .renewCredentials(c.get('actor'), id, input)
+    return c.json(result)
+  })
+
   // POST /api/channels/:id/voice/leave — leave Agora voice state.
   channelHandler.post('/channels/:id/voice/leave', async (c) => {
     const id = c.req.param('id')
-    const result = await container.resolve('voiceChannelService').leave(c.get('actor'), id)
+    const body = await c.req.json().catch(() => ({}))
+    const input = voiceParticipantSelectorSchema.parse(body)
+    const result = await container.resolve('voiceChannelService').leave(c.get('actor'), id, input)
     try {
-      container.resolve('io').to(`voice:${id}`).emit('voice:participant-left', {
-        channelId: id,
-        participant: result.participant,
-        state: result.state,
-      })
+      if (result.left) {
+        container.resolve('io').to(`voice:${id}`).emit('voice:participant-left', {
+          channelId: id,
+          participant: result.participant,
+          state: result.state,
+        })
+      }
     } catch {
       /* non-critical */
     }
@@ -513,14 +535,17 @@ export function createChannelHandler(container: AppContainer) {
   channelHandler.patch('/channels/:id/voice/state', async (c) => {
     const id = c.req.param('id')
     const input = voiceStatePatchSchema.parse(await c.req.json())
-    const result = await container
-      .resolve('voiceChannelService')
-      .updateParticipant(c.get('actor'), id, {
+    const result = await container.resolve('voiceChannelService').updateParticipant(
+      c.get('actor'),
+      id,
+      {
         isMuted: input.muted,
         isDeafened: input.deafened,
         isSpeaking: input.speaking,
         isScreenSharing: input.screenSharing,
-      })
+      },
+      { clientId: input.clientId },
+    )
     try {
       container.resolve('io').to(`voice:${id}`).emit('voice:participant-updated', {
         channelId: id,

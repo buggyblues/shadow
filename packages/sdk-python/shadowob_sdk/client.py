@@ -678,19 +678,35 @@ class ShadowClient:
             payload["deafened"] = deafened
         return self._post(f"/api/channels/{channel_id}/voice/join", json=payload)
 
-    def leave_voice_channel(self, channel_id: str) -> dict[str, Any]:
-        return self._post(f"/api/channels/{channel_id}/voice/leave")
+    def renew_voice_credentials(
+        self, channel_id: str, *, client_id: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if client_id is not None:
+            payload["clientId"] = client_id
+        return self._post(f"/api/channels/{channel_id}/voice/renew", json=payload)
+
+    def leave_voice_channel(
+        self, channel_id: str, *, client_id: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if client_id is not None:
+            payload["clientId"] = client_id
+        return self._post(f"/api/channels/{channel_id}/voice/leave", json=payload)
 
     def update_voice_state(
         self,
         channel_id: str,
         *,
+        client_id: str | None = None,
         muted: bool | None = None,
         deafened: bool | None = None,
         speaking: bool | None = None,
         screen_sharing: bool | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
+        if client_id is not None:
+            payload["clientId"] = client_id
         if muted is not None:
             payload["muted"] = muted
         if deafened is not None:

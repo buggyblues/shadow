@@ -4,6 +4,7 @@ import { Alert } from 'react-native'
 import { getSocket } from '../lib/socket'
 
 export interface VoiceParticipant {
+  id: string
   channelId: string
   userId: string
   uid: number
@@ -23,9 +24,13 @@ export interface VoiceParticipant {
 
 interface VoiceCredentials {
   appId: string
+  channelId: string
   agoraChannelName: string
   uid: number
+  screenUid: number
   token: string | null
+  screenToken: string | null
+  expiresAt: string | null
 }
 
 interface VoiceState {
@@ -40,6 +45,11 @@ interface VoiceState {
 interface VoiceJoinResult {
   credentials: VoiceCredentials
   participant: VoiceParticipant
+  state: VoiceState
+}
+
+interface VoiceRenewResult {
+  credentials: VoiceCredentials
   state: VoiceState
 }
 
@@ -74,7 +84,11 @@ function socketCall<T>(event: string, payload: unknown): Promise<T> {
 export function useVoiceChannel(channelId: string) {
   const { t } = useTranslation()
   const engineRef = useRef<any>(null)
+  const credentialsRef = useRef<VoiceCredentials | null>(null)
+  const clientIdRef = useRef(`shadow-mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tokenRenewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const renewTokensRef = useRef<() => Promise<void>>(async () => undefined)
   const leaveRef = useRef<() => Promise<void>>(async () => undefined)
   const [status, setStatus] = useState<ConnectionStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -96,10 +110,52 @@ export function useVoiceChannel(channelId: string) {
       speaking?: boolean
       screenSharing?: boolean
     }) => {
-      void socketCall('voice:state:update', { channelId, ...patch }).catch(() => null)
+      void socketCall('voice:state:update', {
+        channelId,
+        clientId: clientIdRef.current,
+        ...patch,
+      }).catch(() => null)
     },
     [channelId],
   )
+
+  const clearTokenRenewal = useCallback(() => {
+    if (tokenRenewTimerRef.current) {
+      clearTimeout(tokenRenewTimerRef.current)
+      tokenRenewTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleTokenRenewal = useCallback(
+    (credentials: VoiceCredentials) => {
+      clearTokenRenewal()
+      if (!credentials.expiresAt) return
+      const renewAt = new Date(credentials.expiresAt).getTime() - 5 * 60_000
+      const delay = Math.max(30_000, renewAt - Date.now())
+      tokenRenewTimerRef.current = setTimeout(() => {
+        void renewTokensRef.current()
+      }, delay)
+    },
+    [clearTokenRenewal],
+  )
+
+  const renewTokens = useCallback(async () => {
+    const activeChannelId = credentialsRef.current?.channelId ?? channelId
+    const result = await socketCall<VoiceRenewResult>('voice:token:renew', {
+      channelId: activeChannelId,
+      clientId: clientIdRef.current,
+    })
+    credentialsRef.current = result.credentials
+    applyState(result.state)
+    if (result.credentials.token) {
+      engineRef.current?.renewToken?.(result.credentials.token)
+    }
+    scheduleTokenRenewal(result.credentials)
+  }, [applyState, channelId, scheduleTokenRenewal])
+
+  useEffect(() => {
+    renewTokensRef.current = renewTokens
+  }, [renewTokens])
 
   const join = useCallback(async () => {
     if (status === 'connected' || status === 'connecting') return
@@ -109,9 +165,12 @@ export function useVoiceChannel(channelId: string) {
       const agora = await import('react-native-agora')
       const result = await socketCall<VoiceJoinResult>('voice:join', {
         channelId,
+        clientId: clientIdRef.current,
         muted: isMuted,
         deafened: isDeafened,
       })
+      credentialsRef.current = result.credentials
+      scheduleTokenRenewal(result.credentials)
       applyState(result.state)
       const engine = agora.createAgoraRtcEngine()
       engineRef.current = engine
@@ -119,6 +178,12 @@ export function useVoiceChannel(channelId: string) {
       engine.registerEventHandler({
         onJoinChannelSuccess: () => setStatus('connected'),
         onLeaveChannel: () => setStatus('idle'),
+        onRequestToken: () => {
+          void renewTokensRef.current()
+        },
+        onTokenPrivilegeWillExpire: () => {
+          void renewTokensRef.current()
+        },
         onFirstRemoteVideoDecoded: (_connection: unknown, remoteUid: number) => {
           setRemoteVideoUids((prev) => (prev.includes(remoteUid) ? prev : [...prev, remoteUid]))
         },
@@ -173,7 +238,7 @@ export function useVoiceChannel(channelId: string) {
       )
       heartbeatRef.current = setInterval(() => {
         const socket = getSocket()
-        socket.emit('voice:heartbeat', { channelId })
+        socket.emit('voice:heartbeat', { channelId, clientId: clientIdRef.current })
       }, 30_000)
     } catch (err) {
       const message = err instanceof Error ? err.message : t('voice.joinFailed')
@@ -181,13 +246,23 @@ export function useVoiceChannel(channelId: string) {
       setStatus('error')
       Alert.alert(t('common.error'), message)
     }
-  }, [applyState, channelId, isDeafened, isMuted, status, t, updateVoiceState])
+  }, [
+    applyState,
+    channelId,
+    isDeafened,
+    isMuted,
+    scheduleTokenRenewal,
+    status,
+    t,
+    updateVoiceState,
+  ])
 
   const leave = useCallback(async () => {
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current)
       heartbeatRef.current = null
     }
+    clearTokenRenewal()
     try {
       engineRef.current?.leaveChannel?.()
       engineRef.current?.release?.()
@@ -195,11 +270,12 @@ export function useVoiceChannel(channelId: string) {
       /* native cleanup best effort */
     }
     engineRef.current = null
+    credentialsRef.current = null
     setRemoteVideoUids([])
     setParticipants([])
-    await socketCall('voice:leave', { channelId }).catch(() => null)
+    await socketCall('voice:leave', { channelId, clientId: clientIdRef.current }).catch(() => null)
     setStatus('idle')
-  }, [channelId])
+  }, [channelId, clearTokenRenewal])
 
   const toggleMute = useCallback(() => {
     const next = !isMuted

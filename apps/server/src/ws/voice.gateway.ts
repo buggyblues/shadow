@@ -12,10 +12,16 @@ type VoiceJoinPayload = {
 
 type VoiceStatePayload = {
   channelId: string
+  clientId?: string | null
   muted?: boolean
   deafened?: boolean
   speaking?: boolean
   screenSharing?: boolean
+}
+
+type VoiceLeavePayload = {
+  channelId: string
+  clientId?: string | null
 }
 
 type VoiceAck = { ok: true; data: unknown } | { ok: false; error: string; code?: string }
@@ -33,6 +39,13 @@ function socketVoiceChannels(socket: Socket): Set<string> {
     socket.data.voiceChannels = new Set<string>()
   }
   return socket.data.voiceChannels as Set<string>
+}
+
+function socketVoiceParticipantClients(socket: Socket): Map<string, string | null> {
+  if (!socket.data.voiceParticipantClients) {
+    socket.data.voiceParticipantClients = new Map<string, string | null>()
+  }
+  return socket.data.voiceParticipantClients as Map<string, string | null>
 }
 
 function voicePayload(
@@ -63,11 +76,20 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
         })
         await socket.join(`voice:${payload.channelId}`)
         socketVoiceChannels(socket).add(payload.channelId)
-        socket.to(`voice:${payload.channelId}`).emit('voice:participant-joined', {
-          channelId: payload.channelId,
-          participant: result.participant,
-          state: result.state,
-        })
+        socketVoiceParticipantClients(socket).set(payload.channelId, payload.clientId ?? null)
+        if (result.joined) {
+          socket.to(`voice:${payload.channelId}`).emit('voice:participant-joined', {
+            channelId: payload.channelId,
+            participant: result.participant,
+            state: result.state,
+          })
+        } else {
+          socket.to(`voice:${payload.channelId}`).emit('voice:participant-updated', {
+            channelId: payload.channelId,
+            participant: result.participant,
+            state: result.state,
+          })
+        }
         socket.emit('voice:state', result.state)
         ack?.({ ok: true, data: voicePayload(result) })
       } catch (err) {
@@ -78,18 +100,25 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
 
     socket.on(
       'voice:leave',
-      async ({ channelId }: { channelId: string }, ack?: (res: VoiceAck) => void) => {
+      async ({ channelId, clientId }: VoiceLeavePayload, ack?: (res: VoiceAck) => void) => {
         try {
           const actor = socketActor(socket)
           const voiceChannelService = container.resolve('voiceChannelService')
-          const result = await voiceChannelService.leave(actor, channelId)
+          const resolvedClientId =
+            clientId !== undefined ? clientId : socketVoiceParticipantClients(socket).get(channelId)
+          const result = await voiceChannelService.leave(actor, channelId, {
+            clientId: resolvedClientId,
+          })
           await socket.leave(`voice:${channelId}`)
           socketVoiceChannels(socket).delete(channelId)
-          socket.to(`voice:${channelId}`).emit('voice:participant-left', {
-            channelId,
-            participant: result.participant,
-            state: result.state,
-          })
+          socketVoiceParticipantClients(socket).delete(channelId)
+          if (result.left) {
+            socket.to(`voice:${channelId}`).emit('voice:participant-left', {
+              channelId,
+              participant: result.participant,
+              state: result.state,
+            })
+          }
           ack?.({ ok: true, data: result })
         } catch (err) {
           logger.warn({ err, socketId: socket.id }, 'voice:leave failed')
@@ -104,12 +133,21 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
         try {
           const actor = socketActor(socket)
           const voiceChannelService = container.resolve('voiceChannelService')
-          const result = await voiceChannelService.updateParticipant(actor, payload.channelId, {
-            isMuted: payload.muted,
-            isDeafened: payload.deafened,
-            isSpeaking: payload.speaking,
-            isScreenSharing: payload.screenSharing,
-          })
+          const clientId =
+            payload.clientId !== undefined
+              ? payload.clientId
+              : socketVoiceParticipantClients(socket).get(payload.channelId)
+          const result = await voiceChannelService.updateParticipant(
+            actor,
+            payload.channelId,
+            {
+              isMuted: payload.muted,
+              isDeafened: payload.deafened,
+              isSpeaking: payload.speaking,
+              isScreenSharing: payload.screenSharing,
+            },
+            { clientId },
+          )
           io.to(`voice:${payload.channelId}`).emit('voice:participant-updated', {
             channelId: payload.channelId,
             participant: result.participant,
@@ -123,14 +161,40 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
       },
     )
 
-    socket.on('voice:heartbeat', async ({ channelId }: { channelId: string }) => {
-      try {
-        await container.resolve('voiceChannelService').heartbeat(socketActor(socket), channelId)
-      } catch {
-        socketVoiceChannels(socket).delete(channelId)
-        await socket.leave(`voice:${channelId}`)
-      }
-    })
+    socket.on(
+      'voice:heartbeat',
+      async ({ channelId, clientId }: { channelId: string; clientId?: string | null }) => {
+        try {
+          const resolvedClientId =
+            clientId !== undefined ? clientId : socketVoiceParticipantClients(socket).get(channelId)
+          await container.resolve('voiceChannelService').heartbeat(socketActor(socket), channelId, {
+            clientId: resolvedClientId,
+          })
+        } catch {
+          socketVoiceChannels(socket).delete(channelId)
+          socketVoiceParticipantClients(socket).delete(channelId)
+          await socket.leave(`voice:${channelId}`)
+        }
+      },
+    )
+
+    socket.on(
+      'voice:token:renew',
+      async ({ channelId, clientId }: VoiceLeavePayload, ack?: (res: VoiceAck) => void) => {
+        try {
+          const actor = socketActor(socket)
+          const resolvedClientId =
+            clientId !== undefined ? clientId : socketVoiceParticipantClients(socket).get(channelId)
+          const result = await container
+            .resolve('voiceChannelService')
+            .renewCredentials(actor, channelId, { clientId: resolvedClientId })
+          ack?.({ ok: true, data: result })
+        } catch (err) {
+          logger.warn({ err, socketId: socket.id }, 'voice:token:renew failed')
+          ack?.(errorAck(err))
+        }
+      },
+    )
 
     socket.on('disconnect', async () => {
       const voiceChannelService = container.resolve('voiceChannelService')
@@ -144,12 +208,16 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
       if (!actor) return
       for (const channelId of socketVoiceChannels(socket)) {
         try {
-          const result = await voiceChannelService.leave(actor, channelId)
-          socket.to(`voice:${channelId}`).emit('voice:participant-left', {
-            channelId,
-            participant: result.participant,
-            state: result.state,
+          const result = await voiceChannelService.leave(actor, channelId, {
+            clientId: socketVoiceParticipantClients(socket).get(channelId),
           })
+          if (result.left) {
+            socket.to(`voice:${channelId}`).emit('voice:participant-left', {
+              channelId,
+              participant: result.participant,
+              state: result.state,
+            })
+          }
         } catch (err) {
           logger.warn({ err, channelId, socketId: socket.id }, 'voice disconnect cleanup failed')
         }

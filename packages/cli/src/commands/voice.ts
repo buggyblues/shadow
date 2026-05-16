@@ -41,10 +41,13 @@ export function createVoiceCommand(): Command {
         try {
           const profile = resolveProfileOption(options, command)
           const client = await getClient(profile)
+          const clientId = options.watch
+            ? `shadowob-cli-${Date.now()}-${Math.random().toString(36).slice(2)}`
+            : 'shadowob-cli'
           const result = await client.joinVoiceChannel(channelId, {
             muted: options.muted,
             deafened: options.deafened,
-            clientId: 'shadowob-cli',
+            clientId,
           })
           output(result, { json: options.json })
           if (!options.watch) return
@@ -58,10 +61,10 @@ export function createVoiceCommand(): Command {
           await socket.joinVoiceChannel(channelId, {
             muted: options.muted,
             deafened: options.deafened,
-            clientId: 'shadowob-cli',
+            clientId,
           })
           process.on('SIGINT', () => {
-            void client.leaveVoiceChannel(channelId).finally(() => process.exit(0))
+            void client.leaveVoiceChannel(channelId, { clientId }).finally(() => process.exit(0))
           })
           socket.raw.on('disconnect', () => process.exit(0))
         } catch (error) {

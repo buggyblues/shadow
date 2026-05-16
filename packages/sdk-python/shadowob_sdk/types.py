@@ -143,6 +143,7 @@ class ShadowChannelAccess:
 
 @dataclass
 class ShadowVoiceParticipant:
+    id: str
     channel_id: str
     user_id: str
     uid: int

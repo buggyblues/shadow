@@ -372,6 +372,7 @@ export interface ShadowChannelJoinRequestResult {
 }
 
 export interface ShadowVoiceParticipant {
+  id: string
   channelId: string
   userId: string
   uid: number
@@ -417,6 +418,12 @@ export interface ShadowVoiceJoinResult {
 
 export interface ShadowVoiceLeaveResult {
   participant: ShadowVoiceParticipant | null
+  state: ShadowVoiceState
+  left?: boolean
+}
+
+export interface ShadowVoiceRenewResult {
+  credentials: ShadowVoiceCredentials
   state: ShadowVoiceState
 }
 
@@ -1770,7 +1777,7 @@ export interface ClientEventMap {
     }) => void,
   ) => void
   'voice:leave': (
-    data: { channelId: string },
+    data: { channelId: string; clientId?: string | null },
     ack?: (res: {
       ok: boolean
       data?: ShadowVoiceLeaveResult
@@ -1781,6 +1788,7 @@ export interface ClientEventMap {
   'voice:state:update': (
     data: {
       channelId: string
+      clientId?: string | null
       muted?: boolean
       deafened?: boolean
       speaking?: boolean
@@ -1788,7 +1796,16 @@ export interface ClientEventMap {
     },
     ack?: (res: { ok: boolean; data?: unknown; error?: string; code?: string }) => void,
   ) => void
-  'voice:heartbeat': (data: { channelId: string }) => void
+  'voice:token:renew': (
+    data: { channelId: string; clientId?: string | null },
+    ack?: (res: {
+      ok: boolean
+      data?: ShadowVoiceRenewResult
+      error?: string
+      code?: string
+    }) => void,
+  ) => void
+  'voice:heartbeat': (data: { channelId: string; clientId?: string | null }) => void
   'message:send': (data: {
     channelId: string
     content: string

@@ -81,11 +81,12 @@ export async function runVoiceMediaBridge(options: VoiceBridgeOptions): Promise<
     json: options.json,
   })
   const agoraScriptPath = resolveAgoraBrowserScript(options.agoraSdk)
+  const bridgeClientId = `shadowob-cli-media-bridge-${randomUUID()}`
   const joinResult = await options.client.joinVoiceChannel(options.channelId, {
     muted: options.muted,
-    clientId: 'shadowob-cli-media-bridge',
+    clientId: bridgeClientId,
   })
-  const state = createRuntimeState(options, joinResult, agoraScriptPath)
+  const state = createRuntimeState(options, joinResult, agoraScriptPath, bridgeClientId)
   let chrome: BrowserProcess | null = null
 
   try {
@@ -127,11 +128,13 @@ function createRuntimeState(
   options: VoiceBridgeOptions,
   joinResult: ShadowVoiceJoinResult,
   agoraScriptPath: string,
+  clientId: string,
 ) {
   return {
     options,
     joinResult,
     agoraScriptPath,
+    clientId,
     token: randomUUID(),
     baseUrl: '',
     screenSeq: new Map<string, number>(),
@@ -191,6 +194,18 @@ async function handleBridgeRequest(
               : null,
         },
       })
+      return
+    }
+    if (req.method === 'POST' && route === 'token') {
+      const result = await state.options.client.renewVoiceCredentials(state.options.channelId, {
+        clientId: state.clientId,
+      })
+      state.joinResult = {
+        ...state.joinResult,
+        credentials: result.credentials,
+        state: result.state,
+      }
+      sendJson(res, result)
       return
     }
     if (req.method === 'GET' && route === 'input-file') {
@@ -282,6 +297,8 @@ AgoraRTC.disableLogUpload?.();
 AgoraRTC.setLogLevel?.(3);
 
 const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+let credentials = config.credentials;
+let tokenRenewTimer = null;
 const audioRecorders = new Map();
 const screenRecorders = new Map();
 const videoRecorders = new Map();
@@ -303,6 +320,33 @@ async function emit(type, detail = {}) {
   } catch (error) {
     console.error('failed to emit bridge event', error);
   }
+}
+
+function clearTokenRenewal() {
+  if (!tokenRenewTimer) return;
+  clearTimeout(tokenRenewTimer);
+  tokenRenewTimer = null;
+}
+
+function scheduleTokenRenewal() {
+  clearTokenRenewal();
+  if (!credentials.expiresAt) return;
+  const renewAt = new Date(credentials.expiresAt).getTime() - 5 * 60_000;
+  const delay = Math.max(30_000, renewAt - Date.now());
+  tokenRenewTimer = setTimeout(() => {
+    void renewTokens();
+  }, delay);
+}
+
+async function renewTokens() {
+  const result = await fetch(base + '/token', { method: 'POST' }).then((res) => {
+    if (!res.ok) throw new Error('token renewal failed: ' + res.status);
+    return res.json();
+  });
+  credentials = result.credentials;
+  if (credentials.token) await client.renewToken(credentials.token);
+  scheduleTokenRenewal();
+  void emit('token:renewed', { detail: { expiresAt: credentials.expiresAt } });
 }
 
 function int16FromFloat32(input) {
@@ -514,6 +558,14 @@ client.on('user-published', async (user, mediaType) => {
   }
 });
 
+client.on('token-privilege-will-expire', () => {
+  void renewTokens().catch((error) => emit('token:error', { message: error.message }));
+});
+
+client.on('token-privilege-did-expire', () => {
+  void renewTokens().catch((error) => emit('token:error', { message: error.message }));
+});
+
 client.on('user-unpublished', (user, mediaType) => {
   if (mediaType === 'audio') stopAudioRecorder(user.uid);
   if (mediaType === 'video') stopScreenRecorder(user.uid);
@@ -528,6 +580,7 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 window.__shadowVoiceBridgeStop = async () => {
+  clearTokenRenewal();
   for (const uid of [...screenRecorders.keys(), ...videoRecorders.keys()]) {
     stopScreenRecorder(uid);
   }
@@ -542,11 +595,11 @@ window.__shadowVoiceBridgeStop = async () => {
 };
 
 try {
-  const credentials = config.credentials;
   setStatus('joining');
   await client.join(credentials.appId, credentials.agoraChannelName, credentials.token, credentials.uid);
   setStatus('joined');
   void emit('bridge:joined', { detail: { uid: credentials.uid, screenUid: credentials.screenUid } });
+  scheduleTokenRenewal();
   if (config.options.input?.mode === 'file') await publishInputFile();
   if (config.options.input?.mode === 'stdin-pcm') void publishStdinPcm().catch((error) => emit('input:error', { message: error.message }));
 } catch (error) {
@@ -1118,7 +1171,9 @@ async function shutdownBridge(
   if (state.shuttingDown) return
   state.shuttingDown = true
   if (chrome) await stopBridgePage(chrome.port, state).catch(() => undefined)
-  await options.client.leaveVoiceChannel(options.channelId).catch(() => undefined)
+  await options.client
+    .leaveVoiceChannel(options.channelId, { clientId: state.clientId })
+    .catch(() => undefined)
   await closeAudioSinks(state).catch(() => undefined)
   await closeVideoSinks(state).catch(() => undefined)
   for (const pending of state.pendingPcmRequests) {

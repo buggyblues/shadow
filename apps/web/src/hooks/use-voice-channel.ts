@@ -13,6 +13,7 @@ try {
 }
 
 export interface VoiceParticipant {
+  id: string
   channelId: string
   userId: string
   uid: number
@@ -53,6 +54,11 @@ export interface VoiceState {
 interface VoiceJoinResult {
   credentials: VoiceCredentials
   participant: VoiceParticipant
+  state: VoiceState
+}
+
+interface VoiceRenewResult {
+  credentials: VoiceCredentials
   state: VoiceState
 }
 
@@ -175,6 +181,8 @@ export function useVoiceChannel(channelId: string | null) {
   const credentialsRef = useRef<VoiceCredentials | null>(null)
   const remoteAudioTracksRef = useRef<Map<string | number, any>>(new Map())
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tokenRenewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const renewTokensRef = useRef<() => Promise<void>>(async () => undefined)
   const micTestTrackRef = useRef<any>(null)
   const micTestTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -207,9 +215,9 @@ export function useVoiceChannel(channelId: string | null) {
       screenSharing?: boolean
     }) => {
       if (!channelId) return
-      getSocket().emit('voice:state:update', { channelId, ...patch })
+      getSocket().emit('voice:state:update', { channelId, clientId, ...patch })
     },
-    [channelId],
+    [channelId, clientId],
   )
 
   const applyState = useCallback(
@@ -254,6 +262,48 @@ export function useVoiceChannel(channelId: string | null) {
     }, 120)
   }, [selectedMicrophoneId, stopMicTest])
 
+  const clearTokenRenewal = useCallback(() => {
+    if (tokenRenewTimerRef.current) {
+      clearTimeout(tokenRenewTimerRef.current)
+      tokenRenewTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleTokenRenewal = useCallback(
+    (credentials: VoiceCredentials) => {
+      clearTokenRenewal()
+      if (!credentials.expiresAt) return
+      const renewAt = new Date(credentials.expiresAt).getTime() - 5 * 60_000
+      const delay = Math.max(30_000, renewAt - Date.now())
+      tokenRenewTimerRef.current = setTimeout(() => {
+        void renewTokensRef.current()
+      }, delay)
+    },
+    [clearTokenRenewal],
+  )
+
+  const renewTokens = useCallback(async () => {
+    const activeChannelId = credentialsRef.current?.channelId
+    if (!activeChannelId) return
+    const result = await socketCall<VoiceRenewResult>('voice:token:renew', {
+      channelId: activeChannelId,
+      clientId,
+    })
+    credentialsRef.current = result.credentials
+    applyState(result.state)
+    if (result.credentials.token) {
+      await clientRef.current?.renewToken?.(result.credentials.token)
+    }
+    if (result.credentials.screenToken) {
+      await screenClientRef.current?.renewToken?.(result.credentials.screenToken)
+    }
+    scheduleTokenRenewal(result.credentials)
+  }, [applyState, clientId, scheduleTokenRenewal])
+
+  useEffect(() => {
+    renewTokensRef.current = renewTokens
+  }, [renewTokens])
+
   const leave = useCallback(
     async (options: { silent?: boolean } = {}) => {
       const activeChannelId = credentialsRef.current?.channelId ?? null
@@ -269,6 +319,7 @@ export function useVoiceChannel(channelId: string | null) {
         clearInterval(heartbeatRef.current)
         heartbeatRef.current = null
       }
+      clearTokenRenewal()
       setRemoteScreens([])
       setLocalScreenTrack(null)
       remoteAudioTracksRef.current.clear()
@@ -295,11 +346,13 @@ export function useVoiceChannel(channelId: string | null) {
         screenClient?.leave().catch(() => undefined),
         client?.leave().catch(() => undefined),
         activeChannelId
-          ? socketCall('voice:leave', { channelId: activeChannelId }).catch(() => undefined)
+          ? socketCall('voice:leave', { channelId: activeChannelId, clientId }).catch(
+              () => undefined,
+            )
           : Promise.resolve(),
       ])
     },
-    [stopMicTest],
+    [clearTokenRenewal, clientId, stopMicTest],
   )
 
   const subscribeRemoteUser = useCallback(
@@ -361,6 +414,7 @@ export function useVoiceChannel(channelId: string | null) {
         deafened: isDeafened,
       })
       credentialsRef.current = result.credentials
+      scheduleTokenRenewal(result.credentials)
       applyState(result.state)
 
       const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
@@ -396,6 +450,12 @@ export function useVoiceChannel(channelId: string | null) {
                   : 'poor',
         )
       })
+      client.on('token-privilege-will-expire', () => {
+        void renewTokensRef.current()
+      })
+      client.on('token-privilege-did-expire', () => {
+        void renewTokensRef.current()
+      })
       await client.join(
         result.credentials.appId,
         result.credentials.agoraChannelName,
@@ -413,7 +473,7 @@ export function useVoiceChannel(channelId: string | null) {
       playVoiceCue('join')
       await refreshDevices()
       heartbeatRef.current = setInterval(() => {
-        getSocket().emit('voice:heartbeat', { channelId })
+        getSocket().emit('voice:heartbeat', { channelId, clientId })
       }, 30_000)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to join voice channel'
@@ -431,6 +491,7 @@ export function useVoiceChannel(channelId: string | null) {
     isMuted,
     leave,
     refreshDevices,
+    scheduleTokenRenewal,
     selectedMicrophoneId,
     status,
     subscribeRemoteUser,
@@ -498,6 +559,12 @@ export function useVoiceChannel(channelId: string | null) {
     try {
       const screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
       screenClientRef.current = screenClient
+      screenClient.on('token-privilege-will-expire', () => {
+        void renewTokensRef.current()
+      })
+      screenClient.on('token-privilege-did-expire', () => {
+        void renewTokensRef.current()
+      })
       await screenClient.join(
         credentials.appId,
         credentials.agoraChannelName,

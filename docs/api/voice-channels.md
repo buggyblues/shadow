@@ -32,8 +32,11 @@ OAuth/PAT scope alone is not sufficient. The actor must also have access to the 
 4. Client publishes microphone or custom audio track.
 5. Client uses `credentials.screenUid` on a second Agora client when publishing screen share.
 6. Client sends state updates for mute, deafen, speaking, and screen sharing.
-7. Client sends `voice:heartbeat` over Socket.IO while connected.
-8. Client calls `leave`; the frontend/CLI also clears local UI/process state immediately.
+7. Client renews credentials before `expiresAt` through REST or `voice:token:renew`.
+8. Client sends `voice:heartbeat` over Socket.IO while connected.
+9. Client calls `leave`; the frontend/CLI also clears local UI/process state immediately.
+
+Each active connection should send a stable `clientId`. Presence is keyed by `userId:clientId`, so the same user can have web, mobile, SDK, and CLI sessions in the same voice channel without overwriting each other. If Redis is configured, presence is shared across server instances; otherwise the service falls back to in-memory presence for local development.
 
 Participants that do not heartbeat for 90 seconds are removed. Empty sessions are retained for a 5 minute grace period before cleanup.
 
@@ -47,8 +50,27 @@ Returns current voice presence.
 {
   "channelId": "uuid",
   "agoraChannelName": "shadow_uuid",
-  "participants": [],
-  "participantCount": 0,
+  "participants": [
+    {
+      "id": "user-id:web-tab-1",
+      "channelId": "uuid",
+      "userId": "user-id",
+      "uid": 123,
+      "screenUid": 456,
+      "username": "alice",
+      "displayName": "Alice",
+      "avatarUrl": null,
+      "isBot": false,
+      "isMuted": false,
+      "isDeafened": false,
+      "isSpeaking": false,
+      "isScreenSharing": false,
+      "joinedAt": "2026-05-16T09:00:00.000Z",
+      "updatedAt": "2026-05-16T09:00:00.000Z",
+      "clientId": "web-tab-1"
+    }
+  ],
+  "participantCount": 1,
   "emptySince": null,
   "graceEndsAt": null
 }
@@ -80,7 +102,28 @@ Response includes:
 
 ### `POST /api/channels/:channelId/voice/leave`
 
-Marks the actor disconnected and broadcasts `voice:participant-left`.
+Marks the actor disconnected and broadcasts `voice:participant-left` when a live participant was removed. Passing `clientId` leaves only that client session; omitting it leaves all active sessions for the actor in the channel.
+
+```json
+{
+  "clientId": "web-tab-1"
+}
+```
+
+### `POST /api/channels/:channelId/voice/renew`
+
+Issues fresh Agora credentials for a live client without changing presence.
+
+```json
+{
+  "clientId": "web-tab-1"
+}
+```
+
+Response includes:
+
+- `credentials`
+- `state`
 
 ### `PATCH /api/channels/:channelId/voice/state`
 
@@ -88,6 +131,7 @@ Updates local voice state.
 
 ```json
 {
+  "clientId": "web-tab-1",
   "muted": true,
   "deafened": false,
   "speaking": false,
@@ -121,6 +165,7 @@ Client to server:
 - `voice:join`
 - `voice:leave`
 - `voice:state:update`
+- `voice:token:renew`
 - `voice:heartbeat`
 
 Server to client:
@@ -142,7 +187,8 @@ const joined = await client.joinVoiceChannel(channelId, {
   muted: false,
 })
 await client.updateVoiceState(channelId, { muted: true })
-await client.leaveVoiceChannel(channelId)
+const renewed = await client.renewVoiceCredentials(channelId, { clientId: 'my-app' })
+await client.leaveVoiceChannel(channelId, { clientId: 'my-app' })
 ```
 
 Browser RTC consumer:
@@ -177,7 +223,8 @@ await voice.leave()
 state = client.get_voice_state(channel_id)
 joined = client.join_voice_channel(channel_id, client_id="ai-buddy", muted=False)
 client.update_voice_state(channel_id, speaking=True)
-client.leave_voice_channel(channel_id)
+client.renew_voice_credentials(channel_id, client_id="ai-buddy")
+client.leave_voice_channel(channel_id, client_id="ai-buddy")
 ```
 
 The Python SDK exposes Shadow voice control and credentials. RTC media transport should be handled by a browser bridge, native Agora SDK, or an external process that can join Agora with the returned credentials.

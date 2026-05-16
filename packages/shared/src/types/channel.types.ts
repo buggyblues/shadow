@@ -41,6 +41,7 @@ export interface ChannelSortOptions {
 }
 
 export interface VoiceParticipant {
+  id: string
   channelId: string
   userId: string
   uid: number

@@ -5,6 +5,7 @@ import type {
   ShadowMessageMention,
   ShadowVoiceJoinResult,
   ShadowVoiceLeaveResult,
+  ShadowVoiceRenewResult,
 } from './types'
 
 export interface ShadowSocketOptions {
@@ -174,11 +175,12 @@ export class ShadowSocket {
 
   leaveVoiceChannel(
     channelId: string,
+    options?: { clientId?: string | null },
   ): Promise<{ ok: boolean; data?: ShadowVoiceLeaveResult; error?: string; code?: string }> {
     return new Promise((resolve) => {
       this.socket.emit(
         'voice:leave' satisfies keyof ClientEventMap,
-        { channelId },
+        { channelId, ...options },
         (res: { ok: boolean; data?: ShadowVoiceLeaveResult; error?: string; code?: string }) => {
           resolve(res ?? { ok: true })
         },
@@ -186,9 +188,30 @@ export class ShadowSocket {
     })
   }
 
+  renewVoiceCredentials(
+    channelId: string,
+    options?: { clientId?: string | null },
+  ): Promise<{ ok: boolean; data?: ShadowVoiceRenewResult; error?: string; code?: string }> {
+    return new Promise((resolve) => {
+      this.socket.emit(
+        'voice:token:renew' satisfies keyof ClientEventMap,
+        { channelId, ...options },
+        (res: { ok: boolean; data?: ShadowVoiceRenewResult; error?: string; code?: string }) => {
+          resolve(res ?? { ok: false, error: 'Voice token renewal failed' })
+        },
+      )
+    })
+  }
+
   updateVoiceState(
     channelId: string,
-    data: { muted?: boolean; deafened?: boolean; speaking?: boolean; screenSharing?: boolean },
+    data: {
+      clientId?: string | null
+      muted?: boolean
+      deafened?: boolean
+      speaking?: boolean
+      screenSharing?: boolean
+    },
   ): Promise<{ ok: boolean; data?: unknown; error?: string; code?: string }> {
     return new Promise((resolve) => {
       this.socket.emit(
@@ -201,8 +224,8 @@ export class ShadowSocket {
     })
   }
 
-  sendVoiceHeartbeat(channelId: string): void {
-    this.socket.emit('voice:heartbeat' satisfies keyof ClientEventMap, { channelId })
+  sendVoiceHeartbeat(channelId: string, options?: { clientId?: string | null }): void {
+    this.socket.emit('voice:heartbeat' satisfies keyof ClientEventMap, { channelId, ...options })
   }
 
   // ── Client actions ────────────────────────────────────────────────────

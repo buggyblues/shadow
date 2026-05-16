@@ -90,6 +90,7 @@ import type {
   ShadowVoiceJoinResult,
   ShadowVoiceLeaveResult,
   ShadowVoicePolicy,
+  ShadowVoiceRenewResult,
   ShadowVoiceState,
   ShadowWallet,
 } from './types'
@@ -966,15 +967,30 @@ export class ShadowClient {
     })
   }
 
-  async leaveVoiceChannel(channelId: string): Promise<ShadowVoiceLeaveResult> {
+  async renewVoiceCredentials(
+    channelId: string,
+    options?: { clientId?: string | null },
+  ): Promise<ShadowVoiceRenewResult> {
+    return this.request<ShadowVoiceRenewResult>(`/api/channels/${channelId}/voice/renew`, {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    })
+  }
+
+  async leaveVoiceChannel(
+    channelId: string,
+    options?: { clientId?: string | null },
+  ): Promise<ShadowVoiceLeaveResult> {
     return this.request<ShadowVoiceLeaveResult>(`/api/channels/${channelId}/voice/leave`, {
       method: 'POST',
+      body: JSON.stringify(options ?? {}),
     })
   }
 
   async updateVoiceState(
     channelId: string,
     data: {
+      clientId?: string | null
       muted?: boolean
       deafened?: boolean
       speaking?: boolean

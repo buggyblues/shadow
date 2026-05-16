@@ -114,19 +114,35 @@ class ShadowSocket:
             payload["deafened"] = deafened
         return self._sio.call("voice:join", payload)
 
-    def leave_voice_channel(self, channel_id: str) -> dict[str, Any]:
-        return self._sio.call("voice:leave", {"channelId": channel_id})
+    def leave_voice_channel(
+        self, channel_id: str, *, client_id: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"channelId": channel_id}
+        if client_id is not None:
+            payload["clientId"] = client_id
+        return self._sio.call("voice:leave", payload)
+
+    def renew_voice_credentials(
+        self, channel_id: str, *, client_id: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"channelId": channel_id}
+        if client_id is not None:
+            payload["clientId"] = client_id
+        return self._sio.call("voice:token:renew", payload)
 
     def update_voice_state(
         self,
         channel_id: str,
         *,
+        client_id: str | None = None,
         muted: bool | None = None,
         deafened: bool | None = None,
         speaking: bool | None = None,
         screen_sharing: bool | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"channelId": channel_id}
+        if client_id is not None:
+            payload["clientId"] = client_id
         if muted is not None:
             payload["muted"] = muted
         if deafened is not None:
@@ -137,8 +153,11 @@ class ShadowSocket:
             payload["screenSharing"] = screen_sharing
         return self._sio.call("voice:state:update", payload)
 
-    def send_voice_heartbeat(self, channel_id: str) -> None:
-        self._sio.emit("voice:heartbeat", {"channelId": channel_id})
+    def send_voice_heartbeat(self, channel_id: str, *, client_id: str | None = None) -> None:
+        payload: dict[str, Any] = {"channelId": channel_id}
+        if client_id is not None:
+            payload["clientId"] = client_id
+        self._sio.emit("voice:heartbeat", payload)
 
     # ── Client actions ───────────────────────────────────────────────────
 
