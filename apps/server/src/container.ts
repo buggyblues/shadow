@@ -39,6 +39,7 @@ import { ShopDao } from './dao/shop.dao'
 import { TaskCenterDao } from './dao/task-center.dao'
 // DAO classes
 import { UserDao } from './dao/user.dao'
+import { UserSessionDao } from './dao/user-session.dao'
 import { WalletDao } from './dao/wallet.dao'
 import { WorkspaceDao } from './dao/workspace.dao'
 import { WorkspaceNodeDao } from './dao/workspace-node.dao'
@@ -176,6 +177,7 @@ export interface Cradle {
   oauthAppDao: OAuthAppDao
   oauthAccountDao: OAuthAccountDao
   taskCenterDao: TaskCenterDao
+  userSessionDao: UserSessionDao
 
   // Shop DAOs
   shopDao: ShopDao
@@ -334,6 +336,7 @@ export function createAppContainer(db: Database): AppContainer {
     oauthAppDao: asClass(OAuthAppDao).singleton(),
     oauthAccountDao: asClass(OAuthAccountDao).singleton(),
     taskCenterDao: asClass(TaskCenterDao).singleton(),
+    userSessionDao: asClass(UserSessionDao).singleton(),
 
     // Shop DAOs
     shopDao: asClass(ShopDao).singleton(),

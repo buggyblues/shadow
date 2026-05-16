@@ -3,7 +3,7 @@
  * Supports matching Chinese displayName / username by typing pinyin initials.
  */
 
-import { match } from 'pinyin-pro'
+import { match, pinyin } from 'pinyin-pro'
 
 /**
  * Check if a query matches a text using pinyin.
@@ -17,4 +17,18 @@ export function matchPinyin(text: string, query: string): 'start' | 'partial' | 
   const indices = match(text, query)
   if (!indices || indices.length === 0) return false
   return indices[0] === 0 ? 'start' : 'partial'
+}
+
+export function toPinyinSlug(text: string, fallback = 'buddy') {
+  const converted = text
+    .trim()
+    .replace(/[\u3400-\u9fff]+/g, (chunk) =>
+      pinyin(chunk, { toneType: 'none', separator: '-', v: true }),
+    )
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32)
+
+  return converted || fallback
 }

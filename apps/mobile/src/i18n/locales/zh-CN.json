@@ -251,7 +251,23 @@
     "lightTheme": "浅色模式",
     "systemTheme": "跟随系统",
     "qrCard": "名片",
-    "activityGroup": "任务 & BUDDY"
+    "activityGroup": "任务 & BUDDY",
+    "oauthAccountsTitle": "已连接账号",
+    "oauthNotConnected": "未连接",
+    "oauthDisconnect": "解绑",
+    "oauthConnect": "连接",
+    "oauthUnlinked": "账号已解绑",
+    "oauthUnlinkFailed": "解绑失败",
+    "devicesTitle": "设备管理",
+    "unknownDevice": "未知设备",
+    "currentDevice": "当前设备",
+    "revokedDevice": "已踢出",
+    "lastSeenAt": "最近活跃 {{date}}",
+    "revokeDevice": "踢出",
+    "deviceRevoked": "设备已踢出",
+    "deviceRevokeFailed": "踢出设备失败",
+    "sessionRevokedTitle": "已被踢出",
+    "sessionRevokedNotice": "当前设备已被踢出，请重新登录。"
   },
   "server": {
     "home": "首页",
@@ -310,10 +326,21 @@
     "noCategory": "无分类",
     "changeBanner": "更换横幅",
     "addBanner": "添加横幅",
-    "changeIcon": "点击更换图标"
+    "changeIcon": "点击更换图标",
+    "add": "添加",
+    "addServer": "服务器",
+    "addMenuServer": "Server",
+    "addMenuBuddy": "Buddy",
+    "addMenuDm": "DM",
+    "addDm": "私信",
+    "addBuddy": "Buddy",
+    "addBuddyDm": "Buddy 私信",
+    "addFriendDm": "好友私信"
   },
   "sort": {
     "title": "排序方式",
+    "viewOptions": "显示选项",
+    "order": "排序条件",
     "byPosition": "默认顺序",
     "byCreatedAt": "创建时间",
     "byUpdatedAt": "更新时间",
@@ -554,7 +581,8 @@
     "policySmartReply": "智能回复",
     "policySmartReplyDesc": "跳过明显针对其他人的消息（如 @了别人但没 @ 自己）",
     "policyOwnerTenantOnly": "固定回复策略",
-    "policyOwnerTenantOnlyDesc": "默认只回复拥有者和允许互动的成员，无需 @ Buddy。"
+    "policyOwnerTenantOnlyDesc": "默认只回复拥有者和允许互动的成员，无需 @ Buddy。",
+    "buddyWorkStatus": "{{name}} {{status}}"
   },
   "features": {
     "pageTitle": "所有你需要的协作功能",
@@ -1043,6 +1071,13 @@
     "connectorCap_cronDelivery": "定时投递",
     "connectorCap_streamingPreviews": "流式预览",
     "connectorCap_forms": "表单",
+    "connectorCap_statusChecks": "状态检查",
+    "connectorCap_usageCosts": "用量费用",
+    "connectorCap_multiAgentBinding": "多 Agent 绑定",
+    "connectorCap_shadowCliLogin": "Shadow CLI 登录",
+    "connectorCap_notifications": "通知",
+    "connectorCap_officialSkills": "官方技能",
+    "connectorCap_cronTasks": "定时任务",
     "myBuddies": "我的 Buddy",
     "selectBuddy": "选择 Buddy",
     "selectBuddyDesc": "从左侧选择一个 Buddy 管理配置。",
@@ -1192,5 +1227,8 @@
     "wallet": "虾币",
     "claim": "领取",
     "incomplete": "未完成"
+  },
+  "dm": {
+    "emptyBuddies": "暂无可私信的 Buddy"
   }
 }

@@ -12,6 +12,8 @@ export default function OAuthCallbackScreen() {
     refreshToken?: string
     access_token?: string
     refresh_token?: string
+    oauth?: string
+    provider?: string
     error?: string
   }>()
   const colors = useColors()
@@ -22,6 +24,11 @@ export default function OAuthCallbackScreen() {
     const handleCallback = async () => {
       if (params.error) {
         router.replace('/(auth)/login')
+        return
+      }
+
+      if (params.oauth === 'linked') {
+        router.replace('/(main)/settings/account')
         return
       }
 
@@ -60,6 +67,7 @@ export default function OAuthCallbackScreen() {
     params.refreshToken,
     params.access_token,
     params.refresh_token,
+    params.oauth,
     params.error,
     router.replace,
     setAuth,

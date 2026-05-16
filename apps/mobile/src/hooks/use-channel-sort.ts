@@ -1,6 +1,10 @@
 import type { Channel, ChannelSortBy, ChannelSortDirection } from '@shadowob/shared'
 import { useCallback, useMemo } from 'react'
-import { DEFAULT_SORT, useChannelSortStore } from '../stores/channel-sort.store'
+import {
+  DEFAULT_SORT,
+  normalizeServerSortConfig,
+  useChannelSortStore,
+} from '../stores/channel-sort.store'
 
 function getSafeTime(value?: string | null): number {
   if (!value) return 0
@@ -49,7 +53,7 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
   // Get current sort config for this server
   const currentConfig = useMemo(() => {
     if (!serverId) return DEFAULT_SORT
-    return serverSortConfigs[serverId] ?? DEFAULT_SORT
+    return normalizeServerSortConfig(serverSortConfigs[serverId])
   }, [serverSortConfigs, serverId])
 
   const { sortBy, sortDirection } = currentConfig
@@ -57,8 +61,8 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
   // Check if has custom sort
   const hasCustomSort = useMemo(() => {
     if (!serverId) return false
-    return sortBy !== 'position'
-  }, [sortBy, serverId])
+    return sortBy !== DEFAULT_SORT.sortBy || sortDirection !== DEFAULT_SORT.sortDirection
+  }, [sortBy, sortDirection, serverId])
 
   // Wrapper functions that include serverId
   const setSortBy = useCallback(
@@ -85,7 +89,9 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
   // Stable sort function that uses current sort config from closure
   const sortChannels = useCallback(
     (channels: Channel[]): SortedChannel[] => {
-      const config = serverId ? (serverSortConfigs[serverId] ?? DEFAULT_SORT) : DEFAULT_SORT
+      const config = serverId
+        ? normalizeServerSortConfig(serverSortConfigs[serverId])
+        : DEFAULT_SORT
       const currentSortBy = config.sortBy ?? DEFAULT_SORT.sortBy
       const currentSortDirection = config.sortDirection ?? DEFAULT_SORT.sortDirection
 

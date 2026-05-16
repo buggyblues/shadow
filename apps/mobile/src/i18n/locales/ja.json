@@ -252,7 +252,23 @@
     "lightTheme": "ライトモード",
     "systemTheme": "システム設定",
     "qrCard": "カード",
-    "activityGroup": "タスク & BUDDY"
+    "activityGroup": "タスク & BUDDY",
+    "oauthAccountsTitle": "連携済みアカウント",
+    "oauthNotConnected": "未連携",
+    "oauthDisconnect": "解除",
+    "oauthConnect": "連携",
+    "oauthUnlinked": "アカウント連携を解除しました",
+    "oauthUnlinkFailed": "連携解除に失敗しました",
+    "devicesTitle": "デバイス管理",
+    "unknownDevice": "不明なデバイス",
+    "currentDevice": "現在",
+    "revokedDevice": "無効",
+    "lastSeenAt": "最終アクティブ {{date}}",
+    "revokeDevice": "サインアウト",
+    "deviceRevoked": "デバイスをサインアウトしました",
+    "deviceRevokeFailed": "デバイスのサインアウトに失敗しました",
+    "sessionRevokedTitle": "サインアウトされました",
+    "sessionRevokedNotice": "このデバイスはサインアウトされました。再度ログインしてください。"
   },
   "server": {
     "home": "ホーム",
@@ -311,10 +327,21 @@
     "noCategory": "未分類",
     "changeBanner": "バナーを変更",
     "addBanner": "バナーを追加",
-    "changeIcon": "アイコンを変更"
+    "changeIcon": "アイコンを変更",
+    "add": "追加",
+    "addServer": "サーバー",
+    "addMenuServer": "Server",
+    "addMenuBuddy": "Buddy",
+    "addMenuDm": "DM",
+    "addDm": "DM",
+    "addBuddy": "Buddy",
+    "addBuddyDm": "Buddy DM",
+    "addFriendDm": "フレンド DM"
   },
   "sort": {
     "title": "並び替え",
+    "viewOptions": "表示オプション",
+    "order": "並び順",
     "byPosition": "デフォルト",
     "byCreatedAt": "作成日時",
     "byUpdatedAt": "更新日時",
@@ -555,7 +582,8 @@
     "policySmartReply": "スマートリプライ",
     "policySmartReplyDesc": "他者を明確にターゲットとしたメッセージをスキップ（例：他のユーザーへの @メンションなど）",
     "policyOwnerTenantOnly": "固定返信ポリシー",
-    "policyOwnerTenantOnlyDesc": "デフォルトではオーナーと許可されたメンバーにのみ返信します。@メンションは不要です。"
+    "policyOwnerTenantOnlyDesc": "デフォルトではオーナーと許可されたメンバーにのみ返信します。@メンションは不要です。",
+    "buddyWorkStatus": "{{name}} {{status}}"
   },
   "features": {
     "pageTitle": "必要なコラボ機能がすべて揃っています",
@@ -1044,6 +1072,13 @@
     "connectorCap_cronDelivery": "Cron 配信",
     "connectorCap_streamingPreviews": "ストリーミングプレビュー",
     "connectorCap_forms": "フォーム",
+    "connectorCap_statusChecks": "ステータスチェック",
+    "connectorCap_usageCosts": "利用コスト",
+    "connectorCap_multiAgentBinding": "マルチエージェント連携",
+    "connectorCap_shadowCliLogin": "Shadow CLI ログイン",
+    "connectorCap_notifications": "通知",
+    "connectorCap_officialSkills": "公式スキル",
+    "connectorCap_cronTasks": "Cron タスク",
     "myBuddies": "My Buddy",
     "selectBuddy": "Buddy を選択",
     "selectBuddyDesc": "左側から Buddy を選択して設定を管理します。",
@@ -1193,5 +1228,8 @@
     "wallet": "コイン",
     "claim": "受取",
     "incomplete": "未完了"
+  },
+  "dm": {
+    "emptyBuddies": "DM できる Buddy はありません"
   }
 }

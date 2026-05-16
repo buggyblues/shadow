@@ -178,6 +178,6 @@ The tests cover plan generation, config merging for OpenClaw/Hermes/cc-connect, 
 
 ## Capability Coverage
 
-- OpenClaw: channel messages, DMs, threads, mentions, attachments/images, interactive components, slash commands, online status, typing/activity, reactions, edits/deletes.
-- Hermes Agent: channel messages, DMs, threads, attachments/images, interactive components, slash commands, online status, typing/activity, cron delivery.
-- cc-connect: channel messages, DMs, attachments/images, interactive components, slash commands, typing, streaming previews, forms.
+- OpenClaw: channel messages, DMs, threads, mentions, attachments/images, interactive components, slash commands, online status, typing/activity, reactions, edits/deletes, status checks, usage/cost telemetry, multi-Agent Buddy binding, Shadow CLI login/notifications, official skills, cron tasks.
+- Hermes Agent: channel messages, DMs, threads, attachments/images, interactive components, slash commands, online status, typing/activity, cron delivery, status checks, usage/cost telemetry, Shadow CLI login/notifications, official skills.
+- cc-connect: channel messages, DMs, attachments/images, interactive components, slash commands, typing, streaming previews, forms, status checks, usage/cost telemetry, multi-Agent Buddy binding, Shadow CLI login/notifications.

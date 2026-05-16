@@ -120,111 +120,101 @@ function metaString(n: Notification, key: string) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+function getNotificationChannelId(n: Notification) {
+  return (
+    n.scopeChannelId ??
+    metaString(n, 'channelId') ??
+    (n.referenceType === 'channel' || n.referenceType === 'channel_invite' ? n.referenceId : null)
+  )
+}
+
+function getNotificationServerId(n: Notification) {
+  return (
+    n.scopeServerId ??
+    metaString(n, 'serverId') ??
+    (n.referenceType === 'server_join' || n.referenceType === 'server_invite'
+      ? n.referenceId
+      : null)
+  )
+}
+
 export function NotificationBell() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showPanel, setShowPanel] = useState(false)
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: markRead and setShowPanel are stable refs
   const handleNotificationClick = useCallback(
     async (n: Notification) => {
       // Mark as read
       if (!n.isRead) {
         markRead.mutate(n.id)
       }
-      // Navigate to referenced message
+
+      const navigateToChannel = async (channelId: string, messageId?: string | null) => {
+        const channel = await fetchApi<{
+          id: string
+          name: string
+          serverId?: string | null
+          kind?: string
+        }>(`/api/channels/${channelId}`)
+        if (channel.kind === 'dm' || !channel.serverId) {
+          setShowPanel(false)
+          navigate({
+            to: '/dm/$dmChannelId',
+            params: { dmChannelId: channel.id },
+            search: messageId ? { msg: messageId } : {},
+          })
+          return
+        }
+        const server = await fetchApi<{ id: string; slug: string }>(
+          `/api/servers/${channel.serverId}`,
+        )
+        setShowPanel(false)
+        navigate({
+          to: '/servers/$serverSlug/channels/$channelId',
+          params: { serverSlug: server.slug ?? channel.serverId, channelId: channel.id },
+          search: messageId ? { msg: messageId } : {},
+        })
+      }
+
+      const navigateToServer = async (serverId: string) => {
+        const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
+        setShowPanel(false)
+        navigate({
+          to: '/servers/$serverSlug',
+          params: { serverSlug: server.slug ?? server.id },
+        })
+      }
+
       if (n.referenceType === 'message' && n.referenceId) {
         try {
           const message = await fetchApi<{ id: string; channelId: string }>(
             `/api/messages/${n.referenceId}`,
           )
-          const channel = await fetchApi<{
-            id: string
-            name: string
-            serverId?: string | null
-            kind?: string
-          }>(`/api/channels/${message.channelId}`)
-          if (channel.kind === 'dm' || !channel.serverId) {
-            setShowPanel(false)
-            navigate({
-              to: '/dm/$dmChannelId',
-              params: { dmChannelId: message.channelId },
-            })
-            return
-          }
-          const server = await fetchApi<{ id: string; slug: string }>(
-            `/api/servers/${channel.serverId}`,
-          )
-          setShowPanel(false)
-          navigate({
-            to: '/servers/$serverSlug/channels/$channelId',
-            params: { serverSlug: server.slug ?? channel.serverId, channelId: message.channelId },
-          })
+          await navigateToChannel(message.channelId, message.id)
         } catch {
           // Message may have been deleted
         }
-      } else if (
-        (n.referenceType === 'channel_invite' || n.referenceType === 'channel') &&
-        n.referenceId
-      ) {
+        return
+      }
+
+      const channelId = getNotificationChannelId(n)
+      if (channelId) {
         try {
-          const channel = await fetchApi<{
-            id: string
-            name: string
-            serverId?: string | null
-            kind?: string
-          }>(`/api/channels/${n.referenceId}`)
-          if (channel.kind === 'dm' || !channel.serverId) {
-            setShowPanel(false)
-            navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: channel.id } })
-            return
-          }
-          const server = await fetchApi<{ id: string; slug: string }>(
-            `/api/servers/${channel.serverId}`,
-          )
-          setShowPanel(false)
-          navigate({
-            to: '/servers/$serverSlug/channels/$channelId',
-            params: { serverSlug: server.slug ?? channel.serverId, channelId: channel.id },
-          })
+          await navigateToChannel(channelId)
         } catch {
           // Channel may have been deleted
         }
-      } else if (
-        (n.referenceType === 'server_join' || n.referenceType === 'server_invite') &&
-        n.referenceId
-      ) {
+        return
+      }
+
+      const serverId = getNotificationServerId(n)
+      if (serverId) {
         try {
-          const server = await fetchApi<{ id: string; slug: string }>(
-            `/api/servers/${n.referenceId}`,
-          )
-          setShowPanel(false)
-          navigate({
-            to: '/servers/$serverSlug',
-            params: { serverSlug: server.slug ?? server.id },
-          })
+          await navigateToServer(serverId)
         } catch {
           // Server may have been deleted
-        }
-      } else if (n.scopeChannelId || metaString(n, 'channelId')) {
-        const channelId = n.scopeChannelId ?? metaString(n, 'channelId')
-        const serverId = n.scopeServerId ?? metaString(n, 'serverId')
-        if (!channelId) return
-        if (!serverId) {
-          setShowPanel(false)
-          navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: channelId } })
-          return
-        }
-        try {
-          const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
-          setShowPanel(false)
-          navigate({
-            to: '/servers/$serverSlug/channels/$channelId',
-            params: { serverSlug: server.slug ?? server.id, channelId },
-          })
-        } catch {
-          // Scope may no longer be visible.
         }
       }
     },
@@ -251,6 +241,7 @@ export function NotificationBell() {
   useSocketEvent('notification:new', (_data: Notification) => {
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
     queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
   })
 
   // Mark single as read
@@ -259,6 +250,7 @@ export function NotificationBell() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     },
   })
 
@@ -268,6 +260,7 @@ export function NotificationBell() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     },
   })
 
@@ -280,6 +273,7 @@ export function NotificationBell() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
       queryClient.invalidateQueries({ queryKey: ['channels'] })
     },
   })
@@ -293,6 +287,7 @@ export function NotificationBell() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       queryClient.invalidateQueries({ queryKey: ['server-access'] })
     },

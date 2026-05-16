@@ -13,9 +13,8 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { useRef } from 'react'
+import { type RefObject, useEffect, useRef, useState } from 'react'
 import type { WorkspaceNode } from '../../stores/workspace.store'
-import { useContextMenuPosition } from '../common/context-menu'
 import { resolveWorkspaceMediaUrl } from './workspace-media'
 import type { ContextMenuState } from './workspace-types'
 
@@ -35,6 +34,7 @@ interface ContextMenuGroup {
 
 interface WorkspaceContextMenuProps {
   menu: ContextMenuState
+  boundsRef: RefObject<HTMLElement | null>
   serverId: string
   onClose: () => void
   hasClipboard: boolean
@@ -59,6 +59,7 @@ const metaKey = isMac ? '⌘' : 'Ctrl+'
 
 export function WorkspaceContextMenu({
   menu,
+  boundsRef,
   serverId,
   onClose,
   hasClipboard,
@@ -78,7 +79,7 @@ export function WorkspaceContextMenu({
 }: WorkspaceContextMenuProps) {
   const node = menu.node
   const menuRef = useRef<HTMLDivElement>(null)
-  const position = useContextMenuPosition(menu.x, menu.y, menuRef, 190)
+  const position = useWorkspaceMenuPosition(menu.x, menu.y, menuRef, boundsRef, 190)
 
   const groups = buildMenuGroups({
     node,
@@ -111,7 +112,7 @@ export function WorkspaceContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[61] bg-bg-tertiary/50 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] py-2 min-w-[190px] animate-scale-in"
+        className="absolute z-[61] bg-bg-tertiary/50 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] py-2 min-w-[190px] animate-scale-in"
         style={{ left: position.x, top: position.y }}
       >
         {groups.map((group, gi) => (
@@ -156,6 +157,35 @@ export function WorkspaceContextMenu({
       </div>
     </>
   )
+}
+
+function useWorkspaceMenuPosition(
+  x: number,
+  y: number,
+  menuRef: RefObject<HTMLDivElement | null>,
+  boundsRef: RefObject<HTMLElement | null>,
+  minWidth = 190,
+) {
+  const [position, setPosition] = useState({ x, y })
+
+  useEffect(() => {
+    const bounds = boundsRef.current?.getBoundingClientRect()
+    const maxWidth = bounds?.width ?? window.innerWidth
+    const maxHeight = bounds?.height ?? window.innerHeight
+    const menuRect = menuRef.current?.getBoundingClientRect()
+    const menuWidth = menuRect?.width ?? minWidth
+    const menuHeight = menuRect?.height ?? 260
+
+    let nextX = x
+    let nextY = y
+    if (nextX + menuWidth > maxWidth - 8) nextX = maxWidth - menuWidth - 8
+    if (nextY + menuHeight > maxHeight - 8) nextY = maxHeight - menuHeight - 8
+    if (nextX < 8) nextX = 8
+    if (nextY < 8) nextY = 8
+    setPosition({ x: nextX, y: nextY })
+  }, [boundsRef, menuRef, minWidth, x, y])
+
+  return position
 }
 
 /* ─── Build grouped menu items based on target node ─── */

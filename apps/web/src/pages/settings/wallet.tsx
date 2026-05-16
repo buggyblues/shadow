@@ -732,10 +732,10 @@ function SettlementRow({ line }: { line: SettlementLine }) {
 
 function CommunityActionsSection() {
   const { t } = useTranslation()
-  const [modalMode, setModalMode] = useState<'tip' | 'gift' | null>(null)
+  const [showTipModal, setShowTipModal] = useState(false)
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-4">
       <SettingsSectionBlock titleKey="communityEconomy.sendTip" titleFallback="Send tip">
         <div className="space-y-4">
           <div className="rounded-2xl border border-border-subtle bg-bg-secondary/50 p-4">
@@ -754,40 +754,16 @@ function CommunityActionsSection() {
             size="md"
             type="button"
             icon={HandCoins}
-            onClick={() => setModalMode('tip')}
+            onClick={() => setShowTipModal(true)}
           >
             {t('communityEconomy.sendTip')}
           </Button>
         </div>
       </SettingsSectionBlock>
-      <SettingsSectionBlock titleKey="communityEconomy.sendGift" titleFallback="Send gift">
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-border-subtle bg-bg-secondary/50 p-4">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <Gift size={22} />
-            </div>
-            <p className="text-sm font-black text-text-primary">
-              {t('communityEconomy.giftEntryTitle')}
-            </p>
-            <p className="mt-1 text-xs leading-5 text-text-muted">
-              {t('communityEconomy.giftEntryHint')}
-            </p>
-          </div>
-          <Button
-            variant="primary"
-            size="md"
-            type="button"
-            icon={Gift}
-            onClick={() => setModalMode('gift')}
-          >
-            {t('communityEconomy.sendGift')}
-          </Button>
-        </div>
-      </SettingsSectionBlock>
       <CommunityEconomySendModal
-        open={modalMode !== null}
-        mode={modalMode ?? 'tip'}
-        onClose={() => setModalMode(null)}
+        open={showTipModal}
+        mode="tip"
+        onClose={() => setShowTipModal(false)}
       />
     </div>
   )

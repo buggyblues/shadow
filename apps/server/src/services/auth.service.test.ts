@@ -4,6 +4,7 @@ import type { AgentDao } from '../dao/agent.dao'
 import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { PasswordChangeLogDao } from '../dao/password-change-log.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { UserSessionDao } from '../dao/user-session.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import type { TaskCenterService } from '../services/task-center.service'
 import { AuthService } from './auth.service'
@@ -88,6 +89,12 @@ describe('AuthService', () => {
     getMembership: vi.fn(),
   } as unknown as Mocked<MembershipService>
 
+  const mockUserSessionDao: Mocked<UserSessionDao> = {
+    findById: vi.fn(),
+    create: vi.fn(),
+    updateRefreshTokenHash: vi.fn(),
+  } as unknown as Mocked<UserSessionDao>
+
   let service: AuthService
 
   beforeEach(() => {
@@ -100,6 +107,19 @@ describe('AuthService', () => {
     mockInviteCodeDao.findAvailable.mockResolvedValue(mockInviteCode)
     mockInviteCodeDao.findByUsedBy.mockResolvedValue(null)
     mockTaskCenterService.grantWelcomeReward.mockResolvedValue(false)
+    mockUserSessionDao.findById.mockResolvedValue(null)
+    mockUserSessionDao.create.mockResolvedValue({
+      id: 'session-1',
+      userId: mockUser.id,
+      refreshTokenHash: 'hash',
+      deviceName: null,
+      userAgent: null,
+      ipAddress: null,
+      lastSeenAt: new Date(),
+      revokedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
     mockMembershipService.getMembership.mockResolvedValue({
       status: 'visitor',
       tier: {
@@ -125,6 +145,7 @@ describe('AuthService', () => {
       safeHttpClient: {
         fetch: vi.fn().mockResolvedValue({ ok: true }),
       } as unknown as SafeHttpClient,
+      userSessionDao: mockUserSessionDao,
     })
   })
 

@@ -1,6 +1,8 @@
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { hash } from 'bcryptjs'
 import type { OAuthAccountDao } from '../dao/oauth-account.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { UserSessionDao, UserSessionDevice } from '../dao/user-session.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { randomFixedDigits } from '../lib/id'
 import { type JwtPayload, signAccessToken, signRefreshToken } from '../lib/jwt'
@@ -26,6 +28,64 @@ interface ProviderConfig {
 }
 
 const OAUTH_BASE_URL = process.env.OAUTH_BASE_URL ?? 'http://localhost:3000'
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+
+type OAuthStatePayload = {
+  redirect?: string
+  inviteCode?: string
+  mode?: 'login' | 'link'
+  userId?: string
+  iat?: number
+}
+
+type OAuthCallbackResult =
+  | {
+      mode: 'login'
+      accessToken: string
+      refreshToken: string
+      redirect: string
+      inviteCode?: string
+    }
+  | { mode: 'link'; redirect: string; provider: string }
+
+function oauthStateSecret() {
+  const secret = process.env.OAUTH_STATE_SECRET ?? process.env.JWT_SECRET
+  if (!secret) {
+    throw new Error('OAUTH_STATE_SECRET or JWT_SECRET is required for OAuth state signing')
+  }
+  return secret
+}
+
+function signStatePayload(body: string) {
+  return createHmac('sha256', oauthStateSecret()).update(body).digest('base64url')
+}
+
+function encodeState(payload: OAuthStatePayload) {
+  const body = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() })).toString('base64url')
+  return `${body}.${signStatePayload(body)}`
+}
+
+function decodeState(state?: string): OAuthStatePayload {
+  if (!state) return {}
+  try {
+    const [body, signature] = state.split('.')
+    if (body && signature) {
+      const actual = Buffer.from(signature, 'base64url')
+      const expected = Buffer.from(signStatePayload(body), 'base64url')
+      if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return {}
+      const parsed = JSON.parse(Buffer.from(body, 'base64url').toString()) as OAuthStatePayload
+      if (parsed.iat && Date.now() - parsed.iat > OAUTH_STATE_TTL_MS) return {}
+      return parsed
+    }
+    return JSON.parse(Buffer.from(state, 'base64url').toString()) as OAuthStatePayload
+  } catch {
+    return {}
+  }
+}
+
+function hashToken(token: string) {
+  return createHash('sha256').update(token).digest('hex')
+}
 
 function getProviderConfig(provider: string): ProviderConfig {
   switch (provider) {
@@ -62,6 +122,7 @@ export class ExternalOAuthService {
       membershipService: MembershipService
       taskCenterService: TaskCenterService
       safeHttpClient: SafeHttpClient
+      userSessionDao: UserSessionDao
     },
   ) {}
 
@@ -76,9 +137,7 @@ export class ExternalOAuthService {
       ...(redirectPath ? { redirect: redirectPath } : {}),
       ...(inviteCode?.trim() ? { inviteCode: inviteCode.trim() } : {}),
     }
-    const state = Object.keys(statePayload).length
-      ? Buffer.from(JSON.stringify(statePayload)).toString('base64url')
-      : ''
+    const state = Object.keys(statePayload).length ? encodeState(statePayload) : ''
 
     const params = new URLSearchParams({
       client_id: config.clientId,
@@ -91,11 +150,32 @@ export class ExternalOAuthService {
     return `${config.authorizeUrl}?${params.toString()}`
   }
 
+  getLinkAuthorizeUrl(provider: string, userId: string, redirectPath?: string) {
+    const config = getProviderConfig(provider)
+    if (!config.clientId) {
+      throw Object.assign(new Error(`${provider} OAuth not configured`), { status: 501 })
+    }
+
+    const callbackUrl = `${OAUTH_BASE_URL}/api/auth/oauth/${provider}/callback`
+    const redirect = redirectPath?.trim() || '/app/settings/account'
+    const state = encodeState({ mode: 'link', userId, redirect })
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: callbackUrl,
+      response_type: 'code',
+      scope: config.scopes.join(' '),
+      state,
+    })
+
+    return `${config.authorizeUrl}?${params.toString()}`
+  }
+
   async handleCallback(
     provider: string,
     code: string,
     state?: string,
-  ): Promise<{ accessToken: string; refreshToken: string; redirect: string; inviteCode?: string }> {
+    device?: UserSessionDevice,
+  ): Promise<OAuthCallbackResult> {
     const config = getProviderConfig(provider)
     const callbackUrl = `${OAUTH_BASE_URL}/api/auth/oauth/${provider}/callback`
 
@@ -133,47 +213,58 @@ export class ExternalOAuthService {
     // Fetch user profile
     const profile = await this.fetchProfile(provider, providerAccessToken)
 
+    const parsedState = decodeState(state)
+    if (parsedState.mode === 'link' && parsedState.userId) {
+      await this.linkAccount(parsedState.userId, profile)
+      return {
+        mode: 'link',
+        provider,
+        redirect: this.safeRedirect(parsedState.redirect, '/app/settings/account'),
+      }
+    }
+
     // Find or create user
     const { user, isNew } = await this.findOrCreateUser(profile)
     if (isNew) await this.deps.taskCenterService.grantWelcomeReward(user.id)
 
     // Generate Shadow tokens
-    const jwtPayload: JwtPayload = { userId: user.id, email: user.email, username: user.username }
+    const sessionId = randomUUID()
+    const jwtPayload: JwtPayload = {
+      userId: user.id,
+      email: user.email,
+      username: user.username,
+      sessionId,
+    }
     const accessToken = signAccessToken(jwtPayload)
     const refreshToken = signRefreshToken(jwtPayload)
+    await this.deps.userSessionDao.create({
+      id: sessionId,
+      userId: user.id,
+      refreshTokenHash: hashToken(refreshToken),
+      deviceName: device?.deviceName,
+      userAgent: device?.userAgent,
+      ipAddress: device?.ipAddress,
+    })
 
     // Parse redirect from state
     // Supports:
     // - Web paths starting with '/' (e.g., '/app/settings')
     // - Mobile deep links with custom schemes (e.g., 'shadow://oauth-callback')
     let redirect = '/app/settings'
-    if (state) {
-      try {
-        const parsed = JSON.parse(Buffer.from(state, 'base64url').toString()) as {
-          redirect?: string
-          inviteCode?: string
-        }
-        const redirectPath = parsed.redirect
-        if (redirectPath) {
-          // Allow web paths (/) or custom schemes (://)
-          if (redirectPath.startsWith('/') || redirectPath.includes('://')) {
-            redirect = redirectPath
-          }
-        }
-        const inviteCode = parsed.inviteCode?.trim()
-        if (inviteCode) {
-          return { accessToken, refreshToken, redirect, inviteCode }
-        }
-      } catch {
-        // ignore
-      }
+    if (parsedState.redirect) {
+      redirect = this.safeRedirect(parsedState.redirect, redirect)
+    }
+    const inviteCode = parsedState.inviteCode?.trim()
+    if (inviteCode) {
+      return { mode: 'login', accessToken, refreshToken, redirect, inviteCode }
     }
 
-    return { accessToken, refreshToken, redirect }
+    return { mode: 'login', accessToken, refreshToken, redirect }
   }
 
   async handleGoogleIdToken(
     credential: string,
+    device?: UserSessionDevice,
   ): Promise<{ accessToken: string; refreshToken: string; user: unknown }> {
     const clientId = process.env.GOOGLE_CLIENT_ID ?? ''
     if (!clientId) {
@@ -212,12 +303,34 @@ export class ExternalOAuthService {
     })
     if (isNew) await this.deps.taskCenterService.grantWelcomeReward(user.id)
 
-    const jwtPayload: JwtPayload = { userId: user.id, email: user.email, username: user.username }
+    const sessionId = randomUUID()
+    const jwtPayload: JwtPayload = {
+      userId: user.id,
+      email: user.email,
+      username: user.username,
+      sessionId,
+    }
+    const accessToken = signAccessToken(jwtPayload)
+    const refreshToken = signRefreshToken(jwtPayload)
+    await this.deps.userSessionDao.create({
+      id: sessionId,
+      userId: user.id,
+      refreshTokenHash: hashToken(refreshToken),
+      deviceName: device?.deviceName,
+      userAgent: device?.userAgent,
+      ipAddress: device?.ipAddress,
+    })
     return {
       user: await this.serializeUser(user),
-      accessToken: signAccessToken(jwtPayload),
-      refreshToken: signRefreshToken(jwtPayload),
+      accessToken,
+      refreshToken,
     }
+  }
+
+  private safeRedirect(redirectPath: string | undefined, fallback: string) {
+    if (!redirectPath) return fallback
+    if (redirectPath.startsWith('/') || redirectPath.includes('://')) return redirectPath
+    return fallback
   }
 
   private async fetchProfile(provider: string, accessToken: string): Promise<OAuthProfile> {
@@ -329,7 +442,7 @@ export class ExternalOAuthService {
     }
 
     // OAuth users get a random password hash (they can't login with password)
-    const passwordHash = await hash(crypto.randomUUID(), 12)
+    const passwordHash = await hash(randomUUID(), 12)
 
     const newUser = await userDao.create({
       email: profile.email || `${profile.providerAccountId}@${profile.provider}.oauth`,
@@ -386,6 +499,39 @@ export class ExternalOAuthService {
       providerEmail: a.providerEmail,
       createdAt: a.createdAt,
     }))
+  }
+
+  async linkAccount(userId: string, profile: OAuthProfile) {
+    const { oauthAccountDao, userDao } = this.deps
+    const user = await userDao.findById(userId)
+    if (!user) {
+      throw Object.assign(new Error('User not found'), { status: 404 })
+    }
+
+    const existingProviderAccount = await oauthAccountDao.findByProviderAccount(
+      profile.provider,
+      profile.providerAccountId,
+    )
+    if (existingProviderAccount) {
+      if (existingProviderAccount.userId === userId) return existingProviderAccount
+      throw Object.assign(new Error('OAuth account is linked to another Shadow account'), {
+        status: 409,
+      })
+    }
+
+    const existingUserProvider = (await oauthAccountDao.findByUserId(userId)).find(
+      (account) => account.provider === profile.provider,
+    )
+    if (existingUserProvider) {
+      throw Object.assign(new Error(`${profile.provider} account already linked`), { status: 409 })
+    }
+
+    return oauthAccountDao.create({
+      userId,
+      provider: profile.provider,
+      providerAccountId: profile.providerAccountId,
+      providerEmail: profile.email,
+    })
   }
 
   async unlinkAccount(userId: string, accountId: string) {

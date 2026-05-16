@@ -33,6 +33,31 @@ export const NodeConfigSchema = z
 
 export type NodeConfig = z.infer<typeof NodeConfigSchema>
 
+// ─── Install ─────────────────────────────────────────────────────────────────
+
+export const ClusterInstallConfigSchema = z.object({
+  /** k3s release version. Example: v1.35.4+k3s1 */
+  k3sVersion: z.string().min(1).optional(),
+  /** k3s release channel used when k3sVersion is omitted. */
+  k3sChannel: z.string().min(1).optional(),
+  /** k3s channel endpoint used by the official install script. */
+  k3sChannelUrl: z.string().url().optional(),
+  /** k3s release artifact URL prefix. */
+  k3sArtifactUrl: z.string().url().optional(),
+  /** Common mirror shortcut. "cn" maps to Rancher's China mirror. */
+  k3sMirror: z.string().min(1).optional(),
+  /** Registry prefix used by k3s for bundled system images. */
+  systemDefaultRegistry: z
+    .string()
+    .min(1)
+    .regex(/^\S+$/, 'systemDefaultRegistry must not contain whitespace')
+    .optional(),
+  /** Sandbox pause image used by k3s/containerd. Useful when Docker Hub is unreachable. */
+  pauseImage: z.string().min(1).regex(/^\S+$/, 'pauseImage must not contain whitespace').optional(),
+})
+
+export type ClusterInstallConfig = z.infer<typeof ClusterInstallConfigSchema>
+
 // ─── Cluster ─────────────────────────────────────────────────────────────────
 
 export const ClusterProviderSchema = z.enum(['ssh'])
@@ -50,6 +75,8 @@ export const ClusterConfigSchema = z
     provider: ClusterProviderSchema.default('ssh'),
     /** List of nodes */
     nodes: z.array(NodeConfigSchema).min(1),
+    /** Optional k3s installer settings for restricted networks or pinned versions. */
+    install: ClusterInstallConfigSchema.optional(),
   })
   .refine((c) => c.nodes.filter((n) => n.role === 'master').length === 1, {
     message: 'Cluster must have exactly one master node',

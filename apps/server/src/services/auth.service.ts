@@ -6,6 +6,7 @@ import type { AgentDao } from '../dao/agent.dao'
 import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { PasswordChangeLogDao } from '../dao/password-change-log.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { UserSessionDao, UserSessionDevice } from '../dao/user-session.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { randomFixedDigits } from '../lib/id'
 import { signAccessToken, signRefreshToken, verifyToken } from '../lib/jwt'
@@ -28,6 +29,8 @@ const fallbackOtpStore = new Map<
   { hash: string; expiresAt: number; attempts: number; code: string }
 >()
 
+export type AuthDeviceInfo = UserSessionDevice
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
@@ -40,6 +43,10 @@ function hashOtp(email: string, code: string) {
 
 function otpKey(email: string) {
   return `auth:email-otp:${normalizeEmail(email)}`
+}
+
+function hashToken(token: string) {
+  return createHash('sha256').update(token).digest('hex')
 }
 
 function envValue(...keys: string[]) {
@@ -82,10 +89,41 @@ export class AuthService {
       passwordChangeLogDao: PasswordChangeLogDao
       membershipService: MembershipService
       safeHttpClient: SafeHttpClient
+      userSessionDao: UserSessionDao
     },
   ) {}
 
-  async register(input: RegisterInput) {
+  private async createSessionTokens(
+    user: { id: string; email: string; username: string },
+    device?: AuthDeviceInfo,
+    sessionId: string = randomUUID(),
+  ) {
+    const payload = {
+      userId: user.id,
+      email: user.email,
+      username: user.username,
+      sessionId,
+    }
+    const accessToken = signAccessToken(payload)
+    const refreshToken = signRefreshToken(payload)
+    const refreshTokenHash = hashToken(refreshToken)
+    const existing = await this.deps.userSessionDao.findById(sessionId)
+    if (existing) {
+      await this.deps.userSessionDao.updateRefreshTokenHash(sessionId, refreshTokenHash, device)
+    } else {
+      await this.deps.userSessionDao.create({
+        id: sessionId,
+        userId: user.id,
+        refreshTokenHash,
+        deviceName: device?.deviceName,
+        userAgent: device?.userAgent,
+        ipAddress: device?.ipAddress,
+      })
+    }
+    return { accessToken, refreshToken, sessionId }
+  }
+
+  async register(input: RegisterInput, device?: AuthDeviceInfo) {
     const { userDao, inviteCodeDao, taskCenterService } = this.deps
     const inviteCode = input.inviteCode?.trim().toUpperCase()
     const code = inviteCode ? await inviteCodeDao.findAvailable(inviteCode) : null
@@ -133,19 +171,16 @@ export class AuthService {
     // Campaign reward: signup bonus
     await taskCenterService.grantWelcomeReward(user.id)
 
-    // Generate tokens
-    const payload = { userId: user.id, email: user.email, username: user.username }
-    const accessToken = signAccessToken(payload)
-    const refreshToken = signRefreshToken(payload)
+    const tokens = await this.createSessionTokens(user, device)
 
     return {
       user: await this.serializeUser(user),
-      accessToken,
-      refreshToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     }
   }
 
-  async login(input: LoginInput) {
+  async login(input: LoginInput, device?: AuthDeviceInfo) {
     const { userDao, inviteCodeDao, taskCenterService } = this.deps
 
     // Support login with email or username
@@ -163,9 +198,7 @@ export class AuthService {
       throw Object.assign(new Error('Invalid credentials'), { status: 401 })
     }
 
-    const payload = { userId: user.id, email: user.email, username: user.username }
-    const accessToken = signAccessToken(payload)
-    const refreshToken = signRefreshToken(payload)
+    const tokens = await this.createSessionTokens(user, device)
 
     // Update user status to online
     await userDao.updateStatus(user.id, 'online')
@@ -179,8 +212,8 @@ export class AuthService {
 
     return {
       user: await this.serializeUser(user),
-      accessToken,
-      refreshToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     }
   }
 
@@ -215,7 +248,7 @@ export class AuthService {
     }
   }
 
-  async verifyEmailLogin(input: EmailLoginVerifyInput) {
+  async verifyEmailLogin(input: EmailLoginVerifyInput, device?: AuthDeviceInfo) {
     const email = normalizeEmail(input.email)
     const stored = await this.readEmailOtp(email)
     if (!stored || Date.now() > stored.expiresAt) {
@@ -250,16 +283,16 @@ export class AuthService {
     }
     await this.deps.userDao.updateStatus(user.id, 'online')
 
-    const payload = { userId: user.id, email: user.email, username: user.username }
+    const tokens = await this.createSessionTokens(user, device)
     return {
       user: await this.serializeUser(user),
-      accessToken: signAccessToken(payload),
-      refreshToken: signRefreshToken(payload),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     }
   }
 
-  async refresh(refreshToken: string) {
-    const { userDao } = this.deps
+  async refresh(refreshToken: string, device?: AuthDeviceInfo) {
+    const { userDao, userSessionDao } = this.deps
 
     try {
       const payload = verifyToken(refreshToken, 'refresh')
@@ -268,11 +301,24 @@ export class AuthService {
         throw Object.assign(new Error('User not found'), { status: 401 })
       }
 
-      const newPayload = { userId: user.id, email: user.email, username: user.username }
-      const accessToken = signAccessToken(newPayload)
-      const newRefreshToken = signRefreshToken(newPayload)
+      let sessionId = payload.sessionId
+      if (sessionId) {
+        const session = await userSessionDao.findById(sessionId)
+        if (
+          !session ||
+          session.userId !== user.id ||
+          session.revokedAt ||
+          session.refreshTokenHash !== hashToken(refreshToken)
+        ) {
+          throw Object.assign(new Error('Invalid refresh token'), { status: 401 })
+        }
+      } else {
+        sessionId = randomUUID()
+      }
 
-      return { accessToken, refreshToken: newRefreshToken }
+      const tokens = await this.createSessionTokens(user, device, sessionId)
+
+      return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }
     } catch {
       throw Object.assign(new Error('Invalid refresh token'), { status: 401 })
     }
@@ -306,6 +352,28 @@ export class AuthService {
       membership: await this.deps.membershipService.getMembership(user.id),
       ...(agentId ? { agentId } : {}),
     }
+  }
+
+  async listSessions(userId: string, currentSessionId?: string) {
+    const sessions = await this.deps.userSessionDao.listByUserId(userId)
+    return sessions.map((session) => ({
+      id: session.id,
+      deviceName: session.deviceName,
+      userAgent: session.userAgent,
+      ipAddress: session.ipAddress,
+      lastSeenAt: session.lastSeenAt,
+      createdAt: session.createdAt,
+      revokedAt: session.revokedAt,
+      current: currentSessionId === session.id,
+    }))
+  }
+
+  async revokeSession(userId: string, sessionId: string) {
+    const session = await this.deps.userSessionDao.revoke(sessionId, userId)
+    if (!session) {
+      throw Object.assign(new Error('Session not found'), { status: 404 })
+    }
+    return session
   }
 
   async updateProfile(userId: string, input: { displayName?: string; avatarUrl?: string | null }) {

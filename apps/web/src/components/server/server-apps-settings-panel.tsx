@@ -8,7 +8,6 @@ import {
 import {
   AppWindow,
   Bot,
-  Check,
   ChevronDown,
   ChevronRight,
   CirclePlus,
@@ -356,9 +355,10 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
                 <AppIcon app={app} size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-black">{app.name}</div>
-                  <div className="truncate text-xs text-text-muted">{app.appKey}</div>
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-text-muted">
+                    {app.description || t('serverApps.noDescription')}
+                  </p>
                 </div>
-                <ChevronRight size={15} className="shrink-0 opacity-60" />
               </button>
             )
           })}
@@ -450,40 +450,28 @@ function AddAppView(props: {
       </div>
 
       {props.addMode === 'catalog' ? (
-        <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-2">
           {props.catalog.map((entry) => {
             return (
               <div
                 key={entry.id}
-                className="flex min-h-[260px] flex-col rounded-xl border border-border-subtle bg-bg-primary/30 p-4"
+                className="flex items-center gap-3 rounded-xl border border-border-subtle bg-bg-primary/30 p-3"
               >
-                <div className="flex items-start gap-3">
-                  <AppIcon app={entry} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-black text-text-primary">
-                      {entry.name}
-                    </div>
-                    <div className="truncate text-xs text-text-muted">{entry.appKey}</div>
-                    <div className="mt-2">
-                      <AuthBadge manifest={entry.manifest} />
-                    </div>
-                  </div>
+                <AppIcon app={entry} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-black text-text-primary">{entry.name}</div>
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-text-muted">
+                    {entry.description || t('serverApps.noDescription')}
+                  </p>
                 </div>
-                <p className="mt-3 line-clamp-2 text-xs leading-5 text-text-muted">
-                  {entry.description ?? t('serverApps.noDescription')}
-                </p>
-                <PermissionChips
-                  permissions={(entry.permissions ?? []).map((item) => item.permission)}
-                />
                 <Button
                   variant={entry.installed ? 'glass' : 'primary'}
                   size="sm"
                   disabled={Boolean(entry.installed) || props.installCatalogApp.isPending}
                   loading={props.installCatalogApp.isPending}
                   onClick={() => props.installCatalogApp.mutate(entry)}
-                  className="mt-auto w-full"
+                  className="shrink-0"
                 >
-                  <Check size={14} />
                   {entry.installed
                     ? t('serverApps.alreadyInstalled')
                     : t('serverApps.installFromCatalog')}
@@ -492,14 +480,12 @@ function AddAppView(props: {
             )
           })}
           {props.catalog.length === 0 && (
-            <div className="rounded-xl border border-dashed border-border-subtle p-4 text-sm text-text-muted md:col-span-2">
+            <div className="rounded-xl border border-dashed border-border-subtle p-4 text-sm text-text-muted">
               {t('serverApps.catalogEmpty')}
             </div>
           )}
           {props.installCatalogApp.error instanceof Error && (
-            <p className="text-xs text-danger md:col-span-2">
-              {props.installCatalogApp.error.message}
-            </p>
+            <p className="text-xs text-danger">{props.installCatalogApp.error.message}</p>
           )}
         </div>
       ) : (

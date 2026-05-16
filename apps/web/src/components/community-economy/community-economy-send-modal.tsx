@@ -15,6 +15,7 @@ import { UserAvatar } from '../common/avatar'
 import { ShrimpCoinIcon } from '../shop/ui/currency'
 
 type SendMode = 'tip' | 'gift'
+type EconomyContext = { kind: string; id: string }
 
 export interface CommunityEconomyRecipient {
   id: string
@@ -50,6 +51,7 @@ export function CommunityEconomySendModal({
   recipient,
   recipientUserId,
   initialAssetGrantId,
+  context,
   onClose,
 }: {
   open: boolean
@@ -57,13 +59,13 @@ export function CommunityEconomySendModal({
   recipient?: CommunityEconomyRecipient
   recipientUserId?: string
   initialAssetGrantId?: string
+  context?: EconomyContext
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const { data } = useCommunityAssets()
+  const { data } = useCommunityAssets({ enabled: open && mode === 'gift' })
   const sendTip = useSendTip()
   const sendGift = useSendGift()
-  const [activeMode, setActiveMode] = useState<SendMode>(mode)
   const [selectedRecipient, setSelectedRecipient] = useState<CommunityEconomyRecipient | null>(
     recipient ?? null,
   )
@@ -76,7 +78,7 @@ export function CommunityEconomySendModal({
   const { data: wallet } = useQuery({
     queryKey: ['wallet'],
     queryFn: () => fetchApi<{ id: string; balance: number; frozenAmount: number }>('/api/wallet'),
-    enabled: open,
+    enabled: open && mode === 'tip',
   })
 
   const { data: resolvedRecipient } = useQuery({
@@ -99,7 +101,6 @@ export function CommunityEconomySendModal({
 
   useEffect(() => {
     if (!open) return
-    setActiveMode(mode)
     setSelectedRecipient(recipient ?? resolvedRecipient ?? null)
     setAssetGrantId(initialAssetGrantId ?? '')
     setAssetQuantity('1')
@@ -151,29 +152,40 @@ export function CommunityEconomySendModal({
     !!selectedRecipient &&
     !pending &&
     !completed &&
-    amountWithinBalance &&
-    quantityValid &&
-    (activeMode === 'tip' ? hasCurrency : hasCurrency || Boolean(assetGrantId))
+    (mode === 'tip' ? amountWithinBalance && hasCurrency : Boolean(selectedAsset) && quantityValid)
+  const titleKey =
+    mode === 'tip' && context?.kind === 'message'
+      ? 'communityEconomy.supportMessage'
+      : mode === 'tip'
+        ? 'communityEconomy.sendTip'
+        : 'communityEconomy.sendGift'
+  const introKey =
+    mode === 'tip'
+      ? context?.kind === 'message'
+        ? 'communityEconomy.tipMessageIntro'
+        : 'communityEconomy.tipUserIntro'
+      : 'communityEconomy.giftAssetIntro'
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (!selectedRecipient) return
-    if (activeMode === 'tip') {
+    if (mode === 'tip') {
       sendTip.mutate({
         recipientUserId: selectedRecipient.id,
         amount: amountValue,
         message: message.trim() || undefined,
+        context,
         idempotencyKey: createIdempotencyKey('tip'),
       })
       return
     }
 
+    if (!selectedAsset) return
     sendGift.mutate({
       recipientUserId: selectedRecipient.id,
-      currencies: hasCurrency ? [{ currencyCode: 'shrimp_coin', amount: amountValue }] : undefined,
-      assets: assetGrantId
-        ? [{ assetGrantId, quantity: quantityValue > 0 ? quantityValue : 1 }]
-        : undefined,
+      assets: [
+        { assetGrantId: selectedAsset.grant.id, quantity: quantityValue > 0 ? quantityValue : 1 },
+      ],
       message: message.trim() || undefined,
       idempotencyKey: createIdempotencyKey('gift'),
     })
@@ -201,11 +213,7 @@ export function CommunityEconomySendModal({
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
               {t('communityEconomy.actions')}
             </p>
-            <h2 className="text-lg font-black text-text-primary">
-              {activeMode === 'tip'
-                ? t('communityEconomy.sendTip')
-                : t('communityEconomy.sendGift')}
-            </h2>
+            <h2 className="text-lg font-black text-text-primary">{t(titleKey)}</h2>
           </div>
           <Button variant="ghost" size="icon" type="button" icon={X} onClick={onClose} />
         </div>
@@ -213,24 +221,20 @@ export function CommunityEconomySendModal({
         <form className="min-h-0 overflow-y-auto p-5" onSubmit={submit}>
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-bg-tertiary/40 p-1">
-                {(['tip', 'gift'] as SendMode[]).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setActiveMode(option)}
-                    className={cn(
-                      'rounded-xl px-3 py-2 text-xs font-black transition',
-                      activeMode === option
-                        ? 'bg-primary/15 text-primary shadow-sm'
-                        : 'text-text-muted hover:text-text-primary',
-                    )}
-                  >
-                    {option === 'tip'
-                      ? t('communityEconomy.sendTip')
-                      : t('communityEconomy.sendGift')}
-                  </button>
-                ))}
+              <div className="rounded-2xl border border-border-subtle bg-bg-secondary/50 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    {mode === 'tip' ? <Send size={18} /> : <Gift size={18} />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-text-primary">
+                      {mode === 'tip'
+                        ? t('communityEconomy.tipPurposeTitle')
+                        : t('communityEconomy.giftPurposeTitle')}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-text-muted">{t(introKey)}</p>
+                  </div>
+                </div>
               </div>
 
               <RecipientPicker
@@ -242,18 +246,14 @@ export function CommunityEconomySendModal({
                 onSelect={setSelectedRecipient}
               />
 
-              <AmountPicker
-                label={
-                  activeMode === 'tip'
-                    ? t('communityEconomy.amount')
-                    : t('communityEconomy.currencyGiftAmount')
-                }
-                amount={amount}
-                onChange={setAmount}
-                required={activeMode === 'tip'}
-              />
-
-              {activeMode === 'gift' && (
+              {mode === 'tip' ? (
+                <AmountPicker
+                  label={t('communityEconomy.tipAmount')}
+                  amount={amount}
+                  onChange={setAmount}
+                  required
+                />
+              ) : (
                 <AssetPicker
                   assets={giftableAssets}
                   selectedAsset={selectedAsset}
@@ -268,6 +268,11 @@ export function CommunityEconomySendModal({
                 label={t('communityEconomy.message')}
                 value={message}
                 onChange={setMessage}
+                placeholder={
+                  mode === 'tip'
+                    ? t('communityEconomy.tipMessagePlaceholder')
+                    : t('communityEconomy.giftMessagePlaceholder')
+                }
                 multiline
               />
             </div>
@@ -278,7 +283,7 @@ export function CommunityEconomySendModal({
                   <div className="rounded-2xl border border-success/20 bg-success/10 p-4 text-success">
                     <CheckCircle2 size={28} />
                     <p className="mt-3 text-sm font-black">
-                      {activeMode === 'tip'
+                      {mode === 'tip'
                         ? t('communityEconomy.tipSent')
                         : t('communityEconomy.giftSent')}
                     </p>
@@ -319,60 +324,65 @@ export function CommunityEconomySendModal({
                       {t('communityEconomy.chooseRecipient')}
                     </p>
                   )}
-                  <div className="rounded-xl bg-bg-tertiary/50 p-3">
-                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-text-muted/60">
-                      {activeMode === 'tip'
-                        ? t('communityEconomy.sendTip')
-                        : t('communityEconomy.sendGift')}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2 text-lg font-black text-text-primary">
-                      {hasCurrency ? amountValue.toLocaleString() : 0}
-                      <ShrimpCoinIcon size={16} />
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-bg-tertiary/50 p-3">
-                    <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.14em] text-text-muted/60">
-                      <Wallet size={12} />
-                      {t('wallet.balance')}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2 text-sm font-black text-text-primary">
-                      {(wallet?.balance ?? 0).toLocaleString()}
-                      <ShrimpCoinIcon size={14} />
-                    </div>
-                    {hasCurrency && wallet && (
-                      <p className="mt-1 text-xs text-text-muted">
-                        {t('communityEconomy.estimatedBalanceAfter')}:{' '}
-                        {Math.max(0, wallet.balance - amountValue).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                  {selectedAsset && (
+                  {mode === 'tip' ? (
+                    <>
+                      <div className="rounded-xl bg-bg-tertiary/50 p-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-text-muted/60">
+                          {t('communityEconomy.tipAmount')}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2 text-lg font-black text-text-primary">
+                          {hasCurrency ? amountValue.toLocaleString() : 0}
+                          <ShrimpCoinIcon size={16} />
+                        </div>
+                      </div>
+                      <div className="rounded-xl bg-bg-tertiary/50 p-3">
+                        <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.14em] text-text-muted/60">
+                          <Wallet size={12} />
+                          {t('wallet.balance')}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2 text-sm font-black text-text-primary">
+                          {(wallet?.balance ?? 0).toLocaleString()}
+                          <ShrimpCoinIcon size={14} />
+                        </div>
+                        {hasCurrency && wallet && (
+                          <p className="mt-1 text-xs text-text-muted">
+                            {t('communityEconomy.estimatedBalanceAfter')}:{' '}
+                            {Math.max(0, wallet.balance - amountValue).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
                     <div className="rounded-xl bg-bg-tertiary/50 p-3">
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-text-muted/60">
                         {t('communityEconomy.assetGift')}
                       </p>
-                      <p className="mt-2 truncate text-sm font-black text-text-primary">
-                        {selectedAsset.definition.name} × {assetQuantity || 1}
-                      </p>
+                      {selectedAsset ? (
+                        <p className="mt-2 truncate text-sm font-black text-text-primary">
+                          {selectedAsset.definition.name} × {assetQuantity || 1}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-sm font-bold text-text-muted">
+                          {t('communityEconomy.chooseAsset')}
+                        </p>
+                      )}
                     </div>
                   )}
-                  {!amountWithinBalance && (
+                  {mode === 'tip' && !amountWithinBalance && (
                     <InlineWarning message={t('communityEconomy.insufficientBalance')} />
                   )}
-                  {!quantityValid && (
+                  {mode === 'gift' && !quantityValid && (
                     <InlineWarning message={t('communityEconomy.assetQuantityExceeded')} />
                   )}
                   <Button
                     variant="primary"
                     size="md"
                     type="submit"
-                    icon={activeMode === 'tip' ? Send : Gift}
+                    icon={mode === 'tip' ? Send : Gift}
                     disabled={!canSubmit}
                     className="w-full"
                   >
-                    {activeMode === 'tip'
-                      ? t('communityEconomy.sendTip')
-                      : t('communityEconomy.sendGift')}
+                    {t(titleKey)}
                   </Button>
                 </>
               )}
@@ -561,18 +571,6 @@ function AssetPicker({
         </p>
       ) : (
         <div className="grid max-h-52 gap-2 overflow-y-auto pr-1">
-          <button
-            type="button"
-            onClick={() => onSelect('')}
-            className={cn(
-              'rounded-2xl border p-3 text-left text-sm font-bold transition',
-              !selectedGrantId
-                ? 'border-primary/50 bg-primary/10 text-primary'
-                : 'border-border-subtle bg-bg-secondary/40 text-text-muted hover:border-primary/30',
-            )}
-          >
-            {t('communityEconomy.noAssetGift')}
-          </button>
           {assets.map((asset) => (
             <button
               key={asset.grant.id}
@@ -632,6 +630,7 @@ function CommunityEconomyInput({
   required = false,
   min,
   max,
+  placeholder,
   multiline = false,
 }: {
   label: string
@@ -641,6 +640,7 @@ function CommunityEconomyInput({
   required?: boolean
   min?: number
   max?: number
+  placeholder?: string
   multiline?: boolean
 }) {
   const className =
@@ -653,6 +653,7 @@ function CommunityEconomyInput({
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
           className={cn(className, 'min-h-20 resize-none')}
         />
       ) : (
@@ -663,6 +664,7 @@ function CommunityEconomyInput({
           min={min}
           max={max}
           required={required}
+          placeholder={placeholder}
           className={className}
         />
       )}

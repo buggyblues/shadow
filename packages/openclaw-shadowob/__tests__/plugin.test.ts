@@ -499,7 +499,20 @@ describe('Slash Commands', () => {
         botUserId: 'bot-1',
         botUsername: 'gstack-bot',
         agentId: 'strategy-buddy',
-        channelPolicies: new Map(),
+        channelPolicies: new Map([
+          [
+            'ch-1',
+            {
+              listen: true,
+              reply: true,
+              mentionOnly: false,
+              config: {
+                ownerId: 'user-1',
+                allowedTriggerUserIds: ['user-1', 'tenant-1'],
+              },
+            },
+          ],
+        ]),
         channelServerMap: new Map(),
         slashCommands: [
           {
@@ -518,6 +531,11 @@ describe('Slash Commands', () => {
         expect.objectContaining({
           ctx: expect.objectContaining({
             CommandBody: '/model status',
+            BodyForCommands: '/model status',
+            CommandAuthorized: true,
+            CommandSource: 'text',
+            OwnerAllowFrom: ['user-1'],
+            NativeChannelId: 'ch-1',
             BodyForAgent: expect.not.stringContaining('Slash command /model was invoked.'),
             SlashCommand: '/model',
             SlashCommandArgs: 'status',

@@ -162,6 +162,22 @@ export function createStoredAgentTokenMiddleware(container: AppContainer) {
         .findById(verifiedPayload.userId)
         .catch(() => null)
       if (user) {
+        if (verifiedPayload.typ === 'access' && verifiedPayload.sessionId) {
+          const session = await container
+            .resolve('userSessionDao')
+            .findById(verifiedPayload.sessionId)
+            .catch(() => null)
+          if (!session || session.userId !== verifiedPayload.userId || session.revokedAt) {
+            return c.json(
+              {
+                ok: false,
+                error: 'Unauthorized: Session revoked',
+                code: 'SESSION_REVOKED',
+              },
+              401,
+            )
+          }
+        }
         await next()
         return
       }

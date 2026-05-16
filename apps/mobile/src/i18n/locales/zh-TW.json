@@ -252,7 +252,23 @@
     "lightTheme": "淺色模式",
     "systemTheme": "跟隨系統",
     "qrCard": "名片",
-    "activityGroup": "任務 & BUDDY"
+    "activityGroup": "任務 & BUDDY",
+    "oauthAccountsTitle": "已連接帳號",
+    "oauthNotConnected": "未連接",
+    "oauthDisconnect": "解除連結",
+    "oauthConnect": "連接",
+    "oauthUnlinked": "帳號已解除連結",
+    "oauthUnlinkFailed": "解除連結失敗",
+    "devicesTitle": "裝置管理",
+    "unknownDevice": "未知裝置",
+    "currentDevice": "目前裝置",
+    "revokedDevice": "已踢出",
+    "lastSeenAt": "最近活躍 {{date}}",
+    "revokeDevice": "踢出",
+    "deviceRevoked": "裝置已踢出",
+    "deviceRevokeFailed": "踢出裝置失敗",
+    "sessionRevokedTitle": "已被踢出",
+    "sessionRevokedNotice": "目前裝置已被踢出，請重新登入。"
   },
   "server": {
     "home": "首頁",
@@ -311,10 +327,21 @@
     "noCategory": "無分類",
     "changeBanner": "更換橫幅",
     "addBanner": "添加橫幅",
-    "changeIcon": "點擊更換圖示"
+    "changeIcon": "點擊更換圖示",
+    "add": "新增",
+    "addServer": "伺服器",
+    "addMenuServer": "Server",
+    "addMenuBuddy": "Buddy",
+    "addMenuDm": "DM",
+    "addDm": "私訊",
+    "addBuddy": "Buddy",
+    "addBuddyDm": "Buddy 私訊",
+    "addFriendDm": "好友私訊"
   },
   "sort": {
     "title": "排序方式",
+    "viewOptions": "顯示選項",
+    "order": "排序條件",
     "byPosition": "預設順序",
     "byCreatedAt": "建立時間",
     "byUpdatedAt": "更新時間",
@@ -552,7 +579,8 @@
     "policySmartReply": "智慧回覆",
     "policySmartReplyDesc": "跳過明確針對他人的訊息（例如 @提及其他人而非此 Buddy）",
     "policyOwnerTenantOnly": "固定回覆策略",
-    "policyOwnerTenantOnlyDesc": "預設只回覆擁有者和允許互動的成員，無需 @ Buddy。"
+    "policyOwnerTenantOnlyDesc": "預設只回覆擁有者和允許互動的成員，無需 @ Buddy。",
+    "buddyWorkStatus": "{{name}} {{status}}"
   },
   "features": {
     "pageTitle": "所有你需要的協作功能",
@@ -1041,6 +1069,13 @@
     "connectorCap_cronDelivery": "定時投遞",
     "connectorCap_streamingPreviews": "串流預覽",
     "connectorCap_forms": "表單",
+    "connectorCap_statusChecks": "狀態檢查",
+    "connectorCap_usageCosts": "用量費用",
+    "connectorCap_multiAgentBinding": "多 Agent 綁定",
+    "connectorCap_shadowCliLogin": "Shadow CLI 登入",
+    "connectorCap_notifications": "通知",
+    "connectorCap_officialSkills": "官方技能",
+    "connectorCap_cronTasks": "定時任務",
     "myBuddies": "我的 Buddy",
     "selectBuddy": "選擇 Buddy",
     "selectBuddyDesc": "從左側選擇一個 Buddy 管理設定。",
@@ -1190,5 +1225,8 @@
     "wallet": "蝦幣",
     "claim": "領取",
     "incomplete": "未完成"
+  },
+  "dm": {
+    "emptyBuddies": "暫無可私訊的 Buddy"
   }
 }

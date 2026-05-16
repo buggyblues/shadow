@@ -30,7 +30,7 @@ export function createStatusCommand(): Command {
 
         // Gather all status information
         const user = await client.getMe()
-        const notifications = await client.listNotifications(1).catch(() => [] as unknown[])
+        const unread = await client.getUnreadCount().catch(() => ({ count: 0 }))
 
         const statusInfo = {
           profile: {
@@ -44,7 +44,7 @@ export function createStatusCommand(): Command {
             avatarUrl: user.avatarUrl,
           },
           stats: {
-            unreadNotifications: Array.isArray(notifications) ? notifications.length : 0,
+            unreadNotifications: unread.count,
           },
           connection: {
             status: 'connected',

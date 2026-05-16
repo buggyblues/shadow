@@ -52,7 +52,10 @@ async function refreshAccessToken(): Promise<string | null> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-shadow-device-name': Constants.expoConfig?.name ?? 'Shadow Mobile',
+      },
       body: JSON.stringify({ refreshToken }),
     })
     if (!res.ok) return null
@@ -71,6 +74,7 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
   const headers: Record<string, string> = {
     ...(options?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'x-shadow-device-name': Constants.expoConfig?.name ?? 'Shadow Mobile',
     ...((options?.headers as Record<string, string>) ?? {}),
   }
 

@@ -13,6 +13,7 @@ import {
 import type {
   AgentChainMetadata,
   ShadowAccountConfig,
+  ShadowPolicyConfig,
   ShadowRuntimeLogger,
   ShadowSlashCommand,
 } from '../types.js'
@@ -50,6 +51,29 @@ function buildChannelContextForAgent(info: ChannelServerInfo | undefined, channe
     `Shadow channel: #${info.channelName}`,
     `Shadow channel id: ${channelId}`,
   ].join('\n')
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+}
+
+function isSenderCommandAuthorized(policyConfig: ShadowPolicyConfig | undefined, senderId: string) {
+  const triggerUserIds = normalizeStringList(
+    policyConfig?.allowedTriggerUserIds ?? policyConfig?.triggerUserIds,
+  )
+  if (triggerUserIds.length > 0) return triggerUserIds.includes(senderId)
+
+  const ownerId = typeof policyConfig?.ownerId === 'string' ? policyConfig.ownerId.trim() : ''
+  if (ownerId && ownerId === senderId) return true
+
+  const activeTenantIds = normalizeStringList(policyConfig?.activeTenantIds)
+  return activeTenantIds.includes(senderId)
+}
+
+function resolveOwnerAllowFrom(policyConfig: ShadowPolicyConfig | undefined) {
+  const ownerId = typeof policyConfig?.ownerId === 'string' ? policyConfig.ownerId.trim() : ''
+  return ownerId ? [ownerId] : undefined
 }
 
 async function buildMentionedServerAppSkillsContext(params: {
@@ -221,6 +245,8 @@ export async function processShadowMessage(params: {
     slashCommandMatch && !slashCommandPassThrough
       ? formatSlashCommandPrompt(cleanBody, slashCommandMatch)
       : cleanBody
+  const commandBody = slashCommandPassThrough ? cleanBody : (slashCommandMatch?.args ?? cleanBody)
+  const ownerAllowFrom = resolveOwnerAllowFrom(preflight.policyConfig)
   const structuredMentions = getShadowMessageMentions(message)
   const mentionContext = formatShadowMentionsForAgent(structuredMentions)
   const serverInfo = channelServerMap.get(channelId)
@@ -269,7 +295,10 @@ export async function processShadowMessage(params: {
     Body: body,
     BodyForAgent: bodyForAgent,
     RawBody: rawBody,
-    CommandBody: slashCommandPassThrough ? cleanBody : (slashCommandMatch?.args ?? cleanBody),
+    CommandBody: commandBody,
+    BodyForCommands: commandBody,
+    CommandAuthorized: isSenderCommandAuthorized(preflight.policyConfig, senderId),
+    CommandSource: 'text',
     From: `shadowob:user:${senderId}`,
     To: `shadowob:channel:${channelId}`,
     SessionKey: route.sessionKey,
@@ -286,6 +315,8 @@ export async function processShadowMessage(params: {
     ...mentionContextFields(structuredMentions),
     OriginatingChannel: 'shadowob',
     OriginatingTo: `shadowob:channel:${channelId}`,
+    NativeChannelId: channelId,
+    ...(ownerAllowFrom ? { OwnerAllowFrom: ownerAllowFrom } : {}),
     ...(serverInfo
       ? {
           ServerId: serverInfo.serverId,

@@ -22,6 +22,7 @@ interface UserProfileCardProps {
   ownerAvatarUrl?: string | null
   description?: string
   totalOnlineSeconds?: number
+  currentActivity?: string | null
   className?: string
 }
 
@@ -47,12 +48,23 @@ export function UserProfileCard({
   ownerAvatarUrl,
   description,
   totalOnlineSeconds,
+  currentActivity,
   className = '',
 }: UserProfileCardProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [showQrCard, setShowQrCard] = useState(false)
   const status = user.status ?? 'offline'
+  const currentActivityLabel =
+    currentActivity === 'thinking'
+      ? t('member.activityThinking')
+      : currentActivity === 'working'
+        ? t('member.activityWorking')
+        : currentActivity === 'ready'
+          ? t('member.activityReady')
+          : currentActivity === 'preparing'
+            ? t('member.activityPreparing')
+            : currentActivity
 
   const goToProfile = (userId: string) => {
     navigate({ to: '/profile/$userId', params: { userId } })
@@ -125,6 +137,18 @@ export function UserProfileCard({
               在线 {formatDuration(totalOnlineSeconds)}
             </span>
             <OnlineRank totalSeconds={totalOnlineSeconds} />
+          </div>
+        )}
+
+        {user.isBot && currentActivityLabel && (
+          <div className="flex items-center gap-2 mt-2 rounded-xl bg-primary/10 px-3 py-2">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs font-bold text-primary">
+              {t('member.buddyWorkStatus', {
+                name: user.displayName,
+                status: currentActivityLabel,
+              })}
+            </span>
           </div>
         )}
 

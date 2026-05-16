@@ -215,7 +215,7 @@ export function MarketplaceDetailPage() {
         body: JSON.stringify({ userId: agentUserId }),
       }),
     onSuccess: (data) => {
-      navigate({ to: '/settings/dm', search: { dm: data.id } })
+      navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: data.id } })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })

@@ -23,12 +23,37 @@ interface Notification {
   body: string | null
   referenceId: string | null
   referenceType: string | null
+  scopeServerId?: string | null
+  scopeChannelId?: string | null
   senderId: string | null
   senderAvatarUrl: string | null
   metadata?: Record<string, unknown> | null
   aggregatedCount?: number | null
   isRead: boolean
   createdAt: string
+}
+
+function metaString(n: Notification, key: string) {
+  const value = n.metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function getNotificationChannelId(n: Notification) {
+  return (
+    n.scopeChannelId ??
+    metaString(n, 'channelId') ??
+    (n.referenceType === 'channel' || n.referenceType === 'channel_invite' ? n.referenceId : null)
+  )
+}
+
+function getNotificationServerId(n: Notification) {
+  return (
+    n.scopeServerId ??
+    metaString(n, 'serverId') ??
+    (n.referenceType === 'server_join' || n.referenceType === 'server_invite'
+      ? n.referenceId
+      : null)
+  )
 }
 
 function text(value: unknown, fallback = '') {
@@ -135,6 +160,7 @@ export default function NotificationsScreen() {
   useSocketEvent('notification:new', () => {
     queryClient.invalidateQueries({ queryKey: ['notifications'] })
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
   })
 
   const markRead = useMutation({
@@ -142,6 +168,7 @@ export default function NotificationsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     },
   })
 
@@ -150,6 +177,7 @@ export default function NotificationsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     },
   })
 
@@ -162,6 +190,7 @@ export default function NotificationsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     },
   })
 
@@ -174,6 +203,7 @@ export default function NotificationsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
       queryClient.invalidateQueries({ queryKey: ['servers'] })
     },
   })
@@ -182,9 +212,27 @@ export default function NotificationsScreen() {
     async (n: Notification) => {
       if (!n.isRead) markRead.mutate(n.id)
 
-      if (n.type === 'dm' && n.referenceId) {
-        router.push(`/(main)/dm/${n.referenceId}` as never)
-        return
+      const navigateToChannel = async (targetChannelId: string, messageId?: string | null) => {
+        const channel = await fetchApi<{ id: string; serverId: string | null; kind?: string }>(
+          `/api/channels/${targetChannelId}`,
+        )
+        if (channel.kind === 'dm' || !channel.serverId) {
+          router.push(`/(main)/dm/${channel.id}${messageId ? `?msg=${messageId}` : ''}` as never)
+          return
+        }
+        const server = await fetchApi<{ id: string; slug: string }>(
+          `/api/servers/${channel.serverId}`,
+        )
+        router.push(
+          `/(main)/servers/${server.slug ?? channel.serverId}/channels/${channel.id}${
+            messageId ? `?msg=${messageId}` : ''
+          }` as never,
+        )
+      }
+
+      const navigateToServer = async (serverId: string) => {
+        const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
+        router.push(`/(main)/servers/${server.slug ?? server.id}` as never)
       }
 
       if (n.referenceType === 'message' && n.referenceId) {
@@ -192,46 +240,27 @@ export default function NotificationsScreen() {
           const message = await fetchApi<{ id: string; channelId: string }>(
             `/api/messages/${n.referenceId}`,
           )
-          const channel = await fetchApi<{ id: string; serverId: string | null }>(
-            `/api/channels/${message.channelId}`,
-          )
-          if (!channel.serverId) {
-            router.push(`/(main)/dm/${channel.id}` as never)
-            return
-          }
-          const server = await fetchApi<{ id: string; slug: string }>(
-            `/api/servers/${channel.serverId}`,
-          )
-          router.push(
-            `/(main)/servers/${server.slug ?? channel.serverId}/channels/${message.channelId}` as never,
-          )
+          await navigateToChannel(message.channelId, message.id)
         } catch {}
-      } else if (n.referenceType === 'channel_invite' && n.referenceId) {
+        return
+      }
+
+      const channelId = getNotificationChannelId(n)
+      if (channelId) {
         try {
-          const channel = await fetchApi<{ id: string; serverId: string | null }>(
-            `/api/channels/${n.referenceId}`,
-          )
-          if (!channel.serverId) {
-            router.push(`/(main)/dm/${channel.id}` as never)
-            return
-          }
-          const server = await fetchApi<{ id: string; slug: string }>(
-            `/api/servers/${channel.serverId}`,
-          )
-          router.push(
-            `/(main)/servers/${server.slug ?? channel.serverId}/channels/${channel.id}` as never,
-          )
+          await navigateToChannel(channelId)
         } catch {}
-      } else if (n.referenceType === 'server_join' && n.referenceId) {
+        return
+      }
+
+      const serverId = getNotificationServerId(n)
+      if (serverId) {
         try {
-          const server = await fetchApi<{ id: string; slug: string }>(
-            `/api/servers/${n.referenceId}`,
-          )
-          router.push(`/(main)/servers/${server.slug ?? server.id}` as never)
+          await navigateToServer(serverId)
         } catch {}
       }
     },
-    [router, markRead, t],
+    [router, markRead],
   )
 
   const unreadCount = notifications.filter((n) => !n.isRead).length

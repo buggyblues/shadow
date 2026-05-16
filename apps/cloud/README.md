@@ -126,6 +126,12 @@ Deploy to cloud servers (Ubuntu/Debian) over SSH with a single command — no ex
 ```jsonc
 {
   "name": "prod",
+  "install": {
+    "k3sVersion": "v1.35.4+k3s1",
+    "k3sMirror": "cn",
+    "systemDefaultRegistry": "registry.cn-hangzhou.aliyuncs.com",
+    "pauseImage": "registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.6"
+  },
   "nodes": [
     {
       "role": "master",
@@ -144,6 +150,25 @@ Deploy to cloud servers (Ubuntu/Debian) over SSH with a single command — no ex
 ```
 
 Credentials never stored on disk — use `${env:VAR}` for passwords.
+
+`install` is optional. Use it when a server cannot reliably reach GitHub releases, or when you need
+repeatable cluster builds:
+
+| Field | Meaning |
+| --- | --- |
+| `k3sVersion` | Pins the k3s release. With Rancher's China mirror, `v1.35.4+k3s1` is normalized to the mirror's `v1.35.4-k3s1` path. |
+| `k3sMirror` | Shortcut mirror name. `cn` maps to `https://rancher-mirror.rancher.cn/k3s`. |
+| `k3sArtifactUrl` | Full artifact URL prefix passed to `INSTALL_K3S_ARTIFACT_URL`. |
+| `k3sChannel` / `k3sChannelUrl` | Channel lookup settings for the official installer when not pinning a version. |
+| `systemDefaultRegistry` | Registry prefix passed as `--system-default-registry` for bundled k3s system images. If omitted with `k3sMirror: "cn"`, Shadow uses `registry.cn-hangzhou.aliyuncs.com`. |
+| `pauseImage` | k3s sandbox pause image passed as `--pause-image`. If omitted with `k3sMirror: "cn"`, Shadow uses `registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.6` so Pod sandbox creation does not depend on Docker Hub. |
+
+Environment variables override the same installer settings:
+`INSTALL_K3S_VERSION`, `INSTALL_K3S_ARTIFACT_URL`, `INSTALL_K3S_CHANNEL`, and
+`INSTALL_K3S_CHANNEL_URL`. `INSTALL_K3S_MIRROR=cn` is also accepted for local testing.
+Use `INSTALL_K3S_PAUSE_IMAGE` or `K3S_PAUSE_IMAGE` to override the pause image, and
+`INSTALL_K3S_SYSTEM_DEFAULT_REGISTRY` or `K3S_SYSTEM_DEFAULT_REGISTRY` to override the system image
+registry.
 
 ### 2. Bootstrap k3s
 
@@ -192,6 +217,59 @@ shadowob-cloud cluster destroy --yes               # skip confirmation
 ```
 
 Runs `k3s-uninstall.sh` (master) and `k3s-agent-uninstall.sh` (workers) over SSH, then removes `~/.shadow-cloud/clusters/prod.*`.
+
+## Use `cluster.json` With Web SaaS
+
+The Web SaaS UI in `apps/web` deploys through `apps/server`. By default, those deployments use the
+server process's ambient Kubernetes target (`KUBECONFIG`). You can now point the server at the same
+`cluster.json` used by the CLI:
+
+1. Bootstrap or register the cluster:
+
+```bash
+shadowob-cloud cluster init --config cluster.json
+# or, if another machine already bootstrapped it:
+shadowob-cloud cluster import --name prod --file ./prod.yaml
+```
+
+2. Configure the server environment:
+
+```env
+CLOUD_SAAS_CLUSTER_CONFIG_HOST_PATH=/absolute/host/path/to/cluster.json
+CLOUD_SAAS_CLUSTER_CONFIG=/app/cluster.json
+CLOUD_SAAS_CLUSTER_KUBECONFIG_HOST_PATH=/absolute/host/path/to/prod.yaml
+CLOUD_SAAS_CLUSTER_KUBECONFIG=/home/node/.shadow-cloud/clusters/prod.yaml
+CLOUD_SAAS_WORKLOAD_BACKEND=deployment
+SHADOW_AGENT_SERVER_URL=https://shadow.example.com
+PULUMI_CONFIG_PASSPHRASE=change-me
+```
+
+On startup, `apps/server` reads `CLOUD_SAAS_CLUSTER_CONFIG`, resolves the cluster name to the stored
+kubeconfig, sets `KUBECONFIG` for the embedded Cloud deployment processor, and fails fast if the
+kubeconfig is missing.
+
+This config controls where the server deploys workloads. If a template's agent needs Kubernetes
+access at runtime, still provide `KUBECONFIG_B64` through the Cloud SaaS env var flow.
+
+`CLOUD_SAAS_WORKLOAD_BACKEND=deployment` is the safe default for vanilla k3s clusters created from
+`cluster.json`. Use `agent-sandbox` only on clusters where the `SandboxTemplate`/`SandboxClaim` CRDs
+and controller are already installed.
+
+For Docker Compose, mount both files into the server container:
+
+```yaml
+services:
+  server:
+    environment:
+      CLOUD_SAAS_CLUSTER_CONFIG: /app/cluster.json
+      CLOUD_SAAS_CLUSTER_KUBECONFIG: /home/node/.shadow-cloud/clusters/prod.yaml
+      CLOUD_SAAS_WORKLOAD_BACKEND: deployment
+    volumes:
+      - ./cluster.json:/app/cluster.json:ro
+      - ~/.shadow-cloud/clusters/prod.yaml:/home/node/.shadow-cloud/clusters/prod.yaml:ro
+```
+
+Then start the product stack and deploy from Web at `/app/cloud`.
 
 ## Dashboard
 
@@ -421,9 +499,9 @@ await container.deploy.up({ filePath: 'shadowob-cloud.json' })
 ```bash
 pnpm install
 pnpm --filter @shadowob/cloud build             # build CLI
-pnpm --filter @shadowob/cloud dashboard:build    # build dashboard
-pnpm --filter @shadowob/cloud test               # 194 unit tests
-pnpm --filter @shadowob/cloud test:e2e:cli       # 100 CLI E2E tests
+pnpm --filter @shadowob/cloud console:build      # build dashboard
+pnpm --filter @shadowob/cloud test               # unit tests
+pnpm --filter @shadowob/cloud test:e2e:cli       # CLI E2E tests
 ```
 
 ## License

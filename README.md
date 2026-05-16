@@ -121,12 +121,14 @@ Quality services crafted by AI Builders are mounted on the marketplace, discover
 Prerequisites:
 
 - **Node.js** 22.14+
-- **pnpm** 10+
+- **pnpm** 10.19+
 - **Docker** and Docker Compose v2
+- Optional for Cloud work: `kubectl`, a reachable Kubernetes cluster, and kubeconfig
 
 ```bash
 git clone https://github.com/buggyblues/shadow.git
 cd shadow
+corepack enable
 cp .env.example .env
 docker compose up --build
 ```
@@ -136,6 +138,7 @@ Open:
 | Service | URL |
 |---|---:|
 | Web + website | `http://localhost:3000` |
+| Cloud SaaS | `http://localhost:3000/app/cloud` |
 | Admin | `http://localhost:3001` |
 | API | `http://localhost:3002` |
 | MinIO Console | `http://localhost:9001` |
@@ -152,19 +155,44 @@ For hot reload:
 ```bash
 pnpm install
 pnpm dev
+# or split the work:
+pnpm dev:backend
+pnpm dev:frontend
 ```
 
 Common checks:
 
 ```bash
 pnpm lint
+pnpm check:migrations
+pnpm check:security-pr
 pnpm typecheck
 pnpm test
 pnpm --filter @shadowob/website build
 ```
 
+CI-aligned Docker checks:
+
+```bash
+docker compose -f docker-compose.ci-tests.yml up --build --abort-on-container-exit --exit-code-from ci-tests
+docker compose -f docker-compose.ci-build.yml up --build --abort-on-container-exit --exit-code-from build-check
+```
+
+Cloud SaaS deployments run from the embedded processor in `apps/server`. For local Docker, set
+`KUBECONFIG_HOST_PATH` to a kubeconfig visible on the host, or configure the server from
+`cluster.json` with `CLOUD_SAAS_CLUSTER_CONFIG_HOST_PATH` plus `CLOUD_SAAS_CLUSTER_CONFIG` after running
+`shadowob-cloud cluster init --config cluster.json`. Remote bootstrap supports pinned k3s installer
+settings in `cluster.json`, including `install.k3sVersion` and `install.k3sMirror: "cn"` for servers
+that cannot reach GitHub releases or Docker Hub directly. With `k3sMirror: "cn"`, bootstrap also
+uses domestic defaults for k3s system images and the pause image unless
+`install.systemDefaultRegistry` or `install.pauseImage` is set explicitly. Docker Compose defaults
+`CLOUD_SAAS_WORKLOAD_BACKEND` to
+`deployment`, which works on plain k3s; use `agent-sandbox` only after installing the sandbox CRDs
+and controller.
+
 See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for the full local workflow,
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for system boundaries, and
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for system boundaries,
+[`apps/cloud/README.md`](apps/cloud/README.md) for Cloud CLI and SaaS cluster setup, and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening changes. Product-facing documentation lives in
 [`website/docs`](website/docs).
 
@@ -175,10 +203,10 @@ Shadow is a monorepo because the product pieces are meant to work together.
 | Area | Paths |
 |---|---|
 | 🧑‍💻 Product apps | `apps/server`, `apps/web`, `apps/mobile`, `apps/desktop`, `apps/admin` |
-| ☁️ Cloud | `apps/cloud`, `apps/cloud/packages/ui` |
+| ☁️ Cloud | `apps/cloud`, `apps/cloud/packages/ui`, `apps/flash` |
 | 🔌 SDKs and integrations | `packages/sdk`, `packages/sdk-python`, `packages/cli`, `packages/oauth`, `packages/openclaw-shadowob` |
-| 🧱 Shared systems | `packages/shared`, `packages/ui`, `apps/flash` |
-| 📚 Docs and media | `website/docs`, `docs`, `website/docs/public/readme` |
+| 🧱 Shared systems | `packages/shared`, `packages/ui`, `packages/views` |
+| 📚 Docs and media | `website`, `docs`, `apps/promo`, `website/docs/public/readme` |
 
 ## Contributors
 

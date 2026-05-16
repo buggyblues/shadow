@@ -159,8 +159,7 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
-        <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
+      <div className="flex items-center justify-end px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1.5">
           {isEditing && isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
           <button
@@ -247,7 +246,6 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
                 <div className="flex-1 overflow-auto">
                   <div
                     className="msg-markdown p-6 text-sm leading-relaxed text-text-primary"
-                    // biome-ignore lint: dangerouslySetInnerHTML needed for markdown rendering
                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                   />
                 </div>
@@ -257,7 +255,6 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
             <div className="flex-1 overflow-auto">
               <div
                 className="msg-markdown p-6 text-sm leading-relaxed text-text-primary"
-                // biome-ignore lint: dangerouslySetInnerHTML needed for markdown rendering
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
             </div>
@@ -426,8 +423,7 @@ function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId
 
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
-        <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
+      <div className="flex items-center justify-end px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1.5">
           {isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
           <button
@@ -463,7 +459,6 @@ function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId
           <div className="flex-1 p-4 overflow-auto border-l border-border-subtle">
             <div
               className="msg-markdown text-text-primary text-sm leading-relaxed"
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: markdown preview
               dangerouslySetInnerHTML={{ __html: previewHtml }}
             />
           </div>

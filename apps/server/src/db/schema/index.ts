@@ -156,5 +156,6 @@ export {
 } from './shops'
 export { userRewardLogs, userTaskClaims } from './task-center'
 export { threads } from './threads'
+export { userSessions } from './user-sessions'
 export { userEconomyStatusEnum, userStatusEnum, users } from './users'
 export { workspaceNodeKindEnum, workspaceNodes, workspaces } from './workspaces'

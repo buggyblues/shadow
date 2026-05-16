@@ -74,13 +74,13 @@ const MODAL_TABS: {
     labelFallback: '进阶设置',
   },
   { id: 'apps', icon: AppWindow, labelKey: 'server.settingsApps', labelFallback: 'Apps' },
-  { id: 'shop', icon: ShoppingBag, labelKey: 'server.settingsShop', labelFallback: '店铺' },
   {
     id: 'workspace',
     icon: FolderClosed,
     labelKey: 'server.settingsWorkspace',
     labelFallback: '工作区',
   },
+  { id: 'shop', icon: ShoppingBag, labelKey: 'server.settingsShop', labelFallback: '店铺' },
 ]
 
 export function ServerSettingsModal({
@@ -257,6 +257,7 @@ export function ServerSettingsModal({
   }
 
   const isSettingsTab = activeTab === 'basic' || activeTab === 'advanced'
+  const isWorkspaceTab = activeTab === 'workspace'
 
   return (
     <Modal open={open} onClose={onClose}>
@@ -307,9 +308,9 @@ export function ServerSettingsModal({
           <div
             className={cn(
               'flex-1 min-w-0',
-              isSettingsTab
-                ? 'overflow-y-auto p-6'
-                : 'flex flex-col overflow-hidden bg-bg-primary/5',
+              isSettingsTab && 'overflow-y-auto p-6',
+              isWorkspaceTab && 'flex flex-col overflow-hidden bg-bg-primary/5',
+              !isSettingsTab && !isWorkspaceTab && 'flex flex-col overflow-hidden bg-bg-primary/5',
             )}
           >
             {/* Basic Settings */}
@@ -522,9 +523,8 @@ export function ServerSettingsModal({
 
             {/* Workspace page */}
             {activeTab === 'workspace' && (
-              <div className="flex h-full min-h-0 flex-col">
-                <WorkspacePage serverId={serverSlug} embedded />
-              </div>
+              // Workspace owns its work surface; keep this flush to avoid nested settings cards.
+              <WorkspacePage serverId={serverSlug} embedded />
             )}
           </div>
         </ModalBody>

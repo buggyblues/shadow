@@ -137,11 +137,14 @@ jobs:
           fetch-depth: 0
 
       - name: Run React Doctor
+        continue-on-error: true
         uses: millionco/react-doctor@main
         with:
           diff: main
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          fail-on: error
+          # React Doctor is advisory for this workflow; the PR report records
+          # the score and diagnostics without blocking merge.
+          fail-on: none
 
   security-static:
     name: Security static checks

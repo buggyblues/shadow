@@ -261,7 +261,9 @@ describe('CLI Functional Tests', () => {
 
     it('should show notifications preferences help', async () => {
       const { stdout } = await execa('node', [CLI_PATH, 'notifications', 'preferences', '--help'])
-      expect(stdout).toContain('Notification commands')
+      expect(stdout).toContain('Notification preferences')
+      expect(stdout).toContain('get')
+      expect(stdout).toContain('update')
     })
   })
 

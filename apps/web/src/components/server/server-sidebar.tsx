@@ -11,6 +11,9 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   ServerAvatar,
   Switch,
   Tooltip,
@@ -30,19 +33,27 @@ import {
   Info,
   Lock,
   LogOut,
+  MessageCircle,
+  PawPrint,
   Plus,
   UserPlus,
   Volume2,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { getLastChannelId } from '../../lib/last-channel'
+import { showToast } from '../../lib/toast'
+import { UnifiedContactSidebar } from '../../pages/friends'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
+import { CreateAgentDialog } from '../buddy-management/agent-dialogs'
+import { OpenClawSetupGuide } from '../buddy-management/openclaw-setup-guide'
+import type { Agent, TokenResponse } from '../buddy-management/types'
+import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 
@@ -56,6 +67,31 @@ interface ServerEntry {
     isPublic?: boolean
   }
   member: { role: string }
+}
+
+interface DirectChannelEntry {
+  id: string
+  lastMessageAt: string | null
+  createdAt: string
+  otherUser: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+    status: string
+    isBot: boolean
+  } | null
+}
+
+const directStatusColors: Record<string, string> = {
+  online: 'bg-success',
+  idle: 'bg-warning',
+  dnd: 'bg-danger',
+  offline: 'bg-text-muted',
+}
+
+function normalizePresenceStatus(status?: string | null) {
+  return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline'
 }
 
 // Individual server item component to properly use hooks
@@ -112,12 +148,73 @@ function ServerItem({
         </TooltipPortal>
       </Tooltip>
       {server.isPublic === false && (
-        <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-bg-deep/80 backdrop-blur flex items-center justify-center shadow-sm">
+        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-bg-deep/80 backdrop-blur flex items-center justify-center shadow-sm">
           <Lock size={10} className="text-text-muted" />
         </span>
       )}
       {unreadCount > 0 && !isMuted && (
-        <span className="absolute top-0 right-0 min-w-[12px] h-3 rounded-full border-2 border-[#12121a] bg-primary shadow-[0_0_6px_rgba(0,243,255,0.5)] z-10" />
+        <span className="absolute -bottom-0.5 -right-0.5 min-w-[12px] h-3 rounded-full border-2 border-[#12121a] bg-danger shadow-[0_0_8px_rgba(239,68,68,0.45)] z-10" />
+      )}
+    </div>
+  )
+}
+
+function DirectMessageItem({
+  channel,
+  isActive,
+  unreadCount,
+  onSelect,
+}: {
+  channel: DirectChannelEntry
+  isActive: boolean
+  unreadCount: number
+  onSelect: (id: string) => void
+}) {
+  const peer = channel.otherUser
+  if (!peer) return null
+  const displayName = peer.displayName ?? peer.username
+  const status = normalizePresenceStatus(peer.status)
+
+  return (
+    <div className="relative shrink-0 flex items-center justify-center group/item w-[56px] h-[56px]">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => onSelect(channel.id)}
+            className={cn(
+              'w-[56px] h-[56px] rounded-full transition-all duration-300 flex items-center justify-center overflow-visible bouncy',
+              isActive
+                ? 'ring-[3px] ring-primary ring-offset-2 ring-offset-bg-deep shadow-[0_0_24px_rgba(0,243,255,0.4)]'
+                : 'ring-0 hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] opacity-80 hover:opacity-100',
+            )}
+          >
+            <UserAvatar
+              userId={peer.id}
+              avatarUrl={peer.avatarUrl}
+              displayName={displayName}
+              size="md"
+              className="w-[50px] h-[50px]"
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipPortal>
+          <TooltipContent
+            side="right"
+            className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
+          >
+            {displayName}
+          </TooltipContent>
+        </TooltipPortal>
+      </Tooltip>
+      <span
+        className={cn(
+          'absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-[#12121a] z-10',
+          directStatusColors[status] ?? directStatusColors.offline,
+        )}
+      />
+      {unreadCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[12px] h-3 rounded-full border-2 border-[#12121a] bg-danger shadow-[0_0_8px_rgba(239,68,68,0.45)] z-20" />
       )}
     </div>
   )
@@ -134,14 +231,22 @@ interface ScopedUnread {
   serverUnread: Record<string, number>
 }
 
+type QuickBuddyStep = 'basic' | 'advanced'
+
 export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { channelId } = useParams({ strict: false }) as { channelId?: string }
   const queryClient = useQueryClient()
-  const { activeServerId, setActiveServer } = useChatStore()
+  const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
   const [showCreate, setShowCreate] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
+  const [showAddMenu, setShowAddMenu] = useState(false)
+  const [showDmPicker, setShowDmPicker] = useState(false)
+  const [showCreateBuddy, setShowCreateBuddy] = useState(false)
+  const [createdBuddy, setCreatedBuddy] = useState<Agent | null>(null)
+  const [quickBuddyStep, setQuickBuddyStep] = useState<QuickBuddyStep>('basic')
+  const [quickGeneratedToken, setQuickGeneratedToken] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [isPublic, setIsPublic] = useState(true)
   const [joinCode, setJoinCode] = useState('')
@@ -185,6 +290,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   })
   const showServerSkeleton = servers.length === 0 && (!loadServerNavigation || isServersLoading)
 
+  const { data: directChannels = [] } = useQuery({
+    queryKey: ['direct-channels'],
+    queryFn: () => fetchApi<DirectChannelEntry[]>('/api/channels/dm'),
+    enabled: loadServerNavigation,
+    staleTime: 30_000,
+  })
+
   const { data: scopedUnread } = useQuery({
     queryKey: ['notification-scoped-unread'],
     queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
@@ -199,6 +311,39 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     staleTime: 60_000,
   })
 
+  const sortedServers = useMemo(() => {
+    return servers
+      .map((entry, index) => ({
+        entry,
+        index,
+        unreadCount: scopedUnread?.serverUnread?.[entry.server.id] ?? 0,
+      }))
+      .sort((a, b) => {
+        if (a.unreadCount !== b.unreadCount) return b.unreadCount - a.unreadCount
+        return a.index - b.index
+      })
+      .map((item) => item.entry)
+  }, [scopedUnread?.serverUnread, servers])
+
+  const sortedDirectChannels = useMemo(() => {
+    return [...directChannels]
+      .filter((channel) => {
+        const peer = channel.otherUser
+        if (!peer) return false
+        return !(peer.isBot && normalizePresenceStatus(peer.status) === 'offline')
+      })
+      .sort((a, b) => {
+        const aUnread = scopedUnread?.channelUnread?.[a.id] ?? 0
+        const bUnread = scopedUnread?.channelUnread?.[b.id] ?? 0
+        if (aUnread !== bUnread) return bUnread - aUnread
+        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0
+        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0
+        return bTime - aTime
+      })
+  }, [directChannels, scopedUnread?.channelUnread])
+
+  const isQuickBuddyAdvanced = !createdBuddy && quickBuddyStep === 'advanced'
+
   const updateNotificationPreference = useMutation({
     mutationFn: (payload: Partial<NotificationPreference>) =>
       fetchApi<NotificationPreference>('/api/notifications/preferences', {
@@ -209,6 +354,17 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
       queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    },
+  })
+
+  const quickBuddyTokenMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetchApi<TokenResponse>(`/api/agents/${id}/token`, { method: 'POST' }),
+    onSuccess: (data) => {
+      setQuickGeneratedToken(data.token)
+    },
+    onError: (error: Error) => {
+      showToast(error.message || t('agentMgmt.createFailed'), 'error')
     },
   })
 
@@ -250,6 +406,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         })
         queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+        queryClient.invalidateQueries({ queryKey: ['notifications'] })
       } finally {
         scopeReadInFlightRef.current.delete(key)
       }
@@ -260,10 +417,20 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   useSocketEvent('notification:new', () => {
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
   })
 
   useSocketEvent('server:joined', () => {
     queryClient.invalidateQueries({ queryKey: ['servers'] })
+  })
+
+  useSocketEvent('message:new', () => {
+    queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+  })
+
+  useSocketEvent('message:created', () => {
+    queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
   })
 
   const joinServer = useMutation({
@@ -299,6 +466,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
+  const closeCreateBuddy = useCallback(() => {
+    setShowCreateBuddy(false)
+    setCreatedBuddy(null)
+    setQuickBuddyStep('basic')
+    setQuickGeneratedToken(null)
+  }, [])
+
   const handleSelect = (serverId: string, slug?: string | null) => {
     setActiveServer(serverId)
     setMobileView('channels')
@@ -314,6 +488,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       navigate({ to: '/servers/$serverSlug', params: { serverSlug } })
     }
     requestMarkScopeRead({ serverId })
+    onNavigate?.()
+  }
+
+  const handleSelectDirectChannel = (dmChannelId: string) => {
+    setActiveServer(null)
+    setMobileView('chat')
+    navigate({ to: '/dm/$dmChannelId', params: { dmChannelId } })
+    requestMarkScopeRead({ channelId: dmChannelId })
     onNavigate?.()
   }
 
@@ -361,7 +543,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   className="h-[56px] w-[56px] shrink-0 animate-pulse rounded-3xl bg-white/8 ring-1 ring-white/5"
                 />
               ))
-            : servers.map((s) => (
+            : sortedServers.map((s) => (
                 <ServerItem
                   key={s.server.id}
                   server={s.server}
@@ -373,28 +555,81 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   onContextMenu={handleContextMenu}
                 />
               ))}
+          {sortedDirectChannels.length > 0 && sortedServers.length > 0 && (
+            <div className="w-8 h-0.5 bg-border/10 rounded-full shrink-0" />
+          )}
+          {sortedDirectChannels.map((channel) => (
+            <DirectMessageItem
+              key={channel.id}
+              channel={channel}
+              isActive={!activeServerId && activeChannelId === channel.id}
+              unreadCount={scopedUnread?.channelUnread?.[channel.id] ?? 0}
+              onSelect={handleSelectDirectChannel}
+            />
+          ))}
         </div>
 
         {/* Action buttons — fixed at bottom */}
         <div className="flex flex-col items-center gap-2 pt-2 pb-4 shrink-0">
           <div className="w-8 h-0.5 bg-border/10 rounded-full mb-1" />
-          <Tooltip>
+          <Tooltip open={showAddMenu ? false : undefined}>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="w-[48px] h-[48px] rounded-2xl bg-white/5 hover:bg-white/10 text-text-muted hover:text-primary transition-all bouncy"
-                onClick={() => setShowCreate(!showCreate)}
-              >
-                <Plus size={22} />
-              </Button>
+              <div>
+                <Popover open={showAddMenu} onOpenChange={setShowAddMenu}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-[48px] h-[48px] rounded-2xl bg-white/5 hover:bg-white/10 text-text-muted hover:text-primary transition-all bouncy"
+                    >
+                      <Plus size={22} />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent side="right" align="end" className="w-56 p-2">
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary"
+                      onClick={() => {
+                        setShowAddMenu(false)
+                        setShowCreate(true)
+                      }}
+                    >
+                      <Plus size={15} />
+                      {t('server.addMenuServer')}
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary"
+                      onClick={() => {
+                        setShowAddMenu(false)
+                        setQuickBuddyStep('basic')
+                        setShowCreateBuddy(true)
+                      }}
+                    >
+                      <PawPrint size={15} />
+                      {t('server.addMenuBuddy')}
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary"
+                      onClick={() => {
+                        setShowAddMenu(false)
+                        setShowDmPicker(true)
+                      }}
+                    >
+                      <MessageCircle size={15} />
+                      {t('server.addMenuDm')}
+                    </button>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </TooltipTrigger>
             <TooltipPortal>
               <TooltipContent
                 side="right"
                 className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
               >
-                {t('server.createServer')}
+                {t('server.add')}
               </TooltipContent>
             </TooltipPortal>
           </Tooltip>
@@ -540,6 +775,97 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             </Tooltip>
           )}
         </div>
+
+        <Modal open={showDmPicker} onClose={() => setShowDmPicker(false)}>
+          <ModalContent maxWidth="max-w-sm" className="h-[560px]">
+            <ModalHeader
+              overline={t('server.addDm')}
+              icon={<MessageCircle size={18} strokeWidth={2.5} />}
+              title={t('server.addDm')}
+              closeLabel={t('common.close', '关闭')}
+            />
+            <ModalBody className="min-h-0 flex-1 p-0">
+              <UnifiedContactSidebar
+                activeDirectChannelId={activeChannelId ?? null}
+                filterMode="all"
+                onSelectChannel={(id) => {
+                  setShowDmPicker(false)
+                  handleSelectDirectChannel(id)
+                }}
+                onStartChatWithUser={async (userId) => {
+                  const data = await fetchApi<{ id: string }>('/api/channels/dm', {
+                    method: 'POST',
+                    body: JSON.stringify({ userId }),
+                  })
+                  queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+                  setShowDmPicker(false)
+                  handleSelectDirectChannel(data.id)
+                }}
+              />
+            </ModalBody>
+          </ModalContent>
+        </Modal>
+
+        <Modal open={showCreateBuddy} onClose={closeCreateBuddy}>
+          <ModalContent
+            maxWidth={createdBuddy || isQuickBuddyAdvanced ? 'max-w-2xl' : 'max-w-[420px]'}
+            className={cn(
+              'transition-[max-width,height] duration-300 ease-out',
+              createdBuddy || isQuickBuddyAdvanced ? 'h-[760px]' : 'h-[340px]',
+            )}
+          >
+            <ModalHeader
+              icon={<PawPrint size={18} strokeWidth={2.5} />}
+              title={createdBuddy ? t('agentMgmt.connectorGuideTitle') : t('agentMgmt.createTitle')}
+              subtitle={createdBuddy ? t('agentMgmt.connectorGuideDesc') : undefined}
+              closeLabel={t('common.close', '关闭')}
+              onClose={closeCreateBuddy}
+            />
+            {createdBuddy ? (
+              <ModalBody className="min-h-0 space-y-4 py-5">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-success/20 bg-success/10 px-4 py-3">
+                    <div className="text-sm font-black text-text-primary">
+                      {t('agentMgmt.createSuccess')}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-text-muted">
+                      {createdBuddy.botUser?.displayName ??
+                        createdBuddy.botUser?.username ??
+                        createdBuddy.id}
+                    </div>
+                  </div>
+                  <OpenClawSetupGuide
+                    agent={createdBuddy}
+                    generatedToken={quickGeneratedToken}
+                    onGenerateToken={() => quickBuddyTokenMutation.mutate(createdBuddy.id)}
+                    generatingToken={quickBuddyTokenMutation.isPending}
+                    t={t}
+                    compact
+                  />
+                </div>
+              </ModalBody>
+            ) : (
+              <CreateAgentDialog
+                onClose={closeCreateBuddy}
+                onSuccess={(agent) => {
+                  queryClient.invalidateQueries({ queryKey: ['agents'] })
+                  queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+                  setCreatedBuddy(agent)
+                  setQuickBuddyStep('basic')
+                  setQuickGeneratedToken(null)
+                  showToast(t('agentMgmt.createSuccess'), 'success')
+                }}
+                onError={(message) => showToast(message || t('agentMgmt.createFailed'), 'error')}
+                t={t}
+                embedded
+                quick
+                hideTitle
+                modalSections
+                onQuickStepChange={setQuickBuddyStep}
+              />
+            )}
+          </ModalContent>
+        </Modal>
 
         {/* Simple create dialog */}
         <Modal open={showCreate} onClose={() => setShowCreate(false)}>

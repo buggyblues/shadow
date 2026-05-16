@@ -1,6 +1,16 @@
 import { Badge, Button, FormField, Input } from '@shadowob/ui'
-import { useMutation } from '@tanstack/react-query'
-import { Key, Mail, ShieldCheck, Ticket, User } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Github,
+  Key,
+  Link2,
+  Mail,
+  MonitorSmartphone,
+  ShieldCheck,
+  Ticket,
+  Unlink,
+  User,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
@@ -11,6 +21,7 @@ import { SettingsCard, SettingsPanel } from './_shared'
 
 export function AccountSettings() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const { user, setUser } = useAuthStore()
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -66,6 +77,55 @@ export function AccountSettings() {
     },
     onError: (err) => {
       showToast(getApiErrorMessage(err, t, 'settings.membershipRedeemFailed'), 'error')
+    },
+  })
+
+  const { data: oauthAccounts = [] } = useQuery({
+    queryKey: ['oauth-accounts'],
+    queryFn: () =>
+      fetchApi<
+        Array<{ id: string; provider: string; providerEmail: string | null; createdAt: string }>
+      >('/api/auth/oauth/accounts'),
+  })
+
+  const { data: sessions = [] } = useQuery({
+    queryKey: ['auth-sessions'],
+    queryFn: () =>
+      fetchApi<
+        Array<{
+          id: string
+          deviceName: string | null
+          userAgent: string | null
+          ipAddress: string | null
+          lastSeenAt: string
+          createdAt: string
+          revokedAt: string | null
+          current: boolean
+        }>
+      >('/api/auth/sessions'),
+  })
+
+  const unlinkOAuthMutation = useMutation({
+    mutationFn: (accountId: string) =>
+      fetchApi('/api/auth/oauth/accounts/' + accountId, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['oauth-accounts'] })
+      showToast(t('settings.oauthUnlinked'), 'success')
+    },
+    onError: (err) => {
+      showToast(err instanceof Error ? err.message : t('settings.oauthUnlinkFailed'), 'error')
+    },
+  })
+
+  const revokeSessionMutation = useMutation({
+    mutationFn: (sessionId: string) =>
+      fetchApi('/api/auth/sessions/' + sessionId, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth-sessions'] })
+      showToast(t('settings.deviceRevoked'), 'success')
+    },
+    onError: (err) => {
+      showToast(err instanceof Error ? err.message : t('settings.deviceRevokeFailed'), 'error')
     },
   })
 
@@ -151,6 +211,107 @@ export function AccountSettings() {
           </div>
         </SettingsCard>
       ) : null}
+
+      <SettingsCard>
+        <div className="space-y-4">
+          <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
+            {t('settings.oauthAccountsTitle')}
+          </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {(['google', 'github'] as const).map((provider) => {
+              const account = oauthAccounts.find((item) => item.provider === provider)
+              const ProviderIcon = provider === 'github' ? Github : Link2
+              return (
+                <div
+                  key={provider}
+                  className="flex items-center gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/30 px-3 py-3"
+                >
+                  <ProviderIcon size={16} className="text-text-muted shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-text-primary capitalize">{provider}</p>
+                    <p className="text-xs text-text-muted truncate">
+                      {account?.providerEmail ?? t('settings.oauthNotConnected')}
+                    </p>
+                  </div>
+                  {account ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      icon={Unlink}
+                      loading={unlinkOAuthMutation.isPending}
+                      onClick={() => unlinkOAuthMutation.mutate(account.id)}
+                      aria-label={t('settings.oauthDisconnect')}
+                    />
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={Link2}
+                      onClick={() => {
+                        void fetchApi<{ url: string }>(`/api/auth/oauth/${provider}/link`, {
+                          method: 'POST',
+                          body: JSON.stringify({ redirect: '/app/settings/account' }),
+                        }).then(({ url }) => {
+                          window.location.href = url
+                        })
+                      }}
+                    >
+                      {t('settings.oauthConnect')}
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </SettingsCard>
+
+      <SettingsCard>
+        <div className="space-y-4">
+          <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
+            {t('settings.devicesTitle')}
+          </span>
+          <div className="space-y-2">
+            {sessions.map((session) => (
+              <div
+                key={session.id}
+                className="flex items-center gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/30 px-3 py-3"
+              >
+                <MonitorSmartphone size={16} className="text-text-muted shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-text-primary truncate">
+                      {session.deviceName || session.userAgent || t('settings.unknownDevice')}
+                    </p>
+                    {session.current ? (
+                      <Badge variant="success">{t('settings.currentDevice')}</Badge>
+                    ) : null}
+                    {session.revokedAt ? (
+                      <Badge variant="neutral">{t('settings.revokedDevice')}</Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-text-muted truncate">
+                    {t('settings.lastSeenAt', {
+                      date: new Date(session.lastSeenAt).toLocaleString(),
+                    })}
+                    {session.ipAddress ? ` · ${session.ipAddress}` : ''}
+                  </p>
+                </div>
+                {!session.current && !session.revokedAt ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => revokeSessionMutation.mutate(session.id)}
+                    loading={revokeSessionMutation.isPending}
+                  >
+                    {t('settings.revokeDevice')}
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      </SettingsCard>
 
       {/* Change Password */}
       <SettingsCard>

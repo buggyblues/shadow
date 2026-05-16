@@ -252,7 +252,23 @@
     "lightTheme": "라이트 모드",
     "systemTheme": "시스템 설정",
     "qrCard": "명함",
-    "activityGroup": "작업 & BUDDY"
+    "activityGroup": "작업 & BUDDY",
+    "oauthAccountsTitle": "연결된 계정",
+    "oauthNotConnected": "연결되지 않음",
+    "oauthDisconnect": "연결 해제",
+    "oauthConnect": "연결",
+    "oauthUnlinked": "계정 연결이 해제됨",
+    "oauthUnlinkFailed": "계정 연결 해제 실패",
+    "devicesTitle": "기기 관리",
+    "unknownDevice": "알 수 없는 기기",
+    "currentDevice": "현재 기기",
+    "revokedDevice": "해제됨",
+    "lastSeenAt": "마지막 활동 {{date}}",
+    "revokeDevice": "로그아웃",
+    "deviceRevoked": "기기에서 로그아웃됨",
+    "deviceRevokeFailed": "기기 로그아웃 실패",
+    "sessionRevokedTitle": "로그아웃됨",
+    "sessionRevokedNotice": "이 기기에서 로그아웃되었습니다. 다시 로그인하세요."
   },
   "server": {
     "home": "홈",
@@ -311,10 +327,21 @@
     "noCategory": "미분류",
     "changeBanner": "배너 변경",
     "addBanner": "배너 추가",
-    "changeIcon": "아이콘 변경"
+    "changeIcon": "아이콘 변경",
+    "add": "추가",
+    "addServer": "서버",
+    "addMenuServer": "Server",
+    "addMenuBuddy": "Buddy",
+    "addMenuDm": "DM",
+    "addDm": "DM",
+    "addBuddy": "Buddy",
+    "addBuddyDm": "Buddy DM",
+    "addFriendDm": "친구 DM"
   },
   "sort": {
     "title": "정렬",
+    "viewOptions": "보기 옵션",
+    "order": "정렬 기준",
     "byPosition": "기본 순서",
     "byCreatedAt": "생성 시간",
     "byUpdatedAt": "업데이트 시간",
@@ -555,7 +582,8 @@
     "policySmartReply": "스마트 답장",
     "policySmartReplyDesc": "다른 사용자를 명확히 대상으로 하는 메시지 건너뛰기 (예: 다른 사람 @멘션)",
     "policyOwnerTenantOnly": "고정 답장 정책",
-    "policyOwnerTenantOnlyDesc": "기본적으로 소유자와 허용된 멤버에게만 답장합니다. @멘션은 필요 없습니다."
+    "policyOwnerTenantOnlyDesc": "기본적으로 소유자와 허용된 멤버에게만 답장합니다. @멘션은 필요 없습니다.",
+    "buddyWorkStatus": "{{name}} {{status}}"
   },
   "features": {
     "pageTitle": "필요한 모든 협업 기능",
@@ -1044,6 +1072,13 @@
     "connectorCap_cronDelivery": "Cron 전달",
     "connectorCap_streamingPreviews": "스트리밍 미리보기",
     "connectorCap_forms": "폼",
+    "connectorCap_statusChecks": "상태 확인",
+    "connectorCap_usageCosts": "사용 비용",
+    "connectorCap_multiAgentBinding": "다중 에이전트 연결",
+    "connectorCap_shadowCliLogin": "Shadow CLI 로그인",
+    "connectorCap_notifications": "알림",
+    "connectorCap_officialSkills": "공식 스킬",
+    "connectorCap_cronTasks": "Cron 작업",
     "myBuddies": "내 Buddy",
     "selectBuddy": "Buddy 선택",
     "selectBuddyDesc": "왼쪽에서 Buddy를 선택해 설정을 관리하세요.",
@@ -1193,5 +1228,8 @@
     "wallet": "코인",
     "claim": "받기",
     "incomplete": "미완료"
+  },
+  "dm": {
+    "emptyBuddies": "DM 가능한 Buddy가 없습니다"
   }
 }

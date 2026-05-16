@@ -1,7 +1,8 @@
-import { KeyRound } from 'lucide-react-native'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Github, KeyRound, Link2, MonitorSmartphone, Unlink } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Linking, ScrollView, StyleSheet, View } from 'react-native'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
 import {
   AppText,
@@ -18,6 +19,7 @@ import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 export default function AccountSettingsScreen() {
   const { t } = useTranslation()
   const colors = useColors()
+  const queryClient = useQueryClient()
   const { user, setUser } = useAuthStore()
 
   // Change password state
@@ -34,6 +36,43 @@ export default function AccountSettingsScreen() {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordSuccess, setPasswordSuccess] = useState(false)
+
+  const { data: oauthAccounts = [] } = useQuery({
+    queryKey: ['oauth-accounts'],
+    queryFn: () =>
+      fetchApi<
+        Array<{ id: string; provider: string; providerEmail: string | null; createdAt: string }>
+      >('/api/auth/oauth/accounts'),
+  })
+
+  const { data: sessions = [] } = useQuery({
+    queryKey: ['auth-sessions'],
+    queryFn: () =>
+      fetchApi<
+        Array<{
+          id: string
+          deviceName: string | null
+          userAgent: string | null
+          ipAddress: string | null
+          lastSeenAt: string
+          createdAt: string
+          revokedAt: string | null
+          current: boolean
+        }>
+      >('/api/auth/sessions'),
+  })
+
+  const unlinkOAuth = useMutation({
+    mutationFn: (accountId: string) =>
+      fetchApi('/api/auth/oauth/accounts/' + accountId, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['oauth-accounts'] }),
+  })
+
+  const revokeSession = useMutation({
+    mutationFn: (sessionId: string) =>
+      fetchApi('/api/auth/sessions/' + sessionId, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auth-sessions'] }),
+  })
 
   const handleChangePassword = async () => {
     setPasswordError(null)
@@ -206,6 +245,71 @@ export default function AccountSettingsScreen() {
             </Button>
           </GlassPanel>
         ) : null}
+
+        <AppText variant="label" tone="secondary" style={styles.groupTitle}>
+          {t('settings.oauthAccountsTitle').toUpperCase()}
+        </AppText>
+        <GlassPanel style={styles.card}>
+          {(['google', 'github'] as const).map((provider) => {
+            const account = oauthAccounts.find((item) => item.provider === provider)
+            const ProviderIcon = provider === 'github' ? Github : Link2
+            return (
+              <MenuItem
+                key={provider}
+                icon={ProviderIcon}
+                title={provider === 'github' ? 'GitHub' : 'Google'}
+                subtitle={account?.providerEmail ?? t('settings.oauthNotConnected')}
+                tone={account ? 'success' : 'primary'}
+                onPress={() => {
+                  if (account) {
+                    unlinkOAuth.mutate(account.id)
+                    return
+                  }
+                  fetchApi<{ url: string }>(`/api/auth/oauth/${provider}/link`, {
+                    method: 'POST',
+                    body: JSON.stringify({ redirect: 'shadow://oauth-callback' }),
+                  }).then(({ url }) => Linking.openURL(url))
+                }}
+                right={
+                  account ? (
+                    <Unlink size={16} color={colors.textMuted} />
+                  ) : (
+                    <Link2 size={16} color={colors.primary} />
+                  )
+                }
+              />
+            )
+          })}
+        </GlassPanel>
+
+        <AppText variant="label" tone="secondary" style={styles.groupTitle}>
+          {t('settings.devicesTitle').toUpperCase()}
+        </AppText>
+        <GlassPanel style={styles.card}>
+          {sessions.map((session) => (
+            <MenuItem
+              key={session.id}
+              icon={MonitorSmartphone}
+              title={session.deviceName || session.userAgent || t('settings.unknownDevice')}
+              subtitle={t('settings.lastSeenAt', {
+                date: new Date(session.lastSeenAt).toLocaleString(),
+              })}
+              tone={session.current ? 'success' : session.revokedAt ? 'muted' : 'primary'}
+              onPress={() => {
+                if (!session.current && !session.revokedAt) revokeSession.mutate(session.id)
+              }}
+              right={
+                <AppText variant="label" tone={session.current ? 'success' : 'secondary'}>
+                  {session.current
+                    ? t('settings.currentDevice')
+                    : session.revokedAt
+                      ? t('settings.revokedDevice')
+                      : t('settings.revokeDevice')}
+                </AppText>
+              }
+            />
+          ))}
+        </GlassPanel>
 
         {/* Change Password Section */}
         <AppText variant="label" tone="secondary" style={styles.groupTitle}>

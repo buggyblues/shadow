@@ -7,10 +7,13 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  Switch,
 } from '@shadowob/ui'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { ArrowLeft, ChevronRight } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchApi } from '../../lib/api'
+import { toPinyinSlug } from '../../lib/pinyin'
 import { AvatarEditor } from '../common/avatar-editor'
 import { type Agent, type BuddyMode, getAgentAllowedServerIds, getAgentBuddyMode } from './types'
 
@@ -23,13 +26,73 @@ type ServerEntry = {
 }
 
 function deriveBuddyUsername(name: string) {
-  const username = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 32)
-  return username || 'buddy'
+  return toPinyinSlug(name, 'buddy')
+}
+
+type BuddyModeControlStyle = 'cards' | 'switch'
+type QuickCreateStep = 'basic' | 'advanced'
+
+function BuddyModeControl({
+  buddyMode,
+  onModeChange,
+  t,
+  style = 'cards',
+}: {
+  buddyMode: BuddyMode
+  onModeChange: (mode: BuddyMode) => void
+  t: (key: string) => string
+  style?: BuddyModeControlStyle
+}) {
+  if (style === 'switch') {
+    const shareable = buddyMode === 'shareable'
+    return (
+      <div className="rounded-[14px] border border-border-subtle bg-bg-tertiary/40 px-4 py-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-sm font-black text-text-primary">
+              {shareable ? t('agentMgmt.modeShareable') : t('agentMgmt.modePrivate')}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-text-muted">
+              {shareable ? t('agentMgmt.modeShareableDesc') : t('agentMgmt.modePrivateDesc')}
+            </div>
+          </div>
+          <Switch
+            checked={shareable}
+            onCheckedChange={(checked) => onModeChange(checked ? 'shareable' : 'private')}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <button
+        type="button"
+        onClick={() => onModeChange('private')}
+        className={`text-left rounded-[14px] border-2 px-4 py-3 transition ${
+          buddyMode === 'private'
+            ? 'border-primary bg-primary/10'
+            : 'border-border-subtle bg-bg-tertiary/50'
+        }`}
+      >
+        <div className="text-sm font-black text-text-primary">{t('agentMgmt.modePrivate')}</div>
+        <div className="text-xs leading-5 text-text-muted">{t('agentMgmt.modePrivateDesc')}</div>
+      </button>
+      <button
+        type="button"
+        onClick={() => onModeChange('shareable')}
+        className={`text-left rounded-[14px] border-2 px-4 py-3 transition ${
+          buddyMode === 'shareable'
+            ? 'border-primary bg-primary/10'
+            : 'border-border-subtle bg-bg-tertiary/50'
+        }`}
+      >
+        <div className="text-sm font-black text-text-primary">{t('agentMgmt.modeShareable')}</div>
+        <div className="text-xs leading-5 text-text-muted">{t('agentMgmt.modeShareableDesc')}</div>
+      </button>
+    </div>
+  )
 }
 
 function BuddyAccessControls({
@@ -39,6 +102,10 @@ function BuddyAccessControls({
   onModeChange,
   onAllowedServerIdsChange,
   t,
+  modeControlStyle = 'cards',
+  showModeControl = true,
+  showServerAllowlist = true,
+  showPolicyNote = true,
 }: {
   buddyMode: BuddyMode
   allowedServerIds: string[]
@@ -46,6 +113,10 @@ function BuddyAccessControls({
   onModeChange: (mode: BuddyMode) => void
   onAllowedServerIdsChange: (ids: string[]) => void
   t: (key: string) => string
+  modeControlStyle?: BuddyModeControlStyle
+  showModeControl?: boolean
+  showServerAllowlist?: boolean
+  showPolicyNote?: boolean
 }) {
   const toggleServer = (serverId: string) => {
     onAllowedServerIdsChange(
@@ -60,43 +131,25 @@ function BuddyAccessControls({
       <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
         {t('agentMgmt.accessSection')}
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => onModeChange('private')}
-          className={`text-left rounded-[14px] border-2 px-4 py-3 transition ${
-            buddyMode === 'private'
-              ? 'border-primary bg-primary/10'
-              : 'border-border-subtle bg-bg-tertiary/50'
-          }`}
-        >
-          <div className="text-sm font-black text-text-primary">{t('agentMgmt.modePrivate')}</div>
-          <div className="text-xs leading-5 text-text-muted">{t('agentMgmt.modePrivateDesc')}</div>
-        </button>
-        <button
-          type="button"
-          onClick={() => onModeChange('shareable')}
-          className={`text-left rounded-[14px] border-2 px-4 py-3 transition ${
-            buddyMode === 'shareable'
-              ? 'border-primary bg-primary/10'
-              : 'border-border-subtle bg-bg-tertiary/50'
-          }`}
-        >
-          <div className="text-sm font-black text-text-primary">{t('agentMgmt.modeShareable')}</div>
-          <div className="text-xs leading-5 text-text-muted">
-            {t('agentMgmt.modeShareableDesc')}
+      {showModeControl && (
+        <BuddyModeControl
+          buddyMode={buddyMode}
+          onModeChange={onModeChange}
+          style={modeControlStyle}
+          t={t}
+        />
+      )}
+      {showPolicyNote && (
+        <div className="rounded-[14px] border border-border-subtle bg-bg-tertiary/40 px-4 py-3">
+          <div className="text-xs font-black text-text-primary">
+            {t('agentMgmt.defaultReplyPolicy')}
           </div>
-        </button>
-      </div>
-      <div className="rounded-[14px] border border-border-subtle bg-bg-tertiary/40 px-4 py-3">
-        <div className="text-xs font-black text-text-primary">
-          {t('agentMgmt.defaultReplyPolicy')}
+          <div className="mt-1 text-xs leading-5 text-text-muted">
+            {t('agentMgmt.defaultReplyPolicyDesc')}
+          </div>
         </div>
-        <div className="mt-1 text-xs leading-5 text-text-muted">
-          {t('agentMgmt.defaultReplyPolicyDesc')}
-        </div>
-      </div>
-      {buddyMode === 'private' && (
+      )}
+      {showServerAllowlist && buddyMode === 'private' && (
         <div className="space-y-2">
           <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
             {t('agentMgmt.allowedServersLabel')}
@@ -137,6 +190,10 @@ export function CreateAgentDialog({
   t,
   initialData,
   embedded = false,
+  quick = false,
+  hideTitle = false,
+  modalSections = false,
+  onQuickStepChange,
 }: {
   onClose: () => void
   onSuccess: (agent: Agent) => void
@@ -144,6 +201,10 @@ export function CreateAgentDialog({
   t: (key: string) => string
   initialData?: { name?: string; username?: string; description?: string }
   embedded?: boolean
+  quick?: boolean
+  hideTitle?: boolean
+  modalSections?: boolean
+  onQuickStepChange?: (step: QuickCreateStep) => void
 }) {
   const [name, setName] = useState(initialData?.name ?? '')
   const [username, setUsername] = useState(initialData?.username ?? '')
@@ -152,6 +213,9 @@ export function CreateAgentDialog({
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
   const [buddyMode, setBuddyMode] = useState<BuddyMode>('private')
   const [allowedServerIds, setAllowedServerIds] = useState<string[]>([])
+  const [quickStep, setQuickStep] = useState<QuickCreateStep>('basic')
+  const isQuickAdvanced = quick && quickStep === 'advanced'
+  const nameInputRef = useRef<HTMLInputElement>(null)
   const { data: servers = [] } = useQuery({
     queryKey: ['servers', 'buddy-access'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
@@ -192,6 +256,17 @@ export function CreateAgentDialog({
     },
   })
 
+  useEffect(() => {
+    if (!quick || isQuickAdvanced) return
+    const timeoutId = window.setTimeout(() => nameInputRef.current?.focus(), 80)
+    return () => window.clearTimeout(timeoutId)
+  }, [isQuickAdvanced, quick])
+
+  useEffect(() => {
+    if (!quick) return
+    onQuickStepChange?.(quickStep)
+  }, [onQuickStepChange, quick, quickStep])
+
   const handleNameChange = (value: string) => {
     setName(value)
     if (!usernameTouched) {
@@ -220,122 +295,192 @@ export function CreateAgentDialog({
       allowedServerIds: buddyMode === 'private' ? allowedServerIds : [],
     })
   }
+  const footerClassName = quick ? '' : embedded ? 'mt-2 pt-2 border-t border-border-subtle' : ''
+  const nameField = (
+    <div className="space-y-2">
+      <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+        {t('agentMgmt.nameLabel')}
+      </label>
+      <Input
+        ref={nameInputRef}
+        value={name}
+        onChange={(e) => handleNameChange(e.target.value)}
+        placeholder={t('agentMgmt.namePlaceholder')}
+        maxLength={64}
+        autoFocus={quick && !isQuickAdvanced}
+      />
+    </div>
+  )
+  const usernameField = (
+    <div className="space-y-2">
+      <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+        {t(quick ? 'agentMgmt.buddyIdLabel' : 'agentMgmt.usernameLabel')}
+      </label>
+      <Input
+        value={username}
+        onChange={(e) => handleUsernameChange(e.target.value)}
+        placeholder={t(quick ? 'agentMgmt.buddyIdPlaceholder' : 'agentMgmt.usernamePlaceholder')}
+        maxLength={32}
+      />
+      <p className="px-1 text-xs leading-5 text-text-muted">
+        {t(quick ? 'agentMgmt.buddyIdHint' : 'agentMgmt.usernameHint')}
+      </p>
+    </div>
+  )
+  const profileFields = (
+    <>
+      <div className={embedded ? 'space-y-2' : 'space-y-3'}>
+        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+          {t('agentMgmt.profileSection')}
+        </div>
+        <div className="space-y-2">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+            {t('agentMgmt.descLabel')}
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={t('agentMgmt.descPlaceholder')}
+            className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[20px] px-5 py-4 text-sm font-bold leading-6 outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
+            rows={quick ? 3 : 4}
+            maxLength={500}
+          />
+          <p className="px-1 text-xs leading-5 text-text-muted">{t('agentMgmt.descriptionHint')}</p>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
+          {t('agentMgmt.avatarLabel')}
+        </label>
+        <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+      </div>
+    </>
+  )
+  const renderAccessControls = (
+    showModeControl = true,
+    showServerAllowlist = true,
+    showPolicyNote = true,
+  ) => (
+    <BuddyAccessControls
+      buddyMode={buddyMode}
+      allowedServerIds={allowedServerIds}
+      servers={servers}
+      onModeChange={setBuddyMode}
+      onAllowedServerIdsChange={setAllowedServerIds}
+      t={t}
+      modeControlStyle="switch"
+      showModeControl={showModeControl}
+      showServerAllowlist={showServerAllowlist}
+      showPolicyNote={showPolicyNote}
+    />
+  )
+  const footerButtons = (
+    <ModalButtonGroup>
+      <Button variant="ghost" size="sm" onClick={onClose}>
+        {t('common.cancel')}
+      </Button>
+      <Button
+        variant="primary"
+        size="sm"
+        onClick={handleSubmit}
+        disabled={!name.trim() || !username.trim() || createMutation.isPending}
+      >
+        {createMutation.isPending ? t('agentMgmt.creating') : t('common.create')}
+      </Button>
+    </ModalButtonGroup>
+  )
 
   const content = (
     <>
       {!embedded ? (
         <ModalHeader title={t('agentMgmt.createTitle')} closeLabel={t('common.close')} />
-      ) : (
+      ) : hideTitle ? null : (
         <h2 className="text-base leading-6 font-bold text-text-primary">
           {t('agentMgmt.createTitle')}
         </h2>
       )}
 
-      <div className={embedded ? 'space-y-2' : 'space-y-5 py-5'}>
-        <p
-          className={
-            embedded
-              ? 'text-[11px] leading-4 text-text-muted'
-              : 'text-sm leading-6 text-text-secondary'
-          }
-        >
-          {t('agentMgmt.createIntro')}
-        </p>
-
-        <div className={embedded ? 'space-y-2' : 'space-y-3'}>
-          <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-            {t('agentMgmt.identitySection')}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-                {t('agentMgmt.nameLabel')}
-              </label>
-              <Input
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder={t('agentMgmt.namePlaceholder')}
-                maxLength={64}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-                {t('agentMgmt.usernameLabel')}
-              </label>
-              <Input
-                value={username}
-                onChange={(e) => handleUsernameChange(e.target.value)}
-                placeholder={t('agentMgmt.usernamePlaceholder')}
-                maxLength={32}
-              />
-              <p className="px-1 text-xs leading-5 text-text-muted">
-                {t('agentMgmt.usernameHint')}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className={embedded ? 'space-y-2' : 'space-y-3'}>
-          <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-            {t('agentMgmt.profileSection')}
-          </div>
-          <div className="space-y-2">
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-              {t('agentMgmt.descLabel')}
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t('agentMgmt.descPlaceholder')}
-              className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[20px] px-5 py-4 text-sm font-bold leading-6 outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
-              rows={4}
-              maxLength={500}
-            />
-            <p className="px-1 text-xs leading-5 text-text-muted">
-              {t('agentMgmt.descriptionHint')}
-            </p>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
-            {t('agentMgmt.avatarLabel')}
-          </label>
-          <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
-        </div>
-
-        <BuddyAccessControls
-          buddyMode={buddyMode}
-          allowedServerIds={allowedServerIds}
-          servers={servers}
-          onModeChange={setBuddyMode}
-          onAllowedServerIdsChange={setAllowedServerIds}
-          t={t}
-        />
-      </div>
-
-      <div className={embedded ? 'mt-2 pt-2 border-t border-border-subtle' : ''}>
-        <div className={embedded ? 'pt-2 flex justify-end' : 'flex justify-end'}>
-          <ModalButtonGroup>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSubmit}
-              disabled={!name.trim() || !username.trim() || createMutation.isPending}
+      <div className={quick ? 'space-y-3' : embedded ? 'space-y-3' : 'space-y-5 py-5'}>
+        {isQuickAdvanced ? (
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
+            <button
+              type="button"
+              onClick={() => setQuickStep('basic')}
+              className="inline-flex items-center gap-2 rounded-xl px-2 py-1 text-xs font-black text-text-muted transition hover:bg-bg-tertiary/60 hover:text-text-primary"
             >
-              {createMutation.isPending ? t('agentMgmt.creating') : t('common.create')}
-            </Button>
-          </ModalButtonGroup>
-        </div>
+              <ArrowLeft size={15} />
+              {t('common.back')}
+            </button>
+            <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+              {t('agentMgmt.advancedOptions')}
+            </div>
+            <div className="space-y-5">
+              {usernameField}
+              {profileFields}
+              {renderAccessControls(true, false, false)}
+            </div>
+          </div>
+        ) : (
+          <>
+            {!quick && (
+              <p
+                className={
+                  embedded
+                    ? 'text-[11px] leading-4 text-text-muted'
+                    : 'text-sm leading-6 text-text-secondary'
+                }
+              >
+                {t('agentMgmt.createIntro')}
+              </p>
+            )}
+
+            <div className={embedded ? 'space-y-2' : 'space-y-3'}>
+              {!quick && (
+                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+                  {t('agentMgmt.identitySection')}
+                </div>
+              )}
+              <div className={quick ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-2'}>
+                {nameField}
+                {!quick && usernameField}
+              </div>
+            </div>
+
+            {!quick && profileFields}
+            {!quick && renderAccessControls(true, false, false)}
+
+            {quick && (
+              <button
+                type="button"
+                onClick={() => setQuickStep('advanced')}
+                className="flex w-full items-center justify-between rounded-2xl border border-border-subtle bg-bg-tertiary/40 px-4 py-3 text-left text-sm font-black text-text-secondary transition hover:bg-bg-tertiary/70 hover:text-text-primary"
+              >
+                <span>{t('agentMgmt.advancedOptions')}</span>
+                <ChevronRight size={16} />
+              </button>
+            )}
+          </>
+        )}
       </div>
+
+      {!modalSections && embedded && (
+        <div className={footerClassName}>
+          <div className="flex justify-end">{footerButtons}</div>
+        </div>
+      )}
     </>
   )
 
   if (embedded) {
+    if (modalSections) {
+      return (
+        <>
+          <ModalBody className="min-h-0 space-y-4 py-5">{content}</ModalBody>
+          <ModalFooter className="justify-end">{footerButtons}</ModalFooter>
+        </>
+      )
+    }
     return <div className="animate-in fade-in slide-in-from-right-4 duration-300">{content}</div>
   }
 
@@ -343,6 +488,7 @@ export function CreateAgentDialog({
     <Modal open onClose={onClose}>
       <ModalContent maxWidth="max-w-[560px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
         <ModalBody className="space-y-5 py-5">{content}</ModalBody>
+        <ModalFooter className="justify-end">{footerButtons}</ModalFooter>
       </ModalContent>
     </Modal>
   )

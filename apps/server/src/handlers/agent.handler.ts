@@ -3,6 +3,8 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { triggerCloudDeploymentAutoResumeForBuddyUsers } from '../lib/cloud-deployment-autoresume'
+import { logger } from '../lib/logger'
+import { getRedisClient, presenceKeys } from '../lib/redis'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { createAgentSchema, updateAgentSchema } from '../validators/agent.schema'
 
@@ -61,6 +63,20 @@ function toTenantAgentView<T extends { config?: unknown }>(agent: T): T {
       buddyMode: config.buddyMode,
       allowedServerIds: config.allowedServerIds,
     },
+  }
+}
+
+async function resolveCurrentActivity(userId: string): Promise<string | null> {
+  try {
+    const redis = await getRedisClient()
+    if (!redis) return null
+    const raw = await redis.get(presenceKeys.userActivity(userId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { activity?: unknown }
+    return typeof parsed.activity === 'string' ? parsed.activity : null
+  } catch (err) {
+    logger.warn({ err, userId }, 'Failed to resolve agent current activity')
+    return null
   }
 }
 
@@ -164,6 +180,7 @@ export function createAgentHandler(container: AppContainer) {
           const accessRole = accessRoles.get(agent!.id) ?? 'owner'
           const base = {
             ...signedAgent,
+            currentActivity: await resolveCurrentActivity(agent!.userId),
             accessRole,
             activeContractId: activeContractIds.get(agent!.id) ?? null,
             isListed: listedAgentIds.has(agent!.id),

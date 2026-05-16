@@ -230,6 +230,25 @@ const desktopAPI = {
     updateRegistries: (registries: unknown) =>
       ipcRenderer.invoke('openclaw:skillhub:registries:update', registries),
 
+    // Connector Center
+    getConnectorOverview: () => ipcRenderer.invoke('openclaw:connector:overview'),
+    getConnectorToolStatuses: () => ipcRenderer.invoke('openclaw:connector:tools:status'),
+    installConnectorTools: (tools: unknown) =>
+      ipcRenderer.invoke('openclaw:connector:tools:install', tools),
+    loginShadowCli: (input: unknown) =>
+      ipcRenderer.invoke('openclaw:connector:shadow:login', input),
+    getShadowCliStatus: (profile?: string) =>
+      ipcRenderer.invoke('openclaw:connector:shadow:status', profile),
+    listShadowNotifications: (input?: unknown) =>
+      ipcRenderer.invoke('openclaw:connector:notifications:list', input),
+    markAllShadowNotificationsRead: (profile?: string) =>
+      ipcRenderer.invoke('openclaw:connector:notifications:mark-all-read', profile),
+    getShadowCloudStatus: (args?: string[]) =>
+      ipcRenderer.invoke('openclaw:connector:cloud:status', args),
+    collectShadowCloudCosts: (input?: unknown) =>
+      ipcRenderer.invoke('openclaw:connector:cloud:costs', input),
+    listAgentBuddyBindings: () => ipcRenderer.invoke('openclaw:connector:bindings'),
+
     // Buddy Connections
     listBuddyConnections: () => ipcRenderer.invoke('openclaw:buddy:list'),
     addBuddyConnection: (connection: unknown) =>

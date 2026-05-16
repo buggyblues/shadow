@@ -256,6 +256,47 @@ export interface BuddyConnection {
   error?: string | null
 }
 
+// ─── Connector Center ──────────────────────────────────────────────────────
+
+export type ConnectorToolId = 'shadowob-cli' | 'shadowob-cloud' | 'skillhub' | 'openclaw'
+
+export interface ConnectorToolStatus {
+  id: ConnectorToolId
+  label: string
+  binary: string
+  installed: boolean
+  version: string | null
+  installCommand: string | null
+  error: string | null
+}
+
+export interface ConnectorCommandResult {
+  ok: boolean
+  code: number | null
+  stdout: string
+  stderr: string
+}
+
+export interface AgentBuddyBindingSummary {
+  connectionId: string
+  connectionLabel: string
+  remoteAgentId?: string
+  localAgentId: string
+  localAgentName: string | null
+  serverUrl: string
+  status: BuddyConnection['status']
+  autoConnect: boolean
+  bindingActive: boolean
+}
+
+export interface ConnectorOverview {
+  tools: ConnectorToolStatus[]
+  bindings: AgentBuddyBindingSummary[]
+  cronTaskCount: number
+  enabledCronTaskCount: number
+  installedSkillCount: number
+}
+
 // ─── IPC Event Payloads ─────────────────────────────────────────────────────
 
 export interface GatewayLogEntry {

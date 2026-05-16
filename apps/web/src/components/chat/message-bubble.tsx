@@ -19,7 +19,6 @@ import {
   Copy,
   ExternalLink,
   FileText,
-  Gift,
   HandCoins,
   Hash,
   Lock,
@@ -1216,7 +1215,7 @@ function MessageBubbleInner({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showFullPicker, setShowFullPicker] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
-  const [economyMode, setEconomyMode] = useState<'tip' | 'gift' | null>(null)
+  const [showTipModal, setShowTipModal] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [copied, setCopied] = useState(false)
@@ -2026,24 +2025,12 @@ function MessageBubbleInner({
                     size="xs"
                     onClick={() => {
                       setShowMoreMenu(false)
-                      setEconomyMode('tip')
+                      setShowTipModal(true)
                     }}
                     className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
-                    title={t('communityEconomy.sendTip')}
+                    title={t('communityEconomy.supportMessage')}
                   >
                     <HandCoins size={18} strokeWidth={2} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => {
-                      setShowMoreMenu(false)
-                      setEconomyMode('gift')
-                    }}
-                    className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
-                    title={t('communityEconomy.sendGift')}
-                  >
-                    <Gift size={18} strokeWidth={2} />
                   </Button>
                 </>
               )}
@@ -2097,24 +2084,12 @@ function MessageBubbleInner({
                           size="sm"
                           onClick={() => {
                             setShowMoreMenu(false)
-                            setEconomyMode('tip')
+                            setShowTipModal(true)
                           }}
                           className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-primary/10 hover:text-primary transition-colors"
                         >
                           <HandCoins size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
-                          {t('communityEconomy.sendTip')}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setShowMoreMenu(false)
-                            setEconomyMode('gift')
-                          }}
-                          className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-primary/10 hover:text-primary transition-colors"
-                        >
-                          <Gift size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
-                          {t('communityEconomy.sendGift')}
+                          {t('communityEconomy.supportMessage')}
                         </Button>
                       </>
                     )}
@@ -2359,15 +2334,16 @@ function MessageBubbleInner({
         )}
       {author && canSendEconomyAction && (
         <CommunityEconomySendModal
-          open={economyMode !== null}
-          mode={economyMode ?? 'tip'}
+          open={showTipModal}
+          mode="tip"
           recipient={{
             id: author.id,
             username: author.username,
             displayName: author.displayName,
             avatarUrl: author.avatarUrl,
           }}
-          onClose={() => setEconomyMode(null)}
+          context={{ kind: 'message', id: message.id }}
+          onClose={() => setShowTipModal(false)}
         />
       )}
     </div>

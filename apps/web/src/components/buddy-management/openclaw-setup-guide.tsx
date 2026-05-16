@@ -4,7 +4,7 @@ import {
   type ShadowConnectorTarget,
 } from '@shadowob/connector'
 import { Button, cn } from '@shadowob/ui'
-import { ArrowRight, BookOpen, Bot, Check, MessageSquare, PlugZap, Terminal } from 'lucide-react'
+import { ArrowRight, BookOpen, Check, ChevronDown, MessageSquare, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { ConfigCodeBlock } from './config-code-block'
 import type { Agent } from './types'
@@ -14,6 +14,12 @@ import type { Agent } from './types'
 const HAS_TOKEN = /\b(?:token|secret|api[_-]?key|authorization)\b/i
 
 const hasTokenConfig = (content: string): boolean => HAS_TOKEN.test(content)
+
+const connectorIconSources: Record<ShadowConnectorTarget, string> = {
+  openclaw: '/connectors/openclaw.svg',
+  hermes: '/connectors/hermes-agent.png',
+  'cc-connect': '/connectors/cc-connect.svg',
+}
 
 export function OpenClawSetupGuide({
   agent,
@@ -37,6 +43,10 @@ export function OpenClawSetupGuide({
   const serverUrl = window.location.origin
   const [activeTab, setActiveTab] = useState<'manual' | 'chat'>('manual')
   const [activeTarget, setActiveTarget] = useState<ShadowConnectorTarget>('openclaw')
+  const [showStepByStep, setShowStepByStep] = useState(false)
+  const [failedIcons, setFailedIcons] = useState<Partial<Record<ShadowConnectorTarget, boolean>>>(
+    {},
+  )
   const plans = createConnectorPlans({
     serverUrl,
     token,
@@ -71,22 +81,26 @@ export function OpenClawSetupGuide({
       animation.cancel()
     }
   }, [hasToken])
+
+  useEffect(() => {
+    setShowStepByStep(false)
+  }, [activeTab, activeTarget])
   const targetMeta: Record<
     ShadowConnectorTarget,
-    { icon: typeof Terminal; label: string; desc: string }
+    { fallbackIcon: typeof Terminal; label: string; desc: string; iconClassName?: string }
   > = {
     openclaw: {
-      icon: Terminal,
+      fallbackIcon: Terminal,
       label: t('agentMgmt.connectorOpenClaw'),
       desc: t('agentMgmt.connectorOpenClawDesc'),
     },
     hermes: {
-      icon: Bot,
+      fallbackIcon: Terminal,
       label: t('agentMgmt.connectorHermes'),
       desc: t('agentMgmt.connectorHermesDesc'),
     },
     'cc-connect': {
-      icon: PlugZap,
+      fallbackIcon: Terminal,
       label: t('agentMgmt.connectorCcConnect'),
       desc: t('agentMgmt.connectorCcConnectDesc'),
     },
@@ -156,28 +170,60 @@ export function OpenClawSetupGuide({
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
         {plans.map((plan) => {
           const meta = targetMeta[plan.target]
-          const Icon = meta.icon
+          const FallbackIcon = meta.fallbackIcon
+          const iconFailed = failedIcons[plan.target]
           return (
             <button
               key={plan.target}
               type="button"
               onClick={() => setActiveTarget(plan.target)}
               className={cn(
-                'min-h-[76px] rounded-[14px] border p-3 text-left transition',
+                'rounded-[14px] border p-3 text-left transition',
+                compact ? 'min-h-[58px]' : 'min-h-[76px]',
                 activeTarget === plan.target
                   ? 'border-primary/50 bg-primary/10 text-text-primary shadow-sm'
                   : 'border-border-subtle bg-bg-deep/40 text-text-muted hover:text-text-secondary',
               )}
             >
-              <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
-                <Icon size={14} />
-                {meta.label}
-              </span>
-              <span className="mt-1 block text-[11px] leading-4 font-bold text-text-muted">
-                {meta.desc}
+              <span className="flex items-start gap-3">
+                <span
+                  className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border bg-bg-tertiary/50',
+                    activeTarget === plan.target
+                      ? 'border-primary/40 shadow-[0_0_18px_rgba(0,198,209,0.14)]'
+                      : 'border-border-subtle/80',
+                  )}
+                >
+                  {iconFailed ? (
+                    <FallbackIcon size={16} className="text-primary" />
+                  ) : (
+                    <img
+                      src={connectorIconSources[plan.target]}
+                      alt=""
+                      className={cn('h-5 w-5 object-contain', meta.iconClassName)}
+                      loading="lazy"
+                      onError={() =>
+                        setFailedIcons((current) => ({ ...current, [plan.target]: true }))
+                      }
+                    />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-black uppercase tracking-widest">
+                    {meta.label}
+                  </span>
+                  <span
+                    className={cn(
+                      'mt-1 block text-[11px] leading-4 font-bold text-text-muted',
+                      compact && 'line-clamp-2',
+                    )}
+                  >
+                    {meta.desc}
+                  </span>
+                </span>
               </span>
             </button>
           )
@@ -227,56 +273,61 @@ export function OpenClawSetupGuide({
             />
           </div>
 
-          <div className="mb-4">
-            <p className="text-xs font-black text-text-secondary mb-2 uppercase tracking-widest">
-              {t('agentMgmt.setupBashTitle')}
-            </p>
-            <ConfigCodeBlock
-              content={activePlan.quickCommand}
-              mode={hasTokenConfig(activePlan.quickCommand) ? 'single' : 'multi'}
-              t={t}
-            />
-          </div>
-
-          <div className="h-px bg-bg-tertiary/50 my-4" />
-
-          <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-3">
-            {t('agentMgmt.setupStepByStep')}
-          </p>
-
-          {activePlan.commands.map((command, index) => (
-            <div className="mb-3" key={`${activePlan.target}-${command.label}`}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                  {index + 1}
-                </span>
-                <span className="text-sm font-black text-text-primary">
-                  {t('agentMgmt.connectorStepCommand')}
-                </span>
-              </div>
-              <div className="ml-7">
-                <ConfigCodeBlock
-                  content={command.command}
-                  mode={hasTokenConfig(command.command) ? 'single' : 'multi'}
-                  foldMode="expanded"
-                  t={t}
-                />
-              </div>
-            </div>
-          ))}
-
-          <div className="h-px bg-bg-tertiary/50 my-4" />
-          <div className="space-y-3">
-            {activePlan.configBlocks.map((block) => (
-              <ConfigCodeBlock
-                key={`${activePlan.target}-${block.label}`}
-                content={block.content}
-                label={block.label}
-                t={t}
-                mode={hasTokenConfig(block.content) ? 'single' : 'multi'}
-                foldMode="expanded"
+          <div className="rounded-[16px] border border-border-subtle bg-bg-deep/25">
+            <button
+              type="button"
+              onClick={() => setShowStepByStep((open) => !open)}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+            >
+              <span className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em]">
+                {t('agentMgmt.setupStepByStep')}
+              </span>
+              <ChevronDown
+                size={15}
+                className={cn(
+                  'text-text-muted transition-transform',
+                  showStepByStep && 'rotate-180',
+                )}
               />
-            ))}
+            </button>
+            {showStepByStep && (
+              <div className="space-y-3 border-t border-border-subtle px-4 py-4">
+                {activePlan.commands.map((command, index) => (
+                  <div key={`${activePlan.target}-${command.label}`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
+                        {index + 1}
+                      </span>
+                      <span className="text-sm font-black text-text-primary">
+                        {t('agentMgmt.connectorStepCommand')}
+                      </span>
+                    </div>
+                    <div className="ml-7">
+                      <ConfigCodeBlock
+                        content={command.command}
+                        mode={hasTokenConfig(command.command) ? 'single' : 'multi'}
+                        foldMode="expanded"
+                        t={t}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <div className="h-px bg-bg-tertiary/50" />
+                <div className="space-y-3">
+                  {activePlan.configBlocks.map((block) => (
+                    <ConfigCodeBlock
+                      key={`${activePlan.target}-${block.label}`}
+                      content={block.content}
+                      label={block.label}
+                      t={t}
+                      mode={hasTokenConfig(block.content) ? 'single' : 'multi'}
+                      foldMode="expanded"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </>
       ) : activePlan ? (

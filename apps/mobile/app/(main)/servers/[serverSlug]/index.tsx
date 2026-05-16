@@ -3,10 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
-  ArrowDown,
-  ArrowUp,
   ArrowUpDown,
-  Calendar,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -148,15 +146,9 @@ export default function ServerHomeScreen() {
   })
 
   // Channel sort
-  const {
-    sortBy,
-    sortDirection,
-    setSortBy,
-    toggleSortDirection,
-    sortChannels,
-    updateLastAccessed,
-    hasCustomSort,
-  } = useChannelSort(server?.id)
+  const { sortBy, setSortBy, sortChannels, updateLastAccessed, hasCustomSort } = useChannelSort(
+    server?.id,
+  )
 
   const {
     data: channels = [],
@@ -702,37 +694,17 @@ export default function ServerHomeScreen() {
               label: t('sort.byLastMessage', '最新消息'),
               icon: MessageSquare,
             },
-            {
-              value: 'lastAccessedAt' as ChannelSortBy,
-              label: t('sort.byLastAccessed', '访问时间'),
-              icon: Clock,
-            },
-            {
-              value: 'createdAt' as ChannelSortBy,
-              label: t('sort.byCreatedAt', '创建时间'),
-              icon: Calendar,
-            },
-            {
-              value: 'updatedAt' as ChannelSortBy,
-              label: t('sort.byUpdatedAt', '更新时间'),
-              icon: Clock,
-            },
           ].map((option) => {
             const isSelected = sortBy === option.value
-            const DirectionIcon = sortDirection === 'asc' ? ArrowUp : ArrowDown
             return (
               <MenuItem
                 key={option.value}
                 icon={option.icon}
                 title={option.label}
                 tone={isSelected ? 'primary' : 'muted'}
-                right={isSelected ? <DirectionIcon size={16} color={colors.primary} /> : undefined}
+                right={isSelected ? <Check size={16} color={colors.primary} /> : undefined}
                 onPress={() => {
-                  if (isSelected) {
-                    toggleSortDirection()
-                  } else {
-                    setSortBy(option.value)
-                  }
+                  setSortBy(option.value)
                   setShowSortModal(false)
                 }}
               />

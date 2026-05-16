@@ -6,7 +6,8 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { clearAuthenticatedSession } from '../../lib/auth-session'
-import { connectSocket, disconnectSocket } from '../../lib/socket'
+import { connectSocket, disconnectSocket, getSocket } from '../../lib/socket'
+import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUIStore } from '../../stores/ui.store'
 import { ConfirmDialog } from '../common/confirm-dialog'
@@ -61,8 +62,17 @@ export function AppLayout() {
   // WebSocket connection
   useEffect(() => {
     connectSocket()
-    return () => disconnectSocket()
-  }, [])
+    const socket = getSocket()
+    const handleSessionRevoked = () => {
+      showToast(t('settings.sessionRevokedNotice'), 'error')
+      clearAuthenticatedSession({ redirectToLogin: true })
+    }
+    socket.on('auth:session-revoked', handleSessionRevoked)
+    return () => {
+      socket.off('auth:session-revoked', handleSessionRevoked)
+      disconnectSocket()
+    }
+  }, [t])
 
   return (
     <div className="relative flex h-dvh w-screen overflow-hidden bg-transparent p-3 gap-3">

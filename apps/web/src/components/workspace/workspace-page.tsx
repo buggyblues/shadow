@@ -49,6 +49,7 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
 
   const [dialog, setDialog] = useState<DialogMode>(null)
   const lastClickedRef = useRef<string | null>(null)
+  const workspaceRootRef = useRef<HTMLElement | null>(null)
 
   const { tree, stats, isLoading, refetchTree, invalidateStats } = useWorkspaceData(serverId)
   const { searchResults } = useWorkspaceSearch(serverId)
@@ -78,7 +79,23 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
   } as unknown as Parameters<typeof useDropzone>[0]
 
   const { getRootProps, getInputProps } = useDropzone(dropzoneOptions)
+  const rootProps = getRootProps() as React.HTMLAttributes<HTMLElement> & {
+    ref?: React.Ref<HTMLElement>
+  }
+  const { ref: dropzoneRootRef, ...rootPropsWithoutRef } = rootProps
   const inputProps = getInputProps() as React.InputHTMLAttributes<HTMLInputElement>
+  const setWorkspaceRootRefs = useCallback(
+    (node: HTMLElement | null) => {
+      workspaceRootRef.current = node
+      if (typeof dropzoneRootRef === 'function') {
+        dropzoneRootRef(node)
+      } else if (dropzoneRootRef && 'current' in dropzoneRootRef) {
+        const mutableDropzoneRef = dropzoneRootRef as React.MutableRefObject<HTMLElement | null>
+        mutableDropzoneRef.current = node
+      }
+    },
+    [dropzoneRootRef],
+  )
 
   /* Clipboard actions */
   const handleCopy = useCallback(() => {
@@ -126,9 +143,14 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
       // If multi-selected, delete all selected
       if (selectedIds.size > 1 && selectedIds.has(node.id)) {
         const ok = await useConfirmStore.getState().confirm({
-          title: '删除所选项目',
-          message: `确定删除选中的 ${selectedIds.size} 个项目？`,
-          confirmLabel: '删除',
+          title: t('workspace.deleteSelectedTitle', {
+            defaultValue: '删除所选项目',
+          }),
+          message: t('workspace.deleteSelectedMessage', {
+            defaultValue: '确定删除选中的 {{count}} 个项目？',
+            count: selectedIds.size,
+          }),
+          confirmLabel: t('common.delete', { defaultValue: '删除' }),
           danger: true,
         })
         if (ok) {
@@ -140,9 +162,18 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
         }
       } else {
         const ok = await useConfirmStore.getState().confirm({
-          title: '删除',
-          message: `确定删除 "${node.name}"${node.kind === 'dir' ? ' 及其全部内容' : ''}？`,
-          confirmLabel: '删除',
+          title: t('common.delete', { defaultValue: '删除' }),
+          message:
+            node.kind === 'dir'
+              ? t('workspace.deleteFolderMessage', {
+                  defaultValue: '确定删除 "{{name}}" 及其全部内容？',
+                  name: node.name,
+                })
+              : t('workspace.deleteFileMessage', {
+                  defaultValue: '确定删除 "{{name}}"？',
+                  name: node.name,
+                }),
+          confirmLabel: t('common.delete', { defaultValue: '删除' }),
           danger: true,
         })
         if (ok) {
@@ -150,7 +181,7 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
         }
       }
     },
-    [selectedIds, tree, mutations.deleteNode, clearSelection],
+    [selectedIds, tree, mutations.deleteNode, clearSelection, t],
   )
 
   /* Keyboard shortcuts */
@@ -251,13 +282,15 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
   function handleNodeContextMenu(e: React.MouseEvent, node: WorkspaceNode) {
     e.preventDefault()
     e.stopPropagation()
+    const point = getWorkspaceMenuPoint(e)
     setSelectedNodeId(node.id)
-    setContextMenu({ x: e.clientX, y: e.clientY, node })
+    setContextMenu({ x: point.x, y: point.y, node })
   }
 
   function handleBlankContextMenu(e: React.MouseEvent) {
     e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, node: null })
+    const point = getWorkspaceMenuPoint(e)
+    setContextMenu({ x: point.x, y: point.y, node: null })
   }
 
   function handleRenameSubmit(nodeId: string, newName: string, kind: 'dir' | 'file') {
@@ -294,7 +327,14 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
   function handleRootContextMenu(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    setContextMenu({ x: e.clientX, y: e.clientY, node: null })
+    const point = getWorkspaceMenuPoint(e)
+    setContextMenu({ x: point.x, y: point.y, node: null })
+  }
+
+  function getWorkspaceMenuPoint(e: React.MouseEvent) {
+    const rect = workspaceRootRef.current?.getBoundingClientRect()
+    if (!rect) return { x: e.clientX, y: e.clientY }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
   }
 
   /* Drag-drop move */
@@ -341,7 +381,7 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `${workspace?.name ?? '工作区'}.zip`
+      a.download = `${workspace?.name ?? t('server.settingsWorkspace', { defaultValue: '工作区' })}.zip`
       a.click()
       URL.revokeObjectURL(a.href)
       showToast(t('workspace.downloadComplete'), 'success')
@@ -366,7 +406,8 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
   /* Render */
   return (
     <GlassPanel
-      {...getRootProps()}
+      {...rootPropsWithoutRef}
+      ref={setWorkspaceRootRefs}
       className={cn(
         'relative flex flex-1 flex-col overflow-hidden min-h-0',
         embedded ? 'bg-transparent' : 'h-full',
@@ -377,20 +418,22 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
     >
       <input {...inputProps} />
 
-      <WorkspaceToolbar
-        embedded={embedded}
-        workspaceName={workspace?.name ?? ''}
-        stats={stats}
-        onClose={onClose}
-        onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
-        onNewFolder={() =>
-          setDialog({
-            kind: 'create-folder',
-            parentId: resolveParentForTarget(tree, selectedNodeId),
-          })
-        }
-        onRefresh={refetchTree}
-      />
+      {!embedded && (
+        <WorkspaceToolbar
+          embedded={embedded}
+          workspaceName={workspace?.name ?? ''}
+          stats={stats}
+          onClose={onClose}
+          onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
+          onNewFolder={() =>
+            setDialog({
+              kind: 'create-folder',
+              parentId: resolveParentForTarget(tree, selectedNodeId),
+            })
+          }
+          onRefresh={refetchTree}
+        />
+      )}
 
       <div
         className={cn(
@@ -400,8 +443,10 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
       >
         <div
           className={cn(
-            'flex w-64 shrink-0 flex-col overflow-hidden border-r border-border-subtle',
-            embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/30 backdrop-blur-xl',
+            'flex shrink-0 flex-col overflow-hidden border-r border-border-subtle',
+            embedded
+              ? 'w-64 bg-bg-secondary/15 md:w-72'
+              : 'w-64 bg-bg-tertiary/30 backdrop-blur-xl',
           )}
           onContextMenu={handleBlankContextMenu}
         >
@@ -423,30 +468,55 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
           />
         </div>
 
-        {activeFileNode ? (
-          <div className={cn('flex-1 min-w-0 overflow-hidden', embedded && 'bg-bg-primary/5')}>
+        <div
+          className={cn(
+            'flex min-w-0 flex-1 flex-col overflow-hidden',
+            embedded && 'bg-bg-primary/5',
+          )}
+        >
+          {embedded && (
+            <WorkspaceToolbar
+              embedded
+              workspaceName={workspace?.name ?? ''}
+              stats={stats}
+              onClose={onClose}
+              onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
+              onNewFolder={() =>
+                setDialog({
+                  kind: 'create-folder',
+                  parentId: resolveParentForTarget(tree, selectedNodeId),
+                })
+              }
+              onRefresh={refetchTree}
+            />
+          )}
+
+          {activeFileNode ? (
             <WorkspaceWorkbench
               node={activeFileNode}
               serverId={serverId}
               onClose={() => setActiveFileId(null)}
             />
-          </div>
-        ) : (
-          <div className={cn('flex-1 min-w-0 overflow-hidden', embedded && 'bg-bg-primary/5')}>
-            <div className={cn('flex h-full flex-col text-text-muted', embedded ? 'p-0' : 'p-4')}>
+          ) : (
+            <div
+              className={cn(
+                'flex min-h-0 flex-1 flex-col text-text-muted',
+                embedded ? 'p-0' : 'p-4',
+              )}
+            >
               <div
                 className={cn(
                   'flex h-full min-h-[320px] flex-col items-center justify-center gap-3 px-6 text-center',
-                  embedded ? 'border-0 bg-transparent' : 'border-border-subtle bg-bg-tertiary/20',
+                  embedded ? 'bg-bg-primary/10' : 'border-border-subtle bg-bg-tertiary/20',
                 )}
               >
                 <div
                   className={cn(
-                    'flex h-16 w-16 items-center justify-center rounded-[24px] border border-border-subtle',
-                    embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/30 backdrop-blur-sm',
+                    'flex h-14 w-14 items-center justify-center rounded-2xl border border-border-subtle',
+                    embedded ? 'bg-bg-secondary/30' : 'bg-bg-tertiary/30 backdrop-blur-sm',
                   )}
                 >
-                  <Eye size={28} strokeWidth={1} className="opacity-30" />
+                  <Eye size={24} strokeWidth={1.4} className="opacity-45" />
                 </div>
                 <div className="space-y-1 text-center">
                   <p className="text-[13px] font-black text-text-primary/80">
@@ -460,13 +530,14 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {contextMenu && (
         <WorkspaceContextMenu
           menu={contextMenu}
+          boundsRef={workspaceRootRef}
           serverId={serverId}
           onClose={() => setContextMenu(null)}
           hasClipboard={!!clipboard}

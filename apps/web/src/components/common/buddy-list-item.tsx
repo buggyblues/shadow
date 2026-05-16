@@ -24,6 +24,7 @@ export interface BuddyListItemData {
   ownerAvatarUrl?: string | null
   description?: string
   totalOnlineSeconds?: number
+  currentActivity?: string | null
 }
 
 interface BuddyListItemProps {
@@ -280,6 +281,7 @@ function BuddyHoverCard({
         ownerAvatarUrl={buddy.ownerAvatarUrl}
         description={buddy.description}
         totalOnlineSeconds={buddy.totalOnlineSeconds}
+        currentActivity={buddy.currentActivity}
       />
     </div>,
     document.body,
@@ -331,6 +333,7 @@ export function memberToBuddyItem(
     ownerAvatarUrl?: string | null
     description?: string
     totalOnlineSeconds?: number
+    currentActivity?: string | null
   },
 ): BuddyListItemData | null {
   if (!member.user) return null
@@ -350,6 +353,7 @@ export function memberToBuddyItem(
     ownerAvatarUrl: buddyMeta?.ownerAvatarUrl,
     description: buddyMeta?.description,
     totalOnlineSeconds: buddyMeta?.totalOnlineSeconds,
+    currentActivity: buddyMeta?.currentActivity,
   }
 }
 
@@ -361,6 +365,7 @@ export function agentToBuddyItem(agent: {
   userId: string
   status: string
   totalOnlineSeconds?: number
+  currentActivity?: string | null
   config?: { description?: string }
   botUser?: {
     id: string
@@ -391,5 +396,6 @@ export function agentToBuddyItem(agent: {
     ownerAvatarUrl: agent.owner?.avatarUrl,
     description: agent.config?.description,
     totalOnlineSeconds: agent.totalOnlineSeconds,
+    currentActivity: agent.currentActivity,
   }
 }

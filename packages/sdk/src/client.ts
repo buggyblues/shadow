@@ -1653,13 +1653,42 @@ export class ShadowClient {
   }
 
   async listOAuthAccounts(): Promise<
-    { id: string; provider: string; providerAccountId: string }[]
+    { id: string; provider: string; providerEmail: string | null; createdAt: string }[]
   > {
     return this.request('/api/auth/oauth/accounts')
   }
 
+  async createOAuthConnectUrl(
+    provider: 'google' | 'github',
+    redirect?: string,
+  ): Promise<{ url: string }> {
+    return this.request(`/api/auth/oauth/${provider}/link`, {
+      method: 'POST',
+      body: JSON.stringify({ redirect }),
+    })
+  }
+
   async unlinkOAuthAccount(accountId: string): Promise<{ success: boolean }> {
     return this.request(`/api/auth/oauth/accounts/${accountId}`, { method: 'DELETE' })
+  }
+
+  async listAuthSessions(): Promise<
+    Array<{
+      id: string
+      deviceName: string | null
+      userAgent: string | null
+      ipAddress: string | null
+      lastSeenAt: string
+      createdAt: string
+      revokedAt: string | null
+      current: boolean
+    }>
+  > {
+    return this.request('/api/auth/sessions')
+  }
+
+  async revokeAuthSession(sessionId: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' })
   }
 
   async changePassword(data: {

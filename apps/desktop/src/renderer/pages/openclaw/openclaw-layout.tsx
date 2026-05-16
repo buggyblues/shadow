@@ -19,6 +19,7 @@ import {
   Sparkles,
   Store,
   Terminal,
+  Unplug,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useCallback, useState } from 'react'
@@ -33,6 +34,7 @@ export type OpenClawPage =
   | 'models'
   | 'agents'
   | 'cron'
+  | 'connectors'
   | 'buddy'
   | 'debug'
   | 'help'
@@ -84,6 +86,12 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { id: 'agents', icon: Bot, labelKey: 'openclaw.nav.agents', defaultLabel: '我的龙虾' },
       { id: 'buddy', icon: Cloud, labelKey: 'openclaw.nav.buddy', defaultLabel: '连接 Buddy' },
+      {
+        id: 'connectors',
+        icon: Unplug,
+        labelKey: 'openclaw.nav.connectors',
+        defaultLabel: '连接器中心',
+      },
       { id: 'skillhub', icon: Store, labelKey: 'openclaw.nav.skillhub', defaultLabel: '技能商店' },
       { id: 'cron', icon: Calendar, labelKey: 'openclaw.nav.cron', defaultLabel: '定时任务' },
       { id: 'help', icon: HelpCircle, labelKey: 'openclaw.nav.help', defaultLabel: '帮助中心' },

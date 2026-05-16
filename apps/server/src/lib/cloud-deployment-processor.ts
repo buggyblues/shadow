@@ -1874,6 +1874,7 @@ async function processDestroy(
       'info',
     )
     await settleFinalCloudHourlyBillingForDestroy(deployment, deploymentDao, database)
+    await deploymentDao.appendLog(deployment.id, 'Destroy complete!', 'info')
     await deploymentDao.markNamespaceRowsDestroyed(deployment)
     logger.info({ deploymentId: deployment.id }, 'Destroy completed')
   } catch (err) {
