@@ -9,6 +9,7 @@ export const CLIENT_EVENTS = {
   VOICE_JOIN: 'voice:join',
   VOICE_LEAVE: 'voice:leave',
   VOICE_STATE_UPDATE: 'voice:state:update',
+  VOICE_TOKEN_RENEW: 'voice:token:renew',
   VOICE_HEARTBEAT: 'voice:heartbeat',
 } as const
 
