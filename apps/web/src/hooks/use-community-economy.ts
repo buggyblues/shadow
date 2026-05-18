@@ -3,13 +3,22 @@ import { fetchApi } from '../lib/api'
 
 export interface CommunityAssetDefinition {
   id: string
+  issuerKind?: string
+  issuerId?: string | null
+  shopId?: string | null
   assetType: string
   name: string
   description?: string | null
   imageUrl?: string | null
   giftable: boolean
+  transferable?: boolean
   consumable: boolean
+  revocable?: boolean
+  expiresAfterDays?: number | null
   status: string
+  metadata?: Record<string, unknown> | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface CommunityAssetGrant {
@@ -20,6 +29,11 @@ export interface CommunityAssetGrant {
   remainingQuantity: number
   status: string
   expiresAt?: string | null
+  sourceKind?: string
+  sourceId?: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface CommunityAsset {

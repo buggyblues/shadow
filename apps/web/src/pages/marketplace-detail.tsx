@@ -14,7 +14,7 @@ import {
   Separator,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
 import {
   ArrowLeft,
@@ -111,6 +111,7 @@ export function MarketplaceDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { listingId } = useParams({ strict: false }) as { listingId: string }
+  const search = useSearch({ strict: false }) as { from?: string }
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
 
@@ -203,6 +204,14 @@ export function MarketplaceDetailPage() {
   })
 
   const isOwner = currentUser?.id === listing?.ownerId
+  const backToDiscover = search.from === 'discover'
+  const handleBack = () => {
+    if (backToDiscover) {
+      navigate({ to: '/discover' })
+      return
+    }
+    navigate({ to: '/settings/buddy/market', search: {} })
+  }
   const ownerName =
     listing?.owner?.displayName || listing?.owner?.username || t('marketplace.unknownOwner', '未知')
   const ownerLink = listing?.owner?.id ? `/profile/${listing.owner.id}` : undefined
@@ -297,11 +306,17 @@ export function MarketplaceDetailPage() {
     <GlassPanel className="h-full min-h-screen overflow-y-auto rounded-[32px] border border-[var(--glass-line)] text-text-primary">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 md:px-6">
         <div className="flex items-center justify-between gap-3">
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/settings/buddy/market" className="text-text-muted hover:text-text-primary">
-              <ArrowLeft size={15} />
-              {t('marketplace.backToMarket', '返回集市')}
-            </Link>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleBack}
+            className="text-text-muted hover:text-text-primary"
+          >
+            <ArrowLeft size={15} />
+            {backToDiscover
+              ? t('marketplace.backToDiscover', '返回发现')
+              : t('marketplace.backToMarket', '返回集市')}
           </Button>
         </div>
 

@@ -8,6 +8,7 @@ import type { EntitlementAccessService } from './entitlement-access.service'
 import type { MediaService } from './media.service'
 
 const DEFAULT_GRANT_SECONDS = 5 * 60
+const PAID_FILE_OPEN_CAPABILITIES = ['view', 'use', 'download']
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -40,7 +41,7 @@ export class PaidFileService {
       userId,
       resourceType: 'workspace_file',
       resourceId: fileId,
-      capabilities: ['view', 'use'],
+      capabilities: PAID_FILE_OPEN_CAPABILITIES,
     })
   }
 
@@ -127,7 +128,7 @@ export class PaidFileService {
       userId: grant.userId,
       resourceType: 'workspace_file',
       resourceId: input.fileId,
-      capabilities: ['view', 'use'],
+      capabilities: PAID_FILE_OPEN_CAPABILITIES,
     })
     if (!access.allowed || access.entitlement?.id !== grant.entitlementId) {
       throw apiError('PAID_FILE_ENTITLEMENT_REQUIRED', 403)

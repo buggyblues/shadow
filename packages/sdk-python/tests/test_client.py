@@ -3,7 +3,12 @@
 from shadowob_sdk import (
     ShadowAgentUsageSnapshotInput,
     ShadowClient,
+    ShadowCommerceProductContext,
+    ShadowCommunityAssetDefinition,
+    ShadowEntitlement,
+    ShadowPaidFileOpenResult,
     ShadowSocket,
+    ShadowSettlementLine,
     ShadowUsageProviderSnapshot,
 )
 
@@ -13,6 +18,14 @@ def test_client_creation():
     assert client._base_url == "https://example.com"
     assert client._token == "test-token"
     client.close()
+
+
+def test_commerce_models_are_exported():
+    assert ShadowCommerceProductContext
+    assert ShadowCommunityAssetDefinition
+    assert ShadowEntitlement
+    assert ShadowPaidFileOpenResult
+    assert ShadowSettlementLine
 
 
 def test_client_strips_trailing_api():
@@ -98,6 +111,62 @@ def test_get_commerce_offer_checkout_preview(monkeypatch):
         "params": {"skuId": "sku-1", "viewerUserId": "user-2"},
     }
     assert result["nextAction"] == "open_paid_file"
+    client.close()
+
+
+def test_get_oauth_commerce_entitlement_access(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_get(path, *, params=None):
+        captured["path"] = path
+        captured["params"] = params
+        return {"allowed": True, "resourceId": "app-1:premium"}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    result = client.get_oauth_commerce_entitlement_access(
+        resource_type="external_app", resource_id="app-1:premium", capability="use"
+    )
+
+    assert captured == {
+        "path": "/api/oauth/commerce/entitlements",
+        "params": {
+            "resourceType": "external_app",
+            "resourceId": "app-1:premium",
+            "capability": "use",
+        },
+    }
+    assert result["allowed"] is True
+    client.close()
+
+
+def test_redeem_oauth_commerce_entitlement(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_post(path, json=None):
+        captured["path"] = path
+        captured["json"] = json
+        return {"redeemed": True, "resourceId": "app-1:premium"}
+
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    result = client.redeem_oauth_commerce_entitlement(
+        idempotency_key="redeem-key-1",
+        resource_id="app-1:premium",
+        metadata={"providerOrderId": "provider-order-1"},
+    )
+
+    assert captured == {
+        "path": "/api/oauth/commerce/entitlements/redeem",
+        "json": {
+            "idempotencyKey": "redeem-key-1",
+            "resourceId": "app-1:premium",
+            "metadata": {"providerOrderId": "provider-order-1"},
+        },
+    }
+    assert result["redeemed"] is True
     client.close()
 
 
@@ -859,7 +928,11 @@ def test_commerce_picker_purchase_and_entitlement_paths(monkeypatch):
         idempotency_key="order-idem-1",
         items=[{"productId": "prod-1", "skuId": "sku-1", "quantity": 2}],
     ) == {"ok": True}
+    assert client.complete_order("server-1", "order-1") == {"ok": True}
     assert client.cancel_entitlement("ent-1", reason="user_cancelled") == {"ok": True}
+    assert client.cancel_entitlement_renewal(
+        "ent-1", reason="buyer_cancelled_auto_renewal"
+    ) == {"ok": True}
     assert captured == [
         ("get", "/api/commerce/product-picker", {"target": "channel", "channelId": "channel-1", "limit": 3}),
         (
@@ -924,7 +997,13 @@ def test_commerce_picker_purchase_and_entitlement_paths(monkeypatch):
                 "items": [{"productId": "prod-1", "skuId": "sku-1", "quantity": 2}],
             },
         ),
+        ("post", "/api/servers/server-1/shop/orders/order-1/complete", None),
         ("post", "/api/entitlements/ent-1/cancel", {"reason": "user_cancelled"}),
+        (
+            "post",
+            "/api/entitlements/ent-1/cancel-renewal",
+            {"reason": "buyer_cancelled_auto_renewal"},
+        ),
     ]
     client.close()
 

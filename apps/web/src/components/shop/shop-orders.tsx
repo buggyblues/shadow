@@ -5,6 +5,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Eye,
   Package,
   ShieldCheck,
   Star,
@@ -17,6 +18,7 @@ import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { useShopStore } from '../../stores/shop.store'
 import { PriceDisplay } from './ui/currency'
+import { ProductVisual } from './ui/product-visual'
 
 interface OrderItem {
   id: string
@@ -58,51 +60,154 @@ interface OrderReview {
 const STATUS_CONFIG: Record<
   string,
   {
-    label: string
+    labelKey: string
     badgeVariant: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'
     icon: React.ElementType
   }
 > = {
   pending: {
-    label: '待付款',
+    labelKey: 'shop.orderStatus.pending',
     badgeVariant: 'warning',
     icon: Clock,
   },
   paid: {
-    label: '待发货',
+    labelKey: 'shop.orderStatus.paid',
     badgeVariant: 'info',
     icon: Package,
   },
   processing: {
-    label: '处理中',
+    labelKey: 'shop.orderStatus.processing',
     badgeVariant: 'info',
     icon: Package,
   },
   shipped: {
-    label: '已发货',
+    labelKey: 'shop.orderStatus.shipped',
     badgeVariant: 'primary',
     icon: Truck,
   },
   delivered: {
-    label: '已送达',
+    labelKey: 'shop.orderStatus.delivered',
     badgeVariant: 'success',
     icon: CheckCircle,
   },
   completed: {
-    label: '已完成',
+    labelKey: 'shop.orderStatus.completed',
     badgeVariant: 'success',
     icon: ShieldCheck,
   },
   cancelled: {
-    label: '已取消',
+    labelKey: 'shop.orderStatus.cancelled',
     badgeVariant: 'neutral',
     icon: XCircle,
   },
   refunded: {
-    label: '已退款',
+    labelKey: 'shop.orderStatus.refunded',
     badgeVariant: 'danger',
     icon: XCircle,
   },
+}
+
+function OrderFulfillmentNote({ status }: { status: string }) {
+  const { t } = useTranslation()
+  const isDone = ['delivered', 'completed'].includes(status)
+  const isCanceled = ['cancelled', 'refunded'].includes(status)
+  return (
+    <div className="mt-4 rounded-lg border border-border-subtle bg-bg-tertiary/45 p-3">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          {isCanceled ? (
+            <XCircle size={17} />
+          ) : isDone ? (
+            <ShieldCheck size={17} />
+          ) : (
+            <Truck size={17} />
+          )}
+        </span>
+        <div className="min-w-0">
+          <div className="text-xs font-black uppercase tracking-[0.12em] text-text-primary">
+            {t('shop.fulfillmentProgress')}
+          </div>
+          <p className="mt-1 text-xs leading-5 text-text-muted">
+            {isCanceled
+              ? t('shop.fulfillmentCanceledHint')
+              : isDone
+                ? t('shop.fulfillmentDoneHint')
+                : t('shop.fulfillmentPendingHint')}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function OrderTimeline({ order }: { order: Order }) {
+  const { t } = useTranslation()
+  const timeline = [
+    {
+      key: 'paid',
+      icon: CheckCircle,
+      done: Boolean(order.paidAt),
+      time: order.paidAt,
+      label: t('shop.timelinePaid'),
+    },
+    {
+      key: 'processing',
+      icon: Package,
+      done: ['processing', 'shipped', 'delivered', 'completed'].includes(order.status),
+      time: undefined,
+      label: t('shop.timelineProcessing'),
+    },
+    {
+      key: 'delivered',
+      icon: Truck,
+      done: ['delivered', 'completed'].includes(order.status),
+      time: order.shippedAt,
+      label: t('shop.timelineDelivered'),
+    },
+    {
+      key: 'completed',
+      icon: ShieldCheck,
+      done: order.status === 'completed',
+      time: order.completedAt,
+      label: t('shop.timelineCompleted'),
+    },
+  ]
+
+  if (['cancelled', 'refunded'].includes(order.status)) {
+    timeline.push({
+      key: order.status,
+      icon: XCircle,
+      done: true,
+      time: order.cancelledAt,
+      label: t(`shop.orderStatus.${order.status}`),
+    })
+  }
+
+  return (
+    <div className="mt-4 grid gap-2 rounded-2xl border border-border-subtle bg-bg-tertiary/40 p-3 sm:grid-cols-4">
+      {timeline.map((step) => {
+        const Icon = step.icon
+        return (
+          <div
+            key={step.key}
+            className={`rounded-xl border px-3 py-2 ${
+              step.done
+                ? 'border-success/20 bg-success/5 text-success'
+                : 'border-border-subtle bg-bg-primary/35 text-text-muted'
+            }`}
+          >
+            <div className="flex items-center gap-2 text-xs font-black">
+              <Icon size={14} />
+              {step.label}
+            </div>
+            <p className="mt-1 text-[11px] leading-4 opacity-80">
+              {step.time ? new Date(step.time).toLocaleString() : t('shop.timelinePending')}
+            </p>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 interface ShopOrdersProps {
@@ -121,6 +226,8 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
   const [reviewProductId, setReviewProductId] = useState<string | null>(null)
   const [reviewAnonymous, setReviewAnonymous] = useState(false)
   const [orderReviews, setOrderReviews] = useState<Record<string, OrderReview[]>>({})
+  const setActiveProductId = useShopStore((s) => s.setActiveProductId)
+  const setOverlay = useShopStore((s) => s.setOverlay)
 
   // Clear lastOrderId after consuming it
   useEffect(() => {
@@ -145,15 +252,35 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
   const effectiveExpandedOrder =
     expandedOrder && orders.some((o) => o.id === expandedOrder) ? expandedOrder : null
 
+  const { data: expandedReviews = [] } = useQuery({
+    queryKey: ['shop-order-reviews', serverId, effectiveExpandedOrder],
+    queryFn: () =>
+      fetchApi<OrderReview[]>(
+        `/api/servers/${serverId}/shop/orders/${effectiveExpandedOrder}/reviews`,
+      ),
+    enabled: Boolean(effectiveExpandedOrder),
+  })
+
   const cancelOrder = useMutation({
     mutationFn: (orderId: string) =>
       fetchApi(`/api/servers/${serverId}/shop/orders/${orderId}/cancel`, { method: 'POST' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
-      showToast(t('shop.orderCancelled', '订单已取消'), 'success')
+      showToast(t('shop.orderCancelled'), 'success')
     },
-    onError: (err: Error) => showToast(err.message || t('shop.cancelFailed', '取消失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('shop.cancelFailed'), 'error'),
+  })
+
+  const confirmOrder = useMutation({
+    mutationFn: (orderId: string) =>
+      fetchApi(`/api/servers/${serverId}/shop/orders/${orderId}/complete`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+      showToast(t('shop.orderCompleted'), 'success')
+    },
+    onError: (err: Error) => showToast(err.message || t('shop.orderCompleteFailed'), 'error'),
   })
 
   const submitReview = useMutation({
@@ -184,10 +311,10 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
         [vars.orderId]: [...(prev[vars.orderId] || []), review as OrderReview],
       }))
       queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })
-      showToast(t('shop.reviewSubmitted', '评价已提交，感谢您的反馈！'), 'success')
+      queryClient.invalidateQueries({ queryKey: ['shop-order-reviews', serverId, vars.orderId] })
+      showToast(t('shop.reviewSubmitted'), 'success')
     },
-    onError: (err: Error) =>
-      showToast(err.message || t('shop.reviewSubmitFailed', '评价提交失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('shop.reviewSubmitFailed'), 'error'),
   })
 
   useEffect(() => {
@@ -196,11 +323,11 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
   }, [effectiveExpandedOrder, orderReviews])
 
   const statusTabs = [
-    { key: null, label: '全部' },
-    { key: 'pending', label: '待付款' },
-    { key: 'paid', label: '待发货' },
-    { key: 'shipped', label: '待收货' },
-    { key: 'completed', label: '已完成' },
+    { key: null, label: t('shop.orderFilterAll') },
+    { key: 'pending', label: t('shop.orderStatus.pending') },
+    { key: 'paid', label: t('shop.orderStatus.paid') },
+    { key: 'shipped', label: t('shop.orderStatus.shipped') },
+    { key: 'completed', label: t('shop.orderStatus.completed') },
   ]
 
   if (orders.length === 0 && !statusFilter) {
@@ -210,9 +337,9 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
           <ClipboardList size={48} className="text-primary/30" strokeWidth={1.5} />
         </div>
         <h3 className="text-lg font-black uppercase tracking-tight text-text-primary mb-2">
-          暂无订单记录
+          {t('shop.noOrders')}
         </h3>
-        <p className="text-sm text-text-muted font-bold italic mb-8">您还没有下过任何订单哦</p>
+        <p className="text-sm text-text-muted font-bold italic mb-8">{t('shop.noOrdersHint')}</p>
       </div>
     )
   }
@@ -238,13 +365,15 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hidden">
         {orders.length === 0 && statusFilter ? (
           <div className="py-20 text-center text-text-muted text-sm font-bold italic">
-            该状态下暂无订单
+            {t('shop.noFilteredOrders')}
           </div>
         ) : (
           orders.map((order) => {
             const statusCfg = (STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending)!
             const isExpanded = effectiveExpandedOrder === order.id
             const StatusIcon = statusCfg.icon
+            const currentReviews = isExpanded ? expandedReviews : (orderReviews[order.id] ?? [])
+            const hasReviewed = currentReviews.length > 0
 
             const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0)
 
@@ -264,7 +393,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                     <div className="flex items-center gap-2">
                       <Badge variant={statusCfg.badgeVariant} size="xs">
                         <StatusIcon size={10} strokeWidth={3} className="mr-1" />
-                        {statusCfg.label}
+                        {t(statusCfg.labelKey)}
                       </Badge>
                       <span className="text-text-muted text-[11px] font-black tracking-widest">
                         #{order.orderNo.slice(-8).toUpperCase()}
@@ -282,7 +411,9 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
 
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-[11px] text-text-muted mb-0.5">合计 {totalQuantity} 件</p>
+                      <p className="text-[11px] text-text-muted mb-0.5">
+                        {t('shop.orderItemTotal', { count: totalQuantity })}
+                      </p>
                       <span className="text-text-primary text-sm font-black flex items-baseline justify-end gap-0.5">
                         <PriceDisplay amount={order.totalAmount} />
                       </span>
@@ -302,9 +433,12 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                         {item.imageUrl ? (
                           <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-text-muted">
-                            <Package size={20} className="opacity-50" />
-                          </div>
+                          <ProductVisual
+                            name={item.productName}
+                            productType="entitlement"
+                            showLabel={false}
+                            className="h-full w-full rounded-none"
+                          />
                         )}
                       </div>
 
@@ -332,13 +466,29 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                   {!isExpanded && order.items.length > 1 && (
                     <div className="mt-3 text-center">
                       <p className="text-text-muted text-[11px] font-black bg-bg-tertiary py-1 rounded-2xl border border-border-subtle">
-                        以及其他 {order.items.length - 1} 件商品...
+                        {t('shop.moreOrderItems', { count: order.items.length - 1 })}
                       </p>
                     </div>
                   )}
 
+                  <OrderFulfillmentNote status={order.status} />
+                  {isExpanded && <OrderTimeline order={order} />}
+
                   {/* Actions */}
                   <div className="mt-5 pt-4 border-t border-border-subtle border-dashed flex items-center justify-end gap-2">
+                    {order.items[0] && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setActiveProductId(order.items[0]!.productId)
+                          setOverlay(null)
+                        }}
+                      >
+                        <Eye size={14} />
+                        {t('shop.viewPurchasedProduct')}
+                      </Button>
+                    )}
                     {['pending', 'paid'].includes(order.status) && (
                       <Button
                         variant="ghost"
@@ -346,37 +496,51 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                         onClick={() => cancelOrder.mutate(order.id)}
                         loading={cancelOrder.isPending}
                       >
-                        取消订单
+                        {t('shop.cancelOrder')}
+                      </Button>
+                    )}
+
+                    {order.status === 'delivered' && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => confirmOrder.mutate(order.id)}
+                        loading={confirmOrder.isPending}
+                      >
+                        {t('shop.confirmReceipt')}
                       </Button>
                     )}
 
                     {['delivered', 'completed'].includes(order.status) &&
-                      (orderReviews[order.id]?.length || 0) === 0 &&
+                      !hasReviewed &&
                       reviewingOrder !== order.id && (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => setReviewingOrder(order.id)}
                         >
-                          我要评价
+                          {t('shop.writeReview')}
                         </Button>
                       )}
-                    {['delivered', 'completed'].includes(order.status) &&
-                      (orderReviews[order.id]?.length || 0) > 0 && (
-                        <Badge variant="success">已评价</Badge>
-                      )}
+                    {['delivered', 'completed'].includes(order.status) && hasReviewed && (
+                      <Badge variant="success">{t('shop.reviewed')}</Badge>
+                    )}
                   </div>
 
-                  {isExpanded && (orderReviews[order.id]?.length || 0) > 0 && (
+                  {isExpanded && currentReviews.length > 0 && (
                     <div className="mt-4 p-3 rounded-2xl bg-success/5 border border-success/20 space-y-2 backdrop-blur-sm">
                       <p className="text-xs font-black uppercase tracking-widest text-success">
-                        我的评价
+                        {t('shop.myReview')}
                       </p>
-                      {orderReviews[order.id]!.map((rv) => (
+                      {currentReviews.map((rv) => (
                         <div key={rv.id} className="text-xs text-success">
-                          <span className="font-black">评分 {rv.rating} 星：</span>
-                          <span>{rv.content || '（未填写文字）'}</span>
-                          {rv.isAnonymous ? <span className="ml-2 text-[11px]">匿名</span> : null}
+                          <span className="font-black">
+                            {t('shop.reviewScore', { rating: rv.rating })}
+                          </span>
+                          <span>{rv.content || t('shop.reviewNoContent')}</span>
+                          {rv.isAnonymous ? (
+                            <span className="ml-2 text-[11px]">{t('shop.anonymousReview')}</span>
+                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -384,21 +548,43 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
 
                   {isExpanded && (
                     <div className="mt-4 p-3 rounded-2xl bg-bg-tertiary/50 border border-border-subtle text-xs space-y-1 text-text-muted">
-                      <p>订单号：{order.orderNo}</p>
-                      {order.trackingNo ? <p>物流单号：{order.trackingNo}</p> : null}
-                      {order.buyerNote ? <p>买家备注：{order.buyerNote}</p> : null}
-                      {order.sellerNote ? <p>商家备注：{order.sellerNote}</p> : null}
+                      <p>
+                        {t('shop.orderNo')}: {order.orderNo}
+                      </p>
+                      {order.trackingNo ? (
+                        <p>
+                          {t('shop.trackingNo')}: {order.trackingNo}
+                        </p>
+                      ) : null}
+                      {order.buyerNote ? (
+                        <p>
+                          {t('shop.buyerNote')}: {order.buyerNote}
+                        </p>
+                      ) : null}
+                      {order.sellerNote ? (
+                        <p>
+                          {t('shop.sellerNote')}: {order.sellerNote}
+                        </p>
+                      ) : null}
                       {order.paidAt ? (
-                        <p>支付时间：{new Date(order.paidAt).toLocaleString()}</p>
+                        <p>
+                          {t('shop.paidAt')}: {new Date(order.paidAt).toLocaleString()}
+                        </p>
                       ) : null}
                       {order.shippedAt ? (
-                        <p>发货时间：{new Date(order.shippedAt).toLocaleString()}</p>
+                        <p>
+                          {t('shop.shippedAt')}: {new Date(order.shippedAt).toLocaleString()}
+                        </p>
                       ) : null}
                       {order.completedAt ? (
-                        <p>完成时间：{new Date(order.completedAt).toLocaleString()}</p>
+                        <p>
+                          {t('shop.completedAt')}: {new Date(order.completedAt).toLocaleString()}
+                        </p>
                       ) : null}
                       {order.cancelledAt ? (
-                        <p>取消时间：{new Date(order.cancelledAt).toLocaleString()}</p>
+                        <p>
+                          {t('shop.cancelledAt')}: {new Date(order.cancelledAt).toLocaleString()}
+                        </p>
                       ) : null}
                     </div>
                   )}
@@ -410,7 +596,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                       {order.items.length > 1 && (
                         <div className="mb-3">
                           <span className="text-xs font-black uppercase tracking-widest text-text-secondary block mb-2">
-                            选择要评价的商品
+                            {t('shop.selectReviewProduct')}
                           </span>
                           <div className="flex flex-wrap gap-2">
                             {order.items.map((item) => (
@@ -431,7 +617,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                         </div>
                       )}
                       <span className="text-xs font-black uppercase tracking-widest text-text-secondary block mb-2">
-                        商品评分
+                        {t('shop.productRating')}
                       </span>
                       <div className="flex items-center gap-1.5 mb-3">
                         {Array.from({ length: 5 }).map((_, i) => (
@@ -453,7 +639,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                       <textarea
                         value={reviewContent}
                         onChange={(e) => setReviewContent(e.target.value)}
-                        placeholder="商品满足您的期待吗？说说您的真实感受..."
+                        placeholder={t('shop.reviewPlaceholder')}
                         className="w-full h-24 p-3 bg-bg-tertiary/50 text-text-primary text-sm rounded-2xl border-2 border-border-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none transition-all"
                       />
                       <label className="mt-3 flex items-center gap-2 text-xs text-text-muted font-black">
@@ -462,11 +648,11 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                           checked={reviewAnonymous}
                           onChange={(e) => setReviewAnonymous(e.target.checked)}
                         />
-                        匿名评价
+                        {t('shop.anonymousReviewLabel')}
                       </label>
                       <div className="flex justify-end gap-2 mt-3">
                         <Button variant="ghost" size="sm" onClick={() => setReviewingOrder(null)}>
-                          取消
+                          {t('common.cancel')}
                         </Button>
                         <Button
                           variant="primary"
@@ -482,7 +668,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                           }
                           loading={submitReview.isPending}
                         >
-                          提交评价
+                          {t('shop.submitReview')}
                         </Button>
                       </div>
                     </div>

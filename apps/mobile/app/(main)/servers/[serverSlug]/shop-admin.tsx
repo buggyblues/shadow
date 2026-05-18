@@ -1,24 +1,75 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Image } from 'expo-image'
+import * as ImagePicker from 'expo-image-picker'
 import { useLocalSearchParams } from 'expo-router'
-import { Package, Plus, Trash2 } from 'lucide-react-native'
+import {
+  Award,
+  FileText,
+  ImagePlus,
+  Package,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { EmptyState } from '../../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../../src/components/common/price-display'
-import { fetchApi } from '../../../../src/lib/api'
+import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+
+interface ProductMedia {
+  type?: 'image' | 'video'
+  url?: string | null
+  thumbnailUrl?: string | null
+  position?: number
+}
 
 interface Product {
   id: string
   name: string
   description: string | null
-  price: number
+  basePrice?: number
+  price?: number
   imageUrl: string | null
+  media?: ProductMedia[]
   stock: number | null
   status: string
+}
+
+interface ProductsResponse {
+  products: Product[]
+  total: number
+}
+
+type ProductTemplate = 'ai_service' | 'paid_file' | 'membership' | 'badge_gift' | 'physical'
+
+const PRODUCT_TEMPLATES: Array<{
+  key: ProductTemplate
+  icon: typeof Package
+  resourceType: string
+  capability: string
+}> = [
+  { key: 'ai_service', icon: Sparkles, resourceType: 'service', capability: 'use' },
+  { key: 'paid_file', icon: FileText, resourceType: 'workspace_file', capability: 'download' },
+  { key: 'membership', icon: ShieldCheck, resourceType: 'subscription', capability: 'use' },
+  { key: 'badge_gift', icon: Award, resourceType: 'community_asset', capability: 'redeem' },
+  { key: 'physical', icon: Package, resourceType: '', capability: 'use' },
+]
+
+function makeProductSlug(name: string) {
+  const base = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+  return `${base || 'product'}-${Date.now().toString(36)}`
 }
 
 export default function ShopAdminScreen() {
@@ -31,6 +82,10 @@ export default function ShopAdminScreen() {
   const [newName, setNewName] = useState('')
   const [newPrice, setNewPrice] = useState('')
   const [newDesc, setNewDesc] = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState<ProductTemplate>('ai_service')
+  const [coverUrl, setCoverUrl] = useState<string | null>(null)
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null)
+  const [uploadingCover, setUploadingCover] = useState(false)
 
   const { data: server } = useQuery({
     queryKey: ['server', serverSlug],
@@ -40,27 +95,60 @@ export default function ShopAdminScreen() {
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['shop-products-admin', server?.id],
-    queryFn: () =>
-      fetchApi<Product[]>(`/api/servers/${server!.id}/shop/products?includeInactive=true`),
+    queryFn: async () => {
+      const result = await fetchApi<Product[] | ProductsResponse>(
+        `/api/servers/${server!.id}/shop/products?includeInactive=true`,
+      )
+      return Array.isArray(result) ? result : result.products
+    },
     enabled: !!server?.id,
   })
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      fetchApi(`/api/servers/${server!.id}/shop/products`, {
+    mutationFn: () => {
+      const template = PRODUCT_TEMPLATES.find((item) => item.key === selectedTemplate)
+      const isPhysical = selectedTemplate === 'physical'
+      const entitlementConfig = isPhysical
+        ? undefined
+        : {
+            resourceType: template?.resourceType || 'service',
+            capability: template?.capability || 'use',
+            durationSeconds: selectedTemplate === 'paid_file' ? null : 30 * 24 * 60 * 60,
+            privilegeDescription: newDesc || t(`shop.productTemplates.${selectedTemplate}.promise`),
+          }
+      return fetchApi(`/api/servers/${server!.id}/shop/products`, {
         method: 'POST',
         body: JSON.stringify({
-          name: newName,
-          price: Number(newPrice),
-          description: newDesc || undefined,
+          name: newName.trim(),
+          slug: makeProductSlug(newName),
+          type: isPhysical ? 'physical' : 'entitlement',
+          status: 'active',
+          basePrice: Number(newPrice),
+          description: newDesc || t(`shop.productTemplates.${selectedTemplate}.promise`),
+          summary: newDesc || t(`shop.productTemplates.${selectedTemplate}.summary`),
+          tags:
+            selectedTemplate === 'badge_gift'
+              ? ['badge', 'gift']
+              : selectedTemplate === 'physical'
+                ? ['physical']
+                : selectedTemplate.split('_'),
+          entitlementConfig,
+          media: coverUrl
+            ? [{ type: 'image', url: coverUrl, thumbnailUrl: coverUrl, position: 0 }]
+            : undefined,
         }),
-      }),
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shop-products-admin', server?.id] })
+      queryClient.invalidateQueries({ queryKey: ['shop-products', server?.id] })
       setShowCreate(false)
       setNewName('')
       setNewPrice('')
       setNewDesc('')
+      setSelectedTemplate('ai_service')
+      setCoverUrl(null)
+      setCoverPreviewUrl(null)
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -71,6 +159,57 @@ export default function ShopAdminScreen() {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['shop-products-admin', server?.id] }),
   })
+
+  const pickCover = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!permission.granted) {
+      showToast(t('shop.mediaPermissionDenied'), 'error')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.85,
+    })
+    if (result.canceled || !result.assets[0]) return
+
+    setUploadingCover(true)
+    try {
+      const asset = result.assets[0]
+      const formData = new FormData()
+      formData.append('file', {
+        uri: asset.uri,
+        name: asset.fileName || 'product-cover.jpg',
+        type: asset.mimeType || 'image/jpeg',
+      } as unknown as Blob)
+      const data = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      setCoverUrl(data.url)
+      setCoverPreviewUrl(data.signedUrl ?? getImageUrl(data.url))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t('shop.coverUploadFailed'), 'error')
+    } finally {
+      setUploadingCover(false)
+    }
+  }
+
+  const resetCreateForm = () => {
+    setShowCreate(false)
+    setNewName('')
+    setNewPrice('')
+    setNewDesc('')
+    setCoverUrl(null)
+    setCoverPreviewUrl(null)
+  }
+
+  const getProductImage = (product: Product) => {
+    const url = product.media?.[0]?.thumbnailUrl ?? product.media?.[0]?.url ?? product.imageUrl
+    return getImageUrl(url)
+  }
 
   if (isLoading) return <LoadingScreen />
 
@@ -93,10 +232,17 @@ export default function ShopAdminScreen() {
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: colors.surface }]}>
+              <View style={[styles.thumb, { backgroundColor: colors.inputBackground }]}>
+                {getProductImage(item) ? (
+                  <Image source={{ uri: getProductImage(item)! }} style={styles.thumbImage} />
+                ) : (
+                  <Package size={22} color={colors.textMuted} />
+                )}
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
                 <Text style={{ color: colors.primary, fontWeight: '700' }}>
-                  <PriceCompact amount={item.price} size={14} />
+                  <PriceCompact amount={item.basePrice ?? item.price ?? 0} size={14} />
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
                   {item.status} · {item.stock != null ? `${t('shop.stock')}: ${item.stock}` : '∞'}
@@ -111,12 +257,79 @@ export default function ShopAdminScreen() {
       )}
 
       <Modal visible={showCreate} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowCreate(false)}>
+        <Pressable style={styles.modalOverlay} onPress={resetCreateForm}>
           <View
             style={[styles.modalContent, { backgroundColor: colors.surface }]}
             onStartShouldSetResponder={() => true}
           >
             <Text style={[styles.modalTitle, { color: colors.text }]}>{t('shop.addProduct')}</Text>
+
+            <View style={styles.templateGrid}>
+              {PRODUCT_TEMPLATES.map((template) => {
+                const Icon = template.icon
+                const active = selectedTemplate === template.key
+                return (
+                  <Pressable
+                    key={template.key}
+                    style={[
+                      styles.templateChip,
+                      {
+                        backgroundColor: active ? `${colors.primary}20` : colors.inputBackground,
+                        borderColor: active ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedTemplate(template.key)}
+                  >
+                    <Icon size={16} color={active ? colors.primary : colors.textMuted} />
+                    <Text
+                      style={[
+                        styles.templateText,
+                        { color: active ? colors.primary : colors.text },
+                      ]}
+                    >
+                      {t(`shop.productTemplates.${template.key}.label`)}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+
+            <Pressable
+              style={[
+                styles.coverPicker,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={pickCover}
+              disabled={uploadingCover}
+            >
+              {coverPreviewUrl ? (
+                <>
+                  <Image source={{ uri: coverPreviewUrl }} style={styles.coverImage} />
+                  <Pressable
+                    style={[styles.removeCoverBtn, { backgroundColor: colors.surface }]}
+                    onPress={() => {
+                      setCoverUrl(null)
+                      setCoverPreviewUrl(null)
+                    }}
+                  >
+                    <X size={16} color={colors.text} />
+                  </Pressable>
+                </>
+              ) : (
+                <View style={styles.coverPlaceholder}>
+                  <ImagePlus size={28} color={colors.primary} />
+                  <Text style={[styles.coverTitle, { color: colors.text }]}>
+                    {uploadingCover ? t('shop.uploadingCover') : t('shop.uploadCover')}
+                  </Text>
+                  <Text style={[styles.coverHint, { color: colors.textMuted }]}>
+                    {t('shop.coverHint')}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
 
             <TextInput
               style={[
@@ -167,13 +380,13 @@ export default function ShopAdminScreen() {
             />
 
             <View style={styles.modalActions}>
-              <Pressable onPress={() => setShowCreate(false)}>
+              <Pressable onPress={resetCreateForm}>
                 <Text style={{ color: colors.textSecondary }}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 style={[styles.createBtn, { backgroundColor: colors.primary }]}
                 onPress={() => createMutation.mutate()}
-                disabled={!newName.trim() || !newPrice.trim()}
+                disabled={!newName.trim() || !newPrice.trim() || createMutation.isPending}
               >
                 <Text style={{ color: '#fff', fontWeight: '700' }}>{t('common.create')}</Text>
               </Pressable>
@@ -204,6 +417,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     gap: spacing.md,
   },
+  thumb: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  thumbImage: { width: '100%', height: '100%' },
   name: { fontSize: fontSize.md, fontWeight: '700' },
   iconBtn: { padding: spacing.sm },
   modalOverlay: {
@@ -214,6 +436,50 @@ const styles = StyleSheet.create({
   },
   modalContent: { borderRadius: radius.xl, padding: spacing.xl },
   modalTitle: { fontSize: fontSize.xl, fontWeight: '800', marginBottom: spacing.lg },
+  templateGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  templateChip: {
+    minWidth: '30%',
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  templateText: { fontSize: fontSize.xs, fontWeight: '800' },
+  coverPicker: {
+    height: 150,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  coverImage: { width: '100%', height: '100%' },
+  coverPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  coverTitle: { marginTop: spacing.sm, fontSize: fontSize.md, fontWeight: '700' },
+  coverHint: { marginTop: spacing.xs, fontSize: fontSize.xs, textAlign: 'center' },
+  removeCoverBtn: {
+    position: 'absolute',
+    right: spacing.sm,
+    top: spacing.sm,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
     height: 44,
     borderRadius: radius.lg,

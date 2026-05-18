@@ -71,7 +71,7 @@ packages/
 apps/web/src/pages/settings/developer.tsx   # Developer Settings UI
 ```
 
-## Scopes (14 total)
+## Scopes (16 total)
 
 | Scope              | Description                        |
 | ------------------ | ---------------------------------- |
@@ -89,6 +89,8 @@ apps/web/src/pages/settings/developer.tsx   # Developer Settings UI
 | `workspaces:write` | Modify workspaces                  |
 | `buddies:create`   | Create Buddy bot sub-accounts      |
 | `buddies:manage`   | Send messages as a Buddy           |
+| `commerce:read`    | Check token-user app entitlements  |
+| `commerce:write`   | Redeem token-user app entitlements |
 
 ## API Endpoints
 
@@ -132,6 +134,11 @@ apps/web/src/pages/settings/developer.tsx   # Developer Settings UI
 | `GET`    | `/api/oauth/workspaces/:id`             | `workspaces:read`  |
 | `POST`   | `/api/oauth/buddies`                    | `buddies:create`   |
 | `POST`   | `/api/oauth/buddies/:id/messages`       | `buddies:manage`   |
+| `GET`    | `/api/oauth/commerce/entitlements`      | `commerce:read`    |
+| `POST`   | `/api/oauth/commerce/entitlements/redeem` | `commerce:write` |
+
+Commerce endpoints only support `resourceType = "external_app"` and enforce that `resourceId`
+equals the caller OAuth app id or starts with `<appId>:`. Scope alone is not enough.
 
 ## Token Formats
 

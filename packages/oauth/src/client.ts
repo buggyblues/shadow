@@ -1,6 +1,9 @@
 import type {
   ShadowOAuthBuddy,
   ShadowOAuthChannel,
+  ShadowOAuthCommerceEntitlementAccess,
+  ShadowOAuthCommerceEntitlementRedeemInput,
+  ShadowOAuthCommerceEntitlementRedeemResult,
   ShadowOAuthConfig,
   ShadowOAuthMessage,
   ShadowOAuthScope,
@@ -270,6 +273,40 @@ export class ShadowOAuth {
   ): Promise<ShadowOAuthMessage> {
     return this.oauthPost<ShadowOAuthMessage>(
       `/api/oauth/buddies/${buddyId}/messages`,
+      accessToken,
+      data,
+    )
+  }
+
+  /**
+   * Check the current user's entitlement for this OAuth app.
+   * Requires `commerce:read` scope.
+   */
+  async getCommerceEntitlementAccess(
+    accessToken: string,
+    params?: { resourceType?: string; resourceId?: string; capability?: string },
+  ): Promise<ShadowOAuthCommerceEntitlementAccess> {
+    const qs = new URLSearchParams()
+    if (params?.resourceType) qs.set('resourceType', params.resourceType)
+    if (params?.resourceId) qs.set('resourceId', params.resourceId)
+    if (params?.capability) qs.set('capability', params.capability)
+    const query = qs.toString()
+    return this.oauthGet<ShadowOAuthCommerceEntitlementAccess>(
+      `/api/oauth/commerce/entitlements${query ? `?${query}` : ''}`,
+      accessToken,
+    )
+  }
+
+  /**
+   * Redeem one current-user entitlement for this OAuth app.
+   * Requires `commerce:write` scope.
+   */
+  async redeemCommerceEntitlement(
+    accessToken: string,
+    data: ShadowOAuthCommerceEntitlementRedeemInput,
+  ): Promise<ShadowOAuthCommerceEntitlementRedeemResult> {
+    return this.oauthPost<ShadowOAuthCommerceEntitlementRedeemResult>(
+      '/api/oauth/commerce/entitlements/redeem',
       accessToken,
       data,
     )

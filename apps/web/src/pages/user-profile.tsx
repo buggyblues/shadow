@@ -6,13 +6,17 @@ import {
   Calendar,
   ChevronLeft,
   HandCoins,
+  Package,
   QrCode,
   Shield,
+  ShoppingBag,
+  Star,
+  Store,
   UserPlus,
   X,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -27,6 +31,9 @@ import { UserAvatar } from '../components/common/avatar'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
 import { CommunityEconomySendModal } from '../components/community-economy/community-economy-send-modal'
 import { ProfileCommentSection } from '../components/profile/ProfileCommentSection'
+import type { Product, Shop } from '../components/shop/shop-page'
+import { PriceDisplay } from '../components/shop/ui/currency'
+import { ProductVisual } from '../components/shop/ui/product-visual'
 import { fetchApi } from '../lib/api'
 import { useAuthStore } from '../stores/auth.store'
 
@@ -105,6 +112,178 @@ interface DashboardData {
   }
 }
 
+function firstProductEntitlementConfig(product: Product) {
+  const config = Array.isArray(product.entitlementConfig)
+    ? product.entitlementConfig[0]
+    : product.entitlementConfig
+  return config && typeof config === 'object' ? config : null
+}
+
+function productAssetType(product: Product) {
+  const config = firstProductEntitlementConfig(product)
+  if (config?.resourceType !== 'community_asset') return null
+  return product.tags?.find((tag) =>
+    ['badge', 'gift', 'coupon', 'service_ticket', 'collectible', 'content_pass', 'reward'].includes(
+      tag,
+    ),
+  )
+}
+
+function BuddyCommercePanel({
+  profile,
+  shop,
+  products,
+  rentalStats,
+}: {
+  profile: UserProfile
+  shop: Shop | null
+  products: Product[]
+  rentalStats?: DashboardData['rentalStats']
+}) {
+  const { t } = useTranslation()
+  const activeProducts = products.filter((product) => product.status === 'active')
+  const totalSales = activeProducts.reduce((sum, product) => sum + (product.salesCount ?? 0), 0)
+  const ratingCount = activeProducts.reduce((sum, product) => sum + (product.ratingCount ?? 0), 0)
+  const ratingTotal = activeProducts.reduce(
+    (sum, product) => sum + (product.avgRating ?? 0) * (product.ratingCount ?? 0),
+    0,
+  )
+  const averageRating = ratingCount > 0 ? ratingTotal / ratingCount : 0
+  const revenue =
+    rentalStats?.totalIncome ??
+    activeProducts.reduce(
+      (sum, product) => sum + (product.basePrice ?? 0) * (product.salesCount ?? 0),
+      0,
+    )
+  const featuredProducts = activeProducts.slice(0, 3)
+  const shopPath = `/app/shop/users/${profile.id}?view=buyer`
+
+  return (
+    <GlassPanel className="overflow-hidden p-0">
+      <div className="border-b border-border-subtle bg-bg-tertiary/35 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-primary">
+              {t('profile.agentAsset')}
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-text-muted">
+              {t('profile.agentAssetHint')}
+            </p>
+          </div>
+          {shop && (
+            <a
+              href={shopPath}
+              className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+            >
+              <Store size={14} />
+              {t('profile.visitAssetStore')}
+            </a>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-5 sm:grid-cols-4">
+        <BuddyAssetMetric
+          icon={<ShoppingBag size={15} />}
+          label={t('profile.availableServices')}
+          value={String(activeProducts.length)}
+        />
+        <BuddyAssetMetric
+          icon={<Package size={15} />}
+          label={t('profile.deliveryRecords')}
+          value={String(totalSales)}
+        />
+        <BuddyAssetMetric
+          icon={<Star size={15} />}
+          label={t('profile.creditRating')}
+          value={ratingCount > 0 ? averageRating.toFixed(1) : t('profile.noCreditData')}
+        />
+        <BuddyAssetMetric
+          icon={<HandCoins size={15} />}
+          label={t('profile.assetRevenue')}
+          value={<PriceDisplay amount={revenue} size={14} />}
+        />
+      </div>
+
+      <div className="border-t border-border-subtle px-5 py-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-sm font-black text-text-primary">{t('profile.serviceShelf')}</div>
+          {shop && (
+            <a href={shopPath} className="text-xs font-black text-primary hover:underline">
+              {t('profile.viewAllServices')}
+            </a>
+          )}
+        </div>
+        {featuredProducts.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border-subtle bg-bg-secondary/35 px-4 py-5 text-sm text-text-muted">
+            {t('profile.noAssetServices')}
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {featuredProducts.map((product) => {
+              const config = firstProductEntitlementConfig(product)
+              return (
+                <a
+                  key={product.id}
+                  href={`/app/shop/products/${product.id}`}
+                  className="grid gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/35 p-3 transition hover:border-primary/35 hover:bg-bg-secondary/55 sm:grid-cols-[72px_minmax(0,1fr)_auto]"
+                >
+                  <ProductVisual
+                    name={product.name}
+                    media={product.media}
+                    productType={product.type}
+                    resourceType={config?.resourceType}
+                    assetType={productAssetType(product)}
+                    showLabel={false}
+                    className="h-[72px] w-[72px] shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-black text-text-primary">
+                      {product.name}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
+                      {product.summary ?? t('profile.serviceShelfFallback')}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold text-text-muted">
+                      <span>
+                        {t('shop.soldCount')} {product.salesCount}
+                      </span>
+                      {product.ratingCount > 0 && <span>{product.avgRating.toFixed(1)}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center text-danger">
+                    <PriceDisplay amount={product.basePrice} size={14} />
+                  </div>
+                </a>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </GlassPanel>
+  )
+}
+
+function BuddyAssetMetric({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode
+  label: string
+  value: ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border border-border-subtle bg-bg-secondary/40 px-3 py-3">
+      <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-text-muted">
+        <span className="text-primary">{icon}</span>
+        {label}
+      </div>
+      <div className="text-sm font-black text-text-primary">{value}</div>
+    </div>
+  )
+}
+
 export function UserProfilePage() {
   const { t, i18n } = useTranslation()
   const { userId } = useParams({ strict: false }) as { userId: string }
@@ -126,6 +305,25 @@ export function UserProfilePage() {
     queryFn: () => fetchApi<DashboardData>(`/api/agents/${profile?.agent?.id}/dashboard`),
     enabled: profile?.isBot === true && !!profile.agent?.id,
     refetchInterval: 30000,
+  })
+
+  const { data: assetShop } = useQuery({
+    queryKey: ['profile-asset-shop', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return null
+      try {
+        return await fetchApi<Shop>(`/api/users/${profile.id}/shop`)
+      } catch {
+        return null
+      }
+    },
+    enabled: profile?.isBot === true && !!profile.id,
+  })
+
+  const { data: assetProductsData } = useQuery({
+    queryKey: ['profile-asset-shop-products', assetShop?.id],
+    queryFn: () => fetchApi<{ products: Product[] }>(`/api/shops/${assetShop!.id}/products`),
+    enabled: Boolean(assetShop?.id),
   })
 
   if (isLoading || !profile) {
@@ -158,7 +356,9 @@ export function UserProfilePage() {
           ? t('member.activityReady')
           : currentActivity === 'preparing'
             ? t('member.activityPreparing')
-            : currentActivity
+          : currentActivity
+  const shopSearch = { view: 'buyer' } as const
+  const assetProducts = assetProductsData?.products ?? []
 
   return (
     <div className="flex-1 overflow-y-auto relative scrollbar-hidden">
@@ -177,16 +377,62 @@ export function UserProfilePage() {
                 </Button>
 
                 {currentUser?.id === profile.id ? (
-                  <Button
-                    size="sm"
-                    variant="glass"
-                    onClick={() => setShowQrCard(true)}
-                    icon={QrCode}
-                  >
-                    {t('profile.myQrCard')}
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="glass"
+                      onClick={() => setShowQrCard(true)}
+                      icon={QrCode}
+                    >
+                      {t('profile.myQrCard')}
+                    </Button>
+                    {assetShop && (
+                      <Link
+                        to="/shop/users/$userId"
+                        params={{ userId: profile.id }}
+                        search={shopSearch}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border-subtle bg-bg-tertiary/55 px-3 text-sm font-black text-text-primary transition hover:border-primary/45 hover:text-primary"
+                      >
+                        <Store size={15} />
+                        {t('profile.visitAssetStore')}
+                      </Link>
+                    )}
+                    {!profile.isBot && !assetShop && (
+                      <Link
+                        to="/shop/users/$userId"
+                        params={{ userId: profile.id }}
+                        search={shopSearch}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border-subtle bg-bg-tertiary/55 px-3 text-sm font-black text-text-primary transition hover:border-primary/45 hover:text-primary"
+                      >
+                        <Store size={15} />
+                        {t('profile.visitShop')}
+                      </Link>
+                    )}
+                  </div>
                 ) : (
                   <div className="flex flex-wrap items-center justify-end gap-2">
+                    {assetShop && (
+                      <Link
+                        to="/shop/users/$userId"
+                        params={{ userId: profile.id }}
+                        search={shopSearch}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 text-sm font-black text-primary transition hover:bg-primary/15"
+                      >
+                        <Store size={15} />
+                        {t('profile.visitAssetStore')}
+                      </Link>
+                    )}
+                    {!profile.isBot && !assetShop && (
+                      <Link
+                        to="/shop/users/$userId"
+                        params={{ userId: profile.id }}
+                        search={shopSearch}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 text-sm font-black text-primary transition hover:bg-primary/15"
+                      >
+                        <Store size={15} />
+                        {t('profile.visitShop')}
+                      </Link>
+                    )}
                     <Button
                       size="sm"
                       variant="glass"
@@ -302,6 +548,15 @@ export function UserProfilePage() {
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
             <section className="space-y-5 min-w-0">
+              {profile.isBot && (
+                <BuddyCommercePanel
+                  profile={profile}
+                  shop={assetShop ?? null}
+                  products={assetProducts}
+                  rentalStats={dashboardData?.rentalStats}
+                />
+              )}
+
               {hasDashboard && (
                 <GlassPanel className="p-5 space-y-3">
                   <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/50">

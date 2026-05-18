@@ -1,6 +1,15 @@
 import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { commerceOffers, entitlements, products, shops, users, workspaceNodes } from '../db/schema'
+import {
+  commerceFulfillmentJobs,
+  commerceOffers,
+  entitlements,
+  orders,
+  products,
+  shops,
+  users,
+  workspaceNodes,
+} from '../db/schema'
 
 type DbLike = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
 
@@ -71,11 +80,28 @@ export class EntitlementDao {
           sizeBytes: workspaceNodes.sizeBytes,
           previewUrl: workspaceNodes.previewUrl,
         },
+        order: {
+          id: orders.id,
+          orderNo: orders.orderNo,
+          shopId: orders.shopId,
+          buyerId: orders.buyerId,
+          status: orders.status,
+          totalAmount: orders.totalAmount,
+          buyerNote: orders.buyerNote,
+          sellerNote: orders.sellerNote,
+          paidAt: orders.paidAt,
+          shippedAt: orders.shippedAt,
+          completedAt: orders.completedAt,
+          cancelledAt: orders.cancelledAt,
+          createdAt: orders.createdAt,
+          updatedAt: orders.updatedAt,
+        },
       })
       .from(entitlements)
       .leftJoin(shops, eq(entitlements.shopId, shops.id))
       .leftJoin(products, eq(entitlements.productId, products.id))
       .leftJoin(commerceOffers, eq(entitlements.offerId, commerceOffers.id))
+      .leftJoin(orders, eq(entitlements.orderId, orders.id))
       .leftJoin(
         workspaceNodes,
         and(
@@ -92,7 +118,106 @@ export class EntitlementDao {
       product: row.product?.id ? row.product : null,
       offer: row.offer?.id ? row.offer : null,
       paidFile: row.paidFile?.id ? row.paidFile : null,
+      order: row.order?.id ? row.order : null,
     }))
+  }
+
+  async findByIdWithDetails(id: string) {
+    const rows = await this.db
+      .select({
+        entitlement: entitlements,
+        shop: {
+          id: shops.id,
+          scopeKind: shops.scopeKind,
+          serverId: shops.serverId,
+          ownerUserId: shops.ownerUserId,
+          name: shops.name,
+          logoUrl: shops.logoUrl,
+        },
+        product: {
+          id: products.id,
+          shopId: products.shopId,
+          name: products.name,
+          summary: products.summary,
+          type: products.type,
+          basePrice: products.basePrice,
+          currency: products.currency,
+          billingMode: products.billingMode,
+          entitlementConfig: products.entitlementConfig,
+        },
+        offer: {
+          id: commerceOffers.id,
+          shopId: commerceOffers.shopId,
+          productId: commerceOffers.productId,
+          priceOverride: commerceOffers.priceOverride,
+          currency: commerceOffers.currency,
+          status: commerceOffers.status,
+        },
+        paidFile: {
+          id: workspaceNodes.id,
+          name: workspaceNodes.name,
+          mime: workspaceNodes.mime,
+          sizeBytes: workspaceNodes.sizeBytes,
+          previewUrl: workspaceNodes.previewUrl,
+        },
+        buyer: {
+          id: users.id,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        },
+        order: {
+          id: orders.id,
+          orderNo: orders.orderNo,
+          shopId: orders.shopId,
+          buyerId: orders.buyerId,
+          status: orders.status,
+          totalAmount: orders.totalAmount,
+          buyerNote: orders.buyerNote,
+          sellerNote: orders.sellerNote,
+          paidAt: orders.paidAt,
+          shippedAt: orders.shippedAt,
+          completedAt: orders.completedAt,
+          cancelledAt: orders.cancelledAt,
+          createdAt: orders.createdAt,
+          updatedAt: orders.updatedAt,
+        },
+      })
+      .from(entitlements)
+      .leftJoin(shops, eq(entitlements.shopId, shops.id))
+      .leftJoin(products, eq(entitlements.productId, products.id))
+      .leftJoin(commerceOffers, eq(entitlements.offerId, commerceOffers.id))
+      .leftJoin(users, eq(entitlements.userId, users.id))
+      .leftJoin(orders, eq(entitlements.orderId, orders.id))
+      .leftJoin(
+        workspaceNodes,
+        and(
+          eq(entitlements.resourceType, 'workspace_file'),
+          sql`${entitlements.resourceId} = ${workspaceNodes.id}::text`,
+        ),
+      )
+      .where(eq(entitlements.id, id))
+      .limit(1)
+
+    const row = rows[0]
+    if (!row) return null
+
+    const fulfillmentJobs = await this.db
+      .select()
+      .from(commerceFulfillmentJobs)
+      .where(eq(commerceFulfillmentJobs.entitlementId, id))
+      .orderBy(desc(commerceFulfillmentJobs.createdAt))
+
+    return {
+      ...row.entitlement,
+      shop: row.shop?.id ? row.shop : null,
+      product: row.product?.id ? row.product : null,
+      offer: row.offer?.id ? row.offer : null,
+      paidFile: row.paidFile?.id ? row.paidFile : null,
+      buyer: row.buyer?.id ? row.buyer : null,
+      order: row.order?.id ? row.order : null,
+      fulfillmentJobs,
+    }
   }
 
   async findByShop(shopId: string, opts?: { limit?: number; offset?: number }) {
@@ -131,11 +256,28 @@ export class EntitlementDao {
           sizeBytes: workspaceNodes.sizeBytes,
           previewUrl: workspaceNodes.previewUrl,
         },
+        order: {
+          id: orders.id,
+          orderNo: orders.orderNo,
+          shopId: orders.shopId,
+          buyerId: orders.buyerId,
+          status: orders.status,
+          totalAmount: orders.totalAmount,
+          buyerNote: orders.buyerNote,
+          sellerNote: orders.sellerNote,
+          paidAt: orders.paidAt,
+          shippedAt: orders.shippedAt,
+          completedAt: orders.completedAt,
+          cancelledAt: orders.cancelledAt,
+          createdAt: orders.createdAt,
+          updatedAt: orders.updatedAt,
+        },
       })
       .from(entitlements)
       .leftJoin(users, eq(entitlements.userId, users.id))
       .leftJoin(products, eq(entitlements.productId, products.id))
       .leftJoin(commerceOffers, eq(entitlements.offerId, commerceOffers.id))
+      .leftJoin(orders, eq(entitlements.orderId, orders.id))
       .leftJoin(
         workspaceNodes,
         and(
@@ -154,6 +296,7 @@ export class EntitlementDao {
       product: row.product?.id ? row.product : null,
       offer: row.offer?.id ? row.offer : null,
       paidFile: row.paidFile?.id ? row.paidFile : null,
+      order: row.order?.id ? row.order : null,
     }))
   }
 
@@ -207,14 +350,17 @@ export class EntitlementDao {
     return r[0] ?? null
   }
 
-  async findResourceEntitlements(input: {
-    userId: string
-    resourceType: string
-    resourceId: string
-    capabilities?: string[]
-    serverId?: string | null
-    limit?: number
-  }) {
+  async findResourceEntitlements(
+    input: {
+      userId: string
+      resourceType: string
+      resourceId: string
+      capabilities?: string[]
+      serverId?: string | null
+      limit?: number
+    },
+    db: DbLike = this.db,
+  ) {
     const conditions = [
       eq(entitlements.userId, input.userId),
       eq(entitlements.resourceType, input.resourceType),
@@ -225,7 +371,7 @@ export class EntitlementDao {
     }
     if (input.serverId) conditions.push(eq(entitlements.serverId, input.serverId))
 
-    return this.db
+    return db
       .select()
       .from(entitlements)
       .where(and(...conditions))

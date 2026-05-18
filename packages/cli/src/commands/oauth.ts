@@ -1,6 +1,25 @@
 import { Command } from 'commander'
-import { getClient } from '../utils/client.js'
+import { getClient, getClientWithToken } from '../utils/client.js'
 import { type OutputOptions, output, outputError, outputSuccess } from '../utils/output.js'
+
+function resolveOAuthAccessToken(options: { accessToken?: string }): string {
+  const token = options.accessToken || process.env.SHADOWOB_OAUTH_TOKEN
+  if (!token) {
+    throw new Error('Provide --access-token or SHADOWOB_OAUTH_TOKEN for OAuth commerce APIs')
+  }
+  return token
+}
+
+function parseMetadata(
+  value: string | undefined,
+): Record<string, string | number | boolean | null> | undefined {
+  if (!value) return undefined
+  const parsed = JSON.parse(value) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('--metadata must be a JSON object')
+  }
+  return parsed as Record<string, string | number | boolean | null>
+}
 
 export function createOAuthCommand(): Command {
   const oauth = new Command('oauth').description('OAuth management commands')
@@ -160,6 +179,84 @@ export function createOAuthCommand(): Command {
         process.exit(1)
       }
     })
+
+  const commerce = oauth.command('commerce').description('OAuth commerce entitlement commands')
+
+  commerce
+    .command('check')
+    .description('Check the OAuth token user entitlement for the calling app')
+    .option('--resource-type <type>', 'Resource type, defaults to external_app')
+    .option('--resource-id <id>', 'App resource ID or app-id:feature')
+    .option('--capability <capability>', 'Capability, defaults to use')
+    .option('--access-token <token>', 'OAuth access token; defaults to SHADOWOB_OAUTH_TOKEN')
+    .option('--profile <name>', 'Profile to use for server URL')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (options: {
+        resourceType?: string
+        resourceId?: string
+        capability?: string
+        accessToken?: string
+        profile?: string
+        json?: boolean
+      }) => {
+        try {
+          const client = await getClientWithToken(resolveOAuthAccessToken(options), options.profile)
+          const result = await client.getOAuthCommerceEntitlementAccess({
+            resourceType: options.resourceType,
+            resourceId: options.resourceId,
+            capability: options.capability,
+          })
+          output(result, { json: options.json })
+        } catch (error) {
+          outputError(error instanceof Error ? error.message : String(error), {
+            json: options.json,
+          })
+          process.exit(1)
+        }
+      },
+    )
+
+  commerce
+    .command('redeem')
+    .description('Redeem the OAuth token user entitlement for the calling app')
+    .requiredOption('--idempotency-key <key>', 'Provider idempotency key')
+    .option('--resource-type <type>', 'Resource type, defaults to external_app')
+    .option('--resource-id <id>', 'App resource ID or app-id:feature')
+    .option('--capability <capability>', 'Capability, defaults to use')
+    .option('--metadata <json>', 'Flat provider metadata JSON object')
+    .option('--access-token <token>', 'OAuth access token; defaults to SHADOWOB_OAUTH_TOKEN')
+    .option('--profile <name>', 'Profile to use for server URL')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (options: {
+        idempotencyKey: string
+        resourceType?: string
+        resourceId?: string
+        capability?: string
+        metadata?: string
+        accessToken?: string
+        profile?: string
+        json?: boolean
+      }) => {
+        try {
+          const client = await getClientWithToken(resolveOAuthAccessToken(options), options.profile)
+          const result = await client.redeemOAuthCommerceEntitlement({
+            idempotencyKey: options.idempotencyKey,
+            resourceType: options.resourceType,
+            resourceId: options.resourceId,
+            capability: options.capability,
+            metadata: parseMetadata(options.metadata),
+          })
+          output(result, { json: options.json })
+        } catch (error) {
+          outputError(error instanceof Error ? error.message : String(error), {
+            json: options.json,
+          })
+          process.exit(1)
+        }
+      },
+    )
 
   return oauth
 }

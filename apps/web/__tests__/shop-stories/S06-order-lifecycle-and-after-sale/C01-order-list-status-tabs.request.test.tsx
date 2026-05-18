@@ -40,7 +40,7 @@ describe('S06/C01 order list status tabs request', () => {
 
     renderWithQuery(<ShopOrders serverId={serverId} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: '待付款' }))
+    await userEvent.click(await screen.findByRole('button', { name: '待支付' }))
 
     await waitFor(() => {
       const hasStatusReq = fetchApiMock.mock.calls.some((c) =>

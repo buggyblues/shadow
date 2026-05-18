@@ -22,6 +22,7 @@ export type OAuthActor = {
   kind: 'oauth'
   userId: string
   appId: string
+  appClientId?: string
   tokenId: string
   scopes: string[]
 }

@@ -40,6 +40,8 @@ export type ShadowOAuthScope =
   | 'workspaces:write'
   | 'buddies:create'
   | 'buddies:manage'
+  | 'commerce:read'
+  | 'commerce:write'
 
 export interface ShadowOAuthServer {
   id: string
@@ -75,4 +77,56 @@ export interface ShadowOAuthBuddy {
   id: string
   userId: string
   agentId: string
+}
+
+export interface ShadowOAuthCommerceEntitlementSummary {
+  id: string
+  status: string
+  capability: string
+  resourceType: string
+  resourceId: string
+  productId?: string | null
+  shopId?: string | null
+  orderId?: string | null
+  offerId?: string | null
+  expiresAt?: string | null
+}
+
+export interface ShadowOAuthCommerceEntitlementAccess {
+  allowed: boolean
+  status: string
+  reasonCode?: string | null
+  resourceType: string
+  resourceId: string
+  capability: string
+  app: { id: string }
+  entitlement?: ShadowOAuthCommerceEntitlementSummary | null
+}
+
+export interface ShadowOAuthCommerceEntitlementRedeemInput {
+  idempotencyKey: string
+  resourceType?: string
+  resourceId?: string
+  capability?: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface ShadowOAuthCommerceEntitlementRedemption {
+  appId: string
+  resourceType: string
+  resourceId: string
+  capability: string
+  idempotencyKey: string
+  redeemedAt: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface ShadowOAuthCommerceEntitlementRedeemResult {
+  redeemed: true
+  resourceType: string
+  resourceId: string
+  capability: string
+  app: { id: string }
+  entitlement: ShadowOAuthCommerceEntitlementSummary
+  redemption: ShadowOAuthCommerceEntitlementRedemption
 }

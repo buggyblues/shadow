@@ -1,14 +1,17 @@
-import { Badge, Button, Card, cn, EmptyState, GlassPanel, Input } from '@shadowob/ui'
+import { Button, Card, cn, EmptyState, GlassPanel, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
   ClipboardList,
   Heart,
+  Package,
   Search,
   Settings,
+  ShieldCheck,
   ShoppingBag,
   ShoppingCart,
+  Star,
   Wallet,
   X,
 } from 'lucide-react'
@@ -96,13 +99,22 @@ export interface ProductCategory {
 
 export interface Shop {
   id: string
-  serverId: string
+  serverId?: string | null
+  ownerUserId?: string | null
+  scopeKind?: 'server' | 'user'
   name: string
   description?: string
   logoUrl?: string
   bannerUrl?: string
   status: string
   settings: Record<string, unknown>
+}
+
+export interface ServerSummary {
+  id: string
+  name?: string | null
+  slug?: string | null
+  ownerId?: string | null
 }
 
 /* ───────── Main Shop Page ───────── */
@@ -127,6 +139,12 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
   const { data: shop, isLoading: isShopLoading } = useQuery({
     queryKey: ['shop', serverId],
     queryFn: () => fetchApi<Shop>(`/api/servers/${serverId}/shop`),
+    enabled: !!serverId,
+  })
+
+  const { data: server } = useQuery({
+    queryKey: ['server', serverId],
+    queryFn: () => fetchApi<ServerSummary>(`/api/servers/${serverId}`),
     enabled: !!serverId,
   })
 
@@ -163,6 +181,8 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
         isAdmin={isAdmin}
         onBack={() => setActiveProductId(null)}
         embedded={embedded}
+        shop={shop}
+        server={server}
       />
     )
 
@@ -323,6 +343,7 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
         <ShopBrowse
           serverId={serverId}
           shop={shop}
+          server={server}
           isLoading={isShopLoading}
           embedded={embedded}
           actions={embedded ? actionControls : null}
@@ -335,7 +356,7 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
 
       {/* Overlays */}
       {overlay === 'cart' && (
-        <OverlayContainer onClose={() => setOverlay(null)} title="购物车">
+        <OverlayContainer onClose={() => setOverlay(null)} title={t('shop.cartTitle')}>
           <ShopCart
             serverId={serverId}
             onCheckout={(orderId) => {
@@ -347,13 +368,13 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
       )}
 
       {overlay === 'orders' && (
-        <OverlayContainer onClose={() => setOverlay(null)} title="订单与权益">
+        <OverlayContainer onClose={() => setOverlay(null)} title={t('shop.ordersAndAccess')}>
           <ShopOrders serverId={serverId} />
         </OverlayContainer>
       )}
 
       {overlay === 'favorites' && (
-        <OverlayContainer onClose={() => setOverlay(null)} title="我的收藏">
+        <OverlayContainer onClose={() => setOverlay(null)} title={t('shop.myFavorites')}>
           <FavoriteProducts
             serverId={serverId}
             onAddToCart={(product, e) => {
@@ -380,6 +401,7 @@ function FavoriteProducts({
   onAddToCart?: (product: Product, e: React.MouseEvent) => void
   onOpenProduct: (productId: string) => void
 }) {
+  const { t } = useTranslation()
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
 
   useEffect(() => {
@@ -405,7 +427,7 @@ function FavoriteProducts({
       <div className="p-6">
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="animate-pulse">
+            <Card key={i} className="animate-pulse overflow-hidden !rounded-lg">
               <div className="aspect-[4/5] bg-bg-modifier-hover rounded-t-[40px]" />
               <div className="p-4 space-y-3">
                 <div className="h-4 bg-bg-modifier-hover rounded w-3/4" />
@@ -421,7 +443,11 @@ function FavoriteProducts({
   if (products.length === 0) {
     return (
       <div className="p-8">
-        <EmptyState icon={Heart} title="还没有收藏商品" description="去逛逛并点亮小心心吧" />
+        <EmptyState
+          icon={Heart}
+          title={t('shop.noFavorites')}
+          description={t('shop.noFavoritesHint')}
+        />
       </div>
     )
   }
@@ -465,6 +491,7 @@ function OverlayContainer({
 function ShopBrowse({
   serverId,
   shop,
+  server,
   isLoading,
   embedded = false,
   actions,
@@ -472,12 +499,14 @@ function ShopBrowse({
 }: {
   serverId: string
   shop?: Shop | null
+  server?: ServerSummary | null
   isLoading?: boolean
   embedded?: boolean
   actions?: React.ReactNode
   onAddToCart?: (product: Product, e: React.MouseEvent) => void
 }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const {
     activeCategoryId,
     setActiveCategoryId,
@@ -550,73 +579,22 @@ function ShopBrowse({
   }, [products, searchQuery, sortBy, favoriteOnly, favoriteIds])
 
   const topCategories = categories.slice(0, 8)
+  const totalSales = products.reduce((sum, product) => sum + (product.salesCount ?? 0), 0)
+  const ratedProducts = products.filter((product) => product.ratingCount > 0)
+  const averageRating =
+    ratedProducts.length > 0
+      ? ratedProducts.reduce((sum, product) => sum + product.avgRating, 0) / ratedProducts.length
+      : 0
+  const entitlementProducts = products.filter((product) => product.type === 'entitlement').length
+  const serverName = server?.name ?? server?.slug ?? serverId
+  const ownerProfileId = shop?.ownerUserId ?? server?.ownerId ?? null
+  const shopCoverStyle = shop?.bannerUrl
+    ? ({ backgroundImage: `url(${shop.bannerUrl})` } as React.CSSProperties)
+    : undefined
 
   return (
     <div className={cn('flex flex-col pb-24', embedded && 'pb-8')}>
-      {/* ── Shop Banner / Header ── */}
-      {shop?.bannerUrl ? (
-        <div
-          className={cn(
-            'relative group overflow-hidden bg-bg-secondary',
-            embedded
-              ? 'mx-6 mt-6 h-44 rounded-[28px] border border-border-subtle shadow-[var(--shadow-soft)] md:mx-8 md:h-56'
-              : 'h-48 w-full md:h-[300px]',
-          )}
-        >
-          <img
-            src={shop.bannerUrl}
-            alt="Banner"
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-          {embedded ? (
-            <div className="absolute bottom-5 left-5 right-5 md:bottom-6 md:left-6 md:right-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/80 backdrop-blur-xl">
-                <ShoppingBag size={12} />
-                <span>{t('server.settingsShop', { defaultValue: '店铺' })}</span>
-              </div>
-              {shop.description && (
-                <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-white/85 drop-shadow-sm md:text-base">
-                  {shop.description}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="absolute bottom-6 left-6 right-6 flex items-end gap-5 md:bottom-10 md:left-10">
-              {shop.logoUrl && (
-                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-[3px] border-border-subtle shadow-2xl backdrop-blur-sm md:h-28 md:w-28 md:rounded-3xl md:border-4">
-                  <img src={shop.logoUrl} alt="Logo" className="w-full h-full object-cover" />
-                </div>
-              )}
-              <div className="flex-1 pb-1 md:pb-2">
-                <h3 className="mb-1 text-2xl font-black tracking-tight text-white drop-shadow-md md:mb-2 md:text-4xl">
-                  {shop.name}
-                </h3>
-                {shop.description && (
-                  <p className="max-w-2xl text-xs font-medium leading-relaxed text-white/80 drop-shadow-sm md:line-clamp-3 md:text-base">
-                    {shop.description}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : shop?.description ? (
-        <div
-          className={cn(
-            embedded
-              ? 'mx-6 mt-6 rounded-[28px] border border-border-subtle bg-bg-secondary/35 px-6 py-5 shadow-[var(--shadow-soft)] md:mx-8'
-              : 'border-b border-border-subtle bg-bg-secondary px-6 py-5 md:px-10 md:py-8',
-          )}
-        >
-          {!embedded && (
-            <h1 className="mb-2 text-2xl font-black text-text-primary md:text-3xl">{shop.name}</h1>
-          )}
-          <p className="text-text-secondary text-sm md:text-base max-w-3xl leading-relaxed">
-            {shop.description}
-          </p>
-        </div>
-      ) : isLoading ? (
+      {isLoading ? (
         <div
           className={cn(
             'animate-pulse bg-bg-secondary',
@@ -625,7 +603,100 @@ function ShopBrowse({
               : 'h-48 md:h-[300px]',
           )}
         />
-      ) : null}
+      ) : (
+        <GlassPanel
+          className={cn(
+            'relative overflow-hidden',
+            embedded
+              ? 'mx-4 mt-4 rounded-[28px] shadow-[var(--shadow-soft)] md:mx-6'
+              : 'mx-auto mt-6 w-full max-w-[1400px] rounded-[32px]',
+          )}
+        >
+          {shopCoverStyle && (
+            <div
+              className="absolute inset-0 bg-cover bg-center opacity-45 blur-[1px]"
+              style={shopCoverStyle}
+              aria-hidden="true"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-bg-primary/95 via-bg-primary/70 to-bg-primary/30" />
+          <div className="relative grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] md:p-6">
+            <div className="flex min-w-0 gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-bg-primary/60 text-primary shadow-inner">
+                {shop?.logoUrl ? (
+                  <img src={shop.logoUrl} alt={shop.name} className="h-full w-full object-cover" />
+                ) : (
+                  <ShoppingBag size={28} />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
+                  <ShoppingBag size={13} />
+                  {t('shop.serverStorefront')}
+                </div>
+                <h1 className="truncate text-2xl font-black tracking-tight text-text-primary md:text-3xl">
+                  {shop?.name ?? t('server.settingsShop', { defaultValue: '店铺' })}
+                </h1>
+                {shop?.description && (
+                  <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-text-secondary">
+                    {shop.description}
+                  </p>
+                )}
+                <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/55 px-3 py-1.5 text-xs font-black text-text-muted">
+                  <ShieldCheck size={13} className="text-primary" />
+                  <span className="truncate">
+                    {t('shop.serverProvidedBy', {
+                      server: serverName,
+                      shop: shop?.name ?? t('server.settingsShop', { defaultValue: '店铺' }),
+                    })}
+                  </span>
+                </div>
+                {ownerProfileId && (
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="glass"
+                      onClick={() =>
+                        navigate({
+                          to: '/profile/$userId',
+                          params: { userId: ownerProfileId },
+                        })
+                      }
+                    >
+                      {t('shop.openOwnerProfile')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <ShopSignal
+                icon={<Package size={15} />}
+                label={t('shop.allProducts')}
+                value={String(products.length)}
+              />
+              <ShopSignal
+                icon={<ShieldCheck size={15} />}
+                label={t('shop.entitlement')}
+                value={String(entitlementProducts)}
+              />
+              <ShopSignal
+                icon={<Star size={15} />}
+                label={ratedProducts.length > 0 ? t('shop.reviews') : t('shop.soldCount')}
+                value={
+                  ratedProducts.length > 0
+                    ? averageRating.toFixed(1)
+                    : totalSales > 999
+                      ? '999+'
+                      : String(totalSales)
+                }
+              />
+            </div>
+          </div>
+        </GlassPanel>
+      )}
 
       {/* ── Container for Filters & Grid (PC Friendly Layout) ── */}
       <div className={cn(embedded ? 'w-full px-4 pb-6 md:px-6' : 'mx-auto w-full max-w-[1400px]')}>
@@ -646,7 +717,7 @@ function ShopBrowse({
                   icon={Search}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="搜索商品..."
+                  placeholder={t('shop.searchProducts')}
                   className="!rounded-full"
                 />
               </div>
@@ -654,9 +725,9 @@ function ShopBrowse({
               {/* Sort Controls */}
               <div className="flex items-center gap-1 bg-bg-secondary/60 p-1 rounded-full shrink-0 self-start">
                 {[
-                  { key: 'default' as const, label: '综合' },
-                  { key: 'sales' as const, label: '销量' },
-                  { key: 'newest' as const, label: '最新' },
+                  { key: 'default' as const, label: t('shop.sortDefault') },
+                  { key: 'sales' as const, label: t('shop.sortSales') },
+                  { key: 'newest' as const, label: t('shop.sortNewest') },
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -683,7 +754,7 @@ function ShopBrowse({
                       : 'text-text-secondary hover:text-text-primary',
                   )}
                 >
-                  价格
+                  {t('shop.sortPrice')}
                   <span className="flex flex-col leading-none -space-y-0.5">
                     <span
                       className={`text-[9px] ${sortBy === 'price-asc' ? 'text-accent' : 'opacity-30'}`}
@@ -715,7 +786,7 @@ function ShopBrowse({
                   : 'bg-bg-secondary text-text-secondary ring-1 ring-border-subtle hover:bg-bg-modifier-hover',
               )}
             >
-              全部
+              {t('shop.allProducts')}
             </button>
             {topCategories.map((cat) => (
               <button
@@ -742,7 +813,7 @@ function ShopBrowse({
                   : 'bg-bg-secondary text-text-secondary ring-1 ring-border-subtle hover:bg-bg-modifier-hover',
               )}
             >
-              收藏({favoriteIds.length})
+              {t('shop.favoritesWithCount', { count: favoriteIds.length })}
             </button>
           </div>
         </div>
@@ -752,7 +823,7 @@ function ShopBrowse({
           {isProductsLoading ? (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Card key={i} className="animate-pulse overflow-hidden">
+                <Card key={i} className="animate-pulse overflow-hidden !rounded-lg">
                   <div className="aspect-[4/5] bg-bg-modifier-hover" />
                   <div className="p-4 space-y-3">
                     <div className="h-5 bg-bg-modifier-hover rounded-lg w-3/4" />
@@ -764,20 +835,18 @@ function ShopBrowse({
             </div>
           ) : filtered.length === 0 ? (
             <div className={cn('flex', embedded ? 'min-h-[420px]' : 'min-h-[520px]')}>
-              <div
+              <GlassPanel
                 className={cn(
-                  'flex flex-1 items-center justify-center rounded-[32px] border border-dashed border-border-subtle/80 px-6 py-10',
-                  embedded
-                    ? 'bg-[var(--glass-bg)]/55 shadow-[var(--shadow-soft)]'
-                    : 'bg-bg-secondary/25',
+                  'flex flex-1 items-center justify-center rounded-[32px] border-dashed px-6 py-10',
+                  embedded ? 'shadow-[var(--shadow-soft)]' : '',
                 )}
               >
                 <EmptyState
                   icon={ShoppingBag}
-                  title="未找到相关商品"
-                  description="尝试更换搜索词或分类"
+                  title={t('shop.noProductsFound')}
+                  description={t('shop.noProductsFoundHint')}
                 />
-              </div>
+              </GlassPanel>
             </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
@@ -787,12 +856,34 @@ function ShopBrowse({
                   product={product}
                   onClick={() => setActiveProductId(product.id)}
                   onAddToCart={onAddToCart}
+                  shopName={shop?.name}
+                  serverName={serverName}
                 />
               ))}
             </div>
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function ShopSignal({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-2xl border border-border-subtle bg-bg-primary/55 px-3 py-3">
+      <div className="mb-2 flex items-center justify-between gap-2 text-primary">
+        {icon}
+        <span className="text-lg font-black text-text-primary tabular-nums">{value}</span>
+      </div>
+      <div className="truncate text-xs font-black text-text-muted">{label}</div>
     </div>
   )
 }

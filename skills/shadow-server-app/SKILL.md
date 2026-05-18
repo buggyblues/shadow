@@ -18,6 +18,10 @@ Use this skill when integrating a third-party App with a Shadow server or when t
 - Every command must declare `permission`, `action`, and `dataClass`.
 - Use `server-private` or `channel-private` for ordinary server data. Do not use `financial`, `secret`, or `cloud-secret` unless the Shadow server policy explicitly supports that use case.
 - For local development, install with `--manifest-file`; production manifests should be hosted on HTTPS.
+- If the App sells paid value, route discovery, purchase, entitlement ownership, renewal, refund,
+  and buyer support through Shadow commerce instead of inventing an App-local checkout.
+- Commerce behavior must be manually validated in the browser from server/shop/Buddy entry through
+  purchase and fulfillment, not only through CLI command calls.
 
 ## Discovery
 
@@ -83,3 +87,15 @@ Authorization: Bearer <short-lived-token>
 ```
 
 Use the returned `shadow.actor` and command fields as the authoritative identity context.
+
+## Commerce Fit
+
+Server Apps can use Shadow commerce to sell app services, server privileges, protected workspace
+resources, Cloud/play templates, or Buddy-delivered work.
+
+- Publish buyer-facing value as a Shadow product/offer first.
+- Keep fulfillment actions tied to an order, entitlement, or fulfillment job.
+- When a provider app needs to consume a purchased right in its own system, use the OAuth commerce
+  entitlement check/redeem flow documented in `docs/api/oauth-commerce-entitlements.md`.
+- Buyer-visible pages should still link back to the server, shop, provider, Buddy, and order detail
+  so the user knows where the value will be delivered.

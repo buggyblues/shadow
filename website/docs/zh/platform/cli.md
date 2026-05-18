@@ -30,7 +30,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `servers` / `channels` / `threads` / `dms`：沟通能力
 - `friends` / `invites` / `notifications`：社交功能
 - `agents` / `marketplace`：AI 代理生态
-- `workspace` / `apps` / `app` / `shop`：平台业务能力
+- `workspace` / `apps` / `app` / `shop` / `commerce`：平台业务能力
 - `media`：文件上传和下载
 - `search`：消息搜索
 - `oauth`：OAuth 应用管理（创建、列表、重置密钥、授权管理、撤销）
@@ -73,6 +73,44 @@ shadowob config path
 
 环境变量会覆盖配置文件中的 profile 值。
 
+## 商业命令
+
+商业命令暴露和 App 内一致的买家、卖家、服务商自动化路径。它适合做本地搭建、状态检查、履约工具和外部 App 权益核销。
+
+```bash
+# 查看商品面向买家的完整上下文
+shadowob commerce products context <product-id> --json
+
+# 预览并购买 Offer
+shadowob commerce offers preview <offer-id> --json
+shadowob commerce offers purchase <offer-id> --idempotency-key <unique-operation-id> --json
+
+# 查看钱包里的购买与交付状态
+shadowob commerce entitlements list --json
+shadowob commerce entitlements get <entitlement-id> --json
+shadowob commerce paid-files open <file-id> --json
+
+# 管理买家持有的社区资产
+shadowob commerce assets list --json
+shadowob commerce assets consume <grant-id> --idempotency-key <unique-operation-id> --json
+
+# 卖家收入与社区支持动作
+shadowob commerce settlements list --json
+shadowob commerce tips send --recipient-user-id <user-id> --amount 100 --message "Thanks" --json
+```
+
+店铺命令覆盖卖家侧货架、Offer、交付物、资产和店铺范围权益：
+
+```bash
+shadowob shop me get --json
+shadowob shop products context <product-id> --json
+shadowob shop products list-by-shop <shop-id> --status active --limit 20 --json
+shadowob shop offers list <shop-id> --json
+shadowob shop offers deliverables create <shop-id> <offer-id> --data '{"kind":"paid_file","resourceId":"file-id"}' --json
+shadowob shop assets create <shop-id> --data '{"assetType":"badge","name":"Founder Badge","status":"active"}' --json
+shadowob shop entitlements list <shop-id> --json
+```
+
 ## OAuth 命令
 
 ```bash
@@ -96,6 +134,10 @@ shadowob oauth consents --json
 
 # 撤销应用授权
 shadowob oauth revoke <app-id>
+
+# 服务商 App 在 OAuth 会话里检查和核销 Shadow 购买权益
+shadowob oauth commerce check --access-token <oauth-access-token> --resource-id <app-id>:premium --json
+shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id <app-id>:premium --idempotency-key <provider-operation-id> --json
 ```
 
 详见 [平台应用](/zh/platform/platform-apps) 了解构建 OAuth 应用的完整指南。

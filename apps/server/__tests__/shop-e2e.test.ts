@@ -61,7 +61,7 @@ let skuId1: string
 let skuId2: string
 let cartItemId: string
 let orderId1: string
-let orderId2: string // for cancel test
+let orderId2: string // entitlement order
 let orderNo1: string
 
 const INITIAL_WALLET_BALANCE = 0
@@ -789,10 +789,30 @@ describe('Order — creation & payment', () => {
       body: orderBody({ items: [{ productId: productId2, quantity: 1 }] }),
     })
     expect(res.status).toBe(201)
-    const order = await json<{ id: string; status: string; totalAmount: number }>(res)
+    const order = await json<{
+      id: string
+      status: string
+      totalAmount: number
+      completedAt?: string | null
+    }>(res)
     expect(order.status).toBe('paid')
     expect(order.totalAmount).toBe(200)
     orderId2 = order.id
+
+    for (const status of ['processing', 'shipped', 'delivered', 'completed'] as const) {
+      const statusRes = await req(
+        'PUT',
+        `/api/servers/${serverId}/shop/orders/${orderId2}/status`,
+        {
+          token: adminToken,
+          body: { status },
+        },
+      )
+      expect(statusRes.status).toBe(200)
+      const updated = await json<{ status: string; completedAt?: string | null }>(statusRes)
+      expect(updated.status).toBe(status)
+      if (status === 'completed') expect(updated.completedAt).toBeDefined()
+    }
   })
 
   it('cart is cleared after order', async () => {
@@ -934,6 +954,16 @@ describe('Order status management', () => {
     expect(order.status).toBe('delivered')
   })
 
+  it('buyer can confirm delivered order completion', async () => {
+    const res = await req('POST', `/api/servers/${serverId}/shop/orders/${orderId1}/complete`, {
+      token: buyerToken,
+    })
+    expect(res.status).toBe(200)
+    const order = await json<{ status: string; completedAt: string }>(res)
+    expect(order.status).toBe('completed')
+    expect(order.completedAt).toBeDefined()
+  })
+
   it('admin can complete order', async () => {
     const res = await req('PUT', `/api/servers/${serverId}/shop/orders/${orderId1}/status`, {
       token: adminToken,
@@ -1061,10 +1091,18 @@ describe('Order cancellation & refund', () => {
 
 describe('Reviews', () => {
   it('cannot review order that is not completed/delivered', async () => {
-    // orderId2 is currently 'paid' — should fail
-    const res = await req('POST', `/api/servers/${serverId}/shop/orders/${orderId2}/review`, {
+    await container.resolve('walletService').topUp(buyerUserId, 500, 'Test balance seed')
+    const createRes = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: { productId: productId2, rating: 5, content: '太好了' },
+      body: orderBody({ items: [{ productId: productId1, skuId: skuId1, quantity: 1 }] }),
+    })
+    expect(createRes.status).toBe(201)
+    const paidOrder = await json<{ id: string; status: string }>(createRes)
+    expect(paidOrder.status).toBe('paid')
+
+    const res = await req('POST', `/api/servers/${serverId}/shop/orders/${paidOrder.id}/review`, {
+      token: buyerToken,
+      body: { productId: productId1, rating: 5, content: '太好了' },
     })
     expect(res.status).toBe(400)
   })
@@ -1176,15 +1214,12 @@ describe('Entitlements', () => {
     expect(ent!.capability).toBe('use')
   })
 
-  it('entitlement revoked when entitlement order is cancelled', async () => {
-    // orderId2 was for entitlement product, let's cancel it
-    // It's currently 'paid' so cancellation should work
+  it('completed entitlement order cannot be cancelled after instant delivery', async () => {
     const cancelRes = await req('POST', `/api/servers/${serverId}/shop/orders/${orderId2}/cancel`, {
       token: buyerToken,
     })
-    expect(cancelRes.status).toBe(200)
+    expect(cancelRes.status).toBe(400)
 
-    // Check entitlement is revoked (findActiveByUser excludes inactive)
     const res = await req('GET', `/api/servers/${serverId}/shop/entitlements`, {
       token: buyerToken,
     })
@@ -1193,7 +1228,8 @@ describe('Entitlements', () => {
     const vipEnt = ents.find(
       (e) => e.resourceType === 'service' && e.resourceId === 'vip-member-access',
     )
-    expect(vipEnt).toBeUndefined()
+    expect(vipEnt).toBeDefined()
+    expect(vipEnt!.isActive).toBe(true)
   })
 })
 

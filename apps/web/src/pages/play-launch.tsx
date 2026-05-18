@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, Button, Card, Input } from '@shadowob/ui'
+import { Alert, AlertDescription, Button, GlassPanel, Input } from '@shadowob/ui'
 import { useSearch } from '@tanstack/react-router'
 import {
   ArrowLeft,
@@ -122,6 +122,7 @@ export function PlayLaunchPage() {
   const [error, setError] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [redeeming, setRedeeming] = useState(false)
+  const [heroImageFailed, setHeroImageFailed] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const [typedStepText, setTypedStepText] = useState('')
   const [membershipGate, setMembershipGate] = useState<{
@@ -218,6 +219,10 @@ export function PlayLaunchPage() {
       cancelled = true
     }
   }, [search.play, t])
+
+  useEffect(() => {
+    setHeroImageFailed(false)
+  }, [play?.image])
 
   useEffect(() => {
     if (phase !== 'launching' || !activeStep) {
@@ -337,24 +342,37 @@ export function PlayLaunchPage() {
       : kind === 'private'
         ? t('playLaunch.privatePlay')
         : t('playLaunch.communityPlay')
+  const heroImage = play?.image && !heroImageFailed ? play.image : null
 
   return (
-    <div className="min-h-screen bg-bg-deep px-4 py-8 text-text-primary">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center">
-        <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
-          <Card variant="glass" className="overflow-hidden border-white/10">
-            <div className="relative min-h-[540px]">
-              {play?.image ? (
+    <div className="h-full min-h-0 overflow-y-auto bg-transparent px-4 py-6 text-text-primary">
+      <GlassPanel
+        as="section"
+        className="relative mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl items-center overflow-hidden p-4 md:p-5"
+        style={{ background: 'color-mix(in srgb, var(--glass-bg) 76%, transparent)' }}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/10"
+          aria-hidden="true"
+        />
+        <div className="relative grid w-full gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+          <GlassPanel className="overflow-hidden p-0">
+            <div className="relative min-h-[500px]">
+              {heroImage ? (
                 <img
-                  src={play.image}
+                  src={heroImage}
                   alt={title}
                   className="absolute inset-0 h-full w-full object-cover"
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none'
+                    setHeroImageFailed(true)
+                  }}
                 />
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/25 via-purple-500/20 to-cyan-500/20" />
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-bg-deep via-bg-deep/70 to-bg-deep/15" />
-              <div className="relative flex h-full min-h-[540px] flex-col justify-between p-7 sm:p-9">
+              <div className="absolute inset-0 bg-gradient-to-t from-bg-primary/95 via-bg-primary/68 to-bg-primary/10" />
+              <div className="relative flex h-full min-h-[500px] flex-col justify-between p-7 sm:p-9">
                 <a
                   href="/"
                   className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-bg-secondary/30 px-4 py-2 text-sm font-semibold text-text-secondary no-underline transition hover:bg-white/10 hover:text-text-primary"
@@ -392,9 +410,9 @@ export function PlayLaunchPage() {
                 </div>
               </div>
             </div>
-          </Card>
+          </GlassPanel>
 
-          <Card variant="glass" className="flex flex-col justify-center border-white/10 p-7 sm:p-8">
+          <GlassPanel className="flex flex-col justify-center p-7 sm:p-8">
             {phase === 'launching' ? (
               <div className="text-center">
                 <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-primary/30 bg-primary/15">
@@ -580,9 +598,9 @@ export function PlayLaunchPage() {
                 </div>
               </div>
             )}
-          </Card>
+          </GlassPanel>
         </div>
-      </div>
+      </GlassPanel>
     </div>
   )
 }

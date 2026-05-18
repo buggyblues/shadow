@@ -204,10 +204,23 @@ Each workspace node has a `flags` JSONB field with optional metadata:
 ```bash
 # Shop info
 shadowob shop get <server-id> --json
+shadowob shop get-by-id <shop-id> --json
+shadowob shop me get --json
 
 # Products
-shadowob shop products list <server-id> --json
+shadowob shop products list <server-id> [--status active] [--keyword <text>] [--limit <n>] --json
+shadowob shop products list-by-shop <shop-id> [--status active] [--limit <n>] --json
 shadowob shop products get <server-id> <product-id> --json
+shadowob shop products context <product-id> --json
+shadowob shop products purchase <shop-id> <product-id> --idempotency-key <unique-operation-id> --json
+
+# Offers, deliverables, and shop assets
+shadowob shop offers list <shop-id> --json
+shadowob shop offers create <shop-id> --data '<offer-json>' --json
+shadowob shop offers deliverables create <shop-id> <offer-id> --data '<deliverable-json>' --json
+shadowob shop assets list <shop-id> --json
+shadowob shop assets create <shop-id> --data '<asset-definition-json>' --json
+shadowob shop entitlements list <shop-id> --json
 
 # Cart
 shadowob shop cart list <server-id> --json
@@ -219,6 +232,44 @@ shadowob shop orders get <server-id> <order-id> --json
 # Wallet
 shadowob shop wallet balance --json
 ```
+
+## Commerce
+
+```bash
+# Product and offer buyer context
+shadowob commerce products context <product-id> --json
+shadowob commerce offers preview <offer-id> --json
+shadowob commerce offers purchase <offer-id> --idempotency-key <unique-operation-id> --json
+
+# Chat commerce cards
+shadowob commerce cards list --channel-id <channel-id> [--keyword <text>] --json
+shadowob commerce cards purchase <message-id> <card-id> --idempotency-key <unique-operation-id> --json
+
+# Purchases, delivery, protected files, and community assets
+shadowob commerce entitlements list [--server-id <server-id>] --json
+shadowob commerce entitlements get <entitlement-id> --json
+shadowob commerce entitlements verify <entitlement-id> --json
+shadowob commerce paid-files open <file-id> --json
+shadowob commerce assets list --json
+shadowob commerce assets consume <grant-id> --idempotency-key <unique-operation-id> --json
+
+# Seller income and support actions
+shadowob commerce settlements list --json
+shadowob commerce settlements settle --json
+shadowob commerce tips send --recipient-user-id <user-id> --amount <shrimp> [--message <text>] --json
+shadowob commerce gifts send --recipient-user-id <user-id> --assets '<json-array>' --json
+```
+
+## Commerce Validation Notes
+
+- Use the CLI for setup, inspection, and automation, but validate commerce user stories in the
+  browser before calling them complete.
+- Do not add seed code to populate commerce surfaces. Create ordinary local/test records through
+  browser flows or explicit setup calls.
+- When inspecting a commerce flow, preserve ids for the handoff: product, offer, order,
+  entitlement, shop, server, Buddy, and workspace file where applicable.
+- External app entitlement automation must use Shadow OAuth commerce APIs and remain scoped to the
+  app's own `external_app` resource namespace.
 
 ## Apps
 
@@ -325,6 +376,10 @@ shadowob oauth consents --json
 
 # Revoke consent for an app
 shadowob oauth revoke <app-id>
+
+# External app commerce entitlement checks use OAuth access tokens, not user JWTs
+shadowob oauth commerce check --access-token <oauth-access-token> --resource-id <app-id>:premium --json
+shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id <app-id>:premium --idempotency-key <provider-operation-id> --json
 ```
 
 ## Marketplace

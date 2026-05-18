@@ -4,16 +4,22 @@ import { Image } from 'expo-image'
 import { useLocalSearchParams } from 'expo-router'
 import {
   ArrowUpDown,
+  Award,
   Check,
   ChevronRight,
+  FileText,
+  Gift,
   Heart,
   Minus,
   Package,
   Plus,
   Search,
+  ShieldCheck,
   ShoppingCart,
   Star,
+  Store,
   Tag,
+  Ticket,
   Trash2,
   X,
 } from 'lucide-react-native'
@@ -26,9 +32,11 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  type StyleProp,
   StyleSheet,
   Text,
   View,
+  type ViewStyle,
 } from 'react-native'
 import { EmptyState } from '../../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
@@ -56,6 +64,56 @@ function createIdempotencyKey(prefix: string) {
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width
+
+type ProductVisualKind = 'service' | 'file' | 'badge' | 'gift' | 'ticket' | 'physical'
+
+const PRODUCT_VISUAL_THEME: Record<
+  ProductVisualKind,
+  { bg: string; border: string; color: string; tint: string; icon: typeof Package }
+> = {
+  service: {
+    bg: '#12242B',
+    border: '#67E8F955',
+    color: '#A5F3FC',
+    tint: '#67E8F920',
+    icon: ShieldCheck,
+  },
+  file: {
+    bg: '#142033',
+    border: '#7DD3FC55',
+    color: '#BAE6FD',
+    tint: '#7DD3FC20',
+    icon: FileText,
+  },
+  badge: {
+    bg: '#2A2518',
+    border: '#FDE68A55',
+    color: '#FEF3C7',
+    tint: '#FDE68A22',
+    icon: Award,
+  },
+  gift: {
+    bg: '#2A1C25',
+    border: '#FDA4AF55',
+    color: '#FFE4E6',
+    tint: '#FDA4AF20',
+    icon: Gift,
+  },
+  ticket: {
+    bg: '#1F2A1C',
+    border: '#BEF26455',
+    color: '#ECFCCB',
+    tint: '#BEF26420',
+    icon: Ticket,
+  },
+  physical: {
+    bg: '#2B2218',
+    border: '#FDBA7455',
+    color: '#FED7AA',
+    tint: '#FDBA7420',
+    icon: Package,
+  },
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,6 +156,65 @@ interface Product {
   skus?: SkuItem[]
   imageUrl?: string | null
   createdAt: string
+}
+
+interface ShopSummary {
+  id: string
+  name: string
+  description?: string | null
+  logoUrl?: string | null
+  bannerUrl?: string | null
+}
+
+function getProductVisualKind(product?: Pick<Product, 'type' | 'tags'> | null): ProductVisualKind {
+  if (product?.type === 'physical') return 'physical'
+  if (product?.tags?.some((tag) => tag === 'workspace_file' || tag === 'file')) return 'file'
+  if (product?.tags?.some((tag) => tag === 'badge')) return 'badge'
+  if (product?.tags?.some((tag) => tag === 'gift' || tag === 'collectible')) return 'gift'
+  if (product?.tags?.some((tag) => tag === 'service_ticket' || tag === 'coupon')) return 'ticket'
+  return 'service'
+}
+
+function ProductCoverFallback({
+  product,
+  style,
+  compact = false,
+}: {
+  product?: Pick<Product, 'type' | 'tags' | 'name'> | null
+  style?: StyleProp<ViewStyle>
+  compact?: boolean
+}) {
+  const { t } = useTranslation()
+  const kind = getProductVisualKind(product)
+  const theme = PRODUCT_VISUAL_THEME[kind]
+  const Icon = theme.icon
+
+  return (
+    <View
+      style={[
+        styles.productVisual,
+        { backgroundColor: theme.bg, borderColor: theme.border },
+        style,
+      ]}
+      accessibilityLabel={product?.name ?? t(`shop.visual.${kind}`)}
+    >
+      {!compact && (
+        <View style={[styles.productVisualBadge, { backgroundColor: theme.tint }]}>
+          <Text style={[styles.productVisualBadgeText, { color: theme.color }]}>
+            {t(`shop.visual.${kind}`)}
+          </Text>
+        </View>
+      )}
+      <View style={[styles.productVisualIcon, { backgroundColor: theme.tint }]}>
+        <Icon size={compact ? 18 : 30} color={theme.color} strokeWidth={2.4} />
+      </View>
+      {!compact && (
+        <Text style={[styles.productVisualCaption, { color: theme.color }]} numberOfLines={1}>
+          {t(`shop.visualPromise.${kind}`)}
+        </Text>
+      )}
+    </View>
+  )
 }
 
 interface ProductsResponse {
@@ -171,11 +288,15 @@ type ShopView = 'browse' | 'orders' | 'favorites'
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ShopScreen() {
-  const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
+  const { serverSlug, productId } = useLocalSearchParams<{
+    serverSlug: string
+    productId?: string | string[]
+  }>()
   const { t } = useTranslation()
   const colors = useColors()
   const queryClient = useQueryClient()
   const _currentUser = useAuthStore((s) => s.user)
+  const deepLinkProductId = Array.isArray(productId) ? productId[0] : productId
 
   // UI state
   const [search, setSearch] = useState('')
@@ -203,6 +324,12 @@ export default function ShopScreen() {
     enabled: !!serverSlug,
   })
 
+  const { data: shop } = useQuery({
+    queryKey: ['shop', server?.id],
+    queryFn: () => fetchApi<ShopSummary>(`/api/servers/${server!.id}/shop`),
+    enabled: !!server?.id,
+  })
+
   // ── Wallet ──────────────────────────────────────
   const { data: wallet } = useQuery({
     queryKey: ['wallet'],
@@ -227,6 +354,14 @@ export default function ShopScreen() {
   })
 
   const products = productsData?.products ?? []
+
+  useEffect(() => {
+    if (!deepLinkProductId || selectedProduct?.id === deepLinkProductId) return
+    const product = products.find((item) => item.id === deepLinkProductId)
+    if (!product) return
+    setActiveView('browse')
+    setSelectedProduct(product)
+  }, [deepLinkProductId, products, selectedProduct?.id])
 
   // ── Categories ──────────────────────────────────
   const { data: categories = [] } = useQuery({
@@ -348,6 +483,17 @@ export default function ShopScreen() {
       refetchOrders()
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
     },
+  })
+
+  const completeOrderMutation = useMutation({
+    mutationFn: (orderId: string) =>
+      fetchApi(`/api/servers/${server!.id}/shop/orders/${orderId}/complete`, { method: 'POST' }),
+    onSuccess: () => {
+      refetchOrders()
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+      showToast(t('shop.orderCompleted'), 'success')
+    },
+    onError: (err: Error) => showToast(err.message || t('shop.orderCompleteFailed'), 'error'),
   })
 
   // ── Filter + sort ──────────────────────────────
@@ -478,6 +624,51 @@ export default function ShopScreen() {
       {/* ── Browse view ──────────────────────────── */}
       {(activeView === 'browse' || activeView === 'favorites') && (
         <>
+          <GlassPanel style={styles.shopHero}>
+            <View style={styles.shopHeroTop}>
+              <View style={[styles.shopLogo, { backgroundColor: `${colors.primary}18` }]}>
+                {shop?.logoUrl ? (
+                  <Image
+                    source={{ uri: getImageUrl(shop.logoUrl) ?? shop.logoUrl }}
+                    style={styles.shopLogoImage}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Store size={22} color={colors.primary} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="title" style={styles.shopTitle} numberOfLines={1}>
+                  {shop?.name ?? t('shop.serverStorefront')}
+                </AppText>
+                <AppText variant="label" tone="secondary" numberOfLines={1}>
+                  {t('shop.serverProvidedBy', {
+                    server: server?.name ?? serverSlug,
+                    shop: shop?.name ?? t('shop.serverStorefront'),
+                  })}
+                </AppText>
+              </View>
+            </View>
+            {shop?.description ? (
+              <AppText
+                variant="body"
+                tone="secondary"
+                style={styles.shopSubtitle}
+                numberOfLines={2}
+              >
+                {shop.description}
+              </AppText>
+            ) : null}
+            <View style={styles.shopHeroStats}>
+              <AppText variant="label" tone="secondary">
+                {products.length} {t('shop.allProducts')}
+              </AppText>
+              <AppText variant="label" tone="secondary">
+                {t('shop.sold')} {products.reduce((sum, item) => sum + (item.salesCount ?? 0), 0)}
+              </AppText>
+            </View>
+          </GlassPanel>
+
           {/* Search + sort */}
           <GlassPanel style={styles.searchRow}>
             <TextField
@@ -588,18 +779,7 @@ export default function ShopScreen() {
                         contentFit="cover"
                       />
                     ) : (
-                      <View
-                        style={[
-                          styles.productImage,
-                          {
-                            backgroundColor: colors.inputBackground,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          },
-                        ]}
-                      >
-                        <Package size={32} color={colors.textMuted} />
-                      </View>
+                      <ProductCoverFallback product={item} style={styles.productImage} />
                     )}
                     {/* Favorite heart */}
                     <Pressable
@@ -619,6 +799,17 @@ export default function ShopScreen() {
                       <AppText variant="bodyStrong" style={styles.productName} numberOfLines={2}>
                         {item.name}
                       </AppText>
+                      <View style={styles.productSourceLine}>
+                        <Store size={10} color={colors.primary} />
+                        <AppText
+                          variant="label"
+                          tone="secondary"
+                          style={styles.productSourceText}
+                          numberOfLines={1}
+                        >
+                          {shop?.name ?? t('shop.serverStorefront')} · {server?.name ?? serverSlug}
+                        </AppText>
+                      </View>
                       {/* Rating + sales */}
                       {(item.avgRating > 0 || item.salesCount > 0) && (
                         <View style={styles.metaRow}>
@@ -704,18 +895,7 @@ export default function ShopScreen() {
                       contentFit="cover"
                     />
                   ) : (
-                    <View
-                      style={[
-                        styles.orderItemImage,
-                        {
-                          backgroundColor: colors.inputBackground,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        },
-                      ]}
-                    >
-                      <Package size={16} color={colors.textMuted} />
-                    </View>
+                    <ProductCoverFallback style={styles.orderItemImage} compact />
                   )}
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.orderItemName, { color: colors.text }]} numberOfLines={1}>
@@ -753,6 +933,17 @@ export default function ShopScreen() {
                       onPress={() => cancelOrderMutation.mutate(order.id)}
                     >
                       {t('shop.cancelOrder')}
+                    </Button>
+                  )}
+                  {order.status === 'delivered' && (
+                    <Button
+                      variant="primary"
+                      size="xs"
+                      icon={ShieldCheck}
+                      onPress={() => completeOrderMutation.mutate(order.id)}
+                      loading={completeOrderMutation.isPending}
+                    >
+                      {t('shop.confirmReceipt')}
                     </Button>
                   )}
                   {order.status === 'completed' && (
@@ -811,7 +1002,9 @@ export default function ShopScreen() {
                     style={styles.detailImage}
                     contentFit="cover"
                   />
-                ) : null}
+                ) : (
+                  <ProductCoverFallback product={selectedProduct} style={styles.detailImage} />
+                )}
 
                 <View style={styles.detailBody}>
                   {/* Price + favorite */}
@@ -839,6 +1032,27 @@ export default function ShopScreen() {
                   <Text style={[styles.detailName, { color: colors.text }]}>
                     {selectedProduct.name}
                   </Text>
+                  <View
+                    style={[
+                      styles.productSourcePanel,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.productSourcePanelHeader}>
+                      <Store size={16} color={colors.primary} />
+                      <Text style={[styles.productSourceTitle, { color: colors.text }]}>
+                        {t('shop.productSourceTitle', {
+                          shop: shop?.name ?? t('shop.serverStorefront'),
+                        })}
+                      </Text>
+                    </View>
+                    <Text style={[styles.productSourceBody, { color: colors.textSecondary }]}>
+                      {t('shop.productSourceServer', { server: server?.name ?? serverSlug })}
+                    </Text>
+                    <Text style={[styles.productSourceBody, { color: colors.textMuted }]}>
+                      {t('shop.productSourceHint')}
+                    </Text>
+                  </View>
 
                   {/* Tags */}
                   {selectedProduct.tags?.length > 0 && (
@@ -1277,6 +1491,65 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sortBtn: { padding: spacing.sm },
+  shopHero: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  shopHeroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  shopLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  shopLogoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  shopTitle: {
+    fontWeight: '900',
+  },
+  shopSubtitle: {
+    lineHeight: 20,
+  },
+  shopHeroStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  consumerPath: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  consumerStep: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  consumerStepIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  consumerStepText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '700',
+  },
   // Categories
   catBar: { maxHeight: 44, borderBottomWidth: 1 },
   catBarContent: {
@@ -1290,6 +1563,41 @@ const styles = StyleSheet.create({
   gridRow: { gap: spacing.sm, paddingHorizontal: spacing.sm, marginBottom: spacing.sm },
   productCard: { flex: 1, borderRadius: radius.xl, overflow: 'hidden' },
   productImage: { width: '100%', height: 130 },
+  productVisual: {
+    overflow: 'hidden',
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  productVisualBadge: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  productVisualBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  productVisualIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productVisualCaption: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    bottom: 8,
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: '700',
+  },
   favBtn: {
     position: 'absolute',
     top: 8,
@@ -1302,6 +1610,13 @@ const styles = StyleSheet.create({
   },
   productInfo: { padding: spacing.md },
   productName: { fontSize: fontSize.sm, fontWeight: '700' },
+  productSourceLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  productSourceText: { flex: 1, fontSize: 10 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 4 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   ratingText: { fontSize: 10 },
@@ -1355,6 +1670,20 @@ const styles = StyleSheet.create({
   detailPriceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   detailPrice: { fontSize: 24, fontWeight: '800' },
   detailName: { fontSize: fontSize.xl, fontWeight: '800', marginTop: spacing.xs },
+  productSourcePanel: {
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: 6,
+  },
+  productSourcePanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  productSourceTitle: { flex: 1, fontSize: fontSize.sm, fontWeight: '800' },
+  productSourceBody: { fontSize: fontSize.sm, lineHeight: 20 },
   detailDesc: { fontSize: fontSize.sm, marginTop: spacing.md, lineHeight: 20 },
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.sm },
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },

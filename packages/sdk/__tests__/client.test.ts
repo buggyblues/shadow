@@ -234,6 +234,94 @@ describe('ShadowClient', () => {
     })
   })
 
+  describe('OAuth commerce entitlement helpers', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('checks app-scoped entitlement access with query params', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            allowed: true,
+            status: 'active',
+            reasonCode: null,
+            resourceType: 'external_app',
+            resourceId: 'app-1:premium',
+            capability: 'use',
+            app: { id: 'app-1' },
+            entitlement: { id: 'entitlement-1', status: 'active', capability: 'use' },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      const result = await client.getOAuthCommerceEntitlementAccess({
+        resourceType: 'external_app',
+        resourceId: 'app-1:premium',
+        capability: 'use',
+      })
+
+      expect(result.allowed).toBe(true)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/oauth/commerce/entitlements?resourceType=external_app&resourceId=app-1%3Apremium&capability=use',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token-123',
+          }),
+        }),
+      )
+    })
+
+    it('redeems app-scoped entitlement with idempotency payload', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            redeemed: true,
+            resourceType: 'external_app',
+            resourceId: 'app-1:premium',
+            capability: 'use',
+            app: { id: 'app-1' },
+            entitlement: { id: 'entitlement-1', status: 'active', capability: 'use' },
+            redemption: {
+              appId: 'app-1',
+              resourceType: 'external_app',
+              resourceId: 'app-1:premium',
+              capability: 'use',
+              idempotencyKey: 'redeem-key-1',
+              redeemedAt: '2026-05-17T00:00:00.000Z',
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      const result = await client.redeemOAuthCommerceEntitlement({
+        idempotencyKey: 'redeem-key-1',
+        resourceId: 'app-1:premium',
+        metadata: { providerOrderId: 'provider-order-1' },
+      })
+
+      expect(result.redeemed).toBe(true)
+      const init = mockFetch.mock.calls[0]?.[1] as RequestInit
+      expect(mockFetch.mock.calls[0]?.[0]).toBe(
+        'https://api.example.com/api/oauth/commerce/entitlements/redeem',
+      )
+      expect(init.method).toBe('POST')
+      expect(JSON.parse(init.body as string)).toEqual({
+        idempotencyKey: 'redeem-key-1',
+        resourceId: 'app-1:premium',
+        metadata: { providerOrderId: 'provider-order-1' },
+      })
+    })
+  })
+
   describe('channel bootstrap', () => {
     beforeEach(() => {
       globalThis.fetch = vi.fn() as typeof fetch
@@ -1385,6 +1473,24 @@ describe('ShadowClient', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ reason: 'user_cancelled' }),
+        }),
+      )
+    })
+
+    it('should stop entitlement renewal without cancelling current access', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, renewalCancelled: true }),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.cancelEntitlementRenewal('ent-1', 'buyer_cancelled_auto_renewal')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/entitlements/ent-1/cancel-renewal',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ reason: 'buyer_cancelled_auto_renewal' }),
         }),
       )
     })

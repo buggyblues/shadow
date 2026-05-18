@@ -46,7 +46,8 @@ services:
       test: [ "CMD", "mc", "ready", "local" ]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 20
+      start_period: 30s
 
   # ── Application ───────────────────────────────────
   shadow-server-app-demo:

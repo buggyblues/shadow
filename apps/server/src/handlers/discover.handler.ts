@@ -1,7 +1,9 @@
-import { and, desc, eq, inArray, not, sql } from 'drizzle-orm'
+import { and, desc, eq, ilike, inArray, not, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import type { AppContainer } from '../container'
 import * as schema from '../db/schema'
+import { authMiddleware } from '../middleware/auth.middleware'
+import type { MediaVariant } from '../services/media.service'
 
 function resolveMediaUrl(
   mediaService: {
@@ -13,6 +15,21 @@ function resolveMediaUrl(
   mediaUrl: string | null | undefined,
 ): string | null {
   return mediaService.resolveMediaUrl(mediaUrl)
+}
+
+function resolvePreviewImage(
+  mediaService: {
+    resolveMediaUrl: (
+      mediaUrl: string | null | undefined,
+      fallbackContentType?: string,
+      options?: { variant?: MediaVariant },
+    ) => string | null
+  },
+  mediaUrl: string | null | undefined,
+): string | null {
+  return mediaUrl
+    ? (mediaService.resolveMediaUrl(mediaUrl, 'image/png', { variant: 'preview' }) ?? mediaUrl)
+    : null
 }
 
 /**
@@ -266,6 +283,254 @@ export function createDiscoverHandler(container: AppContainer) {
       items: paginatedResult,
       total: result.length,
       hasMore: result.length > offset + limit,
+    })
+  })
+
+  /**
+   * GET /api/discover/business
+   * 面向发现页的购买入口聚合：Buddy、服务与内容、店铺、公开服务器。
+   * Security: actor=user via authMiddleware; resource=discover.business; action=read;
+   * data class=public/login-required commerce discovery metadata.
+   */
+  handler.get('/business', authMiddleware, async (c) => {
+    const db = container.resolve('db')
+    const mediaService = container.resolve('mediaService')
+    const productMediaDao = container.resolve('productMediaDao')
+    const rentalService = container.resolve('rentalService')
+    const agentDao = container.resolve('agentDao')
+    const userDao = container.resolve('userDao')
+    const limit = Math.min(Number(c.req.query('limit') ?? '8'), 24)
+    const rawQuery = c.req.query('q')?.trim()
+    const keyword = rawQuery && rawQuery.length >= 2 ? rawQuery : undefined
+    const like = keyword ? `%${keyword}%` : undefined
+
+    const listingResult = await rentalService.browseListings({
+      keyword,
+      sortBy: 'popular',
+      limit,
+      offset: 0,
+    })
+
+    const productConditions = [
+      eq(schema.products.status, 'active'),
+      eq(schema.shops.status, 'active'),
+    ]
+    if (like) {
+      productConditions.push(
+        or(
+          ilike(schema.products.name, like),
+          ilike(schema.products.summary, like),
+          ilike(schema.shops.name, like),
+        )!,
+      )
+    }
+    const productRows = await db
+      .select({
+        product: schema.products,
+        shop: schema.shops,
+        server: {
+          id: schema.servers.id,
+          name: schema.servers.name,
+          slug: schema.servers.slug,
+          iconUrl: schema.servers.iconUrl,
+        },
+        owner: {
+          id: schema.users.id,
+          username: schema.users.username,
+          displayName: schema.users.displayName,
+          avatarUrl: schema.users.avatarUrl,
+        },
+      })
+      .from(schema.products)
+      .innerJoin(schema.shops, eq(schema.products.shopId, schema.shops.id))
+      .leftJoin(schema.servers, eq(schema.shops.serverId, schema.servers.id))
+      .leftJoin(schema.users, eq(schema.shops.ownerUserId, schema.users.id))
+      .where(and(...productConditions))
+      .orderBy(desc(schema.products.salesCount), desc(schema.products.updatedAt))
+      .limit(limit)
+
+    const shopConditions = [eq(schema.shops.status, 'active'), eq(schema.products.status, 'active')]
+    if (like) {
+      shopConditions.push(
+        or(
+          ilike(schema.shops.name, like),
+          ilike(schema.shops.description, like),
+          ilike(schema.servers.name, like),
+          ilike(schema.users.username, like),
+          ilike(schema.users.displayName, like),
+        )!,
+      )
+    }
+    const shopRows = await db
+      .select({
+        shop: schema.shops,
+        server: {
+          id: schema.servers.id,
+          name: schema.servers.name,
+          slug: schema.servers.slug,
+          iconUrl: schema.servers.iconUrl,
+        },
+        owner: {
+          id: schema.users.id,
+          username: schema.users.username,
+          displayName: schema.users.displayName,
+          avatarUrl: schema.users.avatarUrl,
+        },
+        productCount: sql<number>`count(${schema.products.id})::int`,
+      })
+      .from(schema.shops)
+      .innerJoin(schema.products, eq(schema.products.shopId, schema.shops.id))
+      .leftJoin(schema.servers, eq(schema.shops.serverId, schema.servers.id))
+      .leftJoin(schema.users, eq(schema.shops.ownerUserId, schema.users.id))
+      .where(and(...shopConditions))
+      .groupBy(schema.shops.id, schema.servers.id, schema.users.id)
+      .orderBy(desc(sql`count(${schema.products.id})`), desc(schema.shops.updatedAt))
+      .limit(limit)
+
+    const communityConditions = [eq(schema.servers.isPublic, true)]
+    if (like) {
+      communityConditions.push(
+        or(ilike(schema.servers.name, like), ilike(schema.servers.description, like))!,
+      )
+    }
+    const communityRows = await db
+      .select({
+        server: schema.servers,
+        memberCount: sql<number>`count(${schema.members.userId})::int`,
+      })
+      .from(schema.servers)
+      .leftJoin(schema.members, eq(schema.servers.id, schema.members.serverId))
+      .where(and(...communityConditions))
+      .groupBy(schema.servers.id)
+      .orderBy(desc(sql`count(${schema.members.userId})`), desc(schema.servers.createdAt))
+      .limit(limit)
+
+    const products = []
+    for (const row of productRows) {
+      const media = await productMediaDao.findByProductId(row.product.id)
+      const imageUrl = resolvePreviewImage(
+        mediaService,
+        media[0]?.thumbnailUrl ?? media[0]?.url ?? null,
+      )
+      products.push({
+        id: row.product.id,
+        name: row.product.name,
+        summary: row.product.summary,
+        description: row.product.description,
+        type: row.product.type,
+        billingMode: row.product.billingMode,
+        price: row.product.basePrice,
+        currency: row.product.currency,
+        salesCount: row.product.salesCount,
+        ratingCount: row.product.ratingCount,
+        avgRating: row.product.avgRating,
+        imageUrl,
+        shop: {
+          id: row.shop.id,
+          name: row.shop.name,
+          scopeKind: row.shop.scopeKind,
+          logoUrl: resolvePreviewImage(mediaService, row.shop.logoUrl),
+          bannerUrl: resolvePreviewImage(mediaService, row.shop.bannerUrl),
+          server: row.server?.id
+            ? {
+                id: row.server.id,
+                name: row.server.name,
+                slug: row.server.slug,
+                iconUrl: resolvePreviewImage(mediaService, row.server.iconUrl),
+              }
+            : null,
+          owner: row.owner?.id
+            ? {
+                id: row.owner.id,
+                username: row.owner.username,
+                displayName: row.owner.displayName,
+                avatarUrl: resolvePreviewImage(mediaService, row.owner.avatarUrl),
+              }
+            : null,
+        },
+      })
+    }
+
+    const buddies = []
+    for (const listing of listingResult.listings) {
+      const agent = listing.agentId ? await agentDao.findById(listing.agentId) : null
+      const buddyUser = agent?.userId ? await userDao.findById(agent.userId) : null
+      buddies.push({
+        id: listing.id,
+        title: listing.title,
+        description: listing.description,
+        skills: listing.skills,
+        tags: listing.tags,
+        deviceTier: listing.deviceTier,
+        osType: listing.osType,
+        baseDailyRate: listing.baseDailyRate ?? listing.dailyRate ?? 0,
+        messageFee: listing.messageFee ?? 0,
+        depositAmount: listing.depositAmount ?? 0,
+        rentalCount: listing.rentalCount ?? 0,
+        viewCount: listing.viewCount ?? 0,
+        totalOnlineSeconds: listing.totalOnlineSeconds ?? 0,
+        buddy: buddyUser
+          ? {
+              id: buddyUser.id,
+              username: buddyUser.username,
+              displayName: buddyUser.displayName,
+              avatarUrl: resolvePreviewImage(mediaService, buddyUser.avatarUrl),
+            }
+          : null,
+        owner: listing.owner
+          ? {
+              ...listing.owner,
+              avatarUrl: resolvePreviewImage(mediaService, listing.owner.avatarUrl),
+            }
+          : null,
+      })
+    }
+
+    return c.json({
+      buddies,
+      products,
+      shops: shopRows.map(({ shop, server, owner, productCount }) => ({
+        id: shop.id,
+        name: shop.name,
+        description: shop.description,
+        scopeKind: shop.scopeKind,
+        logoUrl: resolvePreviewImage(mediaService, shop.logoUrl),
+        bannerUrl: resolvePreviewImage(mediaService, shop.bannerUrl),
+        productCount,
+        server: server?.id
+          ? {
+              id: server.id,
+              name: server.name,
+              slug: server.slug,
+              iconUrl: resolvePreviewImage(mediaService, server.iconUrl),
+            }
+          : null,
+        owner: owner?.id
+          ? {
+              id: owner.id,
+              username: owner.username,
+              displayName: owner.displayName,
+              avatarUrl: resolvePreviewImage(mediaService, owner.avatarUrl),
+            }
+          : null,
+      })),
+      communities: communityRows.map(({ server, memberCount }) => ({
+        id: server.id,
+        name: server.name,
+        slug: server.slug,
+        description: server.description,
+        iconUrl: resolvePreviewImage(mediaService, server.iconUrl),
+        bannerUrl: resolvePreviewImage(mediaService, server.bannerUrl),
+        memberCount,
+        inviteCode: server.inviteCode,
+        heatScore: calculateHeatScore({ memberCount, createdAt: server.createdAt }),
+      })),
+      totals: {
+        buddies: listingResult.total,
+        products: products.length,
+        shops: shopRows.length,
+        communities: communityRows.length,
+      },
     })
   })
 

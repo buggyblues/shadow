@@ -317,6 +317,24 @@ export class ShopUseCase {
     })
   }
 
+  async completeOrder(
+    input: SecureUseCaseInput & {
+      identifier: string
+      orderId: string
+      userId: string
+    },
+  ) {
+    return auditUseCase(this.deps, input, {
+      action: 'order.complete',
+      run: async () => {
+        const serverId = await this.resolveServerId(input.identifier)
+        const shop = await this.deps.shopService.getShopByServerId(serverId)
+        if (!shop) throw apiError('SHOP_NOT_FOUND', 404)
+        return this.deps.orderService.completeOrderInShop(shop.id, input.orderId, input.userId)
+      },
+    })
+  }
+
   /* ───────── Support Ticket ───────── */
 
   async createSupportTicket(
@@ -339,8 +357,7 @@ export class ShopUseCase {
           throw apiError('SERVER_MEMBERSHIP_REQUIRED', 403)
         }
         const server = await this.deps.serverService.getById(serverId)
-        const ownerId =
-          server?.ownerId || members.find((m) => m.role === 'owner')?.userId || null
+        const ownerId = server?.ownerId || members.find((m) => m.role === 'owner')?.userId || null
 
         const existing = await this.deps.channelService.getByServerId(serverId)
         const channelName = `shop-support-${input.userId.slice(0, 8)}`

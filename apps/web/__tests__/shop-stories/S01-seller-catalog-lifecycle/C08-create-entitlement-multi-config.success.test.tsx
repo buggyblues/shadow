@@ -31,7 +31,7 @@ describe('S01/C08 create entitlement multi config success', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '新增权益规则' }))
 
-    const resourceInputs = screen.getAllByPlaceholderText('commerce.resourceIdPlaceholder')
+    const resourceInputs = screen.getAllByPlaceholderText('留空时默认绑定商品自身')
     fireEvent.change(resourceInputs[0], { target: { value: 'resource-a' } })
     fireEvent.change(resourceInputs[1], { target: { value: 'resource-b' } })
 

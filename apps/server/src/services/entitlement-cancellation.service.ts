@@ -126,4 +126,62 @@ export class EntitlementCancellationService {
 
     return { entitlement: cancelled, refundAmount }
   }
+
+  async cancelRenewal(input: {
+    actorUserId: string
+    entitlementId: string
+    reason?: string
+    actor?: Actor
+  }) {
+    const actor = input.actor ?? actorFromUserId(input.actorUserId)
+    const entitlement = await this.deps.entitlementService.getEntitlement(input.entitlementId)
+    if (entitlement.userId !== input.actorUserId) {
+      throw apiError('ENTITLEMENT_OWNER_MISMATCH', 403)
+    }
+    if (!entitlement.isActive || entitlement.status !== 'active') {
+      throw apiError('ENTITLEMENT_NOT_ACTIVE', 400)
+    }
+    if (!entitlement.nextRenewalAt) {
+      throw apiError('ENTITLEMENT_RENEWAL_NOT_ACTIVE', 400)
+    }
+
+    await this.deps.economyPolicyService.authorize({
+      actor,
+      action: 'entitlement.cancel_renewal',
+      resource: { kind: 'entitlement', id: entitlement.id },
+      scope: { kind: 'wallet', id: entitlement.userId },
+      dataClass: 'financial',
+      targetUserId: entitlement.userId,
+    })
+
+    const product = entitlement.productId
+      ? await this.deps.productService.getProductById(entitlement.productId)
+      : null
+    const cancelled = await this.deps.entitlementService.cancelRenewal(
+      entitlement.id,
+      input.reason ?? 'cancel_renewal',
+    )
+
+    await this.deps.economyAuditService.record({
+      actor,
+      action: 'entitlement.cancel_renewal',
+      resource: { kind: 'entitlement', id: entitlement.id },
+      scope: { kind: 'wallet', id: entitlement.userId },
+      request: { reason: input.reason },
+      result: 'succeeded',
+      metadata: {
+        productId: entitlement.productId,
+        previousNextRenewalAt: entitlement.nextRenewalAt,
+      },
+    })
+
+    await this.deps.notificationTriggerService.triggerCommerceSubscriptionCancelled({
+      userId: entitlement.userId,
+      entitlementId: entitlement.id,
+      refundAmount: 0,
+      productName: product?.name,
+    })
+
+    return { entitlement: cancelled, refundAmount: 0, renewalCancelled: true }
+  }
 }

@@ -7,6 +7,8 @@ import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ShopCart } from '../src/components/shop/shop-cart'
 import { ShopOrders } from '../src/components/shop/shop-orders'
+import { ShopPage } from '../src/components/shop/shop-page'
+import i18n from '../src/lib/i18n'
 
 const fetchApiMock = vi.fn()
 const showToastMock = vi.fn()
@@ -17,6 +19,10 @@ vi.mock('../src/lib/api', () => ({
 
 vi.mock('../src/lib/toast', () => ({
   showToast: (message: string, type?: 'error' | 'success' | 'info') => showToastMock(message, type),
+}))
+
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
 }))
 
 function renderWithQuery(ui: React.ReactNode) {
@@ -32,9 +38,11 @@ function renderWithQuery(ui: React.ReactNode) {
 
 const serverId = '550e8400-e29b-41d4-a716-446655440000'
 
-beforeEach(() => {
+beforeEach(async () => {
   fetchApiMock.mockReset()
   showToastMock.mockReset()
+  localStorage.clear()
+  await i18n.changeLanguage('zh-CN')
 })
 
 describe('Shop UI E2E (real interaction)', () => {
@@ -195,7 +203,7 @@ describe('Shop UI E2E (real interaction)', () => {
 
     renderWithQuery(<ShopOrders serverId={serverId} />)
 
-    const paidTab = await screen.findByRole('button', { name: '待发货' })
+    const paidTab = await screen.findByRole('button', { name: '已支付' })
     await userEvent.click(paidTab)
 
     await waitFor(() => {
@@ -204,7 +212,78 @@ describe('Shop UI E2E (real interaction)', () => {
         undefined,
       )
     })
-    expect(await screen.findByText('已支付商品')).toBeTruthy()
+    expect((await screen.findAllByText('已支付商品')).length).toBeGreaterThan(0)
+  })
+
+  it('服务器店铺应展示买家路径和可视化权益商品', async () => {
+    fetchApiMock.mockImplementation((path: string) => {
+      if (path === `/api/servers/${serverId}/shop`) {
+        return Promise.resolve({
+          id: 'shop-1',
+          serverId,
+          name: '星港服务站',
+          description: '把服务器里的服务、徽章和文件整理成清晰货架',
+          status: 'active',
+          settings: {},
+        })
+      }
+      if (path === `/api/servers/${serverId}/shop/cart`) return Promise.resolve([])
+      if (path === '/api/wallet') return Promise.resolve({ balance: 1200 })
+      if (path === `/api/servers/${serverId}/shop/categories`) {
+        return Promise.resolve([
+          {
+            id: 'cat-1',
+            shopId: 'shop-1',
+            name: '会员服务',
+            slug: 'member-service',
+            position: 1,
+          },
+        ])
+      }
+      if (String(path).startsWith(`/api/servers/${serverId}/shop/products`)) {
+        return Promise.resolve({
+          total: 1,
+          products: [
+            {
+              id: 'product-1',
+              shopId: 'shop-1',
+              categoryId: 'cat-1',
+              name: '创作者会员徽章',
+              slug: 'creator-badge',
+              type: 'entitlement',
+              billingMode: 'fixed_duration',
+              status: 'active',
+              description: '购买后获得可展示的身份徽章',
+              summary: '购买后进钱包资产库',
+              basePrice: 100,
+              currency: 'CNY',
+              specNames: [],
+              tags: ['badge'],
+              salesCount: 8,
+              avgRating: 0,
+              ratingCount: 0,
+              entitlementConfig: {
+                resourceType: 'community_asset',
+                resourceId: 'asset-1',
+                capability: 'redeem',
+                durationSeconds: 2592000,
+              },
+              media: [],
+              skus: [],
+              createdAt: '2026-05-01T00:00:00.000Z',
+            },
+          ],
+        })
+      }
+      return Promise.resolve({})
+    })
+
+    renderWithQuery(<ShopPage serverId={serverId} />)
+
+    expect((await screen.findAllByText('星港服务站')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('服务器店铺')).toBeTruthy()
+    expect((await screen.findAllByText('创作者会员徽章')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('徽章')).toBeTruthy()
   })
 
   it('多商品订单评价应提交当前选中的商品ID', async () => {
@@ -243,13 +322,14 @@ describe('Shop UI E2E (real interaction)', () => {
       if (String(path).includes('/shop/orders/o1/review') && options?.method === 'POST') {
         return Promise.resolve({ success: true })
       }
+      if (String(path).includes('/shop/orders/o1/reviews')) return Promise.resolve([])
       if (String(path).includes('/shop/orders')) return Promise.resolve(orders)
       return Promise.resolve({})
     })
 
     renderWithQuery(<ShopOrders serverId={serverId} />)
 
-    expect(await screen.findByText('商品A')).toBeTruthy()
+    expect((await screen.findAllByText('商品A')).length).toBeGreaterThan(0)
     await userEvent.click(screen.getByText('#NO0001'))
     await userEvent.click(screen.getByRole('button', { name: '我要评价' }))
 
@@ -257,8 +337,10 @@ describe('Shop UI E2E (real interaction)', () => {
     await userEvent.click(screen.getByRole('button', { name: '提交评价' }))
 
     await waitFor(() => {
-      const reviewCall = fetchApiMock.mock.calls.find((c) =>
-        String(c[0]).includes(`/api/servers/${serverId}/shop/orders/o1/review`),
+      const reviewCall = fetchApiMock.mock.calls.find(
+        (c) =>
+          String(c[0]).includes(`/api/servers/${serverId}/shop/orders/o1/review`) &&
+          c[1]?.method === 'POST',
       )
       expect(reviewCall).toBeTruthy()
       const body = JSON.parse(String(reviewCall?.[1]?.body)) as {
@@ -298,13 +380,14 @@ describe('Shop UI E2E (real interaction)', () => {
       if (String(path).includes('/shop/orders/o2/cancel') && options?.method === 'POST') {
         return Promise.reject(new Error('shop.cancelNotAllowed(400)'))
       }
+      if (String(path).includes('/shop/orders/o2/reviews')) return Promise.resolve([])
       if (String(path).includes('/shop/orders')) return Promise.resolve(orders)
       return Promise.resolve({})
     })
 
     renderWithQuery(<ShopOrders serverId={serverId} />)
 
-    expect(await screen.findByText('商品C')).toBeTruthy()
+    expect((await screen.findAllByText('商品C')).length).toBeGreaterThan(0)
     await userEvent.click(screen.getByText('#NO0002'))
     await userEvent.click(screen.getByRole('button', { name: '取消订单' }))
 

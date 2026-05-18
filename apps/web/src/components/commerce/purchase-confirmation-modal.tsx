@@ -9,11 +9,16 @@ import {
 } from '@shadowob/ui'
 import { CheckCircle2, Clock3, ExternalLink, Loader2, ShieldCheck, ShoppingBag } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { ProductVisual } from '../shop/ui/product-visual'
 
 export interface PurchaseConfirmationDetails {
   name: string
   summary?: string | null
   imageUrl?: string | null
+  media?: Array<{ type?: string | null; url?: string | null; thumbnailUrl?: string | null }> | null
+  productType?: string | null
+  resourceType?: string | null
+  assetType?: string | null
   priceLabel: string
   billingModeLabel?: string | null
   entitlementLabel?: string | null
@@ -30,6 +35,7 @@ interface PurchaseConfirmationModalProps {
   details: PurchaseConfirmationDetails
   isPending?: boolean
   isCompleted?: boolean
+  completionLabel?: string
   error?: string | null
   provisioningStatus?: string | null
   viewEntitlementHref?: string
@@ -55,6 +61,7 @@ export function PurchaseConfirmationModal({
   details,
   isPending = false,
   isCompleted = false,
+  completionLabel,
   error,
   provisioningStatus,
   viewEntitlementHref = '/app/settings/wallet/entitlements',
@@ -75,13 +82,16 @@ export function PurchaseConfirmationModal({
         />
         <ModalBody className="space-y-4">
           <div className="flex gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/45 p-3">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/15 text-primary">
-              {details.imageUrl ? (
-                <img src={details.imageUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <ShoppingBag size={26} />
-              )}
-            </div>
+            <ProductVisual
+              name={details.name}
+              imageUrl={details.imageUrl}
+              media={details.media}
+              productType={details.productType}
+              resourceType={details.resourceType}
+              assetType={details.assetType}
+              showLabel={false}
+              className="h-20 w-20 shrink-0"
+            />
             <div className="min-w-0 flex-1">
               <h3 className="line-clamp-2 text-base font-black text-text-primary">
                 {details.name}
@@ -112,7 +122,7 @@ export function PurchaseConfirmationModal({
             <div className="rounded-2xl border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
               <div className="flex items-center gap-2 font-black">
                 <CheckCircle2 size={17} />
-                {t('commerce.purchaseCompleted')}
+                {completionLabel ?? t('commerce.purchaseCompleted')}
               </div>
               {provisioningStatus && (
                 <div className="mt-1 flex items-center gap-2 text-xs font-bold">

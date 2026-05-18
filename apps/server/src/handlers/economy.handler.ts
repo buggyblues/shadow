@@ -53,6 +53,30 @@ const assetLifecycleSchema = z.object({
   reason: z.string().max(300).optional(),
 })
 
+function resolveAssetImageUrls<T extends { definition?: { imageUrl?: string | null } | null }>(
+  container: AppContainer,
+  assets: T[],
+): T[] {
+  const mediaService = container.resolve('mediaService')
+  return assets.map(
+    (asset) =>
+      ({
+        ...asset,
+        definition: asset.definition
+          ? {
+              ...asset.definition,
+              imageUrl:
+                typeof asset.definition.imageUrl === 'string'
+                  ? (mediaService.resolveMediaUrl(asset.definition.imageUrl, 'image/png', {
+                      variant: 'preview',
+                    }) ?? asset.definition.imageUrl)
+                  : asset.definition.imageUrl,
+            }
+          : asset.definition,
+      }) as T,
+  )
+}
+
 export function createEconomyHandler(container: AppContainer) {
   const h = new Hono()
   h.use('*', authMiddleware)
@@ -60,7 +84,8 @@ export function createEconomyHandler(container: AppContainer) {
   h.get('/assets', async (c) => {
     const user = c.get('user')
     const communityAssetService = container.resolve('communityAssetService')
-    return c.json({ assets: await communityAssetService.listUserAssets(user.userId) })
+    const assets = await communityAssetService.listUserAssets(user.userId)
+    return c.json({ assets: resolveAssetImageUrls(container, assets) })
   })
 
   h.get('/assets/:grantId', async (c) => {
@@ -71,7 +96,7 @@ export function createEconomyHandler(container: AppContainer) {
     if (row.grant.ownerUserId !== user.userId) {
       throw apiError('COMMUNITY_ASSET_OWNER_MISMATCH', 403)
     }
-    return c.json(row)
+    return c.json(resolveAssetImageUrls(container, [row])[0])
   })
 
   h.post('/assets/:grantId/consume', zValidator('json', consumeAssetSchema), async (c) => {

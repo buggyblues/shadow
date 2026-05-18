@@ -31,6 +31,15 @@ Shadow is a social/chat platform.
 
 - **New features must be implemented on both web and mobile**
 - Ensure consistent behavior across both platforms
+- Consumer product surfaces must use the shared **Glass Panel** primitives for page-level sections and major panels. Child cards should reuse the relevant domain card component/variant instead of becoming separate Glass Panels by default.
+
+### Commerce Experience Work
+
+- Commerce work is accepted by user-story flow, not by isolated component completion. Before finishing, manually validate each affected commerce user story in the browser against the running app.
+- If a browser path fails because the frontend, API, SDK contract, permissions, or data model is incomplete, complete the missing capability before reporting the story as done.
+- Do not add seed code to make commerce pages look populated. Use the local/test environment through browser actions or explicit API setup, and keep any created records as ordinary test data.
+- For buyer-facing commerce surfaces, use consumer language and show the concrete buying context: provider, shop, server when relevant, delivery result, validity, refund/support rule, credit, and asset-home links.
+- Personal shops, server shops, Buddy cards, wallet purchases, product pages, and discovery must reuse the same commerce model: products, offers, orders, entitlements, fulfillment, settlement, and reviews.
 
 ## API Change Sync
 

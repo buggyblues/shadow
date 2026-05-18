@@ -2,6 +2,8 @@
 
 商店 API 允许服务器所有者设置商店，包括分类、商品、购物车、订单、评价和钱包系统。
 
+商店是面向消费者的货架，不是孤立的后台目录。个人店铺、服务器店铺、Buddy 卡片和应用服务商品都应该复用同一套商品、销售 Offer、订单、权益、履约、结算和评价模型。买家侧页面在结账前需要清楚展示提供者、店铺、服务器上下文、交付结果、有效期、退款/支持规则和资产主页入口。
+
 ## 获取 / 创建商店
 
 ```
@@ -157,6 +159,8 @@ products = client.list_products("server-id", keyword="shirt")
 GET /api/servers/:serverId/shop/products/:productId
 ```
 
+商品响应在配置封面或画廊资源后会包含 `media?: Array<{ type: 'image' | 'video'; url: string; thumbnailUrl?: string; position?: number }>`。`POST /api/media/upload` 返回的私有上传引用可以直接作为商品媒体 `url` 使用；Shop API 响应会把这些引用解析成可渲染的授权地址。
+
 :::code-group
 
 ```ts [TypeScript]
@@ -179,14 +183,25 @@ POST /api/servers/:serverId/shop/products
 
 ```ts [TypeScript]
 const product = await client.createProduct('server-id', {
-  name: 'T-Shirt',
+  name: 'Creator badge',
+  slug: 'creator-badge',
+  type: 'entitlement',
   categoryId: 'category-id',
-  price: 25.99,
+  basePrice: 100,
+  media: [{ type: 'image', url: '/shadow/uploads/cover.png', position: 0 }],
 })
 ```
 
 ```python [Python]
-product = client.create_product("server-id", name="T-Shirt", categoryId="category-id", price=25.99)
+product = client.create_product(
+    "server-id",
+    name="Creator badge",
+    slug="creator-badge",
+    type="entitlement",
+    categoryId="category-id",
+    basePrice=100,
+    media=[{"type": "image", "url": "/shadow/uploads/cover.png", "position": 0}],
+)
 ```
 
 :::
@@ -324,20 +339,29 @@ POST /api/servers/:serverId/shop/orders
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
+| `idempotencyKey` | string | 是 | 客户端生成的幂等键，用于安全重试 |
 | `items` | array | 是 | 购物车商品 ID 或商品规格 |
 | `buyerNote` | string | 否 | 买家备注 |
+
+纯权益订单在支付后会立即发放，授予配置的访问权限或社区资产，并直接进入 `completed` 状态，同时出现在钱包权益/资产记录中。实物商品和需要人工履约的服务仍走 `paid -> processing -> shipped -> delivered -> completed` 流程。
 
 :::code-group
 
 ```ts [TypeScript]
 const order = await client.createOrder('server-id', {
+  idempotencyKey: crypto.randomUUID(),
   items: [{ productId: 'pid', quantity: 1 }],
   buyerNote: 'Please gift-wrap',
 })
 ```
 
 ```python [Python]
-order = client.create_order("server-id", items=[{"productId": "pid", "quantity": 1}], buyerNote="Please gift-wrap")
+order = client.create_order(
+    "server-id",
+    idempotency_key="order-123",
+    items=[{"productId": "pid", "quantity": 1}],
+    buyerNote="Please gift-wrap",
+)
 ```
 
 :::
@@ -437,6 +461,26 @@ await client.cancelOrder('server-id', 'order-id')
 
 ```python [Python]
 client.cancel_order("server-id", "order-id")
+```
+
+:::
+
+### 买家确认完成
+
+卖家把订单标记为 `delivered` 后，买家调用该接口确认履约完成。成功后订单进入 `completed`，并触发后续结算流程。
+
+```
+POST /api/servers/:serverId/shop/orders/:orderId/complete
+```
+
+:::code-group
+
+```ts [TypeScript]
+await client.completeOrder('server-id', 'order-id')
+```
+
+```python [Python]
+client.complete_order("server-id", "order-id")
 ```
 
 :::

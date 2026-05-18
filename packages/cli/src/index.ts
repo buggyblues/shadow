@@ -6,6 +6,7 @@ import { createAppCommand } from './commands/app.js'
 import { createAuthCommand } from './commands/auth.js'
 import { createChannelsCommand } from './commands/channels.js'
 import { createCloudCommand } from './commands/cloud.js'
+import { createCommerceCommand } from './commands/commerce.js'
 import { createConfigCommand } from './commands/config.js'
 import { createDiscoverCommand } from './commands/discover.js'
 import { createDirectMessagesCommand } from './commands/dms.js'
@@ -51,6 +52,7 @@ program.addCommand(createListenCommand())
 program.addCommand(createDirectMessagesCommand())
 program.addCommand(createWorkspaceCommand())
 program.addCommand(createShopCommand())
+program.addCommand(createCommerceCommand())
 program.addCommand(createNotificationsCommand())
 program.addCommand(createFriendsCommand())
 program.addCommand(createInvitesCommand())

@@ -1,4 +1,4 @@
-import { Badge, Button, Card, cn } from '@shadowob/ui'
+import { Badge, Button, cn, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -8,20 +8,31 @@ import {
   Heart,
   MessageSquare,
   Minus,
+  Package,
   Plus,
+  ReceiptText,
   Share,
   Shield,
   Star,
+  Store,
   Upload,
+  WalletCards,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import {
+  type CommerceDeliveryEntitlement,
+  type CommercePurchaseOrder,
+  deliveryDetailHref,
+  findPurchaseEntitlement,
+} from '../../lib/commerce-delivery'
 import { showToast } from '../../lib/toast'
 import { OrderConfirm } from './order-confirm'
-import type { Product, ProductMediaItem, SkuItem } from './shop-page'
+import type { Product, ProductMediaItem, ServerSummary, Shop, SkuItem } from './shop-page'
 import { PriceDisplay } from './ui/currency'
+import { ProductVisual } from './ui/product-visual'
 
 function createIdempotencyKey(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -33,6 +44,8 @@ interface ProductDetailProps {
   isAdmin?: boolean
   onBack: () => void
   embedded?: boolean
+  shop?: Shop | null
+  server?: ServerSummary | null
 }
 
 interface Review {
@@ -48,12 +61,254 @@ interface Review {
   createdAt: string
 }
 
+function firstEntitlementConfig(product?: Product | null) {
+  const config = Array.isArray(product?.entitlementConfig)
+    ? product?.entitlementConfig[0]
+    : product?.entitlementConfig
+  return config ?? null
+}
+
+function isInstantDeliveryProduct(product?: Product | null) {
+  if (product?.type !== 'entitlement') return false
+  const config = firstEntitlementConfig(product)
+  return config?.resourceType !== 'service'
+}
+
+function productAssetType(product?: Product | null) {
+  const config = firstEntitlementConfig(product)
+  if (config?.resourceType !== 'community_asset') return null
+  return product?.tags?.find((tag) =>
+    ['badge', 'gift', 'coupon', 'service_ticket', 'collectible'].includes(tag),
+  )
+}
+
+function FulfillmentPanel({ product }: { product: Product }) {
+  const { t } = useTranslation()
+  const config = firstEntitlementConfig(product)
+  const isAsset = config?.resourceType === 'community_asset'
+  const isFile = config?.resourceType === 'workspace_file'
+  const isExternalApp = config?.resourceType === 'external_app'
+
+  return (
+    <div className="mb-6 rounded-lg border border-border-subtle bg-bg-secondary/55 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          {isAsset ? <Package size={18} /> : <Shield size={18} />}
+        </span>
+        <div className="min-w-0">
+          <div className="text-sm font-black text-text-primary">
+            {isAsset
+              ? t('shop.fulfillmentAssetTitle')
+              : isFile
+                ? t('shop.fulfillmentFileTitle')
+                : isExternalApp
+                  ? t('shop.fulfillmentExternalAppTitle')
+                  : t('shop.fulfillmentServiceTitle')}
+          </div>
+          <p className="mt-1 text-sm leading-6 text-text-muted">
+            {isAsset
+              ? t('shop.fulfillmentAssetHint')
+              : isFile
+                ? t('shop.fulfillmentFileHint')
+                : isExternalApp
+                  ? t('shop.fulfillmentExternalAppHint')
+                  : t('shop.fulfillmentServiceHint')}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PurchaseNextPanel({
+  order,
+  entitlement,
+}: {
+  order: CommercePurchaseOrder
+  entitlement?: CommerceDeliveryEntitlement | null
+}) {
+  const { t } = useTranslation()
+  const detailHref = deliveryDetailHref(entitlement?.id)
+  const hasDeliveryDetail = Boolean(entitlement?.id)
+
+  return (
+    <GlassPanel className="mb-6 rounded-lg border-success/25 bg-success/10 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-success/15 text-success">
+          <CheckCircle2 size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-black text-text-primary">
+            {hasDeliveryDetail ? t('shop.purchaseNextReadyTitle') : t('shop.purchaseNextTitle')}
+          </div>
+          <p className="mt-1 text-sm leading-6 text-text-muted">
+            {hasDeliveryDetail ? t('shop.purchaseNextReadyHint') : t('shop.purchaseNextHint')}
+          </p>
+          <div className="mt-2 text-xs font-bold text-text-muted">
+            {t('shop.orderNo')}: {order.orderNo ?? order.id.slice(0, 8)}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a
+              href={detailHref}
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-success px-3 text-xs font-black text-white transition hover:bg-success/90"
+            >
+              <ReceiptText size={14} />
+              {hasDeliveryDetail ? t('shop.viewDeliveryDetail') : t('shop.viewPurchaseDelivery')}
+            </a>
+            <a
+              href="/app/settings/wallet/entitlements"
+              className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+            >
+              <WalletCards size={14} />
+              {t('shop.openPurchaseDelivery')}
+            </a>
+          </div>
+        </div>
+      </div>
+    </GlassPanel>
+  )
+}
+
+function AssetTrustPanel({ product }: { product: Product }) {
+  const { t } = useTranslation()
+  const config = firstEntitlementConfig(product)
+  const isInstant = isInstantDeliveryProduct(product)
+  const metrics = [
+    {
+      label: t('shop.assetMetricSales'),
+      value: product.salesCount.toLocaleString(),
+    },
+    {
+      label: t('shop.assetMetricRating'),
+      value:
+        product.ratingCount > 0
+          ? `${product.avgRating.toFixed(1)} / 5`
+          : t('shop.assetMetricNoRating'),
+    },
+    {
+      label: t('shop.assetMetricDelivery'),
+      value: isInstant ? t('shop.assetDeliveryInstant') : t('shop.assetDeliverySeller'),
+    },
+  ]
+
+  return (
+    <div className="mb-6 rounded-lg border border-primary/20 bg-primary/5 p-4">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Shield size={18} />
+        </span>
+        <div className="min-w-0">
+          <div className="text-sm font-black text-text-primary">{t('shop.assetProfileTitle')}</div>
+          <p className="mt-1 text-sm leading-6 text-text-muted">
+            {config?.privilegeDescription || product.summary || t('shop.assetProfileHint')}
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {metrics.map((item) => (
+          <div key={item.label} className="rounded-xl bg-bg-primary/45 px-3 py-2">
+            <div className="text-[11px] font-black uppercase tracking-[0.12em] text-text-muted">
+              {item.label}
+            </div>
+            <div className="mt-1 text-sm font-black text-text-primary">{item.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ProductSourcePanel({
+  product,
+  shop,
+  server,
+}: {
+  product: Product
+  shop?: Shop | null
+  server?: ServerSummary | null
+}) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const shopName = shop?.name ?? t('commerce.consumerStorefront')
+  const serverName = server?.name ?? server?.slug ?? null
+  const isInstant = isInstantDeliveryProduct(product)
+  const shopServerSlug = server?.slug ?? server?.id ?? shop?.serverId ?? null
+  const ownerProfileId = shop?.ownerUserId ?? server?.ownerId ?? null
+  const canOpenShop = Boolean(shopServerSlug || shop?.ownerUserId)
+  const openShop = () => {
+    if (shopServerSlug) {
+      navigate({
+        to: '/servers/$serverSlug/shop',
+        params: { serverSlug: shopServerSlug },
+      })
+      return
+    }
+    if (shop?.ownerUserId) {
+      navigate({
+        to: '/shop/users/$userId',
+        params: { userId: shop.ownerUserId },
+        search: { view: 'buyer' },
+      })
+    }
+  }
+  const openOwnerProfile = () => {
+    if (!ownerProfileId) return
+    navigate({
+      to: '/profile/$userId',
+      params: { userId: ownerProfileId },
+    })
+  }
+
+  return (
+    <div className="mb-6 rounded-lg border border-border-subtle bg-bg-secondary/55 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Store size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-black text-text-primary">
+            <span className="truncate">{t('shop.productSourceTitle', { shop: shopName })}</span>
+          </div>
+          {serverName && (
+            <div className="mt-1 text-xs font-bold text-text-muted">
+              {t('shop.productSourceServer', { server: serverName })}
+            </div>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-black text-primary">
+              <Shield size={12} />
+              <span className="truncate">
+                {isInstant ? t('commerce.immediateDelivery') : t('commerce.manualDelivery')}
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-border-subtle/60 pt-3">
+        {canOpenShop && (
+          <Button type="button" variant="glass" size="sm" onClick={openShop}>
+            <Store size={15} />
+            {t('shop.openShop')}
+          </Button>
+        )}
+        {ownerProfileId && (
+          <Button type="button" variant="glass" size="sm" onClick={openOwnerProfile}>
+            {t('shop.openOwnerProfile')}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function ProductDetail({
   serverId,
   productId,
   isAdmin: _isAdmin,
   onBack,
   embedded = false,
+  shop,
+  server,
 }: ProductDetailProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -98,6 +353,11 @@ export function ProductDetail({
   const [supportMessage, setSupportMessage] = useState('')
   const [supportImages, setSupportImages] = useState<string[]>([])
   const [uploadingCount, setUploadingCount] = useState(0)
+  const [buyingNow, setBuyingNow] = useState(false)
+  const [lastPurchase, setLastPurchase] = useState<{
+    order: CommercePurchaseOrder
+    entitlement?: CommerceDeliveryEntitlement | null
+  } | null>(null)
 
   useEffect(() => {
     const raw = localStorage.getItem(`shop:favorites:${serverId}`)
@@ -183,27 +443,42 @@ export function ProductDetail({
   const price = selectedSku?.price ?? product.basePrice
   const stock = selectedSku?.stock ?? product.skus?.[0]?.stock ?? 999
   const hasSpecs = product.specNames.length > 0 && (product.skus?.length ?? 0) > 0
+  const entitlementConfig = firstEntitlementConfig(product)
 
   const handleAddToCart = () => {
     addToCart.mutate({ productId: product.id, skuId: selectedSkuId ?? undefined, quantity })
   }
 
   const handleBuyNow = async () => {
+    if (buyingNow) return
     if ((!hasSpecs || !!selectedSkuId) && quantity === 1) {
+      setBuyingNow(true)
       try {
-        await fetchApi<{ id: string }>(`/api/servers/${serverId}/shop/orders`, {
-          method: 'POST',
-          body: JSON.stringify({
-            idempotencyKey: createIdempotencyKey('shop-order'),
-            items: [{ productId: product.id, skuId: selectedSkuId ?? undefined, quantity }],
-          }),
-        })
+        const order = await fetchApi<CommercePurchaseOrder>(
+          `/api/servers/${serverId}/shop/orders`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              idempotencyKey: createIdempotencyKey('shop-order'),
+              items: [{ productId: product.id, skuId: selectedSkuId ?? undefined, quantity }],
+            }),
+          },
+        )
         showToast(t('shop.purchaseSuccess'), 'success')
         queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })
         queryClient.invalidateQueries({ queryKey: ['wallet'] })
         queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] })
+        queryClient.invalidateQueries({ queryKey: ['entitlements'] })
+        queryClient.invalidateQueries({ queryKey: ['community-assets'] })
+        const entitlement = await findPurchaseEntitlement({
+          orderId: order.id,
+          productId: product.id,
+        }).catch(() => null)
+        setLastPurchase({ order, entitlement })
       } catch (err) {
         showToast((err as Error)?.message || t('shop.purchaseError'), 'error')
+      } finally {
+        setBuyingNow(false)
       }
       return
     }
@@ -353,9 +628,14 @@ export function ProductDetail({
                     )}
                   </div>
                 ) : (
-                  <div className="w-full aspect-square bg-bg-tertiary md:rounded-3xl flex items-center justify-center border border-border-subtle shadow-sm">
-                    <span className="text-text-muted">无图片</span>
-                  </div>
+                  <ProductVisual
+                    name={product.name}
+                    media={product.media}
+                    productType={product.type}
+                    resourceType={entitlementConfig?.resourceType}
+                    assetType={productAssetType(product)}
+                    className="aspect-square w-full rounded-lg md:rounded-lg"
+                  />
                 )}
 
                 {/* Thumbnails below main image (PC only) */}
@@ -397,7 +677,7 @@ export function ProductDetail({
                       <PriceDisplay amount={price} size={32} />
                     </span>
                     <span className="text-sm text-text-muted font-medium bg-bg-tertiary px-2.5 py-1 rounded-lg">
-                      已售 {product.salesCount}
+                      {t('shop.soldCount')} {product.salesCount}
                     </span>
                   </div>
                   {product.basePrice !== price && (
@@ -417,11 +697,25 @@ export function ProductDetail({
                   </p>
                 )}
 
+                <ProductSourcePanel
+                  product={product}
+                  shop={shop}
+                  server={server}
+                />
+                <AssetTrustPanel product={product} />
+                <FulfillmentPanel product={product} />
+                {lastPurchase && (
+                  <PurchaseNextPanel
+                    order={lastPurchase.order}
+                    entitlement={lastPurchase.entitlement}
+                  />
+                )}
+
                 <div className="flex flex-wrap gap-2 mb-6">
                   {product.type === 'entitlement' && (
                     <Badge variant="warning" size="sm" className="flex items-center gap-1.5">
                       <Shield size={14} />
-                      虚拟权益
+                      {t('shop.entitlement')}
                     </Badge>
                   )}
                   {product.tags?.map((tag: string) => (
@@ -483,10 +777,12 @@ export function ProductDetail({
                       })}
 
                     <div className="flex items-center justify-between mt-6 bg-bg-tertiary p-4 rounded-2xl border border-border-subtle">
-                      <span className="text-text-secondary text-sm font-bold">购买数量</span>
+                      <span className="text-text-secondary text-sm font-bold">
+                        {t('shop.quantity')}
+                      </span>
                       <div className="flex items-center gap-4">
                         <span className="text-[11px] text-text-muted font-medium">
-                          库存: {stock}件
+                          {t('shop.stock')}: {stock} {t('shop.unit')}
                         </span>
                         <div className="flex items-center bg-bg-secondary rounded-xl p-1 border border-border-subtle shadow-sm">
                           <button
@@ -529,7 +825,7 @@ export function ProductDetail({
                           <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
                             <Shield size={12} strokeWidth={3} />
                           </div>
-                          权益说明
+                          {t('shop.entitlementDesc')}
                         </div>
                         {primaryRule.privilegeDescription && (
                           <p className="text-primary/80 text-sm leading-relaxed mb-3">
@@ -538,18 +834,18 @@ export function ProductDetail({
                         )}
                         <div className="flex items-center gap-2 text-primary/80 text-sm font-medium border-t border-primary/20 pt-3">
                           <Clock size={14} />
-                          有效期：
+                          {t('shop.validity')}
                           <span className="font-bold">
                             {primaryRule.durationSeconds
                               ? primaryRule.durationSeconds >= 86400
-                                ? `${Math.floor(primaryRule.durationSeconds / 86400)} 天`
-                                : `${Math.floor(primaryRule.durationSeconds / 3600)} 小时`
-                              : '永久有效'}
+                                ? `${Math.floor(primaryRule.durationSeconds / 86400)}${t('shop.days')}`
+                                : `${Math.floor(primaryRule.durationSeconds / 3600)}${t('shop.hours')}`
+                              : t('shop.permanent')}
                           </span>
                         </div>
                         {entitlementRules.length > 1 && (
                           <p className="text-xs text-primary/80 mt-2">
-                            共包含 {entitlementRules.length} 条权益规则
+                            {t('shop.totalRules')} {entitlementRules.length} {t('shop.rulesSuffix')}
                           </p>
                         )}
                       </div>
@@ -564,7 +860,7 @@ export function ProductDetail({
                     className="flex flex-col items-center justify-center text-text-muted hover:text-primary w-14 bg-bg-tertiary/50 border border-border-subtle rounded-2xl transition-colors"
                   >
                     <MessageSquare size={20} />
-                    <span className="text-[11px] mt-1 font-black">客服</span>
+                    <span className="text-[11px] mt-1 font-black">{t('shop.customerService')}</span>
                   </button>
                   <Button
                     variant="glass"
@@ -574,19 +870,19 @@ export function ProductDetail({
                   >
                     {addedToCart ? (
                       <span className="flex items-center justify-center gap-2">
-                        <CheckCircle2 size={18} /> 已加入
+                        <CheckCircle2 size={18} /> {t('shop.addedToCart')}
                       </span>
                     ) : (
-                      '加入购物车'
+                      t('shop.addToCart')
                     )}
                   </Button>
                   <Button
                     variant="primary"
                     className="flex-1 py-4"
                     onClick={handleBuyNow}
-                    disabled={stock === 0}
+                    disabled={stock === 0 || buyingNow}
                   >
-                    立即购买
+                    {buyingNow ? t('shop.paymentProcessing') : t('shop.buyNow')}
                   </Button>
                 </div>
               </div>
@@ -594,7 +890,7 @@ export function ProductDetail({
           </div>
 
           {/* ═══ Details & Reviews Tabs ═══ */}
-          <div className="mt-6 md:mt-12 bg-bg-secondary md:rounded-3xl border-t md:border border-border-subtle shadow-sm overflow-hidden min-h-[500px]">
+          <GlassPanel className="mt-6 min-h-[500px] overflow-hidden rounded-lg md:mt-12 md:rounded-3xl">
             <div className="flex border-b border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl px-2 md:px-6">
               <button
                 type="button"
@@ -605,7 +901,7 @@ export function ProductDetail({
                     : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
-                商品详情
+                {t('shop.productDetail')}
                 {activeTab === 'detail' && (
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-t-full" />
                 )}
@@ -619,7 +915,8 @@ export function ProductDetail({
                     : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
-                用户评价 <span className="ml-1 text-xs opacity-60">({reviews?.length || 0})</span>
+                {t('shop.reviews')}{' '}
+                <span className="ml-1 text-xs opacity-60">({reviews?.length || 0})</span>
                 {activeTab === 'reviews' && (
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-t-full" />
                 )}
@@ -638,7 +935,7 @@ export function ProductDetail({
                       <div className="w-20 h-20 rounded-full bg-bg-tertiary flex items-center justify-center">
                         <Heart className="opacity-20" size={32} />
                       </div>
-                      <span className="text-lg font-medium">此商品无图文详情</span>
+                      <span className="text-lg font-medium">{t('shop.noDescription')}</span>
                     </div>
                   )}
                 </div>
@@ -655,8 +952,9 @@ export function ProductDetail({
                           <div>
                             <p className="text-sm font-bold text-text-primary">
                               {review.isAnonymous
-                                ? '匿名用户'
-                                : review.authorName || `用户 ${review.userId.slice(0, 6)}`}
+                                ? t('shop.anonymousUser')
+                                : review.authorName ||
+                                  `${t('shop.userPrefix')}${review.userId.slice(0, 6)}`}
                             </p>
                             <div className="flex text-warning mt-0.5">
                               {[1, 2, 3, 4, 5].map((star) => (
@@ -684,13 +982,13 @@ export function ProductDetail({
                       <div className="w-20 h-20 rounded-full bg-bg-tertiary flex items-center justify-center">
                         <MessageSquare className="opacity-20" size={32} />
                       </div>
-                      <span className="text-lg font-medium">暂无评价，购买后即可发表评价哦</span>
+                      <span className="text-lg font-medium">{t('shop.noReviews')}</span>
                     </div>
                   )}
                 </div>
               )}
             </div>
-          </div>
+          </GlassPanel>
         </div>
       </div>
 
@@ -704,7 +1002,7 @@ export function ProductDetail({
               className="flex flex-col items-center justify-center text-text-muted hover:text-primary w-10"
             >
               <MessageSquare size={18} />
-              <span className="text-[11px] mt-1 font-black">客服</span>
+              <span className="text-[11px] mt-1 font-black">{t('shop.customerService')}</span>
             </button>
             <div className="w-[1px] h-8 bg-border-subtle mx-1" />
           </div>
@@ -715,42 +1013,39 @@ export function ProductDetail({
             onClick={handleAddToCart}
             disabled={addToCart.isPending || stock === 0}
           >
-            {addedToCart ? '已加入' : '加入购物车'}
+            {addedToCart ? t('shop.addedToCart') : t('shop.addToCart')}
           </Button>
 
           <Button
             variant="primary"
             className="flex-1"
             onClick={handleBuyNow}
-            disabled={stock === 0}
+            disabled={stock === 0 || buyingNow}
           >
-            立即购买
+            {buyingNow ? t('shop.paymentProcessing') : t('shop.buyNow')}
           </Button>
         </div>
       </div>
 
       {supportOpen && (
         <div className="absolute inset-0 z-[60] bg-bg-deep/40 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
-          <Card
-            variant="glass"
-            className="w-full md:max-w-lg !rounded-t-[24px] md:!rounded-[40px] !p-5 max-h-[80vh] overflow-y-auto"
-          >
+          <GlassPanel className="max-h-[80vh] w-full overflow-y-auto !rounded-t-[24px] p-5 md:max-w-lg md:!rounded-[40px]">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-black text-text-primary">联系客服</h3>
+              <h3 className="font-black text-text-primary">{t('shop.contactSeller')}</h3>
               <Button variant="ghost" size="icon" icon={X} onClick={() => setSupportOpen(false)} />
             </div>
 
             <textarea
               value={supportMessage}
               onChange={(e) => setSupportMessage(e.target.value)}
-              placeholder="请详细描述问题，我们会尽快处理"
+              placeholder={t('shop.contactPlaceholder')}
               rows={4}
               className="w-full p-3 rounded-xl border border-border-subtle bg-bg-tertiary text-sm"
             />
 
             <div className="mt-4 space-y-2">
               <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer text-primary">
-                <Upload size={15} /> 上传问题截图
+                <Upload size={15} /> {t('shop.uploadScreenshot')}
                 <input
                   type="file"
                   accept="image/*"
@@ -762,7 +1057,9 @@ export function ProductDetail({
                   }}
                 />
               </label>
-              {uploadingCount > 0 && <div className="text-xs text-text-muted">图片上传中...</div>}
+              {uploadingCount > 0 && (
+                <div className="text-xs text-text-muted">{t('shop.uploading')}</div>
+              )}
               {supportImages.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {supportImages.map((url, idx) => (
@@ -790,9 +1087,9 @@ export function ProductDetail({
               disabled={!supportMessage.trim() || contactSupport.isPending || uploadingCount > 0}
               loading={contactSupport.isPending}
             >
-              {contactSupport.isPending ? '正在创建客服会话...' : '提交并进入聊天频道'}
+              {contactSupport.isPending ? t('shop.creatingSupport') : t('shop.submitSupport')}
             </Button>
-          </Card>
+          </GlassPanel>
         </div>
       )}
     </div>

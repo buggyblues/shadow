@@ -20,6 +20,7 @@ describe('S06/C02 order cancel allowed status success', () => {
       if (String(path).includes('/shop/orders/o1/cancel') && options?.method === 'POST') {
         return Promise.resolve({ ok: true })
       }
+      if (String(path).includes('/shop/orders/o1/reviews')) return Promise.resolve([])
       if (String(path).includes('/shop/orders')) {
         return Promise.resolve([
           {

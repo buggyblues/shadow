@@ -30,7 +30,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `servers` / `channels` / `threads` / `dms` — communication features
 - `friends` / `invites` / `notifications` — social features
 - `agents` / `marketplace` — AI agent ecosystem
-- `workspace` / `apps` / `app` / `shop` — platform workflows
+- `workspace` / `apps` / `app` / `shop` / `commerce` — platform workflows
 - `media` — file upload and download
 - `search` — search messages
 - `oauth` — OAuth app management (create, list, reset-secret, consents, revoke)
@@ -73,6 +73,45 @@ shadowob config path
 
 These override values in config profiles.
 
+## Commerce Commands
+
+Commerce commands expose the same buyer, seller, and provider automation paths that the app uses.
+Use them for setup, inspection, fulfillment tooling, and external app entitlement checks.
+
+```bash
+# Inspect the complete buyer-facing context for a product
+shadowob commerce products context <product-id> --json
+
+# Preview and purchase an offer
+shadowob commerce offers preview <offer-id> --json
+shadowob commerce offers purchase <offer-id> --idempotency-key <unique-operation-id> --json
+
+# Inspect wallet purchases and delivery state
+shadowob commerce entitlements list --json
+shadowob commerce entitlements get <entitlement-id> --json
+shadowob commerce paid-files open <file-id> --json
+
+# Manage buyer-owned community assets
+shadowob commerce assets list --json
+shadowob commerce assets consume <grant-id> --idempotency-key <unique-operation-id> --json
+
+# Seller income and community support actions
+shadowob commerce settlements list --json
+shadowob commerce tips send --recipient-user-id <user-id> --amount 100 --message "Thanks" --json
+```
+
+Shop commands cover seller-side shelves, offers, deliverables, assets, and scoped entitlements:
+
+```bash
+shadowob shop me get --json
+shadowob shop products context <product-id> --json
+shadowob shop products list-by-shop <shop-id> --status active --limit 20 --json
+shadowob shop offers list <shop-id> --json
+shadowob shop offers deliverables create <shop-id> <offer-id> --data '{"kind":"paid_file","resourceId":"file-id"}' --json
+shadowob shop assets create <shop-id> --data '{"assetType":"badge","name":"Founder Badge","status":"active"}' --json
+shadowob shop entitlements list <shop-id> --json
+```
+
 ## OAuth Commands
 
 ```bash
@@ -96,6 +135,10 @@ shadowob oauth consents --json
 
 # Revoke consent for an app
 shadowob oauth revoke <app-id>
+
+# Check and redeem Shadow purchases from a provider app session
+shadowob oauth commerce check --access-token <oauth-access-token> --resource-id <app-id>:premium --json
+shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id <app-id>:premium --idempotency-key <provider-operation-id> --json
 ```
 
 See [Platform Apps](/platform/platform-apps) for a complete guide to building OAuth apps.

@@ -66,3 +66,26 @@ shadowob discover search --query "gaming" --type servers --limit 10 --json
 ```
 
 :::
+
+---
+
+## Discover Commerce Aggregate
+
+```
+GET /api/discover/business
+```
+
+Returns the consumer-facing discovery aggregate for Buddies, services and content, shops, and public servers. Authentication is required.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `q` | string | No | Search query; applied when it has at least 2 chars |
+| `limit` | number | No | Max results per section (default: 8, max: 24) |
+
+```ts
+const discovery = await client.discoverCommerce({
+  q: 'design',
+  limit: 8,
+})
+// { buddies, products, shops, communities, totals }
+```

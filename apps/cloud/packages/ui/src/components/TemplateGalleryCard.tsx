@@ -2,8 +2,8 @@ import { Badge, Button, GlassCard } from '@shadowob/ui'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { type TemplateCatalogSummary } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { type TemplateCatalogSummary } from '../lib/api'
+import { cn } from '../lib/utils'
 
 const CATEGORY_BANNER: Record<string, { bg: string; textColor: string }> = {
   devops: {
@@ -111,11 +111,11 @@ export function TemplateGalleryCard({
   const bannerWords = title.split(/[\s-]+/).slice(0, 2)
 
   return (
-    <GlassCard className="relative overflow-hidden transition-shadow duration-200 hover:shadow-lg hover:shadow-primary/[0.08] hover:border-border-primary/25 bg-bg-tertiary/60">
+    <GlassCard className="relative overflow-hidden rounded-[18px] border border-border-subtle bg-bg-secondary/60 shadow-[0_16px_42px_rgba(0,0,0,0.14)] transition hover:border-primary/35 hover:bg-bg-secondary/72">
       <Link to={detailHref} className="block">
         <div
           className={cn(
-            'relative h-32 overflow-hidden border-b border-border-subtle',
+            'relative h-36 overflow-hidden border-b border-border-subtle/70',
             bannerStyle.bg,
           )}
         >

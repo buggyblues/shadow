@@ -5,6 +5,8 @@ import type { EntitlementAccessService } from './entitlement-access.service'
 import { resolveProductEntitlementResource } from './entitlement-resource'
 import type { WalletService } from './wallet.service'
 
+const PAID_FILE_ACCESS_CAPABILITIES = ['view', 'use', 'download']
+
 function addDaysLabelSeconds(seconds?: number | null) {
   return seconds ?? null
 }
@@ -69,8 +71,8 @@ export class CommerceCheckoutService {
             resourceType: resource.resourceType,
             resourceId: resource.resourceId,
             capabilities:
-              resource.resourceType === 'workspace_file' && resource.capability === 'view'
-                ? ['view', 'use']
+              resource.resourceType === 'workspace_file'
+                ? Array.from(new Set([resource.capability, ...PAID_FILE_ACCESS_CAPABILITIES]))
                 : [resource.capability],
           })
         : null

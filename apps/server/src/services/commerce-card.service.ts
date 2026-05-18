@@ -19,6 +19,8 @@ export interface CommerceCard {
     name: string
     summary?: string | null
     imageUrl?: string | null
+    shopName?: string | null
+    deliveryPromise?: string | null
     price: number
     currency: string
     productType: 'physical' | 'entitlement'
@@ -150,6 +152,8 @@ export class CommerceCardService {
         name: product.name,
         summary: product.summary,
         imageUrl,
+        shopName: shop.name,
+        deliveryPromise: config?.privilegeDescription ?? product.summary ?? null,
         price: offer.priceOverride ?? sku?.price ?? product.basePrice,
         currency: offer.currency ?? product.currency,
         productType: product.type,
