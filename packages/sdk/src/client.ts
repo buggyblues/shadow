@@ -19,6 +19,7 @@ import type {
   ShadowCloudProviderProfile,
   ShadowCommerceCheckoutPreview,
   ShadowCommerceProductCard,
+  ShadowCommerceProductContext,
   ShadowCommerceProductPickerResponse,
   ShadowCommunityAsset,
   ShadowCommunityAssetDefinition,
@@ -54,6 +55,9 @@ import type {
   ShadowNotification,
   ShadowNotificationPreferences,
   ShadowOAuthApp,
+  ShadowOAuthCommerceEntitlementAccess,
+  ShadowOAuthCommerceEntitlementRedeemInput,
+  ShadowOAuthCommerceEntitlementRedeemResult,
   ShadowOAuthConsent,
   ShadowOAuthLinkCard,
   ShadowOAuthToken,
@@ -2162,6 +2166,10 @@ export class ShadowClient {
     return this.request(`/api/products/${productId}`)
   }
 
+  async getCommerceProductContext(productId: string): Promise<ShadowCommerceProductContext> {
+    return this.request(`/api/commerce/products/${productId}/context`)
+  }
+
   async getShopProduct(shopId: string, productId: string): Promise<ShadowProduct> {
     return this.request(`/api/shops/${shopId}/products/${productId}`)
   }
@@ -2408,15 +2416,7 @@ export class ShadowClient {
 
   async createProduct(
     serverId: string,
-    data: {
-      name: string
-      description?: string
-      price: number
-      currency?: string
-      stock: number
-      categoryId?: string
-      images?: string[]
-    },
+    data: Partial<ShadowProduct> & { name: string },
   ): Promise<ShadowProduct> {
     return this.request(`/api/servers/${serverId}/shop/products`, {
       method: 'POST',
@@ -2435,6 +2435,7 @@ export class ShadowClient {
       status: string
       categoryId: string | null
       images: string[]
+      media: ShadowProduct['media']
     }>,
   ): Promise<ShadowProduct> {
     return this.request(`/api/servers/${serverId}/shop/products/${productId}`, {
@@ -2481,6 +2482,7 @@ export class ShadowClient {
     data: {
       idempotencyKey: string
       items?: { productId: string; skuId?: string; quantity: number }[]
+      buyerNote?: string
     },
   ): Promise<ShadowOrder> {
     return this.request(`/api/servers/${serverId}/shop/orders`, {
@@ -2510,6 +2512,12 @@ export class ShadowClient {
 
   async cancelOrder(serverId: string, orderId: string): Promise<ShadowOrder> {
     return this.request(`/api/servers/${serverId}/shop/orders/${orderId}/cancel`, {
+      method: 'POST',
+    })
+  }
+
+  async completeOrder(serverId: string, orderId: string): Promise<ShadowOrder> {
+    return this.request(`/api/servers/${serverId}/shop/orders/${orderId}/complete`, {
       method: 'POST',
     })
   }
@@ -2915,6 +2923,32 @@ export class ShadowClient {
     return this.request('/api/entitlements')
   }
 
+  async getEntitlement(entitlementId: string): Promise<ShadowEntitlement> {
+    return this.request(`/api/entitlements/${entitlementId}`)
+  }
+
+  async getOAuthCommerceEntitlementAccess(params?: {
+    resourceType?: string
+    resourceId?: string
+    capability?: string
+  }): Promise<ShadowOAuthCommerceEntitlementAccess> {
+    const qs = new URLSearchParams()
+    if (params?.resourceType) qs.set('resourceType', params.resourceType)
+    if (params?.resourceId) qs.set('resourceId', params.resourceId)
+    if (params?.capability) qs.set('capability', params.capability)
+    const query = qs.toString()
+    return this.request(`/api/oauth/commerce/entitlements${query ? `?${query}` : ''}`)
+  }
+
+  async redeemOAuthCommerceEntitlement(
+    data: ShadowOAuthCommerceEntitlementRedeemInput,
+  ): Promise<ShadowOAuthCommerceEntitlementRedeemResult> {
+    return this.request('/api/oauth/commerce/entitlements/redeem', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
   async verifyEntitlement(entitlementId: string): Promise<{
     active: boolean
     entitlement: Record<string, unknown>
@@ -2928,6 +2962,16 @@ export class ShadowClient {
     reason?: string,
   ): Promise<Record<string, unknown>> {
     return this.request(`/api/entitlements/${entitlementId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    })
+  }
+
+  async cancelEntitlementRenewal(
+    entitlementId: string,
+    reason?: string,
+  ): Promise<Record<string, unknown>> {
+    return this.request(`/api/entitlements/${entitlementId}/cancel-renewal`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
     })
@@ -3002,6 +3046,24 @@ export class ShadowClient {
     if (params?.type) qs.set('type', params.type)
     if (params?.limit) qs.set('limit', String(params.limit))
     return this.request(`/api/discover/search?${qs}`)
+  }
+
+  async discoverCommerce(params?: {
+    q?: string
+    limit?: number
+  }): Promise<Record<string, unknown>> {
+    const qs = new URLSearchParams()
+    if (params?.q) qs.set('q', params.q)
+    if (params?.limit) qs.set('limit', String(params.limit))
+    const suffix = qs.toString()
+    return this.request(`/api/discover/business${suffix ? `?${suffix}` : ''}`)
+  }
+
+  async discoverBusinessHub(params?: {
+    q?: string
+    limit?: number
+  }): Promise<Record<string, unknown>> {
+    return this.discoverCommerce(params)
   }
 
   // ── Voice Enhance ─────────────────────────────────────────────────────

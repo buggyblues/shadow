@@ -66,3 +66,26 @@ shadowob discover search --query "游戏" --type servers --limit 10 --json
 ```
 
 :::
+
+---
+
+## 购买发现聚合
+
+```
+GET /api/discover/business
+```
+
+返回面向发现页的购买入口聚合，包含 Buddy、服务与内容、店铺和公开服务器。需要登录。
+
+| 参数 | 类型 | 必填 | 描述 |
+|-------|------|----------|-------------|
+| `q` | string | 否 | 搜索关键词（最少 2 字才生效） |
+| `limit` | number | 否 | 每类最大结果数（默认: 8，最大: 24） |
+
+```ts
+const discovery = await client.discoverCommerce({
+  q: '设计',
+  limit: 8,
+})
+// { buddies, products, shops, communities, totals }
+```

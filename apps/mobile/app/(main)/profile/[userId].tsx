@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Clock, QrCode, User, X } from 'lucide-react-native'
+import { Clock, Package, QrCode, ShoppingBag, Star, User, X } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import QRCode from 'react-native-qrcode-svg'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
+import { PriceCompact } from '../../../src/components/common/price-display'
 import { StatusBadge } from '../../../src/components/common/status-badge'
 import { ProfileCommentSection } from '../../../src/components/profile/ProfileCommentSection'
 import { AppText, BackgroundSurface, Button, GlassPanel } from '../../../src/components/ui'
@@ -48,6 +49,23 @@ interface UserProfile {
   }>
 }
 
+interface Shop {
+  id: string
+  name: string
+}
+
+interface Product {
+  id: string
+  name: string
+  summary?: string | null
+  status: string
+  basePrice?: number
+  price?: number
+  salesCount?: number
+  avgRating?: number
+  ratingCount?: number
+}
+
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
@@ -81,6 +99,25 @@ export default function UserProfileScreen() {
     enabled: !!currentUser,
   })
 
+  const { data: assetShop } = useQuery({
+    queryKey: ['profile-asset-shop', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return null
+      try {
+        return await fetchApi<Shop>(`/api/users/${profile.id}/shop`)
+      } catch {
+        return null
+      }
+    },
+    enabled: profile?.isBot === true && !!profile.id,
+  })
+
+  const { data: assetProductsData } = useQuery({
+    queryKey: ['profile-asset-shop-products', assetShop?.id],
+    queryFn: () => fetchApi<{ products: Product[] }>(`/api/shops/${assetShop!.id}/products`),
+    enabled: Boolean(assetShop?.id),
+  })
+
   const sendFriendRequest = useMutation({
     mutationFn: () =>
       fetchApi('/api/friends/request', {
@@ -104,6 +141,16 @@ export default function UserProfileScreen() {
   const isFriend = myFriends.some((item) => item.user.id === profile.id)
   const isRequestSent = sentRequests.some((item) => item.user.id === profile.id)
   const addFriendDisabled = sendFriendRequest.isPending || isFriend || isRequestSent
+  const assetProducts = (assetProductsData?.products ?? []).filter(
+    (product) => product.status === 'active',
+  )
+  const assetSales = assetProducts.reduce((sum, product) => sum + (product.salesCount ?? 0), 0)
+  const ratedProducts = assetProducts.filter((product) => (product.ratingCount ?? 0) > 0)
+  const assetRating =
+    ratedProducts.length > 0
+      ? ratedProducts.reduce((sum, product) => sum + (product.avgRating ?? 0), 0) /
+        ratedProducts.length
+      : 0
   const currentActivity = profile.agent?.currentActivity
   const currentActivityLabel =
     currentActivity === 'thinking'
@@ -263,6 +310,73 @@ export default function UserProfileScreen() {
                   )}
                 </View>
               </Pressable>
+            </View>
+          )}
+
+          {profile.isBot && (
+            <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
+              <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+                {t('profile.agentAsset')}
+              </Text>
+              <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
+                {t('profile.agentAssetHint')}
+              </Text>
+              <View style={styles.assetStatsGrid}>
+                <View style={[styles.assetStat, { backgroundColor: colors.inputBackground }]}>
+                  <ShoppingBag size={15} color={colors.primary} />
+                  <Text style={[styles.assetStatValue, { color: colors.text }]}>
+                    {assetProducts.length}
+                  </Text>
+                  <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
+                    {t('profile.availableServices')}
+                  </Text>
+                </View>
+                <View style={[styles.assetStat, { backgroundColor: colors.inputBackground }]}>
+                  <Package size={15} color={colors.primary} />
+                  <Text style={[styles.assetStatValue, { color: colors.text }]}>{assetSales}</Text>
+                  <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
+                    {t('profile.deliveryRecords')}
+                  </Text>
+                </View>
+                <View style={[styles.assetStat, { backgroundColor: colors.inputBackground }]}>
+                  <Star size={15} color={colors.primary} />
+                  <Text style={[styles.assetStatValue, { color: colors.text }]}>
+                    {ratedProducts.length > 0 ? assetRating.toFixed(1) : '-'}
+                  </Text>
+                  <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
+                    {t('profile.creditRating')}
+                  </Text>
+                </View>
+              </View>
+              {assetProducts.length === 0 ? (
+                <Text style={[styles.emptyServices, { color: colors.textMuted }]}>
+                  {t('profile.noAssetServices')}
+                </Text>
+              ) : (
+                <View style={styles.serviceList}>
+                  {assetProducts.slice(0, 3).map((product) => (
+                    <View
+                      key={product.id}
+                      style={[styles.serviceCard, { backgroundColor: colors.inputBackground }]}
+                    >
+                      <View style={styles.serviceInfo}>
+                        <Text style={[styles.serviceName, { color: colors.text }]} numberOfLines={1}>
+                          {product.name}
+                        </Text>
+                        <Text
+                          style={[styles.serviceSummary, { color: colors.textMuted }]}
+                          numberOfLines={2}
+                        >
+                          {product.summary || t('profile.serviceShelfFallback')}
+                        </Text>
+                      </View>
+                      <View style={styles.servicePrice}>
+                        <PriceCompact amount={product.basePrice ?? product.price ?? 0} size={13} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
@@ -491,6 +605,59 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: fontSize.sm,
     lineHeight: 20,
+  },
+  assetStatsGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  assetStat: {
+    flex: 1,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    alignItems: 'center',
+  },
+  assetStatValue: {
+    marginTop: spacing.xs,
+    fontSize: fontSize.md,
+    fontWeight: '800',
+  },
+  assetStatLabel: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptyServices: {
+    marginTop: spacing.md,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+  },
+  serviceList: {
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  serviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+  },
+  serviceInfo: {
+    flex: 1,
+  },
+  serviceName: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+  },
+  serviceSummary: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  servicePrice: {
+    alignItems: 'flex-end',
   },
   ownerCard: {
     flexDirection: 'row',

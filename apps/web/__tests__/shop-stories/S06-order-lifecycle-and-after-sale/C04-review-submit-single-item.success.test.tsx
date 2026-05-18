@@ -17,6 +17,7 @@ describe('S06/C04 review submit single item success', () => {
     fetchApiMock.mockImplementation((path: string, options?: RequestInit) => {
       if (String(path).includes('/shop/orders/o1/review') && options?.method === 'POST')
         return Promise.resolve({ ok: true })
+      if (String(path).includes('/shop/orders/o1/reviews')) return Promise.resolve([])
       if (String(path).includes('/shop/orders'))
         return Promise.resolve([
           {

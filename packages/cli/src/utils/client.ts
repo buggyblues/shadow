@@ -23,6 +23,11 @@ export async function getClient(profile?: string): Promise<ShadowClient> {
   return new ShadowClient(config.serverUrl, config.token)
 }
 
+export async function getClientWithToken(token: string, profile?: string): Promise<ShadowClient> {
+  const config = await getConfig(profile)
+  return new ShadowClient(config.serverUrl, token)
+}
+
 export async function getSocket(profile?: string): Promise<ShadowSocket> {
   const config = await getConfig(profile)
   return new ShadowSocket({ serverUrl: config.serverUrl, token: config.token })

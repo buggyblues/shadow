@@ -279,7 +279,7 @@
     "joinServerDesc": "Enter an invite code to join an existing server",
     "inviteCodePlaceholder": "Enter invite code",
     "joinButton": "Join",
-    "discover": "Discover Servers",
+    "discover": "Discover",
     "serverInfo": "Server Info",
     "inviteMembers": "Invite Members",
     "copyServerId": "Copy Server ID",
@@ -472,6 +472,7 @@
     "commerceSubscription": "Subscription",
     "commercePurchaseFailed": "Purchase failed",
     "commercePurchaseSucceeded": "Purchase completed",
+    "commerceRefundRule": "After-sales by order rules",
     "productPicker": "Products",
     "productPickerLoading": "Loading products...",
     "productPickerEmpty": "No products available",
@@ -892,15 +893,15 @@
   },
   "discover": {
     "title": "Discover",
-    "subtitle": "Find servers and channels",
-    "searchPlaceholder": "Search...",
+    "subtitle": "Find Buddies, buy content, browse shops and servers",
+    "searchPlaceholder": "Search Buddies, services, shops, or servers...",
     "noServers": "No public servers available",
     "noChannels": "No active channels available",
-    "noDescription": "No description",
+    "noDescription": "No description yet.",
     "members": "members",
-    "joinButton": "Join",
-    "enterButton": "Enter",
-    "public": "Public",
+    "joinButton": "Join server",
+    "enterButton": "Open server",
+    "public": "Public server",
     "joinToView": "Join to view",
     "unknownAgent": "Unknown Buddy",
     "unknownUser": "Unknown User",
@@ -933,17 +934,98 @@
         "updated": "Updated"
       }
     },
-    "loadMore": "Loading more...",
-    "noMore": "No more",
-    "emptyTitle": "Nothing here",
-    "emptyDesc": "Be the first to create a community!",
-    "noSearchResults": "No results",
-    "noSearchResultsDesc": "Try different keywords",
+    "loadMore": "Load more servers",
+    "noMore": "All servers shown",
+    "emptyTitle": "Nothing to browse yet",
+    "emptyDesc": "Try another search or come back for new Buddies, services, shops, and servers.",
+    "noSearchResults": "No results found",
+    "noSearchResultsDesc": "Try another keyword.",
     "deviceTier": {
       "highEnd": "High-end",
       "midRange": "Mid-range",
       "lowEnd": "Low-end",
       "unknown": "Unknown"
+    },
+    "eyebrow": "Discover",
+    "heroTitle": "What are you looking for today?",
+    "heroSubtitle": "Find Buddies, buy content, browse shops, or join an interesting server.",
+    "communityModelTitle": "Inside servers",
+    "communityShelfTitle": "Recommended servers",
+    "communityShelfHint": "Join to chat in channels, browse shops, and find Buddies.",
+    "activityScore": "Activity",
+    "joined": "Joined",
+    "views": {
+      "all": "All",
+      "joined": "Joined",
+      "open": "Open"
+    },
+    "metrics": {
+      "publicCommunities": "Public servers",
+      "joinedCommunities": "Joined",
+      "openCommunities": "Open to join",
+      "communityMembers": "Members"
+    },
+    "communityModel": {
+      "identity": {
+        "title": "Enter servers",
+        "body": "Join to browse channels, shops, and Buddies."
+      },
+      "service": {
+        "title": "Buy content",
+        "body": "Open any service or item you like from its detail page."
+      },
+      "trust": {
+        "title": "Read reviews",
+        "body": "Reviews come from real orders and purchases."
+      }
+    },
+    "capabilities": {
+      "channels": "Channels",
+      "services": "Shops",
+      "credit": "Reviews"
+    },
+    "businessTitle": "What are you looking for today?",
+    "businessSubtitle": "Browse Buddies, buy services and content, visit shops, or join a server worth staying in.",
+    "viewAll": "View all",
+    "openBuddy": "Talk to them",
+    "openProduct": "View details",
+    "openShop": "Visit shop",
+    "shopFallback": "This shop is adding fresh picks.",
+    "productCount": "{{count}} items",
+    "memberCount": "{{count}} members",
+    "sections": {
+      "all": "Featured",
+      "buddies": "Buddies",
+      "products": "Services & content",
+      "shops": "Shops",
+      "communities": "Servers"
+    },
+    "lanes": {
+      "buddies": "Recommended Buddies",
+      "products": "Buy today",
+      "shops": "Shops to visit",
+      "communities": "Recommended servers"
+    },
+    "emptyLane": {
+      "buddies": "No Buddies to contact yet.",
+      "products": "No items listed yet.",
+      "shops": "No shops to browse yet.",
+      "communities": "No public servers yet."
+    },
+    "badges": {
+      "buddy": "Buddy"
+    },
+    "facts": {
+      "daily": "Daily",
+      "rentals": "Orders"
+    },
+    "productType": {
+      "physical": "Physical",
+      "entitlement": "Service/content"
+    },
+    "shopScope": {
+      "server": "Server shop",
+      "user": "Personal shop"
     }
   },
   "notification": {
@@ -1118,7 +1200,14 @@
     "offline": "Offline"
   },
   "profile": {
-    "memberSince": "Member since"
+    "memberSince": "Member since",
+    "agentAsset": "Agent asset home",
+    "agentAssetHint": "Shows this Buddy's purchasable services, delivery records, and real credit.",
+    "availableServices": "Services",
+    "deliveryRecords": "Deliveries",
+    "creditRating": "Credit",
+    "noAssetServices": "This Buddy has not listed purchasable services yet.",
+    "serviceShelfFallback": "Purchase creates an order and fulfillment follows the promise."
   },
   "shop": {
     "addProduct": "Add product",
@@ -1162,6 +1251,9 @@
     "statusCancelled": "Cancelled",
     "statusRefunded": "Refunded",
     "cancelOrder": "Cancel Order",
+    "confirmReceipt": "Confirm completion",
+    "orderCompleted": "Order completed",
+    "orderCompleteFailed": "Failed to confirm completion",
     "viewReviews": "View Reviews",
     "wallet": "Wallet",
     "walletBalance": "Balance",
@@ -1172,8 +1264,66 @@
     "buyNow": "Buy Now",
     "cartTotal": "{{count}} items total",
     "clearCart": "Clear cart",
+    "serverStorefront": "Server shop",
+    "serverProvidedBy": "{{server}} · {{shop}}",
+    "productSourceTitle": "Provided by {{shop}}",
+    "productSourceServer": "Server: {{server}}",
+    "productSourceHint": "After purchase, the order, delivery status, content, and support entry stay in Purchases and Delivery.",
     "orderNo": "Order #",
-    "tags": "Tags"
+    "tags": "Tags",
+    "uploadCover": "Upload product cover",
+    "uploadingCover": "Uploading cover...",
+    "coverHint": "The cover appears on shelves, orders, and entitlement receipts",
+    "coverUploadFailed": "Cover upload failed",
+    "mediaPermissionDenied": "Photo library access is required to upload a cover",
+    "productTemplates": {
+      "ai_service": {
+        "label": "AI service",
+        "summary": "Buddy or the seller handles the service from the order.",
+        "promise": "After checkout, the service order is created and the seller delivers by the promised time."
+      },
+      "paid_file": {
+        "label": "Paid file",
+        "summary": "Open or download paid content after purchase.",
+        "promise": "After payment, open the content from Purchases and Delivery."
+      },
+      "membership": {
+        "label": "Membership",
+        "summary": "Get time-limited membership benefits after purchase.",
+        "promise": "Access activates after payment and validity is visible."
+      },
+      "badge_gift": {
+        "label": "Badge/gift",
+        "summary": "Delivered into community assets.",
+        "promise": "After payment, the asset lands in Wallet assets with traceable status."
+      },
+      "physical": {
+        "label": "Physical",
+        "summary": "The seller ships the item from the order.",
+        "promise": "After payment, an order is created and the seller updates processing and shipping."
+      }
+    },
+    "visual": {
+      "service": "Service",
+      "file": "File",
+      "badge": "Badge",
+      "gift": "Gift",
+      "ticket": "Service pass",
+      "physical": "Physical"
+    },
+    "visualPromise": {
+      "service": "Order service",
+      "file": "Unlock after purchase",
+      "badge": "Identity display",
+      "gift": "Giftable collectible",
+      "ticket": "Redeemable pass",
+      "physical": "Delivery tracked"
+    },
+    "consumerPath": {
+      "browse": "Browse",
+      "pay": "Pay",
+      "fulfill": "Fulfill"
+    }
   },
   "workspace": {
     "confirmDelete": "Are you sure you want to delete?",

@@ -78,7 +78,7 @@ const createAssetDefinitionSchema = z.object({
   ]),
   name: z.string().min(1).max(120),
   description: z.string().max(2000).nullable().optional(),
-  imageUrl: z.string().url().nullable().optional(),
+  imageUrl: z.string().min(1).nullable().optional(),
   giftable: z.boolean().optional(),
   transferable: z.boolean().optional(),
   consumable: z.boolean().optional(),
@@ -105,6 +105,91 @@ const createPersonalShopSchema = z.object({
 const cancelEntitlementSchema = z.object({
   reason: z.string().max(500).optional(),
 })
+
+type ProductMediaResponse = {
+  type?: string | null
+  url?: string | null
+  thumbnailUrl?: string | null
+}
+
+function resolveImageUrl(container: AppContainer, value: unknown) {
+  if (typeof value !== 'string' || !value) return value
+  const mediaService = container.resolve('mediaService')
+  return mediaService.resolveMediaUrl(value, 'image/png', { variant: 'preview' }) ?? value
+}
+
+function resolveProductMedia<T extends { media?: ProductMediaResponse[] | null }>(
+  container: AppContainer,
+  product: T,
+): T {
+  if (!product.media?.length) return product
+  const mediaService = container.resolve('mediaService')
+  return {
+    ...product,
+    media: product.media.map((item) => {
+      const contentType = item.type === 'video' ? 'video/mp4' : 'image/png'
+      const url = item.url
+        ? (mediaService.resolveMediaUrl(
+            item.url,
+            contentType,
+            item.type === 'video' ? undefined : { variant: 'preview' },
+          ) ?? item.url)
+        : item.url
+      const thumbnailSource = item.thumbnailUrl ?? item.url
+      const thumbnailUrl = thumbnailSource
+        ? (mediaService.resolveMediaUrl(thumbnailSource, 'image/png', { variant: 'preview' }) ??
+          thumbnailSource)
+        : item.thumbnailUrl
+      return { ...item, url, thumbnailUrl }
+    }),
+  }
+}
+
+function resolveProductList<
+  T extends { products?: Array<{ media?: ProductMediaResponse[] | null }> },
+>(container: AppContainer, payload: T): T {
+  return {
+    ...payload,
+    products: payload.products?.map((product) => resolveProductMedia(container, product)),
+  }
+}
+
+function resolveAssetDefinition<T extends { imageUrl?: string | null }>(
+  container: AppContainer,
+  definition: T,
+): T {
+  return {
+    ...definition,
+    imageUrl: resolveImageUrl(container, definition.imageUrl) as string | null,
+  }
+}
+
+function resolveEntitlementMedia<
+  T extends { metadata?: unknown; shop?: { logoUrl?: string | null } | null },
+>(container: AppContainer, entitlement: T): T {
+  const metadata =
+    entitlement.metadata &&
+    typeof entitlement.metadata === 'object' &&
+    !Array.isArray(entitlement.metadata)
+      ? { ...(entitlement.metadata as Record<string, unknown>) }
+      : entitlement.metadata
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    const metadataRecord = metadata as Record<string, unknown>
+    const image = metadataRecord.productImageUrl
+    if (typeof image === 'string')
+      metadataRecord.productImageUrl = resolveImageUrl(container, image)
+  }
+  return {
+    ...entitlement,
+    metadata,
+    shop: entitlement.shop
+      ? {
+          ...entitlement.shop,
+          logoUrl: resolveImageUrl(container, entitlement.shop.logoUrl) as string | null,
+        }
+      : entitlement.shop,
+  }
+}
 
 const forceMajeureRequestSchema = z.object({
   reason: z.string().min(1).max(4000),
@@ -140,6 +225,126 @@ export function createShopHandler(container: AppContainer) {
     const hasAdminScope = user.scopes?.some((scope) => scope === '*' || scope === 'admin:*')
     if (!isAdminEmail && !hasAdminScope) {
       throw apiError('PLATFORM_REVIEW_FORBIDDEN', 403)
+    }
+  }
+
+  async function resolveCommerceProductContext(productId: string, viewerUserId: string) {
+    const productService = container.resolve('productService')
+    const shopScopeService = container.resolve('shopScopeService')
+    const commerceOfferService = container.resolve('commerceOfferService')
+    const serverDao = container.resolve('serverDao')
+    const userDao = container.resolve('userDao')
+    const agentDao = container.resolve('agentDao')
+
+    const product = await productService.getProductDetail(productId)
+    const shop = await shopScopeService.requireVisibleShop(product.shopId, viewerUserId)
+    if (product.status !== 'active') {
+      const managedShop = await shopScopeService
+        .requireShopManager(product.shopId, viewerUserId)
+        .catch(() => null)
+      if (!managedShop) throw apiError('PRODUCT_NOT_FOUND', 404)
+    }
+
+    const server = shop.serverId ? await serverDao.findById(shop.serverId) : null
+    const providerUserId = shop.ownerUserId ?? server?.ownerId ?? null
+    const provider = providerUserId ? await userDao.findById(providerUserId) : null
+    const buddy = providerUserId ? await agentDao.findByUserId(providerUserId) : null
+    const offer = await commerceOfferService.getLatestOfferForProduct(product.id)
+    const deliverables = offer ? await commerceOfferService.listDeliverablesForOffer(offer.id) : []
+    const entitlementConfig = Array.isArray(product.entitlementConfig)
+      ? product.entitlementConfig[0]
+      : product.entitlementConfig
+    const productHref = `/app/shop/products/${product.id}`
+    const shopHref = server
+      ? `/app/servers/${server.slug ?? server.id}/shop`
+      : shop.ownerUserId
+        ? `/app/shop/users/${shop.ownerUserId}?view=buyer`
+        : null
+    const serverHref = server ? `/app/servers/${server.slug ?? server.id}` : null
+    const providerProfileHref = providerUserId ? `/app/profile/${providerUserId}` : null
+
+    return {
+      product: resolveProductMedia(container, product),
+      shop: {
+        ...shop,
+        logoUrl: resolveImageUrl(container, shop.logoUrl) as string | null,
+        bannerUrl: resolveImageUrl(container, shop.bannerUrl) as string | null,
+      },
+      server: server
+        ? {
+            id: server.id,
+            name: server.name,
+            slug: server.slug,
+            description: server.description,
+            iconUrl: resolveImageUrl(container, server.iconUrl) as string | null,
+            bannerUrl: resolveImageUrl(container, server.bannerUrl) as string | null,
+            ownerId: server.ownerId,
+          }
+        : null,
+      provider: provider
+        ? {
+            id: provider.id,
+            username: provider.username,
+            displayName: provider.displayName,
+            avatarUrl: resolveImageUrl(container, provider.avatarUrl) as string | null,
+            isBot: provider.isBot,
+          }
+        : null,
+      buddy: buddy
+        ? {
+            id: buddy.id,
+            userId: buddy.userId,
+            ownerId: buddy.ownerId,
+            status: buddy.status,
+            totalOnlineSeconds: buddy.totalOnlineSeconds,
+            lastHeartbeat: buddy.lastHeartbeat,
+          }
+        : null,
+      offer: offer
+        ? {
+            id: offer.id,
+            status: offer.status,
+            priceOverride: offer.priceOverride,
+            currency: offer.currency,
+            allowedSurfaces: offer.allowedSurfaces,
+            sellerUserId: offer.sellerUserId,
+            sellerBuddyUserId: offer.sellerBuddyUserId,
+          }
+        : null,
+      fulfillment: {
+        status: 'ready_to_purchase',
+        resourceType: entitlementConfig?.resourceType ?? null,
+        resourceId: entitlementConfig?.resourceId ?? null,
+        capability: entitlementConfig?.capability ?? null,
+        deliverables: deliverables.map((deliverable) => ({
+          id: deliverable.id,
+          kind: deliverable.kind,
+          resourceType: deliverable.resourceType,
+          resourceId: deliverable.resourceId,
+          deliveryTiming: deliverable.deliveryTiming,
+          status: deliverable.status,
+        })),
+      },
+      refund: {
+        policy: 'order_bound',
+        status: 'available_after_purchase',
+        supportPath: '/app/settings/wallet',
+      },
+      credit: {
+        salesCount: product.salesCount ?? 0,
+        avgRating: product.avgRating ?? 0,
+        ratingCount: product.ratingCount ?? 0,
+        completedOrders: product.salesCount ?? 0,
+      },
+      links: {
+        product: productHref,
+        shop: shopHref,
+        server: serverHref,
+        providerProfile: providerProfileHref,
+        buddyProfile: buddy ? `/app/profile/${buddy.userId}` : null,
+        assetHome: null,
+        checkoutPreview: offer ? `/api/commerce/offers/${offer.id}/checkout-preview` : null,
+      },
     }
   }
 
@@ -201,14 +406,13 @@ export function createShopHandler(container: AppContainer) {
     const limit = Number(c.req.query('limit')) || 50
     const offset = Number(c.req.query('offset')) || 0
     const keyword = c.req.query('keyword') || undefined
-    return c.json({
-      products: await productService.getProducts(shop.id, {
-        status: 'active',
-        keyword,
-        limit,
-        offset,
-      }),
+    const products = await productService.getProducts(shop.id, {
+      status: 'active',
+      keyword,
+      limit,
+      offset,
     })
+    return c.json(resolveProductList(container, { products }))
   })
 
   h.get('/shops/:shopId/assets', async (c) => {
@@ -216,8 +420,9 @@ export function createShopHandler(container: AppContainer) {
     const shopScopeService = container.resolve('shopScopeService')
     const communityAssetService = container.resolve('communityAssetService')
     await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
+    const assets = await communityAssetService.listDefinitionsForShop(c.req.param('shopId'))
     return c.json({
-      assets: await communityAssetService.listDefinitionsForShop(c.req.param('shopId')),
+      assets: assets.map((asset) => resolveAssetDefinition(container, asset)),
     })
   })
 
@@ -227,27 +432,25 @@ export function createShopHandler(container: AppContainer) {
     const communityAssetService = container.resolve('communityAssetService')
     const shop = await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
     const input = c.req.valid('json')
-    return c.json(
-      await communityAssetService.createDefinition({
-        actor: c.get('actor'),
-        createdBy: user.userId,
-        issuerKind: 'shop',
-        issuerId: shop.id,
-        shopId: shop.id,
-        assetType: input.assetType,
-        name: input.name,
-        description: input.description,
-        imageUrl: input.imageUrl,
-        giftable: input.giftable,
-        transferable: input.transferable,
-        consumable: input.consumable,
-        revocable: input.revocable,
-        expiresAfterDays: input.expiresAfterDays,
-        status: input.status,
-        metadata: input.metadata,
-      }),
-      201,
-    )
+    const definition = await communityAssetService.createDefinition({
+      actor: c.get('actor'),
+      createdBy: user.userId,
+      issuerKind: 'shop',
+      issuerId: shop.id,
+      shopId: shop.id,
+      assetType: input.assetType,
+      name: input.name,
+      description: input.description,
+      imageUrl: input.imageUrl,
+      giftable: input.giftable,
+      transferable: input.transferable,
+      consumable: input.consumable,
+      revocable: input.revocable,
+      expiresAfterDays: input.expiresAfterDays,
+      status: input.status,
+      metadata: input.metadata,
+    })
+    return c.json(resolveAssetDefinition(container, definition), 201)
   })
 
   h.get('/products/:productId', async (c) => {
@@ -262,7 +465,12 @@ export function createShopHandler(container: AppContainer) {
         .catch(() => null)
       if (!shop) throw apiError('PRODUCT_NOT_FOUND', 404)
     }
-    return c.json(product)
+    return c.json(resolveProductMedia(container, product))
+  })
+
+  h.get('/commerce/products/:productId/context', async (c) => {
+    const user = c.get('user')
+    return c.json(await resolveCommerceProductContext(c.req.param('productId'), user.userId))
   })
 
   h.get('/shops/:shopId/products/:productId', async (c) => {
@@ -278,7 +486,7 @@ export function createShopHandler(container: AppContainer) {
         .catch(() => null)
       if (!shop) throw apiError('PRODUCT_NOT_FOUND', 404)
     }
-    return c.json(product)
+    return c.json(resolveProductMedia(container, product))
   })
 
   h.post('/shops/:shopId/products', zValidator('json', createProductSchema), async (c) => {
@@ -292,7 +500,7 @@ export function createShopHandler(container: AppContainer) {
       productId: product.id,
       sellerUserId: user.userId,
     })
-    return c.json(product, 201)
+    return c.json(resolveProductMedia(container, product), 201)
   })
 
   h.put(
@@ -305,7 +513,8 @@ export function createShopHandler(container: AppContainer) {
       const shop = await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
       const product = await productService.getProductById(c.req.param('productId'))
       if (product.shopId !== shop.id) throw apiError('PRODUCT_SHOP_MISMATCH', 400)
-      return c.json(await productService.updateProduct(product.id, c.req.valid('json')))
+      const updated = await productService.updateProduct(product.id, c.req.valid('json'))
+      return c.json(resolveProductMedia(container, updated))
     },
   )
 
@@ -329,24 +538,23 @@ export function createShopHandler(container: AppContainer) {
       const communityAssetService = container.resolve('communityAssetService')
       const shop = await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
       const input = c.req.valid('json')
-      return c.json(
-        await communityAssetService.updateDefinition({
-          actor: c.get('actor'),
-          definitionId: c.req.param('assetDefinitionId'),
-          shopId: shop.id,
-          updatedBy: user.userId,
-          name: input.name,
-          description: input.description,
-          imageUrl: input.imageUrl,
-          giftable: input.giftable,
-          transferable: input.transferable,
-          consumable: input.consumable,
-          revocable: input.revocable,
-          expiresAfterDays: input.expiresAfterDays,
-          status: input.status,
-          metadata: input.metadata,
-        }),
-      )
+      const definition = await communityAssetService.updateDefinition({
+        actor: c.get('actor'),
+        definitionId: c.req.param('assetDefinitionId'),
+        shopId: shop.id,
+        updatedBy: user.userId,
+        name: input.name,
+        description: input.description,
+        imageUrl: input.imageUrl,
+        giftable: input.giftable,
+        transferable: input.transferable,
+        consumable: input.consumable,
+        revocable: input.revocable,
+        expiresAfterDays: input.expiresAfterDays,
+        status: input.status,
+        metadata: input.metadata,
+      })
+      return c.json(resolveAssetDefinition(container, definition))
     },
   )
 
@@ -636,7 +844,10 @@ export function createShopHandler(container: AppContainer) {
   h.get('/entitlements', async (c) => {
     const user = c.get('user')
     const entitlementService = container.resolve('entitlementService')
-    return c.json(await entitlementService.getAllUserEntitlements(user.userId))
+    const entitlements = await entitlementService.getAllUserEntitlements(user.userId)
+    return c.json(
+      entitlements.map((entitlement) => resolveEntitlementMedia(container, entitlement)),
+    )
   })
 
   h.get('/shops/:shopId/entitlements', async (c) => {
@@ -644,12 +855,25 @@ export function createShopHandler(container: AppContainer) {
     const shopScopeService = container.resolve('shopScopeService')
     const entitlementService = container.resolve('entitlementService')
     await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
+    const entitlements = await entitlementService.getShopEntitlements(c.req.param('shopId'), {
+      limit: Number(c.req.query('limit')) || 100,
+      offset: Number(c.req.query('offset')) || 0,
+    })
     return c.json(
-      await entitlementService.getShopEntitlements(c.req.param('shopId'), {
-        limit: Number(c.req.query('limit')) || 100,
-        offset: Number(c.req.query('offset')) || 0,
-      }),
+      entitlements.map((entitlement) => resolveEntitlementMedia(container, entitlement)),
     )
+  })
+
+  h.get('/entitlements/:entitlementId', async (c) => {
+    const user = c.get('user')
+    const entitlementService = container.resolve('entitlementService')
+    const shopScopeService = container.resolve('shopScopeService')
+    const entitlement = await entitlementService.getEntitlementDetail(c.req.param('entitlementId'))
+    if (entitlement.userId !== user.userId) {
+      if (!entitlement.shopId) throw apiError('ENTITLEMENT_ACCESS_FORBIDDEN', 403)
+      await shopScopeService.requireShopManager(entitlement.shopId, user.userId)
+    }
+    return c.json(resolveEntitlementMedia(container, entitlement))
   })
 
   h.get('/entitlements/:entitlementId/verify', async (c) => {
@@ -689,7 +913,7 @@ export function createShopHandler(container: AppContainer) {
       const user = c.get('user')
       const cancellationService = container.resolve('entitlementCancellationService')
       return c.json(
-        await cancellationService.cancel({
+        await cancellationService.cancelRenewal({
           actorUserId: user.userId,
           entitlementId: c.req.param('entitlementId'),
           reason: c.req.valid('json').reason ?? 'cancel_renewal',
@@ -898,42 +1122,38 @@ export function createShopHandler(container: AppContainer) {
     const keyword = c.req.query('keyword') || undefined
     const limit = Number(c.req.query('limit')) || 50
     const offset = Number(c.req.query('offset')) || 0
-    return c.json(
-      await productUseCase.getProducts({
-        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
-        identifier: c.req.param('serverId'),
-        userId: user.userId,
-        status,
-        categoryId,
-        keyword,
-        limit,
-        offset,
-      }),
-    )
+    const products = await productUseCase.getProducts({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      identifier: c.req.param('serverId'),
+      userId: user.userId,
+      status,
+      categoryId,
+      keyword,
+      limit,
+      offset,
+    })
+    return c.json(resolveProductList(container, products))
   })
 
   h.get('/servers/:serverId/shop/products/:productId', async (c) => {
     const productUseCase = container.resolve('productUseCase')
-    return c.json(
-      await productUseCase.getProductDetail({
-        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
-        productId: c.req.param('productId'),
-      }),
-    )
+    const product = await productUseCase.getProductDetail({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      productId: c.req.param('productId'),
+    })
+    return c.json(resolveProductMedia(container, product))
   })
 
   h.post('/servers/:serverId/shop/products', zValidator('json', createProductSchema), async (c) => {
     const user = c.get('user')
     const productUseCase = container.resolve('productUseCase')
-    return c.json(
-      await productUseCase.createProduct({
-        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
-        identifier: c.req.param('serverId'),
-        userId: user.userId,
-        data: c.req.valid('json'),
-      }),
-      201,
-    )
+    const product = await productUseCase.createProduct({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      identifier: c.req.param('serverId'),
+      userId: user.userId,
+      data: c.req.valid('json'),
+    })
+    return c.json(resolveProductMedia(container, product), 201)
   })
 
   h.put(
@@ -941,14 +1161,13 @@ export function createShopHandler(container: AppContainer) {
     zValidator('json', updateProductSchema),
     async (c) => {
       const productUseCase = container.resolve('productUseCase')
-      return c.json(
-        await productUseCase.updateProduct({
-          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
-          identifier: c.req.param('serverId'),
-          productId: c.req.param('productId'),
-          data: c.req.valid('json'),
-        }),
-      )
+      const product = await productUseCase.updateProduct({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        productId: c.req.param('productId'),
+        data: c.req.valid('json'),
+      })
+      return c.json(resolveProductMedia(container, product))
     },
   )
 
@@ -1116,6 +1335,19 @@ export function createShopHandler(container: AppContainer) {
     )
   })
 
+  h.post('/servers/:serverId/shop/orders/:orderId/complete', async (c) => {
+    const user = c.get('user')
+    const shopUseCase = container.resolve('shopUseCase')
+    return c.json(
+      await shopUseCase.completeOrder({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        identifier: c.req.param('serverId'),
+        orderId: c.req.param('orderId'),
+        userId: user.userId,
+      }),
+    )
+  })
+
   /* ══════════════════════════════════════════
      Reviews
      ══════════════════════════════════════════ */
@@ -1219,7 +1451,10 @@ export function createShopHandler(container: AppContainer) {
     const serverId = UUID_RE.test(c.req.param('serverId'))
       ? c.req.param('serverId')
       : (await serverService.getBySlug(c.req.param('serverId'))).id
-    return c.json(await entitlementService.getUserEntitlements(user.userId, serverId))
+    const entitlements = await entitlementService.getUserEntitlements(user.userId, serverId)
+    return c.json(
+      entitlements.map((entitlement) => resolveEntitlementMedia(container, entitlement)),
+    )
   })
 
   /* ══════════════════════════════════════════

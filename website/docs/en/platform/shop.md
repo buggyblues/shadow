@@ -2,6 +2,12 @@
 
 The Shop API lets server owners set up stores with categories, products, cart, orders, reviews, and a wallet system.
 
+Shops are consumer storefronts, not isolated admin catalogs. Personal shops, server shops, Buddy
+cards, and app-backed products should share the same product, offer, order, entitlement,
+fulfillment, settlement, and review model. Buyer-facing pages should make the provider, shop,
+server context, delivery result, validity, refund/support rule, and asset-home link visible before
+checkout.
+
 ## Get / Create shop
 
 ```
@@ -157,6 +163,8 @@ products = client.list_products("server-id", keyword="shirt")
 GET /api/servers/:serverId/shop/products/:productId
 ```
 
+Product responses include `media?: Array<{ type: 'image' | 'video'; url: string; thumbnailUrl?: string; position?: number }>` when covers or gallery assets are attached. Private upload references returned from `POST /api/media/upload` can be used as product media `url`; Shop API responses resolve those references into authorized render URLs.
+
 :::code-group
 
 ```ts [TypeScript]
@@ -179,14 +187,25 @@ POST /api/servers/:serverId/shop/products
 
 ```ts [TypeScript]
 const product = await client.createProduct('server-id', {
-  name: 'T-Shirt',
+  name: 'Creator badge',
+  slug: 'creator-badge',
+  type: 'entitlement',
   categoryId: 'category-id',
-  price: 25.99,
+  basePrice: 100,
+  media: [{ type: 'image', url: '/shadow/uploads/cover.png', position: 0 }],
 })
 ```
 
 ```python [Python]
-product = client.create_product("server-id", name="T-Shirt", categoryId="category-id", price=25.99)
+product = client.create_product(
+    "server-id",
+    name="Creator badge",
+    slug="creator-badge",
+    type="entitlement",
+    categoryId="category-id",
+    basePrice=100,
+    media=[{"type": "image", "url": "/shadow/uploads/cover.png", "position": 0}],
+)
 ```
 
 :::
@@ -344,20 +363,29 @@ POST /api/servers/:serverId/shop/orders
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `idempotencyKey` | string | Yes | Client-generated key for safe retries |
 | `items` | array | Yes | Cart item IDs or product specs |
 | `buyerNote` | string | No | Note to seller |
+
+Entitlement-only orders are delivered immediately after payment. They grant the configured access or community asset, move to `completed`, and become visible in Wallet access/asset records. Physical and manually fulfilled services remain in the normal `paid -> processing -> shipped -> delivered -> completed` flow.
 
 :::code-group
 
 ```ts [TypeScript]
 const order = await client.createOrder('server-id', {
+  idempotencyKey: crypto.randomUUID(),
   items: [{ productId: 'pid', quantity: 1 }],
   buyerNote: 'Please gift-wrap',
 })
 ```
 
 ```python [Python]
-order = client.place_order("server-id", items=[{"productId": "pid", "quantity": 1}], buyerNote="Please gift-wrap")
+order = client.create_order(
+    "server-id",
+    idempotency_key="order-123",
+    items=[{"productId": "pid", "quantity": 1}],
+    buyerNote="Please gift-wrap",
+)
 ```
 
 :::
@@ -457,6 +485,26 @@ await client.cancelOrder('server-id', 'order-id')
 
 ```python [Python]
 client.cancel_order("server-id", "order-id")
+```
+
+:::
+
+### Confirm completed delivery
+
+Buyers call this after a seller marks the order `delivered`. This moves the order to `completed` and releases the settlement flow.
+
+```
+POST /api/servers/:serverId/shop/orders/:orderId/complete
+```
+
+:::code-group
+
+```ts [TypeScript]
+await client.completeOrder('server-id', 'order-id')
+```
+
+```python [Python]
+client.complete_order("server-id", "order-id")
 ```
 
 :::

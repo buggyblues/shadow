@@ -1,46 +1,99 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import {
-  Flame,
-  Hash,
-  MessageCircle,
+  Bot,
+  Coins,
+  Compass,
+  type LucideIcon,
+  Package,
   Search,
   Server,
-  Sparkles,
-  Users,
+  ShieldCheck,
+  Store,
   X,
-  Zap,
 } from 'lucide-react-native'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import {
   AppScreen,
+  Badge,
   Button,
   EmptyState,
-  GlassCard,
-  GlassPressable,
-  IconBubble,
+  GlassPanel,
   IconButton,
-  SegmentedControl,
   TextField,
 } from '../../src/components/ui'
-import { fetchApi, getImageUrl } from '../../src/lib/api'
+import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
 
-type FeedItemType = 'server' | 'channel'
-type FilterType = 'all' | 'servers' | 'channels'
+type HubSection = 'all' | 'buddies' | 'products' | 'shops' | 'communities'
 
-interface FeedItem {
-  id: string
-  type: FeedItemType
-  heatScore: number
-  data: ServerData | ChannelData
+interface ServerEntry {
+  server: { id: string; name: string; slug: string | null; iconUrl: string | null }
+  member: { role: string }
 }
 
-interface ServerData {
+interface HubOwner {
+  id: string
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+}
+
+interface HubServer {
+  id: string
+  name: string
+  slug: string | null
+  iconUrl: string | null
+}
+
+interface HubBuddy {
+  id: string
+  title: string
+  description: string | null
+  baseDailyRate: number
+  messageFee: number
+  rentalCount: number
+  buddy: HubOwner | null
+  owner: HubOwner | null
+}
+
+interface HubProduct {
+  id: string
+  name: string
+  summary: string | null
+  description: string | null
+  type: 'physical' | 'entitlement' | string
+  price: number
+  imageUrl: string | null
+  salesCount: number
+  shop: {
+    id: string
+    name: string
+    scopeKind: 'server' | 'user' | string
+    logoUrl: string | null
+    bannerUrl: string | null
+    server: HubServer | null
+    owner: HubOwner | null
+  }
+}
+
+interface HubShop {
+  id: string
+  name: string
+  description: string | null
+  scopeKind: 'server' | 'user' | string
+  logoUrl: string | null
+  bannerUrl: string | null
+  productCount: number
+  server: HubServer | null
+  owner: HubOwner | null
+}
+
+interface HubCommunity {
   id: string
   name: string
   slug: string | null
@@ -48,39 +101,29 @@ interface ServerData {
   iconUrl: string | null
   bannerUrl: string | null
   memberCount: number
-  isPublic: boolean
   inviteCode: string
-  createdAt: string
 }
 
-interface ChannelData {
-  id: string
-  name: string
-  type: 'text' | 'voice' | 'announcement'
-  topic: string | null
-  server: {
-    id: string
-    name: string
-    slug: string | null
-    iconUrl: string | null
+interface DiscoverCommerceResponse {
+  buddies: HubBuddy[]
+  products: HubProduct[]
+  shops: HubShop[]
+  communities: HubCommunity[]
+  totals: {
+    buddies: number
+    products: number
+    shops: number
+    communities: number
   }
-  memberCount: number
-  lastMessage: {
-    content: string
-    createdAt: string
-  } | null
 }
 
-interface FeedResponse {
-  items: FeedItem[]
-  total: number
-  hasMore: boolean
-}
-
-interface ServerEntry {
-  server: { id: string; name: string; slug: string | null; iconUrl: string | null }
-  member: { role: string }
-}
+const HUB_SECTIONS: Array<{ key: HubSection; icon: LucideIcon }> = [
+  { key: 'all', icon: Compass },
+  { key: 'buddies', icon: Bot },
+  { key: 'products', icon: Package },
+  { key: 'shops', icon: Store },
+  { key: 'communities', icon: Server },
+]
 
 export default function DiscoverScreen() {
   const { t } = useTranslation()
@@ -88,51 +131,31 @@ export default function DiscoverScreen() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
-  const [isSearching, setIsSearching] = useState(false)
+  const [activeSection, setActiveSection] = useState<HubSection>('all')
+  const normalizedSearch = searchQuery.trim()
+  const effectiveSearch = normalizedSearch.length >= 2 ? normalizedSearch : ''
 
   const { data: myServers = [] } = useQuery({
     queryKey: ['servers'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
   })
-
   const joinedServerIds = useMemo(() => new Set(myServers.map((s) => s.server.id)), [myServers])
 
-  // 无限滚动加载
-  const {
-    data: feedData,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    refetch,
-  } = useInfiniteQuery({
-    queryKey: ['discover-feed', activeFilter],
-    queryFn: async ({ pageParam = 0 }) => {
-      const res = await fetchApi<FeedResponse>(
-        `/api/discover/feed?type=${activeFilter}&limit=15&offset=${pageParam}`,
-      )
-      return res
-    },
-    getNextPageParam: (lastPage, pages) => {
-      if (!lastPage.hasMore) return undefined
-      return pages.length * 15
-    },
-    initialPageParam: 0,
+  const { data, isLoading } = useQuery({
+    queryKey: ['discover-commerce', effectiveSearch],
+    queryFn: () =>
+      fetchApi<DiscoverCommerceResponse>(
+        `/api/discover/business?limit=10${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
+      ),
   })
 
-  // 搜索
-  const { data: searchResults, isLoading: searchLoading } = useQuery({
-    queryKey: ['discover-search', searchQuery, activeFilter],
-    queryFn: async () => {
-      if (!searchQuery || searchQuery.length < 2) return { items: [] }
-      const res = await fetchApi<{ items: FeedItem[] }>(
-        `/api/discover/search?q=${encodeURIComponent(searchQuery)}&type=${activeFilter}`,
-      )
-      return res
-    },
-    enabled: isSearching && searchQuery.length >= 2,
-  })
+  const hub = data ?? {
+    buddies: [],
+    products: [],
+    shops: [],
+    communities: [],
+    totals: { buddies: 0, products: 0, shops: 0, communities: 0 },
+  }
 
   const joinMutation = useMutation({
     mutationFn: ({ inviteCode }: { inviteCode: string }) =>
@@ -140,540 +163,624 @@ export default function DiscoverScreen() {
         method: 'POST',
         body: JSON.stringify({ inviteCode }),
       }),
-    onSuccess: (data) => {
+    onSuccess: (server) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      router.push(`/(main)/servers/${data.slug ?? data.id}`)
+      router.push(`/(main)/servers/${server.slug ?? server.id}`)
     },
-    onError: (err: { message?: string }) => {
-      showToast(err?.message || t('common.error'), 'error')
-    },
+    onError: (err: { message?: string }) => showToast(err?.message || t('common.error'), 'error'),
   })
 
-  const allItems = useMemo(() => {
-    const items = isSearching
-      ? searchResults?.items || []
-      : feedData?.pages.flatMap((page) => page.items) || []
-    return items.filter((item) => item.type === 'server' || item.type === 'channel')
-  }, [feedData, searchResults, isSearching])
+  const counts = {
+    all: hub.buddies.length + hub.products.length + hub.shops.length + hub.communities.length,
+    buddies: hub.totals.buddies,
+    products: hub.totals.products,
+    shops: hub.totals.shops,
+    communities: hub.totals.communities,
+  }
+  const isSearching = effectiveSearch.length > 0
+  const empty = counts.all === 0
 
-  const handleSearch = () => {
-    if (searchQuery.length >= 2) {
-      setIsSearching(true)
+  const openSeller = (owner: HubOwner | null) => {
+    if (owner?.id) router.push(`/(main)/profile/${owner.id}`)
+  }
+
+  const openShop = (shop: HubShop | HubProduct['shop']) => {
+    if (shop.server) {
+      router.push(`/(main)/servers/${shop.server.slug ?? shop.server.id}/shop` as never)
+      return
     }
+    openSeller(shop.owner)
   }
 
-  const clearSearch = () => {
-    setSearchQuery('')
-    setIsSearching(false)
-  }
-
-  const formatTimeAgo = (date: string) => {
-    const now = new Date()
-    const then = new Date(date)
-    const diff = now.getTime() - then.getTime()
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
-
-    if (minutes < 1) return t('discover.justNow')
-    if (minutes < 60) return t('discover.minutesAgo', { count: minutes })
-    if (hours < 24) return t('discover.hoursAgo', { count: hours })
-    if (days < 7) return t('discover.daysAgo', { count: days })
-    return then.toLocaleDateString()
-  }
-
-  const getHeatIcon = (score: number) => {
-    if (score >= 100) return { icon: Flame, color: '#ef4444' }
-    if (score >= 50) return { icon: Zap, color: '#f97316' }
-    return null
-  }
-
-  const renderItem = ({ item }: { item: FeedItem }) => {
-    return (
-      <FeedCard
-        item={item}
-        joinedServerIds={joinedServerIds}
-        joinMutation={joinMutation}
-        router={router}
-        colors={colors}
-        t={t}
-        formatTimeAgo={formatTimeAgo}
-        getHeatIcon={getHeatIcon}
-      />
-    )
-  }
-
-  const renderFooter = () => {
-    if (!hasNextPage || isSearching) return null
-    return (
-      <View style={styles.loadMore}>
-        {isFetchingNextPage ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
-            {t('discover.loadMore')}
-          </Text>
-        )}
-      </View>
-    )
-  }
-
-  const onEndReached = () => {
-    if (!isSearching && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage()
+  const openProduct = (product: HubProduct) => {
+    if (product.shop.server) {
+      const serverSlug = product.shop.server.slug ?? product.shop.server.id
+      router.push(`/(main)/servers/${serverSlug}/shop?productId=${product.id}` as never)
+      return
     }
+    openSeller(product.shop.owner)
   }
 
   return (
     <AppScreen>
-      {/* Header */}
-      <GlassCard style={styles.header}>
-        {/* Title */}
-        <View style={styles.titleRow}>
-          <IconBubble icon={Flame} tone="primary" size={20} style={styles.iconContainer} />
-          <View>
-            <Text style={[styles.title, { color: colors.text }]}>{t('discover.title')}</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              {t('discover.subtitle')}
+      <ScrollView contentContainerStyle={styles.content}>
+        <GlassPanel style={styles.hero}>
+          <View style={styles.eyebrow}>
+            <Compass size={14} color={colors.primary} />
+            <Text style={[styles.eyebrowText, { color: colors.primary }]}>
+              {t('discover.eyebrow')}
             </Text>
           </View>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>
+            {t('discover.businessTitle')}
+          </Text>
+          <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+            {t('discover.businessSubtitle')}
+          </Text>
+          <TextField
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t('discover.searchPlaceholder')}
+            left={<Search size={18} color={colors.textMuted} />}
+            right={
+              searchQuery.length > 0 ? (
+                <IconButton
+                  icon={X}
+                  variant="ghost"
+                  iconColor={colors.textMuted}
+                  iconSize={18}
+                  style={styles.clearButton}
+                  onPress={() => setSearchQuery('')}
+                />
+              ) : null
+            }
+            style={styles.searchBox}
+          />
+        </GlassPanel>
+
+        <View style={styles.statsGrid}>
+          <HubStat
+            icon={Bot}
+            label={t('discover.sections.buddies')}
+            value={String(hub.totals.buddies)}
+          />
+          <HubStat
+            icon={Package}
+            label={t('discover.sections.products')}
+            value={String(hub.totals.products)}
+          />
+          <HubStat
+            icon={Store}
+            label={t('discover.sections.shops')}
+            value={String(hub.totals.shops)}
+          />
+          <HubStat
+            icon={Server}
+            label={t('discover.sections.communities')}
+            value={String(hub.totals.communities)}
+          />
         </View>
 
-        {/* Search */}
-        <TextField
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          placeholder={t('discover.searchPlaceholder')}
-          returnKeyType="search"
-          left={<Search size={18} color={colors.textMuted} />}
-          right={
-            searchQuery.length > 0 ? (
-              <IconButton
-                icon={X}
-                variant="ghost"
-                iconColor={colors.textMuted}
-                iconSize={18}
-                style={styles.clearButton}
-                onPress={clearSearch}
-              />
-            ) : null
-          }
-          style={styles.searchBox}
-        />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabs}
+        >
+          {HUB_SECTIONS.map((section) => {
+            const Icon = section.icon
+            const active = activeSection === section.key
+            return (
+              <Pressable
+                key={section.key}
+                onPress={() => setActiveSection(section.key)}
+                style={[
+                  styles.tab,
+                  {
+                    borderColor: active ? colors.primary : colors.border,
+                    backgroundColor: active ? `${colors.primary}18` : colors.inputBackground,
+                  },
+                ]}
+              >
+                <Icon size={15} color={active ? colors.primary : colors.textMuted} />
+                <Text
+                  style={[
+                    styles.tabText,
+                    { color: active ? colors.primary : colors.textSecondary },
+                  ]}
+                >
+                  {t(`discover.sections.${section.key}`)}
+                </Text>
+                <Text
+                  style={[styles.tabCount, { color: active ? colors.primary : colors.textMuted }]}
+                >
+                  {counts[section.key]}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </ScrollView>
 
-        {/* Filter Tabs */}
-        <SegmentedControl
-          value={activeFilter}
-          options={[
-            { key: 'all', label: t('discover.filters.all'), icon: Flame },
-            { key: 'servers', label: t('discover.filters.servers'), icon: Server },
-            { key: 'channels', label: t('discover.filters.channels'), icon: Hash },
-          ].map(({ key, label, icon }) => ({ value: key as FilterType, label, icon }))}
-          onChange={(value) => {
-            setActiveFilter(value)
-            setIsSearching(false)
-          }}
-        />
-      </GlassCard>
+        {isLoading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : empty ? (
+          <GlassPanel style={styles.emptyPanel}>
+            <EmptyState
+              icon={Search}
+              title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
+              description={
+                isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')
+              }
+            />
+          </GlassPanel>
+        ) : (
+          <View style={styles.lanes}>
+            {(activeSection === 'all' || activeSection === 'buddies') && (
+              <HubLane title={t('discover.lanes.buddies')} empty={t('discover.emptyLane.buddies')}>
+                {hub.buddies.map((item) => (
+                  <BuddyCard key={item.id} item={item} onOpen={() => openSeller(item.owner)} />
+                ))}
+              </HubLane>
+            )}
 
-      {/* Content */}
-      {isLoading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : allItems.length === 0 ? (
-        <EmptyState
-          icon={isSearching ? Search : Sparkles}
-          title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
-        />
-      ) : (
-        <FlatList
-          data={allItems}
-          keyExtractor={(item, index) => `${item.type}-${item.id}-${index}`}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />
-          }
-          onEndReached={onEndReached}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={renderFooter}
-        />
-      )}
+            {(activeSection === 'all' || activeSection === 'products') && (
+              <HubLane
+                title={t('discover.lanes.products')}
+                empty={t('discover.emptyLane.products')}
+              >
+                {hub.products.map((item) => (
+                  <ProductCard key={item.id} item={item} onOpen={() => openProduct(item)} />
+                ))}
+              </HubLane>
+            )}
+
+            {(activeSection === 'all' || activeSection === 'shops') && (
+              <HubLane title={t('discover.lanes.shops')} empty={t('discover.emptyLane.shops')}>
+                {hub.shops.map((shop) => (
+                  <ShopCard key={shop.id} shop={shop} onOpen={() => openShop(shop)} />
+                ))}
+              </HubLane>
+            )}
+
+            {(activeSection === 'all' || activeSection === 'communities') && (
+              <HubLane
+                title={t('discover.lanes.communities')}
+                empty={t('discover.emptyLane.communities')}
+              >
+                {hub.communities.map((community) => (
+                  <CommunityCard
+                    key={community.id}
+                    community={community}
+                    joined={joinedServerIds.has(community.id)}
+                    pending={joinMutation.isPending}
+                    onEnter={() => router.push(`/(main)/servers/${community.slug ?? community.id}`)}
+                    onJoin={() => joinMutation.mutate({ inviteCode: community.inviteCode })}
+                  />
+                ))}
+              </HubLane>
+            )}
+          </View>
+        )}
+      </ScrollView>
     </AppScreen>
   )
 }
 
-// Feed Card Component
-function FeedCard({
-  item,
-  joinedServerIds,
-  joinMutation,
-  router,
-  colors,
-  t,
-  formatTimeAgo,
-  getHeatIcon,
+function HubStat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  const colors = useColors()
+  return (
+    <GlassPanel style={styles.statCard}>
+      <Icon size={16} color={colors.primary} />
+      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: colors.textMuted }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </GlassPanel>
+  )
+}
+
+function HubLane({
+  title,
+  empty,
+  children,
 }: {
-  item: FeedItem
-  joinedServerIds: Set<string>
-  joinMutation: {
-    mutate: (variables: { inviteCode: string }) => void
-    isPending: boolean
-  }
-  router: ReturnType<typeof useRouter>
-  colors: ReturnType<typeof useColors>
-  t: (key: string, options?: Record<string, unknown>) => string
-  formatTimeAgo: (date: string) => string
-  getHeatIcon: (score: number) => { icon: typeof Flame; color: string } | null
+  title: string
+  empty: string
+  children: ReactNode
 }) {
-  const heat = getHeatIcon(item.heatScore)
+  const colors = useColors()
+  const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children)
+  return (
+    <GlassPanel style={styles.lane}>
+      <Text style={[styles.laneTitle, { color: colors.text }]}>{title}</Text>
+      <View style={styles.cardStack}>
+        {hasChildren ? (
+          children
+        ) : (
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>{empty}</Text>
+        )}
+      </View>
+    </GlassPanel>
+  )
+}
 
-  if (item.type === 'server') {
-    const server = item.data as ServerData
-    const isJoined = joinedServerIds.has(server.id)
-
-    return (
-      <GlassPressable
-        style={styles.card}
-        onPress={() => {
-          if (isJoined) {
-            router.push(`/(main)/servers/${server.slug ?? server.id}`)
-          }
-        }}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.serverIconContainer}>
-            {server.iconUrl ? (
-              <Image
-                source={{ uri: getImageUrl(server.iconUrl) || '' }}
-                style={styles.serverIcon}
-              />
-            ) : (
-              <View style={[styles.serverIconFallback, { backgroundColor: colors.primary + '20' }]}>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: colors.primary }}>
-                  {server.name.charAt(0)}
-                </Text>
-              </View>
-            )}
-            {server.isPublic && (
-              <View style={[styles.publicBadge, { backgroundColor: colors.success }]}>
-                <Flame size={10} color="#fff" />
-              </View>
-            )}
-          </View>
-
-          <View style={styles.cardContent}>
-            <View style={styles.cardTitleRow}>
-              <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                {server.name}
-              </Text>
-              {isJoined ? (
-                <Button
-                  variant="glass"
-                  size="xs"
-                  style={styles.actionButton}
-                  onPress={() => router.push(`/(main)/servers/${server.slug ?? server.id}`)}
-                >
-                  {t('discover.enterButton')}
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  size="xs"
-                  style={styles.actionButton}
-                  onPress={() => joinMutation.mutate({ inviteCode: server.inviteCode })}
-                  disabled={joinMutation.isPending}
-                >
-                  {t('discover.joinButton')}
-                </Button>
-              )}
-            </View>
-
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <Users size={12} color={colors.textMuted} />
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                  {server.memberCount}
-                </Text>
-              </View>
-              {heat && (
-                <View style={styles.metaItem}>
-                  <heat.icon size={12} color={heat.color} />
-                  <Text style={{ color: heat.color, fontSize: fontSize.xs }}>
-                    {t('discover.heat.hot')}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {server.description && (
-              <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
-                {server.description}
-              </Text>
-            )}
-          </View>
+function BuddyCard({ item, onOpen }: { item: HubBuddy; onOpen: () => void }) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const buddyName =
+    item.buddy?.displayName ?? item.buddy?.username ?? item.owner?.displayName ?? item.title
+  const ownerName = item.owner?.displayName ?? item.owner?.username ?? t('common.unknown')
+  return (
+    <GlassPanel style={styles.itemCard}>
+      <View style={styles.row}>
+        <Avatar imageUrl={item.buddy?.avatarUrl} icon={Bot} label={buddyName} />
+        <View style={styles.titleBlock}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
+            {ownerName}
+          </Text>
         </View>
-      </GlassPressable>
-    )
-  }
+        <Badge variant="primary" size="xs">
+          {t('discover.badges.buddy')}
+        </Badge>
+      </View>
+      <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+        {item.description || t('discover.noDescription')}
+      </Text>
+      <View style={styles.factRow}>
+        <Fact icon={Coins} label={t('discover.facts.daily')} value={String(item.baseDailyRate)} />
+        <Fact
+          icon={ShieldCheck}
+          label={t('discover.facts.rentals')}
+          value={String(item.rentalCount)}
+        />
+      </View>
+      <Button variant="glass" size="sm" onPress={onOpen}>
+        {t('discover.openBuddy')}
+      </Button>
+    </GlassPanel>
+  )
+}
 
-  if (item.type === 'channel') {
-    const channel = item.data as ChannelData
-    const isJoined = joinedServerIds.has(channel.server.id)
-
-    return (
-      <GlassPressable
-        style={styles.card}
-        onPress={() => {
-          if (isJoined) {
-            router.push(
-              `/(main)/servers/${channel.server.slug ?? channel.server.id}/channels/${channel.id}`,
-            )
-          } else {
-            router.push(`/(main)/servers/${channel.server.slug ?? channel.server.id}`)
-          }
-        }}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.channelIconContainer}>
-            {channel.server.iconUrl ? (
-              <Image
-                source={{ uri: getImageUrl(channel.server.iconUrl) || '' }}
-                style={styles.channelIcon}
-              />
-            ) : (
-              <View
-                style={[styles.channelIconFallback, { backgroundColor: colors.primary + '20' }]}
-              >
-                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>
-                  {channel.server.name.charAt(0)}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.cardContent}>
-            <View style={styles.channelTitleRow}>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
-                {channel.server.name}
-              </Text>
-              <Text style={{ color: colors.textMuted }}>/</Text>
-              <Hash size={14} color={colors.textMuted} />
-              <Text style={[styles.channelName, { color: colors.text }]} numberOfLines={1}>
-                {channel.name}
-              </Text>
-            </View>
-
-            {channel.topic && (
-              <Text style={[styles.topic, { color: colors.textSecondary }]} numberOfLines={1}>
-                {channel.topic}
-              </Text>
-            )}
-
-            {channel.lastMessage && (
-              <View style={[styles.lastMessageBox, { backgroundColor: colors.inputBackground }]}>
-                <Text
-                  style={[styles.lastMessageText, { color: colors.textSecondary }]}
-                  numberOfLines={2}
-                >
-                  {channel.lastMessage.content}
-                </Text>
-                <Text style={[styles.lastMessageTime, { color: colors.textMuted }]}>
-                  {formatTimeAgo(channel.lastMessage.createdAt)}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.channelFooter}>
-              <View style={styles.metaItem}>
-                <MessageCircle size={12} color={colors.textMuted} />
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                  {channel.memberCount}
-                </Text>
-              </View>
-              {!isJoined && (
-                <View style={[styles.joinBadge, { backgroundColor: colors.background }]}>
-                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                    {t('discover.joinToView')}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
+function ProductCard({ item, onOpen }: { item: HubProduct; onOpen: () => void }) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  return (
+    <GlassPanel style={styles.itemCard}>
+      <Visual imageUrl={item.imageUrl} icon={Package} label={item.name} />
+      <View style={styles.row}>
+        <View style={styles.titleBlock}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={[styles.cardMeta, { color: colors.primary }]} numberOfLines={1}>
+            {item.shop.name}
+          </Text>
         </View>
-      </GlassPressable>
-    )
-  }
+        <Text style={[styles.price, { color: colors.shrimpCoin }]}>{item.price}</Text>
+      </View>
+      <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+        {item.summary || item.description || t('discover.noDescription')}
+      </Text>
+      <Button size="sm" onPress={onOpen}>
+        {t('discover.openProduct')}
+      </Button>
+    </GlassPanel>
+  )
+}
 
-  return null
+function ShopCard({ shop, onOpen }: { shop: HubShop; onOpen: () => void }) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const owner =
+    shop.server?.name ?? shop.owner?.displayName ?? shop.owner?.username ?? t('common.unknown')
+  return (
+    <GlassPanel style={styles.itemCard}>
+      <Visual imageUrl={shop.bannerUrl ?? shop.logoUrl} icon={Store} label={shop.name} />
+      <View style={styles.row}>
+        <Avatar imageUrl={shop.logoUrl} icon={Store} label={shop.name} />
+        <View style={styles.titleBlock}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+            {shop.name}
+          </Text>
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
+            {owner}
+          </Text>
+        </View>
+      </View>
+      <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+        {shop.description || t('discover.shopFallback')}
+      </Text>
+      <View style={styles.row}>
+        <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
+          {t('discover.productCount', { count: shop.productCount })}
+        </Text>
+        <Button variant="glass" size="sm" onPress={onOpen}>
+          {t('discover.openShop')}
+        </Button>
+      </View>
+    </GlassPanel>
+  )
+}
+
+function CommunityCard({
+  community,
+  joined,
+  pending,
+  onEnter,
+  onJoin,
+}: {
+  community: HubCommunity
+  joined: boolean
+  pending: boolean
+  onEnter: () => void
+  onJoin: () => void
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  return (
+    <GlassPanel style={styles.itemCard}>
+      <Visual imageUrl={community.bannerUrl} icon={Server} label={community.name} />
+      <View style={styles.row}>
+        <Avatar imageUrl={community.iconUrl} icon={Server} label={community.name} />
+        <View style={styles.titleBlock}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+            {community.name}
+          </Text>
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
+            {t('discover.memberCount', { count: community.memberCount })}
+          </Text>
+        </View>
+        <Badge variant={joined ? 'success' : 'neutral'} size="xs">
+          {joined ? t('discover.joined') : t('discover.public')}
+        </Badge>
+      </View>
+      <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+        {community.description || t('discover.noDescription')}
+      </Text>
+      <Button
+        variant={joined ? 'glass' : 'primary'}
+        size="sm"
+        onPress={joined ? onEnter : onJoin}
+        disabled={pending}
+      >
+        {joined ? t('discover.enterButton') : t('discover.joinButton')}
+      </Button>
+    </GlassPanel>
+  )
+}
+
+function Avatar({
+  imageUrl,
+  icon: Icon,
+  label,
+}: {
+  imageUrl?: string | null
+  icon: LucideIcon
+  label: string
+}) {
+  const colors = useColors()
+  return (
+    <View
+      style={[
+        styles.avatar,
+        { backgroundColor: colors.inputBackground, borderColor: colors.border },
+      ]}
+    >
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.avatarImage} accessibilityLabel={label} />
+      ) : (
+        <Icon size={20} color={colors.primary} />
+      )}
+    </View>
+  )
+}
+
+function Visual({
+  imageUrl,
+  icon: Icon,
+  label,
+}: {
+  imageUrl?: string | null
+  icon: LucideIcon
+  label: string
+}) {
+  const colors = useColors()
+  return (
+    <View style={[styles.visual, { backgroundColor: `${colors.primary}14` }]}>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.visualImage} accessibilityLabel={label} />
+      ) : (
+        <Icon size={26} color={colors.primary} />
+      )}
+    </View>
+  )
+}
+
+function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  const colors = useColors()
+  return (
+    <View style={[styles.fact, { backgroundColor: colors.inputBackground }]}>
+      <Icon size={13} color={colors.primary} />
+      <Text style={[styles.factText, { color: colors.textMuted }]}>{label}</Text>
+      <Text style={[styles.factValue, { color: colors.text }]}>{value}</Text>
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    margin: spacing.md,
-    marginBottom: 0,
+  content: {
+    padding: spacing.md,
+    gap: spacing.md,
   },
-  titleRow: {
+  hero: {
+    gap: spacing.sm,
+  },
+  eyebrow: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+  eyebrowText: {
+    fontSize: fontSize.xs,
+    fontWeight: '900',
   },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: '800',
+  heroTitle: {
+    fontSize: fontSize['2xl'],
+    fontWeight: '900',
   },
-  subtitle: {
+  heroSubtitle: {
     fontSize: fontSize.sm,
+    lineHeight: 20,
   },
   searchBox: {
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
   },
   clearButton: {
     width: 30,
     height: 30,
   },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  list: {
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  loadMore: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-  },
-  // Card styles
-  card: {
-    borderRadius: radius['2xl'],
-  },
-  cardHeader: {
+  statsGrid: {
     flexDirection: 'row',
-    gap: spacing.md,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  statCard: {
+    width: '48%',
+    gap: spacing.xs,
+  },
+  statValue: {
+    fontSize: fontSize.lg,
+    fontWeight: '900',
+  },
+  statLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  tabs: {
+    gap: spacing.sm,
+    paddingRight: spacing.md,
+  },
+  tab: {
+    minWidth: 104,
+    height: 38,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  tabText: {
+    fontSize: fontSize.xs,
+    fontWeight: '900',
+  },
+  tabCount: {
+    marginLeft: 'auto',
+    fontSize: fontSize.xs,
+    fontWeight: '900',
+  },
+  centerContainer: {
+    paddingVertical: spacing['3xl'],
+    alignItems: 'center',
+  },
+  lanes: {
+    gap: spacing.md,
+  },
+  lane: {
+    gap: spacing.md,
+  },
+  laneTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '900',
+  },
+  cardStack: {
+    gap: spacing.md,
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
+  emptyPanel: {
+    minHeight: 220,
+    justifyContent: 'center',
+  },
+  itemCard: {
+    gap: spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
   },
   cardTitle: {
     fontSize: fontSize.md,
+    fontWeight: '900',
+  },
+  cardMeta: {
+    marginTop: 2,
+    fontSize: fontSize.xs,
     fontWeight: '700',
-    flex: 1,
-  },
-  actionButton: {
-    minWidth: 68,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.xs,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   description: {
     fontSize: fontSize.sm,
-    marginTop: spacing.sm,
+    lineHeight: 20,
   },
-  // Server styles
-  serverIconContainer: {
-    position: 'relative',
+  price: {
+    fontSize: fontSize.lg,
+    fontWeight: '900',
   },
-  serverIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
-  },
-  serverIconFallback: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  publicBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Channel styles
-  channelIconContainer: {
-    width: 48,
-    height: 48,
+  avatar: {
+    width: 44,
+    height: 44,
+    borderWidth: 1,
     borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
     overflow: 'hidden',
   },
-  channelIcon: {
-    width: 48,
-    height: 48,
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
-  channelIconFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
+  visual: {
+    height: 118,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  channelTitleRow: {
+  visualImage: {
+    width: '100%',
+    height: '100%',
+  },
+  factRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    gap: spacing.sm,
   },
-  channelName: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  topic: {
-    fontSize: fontSize.sm,
-    marginTop: 2,
-  },
-  lastMessageBox: {
+  fact: {
+    flex: 1,
     borderRadius: radius.md,
     padding: spacing.sm,
-    marginTop: spacing.sm,
+    gap: 3,
   },
-  lastMessageText: {
+  factText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  factValue: {
     fontSize: fontSize.sm,
-  },
-  lastMessageTime: {
-    fontSize: fontSize.xs,
-    marginTop: 4,
-  },
-  channelFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-  },
-  joinBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
+    fontWeight: '900',
   },
 })

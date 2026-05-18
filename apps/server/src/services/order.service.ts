@@ -92,6 +92,7 @@ export class OrderService {
 
     // 1. Validate items and calculate total
     let totalAmount = 0
+    let allItemsGrantInstantly = true
     const orderItemsData: Array<{
       orderId: string
       productId: string
@@ -109,6 +110,18 @@ export class OrderService {
         throw Object.assign(new Error(`Product "${product.name}" is not available`), {
           status: 400,
         })
+      }
+      const entitlementConfigs = Array.isArray(product.entitlementConfig)
+        ? product.entitlementConfig
+        : product.entitlementConfig
+          ? [product.entitlementConfig]
+          : []
+      const hasManualServiceEntitlement = entitlementConfigs.some((config) => {
+        const resource = resolveProductEntitlementResource(product, config)
+        return resource?.resourceType === 'service'
+      })
+      if (product.type !== 'entitlement' || hasManualServiceEntitlement) {
+        allItemsGrantInstantly = false
       }
       if (product.shopId !== shopId) {
         throw Object.assign(new Error(`Product "${product.name}" does not belong to this shop`), {
@@ -290,6 +303,29 @@ export class OrderService {
       }
     }
 
+    if (allItemsGrantInstantly) {
+      const completed = await this.updateOrderStatusInShop(
+        shopId,
+        order.id,
+        'completed',
+        undefined,
+        {
+          allowPaidCompletion: true,
+        },
+      )
+      if (completed) {
+        const response = { ...completed, items: order.items }
+        await this.deps.economyIdempotencyService.complete({
+          actorUserId: buyerId,
+          key: idempotencyKey,
+          action: 'shop.order.create',
+          referenceId: completed.id,
+          response,
+        })
+        return response
+      }
+    }
+
     return order
   }
 
@@ -343,6 +379,7 @@ export class OrderService {
     orderId: string,
     status: 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'refunded',
     extra?: { trackingNo?: string; sellerNote?: string },
+    options?: { allowPaidCompletion?: boolean },
   ) {
     const currentOrder = await this.deps.orderDao.findById(orderId)
     if (!currentOrder || currentOrder.shopId !== shopId) {
@@ -352,7 +389,9 @@ export class OrderService {
     const isStateChange = currentOrder.status !== status
     if (isStateChange) {
       const allowed = ORDER_STATE_TRANSITIONS[currentOrder.status] || []
-      if (!allowed.includes(status)) {
+      const isInternalInstantCompletion =
+        options?.allowPaidCompletion && currentOrder.status === 'paid' && status === 'completed'
+      if (!allowed.includes(status) && !isInternalInstantCompletion) {
         throw Object.assign(
           new Error(`Invalid order status transition: ${currentOrder.status} -> ${status}`),
           { status: 400 },
@@ -376,6 +415,21 @@ export class OrderService {
     }
 
     return result
+  }
+
+  async completeOrderInShop(shopId: string, orderId: string, userId: string) {
+    const order = await this.deps.orderDao.findById(orderId)
+    if (!order || order.shopId !== shopId) {
+      throw Object.assign(new Error('Order not found'), { status: 404 })
+    }
+    if (order.buyerId !== userId) {
+      throw Object.assign(new Error('Not your order'), { status: 403 })
+    }
+    if (order.status === 'completed') return order
+    if (order.status !== 'delivered') {
+      throw Object.assign(new Error('Order must be delivered before completion'), { status: 400 })
+    }
+    return this.updateOrderStatusInShop(shopId, orderId, 'completed')
   }
 
   /**

@@ -96,6 +96,8 @@ export interface CommerceProductCard {
     name: string
     summary?: string | null
     imageUrl?: string | null
+    shopName?: string | null
+    deliveryPromise?: string | null
     price: number
     currency: string
     productType: 'physical' | 'entitlement'

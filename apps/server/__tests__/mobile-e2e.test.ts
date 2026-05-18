@@ -453,7 +453,7 @@ describe('Shop order lifecycle (mobile)', () => {
 
 describe('Shop reviews (mobile)', () => {
   it('setup: move order to completed', async () => {
-    // processing → shipped → delivered → completed
+    // processing → shipped → delivered → buyer confirmation
     await req('PUT', `/api/servers/${serverId}/shop/orders/${orderId}/status`, {
       token: ownerToken,
       body: { status: 'shipped', trackingNo: 'TRACK123' },
@@ -462,10 +462,14 @@ describe('Shop reviews (mobile)', () => {
       token: ownerToken,
       body: { status: 'delivered' },
     })
-    await req('PUT', `/api/servers/${serverId}/shop/orders/${orderId}/status`, {
-      token: ownerToken,
-      body: { status: 'completed' },
-    })
+    const completeRes = await req(
+      'POST',
+      `/api/servers/${serverId}/shop/orders/${orderId}/complete`,
+      {
+        token: memberToken,
+      },
+    )
+    expect(completeRes.status).toBe(200)
   })
 
   it('buyer can review completed order', async () => {

@@ -19,6 +19,12 @@ export class EntitlementService {
     return this.deps.entitlementDao.findByUserWithDetails(userId)
   }
 
+  async getEntitlementDetail(id: string) {
+    const entitlement = await this.deps.entitlementDao.findByIdWithDetails(id)
+    if (!entitlement) throw apiError('ENTITLEMENT_NOT_FOUND', 404)
+    return entitlement
+  }
+
   async getShopEntitlements(shopId: string, opts?: { limit?: number; offset?: number }) {
     return this.deps.entitlementDao.findByShop(shopId, opts)
   }
@@ -67,6 +73,19 @@ export class EntitlementService {
       isActive: false,
       cancelledAt: new Date(),
       cancelReason: reason ?? null,
+    })
+  }
+
+  async cancelRenewal(id: string, reason?: string) {
+    const entitlement = await this.getEntitlement(id)
+    return this.deps.entitlementDao.update(id, {
+      nextRenewalAt: null,
+      cancelReason: reason ?? 'cancel_renewal',
+      metadata: {
+        ...(entitlement.metadata ?? {}),
+        renewalCancelledAt: new Date().toISOString(),
+        renewalCancelReason: reason ?? 'cancel_renewal',
+      },
     })
   }
 

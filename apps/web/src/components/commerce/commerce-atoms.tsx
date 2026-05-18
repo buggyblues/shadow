@@ -1,13 +1,13 @@
-import { cn } from '@shadowob/ui'
+import { cn, GlassPanel, GlassSurface } from '@shadowob/ui'
 import { X } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
 
 type SurfaceTone = 'default' | 'quiet' | 'accent'
 
 const surfaceToneClasses: Record<SurfaceTone, string> = {
-  default: 'border-border-subtle bg-bg-secondary/70 shadow-[0_18px_48px_rgba(0,0,0,0.10)]',
-  quiet: 'border-border-subtle/80 bg-bg-secondary/[0.42]',
-  accent: 'border-primary/25 bg-primary/[0.08] shadow-[0_20px_54px_rgba(0,198,209,0.10)]',
+  default: 'rounded-2xl border-border-subtle/80',
+  quiet: 'rounded-2xl border-border-subtle/70',
+  accent: 'rounded-2xl border-primary/25 shadow-[0_20px_54px_rgba(0,198,209,0.10)]',
 }
 
 export function CommerceSurface({
@@ -15,9 +15,10 @@ export function CommerceSurface({
   tone = 'default',
   ...props
 }: HTMLAttributes<HTMLDivElement> & { tone?: SurfaceTone }) {
+  const Surface = tone === 'accent' ? GlassPanel : GlassSurface
   return (
-    <div
-      className={cn('rounded-2xl border backdrop-blur-xl', surfaceToneClasses[tone], className)}
+    <Surface
+      className={cn(surfaceToneClasses[tone], tone === 'accent' && 'bg-primary/[0.08]', className)}
       {...props}
     />
   )
@@ -50,7 +51,10 @@ export function CommerceDrawer({
         className="fixed inset-0 z-40 bg-bg-deep/45 backdrop-blur-sm"
         onClick={onClose}
       />
-      <aside className="fixed inset-y-3 right-3 z-50 flex w-[min(520px,calc(100vw-24px))] flex-col overflow-hidden rounded-3xl border border-border-subtle bg-bg-secondary/88 shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
+      <GlassPanel
+        as="aside"
+        className="fixed inset-y-3 right-3 z-50 flex w-[min(520px,calc(100vw-24px))] flex-col overflow-hidden rounded-3xl"
+      >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border-subtle/80 px-5 py-4">
           <div className="min-w-0">
             <h2 className="truncate text-lg font-black text-text-primary">{title}</h2>
@@ -69,7 +73,7 @@ export function CommerceDrawer({
         {footer && (
           <footer className="shrink-0 border-t border-border-subtle/80 px-5 py-4">{footer}</footer>
         )}
-      </aside>
+      </GlassPanel>
     </>
   )
 }

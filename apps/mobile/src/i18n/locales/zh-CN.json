@@ -278,7 +278,7 @@
     "joinServerDesc": "输入邀请码加入已有的服务器",
     "inviteCodePlaceholder": "输入邀请码",
     "joinButton": "加入",
-    "discover": "探索服务器",
+    "discover": "发现",
     "serverInfo": "服务器信息",
     "inviteMembers": "邀请成员",
     "copyServerId": "复制服务器 ID",
@@ -471,6 +471,7 @@
     "commerceSubscription": "订阅",
     "commercePurchaseFailed": "购买失败",
     "commercePurchaseSucceeded": "购买完成",
+    "commerceRefundRule": "按订单规则售后",
     "productPicker": "商品",
     "productPickerLoading": "正在加载商品...",
     "productPickerEmpty": "暂无可发送商品",
@@ -891,15 +892,15 @@
   },
   "discover": {
     "title": "发现",
-    "subtitle": "发现服务器和频道",
-    "searchPlaceholder": "搜索...",
+    "subtitle": "找 Buddy、买内容、逛店铺和服务器",
+    "searchPlaceholder": "搜索 Buddy、服务、店铺或服务器...",
     "noServers": "暂无公开的服务器",
     "noChannels": "暂无活跃的频道",
-    "noDescription": "暂无描述",
+    "noDescription": "暂无介绍。",
     "members": "成员",
-    "joinButton": "加入",
-    "enterButton": "进入",
-    "public": "公开",
+    "joinButton": "加入服务器",
+    "enterButton": "进入服务器",
+    "public": "公开服务器",
     "joinToView": "加入后查看",
     "unknownAgent": "未知 Buddy",
     "unknownUser": "未知用户",
@@ -932,17 +933,98 @@
         "updated": "更新时间"
       }
     },
-    "loadMore": "加载更多...",
-    "noMore": "没有更多了",
-    "emptyTitle": "这里还没有内容",
-    "emptyDesc": "成为第一个创建社区的人吧！",
-    "noSearchResults": "未找到结果",
-    "noSearchResultsDesc": "尝试不同的关键词",
+    "loadMore": "加载更多服务器",
+    "noMore": "已显示全部服务器",
+    "emptyTitle": "还没有找到想逛的内容",
+    "emptyDesc": "先换个关键词，或者稍后再来看看新的 Buddy、服务、店铺和服务器。",
+    "noSearchResults": "没有找到结果",
+    "noSearchResultsDesc": "换一个关键词试试。",
     "deviceTier": {
       "highEnd": "高端",
       "midRange": "中端",
       "lowEnd": "低端",
       "unknown": "未知"
+    },
+    "eyebrow": "发现",
+    "heroTitle": "今天想找点什么？",
+    "heroSubtitle": "找 Buddy、买内容、逛店铺，或者加入一个有趣的服务器。",
+    "communityModelTitle": "服务器里有什么",
+    "communityShelfTitle": "推荐服务器",
+    "communityShelfHint": "加入后可以进频道聊天、看店铺、找 Buddy。",
+    "activityScore": "活跃度",
+    "joined": "已加入",
+    "views": {
+      "all": "全部",
+      "joined": "已加入",
+      "open": "可加入"
+    },
+    "metrics": {
+      "publicCommunities": "公开服务器",
+      "joinedCommunities": "已加入",
+      "openCommunities": "可加入",
+      "communityMembers": "成员"
+    },
+    "communityModel": {
+      "identity": {
+        "title": "进服务器",
+        "body": "加入后可以看频道、店铺和 Buddy。"
+      },
+      "service": {
+        "title": "买内容",
+        "body": "喜欢的服务和内容可以直接进入详情页。"
+      },
+      "trust": {
+        "title": "看评价",
+        "body": "评价来自真实订单和购买记录。"
+      }
+    },
+    "capabilities": {
+      "channels": "频道",
+      "services": "店铺",
+      "credit": "评价"
+    },
+    "businessTitle": "今天想找点什么？",
+    "businessSubtitle": "逛 Buddy、买服务和内容、进店铺，或者加入一个好玩的服务器。",
+    "viewAll": "查看全部",
+    "openBuddy": "找他聊聊",
+    "openProduct": "查看详情",
+    "openShop": "进店看看",
+    "shopFallback": "这里正在上新，先看看店里的推荐。",
+    "productCount": "{{count}} 件在售",
+    "memberCount": "{{count}} 名成员",
+    "sections": {
+      "all": "精选",
+      "buddies": "Buddy",
+      "products": "服务与内容",
+      "shops": "店铺",
+      "communities": "服务器"
+    },
+    "lanes": {
+      "buddies": "推荐 Buddy",
+      "products": "今天可买",
+      "shops": "值得逛的店",
+      "communities": "推荐服务器"
+    },
+    "emptyLane": {
+      "buddies": "暂时没有可联系的 Buddy。",
+      "products": "暂时没有上架内容。",
+      "shops": "暂时没有可逛的店铺。",
+      "communities": "暂时没有公开服务器。"
+    },
+    "badges": {
+      "buddy": "Buddy"
+    },
+    "facts": {
+      "daily": "每日",
+      "rentals": "已成交"
+    },
+    "productType": {
+      "physical": "实物",
+      "entitlement": "服务/内容"
+    },
+    "shopScope": {
+      "server": "服务器店铺",
+      "user": "个人店铺"
     }
   },
   "notification": {
@@ -1117,7 +1199,14 @@
     "offline": "离线"
   },
   "profile": {
-    "memberSince": "注册于"
+    "memberSince": "注册于",
+    "agentAsset": "Agent 资产主页",
+    "agentAssetHint": "展示这个 Buddy 的可买服务、交付记录和真实信用。",
+    "availableServices": "可买服务",
+    "deliveryRecords": "交付记录",
+    "creditRating": "信用评分",
+    "noAssetServices": "这个 Buddy 还没有上架可购买服务。",
+    "serviceShelfFallback": "购买后会按订单承诺进入履约。"
   },
   "shop": {
     "addProduct": "添加商品",
@@ -1161,6 +1250,9 @@
     "statusCancelled": "已取消",
     "statusRefunded": "已退款",
     "cancelOrder": "取消订单",
+    "confirmReceipt": "确认完成",
+    "orderCompleted": "订单已完成",
+    "orderCompleteFailed": "确认完成失败",
     "viewReviews": "查看评价",
     "wallet": "钱包",
     "walletBalance": "余额",
@@ -1171,8 +1263,66 @@
     "buyNow": "立即购买",
     "cartTotal": "共 {{count}} 件",
     "clearCart": "清空购物车",
+    "serverStorefront": "服务器店铺",
+    "serverProvidedBy": "{{server}} · {{shop}}",
+    "productSourceTitle": "由 {{shop}} 提供",
+    "productSourceServer": "服务器：{{server}}",
+    "productSourceHint": "购买后会生成订单，交付状态、内容和售后入口都会留在购买与交付中心。",
     "orderNo": "订单号",
-    "tags": "标签"
+    "tags": "标签",
+    "uploadCover": "上传商品封面",
+    "uploadingCover": "正在上传封面...",
+    "coverHint": "封面会展示在货架、订单和权益凭证里",
+    "coverUploadFailed": "封面上传失败",
+    "mediaPermissionDenied": "需要相册访问权限才能上传封面",
+    "productTemplates": {
+      "ai_service": {
+        "label": "AI 服务",
+        "summary": "购买后由 Buddy 或店主按订单处理服务。",
+        "promise": "下单后进入服务订单，店主会在约定时间内交付结果。"
+      },
+      "paid_file": {
+        "label": "付费文件",
+        "summary": "购买后可打开或下载付费内容。",
+        "promise": "支付成功后在购买与交付中心打开内容。"
+      },
+      "membership": {
+        "label": "会员权益",
+        "summary": "购买后获得一段时间的会员权益。",
+        "promise": "支付成功后权益自动生效，可查看有效期。"
+      },
+      "badge_gift": {
+        "label": "徽章/礼物",
+        "summary": "购买后进入社区资产库。",
+        "promise": "支付成功后资产进入钱包资产库，状态可追踪。"
+      },
+      "physical": {
+        "label": "实物商品",
+        "summary": "购买后由店主按订单发货。",
+        "promise": "支付成功后生成订单，店主会更新处理和发货状态。"
+      }
+    },
+    "visual": {
+      "service": "服务",
+      "file": "文件",
+      "badge": "徽章",
+      "gift": "礼物",
+      "ticket": "服务券",
+      "physical": "实物"
+    },
+    "visualPromise": {
+      "service": "订单服务",
+      "file": "购买后打开",
+      "badge": "身份展示",
+      "gift": "可赠送收藏",
+      "ticket": "可核销凭证",
+      "physical": "配送交付"
+    },
+    "consumerPath": {
+      "browse": "逛店",
+      "pay": "下单",
+      "fulfill": "履约"
+    }
   },
   "workspace": {
     "confirmDelete": "确定要删除吗？",

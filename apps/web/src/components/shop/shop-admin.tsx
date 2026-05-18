@@ -2,13 +2,16 @@ import { Badge, Button, Card, cn, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
+  Award,
   CheckCircle,
   ChevronDown,
   Clock,
   Edit3,
   Eye,
   EyeOff,
+  FileText,
   FolderPlus,
+  Gift,
   Layers,
   Package,
   Plus,
@@ -16,6 +19,7 @@ import {
   Search,
   Settings,
   ShoppingBag,
+  Sparkles,
   Tag,
   Trash2,
   Upload,
@@ -27,11 +31,27 @@ import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { useConfirmStore } from '../common/confirm-dialog'
+import { WorkspaceFilePicker } from '../workspace/WorkspaceFilePicker'
 import type { Product, ProductCategory, Shop } from './shop-page'
 import { PriceDisplay, ShrimpCoinIcon } from './ui/currency'
+import { ProductVisual } from './ui/product-visual'
+
+type WorkspaceUploadNode = {
+  id: string
+  name: string
+  sizeBytes?: number | null
+}
 
 /* ─────────── Admin Section Types ─────────── */
 type AdminSection = 'products' | 'categories' | 'orders' | 'settings'
+type ProductTemplate = 'ai_service' | 'paid_file' | 'membership' | 'badge_gift' | 'physical'
+
+function formatFileSizeLabel(size?: number | null) {
+  if (!size || size <= 0) return null
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
 
 interface OrderItem {
   id: string
@@ -389,6 +409,15 @@ function normalizeEntitlementRules(product: Product | null): EntitlementRule[] {
     .filter((r) => !!r.resourceType)
 }
 
+function inferProductTemplate(product: Product | null): ProductTemplate {
+  if (product?.type === 'physical') return 'physical'
+  const rule = normalizeEntitlementRules(product)[0]
+  if (rule?.resourceType === 'workspace_file') return 'paid_file'
+  if (rule?.resourceType === 'subscription') return 'membership'
+  if (rule?.resourceType === 'community_asset') return 'badge_gift'
+  return 'ai_service'
+}
+
 function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -398,12 +427,20 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
   const [name, setName] = useState(product?.name || '')
   const [slug, setSlug] = useState(product?.slug || '')
   const [type, setType] = useState<'physical' | 'entitlement'>(product?.type || 'physical')
-  const [status, setStatus] = useState<'draft' | 'active' | 'archived'>(product?.status || 'draft')
+  const [status, setStatus] = useState<'draft' | 'active' | 'archived'>(
+    product?.status || 'active',
+  )
   const [summary, setSummary] = useState(product?.summary || '')
   const [description, setDescription] = useState(product?.description || '')
   const [basePrice, setBasePrice] = useState(product?.basePrice?.toString() || '0')
   const [tags, setTags] = useState(product?.tags?.join(', ') || '')
   const [categoryId, setCategoryId] = useState(product?.categoryId || '')
+  const [selectedTemplate, setSelectedTemplate] = useState<ProductTemplate>(
+    inferProductTemplate(product),
+  )
+  const [paidFileNode, setPaidFileNode] = useState<WorkspaceUploadNode | null>(null)
+  const [paidFileUploading, setPaidFileUploading] = useState(false)
+  const [paidFilePickerOpen, setPaidFilePickerOpen] = useState(false)
 
   // Media
   const [mediaUrls, setMediaUrls] = useState<string[]>(product?.media?.map((m) => m.url) || [])
@@ -449,6 +486,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
     setDescription(source.description || '')
     setBasePrice(source.basePrice?.toString() || '0')
     setTags(source.tags?.join(', ') || '')
+    setSelectedTemplate(inferProductTemplate(source))
     setCategoryId(source.categoryId || '')
     setMediaUrls(source.media?.map((m) => m.url) || [])
     setSpecNames(source.specNames?.join(', ') || '')
@@ -463,11 +501,116 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
     setEntitlementRules(normalizeEntitlementRules(source))
   }, [editingProductDetail, isEditing, product])
 
+  const bindPaidFileNode = (node: WorkspaceUploadNode) => {
+    setPaidFileNode(node)
+    setEntitlementRules((rules) => {
+      const next = rules.length
+        ? [...rules]
+        : [
+            {
+              resourceType: 'workspace_file',
+              resourceId: '',
+              capability: 'download',
+              durationSeconds: '',
+              privilegeDescription: '',
+            },
+          ]
+      next[0] = {
+        ...next[0]!,
+        resourceType: 'workspace_file',
+        resourceId: node.id,
+        capability: 'download',
+        privilegeDescription:
+          next[0]!.privilegeDescription ||
+          t('commerce.paidFileDefaultPrivilege', { name: node.name }),
+      }
+      return next
+    })
+    if (!name.trim()) setName(node.name.replace(/\.[^.]+$/, ''))
+    if (!summary.trim()) setSummary(t('commerce.paidFileDefaultSummary', { name: node.name }))
+  }
+
+  const uploadPaidFile = async (file: File) => {
+    setPaidFileUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const node = await fetchApi<WorkspaceUploadNode>(
+        `/api/servers/${serverId}/workspace/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        },
+      )
+      bindPaidFileNode(node)
+      showToast(t('commerce.paidFileUploaded'), 'success')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('commerce.paidFileUploadFailed')
+      showToast(message || t('commerce.paidFileUploadFailed'), 'error')
+    } finally {
+      setPaidFileUploading(false)
+    }
+  }
+
+  const templateOptions = useMemo(
+    () => [
+      { key: 'ai_service' as const, icon: Sparkles, resourceType: 'service', capability: 'use' },
+      {
+        key: 'paid_file' as const,
+        icon: FileText,
+        resourceType: 'workspace_file',
+        capability: 'download',
+      },
+      {
+        key: 'membership' as const,
+        icon: CheckCircle,
+        resourceType: 'subscription',
+        capability: 'use',
+      },
+      {
+        key: 'badge_gift' as const,
+        icon: Award,
+        resourceType: 'community_asset',
+        capability: 'redeem',
+      },
+      { key: 'physical' as const, icon: Package, resourceType: '', capability: 'use' },
+    ],
+    [],
+  )
+
+  const applyTemplate = (template: ProductTemplate) => {
+    setSelectedTemplate(template)
+    if (template !== 'paid_file') setPaidFileNode(null)
+    const option = templateOptions.find((item) => item.key === template)
+    setType(template === 'physical' ? 'physical' : 'entitlement')
+    setTags(
+      template === 'badge_gift'
+        ? 'badge, gift'
+        : template === 'physical'
+          ? 'physical'
+          : template.replace('_', ', '),
+    )
+    if (!summary.trim()) setSummary(t(`shop.productTemplates.${template}.summary`))
+    if (template !== 'physical' && option) {
+      setEntitlementRules([
+        {
+          resourceType: option.resourceType,
+          resourceId: '',
+          capability: option.capability,
+          durationSeconds: template === 'paid_file' ? '' : '2592000',
+          privilegeDescription: t(`shop.productTemplates.${template}.promise`),
+        },
+      ])
+    }
+  }
+
   // Categories data
   const { data: categories = [] } = useQuery({
     queryKey: ['shop-categories', serverId],
     queryFn: () => fetchApi<ProductCategory[]>(`/api/servers/${serverId}/shop/categories`),
   })
+  const paidFileMissing =
+    selectedTemplate === 'paid_file' && type === 'entitlement' && !entitlementRules[0]?.resourceId
 
   // Auto-generate slug
   useEffect(() => {
@@ -550,30 +693,81 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" icon={ArrowLeft} onClick={onCancel} />
           <h3 className="text-text-primary font-black text-lg">
-            {isEditing ? '编辑商品规则' : '上架新商品'}
+            {isEditing ? t('shop.editProduct') : t('shop.createProduct')}
           </h3>
         </div>
         <Button
           variant="primary"
           icon={Save}
           onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending || !name.trim()}
+          disabled={saveMutation.isPending || !name.trim() || paidFileMissing || paidFileUploading}
           loading={saveMutation.isPending}
         >
-          {saveMutation.isPending ? '正在保存...' : '保存更改'}
+          {saveMutation.isPending ? t('commerce.saving') : t('shop.saveProduct')}
         </Button>
       </div>
 
       {saveMutation.isError && (
         <div className="p-4 bg-danger/10 border border-danger/20 rounded-2xl text-danger text-sm flex items-center gap-2 font-black">
           <XCircle size={18} />
-          保存失败：{(saveMutation.error as Error).message}
+          {t('shop.saveProductFailed')}：{(saveMutation.error as Error).message}
         </div>
       )}
 
       <div className="space-y-6">
+        <FormSection title={t('shop.publishWizard')}>
+          <div className="mb-4 grid gap-2 sm:grid-cols-4">
+            {(
+              [
+                'publishStepTemplate',
+                'publishStepPromise',
+                'publishStepPrice',
+                'publishStepPreview',
+              ] as const
+            ).map((step, index) => (
+              <div
+                key={step}
+                className="rounded-xl border border-border-subtle bg-bg-tertiary/45 px-3 py-2"
+              >
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-primary">
+                  {String(index + 1).padStart(2, '0')}
+                </div>
+                <div className="mt-1 text-xs font-black text-text-primary">{t(`shop.${step}`)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+            {templateOptions.map((template) => {
+              const Icon = template.icon
+              return (
+                <button
+                  key={template.key}
+                  type="button"
+                  onClick={() => applyTemplate(template.key)}
+                  className={cn(
+                    'rounded-2xl border p-3 text-left transition',
+                    selectedTemplate === template.key
+                      ? 'border-primary/50 bg-primary/10 text-primary'
+                      : 'border-border-subtle bg-bg-tertiary/55 text-text-secondary hover:border-primary/30',
+                  )}
+                >
+                  <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-bg-secondary/80">
+                    <Icon size={18} />
+                  </span>
+                  <span className="block text-sm font-black">
+                    {t(`shop.productTemplates.${template.key}.label`)}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-text-muted">
+                    {t(`shop.productTemplates.${template.key}.hint`)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </FormSection>
+
         {/* ── Section: 基本信息 ── */}
-        <FormSection title="基本信息">
+        <FormSection title={t('shop.publishBasics')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <FormField label="商品名称 (必填)" className="md:col-span-2">
               <input
@@ -661,7 +855,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
         </FormSection>
 
         {/* ── Section: 价格 ── */}
-        <FormSection title="价格与展示">
+        <FormSection title={t('shop.publishPricing')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
             <FormField label="商品底价 (美元 / 虾币)">
               <div className="relative">
@@ -717,7 +911,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
         </FormSection>
 
         {/* ── Section: 媒体 ── */}
-        <FormSection title="画廊图片">
+        <FormSection title={t('shop.publishMedia')}>
           <div className="flex flex-wrap gap-3 mb-4">
             {mediaUrls.map((url, idx) => (
               <div
@@ -746,7 +940,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
         </FormSection>
 
         {/* ── Section: SKU ── */}
-        <FormSection title="规格库存 (SKU)">
+        <FormSection title={t('shop.publishSku')}>
           <FormField label="规格属性体系 (如有多维需用逗号区分)" className="mb-5">
             <input
               type="text"
@@ -849,6 +1043,80 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
         {type === 'entitlement' && (
           <FormSection title={t('commerce.entitlementDeliveryConfig')}>
             <div className="space-y-4">
+              {selectedTemplate === 'paid_file' && (
+                <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] p-4">
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-sm font-black text-text-primary">
+                        <FileText size={16} className="text-primary" />
+                        {paidFileNode
+                          ? paidFileNode.name
+                          : entitlementRules[0]?.resourceId
+                            ? t('commerce.paidFileBound')
+                            : t('commerce.paidFileUploadTitle')}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-text-muted">
+                        {paidFileNode
+                          ? t('commerce.paidFileSelected', {
+                              size:
+                                formatFileSizeLabel(paidFileNode.sizeBytes) ?? t('common.unknown'),
+                            })
+                          : t('commerce.paidFileUploadHint')}
+                      </p>
+                    </div>
+                    <label
+                      className={cn(
+                        'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 text-xs font-black text-primary transition hover:bg-primary/15',
+                        paidFileUploading && 'pointer-events-none opacity-60',
+                      )}
+                    >
+                      {paidFileUploading ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      ) : (
+                        <Upload size={15} />
+                      )}
+                      {paidFileUploading
+                        ? t('commerce.uploadingPaidFile')
+                        : t('commerce.uploadPaidFile')}
+                      <input
+                        type="file"
+                        disabled={paidFileUploading}
+                        className="sr-only"
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0]
+                          if (file) void uploadPaidFile(file)
+                          event.currentTarget.value = ''
+                        }}
+                      />
+                    </label>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-10 rounded-full px-4 text-xs"
+                      onClick={() => setPaidFilePickerOpen(true)}
+                    >
+                      {t('commerce.chooseWorkspaceFile')}
+                    </Button>
+                  </div>
+                  {!entitlementRules[0]?.resourceId && (
+                    <p className="mt-3 text-xs font-bold text-danger">
+                      {t('commerce.paidFileRequiredHint')}
+                    </p>
+                  )}
+                </div>
+              )}
+              {paidFilePickerOpen && (
+                <WorkspaceFilePicker
+                  serverId={serverId}
+                  mode="select-file"
+                  title={t('commerce.chooseWorkspaceFile')}
+                  onConfirm={({ node }) => {
+                    bindPaidFileNode(node)
+                    setPaidFilePickerOpen(false)
+                  }}
+                  onClose={() => setPaidFilePickerOpen(false)}
+                />
+              )}
               {entitlementRules.map((rule, idx) => (
                 <div
                   key={idx}
@@ -976,6 +1244,40 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
             </div>
           </FormSection>
         )}
+
+        <FormSection title={t('shop.buyerPreview')}>
+          <div className="grid gap-4 rounded-2xl border border-primary/20 bg-primary/[0.06] p-4 sm:grid-cols-[132px_minmax(0,1fr)]">
+            <ProductVisual
+              name={name || t(`shop.productTemplates.${selectedTemplate}.label`)}
+              imageUrl={mediaUrls[0]}
+              productType={type}
+              resourceType={entitlementRules[0]?.resourceType}
+              assetType={tags.includes('badge') ? 'badge' : tags.includes('gift') ? 'gift' : null}
+              className="h-32 w-full"
+            />
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
+                <Gift size={13} />
+                {t(`shop.productTemplates.${selectedTemplate}.label`)}
+              </div>
+              <div className="text-base font-black text-text-primary">
+                {name || t('shop.productName')}
+              </div>
+              <p className="mt-1 line-clamp-2 text-sm leading-6 text-text-secondary">
+                {summary || entitlementRules[0]?.privilegeDescription || t('shop.deliveryPromise')}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-bg-primary/65 px-3 py-1 text-sm font-black text-danger">
+                  <ShrimpCoinIcon size={14} />
+                  {(Number(basePrice) || 0).toLocaleString()}
+                </span>
+                <span className="rounded-full bg-bg-primary/65 px-3 py-1 text-xs font-black text-text-muted">
+                  {entitlementRules[0]?.privilegeDescription || t('shop.deliveryPromise')}
+                </span>
+              </div>
+            </div>
+          </div>
+        </FormSection>
       </div>
     </div>
   )

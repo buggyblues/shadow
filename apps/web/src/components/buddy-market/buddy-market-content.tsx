@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -11,26 +10,14 @@ import {
   Search as UiSearch,
 } from '@shadowob/ui'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { Link, useLocation, useNavigate, useSearch } from '@tanstack/react-router'
-import {
-  ArrowDownAZ,
-  ArrowUpAZ,
-  Check,
-  Clock,
-  Eye,
-  ListFilter,
-  RefreshCw,
-  Users,
-  X,
-} from 'lucide-react'
+import { useLocation, useNavigate, useSearch } from '@tanstack/react-router'
+import { ArrowDownAZ, ArrowUpAZ, Check, Clock, ListFilter, Users, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { useAuthStore } from '../../stores/auth.store'
 import { useMarketplaceStore } from '../../stores/marketplace.store'
-import { UserAvatar } from '../common/avatar'
 import { EmptyState } from '../common/empty-state'
-import { PriceDisplay } from '../shop/ui/currency'
+import { BuddyListingCard, type BuddyListingCardData } from './buddy-listing-card'
 
 interface ListingOwner {
   id: string
@@ -113,15 +100,6 @@ function serializeSearchState(state: SearchState): string {
   } as const
 
   return JSON.stringify(keys)
-}
-
-function formatOnlineDuration(seconds: number) {
-  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))}m`
-  const hours = Math.floor(seconds / 3600)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  const remainHours = hours % 24
-  return remainHours > 0 ? `${days}d ${remainHours}h` : `${days}d`
 }
 
 function getDeviceLabelKey(tier: Listing['deviceTier']) {
@@ -554,7 +532,16 @@ export function BuddyMarketContent() {
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {listings.map((listing) => (
-                <ListingCard key={listing.id} listing={listing} />
+                <BuddyListingCard
+                  key={listing.id}
+                  listing={toBuddyListingCardData(listing)}
+                  onOpen={() =>
+                    navigate({
+                      to: '/marketplace/$listingId',
+                      params: { listingId: listing.id },
+                    })
+                  }
+                />
               ))}
             </div>
 
@@ -623,143 +610,18 @@ function MarketListingSkeleton() {
   )
 }
 
-function ListingCard({ listing }: { listing: Listing }) {
-  const { t } = useTranslation()
-  const ownerName = listing.owner?.displayName || listing.owner?.username || 'Buddy'
-  const tags = listing.skills.length > 0 ? listing.skills : listing.tags
-  const visibleTools = (tags?.length ? tags : []).slice(0, 3)
-  const descriptionText = listing.description?.trim() || t('marketplace.noDescription', '暂无描述')
-  const ownerProfileId = listing.owner?.id ?? listing.ownerId
-  const canOpenOwnerProfile = Boolean(ownerProfileId)
-  const ownerDisplay =
-    listing.owner?.displayName || listing.owner?.username || t('marketplace.owner', '提供者')
-  const navigate = useNavigate()
-  const currentUserId = useAuthStore((state) => state.user?.id)
-  const isOwner = Boolean(currentUserId) && currentUserId === ownerProfileId
-
-  return (
-    <Link
-      to={`/marketplace/${listing.id}`}
-      className="group block overflow-hidden rounded-[32px]"
-      aria-label={`${t('marketplace.viewDetails', '查看详情')} · ${listing.title}`}
-    >
-      <div className="overflow-hidden rounded-[32px]">
-        <Card
-          variant="glass"
-          className="relative h-full border border-border-subtle transition duration-300 hover:border-primary/45 hover:shadow-[0_12px_36px_rgba(0,209,255,0.22)]"
-        >
-          <CardContent className="space-y-3 p-0">
-            <div className="p-4 pb-3">
-              <div className="flex items-start gap-3">
-                <div className="relative shrink-0 mt-1">
-                  <div className="rounded-full p-0.5 ring-1 ring-primary/30">
-                    <UserAvatar
-                      userId={listing.owner?.id ?? listing.ownerId}
-                      avatarUrl={listing.owner?.avatarUrl}
-                      displayName={ownerName}
-                      size="md"
-                    />
-                  </div>
-                  <span
-                    title={t('marketplace.online', '在线')}
-                    className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-bg-secondary bg-success"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-base font-black text-text-primary group-hover:text-primary transition-colors">
-                    {listing.title}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      if (!ownerProfileId) return
-                      navigate({
-                        to: '/profile/$userId',
-                        params: { userId: ownerProfileId },
-                      })
-                    }}
-                    disabled={!canOpenOwnerProfile}
-                    className="mt-0.5 inline-flex text-[11px] font-black uppercase tracking-[0.14em] text-text-muted hover:text-primary"
-                  >
-                    {t('marketplace.provider', '提供者')}：
-                    <span className="ml-1 font-normal normal-case text-text-secondary hover:text-primary">
-                      {ownerDisplay}
-                    </span>
-                  </button>
-                </div>
-                <div className="shrink-0 self-start text-right">
-                  <p className="mt-0 flex items-baseline justify-end gap-1">
-                    <span className="text-[3rem] font-black leading-none text-primary">
-                      <PriceDisplay amount={listing.hourlyRate} size={40} />
-                    </span>
-                    <span className="text-sm font-black text-text-secondary">
-                      {t('marketplace.perHour', '/时')}
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-4 -mt-1">
-              <p className="text-sm leading-7 text-text-primary">{descriptionText}</p>
-            </div>
-
-            <div className="px-4">
-              <div className="mt-2">
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
-                  {t('marketplace.skills', '技能标签')}
-                </p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {visibleTools.map((tool) => (
-                    <Badge key={tool} variant="info" size="xs" className="normal-case">
-                      {tool}
-                    </Badge>
-                  ))}
-                  {visibleTools.length === 0 ? (
-                    <span className="text-xs text-text-muted">
-                      {t('marketplace.noDescription', '暂无描述')}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="px-4">
-              <div className="mt-2">
-                <div className="grid grid-cols-3 divide-x divide-border-subtle/70 rounded-xl border border-border-subtle bg-bg-secondary/20 px-1 py-2.5 text-xs text-text-secondary">
-                  <div className="flex min-w-0 items-center gap-1.5 px-3">
-                    <Clock size={12} className="shrink-0 text-text-muted" />
-                    <span className="truncate">{t('marketplace.totalOnline', '累计在线')}</span>
-                    <span className="ml-auto font-black text-text-primary">
-                      {formatOnlineDuration(listing.totalOnlineSeconds)}
-                    </span>
-                  </div>
-
-                  <div className="flex min-w-0 items-center gap-1.5 px-3">
-                    <Eye size={12} className="shrink-0 text-text-muted" />
-                    <span className="truncate">{t('marketplace.views', '浏览')}</span>
-                    <span className="ml-auto font-black text-text-primary">
-                      {listing.viewCount}
-                    </span>
-                  </div>
-
-                  <div className="flex min-w-0 items-center gap-1.5 px-3">
-                    <RefreshCw size={12} className="shrink-0 text-text-muted" />
-                    <span className="truncate">{t('marketplace.rentalCount', '租赁次数')}</span>
-                    <span className="ml-auto font-black text-text-primary">
-                      {listing.rentalCount}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pb-2" />
-          </CardContent>
-        </Card>
-      </div>
-    </Link>
-  )
+function toBuddyListingCardData(listing: Listing): BuddyListingCardData {
+  return {
+    id: listing.id,
+    ownerId: listing.ownerId,
+    title: listing.title,
+    description: listing.description,
+    skills: listing.skills,
+    tags: listing.tags,
+    hourlyRate: listing.hourlyRate,
+    viewCount: listing.viewCount,
+    rentalCount: listing.rentalCount,
+    totalOnlineSeconds: listing.totalOnlineSeconds,
+    owner: listing.owner,
+  }
 }

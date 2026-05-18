@@ -54,7 +54,7 @@ describe('S01/C04 delete product success and list refresh', () => {
     await screen.findByText('商品X')
     await userEvent.click(screen.getByTitle('删除此商品'))
     await waitFor(() => {
-      expect(showToastMock).toHaveBeenCalledWith('shop.productDeleted', 'success')
+      expect(showToastMock).toHaveBeenCalledWith('商品已删除', 'success')
     })
   })
 })

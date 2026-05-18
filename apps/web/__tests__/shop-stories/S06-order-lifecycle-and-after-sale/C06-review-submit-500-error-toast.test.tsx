@@ -17,6 +17,7 @@ describe('S06/C06 review submit 500 error toast', () => {
     fetchApiMock.mockImplementation((path: string, options?: RequestInit) => {
       if (String(path).includes('/shop/orders/o1/review') && options?.method === 'POST')
         return Promise.reject(new Error('shop.reviewError(500)'))
+      if (String(path).includes('/shop/orders/o1/reviews')) return Promise.resolve([])
       if (String(path).includes('/shop/orders'))
         return Promise.resolve([
           {

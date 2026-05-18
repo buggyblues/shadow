@@ -34,7 +34,7 @@
 将用户重定向到 Shadow 授权页面：
 
 ```text
-https://shadowob.com/oauth/authorize
+https://shadowob.com/app/oauth/authorize
   ?response_type=code
   &client_id=YOUR_CLIENT_ID
   &redirect_uri=https://your-app.com/callback
@@ -126,7 +126,7 @@ const app = await client.createOAuthApp({
 
 ```ts
 // 将用户重定向到：
-const authorizeUrl = new URL('https://shadowob.com/oauth/authorize')
+const authorizeUrl = new URL('https://shadowob.com/app/oauth/authorize')
 authorizeUrl.searchParams.set('response_type', 'code')
 authorizeUrl.searchParams.set('client_id', app.clientId)
 authorizeUrl.searchParams.set('redirect_uri', 'https://tavern-game.example.com/callback')

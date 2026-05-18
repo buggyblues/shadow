@@ -218,6 +218,9 @@ describe('CLI Functional Tests', () => {
       const { stdout } = await execa('node', [CLI_PATH, 'shop', '--help'])
       expect(stdout).toContain('get')
       expect(stdout).toContain('products')
+      expect(stdout).toContain('offers')
+      expect(stdout).toContain('assets')
+      expect(stdout).toContain('entitlements')
       expect(stdout).toContain('cart')
       expect(stdout).toContain('orders')
       expect(stdout).toContain('wallet')
@@ -232,6 +235,23 @@ describe('CLI Functional Tests', () => {
       const { stdout } = await execa('node', [CLI_PATH, 'shop', 'products', '--help'])
       expect(stdout).toContain('list')
       expect(stdout).toContain('get')
+      expect(stdout).toContain('context')
+      expect(stdout).toContain('purchase')
+      expect(stdout).toContain('list-by-shop')
+    })
+
+    it('should show shop offers help', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'shop', 'offers', '--help'])
+      expect(stdout).toContain('list')
+      expect(stdout).toContain('create')
+      expect(stdout).toContain('deliverables')
+    })
+
+    it('should show shop assets help', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'shop', 'assets', '--help'])
+      expect(stdout).toContain('list')
+      expect(stdout).toContain('create')
+      expect(stdout).toContain('update')
     })
 
     it('should show shop cart help', async () => {
@@ -296,11 +316,47 @@ describe('CLI Functional Tests', () => {
       expect(stdout).toContain('create')
       expect(stdout).toContain('update')
       expect(stdout).toContain('delete')
+      expect(stdout).toContain('commerce')
+    })
+
+    it('should show oauth commerce help', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'oauth', 'commerce', '--help'])
+      expect(stdout).toContain('check')
+      expect(stdout).toContain('redeem')
     })
 
     it('should show oauth tokens help', async () => {
       const { stdout } = await execa('node', [CLI_PATH, 'oauth', 'tokens', '--help'])
       expect(stdout).toContain('OAuth management commands')
+    })
+  })
+
+  describe('commerce commands', () => {
+    it('should show commerce help', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'commerce', '--help'])
+      expect(stdout).toContain('products')
+      expect(stdout).toContain('offers')
+      expect(stdout).toContain('cards')
+      expect(stdout).toContain('entitlements')
+      expect(stdout).toContain('assets')
+      expect(stdout).toContain('paid-files')
+      expect(stdout).toContain('settlements')
+    })
+
+    it('should show commerce entitlements help', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'commerce', 'entitlements', '--help'])
+      expect(stdout).toContain('list')
+      expect(stdout).toContain('get')
+      expect(stdout).toContain('verify')
+      expect(stdout).toContain('cancel-renewal')
+    })
+
+    it('should show commerce assets help', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'commerce', 'assets', '--help'])
+      expect(stdout).toContain('consume')
+      expect(stdout).toContain('lock')
+      expect(stdout).toContain('unlock')
+      expect(stdout).toContain('revoke')
     })
   })
 

@@ -34,7 +34,7 @@ Save the **Client ID** and **Client Secret** — the secret is only shown once.
 Redirect users to the Shadow authorization page:
 
 ```text
-https://shadowob.com/oauth/authorize
+https://shadowob.com/app/oauth/authorize
   ?response_type=code
   &client_id=YOUR_CLIENT_ID
   &redirect_uri=https://your-app.com/callback
@@ -126,7 +126,7 @@ const app = await client.createOAuthApp({
 
 ```ts
 // Redirect user to:
-const authorizeUrl = new URL('https://shadowob.com/oauth/authorize')
+const authorizeUrl = new URL('https://shadowob.com/app/oauth/authorize')
 authorizeUrl.searchParams.set('response_type', 'code')
 authorizeUrl.searchParams.set('client_id', app.clientId)
 authorizeUrl.searchParams.set('redirect_uri', 'https://tavern-game.example.com/callback')

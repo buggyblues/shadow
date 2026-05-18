@@ -279,7 +279,7 @@
     "joinServerDesc": "輸入邀請碼加入已有的伺服器",
     "inviteCodePlaceholder": "輸入邀請碼",
     "joinButton": "加入",
-    "discover": "探索伺服器",
+    "discover": "發現",
     "serverInfo": "伺服器資訊",
     "inviteMembers": "邀請成員",
     "copyServerId": "複製伺服器 ID",
@@ -469,6 +469,7 @@
     "commerceSubscription": "訂閱",
     "commercePurchaseFailed": "購買失敗",
     "commercePurchaseSucceeded": "購買完成",
+    "commerceRefundRule": "按訂單規則售後",
     "productPicker": "商品",
     "productPickerLoading": "正在載入商品...",
     "productPickerEmpty": "暫無可傳送商品",
@@ -888,15 +889,15 @@
     "joining": "加入中..."
   },
   "discover": {
-    "title": "探索伺服器",
-    "subtitle": "探索伺服器和頻道",
-    "searchPlaceholder": "搜尋伺服器...",
+    "title": "發現",
+    "subtitle": "找 Buddy、買內容、逛店鋪和伺服器",
+    "searchPlaceholder": "搜尋 Buddy、服務、店鋪或伺服器...",
     "noServers": "暫無公開的伺服器",
-    "noDescription": "暫無描述",
+    "noDescription": "暫無介紹。",
     "members": "成員",
-    "joinButton": "加入",
-    "enterButton": "進入",
-    "public": "公開",
+    "joinButton": "加入伺服器",
+    "enterButton": "進入伺服器",
+    "public": "公開伺服器",
     "daysAgo": "{{count}}天前",
     "deviceTier": {
       "highEnd": "高階",
@@ -904,8 +905,8 @@
       "midRange": "中階",
       "unknown": "不明"
     },
-    "emptyDesc": "成為第一個建立社群的人！",
-    "emptyTitle": "這裡空空如也",
+    "emptyDesc": "先換個關鍵字，或稍後再看看新的 Buddy、服務、店鋪和伺服器。",
+    "emptyTitle": "還沒有找到想逛的內容",
     "filter": {
       "apply": "套用",
       "ascending": "遞增",
@@ -934,14 +935,95 @@
     "hoursAgo": "{{count}}小時前",
     "joinToView": "加入後查看",
     "justNow": "剛剛",
-    "loadMore": "載入更多...",
+    "loadMore": "載入更多伺服器",
     "minutesAgo": "{{count}}分鐘前",
     "noChannels": "沒有可用的活躍頻道",
-    "noMore": "沒有更多了",
-    "noSearchResults": "沒有結果",
-    "noSearchResultsDesc": "試試其他關鍵字",
+    "noMore": "已顯示全部伺服器",
+    "noSearchResults": "沒有找到結果",
+    "noSearchResultsDesc": "換一個關鍵字試試。",
     "unknownAgent": "未知 Buddy",
-    "unknownUser": "未知用戶"
+    "unknownUser": "未知用戶",
+    "eyebrow": "發現",
+    "heroTitle": "今天想找點什麼？",
+    "heroSubtitle": "找 Buddy、買內容、逛店鋪，或加入一個有趣的伺服器。",
+    "communityModelTitle": "伺服器裡有什麼",
+    "communityShelfTitle": "推薦伺服器",
+    "communityShelfHint": "加入後可以進頻道聊天、看店鋪、找 Buddy。",
+    "activityScore": "活躍度",
+    "joined": "已加入",
+    "views": {
+      "all": "全部",
+      "joined": "已加入",
+      "open": "可加入"
+    },
+    "metrics": {
+      "publicCommunities": "公開伺服器",
+      "joinedCommunities": "已加入",
+      "openCommunities": "可加入",
+      "communityMembers": "成員"
+    },
+    "communityModel": {
+      "identity": {
+        "title": "進伺服器",
+        "body": "加入後可以看頻道、店鋪和 Buddy。"
+      },
+      "service": {
+        "title": "買內容",
+        "body": "喜歡的服務和內容可以直接進入詳情頁。"
+      },
+      "trust": {
+        "title": "看評價",
+        "body": "評價來自真實訂單和購買記錄。"
+      }
+    },
+    "capabilities": {
+      "channels": "頻道",
+      "services": "店鋪",
+      "credit": "評價"
+    },
+    "businessTitle": "今天想找點什麼？",
+    "businessSubtitle": "逛 Buddy、買服務和內容、進店鋪，或加入一個好玩的伺服器。",
+    "viewAll": "查看全部",
+    "openBuddy": "找他聊聊",
+    "openProduct": "查看詳情",
+    "openShop": "進店看看",
+    "shopFallback": "這裡正在上新，先看看店裡的推薦。",
+    "productCount": "{{count}} 件在售",
+    "memberCount": "{{count}} 名成員",
+    "sections": {
+      "all": "精選",
+      "buddies": "Buddy",
+      "products": "服務與內容",
+      "shops": "店鋪",
+      "communities": "伺服器"
+    },
+    "lanes": {
+      "buddies": "推薦 Buddy",
+      "products": "今天可買",
+      "shops": "值得逛的店",
+      "communities": "推薦伺服器"
+    },
+    "emptyLane": {
+      "buddies": "暫時沒有可聯絡的 Buddy。",
+      "products": "暫時沒有上架內容。",
+      "shops": "暫時沒有可逛的店鋪。",
+      "communities": "暫時沒有公開伺服器。"
+    },
+    "badges": {
+      "buddy": "Buddy"
+    },
+    "facts": {
+      "daily": "每日",
+      "rentals": "已成交"
+    },
+    "productType": {
+      "physical": "實物",
+      "entitlement": "服務/內容"
+    },
+    "shopScope": {
+      "server": "伺服器店鋪",
+      "user": "個人店鋪"
+    }
   },
   "notification": {
     "title": "通知",
@@ -1115,7 +1197,14 @@
     "offline": "離線"
   },
   "profile": {
-    "memberSince": "註冊於"
+    "memberSince": "註冊於",
+    "agentAsset": "Agent 資產主頁",
+    "agentAssetHint": "展示這個 Buddy 的可買服務、交付記錄和真實信用。",
+    "availableServices": "可買服務",
+    "deliveryRecords": "交付記錄",
+    "creditRating": "信用評分",
+    "noAssetServices": "這個 Buddy 還沒有上架可購買服務。",
+    "serviceShelfFallback": "購買後會按訂單承諾進入履約。"
   },
   "shop": {
     "addProduct": "新增商品",
@@ -1159,6 +1248,9 @@
     "statusCancelled": "已取消",
     "statusRefunded": "已退款",
     "cancelOrder": "取消訂單",
+    "confirmReceipt": "確認完成",
+    "orderCompleted": "訂單已完成",
+    "orderCompleteFailed": "確認完成失敗",
     "viewReviews": "查看評價",
     "wallet": "錢包",
     "walletBalance": "餘額",
@@ -1169,8 +1261,66 @@
     "buyNow": "立即購買",
     "cartTotal": "共 {{count}} 件",
     "clearCart": "清空購物車",
+    "serverStorefront": "伺服器店鋪",
+    "serverProvidedBy": "{{server}} · {{shop}}",
+    "productSourceTitle": "由 {{shop}} 提供",
+    "productSourceServer": "伺服器：{{server}}",
+    "productSourceHint": "購買後會生成訂單，交付狀態、內容和售後入口都會留在購買與交付中心。",
     "orderNo": "訂單號",
-    "tags": "標籤"
+    "tags": "標籤",
+    "uploadCover": "上傳商品封面",
+    "uploadingCover": "正在上傳封面...",
+    "coverHint": "封面會展示在貨架、訂單和權益憑證裡",
+    "coverUploadFailed": "封面上傳失敗",
+    "mediaPermissionDenied": "需要相簿存取權限才能上傳封面",
+    "productTemplates": {
+      "ai_service": {
+        "label": "AI 服務",
+        "summary": "購買後由 Buddy 或店主按訂單處理服務。",
+        "promise": "下單後進入服務訂單，店主會在約定時間內交付結果。"
+      },
+      "paid_file": {
+        "label": "付費檔案",
+        "summary": "購買後可開啟或下載付費內容。",
+        "promise": "付款成功後在購買與交付中心開啟內容。"
+      },
+      "membership": {
+        "label": "會員權益",
+        "summary": "購買後獲得一段時間的會員權益。",
+        "promise": "付款成功後權益自動生效，可查看有效期。"
+      },
+      "badge_gift": {
+        "label": "徽章/禮物",
+        "summary": "購買後進入社群資產庫。",
+        "promise": "付款成功後資產進入錢包資產庫，狀態可追蹤。"
+      },
+      "physical": {
+        "label": "實物商品",
+        "summary": "購買後由店主按訂單發貨。",
+        "promise": "付款成功後生成訂單，店主會更新處理和發貨狀態。"
+      }
+    },
+    "visual": {
+      "service": "服務",
+      "file": "檔案",
+      "badge": "徽章",
+      "gift": "禮物",
+      "ticket": "服務券",
+      "physical": "實物"
+    },
+    "visualPromise": {
+      "service": "訂單服務",
+      "file": "購買後開啟",
+      "badge": "身份展示",
+      "gift": "可贈送收藏",
+      "ticket": "可核銷憑證",
+      "physical": "配送交付"
+    },
+    "consumerPath": {
+      "browse": "逛店",
+      "pay": "下單",
+      "fulfill": "履約"
+    }
   },
   "workspace": {
     "confirmDelete": "確定要刪除嗎？",

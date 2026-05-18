@@ -1354,7 +1354,7 @@ describe('14. Product update & admin operations', () => {
     expect(res.status).toBe(200)
     const p = await json<{ media: { url: string }[] }>(res)
     expect(p.media).toHaveLength(2)
-    expect(p.media[0]!.url).toBe('/shadow/uploads/phone-new-1.jpg')
+    expect(p.media[0]!.url).toMatch(/^\/api\/media\/signed\//)
   })
 
   it('admin archives a product', async () => {

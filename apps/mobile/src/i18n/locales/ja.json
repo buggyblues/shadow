@@ -279,7 +279,7 @@
     "joinServerDesc": "招待コードを入力してサーバーに参加",
     "inviteCodePlaceholder": "招待コードを入力",
     "joinButton": "参加",
-    "discover": "サーバーを探す",
+    "discover": "見つける",
     "serverInfo": "サーバー情報",
     "inviteMembers": "メンバーを招待",
     "copyServerId": "サーバーIDをコピー",
@@ -472,6 +472,7 @@
     "commerceSubscription": "サブスクリプション",
     "commercePurchaseFailed": "購入に失敗しました",
     "commercePurchaseSucceeded": "購入が完了しました",
+    "commerceRefundRule": "注文ルールに沿って対応",
     "productPicker": "商品",
     "productPickerLoading": "商品を読み込み中...",
     "productPickerEmpty": "送信できる商品はありません",
@@ -891,15 +892,15 @@
     "joining": "参加中..."
   },
   "discover": {
-    "title": "サーバーを探す",
-    "subtitle": "サーバーとチャンネルを探す",
-    "searchPlaceholder": "サーバーを検索...",
+    "title": "見つける",
+    "subtitle": "Buddy、コンテンツ、ショップ、サーバーを探す",
+    "searchPlaceholder": "Buddy、サービス、ショップ、サーバーを検索...",
     "noServers": "公開サーバーはありません",
-    "noDescription": "説明なし",
+    "noDescription": "説明はまだありません。",
     "members": "メンバー",
-    "joinButton": "参加",
-    "enterButton": "入る",
-    "public": "公開",
+    "joinButton": "サーバーに参加",
+    "enterButton": "サーバーを開く",
+    "public": "公開サーバー",
     "daysAgo": "{{count}}日前",
     "deviceTier": {
       "highEnd": "ハイエンド",
@@ -907,8 +908,8 @@
       "midRange": "ミドルレンジ",
       "unknown": "不明"
     },
-    "emptyDesc": "コミュニティを最初に作成しよう！",
-    "emptyTitle": "まだ何もありません",
+    "emptyDesc": "別のキーワードを試すか、新しい Buddy、サービス、ショップ、サーバーを待ってください。",
+    "emptyTitle": "まだ見るものがありません",
     "filter": {
       "apply": "適用",
       "ascending": "昇順",
@@ -937,14 +938,95 @@
     "hoursAgo": "{{count}}時間前",
     "joinToView": "参加して表示",
     "justNow": "たった今",
-    "loadMore": "さらに読み込み中...",
+    "loadMore": "サーバーをさらに表示",
     "minutesAgo": "{{count}}分前",
     "noChannels": "アクティブなチャンネルはありません",
-    "noMore": "これ以上ありません",
-    "noSearchResults": "結果なし",
-    "noSearchResultsDesc": "別のキーワードを試してください",
+    "noMore": "すべてのサーバーを表示しました",
+    "noSearchResults": "結果が見つかりません",
+    "noSearchResultsDesc": "別のキーワードを試してください。",
     "unknownAgent": "不明な Buddy",
-    "unknownUser": "不明なユーザー"
+    "unknownUser": "不明なユーザー",
+    "eyebrow": "見つける",
+    "heroTitle": "今日は何を探しますか？",
+    "heroSubtitle": "Buddy、内容、ショップ、面白いサーバーを探せます。",
+    "communityModelTitle": "サーバーの中身",
+    "communityShelfTitle": "おすすめサーバー",
+    "communityShelfHint": "参加するとチャンネル、ショップ、Buddy を使えます。",
+    "activityScore": "アクティビティ",
+    "joined": "参加済み",
+    "views": {
+      "all": "すべて",
+      "joined": "参加済み",
+      "open": "参加可能"
+    },
+    "metrics": {
+      "publicCommunities": "公開サーバー",
+      "joinedCommunities": "参加済み",
+      "openCommunities": "参加可能",
+      "communityMembers": "メンバー"
+    },
+    "communityModel": {
+      "identity": {
+        "title": "サーバーへ",
+        "body": "参加するとチャンネル、ショップ、Buddy を見られます。"
+      },
+      "service": {
+        "title": "内容を買う",
+        "body": "気になるサービスや内容は詳細ページから確認できます。"
+      },
+      "trust": {
+        "title": "レビューを見る",
+        "body": "レビューは実際の注文と購入記録から生まれます。"
+      }
+    },
+    "capabilities": {
+      "channels": "チャンネル",
+      "services": "ショップ",
+      "credit": "レビュー"
+    },
+    "businessTitle": "今日は何を探しますか？",
+    "businessSubtitle": "Buddy を見つけ、サービスやコンテンツを買い、ショップを見て、楽しいサーバーに参加できます。",
+    "viewAll": "すべて見る",
+    "openBuddy": "話してみる",
+    "openProduct": "詳細を見る",
+    "openShop": "ショップを見る",
+    "shopFallback": "このショップは新しい内容を準備中です。",
+    "productCount": "{{count}} 件",
+    "memberCount": "{{count}} 人のメンバー",
+    "sections": {
+      "all": "おすすめ",
+      "buddies": "Buddy",
+      "products": "サービスと内容",
+      "shops": "ショップ",
+      "communities": "サーバー"
+    },
+    "lanes": {
+      "buddies": "おすすめ Buddy",
+      "products": "今日買えるもの",
+      "shops": "見る価値のあるショップ",
+      "communities": "おすすめサーバー"
+    },
+    "emptyLane": {
+      "buddies": "連絡できる Buddy はまだありません。",
+      "products": "出品はまだありません。",
+      "shops": "見られるショップはまだありません。",
+      "communities": "公開サーバーはまだありません。"
+    },
+    "badges": {
+      "buddy": "Buddy"
+    },
+    "facts": {
+      "daily": "日額",
+      "rentals": "注文"
+    },
+    "productType": {
+      "physical": "実物",
+      "entitlement": "サービス/内容"
+    },
+    "shopScope": {
+      "server": "サーバーショップ",
+      "user": "個人ショップ"
+    }
   },
   "notification": {
     "title": "通知",
@@ -1118,7 +1200,14 @@
     "offline": "オフライン"
   },
   "profile": {
-    "memberSince": "登録日"
+    "memberSince": "登録日",
+    "agentAsset": "Agent 資産ホーム",
+    "agentAssetHint": "この Buddy の購入可能サービス、納品記録、実際の信用を表示します。",
+    "availableServices": "購入可能サービス",
+    "deliveryRecords": "納品記録",
+    "creditRating": "信用",
+    "noAssetServices": "この Buddy はまだ購入可能なサービスを出品していません。",
+    "serviceShelfFallback": "購入後、注文の約束に沿って履行されます。"
   },
   "shop": {
     "addProduct": "商品追加",
@@ -1162,6 +1251,9 @@
     "statusCancelled": "キャンセル済み",
     "statusRefunded": "返金済み",
     "cancelOrder": "注文をキャンセル",
+    "confirmReceipt": "完了を確認",
+    "orderCompleted": "注文が完了しました",
+    "orderCompleteFailed": "完了確認に失敗しました",
     "viewReviews": "レビューを見る",
     "wallet": "ウォレット",
     "walletBalance": "残高",
@@ -1172,8 +1264,66 @@
     "buyNow": "今すぐ購入",
     "cartTotal": "合計 {{count}} 点",
     "clearCart": "カートを空にする",
+    "serverStorefront": "サーバーショップ",
+    "serverProvidedBy": "{{server}} · {{shop}}",
+    "productSourceTitle": "{{shop}} が提供",
+    "productSourceServer": "サーバー：{{server}}",
+    "productSourceHint": "購入後は注文、納品状況、コンテンツ、サポート入口が購入と納品センターに残ります。",
     "orderNo": "注文番号",
-    "tags": "タグ"
+    "tags": "タグ",
+    "uploadCover": "商品カバーをアップロード",
+    "uploadingCover": "カバーをアップロード中...",
+    "coverHint": "カバーは棚、注文、権利証明に表示されます",
+    "coverUploadFailed": "カバーのアップロードに失敗しました",
+    "mediaPermissionDenied": "カバーをアップロードするには写真ライブラリへのアクセスが必要です",
+    "productTemplates": {
+      "ai_service": {
+        "label": "AI サービス",
+        "summary": "購入後、Buddy または販売者が注文に沿って対応します。",
+        "promise": "決済後にサービス注文が作成され、約束した時間内に結果を納品します。"
+      },
+      "paid_file": {
+        "label": "有料ファイル",
+        "summary": "購入後に有料コンテンツを開く、またはダウンロードできます。",
+        "promise": "支払い後、購入と履行センターからコンテンツを開けます。"
+      },
+      "membership": {
+        "label": "会員権",
+        "summary": "購入後、一定期間の会員特典を受け取ります。",
+        "promise": "支払い後に権限が有効になり、有効期限を確認できます。"
+      },
+      "badge_gift": {
+        "label": "バッジ/ギフト",
+        "summary": "コミュニティ資産として届きます。",
+        "promise": "支払い後、資産は Wallet 資産に入り、状態を追跡できます。"
+      },
+      "physical": {
+        "label": "物理商品",
+        "summary": "購入後、販売者が注文に沿って発送します。",
+        "promise": "支払い後に注文が作成され、販売者が処理と発送状態を更新します。"
+      }
+    },
+    "visual": {
+      "service": "サービス",
+      "file": "ファイル",
+      "badge": "バッジ",
+      "gift": "ギフト",
+      "ticket": "サービス券",
+      "physical": "物販"
+    },
+    "visualPromise": {
+      "service": "注文サービス",
+      "file": "購入後に開く",
+      "badge": "身分表示",
+      "gift": "贈れるコレクション",
+      "ticket": "利用券",
+      "physical": "配送管理"
+    },
+    "consumerPath": {
+      "browse": "見る",
+      "pay": "支払う",
+      "fulfill": "履行"
+    }
   },
   "workspace": {
     "confirmDelete": "本当に削除しますか？",

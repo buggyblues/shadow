@@ -545,6 +545,20 @@ class ShadowCommerceCheckoutPreview:
 
 
 @dataclass
+class ShadowCommerceProductContext:
+    product: dict[str, Any]
+    shop: dict[str, Any]
+    server: dict[str, Any] | None = None
+    provider: dict[str, Any] | None = None
+    buddy: dict[str, Any] | None = None
+    offer: dict[str, Any] | None = None
+    fulfillment: dict[str, Any] = field(default_factory=dict)
+    refund: dict[str, Any] = field(default_factory=dict)
+    credit: dict[str, Any] = field(default_factory=dict)
+    links: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ShadowEntitlementProvisioning:
     status: str
     code: str
@@ -582,6 +596,153 @@ class ShadowEntitlement:
     product: dict[str, Any] | None = None
     offer: dict[str, Any] | None = None
     paid_file: dict[str, Any] | None = None
+    buyer: dict[str, Any] | None = None
+    order: dict[str, Any] | None = None
+    fulfillment_jobs: list[dict[str, Any]] | None = None
+
+
+@dataclass
+class ShadowCommunityAssetDefinition:
+    id: str
+    issuer_kind: str
+    asset_type: str
+    name: str
+    giftable: bool
+    transferable: bool
+    consumable: bool
+    revocable: bool
+    status: str
+    issuer_id: str | None = None
+    shop_id: str | None = None
+    description: str | None = None
+    image_url: str | None = None
+    expires_after_days: int | None = None
+    metadata: dict[str, Any] | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowCommunityAssetGrant:
+    id: str
+    definition_id: str
+    owner_user_id: str
+    source_kind: str
+    quantity: int
+    remaining_quantity: int
+    status: str
+    source_id: str | None = None
+    expires_at: str | None = None
+    metadata: dict[str, Any] | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowCommunityAsset:
+    grant: ShadowCommunityAssetGrant | dict[str, Any]
+    definition: ShadowCommunityAssetDefinition | dict[str, Any]
+
+
+@dataclass
+class ShadowSettlementLine:
+    id: str
+    seller_user_id: str
+    source_type: str
+    source_id: str
+    gross_amount: int
+    platform_fee: int
+    net_amount: int
+    status: str
+    shop_id: str | None = None
+    available_at: str | None = None
+    settled_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowOAuthCommerceEntitlementSummary:
+    id: str
+    status: str
+    capability: str
+    resource_type: str
+    resource_id: str
+    product_id: str | None = None
+    shop_id: str | None = None
+    order_id: str | None = None
+    offer_id: str | None = None
+    expires_at: str | None = None
+
+
+@dataclass
+class ShadowOAuthCommerceEntitlementAccess:
+    allowed: bool
+    status: str
+    resource_type: str
+    resource_id: str
+    capability: str
+    app: dict[str, Any]
+    reason_code: str | None = None
+    entitlement: ShadowOAuthCommerceEntitlementSummary | dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowOAuthCommerceEntitlementRedemption:
+    app_id: str
+    resource_type: str
+    resource_id: str
+    capability: str
+    idempotency_key: str
+    redeemed_at: str
+    metadata: dict[str, str | int | float | bool | None] | None = None
+
+
+@dataclass
+class ShadowOAuthCommerceEntitlementRedeemResult:
+    redeemed: bool
+    resource_type: str
+    resource_id: str
+    capability: str
+    app: dict[str, Any]
+    entitlement: ShadowOAuthCommerceEntitlementSummary | dict[str, Any]
+    redemption: ShadowOAuthCommerceEntitlementRedemption | dict[str, Any]
+
+
+@dataclass
+class ShadowPaidFileOpenResult:
+    grant: dict[str, Any]
+    viewer_url: str
+
+
+@dataclass
+class ShadowProductMedia:
+    url: str
+    id: str | None = None
+    type: str | None = None
+    thumbnail_url: str | None = None
+    position: int | None = None
+
+
+@dataclass
+class ShadowProductSku:
+    id: str
+    spec_values: list[str]
+    price: int
+    stock: int
+    image_url: str | None = None
+    sku_code: str | None = None
+    is_active: bool | None = None
+
+
+@dataclass
+class ShadowProductEntitlementConfig:
+    resource_type: str | None = None
+    resource_id: str | None = None
+    capability: str | None = None
+    duration_seconds: int | None = None
+    renewal_period_seconds: int | None = None
+    privilege_description: str | None = None
 
 
 @dataclass

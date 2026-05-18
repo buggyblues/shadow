@@ -15,7 +15,16 @@ import httpx
 from .types import (
     ShadowAddAgentsToServerResult,
     ShadowAgentUsageSnapshotInput,
+    ShadowCommerceCheckoutPreview,
+    ShadowCommerceProductContext,
+    ShadowCommunityAsset,
+    ShadowCommunityAssetDefinition,
+    ShadowCommunityAssetGrant,
     ShadowEntitlement,
+    ShadowOAuthCommerceEntitlementAccess,
+    ShadowOAuthCommerceEntitlementRedeemResult,
+    ShadowPaidFileOpenResult,
+    ShadowSettlementLine,
 )
 
 
@@ -1287,6 +1296,11 @@ class ShadowClient:
     def get_scope_neutral_product(self, product_id: str) -> dict[str, Any]:
         return self._get(f"/api/products/{product_id}")
 
+    def get_commerce_product_context(
+        self, product_id: str
+    ) -> ShadowCommerceProductContext | dict[str, Any]:
+        return self._get(f"/api/commerce/products/{product_id}/context")
+
     def get_shop_product(self, shop_id: str, product_id: str) -> dict[str, Any]:
         return self._get(f"/api/shops/{shop_id}/products/{product_id}")
 
@@ -1335,7 +1349,7 @@ class ShadowClient:
         *,
         sku_id: str | None = None,
         viewer_user_id: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> ShadowCommerceCheckoutPreview | dict[str, Any]:
         params: dict[str, Any] = {}
         if sku_id is not None:
             params["skuId"] = sku_id
@@ -1359,15 +1373,19 @@ class ShadowClient:
             f"/api/shops/{shop_id}/offers/{offer_id}/deliverables", json=kwargs
         )
 
-    def list_shop_asset_definitions(self, shop_id: str) -> dict[str, Any]:
+    def list_shop_asset_definitions(
+        self, shop_id: str
+    ) -> dict[str, list[ShadowCommunityAssetDefinition | dict[str, Any]]]:
         return self._get(f"/api/shops/{shop_id}/assets")
 
-    def create_shop_asset_definition(self, shop_id: str, **kwargs: Any) -> dict[str, Any]:
+    def create_shop_asset_definition(
+        self, shop_id: str, **kwargs: Any
+    ) -> ShadowCommunityAssetDefinition | dict[str, Any]:
         return self._post(f"/api/shops/{shop_id}/assets", json=kwargs)
 
     def update_shop_asset_definition(
         self, shop_id: str, asset_definition_id: str, **kwargs: Any
-    ) -> dict[str, Any]:
+    ) -> ShadowCommunityAssetDefinition | dict[str, Any]:
         return self._patch(
             f"/api/shops/{shop_id}/assets/{asset_definition_id}", json=kwargs
         )
@@ -1401,7 +1419,7 @@ class ShadowClient:
             params["limit"] = limit
         return self._get("/api/commerce/product-picker", params=params)
 
-    def open_paid_file(self, file_id: str) -> dict[str, Any]:
+    def open_paid_file(self, file_id: str) -> ShadowPaidFileOpenResult | dict[str, Any]:
         return self._post(f"/api/paid-files/{file_id}/open")
 
     def list_shop_entitlements(self, shop_id: str, **kwargs: Any) -> list[dict[str, Any]]:
@@ -1516,6 +1534,9 @@ class ShadowClient:
     def cancel_order(self, server_id: str, order_id: str) -> dict[str, Any]:
         return self._post(f"/api/servers/{server_id}/shop/orders/{order_id}/cancel")
 
+    def complete_order(self, server_id: str, order_id: str) -> dict[str, Any]:
+        return self._post(f"/api/servers/{server_id}/shop/orders/{order_id}/complete")
+
     def get_product_reviews(
         self, server_id: str, product_id: str
     ) -> list[dict[str, Any]]:
@@ -1568,25 +1589,35 @@ class ShadowClient:
 
     # ── Community Economy ──────────────────────────────────────────────
 
-    def list_community_assets(self) -> dict[str, Any]:
+    def list_community_assets(
+        self,
+    ) -> dict[str, list[ShadowCommunityAsset | dict[str, Any]]]:
         return self._get("/api/economy/assets")
 
-    def get_community_asset(self, grant_id: str) -> dict[str, Any]:
+    def get_community_asset(
+        self, grant_id: str
+    ) -> ShadowCommunityAsset | dict[str, Any]:
         return self._get(f"/api/economy/assets/{grant_id}")
 
-    def consume_community_asset(self, grant_id: str, *, idempotency_key: str) -> dict[str, Any]:
+    def consume_community_asset(
+        self, grant_id: str, *, idempotency_key: str
+    ) -> dict[str, ShadowCommunityAssetGrant | dict[str, Any]]:
         return self._post(
             f"/api/economy/assets/{grant_id}/consume",
             json={"idempotencyKey": idempotency_key},
         )
 
-    def lock_community_asset(self, grant_id: str, *, idempotency_key: str) -> dict[str, Any]:
+    def lock_community_asset(
+        self, grant_id: str, *, idempotency_key: str
+    ) -> dict[str, ShadowCommunityAssetGrant | dict[str, Any]]:
         return self._post(
             f"/api/economy/assets/{grant_id}/lock",
             json={"idempotencyKey": idempotency_key},
         )
 
-    def unlock_community_asset(self, grant_id: str, *, idempotency_key: str) -> dict[str, Any]:
+    def unlock_community_asset(
+        self, grant_id: str, *, idempotency_key: str
+    ) -> dict[str, ShadowCommunityAssetGrant | dict[str, Any]]:
         return self._post(
             f"/api/economy/assets/{grant_id}/unlock",
             json={"idempotencyKey": idempotency_key},
@@ -1594,7 +1625,7 @@ class ShadowClient:
 
     def revoke_community_asset(
         self, grant_id: str, *, idempotency_key: str, reason: str | None = None
-    ) -> dict[str, Any]:
+    ) -> dict[str, ShadowCommunityAssetGrant | dict[str, Any]]:
         payload = {"idempotencyKey": idempotency_key}
         if reason is not None:
             payload["reason"] = reason
@@ -1649,7 +1680,7 @@ class ShadowClient:
 
     def list_settlements(
         self, *, limit: int | None = None, offset: int | None = None
-    ) -> dict[str, Any]:
+    ) -> dict[str, list[ShadowSettlementLine | dict[str, Any]]]:
         params: dict[str, Any] = {}
         if limit is not None:
             params["limit"] = limit
@@ -1657,7 +1688,9 @@ class ShadowClient:
             params["offset"] = offset
         return self._get("/api/economy/settlements", params=params or None)
 
-    def settle_available_settlements(self) -> dict[str, Any]:
+    def settle_available_settlements(
+        self,
+    ) -> dict[str, list[ShadowSettlementLine | dict[str, Any]]]:
         return self._post("/api/economy/settlements/settle")
 
     # ── Cloud SaaS DIY Generation ──────────────────────────────────────
@@ -1886,6 +1919,45 @@ class ShadowClient:
     def get_all_entitlements(self) -> list[ShadowEntitlement | dict[str, Any]]:
         return self._get("/api/entitlements")
 
+    def get_entitlement(self, entitlement_id: str) -> ShadowEntitlement | dict[str, Any]:
+        return self._get(f"/api/entitlements/{entitlement_id}")
+
+    def get_oauth_commerce_entitlement_access(
+        self,
+        *,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        capability: str | None = None,
+    ) -> ShadowOAuthCommerceEntitlementAccess | dict[str, Any]:
+        params: dict[str, Any] = {}
+        if resource_type is not None:
+            params["resourceType"] = resource_type
+        if resource_id is not None:
+            params["resourceId"] = resource_id
+        if capability is not None:
+            params["capability"] = capability
+        return self._get("/api/oauth/commerce/entitlements", params=params)
+
+    def redeem_oauth_commerce_entitlement(
+        self,
+        *,
+        idempotency_key: str,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        capability: str | None = None,
+        metadata: dict[str, str | int | float | bool | None] | None = None,
+    ) -> ShadowOAuthCommerceEntitlementRedeemResult | dict[str, Any]:
+        payload: dict[str, Any] = {"idempotencyKey": idempotency_key}
+        if resource_type is not None:
+            payload["resourceType"] = resource_type
+        if resource_id is not None:
+            payload["resourceId"] = resource_id
+        if capability is not None:
+            payload["capability"] = capability
+        if metadata is not None:
+            payload["metadata"] = metadata
+        return self._post("/api/oauth/commerce/entitlements/redeem", json=payload)
+
     def verify_entitlement(self, entitlement_id: str) -> dict[str, Any]:
         return self._get(f"/api/entitlements/{entitlement_id}/verify")
 
@@ -1899,6 +1971,17 @@ class ShadowClient:
         if reason is not None:
             payload["reason"] = reason
         return self._post(f"/api/entitlements/{entitlement_id}/cancel", json=payload)
+
+    def cancel_entitlement_renewal(
+        self,
+        entitlement_id: str,
+        *,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if reason is not None:
+            payload["reason"] = reason
+        return self._post(f"/api/entitlements/{entitlement_id}/cancel-renewal", json=payload)
 
     # ── Task Center ──────────────────────────────────────────────────────
 
@@ -2024,6 +2107,25 @@ class ShadowClient:
         if limit:
             params["limit"] = limit
         return self._get("/api/discover/search", params=params)
+
+    def discover_commerce(
+        self,
+        q: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if q:
+            params["q"] = q
+        if limit:
+            params["limit"] = limit
+        return self._get("/api/discover/business", params=params or None)
+
+    def discover_business_hub(
+        self,
+        q: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        return self.discover_commerce(q=q, limit=limit)
 
     # ── Voice Enhance ────────────────────────────────────────────────────
 

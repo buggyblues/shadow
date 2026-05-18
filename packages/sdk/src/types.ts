@@ -1069,6 +1069,8 @@ export interface ShadowCommerceProductCard {
     name: string
     summary?: string | null
     imageUrl?: string | null
+    shopName?: string | null
+    deliveryPromise?: string | null
     price: number
     currency: string
     productType: 'physical' | 'entitlement'
@@ -1161,6 +1163,71 @@ export interface ShadowEntitlement {
     sizeBytes?: number | null
     previewUrl?: string | null
   } | null
+  buyer?: {
+    id: string
+    username: string
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+  order?:
+    | (Omit<ShadowOrder, 'items' | 'currency'> & {
+        currency?: string | null
+        items?: ShadowOrder['items']
+      })
+    | null
+  fulfillmentJobs?: Array<Record<string, unknown>>
+}
+
+export interface ShadowOAuthCommerceEntitlementSummary {
+  id: string
+  status: string
+  capability: string
+  resourceType: string
+  resourceId: string
+  productId?: string | null
+  shopId?: string | null
+  orderId?: string | null
+  offerId?: string | null
+  expiresAt?: string | null
+}
+
+export interface ShadowOAuthCommerceEntitlementAccess {
+  allowed: boolean
+  status: string
+  reasonCode?: string | null
+  resourceType: string
+  resourceId: string
+  capability: string
+  app: { id: string }
+  entitlement?: ShadowOAuthCommerceEntitlementSummary | null
+}
+
+export interface ShadowOAuthCommerceEntitlementRedeemInput {
+  idempotencyKey: string
+  resourceType?: string
+  resourceId?: string
+  capability?: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface ShadowOAuthCommerceEntitlementRedemption {
+  appId: string
+  resourceType: string
+  resourceId: string
+  capability: string
+  idempotencyKey: string
+  redeemedAt: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface ShadowOAuthCommerceEntitlementRedeemResult {
+  redeemed: true
+  resourceType: string
+  resourceId: string
+  capability: string
+  app: { id: string }
+  entitlement: ShadowOAuthCommerceEntitlementSummary
+  redemption: ShadowOAuthCommerceEntitlementRedemption
 }
 
 export interface ShadowEntitlementPurchaseResult {
@@ -1226,6 +1293,81 @@ export interface ShadowCommerceCheckoutPreview {
   nextAction: 'purchase' | 'open_paid_file' | 'view_entitlement' | string
 }
 
+export interface ShadowCommerceProductContext {
+  product: ShadowProduct
+  shop: ShadowShop & {
+    logoUrl?: string | null
+    bannerUrl?: string | null
+  }
+  server: {
+    id: string
+    name: string
+    slug?: string | null
+    description?: string | null
+    iconUrl?: string | null
+    bannerUrl?: string | null
+    ownerId?: string | null
+  } | null
+  provider: {
+    id: string
+    username: string
+    displayName?: string | null
+    avatarUrl?: string | null
+    isBot?: boolean
+  } | null
+  buddy: {
+    id: string
+    userId: string
+    ownerId: string
+    status: string
+    totalOnlineSeconds?: number | null
+    lastHeartbeat?: string | null
+  } | null
+  offer: {
+    id: string
+    status: string
+    priceOverride?: number | null
+    currency: string
+    allowedSurfaces?: string[] | null
+    sellerUserId?: string | null
+    sellerBuddyUserId?: string | null
+  } | null
+  fulfillment: {
+    status: string
+    resourceType?: string | null
+    resourceId?: string | null
+    capability?: string | null
+    deliverables: Array<{
+      id: string
+      kind: string
+      resourceType?: string | null
+      resourceId?: string | null
+      deliveryTiming?: string | null
+      status: string
+    }>
+  }
+  refund: {
+    policy: string
+    status: string
+    supportPath?: string | null
+  }
+  credit: {
+    salesCount: number
+    avgRating: number
+    ratingCount: number
+    completedOrders: number
+  }
+  links: {
+    product: string
+    shop?: string | null
+    server?: string | null
+    providerProfile?: string | null
+    buddyProfile?: string | null
+    assetHome?: string | null
+    checkoutPreview?: string | null
+  }
+}
+
 export interface ShadowPaidFileOpenResult {
   grant: { id: string; fileId: string; status: string; expiresAt: string }
   viewerUrl: string
@@ -1239,18 +1381,57 @@ export interface ShadowCategory {
   position: number
 }
 
+export interface ShadowProductMedia {
+  id?: string
+  type?: 'image' | 'video' | string
+  url: string
+  thumbnailUrl?: string | null
+  position?: number
+}
+
+export interface ShadowProductSku {
+  id: string
+  specValues: string[]
+  price: number
+  stock: number
+  imageUrl?: string | null
+  skuCode?: string | null
+  isActive?: boolean
+}
+
+export interface ShadowProductEntitlementConfig {
+  resourceType?: string
+  resourceId?: string
+  capability?: string
+  durationSeconds?: number | null
+  renewalPeriodSeconds?: number | null
+  privilegeDescription?: string
+}
+
 export interface ShadowProduct {
   id: string
   shopId: string
   categoryId?: string | null
   name: string
+  slug?: string
+  type?: 'physical' | 'entitlement' | string
   description?: string | null
-  price: number
+  summary?: string | null
+  price?: number
+  basePrice?: number
   currency: string
-  stock: number
+  stock?: number
   status: string
+  specNames?: string[]
+  tags?: string[]
+  salesCount?: number
+  avgRating?: number
+  ratingCount?: number
   billingMode?: 'one_time' | 'fixed_duration' | 'subscription'
-  images: string[]
+  entitlementConfig?: ShadowProductEntitlementConfig | ShadowProductEntitlementConfig[] | null
+  media?: ShadowProductMedia[]
+  skus?: ShadowProductSku[]
+  images?: string[]
   createdAt: string
 }
 
@@ -1263,12 +1444,38 @@ export interface ShadowCartItem {
 
 export interface ShadowOrder {
   id: string
+  orderNo?: string
   shopId: string
   buyerId: string
-  status: string
+  status:
+    | 'pending'
+    | 'paid'
+    | 'processing'
+    | 'shipped'
+    | 'delivered'
+    | 'completed'
+    | 'cancelled'
+    | 'refunded'
+    | string
   totalAmount: number
   currency: string
-  items: { productId: string; skuId?: string | null; quantity: number; price: number }[]
+  trackingNo?: string | null
+  buyerNote?: string | null
+  sellerNote?: string | null
+  paidAt?: string | null
+  shippedAt?: string | null
+  completedAt?: string | null
+  cancelledAt?: string | null
+  items: Array<{
+    id?: string
+    productId: string
+    skuId?: string | null
+    productName?: string
+    specValues?: string[]
+    quantity: number
+    price: number
+    imageUrl?: string | null
+  }>
   createdAt: string
 }
 

@@ -7,6 +7,7 @@ export interface OAuthTokenPayload {
   tokenId: string
   userId: string
   appId: string
+  appClientId?: string
   scope: string
 }
 
@@ -46,11 +47,16 @@ export function createOAuthAuthMiddleware(container: AppContainer) {
     if (new Date() > token.expiresAt) {
       return c.json({ ok: false, error: 'Access token expired' }, 401)
     }
+    const app = await oauthAppDao.findById(token.appId)
+    if (!app || !app.isActive) {
+      return c.json({ ok: false, error: 'Invalid OAuth app' }, 401)
+    }
 
     const payload = {
       tokenId: token.id,
       userId: token.userId,
       appId: token.appId,
+      appClientId: app.clientId,
       scope: token.scope,
     }
 
@@ -59,6 +65,7 @@ export function createOAuthAuthMiddleware(container: AppContainer) {
       kind: 'oauth',
       userId: payload.userId,
       appId: payload.appId,
+      appClientId: payload.appClientId,
       tokenId: payload.tokenId,
       scopes: parseScopes(payload.scope),
     })

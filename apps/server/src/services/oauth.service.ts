@@ -129,6 +129,8 @@ export const VALID_OAUTH_SCOPES = [
   'workspaces:write',
   'buddies:create',
   'buddies:manage',
+  'commerce:read',
+  'commerce:write',
 ] as const
 
 export class OAuthService {

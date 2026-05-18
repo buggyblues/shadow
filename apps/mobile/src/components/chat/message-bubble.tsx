@@ -1386,6 +1386,34 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
             {card.snapshot.summary}
           </Text>
         ) : null}
+        <View style={styles.commerceMetaChips}>
+          <Text
+            style={[
+              styles.commerceMetaChip,
+              { color: colors.textMuted, borderColor: colors.border },
+            ]}
+            numberOfLines={1}
+          >
+            {card.snapshot.shopName ?? t('shop.shopReply')}
+          </Text>
+          <Text
+            style={[styles.commerceMetaChip, { color: colors.primary, borderColor: colors.border }]}
+            numberOfLines={1}
+          >
+            {card.snapshot.deliveryPromise ??
+              card.snapshot.summary ??
+              t('chat.commerceEntitlement')}
+          </Text>
+          <Text
+            style={[
+              styles.commerceMetaChip,
+              { color: colors.textMuted, borderColor: colors.border },
+            ]}
+            numberOfLines={1}
+          >
+            {t('chat.commerceRefundRule')}
+          </Text>
+        </View>
         <View style={styles.commerceFooter}>
           <Text style={[styles.commerceMode, { color: colors.textMuted }]}>
             {card.snapshot.billingMode === 'subscription'
@@ -1756,6 +1784,21 @@ const styles = StyleSheet.create({
   commerceSummary: {
     fontSize: fontSize.xs,
     marginTop: 2,
+  },
+  commerceMetaChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: spacing.xs,
+  },
+  commerceMetaChip: {
+    maxWidth: '100%',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    fontSize: 10,
+    fontWeight: '700',
   },
   commerceFooter: {
     flexDirection: 'row',

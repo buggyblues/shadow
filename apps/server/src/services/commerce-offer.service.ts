@@ -116,6 +116,16 @@ export class CommerceOfferService {
     }
   }
 
+  async getLatestOfferForProduct(productId: string) {
+    const rows = await this.db
+      .select()
+      .from(commerceOffers)
+      .where(eq(commerceOffers.productId, productId))
+      .orderBy(desc(commerceOffers.createdAt))
+      .limit(1)
+    return rows[0] ?? null
+  }
+
   async listActiveOffersForShop(shopId: string, opts?: { keyword?: string; limit?: number }) {
     const conditions = [
       eq(commerceOffers.shopId, shopId),

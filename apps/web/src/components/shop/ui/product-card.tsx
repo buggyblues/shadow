@@ -1,55 +1,112 @@
-import { Badge, Button, Card, CardContent } from '@shadowob/ui'
-import { Package, Plus } from 'lucide-react'
+import { Badge, Button, Card, CardContent, cn } from '@shadowob/ui'
+import { Plus, ShieldCheck, Star, Store } from 'lucide-react'
 import type React from 'react'
-import type { Product } from '../shop-page'
+import { useTranslation } from 'react-i18next'
 import { PriceDisplay } from './currency'
+import { ProductVisual, resolveProductVisualKind } from './product-visual'
 
-interface ProductCardProps {
-  product: Product
-  onClick: (id: string) => void
-  onAddToCart?: (product: Product, e: React.MouseEvent) => void
+type ProductCardMedia = {
+  type?: string | null
+  url?: string | null
+  thumbnailUrl?: string | null
 }
 
-export function ProductCard({ product, onClick, onAddToCart }: ProductCardProps) {
-  const imageUrl = product.media?.[0]?.url
+type ProductCardEntitlementConfig = {
+  resourceType?: string | null
+  resourceId?: string | null
+  capability?: string | null
+  durationSeconds?: number | null
+  renewalPeriodSeconds?: number | null
+  privilegeDescription?: string | null
+} | null
+
+export interface ProductCardProduct {
+  id: string
+  name: string
+  type: 'physical' | 'entitlement' | string
+  summary?: string | null
+  description?: string | null
+  basePrice?: number | null
+  currency?: string | null
+  tags?: string[] | null
+  salesCount?: number | null
+  avgRating?: number | null
+  ratingCount?: number | null
+  imageUrl?: string | null
+  media?: ProductCardMedia[] | null
+  entitlementConfig?: ProductCardEntitlementConfig | ProductCardEntitlementConfig[] | null
+}
+
+interface ProductCardProps<TProduct extends ProductCardProduct> {
+  product: TProduct
+  onClick: (id: string) => void
+  onAddToCart?: (product: TProduct, e: React.MouseEvent) => void
+  onShopClick?: (e: React.MouseEvent) => void
+  shopName?: string | null
+  serverName?: string | null
+  className?: string
+}
+
+export function ProductCard<TProduct extends ProductCardProduct>({
+  product,
+  onClick,
+  onAddToCart,
+  onShopClick,
+  shopName,
+  serverName,
+  className,
+}: ProductCardProps<TProduct>) {
+  const { t } = useTranslation()
+  const entitlementConfig = Array.isArray(product.entitlementConfig)
+    ? product.entitlementConfig[0]
+    : product.entitlementConfig
+  const resourceType = entitlementConfig?.resourceType
+  const assetType =
+    resourceType === 'community_asset'
+      ? product.tags?.find((tag) =>
+          ['badge', 'gift', 'coupon', 'service_ticket', 'collectible'].includes(tag),
+        )
+      : undefined
+  const visualKind = resolveProductVisualKind({
+    productType: product.type,
+    resourceType,
+    assetType,
+  })
 
   return (
     <Card
+      role="button"
+      tabIndex={0}
       variant="glass"
       hoverable
-      className="group flex flex-col cursor-pointer !rounded-[40px]"
+      className={cn(
+        'group flex cursor-pointer flex-col overflow-hidden !rounded-[18px] border border-border-subtle bg-bg-secondary/60 shadow-[0_16px_42px_rgba(0,0,0,0.14)] transition hover:border-primary/35 hover:bg-bg-secondary/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+        className,
+      )}
       onClick={() => onClick(product.id)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        onClick(product.id)
+      }}
     >
-      {/* Image container */}
-      <div className="relative w-full aspect-[4/5] bg-bg-tertiary/30 overflow-hidden">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.33,1,0.68,1)] group-hover:scale-105"
-            draggable={false}
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-text-muted/30">
-            <Package size={48} strokeWidth={1} />
-          </div>
-        )}
+      <div className="relative h-36 w-full overflow-hidden border-b border-border-subtle/70 bg-bg-tertiary/30">
+        <ProductVisual
+          name={product.name}
+          imageUrl={product.imageUrl}
+          media={product.media}
+          productType={product.type}
+          resourceType={resourceType}
+          assetType={assetType}
+          className="h-full w-full rounded-none border-0 transition-transform duration-500 group-hover:scale-[1.03]"
+        />
 
-        {/* Top-left tag: Entitlement badge */}
-        {product.type === 'entitlement' && (
-          <div className="absolute top-3 left-3">
-            <Badge variant="warning" size="sm">
-              虚拟权益
-            </Badge>
-          </div>
-        )}
-
-        {/* Hover overlay add to cart button (PC friendly) */}
         {onAddToCart && (
           <div className="absolute bottom-4 right-4 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 z-10 hidden md:block">
             <Button
               variant="glass"
               size="icon"
+              title={t('shop.addToCart')}
               onClick={(e) => onAddToCart(product, e)}
               icon={Plus}
             />
@@ -57,22 +114,69 @@ export function ProductCard({ product, onClick, onAddToCart }: ProductCardProps)
         )}
       </div>
 
-      {/* Content wrapper */}
-      <CardContent className="flex-1 flex flex-col p-4 pt-4">
-        <h3 className="text-[15px] font-black text-text-primary line-clamp-2 leading-tight mb-1 group-hover:text-primary transition-colors">
+      <CardContent className="flex min-h-[184px] flex-1 flex-col p-4">
+        {(shopName || serverName) && (
+          <div className="mb-2 flex min-w-0 items-center gap-1.5 text-[11px] font-black text-text-muted">
+            <Store size={12} className="shrink-0 text-primary" />
+            {onShopClick ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onShopClick(event)
+                }}
+                className="min-w-0 truncate text-left transition hover:text-primary"
+              >
+                {shopName ?? t('commerce.consumerStorefront')}
+              </button>
+            ) : (
+              <span className="truncate">{shopName ?? t('commerce.consumerStorefront')}</span>
+            )}
+            {serverName && (
+              <>
+                <span className="shrink-0 text-text-muted/45">·</span>
+                <span className="truncate">{serverName}</span>
+              </>
+            )}
+          </div>
+        )}
+        <h3 className="mb-1 line-clamp-2 text-base font-black leading-tight text-text-primary transition-colors group-hover:text-primary">
           {product.name}
         </h3>
 
         {product.summary && (
-          <p className="text-xs text-text-muted line-clamp-1 mb-3">{product.summary}</p>
+          <p className="mb-3 line-clamp-2 text-sm leading-5 text-text-secondary">
+            {product.summary}
+          </p>
         )}
 
-        <div className="mt-auto pt-3 flex items-end justify-between">
-          <PriceDisplay amount={product.basePrice} size={18} showFree />
-
-          <span className="text-[11px] text-text-muted font-bold">
-            已售 {product.salesCount > 999 ? '999+' : product.salesCount}
+        <div className="mb-3 flex max-w-full flex-wrap gap-1.5">
+          <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-black text-primary">
+            <ShieldCheck size={12} className="shrink-0" />
+            <span className="truncate">{t(`commerce.visualPromise.${visualKind}`)}</span>
           </span>
+          {product.type === 'entitlement' && (
+            <Badge variant="warning" size="xs" className="max-w-full">
+              <span className="truncate">{t('shop.entitlement')}</span>
+            </Badge>
+          )}
+        </div>
+
+        <div className="mt-auto flex items-end justify-between gap-3 pt-3">
+          <PriceDisplay amount={product.basePrice ?? 0} size={18} showFree />
+
+          <div className="flex shrink-0 flex-col items-end gap-1 text-[11px] font-bold text-text-muted">
+            {(product.ratingCount ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1 text-amber-200">
+                <Star size={11} fill="currentColor" />
+                {(product.avgRating ?? 0).toFixed(1)}
+              </span>
+            )}
+            <span>
+              {t('shop.soldCount')}{' '}
+              {(product.salesCount ?? 0) > 999 ? '999+' : (product.salesCount ?? 0)}
+            </span>
+          </div>
         </div>
       </CardContent>
     </Card>

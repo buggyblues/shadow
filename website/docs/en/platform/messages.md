@@ -12,7 +12,7 @@ POST /api/channels/:channelId/messages
 | `threadId` | string | No | Thread ID for thread replies |
 | `replyToId` | string | No | Message ID being replied to |
 | `metadata.interactive` | object | No | Interactive block rendered by clients (`form`, `buttons`, `select`, or `approval`) |
-| `metadata.commerceCards` | array | No | Commerce cards. Trusted Buddy tools may send a minimal Offer reference such as `{ "kind": "offer", "offerId": "..." }`; the server rebuilds the product, price, and entitlement snapshot before storing the message. |
+| `metadata.commerceCards` | array | No | Commerce cards. Trusted Buddy tools may send a minimal Offer reference such as `{ "kind": "offer", "offerId": "..." }`; the server rebuilds the product, price, shop, delivery promise, and entitlement snapshot before storing the message. |
 
 :::code-group
 

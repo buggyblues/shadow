@@ -1,26 +1,113 @@
-import { getCatAvatar } from '@shadowob/shared'
-import { Badge, Button, Card, cn, EmptyState, GlassHeader, GlassPanel, Input } from '@shadowob/ui'
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Badge, Button, cn, EmptyState, GlassPanel, Input } from '@shadowob/ui'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
-import { ArrowRight, Flame, Hash, Search, Server, Users, Zap } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ArrowRight,
+  Bot,
+  Cloud,
+  Coins,
+  Compass,
+  Loader2,
+  type LucideIcon,
+  Package,
+  Play,
+  Search,
+  Server,
+  Store,
+} from 'lucide-react'
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  BuddyListingCard,
+  type BuddyListingCardData,
+} from '../components/buddy-market/buddy-listing-card'
+import {
+  type CloudTemplateSource,
+  DiscoverCloudTemplateCard,
+  toTemplateCatalogSummary,
+} from '../components/discover/cloud-template-card'
+import { DiscoverPlayCard, type DiscoverPlayCardData } from '../components/discover/play-card'
+import { DiscoverShopCard, type DiscoverShopCardData } from '../components/discover/shop-card'
+import { ProductCard, type ProductCardProduct } from '../components/shop/ui/product-card'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
 
-type FeedItemType = 'server' | 'channel' | 'rental'
-type FilterType = 'all' | 'servers' | 'channels' | 'rentals'
+type HubSection = 'all' | 'plays' | 'buddies' | 'products' | 'shops' | 'cloud' | 'communities'
 
-interface FeedItem {
-  id: string
-  type: FeedItemType
-  heatScore: number
-  data: ServerData | ChannelData | RentalData
+interface ServerEntry {
+  server: { id: string; name: string; slug: string | null; iconUrl: string | null }
+  member: { role: string }
 }
 
-interface ServerData {
+interface HubOwner {
+  id: string
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+}
+
+interface HubServer {
+  id: string
+  name: string
+  slug: string | null
+  iconUrl: string | null
+}
+
+interface HubBuddy {
+  id: string
+  title: string
+  description: string | null
+  skills: string[] | null
+  tags: string[] | null
+  deviceTier: string | null
+  osType: string | null
+  baseDailyRate: number
+  messageFee: number
+  rentalCount: number
+  viewCount: number
+  buddy: HubOwner | null
+  owner: HubOwner | null
+}
+
+interface HubProduct {
+  id: string
+  name: string
+  summary: string | null
+  description: string | null
+  type: 'physical' | 'entitlement' | string
+  billingMode: string
+  price: number
+  currency: string
+  salesCount: number
+  ratingCount: number
+  avgRating: number
+  imageUrl: string | null
+  shop: {
+    id: string
+    name: string
+    scopeKind: 'server' | 'user' | string
+    logoUrl: string | null
+    bannerUrl: string | null
+    server: HubServer | null
+    owner: HubOwner | null
+  }
+}
+
+interface HubShop {
+  id: string
+  name: string
+  description: string | null
+  scopeKind: 'server' | 'user' | string
+  logoUrl: string | null
+  bannerUrl: string | null
+  productCount: number
+  server: HubServer | null
+  owner: HubOwner | null
+}
+
+interface HubCommunity {
   id: string
   name: string
   slug: string | null
@@ -28,95 +115,69 @@ interface ServerData {
   iconUrl: string | null
   bannerUrl: string | null
   memberCount: number
-  isPublic: boolean
   inviteCode: string
-  createdAt: string
+  heatScore: number
 }
 
-interface ChannelData {
-  id: string
-  name: string
-  type: 'text' | 'voice' | 'announcement'
-  topic: string | null
-  server: {
-    id: string
-    name: string
-    slug: string | null
-    iconUrl: string | null
-  }
-  memberCount: number
-  lastMessage: {
-    content: string
-    createdAt: string
-  } | null
-}
-
-interface RentalData {
-  contractId: string
-  contractNo: string
-  startedAt: string
-  expiresAt: string | null
-  listing: {
-    id: string
-    title: string
-    description: string | null
-    deviceTier: string | null
-    osType: string | null
-    hourlyRate: number
-    tags: string[] | null
-  } | null
-  tenant: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-  } | null
-  owner: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-  } | null
-  agent: {
-    id: string
-    name: string
-    status: string
-    lastHeartbeat: string | null
-  } | null
-}
-
-interface ServerEntry {
-  server: { id: string; name: string; slug: string | null; iconUrl: string | null }
-  member: { role: string }
-}
-
-interface FeedResponse {
-  items: FeedItem[]
-  total: number
-  hasMore: boolean
-}
+type PlayAvailability = 'available' | 'gated' | 'coming_soon' | 'misconfigured'
 
 interface PlayCatalogItem {
   id: string
+  image: string
   title: string
   titleEn: string
   desc: string
   descEn: string
   category: string
   categoryEn: string
-  status: 'available' | 'gated' | 'coming_soon' | 'misconfigured'
+  starts: string
+  accentColor: string
+  hot?: boolean
+  status: PlayAvailability
+  action?: {
+    kind: 'public_channel' | 'private_room' | 'cloud_deploy' | 'external_oauth_app' | 'landing_page'
+    templateSlug?: string
+  }
+  template?: {
+    slug: string
+  }
 }
 
-/* ── Neon Frost glass helpers ── */
-const neonSpinner =
-  'animate-spin w-8 h-8 rounded-full border-2 border-primary border-t-transparent drop-shadow-[0_0_6px_rgba(0,243,255,0.5)]'
+interface DiscoverCommerceResponse {
+  buddies: HubBuddy[]
+  products: HubProduct[]
+  shops: HubShop[]
+  communities: HubCommunity[]
+  totals: {
+    buddies: number
+    products: number
+    shops: number
+    communities: number
+  }
+}
 
-const FILTER_ITEMS = [
-  { key: 'all', labelKey: 'discover.filters.all', icon: Flame },
-  { key: 'servers', labelKey: 'discover.filters.servers', icon: Server },
-  { key: 'channels', labelKey: 'discover.filters.channels', icon: Hash },
-  { key: 'rentals', labelKey: 'discover.filters.rentals', icon: Zap },
-] as const
+const HUB_SECTIONS: Array<{ key: HubSection; icon: LucideIcon }> = [
+  { key: 'all', icon: Compass },
+  { key: 'plays', icon: Play },
+  { key: 'buddies', icon: Bot },
+  { key: 'products', icon: Package },
+  { key: 'shops', icon: Store },
+  { key: 'cloud', icon: Cloud },
+  { key: 'communities', icon: Server },
+]
+
+const FEATURED_LIMIT = 6
+const SECTION_PAGE_SIZE = 12
+
+const initialSectionPages: Record<HubSection, number> = {
+  all: 1,
+  plays: 1,
+  buddies: 1,
+  products: 1,
+  shops: 1,
+  cloud: 1,
+  communities: 1,
+}
 
 export function DiscoverPage() {
   const { t, i18n } = useTranslation()
@@ -124,8 +185,21 @@ export function DiscoverPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
-  const [isSearching, setIsSearching] = useState(false)
+  const [activeSection, setActiveSection] = useState<HubSection>('all')
+  const [sectionPages, setSectionPages] = useState<Record<HubSection, number>>(initialSectionPages)
+  const normalizedSearch = searchQuery.trim()
+  const effectiveSearch = normalizedSearch.length >= 2 ? normalizedSearch : ''
+  const searchHints = useMemo(
+    () => [
+      t('discover.searchHints.buddy'),
+      t('discover.searchHints.service'),
+      t('discover.searchHints.shop'),
+      t('discover.searchHints.server'),
+      t('discover.searchHints.cloud'),
+    ],
+    [t],
+  )
+  const typedSearchPlaceholder = useTypewriterPlaceholder(searchHints)
 
   useAppStatus({
     title: t('discover.title'),
@@ -138,55 +212,54 @@ export function DiscoverPage() {
     queryKey: ['servers'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
   })
-  const { data: playCatalog } = useQuery({
-    queryKey: ['play-catalog', 'discover'],
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['discover-commerce', effectiveSearch],
+    queryFn: () =>
+      fetchApi<DiscoverCommerceResponse>(
+        `/api/discover/business?limit=48${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
+      ),
+  })
+
+  const { data: playData } = useQuery({
+    queryKey: ['discover-plays'],
     queryFn: () => fetchApi<{ plays: PlayCatalogItem[] }>('/api/play/catalog'),
   })
 
+  const { data: cloudTemplates = [] } = useQuery({
+    queryKey: ['discover-cloud-templates', i18n.language, effectiveSearch],
+    queryFn: () =>
+      fetchApi<CloudTemplateSource[]>(
+        `/api/cloud-saas/templates?locale=${encodeURIComponent(i18n.language)}${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
+      ),
+    retry: false,
+  })
+
+  useEffect(() => {
+    setSectionPages(initialSectionPages)
+  }, [effectiveSearch])
+
   const joinedServerIds = useMemo(() => new Set(myServers.map((s) => s.server.id)), [myServers])
-  const featuredPlays = useMemo(() => {
-    const plays = (playCatalog?.plays ?? []).filter((play) =>
-      ['available', 'gated'].includes(play.status),
-    )
-    const littleMatchGirl = plays.find((play) => play.id === 'little-match-girl')
-    const rest = plays.filter((play) => play.id !== 'little-match-girl')
-    return [...(littleMatchGirl ? [littleMatchGirl] : []), ...rest].slice(0, 4)
-  }, [playCatalog])
-
-  // 无限滚动加载推荐流
-  const {
-    data: feedData,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading: feedLoading,
-  } = useInfiniteQuery({
-    queryKey: ['discover-feed', activeFilter],
-    queryFn: async ({ pageParam = 0 }) => {
-      const res = await fetchApi<FeedResponse>(
-        `/api/discover/feed?type=${activeFilter}&limit=20&offset=${pageParam}`,
-      )
-      return res
-    },
-    getNextPageParam: (lastPage, pages) => {
-      if (!lastPage.hasMore) return undefined
-      return pages.length * 20
-    },
-    initialPageParam: 0,
-  })
-
-  // 搜索
-  const { data: searchResults, isLoading: searchLoading } = useQuery({
-    queryKey: ['discover-search', searchQuery, activeFilter],
-    queryFn: async () => {
-      if (!searchQuery || searchQuery.length < 2) return { items: [] }
-      const res = await fetchApi<{ items: FeedItem[] }>(
-        `/api/discover/search?q=${encodeURIComponent(searchQuery)}&type=${activeFilter}`,
-      )
-      return res
-    },
-    enabled: isSearching && searchQuery.length >= 2,
-  })
+  const hub = data ?? {
+    buddies: [],
+    products: [],
+    shops: [],
+    communities: [],
+    totals: { buddies: 0, products: 0, shops: 0, communities: 0 },
+  }
+  const plays = useMemo(
+    () => sortPlays(filterPlays(playData?.plays ?? [], effectiveSearch)),
+    [effectiveSearch, playData?.plays],
+  )
+  const buddies = useMemo(() => sortBuddies(hub.buddies), [hub.buddies])
+  const products = useMemo(() => sortProducts(hub.products), [hub.products])
+  const shops = useMemo(() => sortShops(hub.shops), [hub.shops])
+  const communities = useMemo(() => sortCommunities(hub.communities), [hub.communities])
+  const cloudCards = useMemo(
+    () => cloudTemplates.map(toTemplateCatalogSummary).sort(sortCloudTemplates),
+    [cloudTemplates],
+  )
+  const isZh = i18n.language.startsWith('zh')
 
   const joinMutation = useMutation({
     mutationFn: ({ inviteCode }: { inviteCode: string }) =>
@@ -194,674 +267,719 @@ export function DiscoverPage() {
         method: 'POST',
         body: JSON.stringify({ inviteCode }),
       }),
-    onSuccess: (data) => {
+    onSuccess: (server) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      navigate({
-        to: '/servers/$serverSlug',
-        params: { serverSlug: data.slug ?? data.id },
-      })
+      navigate({ to: '/servers/$serverSlug', params: { serverSlug: server.slug ?? server.id } })
     },
   })
 
-  // 合并所有页面数据
-  const allItems = useMemo(() => {
-    if (isSearching) return searchResults?.items || []
-    return feedData?.pages.flatMap((page) => page.items) || []
-  }, [feedData, searchResults, isSearching])
-
-  // 监听滚动加载更多
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const loadMoreRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (isSearching) return
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage({})
-        }
-      },
-      { threshold: 0.1 },
-    )
-
-    if (loadMoreRef.current) {
-      observerRef.current.observe(loadMoreRef.current)
-    }
-
-    return () => observerRef.current?.disconnect()
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isSearching])
-
-  const handleSearch = (value: string) => {
-    setSearchQuery(value)
-    if (value.length >= 2) setIsSearching(true)
-    else setIsSearching(false)
+  const selectSection = (section: HubSection) => {
+    setActiveSection(section)
+    setSectionPages((current) => ({ ...current, [section]: 1 }))
   }
 
-  const activeFilterItem = FILTER_ITEMS.find((item) => item.key === activeFilter) ?? FILTER_ITEMS[0]
-  const ActiveFilterIcon = activeFilterItem.icon
+  const loadMore = (section: HubSection) => {
+    setSectionPages((current) => ({ ...current, [section]: current[section] + 1 }))
+  }
+
+  const sectionItems = <T,>(items: T[], section: HubSection) =>
+    activeSection === 'all'
+      ? items.slice(0, FEATURED_LIMIT)
+      : items.slice(0, sectionPages[section] * SECTION_PAGE_SIZE)
+
+  const visiblePlays = sectionItems(plays, 'plays')
+  const visibleBuddies = sectionItems(buddies, 'buddies')
+  const visibleProducts = sectionItems(products, 'products')
+  const visibleShops = sectionItems(shops, 'shops')
+  const visibleCommunities = sectionItems(communities, 'communities')
+  const visibleCloudCards =
+    activeSection === 'all'
+      ? cloudCards.slice(0, Math.max(FEATURED_LIMIT - 1, 0))
+      : cloudCards.slice(0, Math.max(sectionPages.cloud * SECTION_PAGE_SIZE - 1, 0))
+
+  const hasMore = (section: HubSection, visibleCount: number, totalCount: number) =>
+    activeSection === section && visibleCount < totalCount
+
+  const counts = {
+    all:
+      plays.length +
+      buddies.length +
+      products.length +
+      shops.length +
+      cloudCards.length +
+      1 +
+      communities.length,
+    plays: plays.length,
+    buddies: hub.totals.buddies,
+    products: hub.totals.products,
+    shops: hub.totals.shops,
+    cloud: cloudCards.length + 1,
+    communities: hub.totals.communities,
+  }
+
+  const openShop = (shop: HubShop | HubProduct['shop']) => {
+    if (shop.server) {
+      navigate({
+        to: '/servers/$serverSlug/shop',
+        params: { serverSlug: shop.server.slug ?? shop.server.id },
+      })
+      return
+    }
+    if (shop.owner) {
+      navigate({
+        to: '/shop/users/$userId',
+        params: { userId: shop.owner.id },
+        search: { view: 'buyer' },
+      })
+    }
+  }
+
+  const isSearching = effectiveSearch.length > 0
+  const empty =
+    plays.length === 0 &&
+    hub.buddies.length === 0 &&
+    hub.products.length === 0 &&
+    hub.shops.length === 0 &&
+    (isSearching ? cloudCards.length === 0 : false) &&
+    hub.communities.length === 0
 
   return (
-    <div className="relative flex h-full min-h-0 overflow-hidden overflow-x-hidden">
-      {/* Ambient orb blurs */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[180px]" />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-accent/5 blur-[160px]" />
-      </div>
-
-      <div className="flex h-full min-h-0 flex-col gap-3 md:flex-row flex-1">
-        <GlassPanel as="aside" className="hidden w-[240px] shrink-0 md:flex md:flex-col">
-          <div className="border-b border-border-subtle px-4 py-4">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                <Flame size={20} className="text-primary" strokeWidth={2.5} />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4">
+          <GlassPanel className="p-4 md:p-5">
+            <div className="max-w-3xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-black text-primary">
+                <Compass size={14} />
+                {t('discover.eyebrow')}
               </div>
-              <div className="min-w-0">
-                <h1 className="truncate text-base font-black tracking-tight text-text-primary">
-                  {t('discover.title')}
-                </h1>
-              </div>
-            </div>
-
-            <div className="relative">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-text-muted"
-              />
-              <Input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder={t('discover.searchPlaceholder')}
-                className="w-full rounded-xl border-border-subtle bg-bg-tertiary/50 py-2 pl-9 pr-3 text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-2 px-3 py-3">
-            {FILTER_ITEMS.map(({ key, labelKey, icon: Icon }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => {
-                  setActiveFilter(key as FilterType)
-                  setIsSearching(false)
-                }}
-                className={cn(
-                  'flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left text-[13px] font-bold transition-all duration-200',
-                  activeFilter === key
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary',
-                )}
-              >
-                <Icon
-                  size={16}
-                  strokeWidth={activeFilter === key ? 2.8 : 2.2}
-                  className={cn(
-                    'shrink-0 transition-colors',
-                    activeFilter === key ? 'text-primary' : 'text-text-muted',
-                  )}
+              <h1 className="text-2xl font-black leading-tight text-text-primary md:text-3xl">
+                {t('discover.businessTitle')}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
+                {t('discover.businessSubtitle')}
+              </p>
+              <div className="mt-4 max-w-xl">
+                <Input
+                  icon={Search}
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={typedSearchPlaceholder || t('discover.searchPlaceholder')}
+                  className="!rounded-lg"
                 />
-                <span className="truncate">{t(labelKey)}</span>
-              </button>
-            ))}
-          </div>
-        </GlassPanel>
-
-        <main className="flex h-full min-h-0 min-w-0 flex-1 w-full flex-col">
-          <div className="desktop-drag-titlebar md:hidden px-4 pt-4">
-            <GlassPanel className="border-border-subtle/70 px-6 py-5">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                    <Flame size={20} className="text-primary" strokeWidth={2.5} />
-                  </div>
-                  <h1 className="text-base font-black tracking-tight text-text-primary">
-                    {t('discover.title')}
-                  </h1>
-                </div>
-
-                <div className="hidden w-72 md:block">
-                  <div className="relative">
-                    <Search
-                      size={16}
-                      className="absolute left-3 top-1/2 z-10 -translate-y-1/2 text-text-muted"
-                    />
-                    <Input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => handleSearch(e.target.value)}
-                      placeholder={t('discover.searchPlaceholder')}
-                      className="w-full rounded-xl border-border-subtle bg-bg-tertiary/50 py-2 pl-9 pr-3 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto scrollbar-hidden">
-                {FILTER_ITEMS.map(({ key, labelKey, icon: Icon }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => {
-                      setActiveFilter(key as FilterType)
-                      setIsSearching(false)
-                    }}
-                    className={cn(
-                      'flex items-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest transition-all active:scale-95',
-                      activeFilter === key
-                        ? 'bg-primary/15 text-primary ring-1 ring-primary/20'
-                        : 'text-text-muted hover:bg-bg-tertiary/50 hover:text-text-primary',
-                    )}
-                  >
-                    <Icon size={14} strokeWidth={activeFilter === key ? 3 : 2} />
-                    {t(labelKey)}
-                  </button>
-                ))}
-              </div>
-            </GlassPanel>
-          </div>
-
-          <GlassPanel className="flex-1 min-h-0 w-full flex flex-col md:h-full">
-            <GlassHeader className="hidden items-center justify-between gap-4 border-b border-border-subtle/70 px-4 py-4 md:flex">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <ActiveFilterIcon size={20} strokeWidth={2.5} />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="truncate text-base font-black tracking-tight text-text-primary">
-                    {t(activeFilterItem.labelKey)}
-                  </h2>
-                </div>
-              </div>
-
-              <Badge variant="neutral" className="shrink-0">
-                {allItems.length}
-              </Badge>
-            </GlassHeader>
-
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="w-full px-4 py-4 md:p-6">
-                {!isSearching && featuredPlays.length > 0 && (
-                  <section className="mb-5">
-                    <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-                      <div>
-                        <h2 className="text-base font-black text-text-primary">
-                          {t('discover.playsTitle')}
-                        </h2>
-                        <p className="mt-1 text-xs font-medium text-text-muted">
-                          {t('discover.playsSubtitle')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      {featuredPlays.map((play) => {
-                        const isZh = i18n.language.startsWith('zh')
-                        const title = isZh ? play.title : play.titleEn
-                        const desc = isZh ? play.desc : play.descEn
-                        const category = isZh ? play.category : play.categoryEn
-                        return (
-                          <button
-                            key={play.id}
-                            type="button"
-                            onClick={() =>
-                              navigate({
-                                to: '/play/launch',
-                                search: { play: play.id },
-                              })
-                            }
-                            className="group rounded-lg border border-border-subtle bg-bg-secondary/70 p-4 text-left transition hover:border-primary/50 hover:bg-bg-secondary"
-                          >
-                            <div className="mb-3 flex items-center justify-between gap-3">
-                              <span className="inline-flex items-center gap-2 rounded-lg bg-primary/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-widest text-primary">
-                                <Zap size={13} />
-                                {category}
-                              </span>
-                              <span className="text-xs font-bold text-text-muted">
-                                {play.status === 'gated'
-                                  ? t('discover.memberPlay')
-                                  : t('discover.readyPlay')}
-                              </span>
-                            </div>
-                            <div className="font-black text-text-primary">{title}</div>
-                            <p className="mt-2 line-clamp-2 text-sm leading-6 text-text-muted">
-                              {desc}
-                            </p>
-                            <div className="mt-4 inline-flex items-center gap-2 text-sm font-black text-primary">
-                              {t('discover.startPlay')}
-                              <ArrowRight
-                                size={14}
-                                className="transition group-hover:translate-x-0.5"
-                              />
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </section>
-                )}
-                {isSearching && searchLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 animate-bounce">
-                        <div className="h-6 w-6 rounded-full bg-primary" />
-                      </div>
-                      <span className="animate-pulse text-xs font-black uppercase tracking-widest text-primary">
-                        {t('common.loading')}...
-                      </span>
-                    </div>
-                  </div>
-                ) : allItems.length === 0 ? (
-                  <EmptyState
-                    icon={Search}
-                    title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
-                    description={
-                      isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')
-                    }
-                  />
-                ) : (
-                  <div className="grid w-full gap-5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
-                    {allItems.map((item, index) => (
-                      <FeedCard
-                        key={`${item.type}-${item.id}-${index}`}
-                        item={item}
-                        joinedServerIds={joinedServerIds}
-                        joinMutation={joinMutation}
-                        navigate={navigate}
-                        t={t}
-                      />
-                    ))}
-
-                    {!isSearching && (
-                      <div ref={loadMoreRef} className="col-span-full py-6 text-center">
-                        {isFetchingNextPage ? (
-                          <div className="mx-auto h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                        ) : hasNextPage ? (
-                          <span className="text-xs font-black uppercase tracking-widest text-text-muted/40">
-                            {t('discover.loadMore')}
-                          </span>
-                        ) : (
-                          <span className="text-xs font-black uppercase tracking-widest text-text-muted/40">
-                            {t('discover.noMore')}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </GlassPanel>
-        </main>
+
+          <div className="flex flex-wrap gap-2">
+            {HUB_SECTIONS.map((section) => {
+              const Icon = section.icon
+              return (
+                <button
+                  key={section.key}
+                  type="button"
+                  onClick={() => selectSection(section.key)}
+                  className={cn(
+                    'inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-black transition',
+                    activeSection === section.key
+                      ? 'border-primary/60 bg-primary/15 text-primary'
+                      : 'border-border-subtle bg-bg-secondary/65 text-text-muted hover:border-primary/30 hover:text-text-primary',
+                  )}
+                >
+                  <Icon size={15} />
+                  {t(`discover.sections.${section.key}`)}
+                  <span className="rounded-full bg-bg-primary/70 px-1.5 py-0.5 text-[10px]">
+                    {counts[section.key]}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {isLoading ? (
+            <GlassPanel className="flex min-h-[360px] items-center justify-center text-primary">
+              <Loader2 className="animate-spin" />
+            </GlassPanel>
+          ) : empty ? (
+            <GlassPanel className="p-6">
+              <EmptyState
+                icon={Search}
+                title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
+                description={
+                  isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')
+                }
+              />
+            </GlassPanel>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {(activeSection === 'all' || activeSection === 'plays') && (
+                <HubLane
+                  title={t('discover.lanes.plays')}
+                  action={activeSection === 'all' ? t('discover.viewAll') : undefined}
+                  onAction={() => selectSection('plays')}
+                  hasMore={hasMore('plays', visiblePlays.length, plays.length)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  onLoadMore={() => loadMore('plays')}
+                >
+                  {visiblePlays.length ? (
+                    visiblePlays.map((play) => (
+                      <DiscoverPlayCard
+                        key={play.id}
+                        play={toDiscoverPlayCardData(play, isZh, t)}
+                        actionLabel={t('discover.startPlay')}
+                        onOpen={() =>
+                          navigate({
+                            to: '/play/launch',
+                            search: { play: play.id },
+                          })
+                        }
+                      />
+                    ))
+                  ) : (
+                    <LaneEmpty text={t('discover.emptyLane.plays')} />
+                  )}
+                </HubLane>
+              )}
+
+              {(activeSection === 'all' || activeSection === 'buddies') && (
+                <HubLane
+                  title={t('discover.lanes.buddies')}
+                  action={activeSection === 'all' ? t('discover.viewAll') : undefined}
+                  onAction={() => selectSection('buddies')}
+                  hasMore={hasMore('buddies', visibleBuddies.length, buddies.length)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  onLoadMore={() => loadMore('buddies')}
+                >
+                  {visibleBuddies.length ? (
+                    visibleBuddies.map((item) => (
+                      <BuddyListingCard
+                        key={item.id}
+                        listing={toBuddyListingCardData(item)}
+                        onOpen={() =>
+                          navigate({
+                            to: '/marketplace/$listingId',
+                            params: { listingId: item.id },
+                            search: { from: 'discover' },
+                          })
+                        }
+                      />
+                    ))
+                  ) : (
+                    <LaneEmpty text={t('discover.emptyLane.buddies')} />
+                  )}
+                </HubLane>
+              )}
+
+              {(activeSection === 'all' || activeSection === 'products') && (
+                <HubLane
+                  title={t('discover.lanes.products')}
+                  action={activeSection === 'all' ? t('discover.viewAll') : undefined}
+                  onAction={() => selectSection('products')}
+                  hasMore={hasMore('products', visibleProducts.length, products.length)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  onLoadMore={() => loadMore('products')}
+                >
+                  {visibleProducts.length ? (
+                    visibleProducts.map((item) => (
+                      <ProductCard
+                        key={item.id}
+                        product={toProductCardProduct(item)}
+                        shopName={item.shop.name}
+                        serverName={item.shop.server?.name ?? null}
+                        onClick={() =>
+                          navigate({
+                            to: '/shop/products/$productId',
+                            params: { productId: item.id },
+                          })
+                        }
+                        onShopClick={() => openShop(item.shop)}
+                      />
+                    ))
+                  ) : (
+                    <LaneEmpty text={t('discover.emptyLane.products')} />
+                  )}
+                </HubLane>
+              )}
+
+              {(activeSection === 'all' || activeSection === 'cloud') && (
+                <HubLane
+                  title={t('discover.lanes.cloud')}
+                  action={activeSection === 'all' ? t('discover.viewAll') : undefined}
+                  onAction={() => selectSection('cloud')}
+                  hasMore={hasMore('cloud', visibleCloudCards.length + 1, cloudCards.length + 1)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  onLoadMore={() => loadMore('cloud')}
+                >
+                  <CloudCashbackCard
+                    t={t}
+                    onOpen={() => {
+                      navigate({ to: '/cloud/diy' })
+                    }}
+                  />
+                  {visibleCloudCards.map((template) => (
+                    <DiscoverCloudTemplateCard
+                      key={template.name}
+                      template={template}
+                      locale={i18n.language}
+                      categoryLabel={template.category}
+                      difficultyLabel={t(`discover.cloudDifficulty.${template.difficulty}`)}
+                      cashbackLabel={t('discover.templateCashbackHint')}
+                      deployLabel={t('discover.cloudTemplateAction')}
+                      agentCountLabel={t('discover.cloudMetricAgents')}
+                      popularityLabel={t('discover.cloudMetricPopularity')}
+                      summaryFallback={t('discover.cloudTemplateFallback')}
+                    />
+                  ))}
+                </HubLane>
+              )}
+
+              {(activeSection === 'all' || activeSection === 'shops') && (
+                <HubLane
+                  title={t('discover.lanes.shops')}
+                  action={activeSection === 'all' ? t('discover.viewAll') : undefined}
+                  onAction={() => selectSection('shops')}
+                  hasMore={hasMore('shops', visibleShops.length, shops.length)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  onLoadMore={() => loadMore('shops')}
+                >
+                  {visibleShops.length ? (
+                    visibleShops.map((shop) => (
+                      <DiscoverShopCard
+                        key={shop.id}
+                        shop={toDiscoverShopCardData(shop, t)}
+                        actionLabel={t('discover.openShop')}
+                        onOpen={() => openShop(shop)}
+                      />
+                    ))
+                  ) : (
+                    <LaneEmpty text={t('discover.emptyLane.shops')} />
+                  )}
+                </HubLane>
+              )}
+
+              {(activeSection === 'all' || activeSection === 'communities') && (
+                <HubLane
+                  title={t('discover.lanes.communities')}
+                  action={activeSection === 'all' ? t('discover.viewAll') : undefined}
+                  onAction={() => selectSection('communities')}
+                  hasMore={hasMore('communities', visibleCommunities.length, communities.length)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  onLoadMore={() => loadMore('communities')}
+                >
+                  {visibleCommunities.length ? (
+                    visibleCommunities.map((community) => (
+                      <CommunityHubCard
+                        key={community.id}
+                        community={community}
+                        joined={joinedServerIds.has(community.id)}
+                        pending={joinMutation.isPending}
+                        t={t}
+                        onEnter={() =>
+                          navigate({
+                            to: '/servers/$serverSlug',
+                            params: { serverSlug: community.slug ?? community.id },
+                          })
+                        }
+                        onJoin={() => joinMutation.mutate({ inviteCode: community.inviteCode })}
+                      />
+                    ))
+                  ) : (
+                    <LaneEmpty text={t('discover.emptyLane.communities')} />
+                  )}
+                </HubLane>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-const FEED_CARD_CLASS =
-  'relative overflow-hidden rounded-2xl bg-bg-secondary/90 p-5 min-h-[250px] shadow-sm ring-1 ring-border-subtle/12'
-const FEED_CARD_GLOW =
-  'after:pointer-events-none after:absolute after:inset-0 after:rounded-2xl after:opacity-35 after:transition-opacity after:duration-300 hover:after:opacity-100'
-const FEED_CARD_THEME: Record<
-  FeedItemType,
-  {
-    chipClass: string
-    iconClass: string
-  }
-> = {
-  server: {
-    chipClass: 'bg-primary/12 text-primary',
-    iconClass: 'text-primary',
-  },
-  channel: {
-    chipClass: 'bg-success/12 text-success',
-    iconClass: 'text-success',
-  },
-  rental: {
-    chipClass: 'bg-accent/12 text-accent',
-    iconClass: 'text-accent',
-  },
+function handleCardKey(event: KeyboardEvent, onOpen: () => void) {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  onOpen()
 }
 
-function FeedCard({
-  item,
-  joinedServerIds,
-  joinMutation,
-  navigate,
-  t,
+function useTypewriterPlaceholder(values: string[]) {
+  const [hintIndex, setHintIndex] = useState(0)
+  const [charCount, setCharCount] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+  const current = values[hintIndex] ?? values[0] ?? ''
+
+  useEffect(() => {
+    if (!current) return
+    const isComplete = charCount >= current.length
+    const isEmpty = charCount <= 0
+    const delay = isComplete && !deleting ? 1100 : deleting ? 34 : 58
+
+    const timer = window.setTimeout(() => {
+      if (isComplete && !deleting) {
+        setDeleting(true)
+        return
+      }
+      if (isEmpty && deleting) {
+        setDeleting(false)
+        setHintIndex((index) => (index + 1) % Math.max(values.length, 1))
+        return
+      }
+      setCharCount((count) => count + (deleting ? -1 : 1))
+    }, delay)
+
+    return () => window.clearTimeout(timer)
+  }, [charCount, current, deleting, values.length])
+
+  return current.slice(0, charCount) || values[0] || ''
+}
+
+function filterPlays(plays: PlayCatalogItem[], query: string) {
+  const normalized = query.trim().toLowerCase()
+  const visible = plays.filter((play) => play.status !== 'misconfigured')
+  if (!normalized) return visible
+  return visible.filter((play) =>
+    [play.title, play.titleEn, play.desc, play.descEn, play.category, play.categoryEn]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(normalized)),
+  )
+}
+
+function sortPlays(plays: PlayCatalogItem[]) {
+  const statusRank: Record<PlayAvailability, number> = {
+    available: 0,
+    gated: 1,
+    coming_soon: 2,
+    misconfigured: 3,
+  }
+  return [...plays].sort((a, b) => {
+    const statusDelta = statusRank[a.status] - statusRank[b.status]
+    if (statusDelta !== 0) return statusDelta
+    if (a.hot !== b.hot) return a.hot ? -1 : 1
+    return a.title.localeCompare(b.title)
+  })
+}
+
+function sortBuddies(buddies: HubBuddy[]) {
+  return [...buddies].sort(
+    (a, b) =>
+      b.rentalCount * 6 + b.viewCount - (a.rentalCount * 6 + a.viewCount) ||
+      b.messageFee - a.messageFee ||
+      a.title.localeCompare(b.title),
+  )
+}
+
+function sortProducts(products: HubProduct[]) {
+  return [...products].sort(
+    (a, b) =>
+      b.salesCount * 6 +
+        b.ratingCount * 2 +
+        b.avgRating -
+        (a.salesCount * 6 + a.ratingCount * 2 + a.avgRating) || a.name.localeCompare(b.name),
+  )
+}
+
+function sortShops(shops: HubShop[]) {
+  return [...shops].sort(
+    (a, b) => (b.productCount ?? 0) - (a.productCount ?? 0) || a.name.localeCompare(b.name),
+  )
+}
+
+function sortCommunities(communities: HubCommunity[]) {
+  return [...communities].sort(
+    (a, b) =>
+      b.heatScore - a.heatScore || b.memberCount - a.memberCount || a.name.localeCompare(b.name),
+  )
+}
+
+function sortCloudTemplates(
+  a: ReturnType<typeof toTemplateCatalogSummary>,
+  b: ReturnType<typeof toTemplateCatalogSummary>,
+) {
+  if (a.featured !== b.featured) return a.featured ? -1 : 1
+  return b.popularity - a.popularity || a.title.localeCompare(b.title)
+}
+
+function toDiscoverPlayCardData(
+  play: PlayCatalogItem,
+  isZh: boolean,
+  t: TFunction,
+): DiscoverPlayCardData {
+  return {
+    id: play.id,
+    title: isZh ? play.title : play.titleEn,
+    description: isZh ? play.desc : play.descEn,
+    category: isZh ? play.category : play.categoryEn,
+    image: play.image,
+    accentColor: play.accentColor,
+    statusLabel: play.status === 'gated' ? t('discover.memberPlay') : t('discover.readyPlay'),
+    statusTone: play.status === 'gated' ? 'warning' : 'success',
+    startsLabel: play.starts,
+  }
+}
+
+function toDiscoverShopCardData(shop: HubShop, t: TFunction): DiscoverShopCardData {
+  const ownerName =
+    shop.server?.name ?? shop.owner?.displayName ?? shop.owner?.username ?? t('common.unknown')
+  const scopeKind = shop.scopeKind === 'server' ? 'server' : 'user'
+
+  return {
+    id: shop.id,
+    name: shop.name,
+    description: shop.description,
+    scopeKind,
+    logoUrl: shop.logoUrl,
+    bannerUrl: shop.bannerUrl,
+    productCount: shop.productCount,
+    ownerName,
+    scopeLabel: t(`discover.shopScope.${scopeKind}`),
+    productCountLabel: t('discover.productCount', { count: shop.productCount }),
+    fallbackDescription: t('discover.shopFallback'),
+  }
+}
+
+function HubLane({
+  title,
+  action,
+  onAction,
+  hasMore,
+  loadMoreLabel,
+  onLoadMore,
+  children,
 }: {
-  item: FeedItem
-  joinedServerIds: Set<string>
-  joinMutation: {
-    mutate: (variables: { inviteCode: string }) => void
-    isPending: boolean
-  }
-  navigate: ReturnType<typeof useNavigate>
-  t: TFunction
+  title: string
+  action?: string
+  onAction?: () => void
+  hasMore?: boolean
+  loadMoreLabel?: string
+  onLoadMore?: () => void
+  children: ReactNode
 }) {
-  if (item.type === 'server') {
-    const server = item.data as ServerData
-    const isJoined = joinedServerIds.has(server.id)
-
-    return (
-      <Card
-        variant="default"
-        hoverable
-        onClick={() => {
-          if (isJoined) {
-            navigate({
-              to: '/servers/$serverSlug',
-              params: { serverSlug: server.slug ?? server.id },
-            })
-          }
-        }}
-        className={cn(
-          FEED_CARD_CLASS,
-          FEED_CARD_GLOW,
-          'overflow-hidden relative cursor-pointer group',
+  return (
+    <GlassPanel className="p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-base font-black text-text-primary">{title}</h2>
+        {action && (
+          <button
+            type="button"
+            onClick={onAction}
+            className="inline-flex items-center gap-1 text-xs font-black text-primary"
+          >
+            {action}
+            <ArrowRight size={13} />
+          </button>
         )}
-      >
-        <div className="relative z-10 flex h-full flex-col">
-          <div className="mb-4 flex items-center justify-between">
-            <div
-              className={cn(
-                'inline-flex items-center gap-2 rounded-full border bg-bg-tertiary/60 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em]',
-                FEED_CARD_THEME.server.chipClass,
-              )}
-            >
-              <Server size={13} className={FEED_CARD_THEME.server.iconClass} />
-              {t('discover.filters.servers', '服务器')}
-            </div>
-            <span className="text-[11px] font-bold text-text-muted/80">
-              {t('discover.score', '热度')}
-            </span>
-          </div>
-
-          <div className="relative h-28 rounded-xl overflow-hidden bg-gradient-to-br from-primary/20 via-primary/5 to-bg-secondary/10 mb-5">
-            {server.bannerUrl ? (
-              <img
-                src={server.bannerUrl}
-                alt=""
-                className="w-full h-full object-cover opacity-75 group-hover:scale-[1.04] transition-transform duration-500"
-              />
-            ) : (
-              <div className="absolute inset-0" />
-            )}
-            <div className="absolute left-4 top-1/2 -translate-y-1/2">
-              <div className="w-14 h-14 rounded-xl overflow-hidden bg-bg-deep/75 border-4 border-bg-deep shadow-xl">
-                {server.iconUrl ? (
-                  <img src={server.iconUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <img
-                    src={getCatAvatar(0)}
-                    alt={server.name}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-              </div>
-            </div>
-            <div className="absolute left-0 right-0 bottom-2 px-3 flex items-center justify-end gap-1.5">
-              <Badge variant="neutral" size="sm" className="bg-bg-deep/55 border-border-subtle">
-                <Users size={11} />
-                {server.memberCount}
-              </Badge>
-              <Badge variant="neutral" size="sm" className="bg-bg-deep/55 border-border-subtle">
-                {item.heatScore}
-              </Badge>
-              {server.isPublic && (
-                <Badge variant="neutral" size="sm" className="bg-bg-deep/55 border-border-subtle">
-                  {t('discover.public')}
-                </Badge>
-              )}
-            </div>
-          </div>
-
-          <h3 className="font-black text-text-primary text-base mb-2 truncate tracking-tight">
-            {server.name}
-          </h3>
-          <p className="text-text-muted text-sm mb-4 line-clamp-2 min-h-[2.6rem]">
-            {server.description ?? t('discover.noDescription')}
-          </p>
-
-          <div className="mt-auto flex items-center justify-between">
-            {isJoined ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  navigate({
-                    to: '/servers/$serverSlug',
-                    params: { serverSlug: server.slug ?? server.id },
-                  })
-                }}
-                className="rounded-xl"
-              >
-                {t('discover.enterButton')}
-                <ArrowRight size={14} />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  joinMutation.mutate({ inviteCode: server.inviteCode })
-                }}
-                disabled={joinMutation.isPending}
-                className="rounded-xl"
-              >
-                {t('discover.joinButton')}
-              </Button>
-            )}
-          </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+      {hasMore && loadMoreLabel && onLoadMore ? (
+        <div className="mt-4 flex justify-center">
+          <Button type="button" variant="glass" size="sm" onClick={onLoadMore}>
+            {loadMoreLabel}
+          </Button>
         </div>
-      </Card>
-    )
+      ) : null}
+    </GlassPanel>
+  )
+}
+
+function LaneEmpty({ text }: { text: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border-subtle bg-bg-secondary/35 p-5 text-sm font-bold text-text-muted">
+      {text}
+    </div>
+  )
+}
+
+function toBuddyListingCardData(item: HubBuddy): BuddyListingCardData {
+  const owner = item.owner ?? item.buddy
+
+  return {
+    id: item.id,
+    ownerId: owner?.id ?? item.owner?.id ?? item.buddy?.id ?? null,
+    title: item.title,
+    description: item.description,
+    skills: item.skills,
+    tags: item.tags,
+    hourlyRate: item.messageFee,
+    viewCount: item.viewCount,
+    rentalCount: item.rentalCount,
+    totalOnlineSeconds: null,
+    owner: owner
+      ? {
+          id: owner.id,
+          username: owner.username,
+          displayName: owner.displayName,
+          avatarUrl: owner.avatarUrl,
+        }
+      : null,
   }
+}
 
-  if (item.type === 'channel') {
-    const channel = item.data as ChannelData
-    const isJoined = joinedServerIds.has(channel.server.id)
+function toProductCardProduct(item: HubProduct): ProductCardProduct {
+  return {
+    id: item.id,
+    name: item.name,
+    type: item.type,
+    summary: item.summary ?? item.description,
+    description: item.description,
+    basePrice: item.price,
+    currency: item.currency,
+    tags: [],
+    salesCount: item.salesCount,
+    avgRating: item.avgRating,
+    ratingCount: item.ratingCount,
+    imageUrl: item.imageUrl,
+    entitlementConfig:
+      item.type === 'physical'
+        ? null
+        : {
+            resourceType: 'service',
+          },
+  }
+}
 
-    return (
-      <Card
-        variant="default"
-        hoverable
-        onClick={() => {
-          if (isJoined) {
-            navigate({
-              to: '/servers/$serverSlug/channels/$channelId',
-              params: {
-                serverSlug: channel.server.slug ?? channel.server.id,
-                channelId: channel.id,
-              },
-            })
-          } else {
-            navigate({
-              to: '/servers/$serverSlug',
-              params: { serverSlug: channel.server.slug ?? channel.server.id },
-            })
-          }
-        }}
-        className={cn(
-          FEED_CARD_CLASS,
-          FEED_CARD_GLOW,
-          'overflow-hidden cursor-pointer group relative',
-        )}
-      >
-        <div className="relative z-10 flex h-full flex-col">
-          <div className="mb-4 flex items-center justify-between">
-            <div
-              className={cn(
-                'inline-flex items-center gap-2 rounded-full border bg-bg-tertiary/60 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em]',
-                FEED_CARD_THEME.channel.chipClass,
-              )}
-            >
-              <Hash size={13} className={FEED_CARD_THEME.channel.iconClass} />
-              {t('discover.filters.channels', '频道')}
-            </div>
-            <span className="text-[11px] font-bold text-text-muted/80">
-              {t('discover.score', '热度')}
-            </span>
-          </div>
-
-          <div className="mb-4 flex items-start gap-3">
-            <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-bg-tertiary border border-border-subtle">
-              {channel.server.iconUrl ? (
-                <img src={channel.server.iconUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <img
-                  src={getCatAvatar(0)}
-                  alt={channel.server.name}
-                  className="w-full h-full object-cover"
-                />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-black text-base text-text-primary mb-1 truncate tracking-tight">
-                #{channel.name}
-              </h3>
-              <p className="text-text-muted text-xs truncate">{channel.server.name}</p>
-            </div>
-          </div>
-
-          <p className="text-text-muted text-sm line-clamp-2 min-h-[2.5rem]">
-            {channel.topic || t('discover.channelNoTopic', '暂无主题')}
-          </p>
-
-          {channel.lastMessage && (
-            <div className="mt-3 flex justify-end">
-              <div className="relative max-w-[92%] rounded-[16px] rounded-bl-lg border border-border-subtle/70 bg-bg-tertiary/70 px-3.5 py-2.5 shadow-sm">
-                <span className="absolute -left-[8px] top-4 h-3.5 w-3.5 rotate-45 border-l border-b border-border-subtle/70 bg-bg-tertiary/70" />
-
-                <div className="mb-1.5 flex items-center gap-1.5">
-                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.18em] text-success">
-                    {t('discover.active', '活跃')}
-                  </span>
-                </div>
-                <p className="text-text-muted text-xs leading-relaxed line-clamp-2">
-                  {channel.lastMessage.content}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-auto pt-4 flex items-center justify-between border-t border-border-subtle/60">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-text-muted">
-              <Users size={12} />
-              {channel.memberCount}
-            </span>
-            {!isJoined ? (
-              <Badge variant="neutral" size="sm">
-                {t('discover.joinToView')}
-              </Badge>
-            ) : (
-              <Badge variant="success" size="sm">
-                {t('discover.enterButton')}
-              </Badge>
-            )}
-          </div>
+function CloudCashbackCard({ t, onOpen }: { t: TFunction; onOpen: () => void }) {
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => handleCardKey(event, onOpen)}
+      className="cursor-pointer overflow-hidden rounded-[18px] border border-border-subtle bg-bg-secondary/60 shadow-[0_16px_42px_rgba(0,0,0,0.14)] transition hover:border-primary/35 hover:bg-bg-secondary/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+    >
+      <div className="relative h-36 overflow-hidden border-b border-border-subtle/70 bg-[#10242c] p-4">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,rgba(255,51,102,0.28),transparent_27%),radial-gradient(circle_at_18%_18%,rgba(0,209,255,0.22),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent)]" />
+        <Badge variant="warning" size="sm" className="relative">
+          {t('discover.cashbackBadge')}
+        </Badge>
+        <div className="relative mt-8 flex h-12 w-12 items-center justify-center rounded-[14px] bg-primary/10 text-primary ring-1 ring-primary/25">
+          <Coins size={28} />
         </div>
-      </Card>
-    )
-  }
+      </div>
+      <div className="flex min-h-[184px] flex-col p-4">
+        <h3 className="text-base font-black text-text-primary">{t('discover.cashbackTitle')}</h3>
+        <p className="mt-2 line-clamp-3 flex-1 text-sm leading-6 text-text-secondary">
+          {t('discover.cashbackDesc')}
+        </p>
+        <div className="mt-4 border-t border-border-subtle/60 pt-3">
+          <Button
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpen()
+            }}
+          >
+            {t('discover.cashbackAction')}
+          </Button>
+        </div>
+      </div>
+    </article>
+  )
+}
 
-  if (item.type === 'rental') {
-    const rental = item.data as RentalData
-
-    return (
-      <Card variant="default" hoverable className={cn(FEED_CARD_CLASS, FEED_CARD_GLOW, 'relative')}>
-        <div className="flex gap-4">
-          <div className="w-14 h-14 rounded-xl bg-accent/10 flex items-center justify-center shrink-0 border border-accent/20 shadow-inner">
-            <Zap size={24} className="text-accent" />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-full border bg-bg-tertiary/60 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em]',
-                  FEED_CARD_THEME.rental.chipClass,
-                )}
-              >
-                <Server size={13} className={FEED_CARD_THEME.rental.iconClass} />
-                {t('discover.filters.rentals', '租赁')}
-              </div>
-              <span className="inline-flex items-center gap-1 text-xs font-black text-text-muted">
-                {t('discover.score', '热度')}: {item.heatScore}
-              </span>
-            </div>
-
-            <h3 className="font-black text-text-primary text-base tracking-tight">
-              {rental.listing?.title || t('discover.unknownListing')}
-            </h3>
-            <p className="text-text-muted text-xs mb-2">
-              {rental.agent?.name || t('discover.unknownAgent')}
+function CommunityHubCard({
+  community,
+  joined,
+  pending,
+  t,
+  onEnter,
+  onJoin,
+}: {
+  community: HubCommunity
+  joined: boolean
+  pending: boolean
+  t: TFunction
+  onEnter: () => void
+  onJoin: () => void
+}) {
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={joined ? onEnter : onJoin}
+      onKeyDown={(event) => handleCardKey(event, joined ? onEnter : onJoin)}
+      className="cursor-pointer overflow-hidden rounded-[18px] border border-border-subtle bg-bg-secondary/60 shadow-[0_16px_42px_rgba(0,0,0,0.14)] transition hover:border-primary/35 hover:bg-bg-secondary/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+    >
+      <CardVisual
+        imageUrl={community.bannerUrl}
+        icon={<Server size={26} />}
+        label={community.name}
+      />
+      <div className="flex min-h-[168px] flex-col p-4">
+        <div className="mb-3 flex items-start gap-3">
+          <AvatarImage
+            imageUrl={community.iconUrl}
+            label={community.name}
+            icon={<Server size={20} />}
+          />
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-base font-black text-text-primary">{community.name}</h3>
+            <p className="mt-1 text-xs font-bold text-text-muted">
+              {t('discover.memberCount', { count: community.memberCount })}
             </p>
-
-            {rental.listing?.description && (
-              <p className="text-text-muted text-sm mt-2 line-clamp-2 min-h-[2.6rem]">
-                {rental.listing.description}
-              </p>
-            )}
-
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {rental.listing?.deviceTier && (
-                <Badge variant="neutral" size="sm">
-                  {rental.listing.deviceTier}
-                </Badge>
-              )}
-              {rental.listing?.osType && (
-                <Badge variant="neutral" size="sm">
-                  {rental.listing.osType}
-                </Badge>
-              )}
-              {rental.agent?.status && (
-                <Badge
-                  variant={
-                    rental.agent.status === 'online'
-                      ? 'success'
-                      : rental.agent.status === 'error'
-                        ? 'danger'
-                        : 'neutral'
-                  }
-                  size="sm"
-                >
-                  {rental.agent.status}
-                </Badge>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
-              <div className="w-6 h-6 rounded-lg bg-bg-tertiary/50 overflow-hidden">
-                {rental.tenant?.avatarUrl ? (
-                  <img
-                    src={rental.tenant.avatarUrl}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[11px]">
-                    👤
-                  </div>
-                )}
-              </div>
-              <span className="text-text-muted text-xs font-bold">
-                {rental.tenant?.displayName || rental.tenant?.username || t('discover.unknownUser')}
-              </span>
-              <span className="text-accent text-xs font-black ml-auto">
-                {rental.listing?.hourlyRate}
-                <span className="text-text-muted font-normal ml-1">{t('recharge.coins')}/h</span>
-              </span>
-            </div>
           </div>
+          <Badge variant={joined ? 'success' : 'neutral'}>
+            {joined ? t('discover.joined') : t('discover.public')}
+          </Badge>
         </div>
-      </Card>
-    )
-  }
+        <p className="line-clamp-2 flex-1 text-sm leading-5 text-text-secondary">
+          {community.description || t('discover.noDescription')}
+        </p>
+        <Button
+          className="mt-4 w-full"
+          variant={joined ? 'glass' : 'primary'}
+          onClick={(event) => {
+            event.stopPropagation()
+            if (joined) onEnter()
+            else onJoin()
+          }}
+          disabled={pending}
+        >
+          {pending && <Loader2 size={15} className="animate-spin" />}
+          {joined ? t('discover.enterButton') : t('discover.joinButton')}
+        </Button>
+      </div>
+    </article>
+  )
+}
 
-  return null
+function AvatarImage({
+  imageUrl,
+  label,
+  icon,
+}: {
+  imageUrl?: string | null
+  label: string
+  icon: ReactNode
+}) {
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-border-subtle bg-bg-primary text-primary">
+      {imageUrl ? <img src={imageUrl} alt={label} className="h-full w-full object-cover" /> : icon}
+    </div>
+  )
+}
+
+function CardVisual({
+  imageUrl,
+  icon,
+  label,
+}: {
+  imageUrl?: string | null
+  icon: ReactNode
+  label: string
+}) {
+  return (
+    <div className="relative h-28 overflow-hidden border-b border-border-subtle/70 bg-bg-tertiary">
+      {imageUrl ? (
+        <img src={imageUrl} alt={label} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-end justify-between bg-[radial-gradient(circle_at_82%_18%,rgba(255,255,255,0.22),transparent_28%),linear-gradient(135deg,rgba(0,243,255,0.24),rgba(71,85,105,0.18)_48%,rgba(255,42,85,0.16))] p-4 text-primary">
+          <span className="max-w-[70%] truncate text-lg font-black text-text-primary">{label}</span>
+          <span className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/15 bg-bg-primary/55">
+            {icon}
+          </span>
+        </div>
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-bg-secondary/85 via-transparent to-transparent" />
+    </div>
+  )
 }

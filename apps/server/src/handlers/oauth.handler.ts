@@ -1,11 +1,13 @@
 import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
+import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
   createOAuthAuthMiddleware,
   oauthScopeMiddleware,
 } from '../middleware/oauth-auth.middleware'
+import type { OAuthActor } from '../security/actor'
 import {
   authorizeApproveSchema,
   authorizeQuerySchema,
@@ -16,6 +18,32 @@ import {
   tokenExchangeSchema,
   updateOAuthAppSchema,
 } from '../validators/oauth.schema'
+
+const oauthCommerceEntitlementQuerySchema = z.object({
+  resourceType: z.string().min(1).max(80).optional(),
+  resourceId: z.string().min(1).max(240).optional(),
+  capability: z.string().min(1).max(80).optional(),
+})
+
+const oauthCommerceMetadataSchema = z
+  .record(
+    z.string().min(1).max(80),
+    z.union([z.string().max(500), z.number(), z.boolean(), z.null()]),
+  )
+  .refine((value) => Object.keys(value).length <= 20, {
+    message: 'metadata can include at most 20 keys',
+  })
+  .refine((value) => JSON.stringify(value).length <= 2048, {
+    message: 'metadata must be 2KB or smaller',
+  })
+
+const oauthCommerceEntitlementRedeemSchema = z.object({
+  idempotencyKey: z.string().min(8).max(200),
+  resourceType: z.string().min(1).max(80).optional(),
+  resourceId: z.string().min(1).max(240).optional(),
+  capability: z.string().min(1).max(80).optional(),
+  metadata: oauthCommerceMetadataSchema.optional(),
+})
 
 export function createOAuthHandler(container: AppContainer) {
   const oauthHandler = new Hono()
@@ -186,6 +214,46 @@ export function createOAuthHandler(container: AppContainer) {
   )
 
   // ─── OAuth API Endpoints (token-authenticated) ────
+
+  // GET /api/oauth/commerce/entitlements — app-scoped entitlement access check
+  oauthHandler.get(
+    '/commerce/entitlements',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['commerce:read']),
+    zValidator('query', oauthCommerceEntitlementQuerySchema),
+    async (c) => {
+      const entitlementAccessService = container.resolve('entitlementAccessService')
+      const query = c.req.valid('query')
+      const result = await entitlementAccessService.checkOAuthExternalAppAccess({
+        actor: c.get('actor') as OAuthActor,
+        resourceType: query.resourceType,
+        resourceId: query.resourceId,
+        capability: query.capability,
+      })
+      return c.json(result)
+    },
+  )
+
+  // POST /api/oauth/commerce/entitlements/redeem — redeem one app-scoped entitlement
+  oauthHandler.post(
+    '/commerce/entitlements/redeem',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['commerce:write']),
+    zValidator('json', oauthCommerceEntitlementRedeemSchema),
+    async (c) => {
+      const entitlementAccessService = container.resolve('entitlementAccessService')
+      const input = c.req.valid('json')
+      const result = await entitlementAccessService.redeemOAuthExternalAppEntitlement({
+        actor: c.get('actor') as OAuthActor,
+        idempotencyKey: input.idempotencyKey,
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        capability: input.capability,
+        metadata: input.metadata,
+      })
+      return c.json(result)
+    },
+  )
 
   // GET /api/oauth/servers — list user's servers
   oauthHandler.get(

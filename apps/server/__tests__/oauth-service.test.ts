@@ -1095,9 +1095,11 @@ describe('OAuthService — Buddies', () => {
    ═══════════════════════════════════════════════════════ */
 
 describe('OAuthService — Scopes', () => {
-  it('exports 14 valid scopes', () => {
-    expect(VALID_OAUTH_SCOPES).toHaveLength(14)
+  it('exports 16 valid scopes', () => {
+    expect(VALID_OAUTH_SCOPES).toHaveLength(16)
     expect(VALID_OAUTH_SCOPES).toContain('user:read')
     expect(VALID_OAUTH_SCOPES).toContain('buddies:manage')
+    expect(VALID_OAUTH_SCOPES).toContain('commerce:read')
+    expect(VALID_OAUTH_SCOPES).toContain('commerce:write')
   })
 })

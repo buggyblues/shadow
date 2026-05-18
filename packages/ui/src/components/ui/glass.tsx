@@ -5,26 +5,30 @@ type GlassVariant = 'panel' | 'surface' | 'card'
 
 const glassStyles: Record<GlassVariant, React.CSSProperties> = {
   panel: {
-    background: 'var(--glass-bg)',
+    background: 'color-mix(in srgb, var(--glass-bg) 78%, transparent)',
     border: '1px solid var(--glass-line)',
-    backdropFilter: 'blur(48px)',
-    WebkitBackdropFilter: 'blur(48px)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
     boxShadow: 'var(--nf-shadow-card, var(--shadow-soft))',
+    isolation: 'isolate',
+    contain: 'paint',
   },
+
   surface: {
-    background: 'color-mix(in srgb, var(--glass-bg) 72%, transparent)',
+    background: 'color-mix(in srgb, var(--glass-bg) 64%, transparent)',
     border: '1px solid var(--glass-line)',
-    backdropFilter: 'blur(32px)',
-    WebkitBackdropFilter: 'blur(32px)',
     boxShadow: 'var(--nf-shadow-soft, var(--shadow-soft))',
+    contain: 'paint',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
   },
+
   card: {
-    background: 'color-mix(in srgb, var(--glass-bg) 72%, transparent)',
     border: '1px solid var(--glass-line)',
     borderTop: '1px solid var(--glass-line-strong)',
-    backdropFilter: 'blur(48px)',
-    WebkitBackdropFilter: 'blur(48px)',
     boxShadow: 'var(--nf-shadow-soft, var(--shadow-soft))',
+    contain: 'paint',
+    isolation: 'isolate',
   },
 }
 

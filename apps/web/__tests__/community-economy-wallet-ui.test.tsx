@@ -159,7 +159,7 @@ describe('Community economy wallet UI', () => {
   it('renders assets and sends lifecycle actions through the economy API', async () => {
     renderWithQuery(<WalletSettings initialSection="assets" />)
 
-    expect(await screen.findByText('Founding Badge')).toBeTruthy()
+    expect((await screen.findAllByText('Founding Badge')).length).toBeGreaterThan(0)
 
     await userEvent.click(screen.getByRole('button', { name: 'communityEconomy.consume' }))
 
@@ -211,7 +211,7 @@ describe('Community economy wallet UI', () => {
   it('submits gifts from the asset scene with selected assets', async () => {
     renderWithQuery(<WalletSettings initialSection="assets" />)
 
-    expect(await screen.findByText('Founding Badge')).toBeTruthy()
+    expect((await screen.findAllByText('Founding Badge')).length).toBeGreaterThan(0)
     await userEvent.click(screen.getAllByRole('button', { name: 'communityEconomy.sendGift' })[0]!)
     await userEvent.click(await screen.findByText('Recipient Two'))
     const giftButtons = screen.getAllByRole('button', { name: 'communityEconomy.sendGift' })

@@ -131,6 +131,20 @@ export class EntitlementPurchaseService {
       throw apiError('SKU_NOT_AVAILABLE', 400)
     }
     const price = offer.priceOverride ?? sku?.price ?? product.basePrice
+    const productImageUrl =
+      sku?.imageUrl ?? product.media?.[0]?.thumbnailUrl ?? product.media?.[0]?.url ?? null
+    const productAssetType =
+      product.tags?.find((tag) =>
+        [
+          'badge',
+          'gift',
+          'coupon',
+          'service_ticket',
+          'collectible',
+          'content_pass',
+          'reward',
+        ].includes(tag),
+      ) ?? null
     const settlementUserId = await this.resolveSettlementUserId({
       buyerId: input.buyerId,
       sellerBuddyUserId: offer.sellerBuddyUserId,
@@ -141,6 +155,7 @@ export class EntitlementPurchaseService {
     if (!entitlementResource) {
       throw apiError('ENTITLEMENT_PRODUCT_CONFIG_MISSING', 400)
     }
+    const grantsInstantly = entitlementResource.resourceType !== 'service'
     const { config } = entitlementResource
     const durationSeconds = config.durationSeconds ?? config.renewalPeriodSeconds ?? null
     const expiresAt = addSeconds(durationSeconds)
@@ -175,6 +190,7 @@ export class EntitlementPurchaseService {
         }
       }
 
+      const paidAt = new Date()
       const [order] = await tx
         .insert(orders)
         .values({
@@ -182,9 +198,9 @@ export class EntitlementPurchaseService {
           shopId: shop.id,
           buyerId: input.buyerId,
           totalAmount: price,
-          status: 'completed',
-          paidAt: new Date(),
-          completedAt: new Date(),
+          status: grantsInstantly ? 'completed' : 'paid',
+          paidAt,
+          completedAt: grantsInstantly ? paidAt : undefined,
         })
         .returning()
       if (!order) throw apiError('ORDER_CREATE_FAILED', 500)
@@ -200,7 +216,7 @@ export class EntitlementPurchaseService {
         },
         tx,
       )
-      if (settlementUserId) {
+      if (settlementUserId && grantsInstantly) {
         await this.deps.settlementService.createLine(
           {
             sellerUserId: settlementUserId,
@@ -262,6 +278,8 @@ export class EntitlementPurchaseService {
             paidAmount: price,
             refundBaseAmount: price,
             offerId: offer.id,
+            productImageUrl,
+            productAssetType,
           },
         })
         .returning()

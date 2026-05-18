@@ -55,6 +55,6 @@ describe('S01/C01 product detail buy now success', () => {
         expect.objectContaining({ method: 'POST' }),
       )
     })
-    expect(showToastMock).toHaveBeenCalledWith('shop.purchaseSuccess', 'success')
+    expect(showToastMock).toHaveBeenCalledWith('购买成功！', 'success')
   })
 })

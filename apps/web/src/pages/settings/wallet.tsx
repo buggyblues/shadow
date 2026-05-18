@@ -6,14 +6,20 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Ban,
+  CheckCircle2,
   Coins,
   CreditCard,
   Filter,
   Gift,
   HandCoins,
+  HeartHandshake,
   LockKeyhole,
   Package,
   RefreshCw,
+  ReceiptText,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
   Target,
   UnlockKeyhole,
   Wallet,
@@ -23,6 +29,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CommunityEconomySendModal } from '../../components/community-economy/community-economy-send-modal'
 import { ShrimpCoinIcon } from '../../components/shop/ui/currency'
+import { ProductVisual } from '../../components/shop/ui/product-visual'
 import {
   type CommunityAsset,
   type SettlementLine,
@@ -88,6 +95,15 @@ interface WalletTransaction {
   } | null
 }
 
+interface WalletEntitlement {
+  status: string
+  isActive: boolean
+  expiresAt?: string | null
+  resourceType?: string | null
+  resourceId?: string | null
+  paidFile?: { id: string } | null
+}
+
 const TYPE_ICONS: Record<TransactionType, typeof CreditCard> = {
   topup: CreditCard,
   purchase: ArrowUpRight,
@@ -130,6 +146,22 @@ function formatOptionalDate(dateStr?: string | null) {
   })
 }
 
+function walletEntitlementActive(entitlement: WalletEntitlement) {
+  if (!entitlement.isActive || entitlement.status !== 'active') return false
+  if (!entitlement.expiresAt) return true
+  return new Date(entitlement.expiresAt).getTime() > Date.now()
+}
+
+function walletEntitlementOpenable(entitlement: WalletEntitlement) {
+  return (
+    walletEntitlementActive(entitlement) &&
+    Boolean(
+      entitlement.paidFile?.id ||
+        (entitlement.resourceType === 'workspace_file' && entitlement.resourceId),
+    )
+  )
+}
+
 export function WalletSettings({
   initialSection = 'transactions',
 }: {
@@ -151,6 +183,17 @@ export function WalletSettings({
     queryKey: ['wallet'],
     queryFn: () => fetchApi<{ id: string; balance: number; frozenAmount: number }>('/api/wallet'),
   })
+
+  const { data: entitlementSummary = [] } = useQuery({
+    queryKey: ['entitlements'],
+    queryFn: async () => {
+      const result = await fetchApi<unknown>('/api/entitlements')
+      return Array.isArray(result) ? (result as WalletEntitlement[]) : []
+    },
+  })
+
+  const { data: communityAssetsSummary } = useCommunityAssets()
+  const { data: settlementSummary } = useSettlementLines({ limit: 50, offset: 0 })
 
   const { data: txCount } = useQuery({
     queryKey: ['wallet-transactions-count', transactionDirection],
@@ -176,6 +219,65 @@ export function WalletSettings({
 
   const totalCount = txCount?.count ?? 0
   const hasMore = offset + PAGE_SIZE < totalCount
+  const activeEntitlementCount = entitlementSummary.filter(walletEntitlementActive).length
+  const openableEntitlementCount = entitlementSummary.filter(walletEntitlementOpenable).length
+  const activeAssets = (communityAssetsSummary?.assets ?? []).filter(
+    (asset) =>
+      (asset.grant.status === 'active' || asset.grant.status === 'locked') &&
+      asset.grant.remainingQuantity > 0,
+  )
+  const giftableAssetCount = activeAssets.filter((asset) => asset.definition.giftable).length
+  const settlementLines = settlementSummary?.settlements ?? []
+  const availableSettlementCount = settlementLines.filter(
+    (line) => line.status === 'available',
+  ).length
+  const pendingSettlementNet = settlementLines
+    .filter((line) => line.status === 'pending' || line.status === 'held')
+    .reduce((sum, line) => sum + line.netAmount, 0)
+
+  const sectionOptions: Array<{
+    section: WalletSettingsSection
+    label: string
+    caption: string
+    metric: string
+    icon: LucideIcon
+  }> = [
+    {
+      section: 'transactions',
+      label: t('wallet.transactionHistory'),
+      caption: t('wallet.sectionHint.transactions'),
+      metric: totalCount.toLocaleString(),
+      icon: ReceiptText,
+    },
+    {
+      section: 'entitlements',
+      label: t('commerce.entitlements'),
+      caption: t('wallet.sectionHint.entitlements'),
+      metric: openableEntitlementCount.toLocaleString(),
+      icon: ShieldCheck,
+    },
+    {
+      section: 'assets',
+      label: t('communityEconomy.assets'),
+      caption: t('wallet.sectionHint.assets'),
+      metric: activeAssets.length.toLocaleString(),
+      icon: Package,
+    },
+    {
+      section: 'settlements',
+      label: t('communityEconomy.settlements'),
+      caption: t('wallet.sectionHint.settlements'),
+      metric: availableSettlementCount.toLocaleString(),
+      icon: HandCoins,
+    },
+    {
+      section: 'actions',
+      label: t('communityEconomy.actions'),
+      caption: t('wallet.sectionHint.actions'),
+      metric: giftableAssetCount.toLocaleString(),
+      icon: HeartHandshake,
+    },
+  ]
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
@@ -189,77 +291,102 @@ export function WalletSettings({
   }
 
   return (
-    <SettingsPanel>
-      {/* Balance Card — Brand Gradient */}
-      <SettingsCard className="relative overflow-hidden bg-gradient-to-br from-primary/20 via-primary/10 to-success/5 border-primary/20">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-primary/10 rounded-full blur-3xl -mr-16 -mt-16" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-success/10 rounded-full blur-3xl -ml-10 -mb-10" />
-        <div className="relative z-10 flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 mb-1">
-              {t('wallet.balance')}
-            </p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-text-primary tabular-nums">
-                {wallet?.balance?.toLocaleString() ?? '—'}
-              </span>
-              <ShrimpCoinIcon size={24} />
+    <SettingsPanel className="space-y-5">
+      <SettingsCard className="overflow-hidden border-primary/25 bg-bg-secondary/60 p-0">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 p-5 sm:p-6">
+            <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-primary">
+              <Sparkles size={15} />
+              {t('wallet.hubEyebrow')}
             </div>
-            {(wallet?.frozenAmount ?? 0) > 0 && (
-              <p className="text-xs text-text-muted mt-1 inline-flex items-center gap-1">
-                {t('wallet.frozen')}: {wallet?.frozenAmount?.toLocaleString()}{' '}
-                <ShrimpCoinIcon size={12} />
-              </p>
-            )}
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-text-muted">{t('wallet.balance')}</p>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-4xl font-black text-text-primary tabular-nums sm:text-5xl">
+                    {wallet?.balance?.toLocaleString() ?? '—'}
+                  </span>
+                  <ShrimpCoinIcon size={26} />
+                </div>
+                {(wallet?.frozenAmount ?? 0) > 0 && (
+                  <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-bold text-warning">
+                    {t('wallet.frozen')}: {wallet?.frozenAmount?.toLocaleString()}{' '}
+                    <ShrimpCoinIcon size={12} />
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  type="button"
+                  onClick={openModal}
+                  className="shadow-lg shadow-primary/25"
+                >
+                  {t('wallet.rechargeBtn')}
+                </Button>
+                <Button
+                  variant={(wallet?.balance ?? 0) < 100 ? 'secondary' : 'ghost'}
+                  size="md"
+                  type="button"
+                  onClick={() => navigate({ to: '/settings/tasks', replace: true })}
+                  icon={Target}
+                >
+                  {t('wallet.earnByTasks')}
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="primary"
-              size="md"
-              type="button"
-              onClick={openModal}
-              className="shadow-lg shadow-primary/25"
-            >
-              {t('wallet.rechargeBtn')}
-            </Button>
-            {(wallet?.balance ?? 0) < 100 && (
-              <Button
-                variant="secondary"
-                size="sm"
-                type="button"
-                onClick={() => navigate({ to: '/settings/tasks', replace: true })}
-                icon={Target}
-              >
-                {t('wallet.earnByTasks')}
-              </Button>
-            )}
+          <div className="grid gap-2 border-t border-border-subtle bg-bg-primary/35 p-4 lg:border-l lg:border-t-0">
+            <WalletSignal
+              icon={ShoppingBag}
+              label={t('wallet.readyToUse')}
+              value={activeEntitlementCount.toLocaleString()}
+              detail={t('wallet.readyToUseDetail', { count: openableEntitlementCount })}
+              onClick={() => setActiveSection('entitlements')}
+            />
+            <WalletSignal
+              icon={Package}
+              label={t('wallet.communityInventory')}
+              value={activeAssets.length.toLocaleString()}
+              detail={t('wallet.communityInventoryDetail', { count: giftableAssetCount })}
+              onClick={() => setActiveSection('assets')}
+            />
+            <WalletSignal
+              icon={HandCoins}
+              label={t('wallet.creatorIncome')}
+              value={availableSettlementCount.toLocaleString()}
+              detail={t('wallet.creatorIncomeDetail', {
+                amount: pendingSettlementNet.toLocaleString(),
+              })}
+              onClick={() => setActiveSection('settlements')}
+            />
           </div>
         </div>
       </SettingsCard>
 
-      <div className="flex flex-wrap items-center gap-1 rounded-full bg-bg-tertiary/30 p-1">
-        {(
-          [
-            ['transactions', t('wallet.transactionHistory')],
-            ['entitlements', t('commerce.entitlements')],
-            ['assets', t('communityEconomy.assets')],
-            ['settlements', t('communityEconomy.settlements')],
-            ['actions', t('communityEconomy.actions')],
-          ] as Array<[WalletSettingsSection, string]>
-        ).map(([section, label]) => (
+      <div className="grid gap-2 md:grid-cols-5">
+        {sectionOptions.map(({ section, label, caption, metric, icon: Icon }) => (
           <button
             key={section}
             type="button"
             aria-pressed={activeSection === section}
             onClick={() => setActiveSection(section)}
             className={cn(
-              'rounded-full px-3 py-1.5 text-xs font-black transition',
+              'min-h-[96px] rounded-2xl border px-3 py-3 text-left transition',
               activeSection === section
-                ? 'bg-primary/15 text-primary shadow-sm'
-                : 'text-text-muted hover:text-text-primary',
+                ? 'border-primary/50 bg-primary/12 text-primary shadow-[0_12px_28px_rgba(0,198,209,0.12)]'
+                : 'border-border-subtle bg-bg-secondary/35 text-text-muted hover:border-primary/30 hover:text-text-primary',
             )}
           >
-            {label}
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <Icon size={16} className={activeSection === section ? 'text-primary' : ''} />
+              <span className="rounded-full bg-bg-primary/50 px-2 py-0.5 text-[11px] font-black tabular-nums">
+                {metric}
+              </span>
+            </div>
+            <div className="text-sm font-black">{label}</div>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">{caption}</p>
           </button>
         ))}
       </div>
@@ -271,7 +398,7 @@ export function WalletSettings({
       ) : activeSection === 'settlements' ? (
         <CommunitySettlementsSection />
       ) : activeSection === 'actions' ? (
-        <CommunityActionsSection />
+        <CommunityActionsSection onOpenAssets={() => setActiveSection('assets')} />
       ) : (
         <>
           {/* Transaction History */}
@@ -409,6 +536,39 @@ export function WalletSettings({
   )
 }
 
+function WalletSignal({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  onClick,
+}: {
+  icon: LucideIcon
+  label: string
+  value: string
+  detail: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/45 px-3 py-2.5 text-left transition hover:border-primary/35 hover:bg-bg-secondary/70"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon size={19} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
+          <span className="text-xl font-black text-text-primary tabular-nums">{value}</span>
+          <span className="truncate text-xs font-black text-text-secondary">{label}</span>
+        </span>
+        <span className="mt-0.5 block truncate text-xs font-bold text-text-muted">{detail}</span>
+      </span>
+    </button>
+  )
+}
+
 function CommunityAssetsSection() {
   const { t } = useTranslation()
   const { data, isLoading } = useCommunityAssets()
@@ -419,11 +579,51 @@ function CommunityAssetsSection() {
   const assets = data?.assets ?? []
   const assetTypes = Array.from(new Set(assets.map((asset) => asset.definition.assetType))).sort()
   const [assetTypeFilter, setAssetTypeFilter] = useState('all')
+  const [assetUseFilter, setAssetUseFilter] = useState<'all' | 'usable' | 'giftable' | 'history'>(
+    'all',
+  )
   const [giftGrantId, setGiftGrantId] = useState<string | null>(null)
+  const usableAssets = assets.filter(
+    (asset) => asset.grant.status === 'active' && asset.grant.remainingQuantity > 0,
+  )
+  const giftableAssets = usableAssets.filter((asset) => asset.definition.giftable)
+  const historyAssets = assets.filter(
+    (asset) =>
+      asset.grant.status !== 'active' ||
+      asset.grant.remainingQuantity <= 0 ||
+      (asset.grant.expiresAt && new Date(asset.grant.expiresAt).getTime() <= Date.now()),
+  )
   const displayedAssets =
     assetTypeFilter === 'all'
       ? assets
       : assets.filter((asset) => asset.definition.assetType === assetTypeFilter)
+  const filteredAssets = displayedAssets.filter((asset) => {
+    if (assetUseFilter === 'usable') {
+      return asset.grant.status === 'active' && asset.grant.remainingQuantity > 0
+    }
+    if (assetUseFilter === 'giftable') {
+      return (
+        asset.definition.giftable &&
+        asset.grant.status === 'active' &&
+        asset.grant.remainingQuantity > 0
+      )
+    }
+    if (assetUseFilter === 'history') {
+      return historyAssets.some((historyAsset) => historyAsset.grant.id === asset.grant.id)
+    }
+    return true
+  })
+
+  const assetFilterOptions: Array<{
+    key: typeof assetUseFilter
+    count: number
+    icon: ReactNode
+  }> = [
+    { key: 'all', count: assets.length, icon: <Package size={13} /> },
+    { key: 'usable', count: usableAssets.length, icon: <CheckCircle2 size={13} /> },
+    { key: 'giftable', count: giftableAssets.length, icon: <Gift size={13} /> },
+    { key: 'history', count: historyAssets.length, icon: <ReceiptText size={13} /> },
+  ]
 
   const runGrantAction = (
     action: 'consume' | 'lock' | 'unlock' | 'revoke',
@@ -453,7 +653,7 @@ function CommunityAssetsSection() {
 
   return (
     <SettingsSectionBlock
-      titleKey="communityEconomy.assets"
+      titleKey="communityEconomy.assetLibraryTitle"
       titleFallback="Community Assets"
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -466,30 +666,76 @@ function CommunityAssetsSection() {
               <option value="all">{t('communityEconomy.allAssetTypes')}</option>
               {assetTypes.map((type) => (
                 <option key={type} value={type}>
-                  {type}
+                  {t(`communityEconomy.assetTypes.${type}`, { defaultValue: type })}
                 </option>
               ))}
             </select>
           )}
           <span className="text-xs font-bold text-text-muted">
-            {t('communityEconomy.assetCount', { count: displayedAssets.length })}
+            {t('communityEconomy.assetCount', { count: filteredAssets.length })}
           </span>
         </div>
       }
     >
+      <div className="grid gap-3 md:grid-cols-3">
+        <SummaryMetric
+          label={t('communityEconomy.usableAssets')}
+          value={String(usableAssets.length)}
+        />
+        <SummaryMetric
+          label={t('communityEconomy.giftableAssets')}
+          value={String(giftableAssets.length)}
+        />
+        <SummaryMetric
+          label={t('communityEconomy.historyAssets')}
+          value={String(historyAssets.length)}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-1 rounded-2xl bg-bg-tertiary/25 p-1">
+        {assetFilterOptions.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            aria-pressed={assetUseFilter === option.key}
+            onClick={() => setAssetUseFilter(option.key)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition',
+              assetUseFilter === option.key
+                ? 'bg-primary/15 text-primary'
+                : 'text-text-muted hover:text-text-primary',
+            )}
+          >
+            {option.icon}
+            {t(`communityEconomy.assetFilters.${option.key}`)}
+            <span className="rounded-full bg-bg-primary/50 px-1.5 py-0.5 text-[10px] tabular-nums">
+              {option.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="flex justify-center py-12">
           <RefreshCw size={24} className="animate-spin text-text-muted" />
         </div>
-      ) : displayedAssets.length === 0 ? (
+      ) : filteredAssets.length === 0 ? (
         <EmptyState
           icon={Package}
-          title={t('communityEconomy.noAssets')}
-          description={t('communityEconomy.noAssetsHint')}
+          title={
+            assets.length === 0
+              ? t('communityEconomy.noAssets')
+              : t('communityEconomy.noFilteredAssets')
+          }
+          description={
+            assets.length === 0
+              ? t('communityEconomy.noAssetsHint')
+              : t('communityEconomy.noFilteredAssetsHint')
+          }
         />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {displayedAssets.map((asset) => (
+          {filteredAssets.map((asset) => (
             <CommunityAssetCard
               key={asset.grant.id}
               asset={asset}
@@ -531,21 +777,28 @@ function CommunityAssetCard({
   const expiresAt = formatOptionalDate(grant.expiresAt)
   const isActive = grant.status === 'active'
   const isLocked = grant.status === 'locked'
+  const assetTypeLabel = t(`communityEconomy.assetTypes.${definition.assetType}`, {
+    defaultValue: definition.assetType,
+  })
+  const behaviorLabels = [
+    definition.consumable
+      ? t('communityEconomy.assetBehavior.consumable')
+      : t('communityEconomy.assetBehavior.holdable'),
+    definition.giftable
+      ? t('communityEconomy.assetBehavior.giftable')
+      : t('communityEconomy.assetBehavior.bound'),
+  ]
 
   return (
-    <div className="rounded-2xl border border-border-subtle bg-bg-secondary/30 p-4 space-y-3">
-      <div className="flex items-start gap-3">
-        {definition.imageUrl ? (
-          <img
-            src={definition.imageUrl}
-            alt=""
-            className="h-12 w-12 rounded-2xl object-cover border border-border-subtle"
-          />
-        ) : (
-          <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-            <Package size={20} />
-          </div>
-        )}
+    <div className="overflow-hidden rounded-lg border border-border-subtle bg-bg-secondary/30">
+      <ProductVisual
+        name={definition.name}
+        imageUrl={definition.imageUrl}
+        resourceType="community_asset"
+        assetType={definition.assetType}
+        className="h-32 w-full rounded-none"
+      />
+      <div className="space-y-3 p-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h4 className="truncate text-sm font-black text-text-primary">{definition.name}</h4>
@@ -554,83 +807,103 @@ function CommunityAssetCard({
           {definition.description && (
             <p className="mt-1 line-clamp-2 text-xs text-text-muted">{definition.description}</p>
           )}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-black text-primary">
+              {assetTypeLabel}
+            </span>
+            {behaviorLabels.map((label) => (
+              <span
+                key={label}
+                className="rounded-full bg-bg-primary/60 px-2 py-1 text-[11px] font-black text-text-muted"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <AssetMeta label={t('communityEconomy.quantity')} value={String(grant.quantity)} />
-        <AssetMeta
-          label={t('communityEconomy.remaining')}
-          value={String(grant.remainingQuantity)}
-        />
-        <AssetMeta label={t('communityEconomy.type')} value={definition.assetType} />
-        <AssetMeta
-          label={t('communityEconomy.expiresAt')}
-          value={expiresAt ?? t('communityEconomy.never')}
-        />
-      </div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <AssetMeta label={t('communityEconomy.quantity')} value={String(grant.quantity)} />
+          <AssetMeta
+            label={t('communityEconomy.remaining')}
+            value={String(grant.remainingQuantity)}
+          />
+          <AssetMeta label={t('communityEconomy.type')} value={assetTypeLabel} />
+          <AssetMeta
+            label={t('communityEconomy.expiresAt')}
+            value={expiresAt ?? t('communityEconomy.never')}
+          />
+        </div>
 
-      <div className="flex flex-wrap gap-2">
-        {definition.consumable && isActive && grant.remainingQuantity > 0 && (
-          <Button
-            variant="secondary"
-            size="sm"
-            type="button"
-            icon={Coins}
-            disabled={pending}
-            onClick={() => onAction('consume', grant.id)}
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`/app/assets/${grant.id}`}
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
           >
-            {t('communityEconomy.consume')}
-          </Button>
-        )}
-        {definition.giftable && isActive && grant.remainingQuantity > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            type="button"
-            icon={Gift}
-            disabled={pending}
-            onClick={() => onGift(grant.id)}
-          >
-            {t('communityEconomy.sendGift')}
-          </Button>
-        )}
-        {isActive && (
-          <Button
-            variant="ghost"
-            size="sm"
-            type="button"
-            icon={LockKeyhole}
-            disabled={pending}
-            onClick={() => onAction('lock', grant.id)}
-          >
-            {t('communityEconomy.lock')}
-          </Button>
-        )}
-        {isLocked && (
-          <Button
-            variant="ghost"
-            size="sm"
-            type="button"
-            icon={UnlockKeyhole}
-            disabled={pending}
-            onClick={() => onAction('unlock', grant.id)}
-          >
-            {t('communityEconomy.unlock')}
-          </Button>
-        )}
-        {(isActive || isLocked) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            type="button"
-            icon={Ban}
-            disabled={pending}
-            onClick={() => onAction('revoke', grant.id, 'user_requested')}
-          >
-            {t('communityEconomy.revoke')}
-          </Button>
-        )}
+            <Package size={14} />
+            {t('communityEconomy.assetHome')}
+          </a>
+          {definition.consumable && isActive && grant.remainingQuantity > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              icon={Coins}
+              disabled={pending}
+              onClick={() => onAction('consume', grant.id)}
+            >
+              {t('communityEconomy.consume')}
+            </Button>
+          )}
+          {definition.giftable && isActive && grant.remainingQuantity > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              icon={Gift}
+              disabled={pending}
+              onClick={() => onGift(grant.id)}
+            >
+              {t('communityEconomy.sendGift')}
+            </Button>
+          )}
+          {isActive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              icon={LockKeyhole}
+              disabled={pending}
+              onClick={() => onAction('lock', grant.id)}
+            >
+              {t('communityEconomy.lock')}
+            </Button>
+          )}
+          {isLocked && (
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              icon={UnlockKeyhole}
+              disabled={pending}
+              onClick={() => onAction('unlock', grant.id)}
+            >
+              {t('communityEconomy.unlock')}
+            </Button>
+          )}
+          {(isActive || isLocked) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              icon={Ban}
+              disabled={pending}
+              onClick={() => onAction('revoke', grant.id, 'user_requested')}
+            >
+              {t('communityEconomy.revoke')}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -642,13 +915,17 @@ function CommunitySettlementsSection() {
   const settleMutation = useSettleAvailableLines()
   const settlements = data?.settlements ?? []
   const availableCount = settlements.filter((line) => line.status === 'available').length
+  const availableNet = settlements
+    .filter((line) => line.status === 'available')
+    .reduce((sum, line) => sum + line.netAmount, 0)
   const pendingNet = settlements
     .filter((line) => line.status === 'pending' || line.status === 'held')
     .reduce((sum, line) => sum + line.netAmount, 0)
+  const settledCount = settlements.filter((line) => line.status === 'settled').length
 
   return (
     <SettingsSectionBlock
-      titleKey="communityEconomy.settlements"
+      titleKey="communityEconomy.settlementCenterTitle"
       titleFallback="Settlements"
       actions={
         <Button
@@ -663,7 +940,7 @@ function CommunitySettlementsSection() {
         </Button>
       }
     >
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-4">
         <SummaryMetric
           label={t('communityEconomy.totalLines')}
           value={String(settlements.length)}
@@ -673,11 +950,21 @@ function CommunitySettlementsSection() {
           value={String(availableCount)}
         />
         <SummaryMetric
+          label={t('communityEconomy.availableNet')}
+          value={availableNet.toLocaleString()}
+          icon={<ShrimpCoinIcon size={14} />}
+        />
+        <SummaryMetric
           label={t('communityEconomy.pendingNet')}
           value={pendingNet.toLocaleString()}
           icon={<ShrimpCoinIcon size={14} />}
         />
       </div>
+      {settledCount > 0 && (
+        <p className="text-xs font-bold text-text-muted">
+          {t('communityEconomy.settledLinesHint', { count: settledCount })}
+        </p>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-12">
@@ -730,16 +1017,19 @@ function SettlementRow({ line }: { line: SettlementLine }) {
   )
 }
 
-function CommunityActionsSection() {
+function CommunityActionsSection({ onOpenAssets }: { onOpenAssets?: () => void }) {
   const { t } = useTranslation()
   const [showTipModal, setShowTipModal] = useState(false)
 
   return (
     <div className="grid gap-4">
-      <SettingsSectionBlock titleKey="communityEconomy.sendTip" titleFallback="Send tip">
-        <div className="space-y-4">
+      <SettingsSectionBlock
+        titleKey="communityEconomy.communitySupportTitle"
+        titleFallback="Send tip"
+      >
+        <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-2xl border border-border-subtle bg-bg-secondary/50 p-4">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <HandCoins size={22} />
             </div>
             <p className="text-sm font-black text-text-primary">
@@ -748,16 +1038,38 @@ function CommunityActionsSection() {
             <p className="mt-1 text-xs leading-5 text-text-muted">
               {t('communityEconomy.tipEntryHint')}
             </p>
+            <Button
+              className="mt-4"
+              variant="primary"
+              size="md"
+              type="button"
+              icon={HandCoins}
+              onClick={() => setShowTipModal(true)}
+            >
+              {t('communityEconomy.sendTip')}
+            </Button>
           </div>
-          <Button
-            variant="primary"
-            size="md"
-            type="button"
-            icon={HandCoins}
-            onClick={() => setShowTipModal(true)}
-          >
-            {t('communityEconomy.sendTip')}
-          </Button>
+          <div className="rounded-2xl border border-border-subtle bg-bg-secondary/50 p-4">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-warning/10 text-warning">
+              <Gift size={22} />
+            </div>
+            <p className="text-sm font-black text-text-primary">
+              {t('communityEconomy.giftEntryTitle')}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-text-muted">
+              {t('communityEconomy.giftEntryHint')}
+            </p>
+            <Button
+              className="mt-4"
+              variant="secondary"
+              size="md"
+              type="button"
+              icon={Gift}
+              onClick={onOpenAssets}
+            >
+              {t('communityEconomy.openGiftShelf')}
+            </Button>
+          </div>
         </div>
       </SettingsSectionBlock>
       <CommunityEconomySendModal

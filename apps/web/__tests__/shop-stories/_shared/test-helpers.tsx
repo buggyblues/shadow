@@ -11,6 +11,7 @@ import {
 import { render } from '@testing-library/react'
 import type React from 'react'
 import { vi } from 'vitest'
+import i18n from '../../../src/lib/i18n'
 
 export const fetchApiMock = vi.fn()
 export const showToastMock = vi.fn()
@@ -31,6 +32,8 @@ vi.mock('../../../src/lib/toast', () => ({
 }))
 
 export function renderWithQuery(ui: React.ReactNode) {
+  void i18n.changeLanguage('zh-CN')
+
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },

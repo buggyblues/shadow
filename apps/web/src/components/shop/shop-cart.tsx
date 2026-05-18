@@ -1,9 +1,25 @@
 import { Button, Card } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Minus, Plus, ShieldCheck, ShoppingBag, ShoppingCart, Trash2 } from 'lucide-react'
+import {
+  CheckCircle2,
+  Minus,
+  Plus,
+  ReceiptText,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
+  Trash2,
+  WalletCards,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import {
+  type CommerceDeliveryEntitlement,
+  type CommercePurchaseOrder,
+  deliveryDetailHref,
+  findPurchaseEntitlement,
+} from '../../lib/commerce-delivery'
 import { showToast } from '../../lib/toast'
 import { PriceDisplay } from './ui/currency'
 
@@ -33,6 +49,10 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [checkoutResult, setCheckoutResult] = useState<{
+    order: CommercePurchaseOrder
+    entitlement?: CommerceDeliveryEntitlement | null
+  } | null>(null)
 
   const { data: cartItems = [] } = useQuery({
     queryKey: ['shop-cart', serverId],
@@ -53,7 +73,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
         return next
       })
     },
-    onError: (err: Error) => showToast(err.message || t('shop.deleteFailed', '删除失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('shop.deleteFailed'), 'error'),
   })
 
   const updateQty = useMutation({
@@ -63,26 +83,27 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
         body: JSON.stringify(data),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] }),
-    onError: (err: Error) =>
-      showToast(err.message || t('shop.updateQuantityFailed', '更新数量失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('shop.updateQuantityFailed'), 'error'),
   })
 
   const placeOrder = useMutation({
     mutationFn: (items: Array<{ productId: string; skuId?: string; quantity: number }>) =>
-      fetchApi<{ id: string }>(`/api/servers/${serverId}/shop/orders`, {
+      fetchApi<CommercePurchaseOrder>(`/api/servers/${serverId}/shop/orders`, {
         method: 'POST',
         body: JSON.stringify({ items, idempotencyKey: createIdempotencyKey('shop-order') }),
       }),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] })
       queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
+      queryClient.invalidateQueries({ queryKey: ['entitlements'] })
+      queryClient.invalidateQueries({ queryKey: ['community-assets'] })
       setSelectedIds(new Set())
-      showToast(t('shop.orderSuccess', '下单成功！'), 'success')
-      if (onCheckout) onCheckout(data.id)
+      showToast(t('shop.orderSuccess'), 'success')
+      const entitlement = await findPurchaseEntitlement({ orderId: data.id }).catch(() => null)
+      setCheckoutResult({ order: data, entitlement })
     },
-    onError: (err: Error) =>
-      showToast(err.message || t('shop.orderFailed', '下单失败，请检查余额或库存'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('shop.orderFailed'), 'error'),
   })
 
   const selectedItems = useMemo(
@@ -122,6 +143,46 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
     placeOrder.mutate(items)
   }
 
+  if (checkoutResult) {
+    const detailHref = deliveryDetailHref(checkoutResult.entitlement?.id)
+    return (
+      <div className="flex h-full flex-1 flex-col items-center justify-center gap-5 bg-bg-primary p-8 text-center">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10 text-success">
+          <CheckCircle2 size={42} />
+        </div>
+        <div className="max-w-sm">
+          <h3 className="text-xl font-black text-text-primary">{t('shop.paymentSuccessTitle')}</h3>
+          <p className="mt-2 text-sm font-bold leading-6 text-text-muted">
+            {t('shop.paymentSuccessHint')}
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-3">
+          <a
+            href={detailHref}
+            className="inline-flex h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-black text-white transition hover:bg-success/90"
+          >
+            <ReceiptText size={16} />
+            {checkoutResult.entitlement
+              ? t('shop.viewDeliveryDetail')
+              : t('shop.viewPurchaseDelivery')}
+          </a>
+          <a
+            href="/app/settings/wallet/entitlements"
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-secondary/70 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+          >
+            <WalletCards size={16} />
+            {t('shop.openPurchaseDelivery')}
+          </a>
+          {onCheckout && (
+            <Button variant="glass" onClick={() => onCheckout(checkoutResult.order.id)}>
+              {t('shop.openStoreOrders')}
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (cartItems.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-bg-primary h-full">
@@ -132,9 +193,9 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
           </div>
         </div>
         <h3 className="text-lg font-black uppercase tracking-tight text-text-primary mb-2">
-          购物车空空如也
+          {t('shop.cartEmptyTitle')}
         </h3>
-        <p className="text-sm text-text-muted font-bold italic mb-8">去挑选一些心仪的商品吧</p>
+        <p className="text-sm text-text-muted font-bold mb-8">{t('shop.cartEmptyHint')}</p>
       </div>
     )
   }
@@ -144,7 +205,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       {/* ── Security Banner ── */}
       <div className="flex items-center justify-center gap-1.5 py-2 bg-success/5 text-success text-[11px] sm:text-xs font-black uppercase tracking-widest">
         <ShieldCheck size={14} />
-        官方担保交易，支付安全无忧
+        {t('shop.secureCheckoutBanner')}
       </div>
 
       {/* ── List Header ── */}
@@ -167,10 +228,10 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
             onChange={toggleAll}
             className="hidden"
           />
-          全选全部
+          {t('shop.selectAll')}
         </label>
         <span className="text-xs font-black px-2 py-1 bg-primary/5 border border-primary/20 rounded-full text-text-muted uppercase tracking-widest">
-          共 {cartItems.length} 件
+          {t('shop.cartCount', { count: cartItems.length })}
         </span>
       </div>
 
@@ -222,7 +283,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="text-text-primary text-sm font-black line-clamp-2 leading-snug">
-                        {item.product?.name || '商品已下架'}
+                        {item.product?.name || t('shop.productUnavailable')}
                       </h4>
                       <Button
                         variant="ghost"
@@ -289,10 +350,10 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       <div className="shrink-0 p-4 border-t border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl flex items-center gap-4 z-20 pb-safe">
         <div className="flex-1 flex flex-col justify-center">
           <div className="text-xs text-text-muted font-black uppercase tracking-widest mb-0.5">
-            已选 {selectedItems.length} 件
+            {t('shop.selectedCartCount', { count: selectedItems.length })}
           </div>
           <div className="flex items-baseline gap-1">
-            <span className="text-sm font-black text-text-primary">合计:</span>
+            <span className="text-sm font-black text-text-primary">{t('shop.orderTotal')}</span>
             <span className="text-danger font-black text-xl flex items-baseline gap-0.5 tracking-tight">
               <PriceDisplay amount={totalAmount} size={24} />
             </span>
@@ -305,7 +366,9 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
           loading={placeOrder.isPending}
           disabled={selectedItems.length === 0}
         >
-          {placeOrder.isPending ? '处理中...' : `去结算 (${selectedItems.length})`}
+          {placeOrder.isPending
+            ? t('shop.checkoutProcessing')
+            : t('shop.checkoutSelected', { count: selectedItems.length })}
         </Button>
       </div>
     </div>

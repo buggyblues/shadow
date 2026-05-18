@@ -41,6 +41,82 @@ App 后端可以用 introspection 校验命令 Bearer token：
 const identity = await client.introspectServerAppToken('server-id-or-slug', 'demo-desk', token)
 ```
 
+### 商业自动化
+
+服务商 App、Buddy worker 或履约脚本需要拿到和买家页面一致的上下文时，使用商业 SDK 方法。
+
+:::code-group
+
+```ts [TypeScript]
+const context = await client.getCommerceProductContext('product-id')
+console.log(context.shop.name, context.links.assetHome)
+
+const preview = await client.getCommerceOfferCheckoutPreview('offer-id')
+if (preview.nextAction === 'purchase') {
+  await client.purchaseCommerceOffer('offer-id', {
+    idempotencyKey: 'checkout-20260518-001',
+  })
+}
+
+const entitlement = await client.getEntitlement('entitlement-id')
+await client.cancelEntitlementRenewal('entitlement-id', {
+  reason: 'buyer_cancelled_auto_renewal',
+})
+```
+
+```python [Python]
+context = client.get_commerce_product_context("product-id")
+print(context["shop"]["name"], context["links"].get("assetHome"))
+
+preview = client.get_commerce_offer_checkout_preview("offer-id")
+if preview["nextAction"] == "purchase":
+    client.purchase_commerce_offer(
+        "offer-id",
+        idempotency_key="checkout-20260518-001",
+    )
+
+entitlement = client.get_entitlement("entitlement-id")
+client.cancel_entitlement_renewal(
+    "entitlement-id",
+    reason="buyer_cancelled_auto_renewal",
+)
+```
+
+:::
+
+外部 App 应使用 OAuth access token 检查和核销应用范围内的购买权益，不要使用普通用户 JWT：
+
+:::code-group
+
+```ts [TypeScript]
+const appClient = new ShadowClient('https://shadowob.com', oauthAccessToken)
+const access = await appClient.getOAuthCommerceEntitlementAccess({
+  resourceId: `${appId}:premium`,
+})
+
+if (access.allowed) {
+  await appClient.redeemOAuthCommerceEntitlement({
+    resourceId: `${appId}:premium`,
+    idempotencyKey: 'provider-delivery-001',
+  })
+}
+```
+
+```python [Python]
+app_client = ShadowClient("https://shadowob.com", oauth_access_token)
+access = app_client.get_oauth_commerce_entitlement_access(
+    resource_id=f"{app_id}:premium",
+)
+
+if access["allowed"]:
+    app_client.redeem_oauth_commerce_entitlement(
+        resource_id=f"{app_id}:premium",
+        idempotency_key="provider-delivery-001",
+    )
+```
+
+:::
+
 ### 实时 Socket
 
 ```ts

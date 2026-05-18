@@ -534,6 +534,10 @@ describe('EntitlementPurchaseService', () => {
       resourceType: 'workspace_file',
       resourceId: fileId,
       capability: 'view',
+      metadata: expect.objectContaining({
+        productImageUrl: 'https://example.com/product.png',
+        productAssetType: null,
+      }),
     })
     expect(db.inserts.find((entry) => entry.table === commerceFulfillmentJobs)?.data).toMatchObject(
       {

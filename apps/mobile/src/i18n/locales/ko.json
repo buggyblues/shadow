@@ -279,7 +279,7 @@
     "joinServerDesc": "초대 코드를 입력하여 서버에 참가",
     "inviteCodePlaceholder": "초대 코드 입력",
     "joinButton": "참가",
-    "discover": "서버 탐색",
+    "discover": "발견",
     "serverInfo": "서버 정보",
     "inviteMembers": "멤버 초대",
     "copyServerId": "서버 ID 복사",
@@ -472,6 +472,7 @@
     "commerceSubscription": "구독",
     "commercePurchaseFailed": "구매 실패",
     "commercePurchaseSucceeded": "구매 완료",
+    "commerceRefundRule": "주문 규칙에 따라 사후 처리",
     "productPicker": "상품",
     "productPickerLoading": "상품 불러오는 중...",
     "productPickerEmpty": "보낼 수 있는 상품이 없습니다",
@@ -891,15 +892,15 @@
     "joining": "참여 중..."
   },
   "discover": {
-    "title": "서버 탐색",
-    "subtitle": "서버와 채널 찾기",
-    "searchPlaceholder": "서버 검색...",
+    "title": "발견",
+    "subtitle": "Buddy, 콘텐츠, 상점, 서버를 찾아보세요",
+    "searchPlaceholder": "Buddy, 서비스, 상점 또는 서버 검색...",
     "noServers": "공개 서버가 없습니다",
-    "noDescription": "설명 없음",
+    "noDescription": "아직 소개가 없습니다.",
     "members": "멤버",
-    "joinButton": "참가",
-    "enterButton": "입장",
-    "public": "공개",
+    "joinButton": "서버 참가",
+    "enterButton": "서버 열기",
+    "public": "공개 서버",
     "daysAgo": "{{count}}일 전",
     "deviceTier": {
       "highEnd": "하이엔드",
@@ -907,8 +908,8 @@
       "midRange": "미드레인지",
       "unknown": "알 수 없음"
     },
-    "emptyDesc": "첫 번째 커뮤니티를 만들어 보세요!",
-    "emptyTitle": "아직 아무것도 없습니다",
+    "emptyDesc": "다른 검색어를 입력하거나 새 Buddy, 서비스, 상점, 서버를 기다려 주세요.",
+    "emptyTitle": "아직 둘러볼 내용이 없습니다",
     "filter": {
       "apply": "적용",
       "ascending": "오름차순",
@@ -937,14 +938,95 @@
     "hoursAgo": "{{count}}시간 전",
     "joinToView": "참여하여 보기",
     "justNow": "방금",
-    "loadMore": "더 불러오는 중...",
+    "loadMore": "서버 더 보기",
     "minutesAgo": "{{count}}분 전",
     "noChannels": "활성 채널이 없습니다",
-    "noMore": "더 이상 없음",
-    "noSearchResults": "결과 없음",
-    "noSearchResultsDesc": "다른 키워드를 시도해 보세요",
+    "noMore": "모든 서버를 표시했습니다",
+    "noSearchResults": "결과가 없습니다",
+    "noSearchResultsDesc": "다른 키워드를 입력해 보세요.",
     "unknownAgent": "알 수 없는 Buddy",
-    "unknownUser": "알 수 없는 사용자"
+    "unknownUser": "알 수 없는 사용자",
+    "eyebrow": "발견",
+    "heroTitle": "오늘 무엇을 찾아볼까요?",
+    "heroSubtitle": "Buddy, 콘텐츠, 상점 또는 흥미로운 서버를 찾아보세요.",
+    "communityModelTitle": "서버 안에서",
+    "communityShelfTitle": "추천 서버",
+    "communityShelfHint": "참가하면 채널, 상점, Buddy를 이용할 수 있습니다.",
+    "activityScore": "활동도",
+    "joined": "참여 중",
+    "views": {
+      "all": "전체",
+      "joined": "참여 중",
+      "open": "참여 가능"
+    },
+    "metrics": {
+      "publicCommunities": "공개 서버",
+      "joinedCommunities": "참가함",
+      "openCommunities": "참가 가능",
+      "communityMembers": "멤버"
+    },
+    "communityModel": {
+      "identity": {
+        "title": "서버 들어가기",
+        "body": "참가하면 채널, 상점, Buddy를 볼 수 있습니다."
+      },
+      "service": {
+        "title": "콘텐츠 구매",
+        "body": "마음에 드는 서비스와 콘텐츠는 상세 페이지에서 확인하세요."
+      },
+      "trust": {
+        "title": "리뷰 보기",
+        "body": "리뷰는 실제 주문과 구매 기록에서 나옵니다."
+      }
+    },
+    "capabilities": {
+      "channels": "채널",
+      "services": "상점",
+      "credit": "리뷰"
+    },
+    "businessTitle": "오늘 무엇을 찾아볼까요?",
+    "businessSubtitle": "Buddy를 찾고, 서비스와 콘텐츠를 사고, 상점을 둘러보거나 재미있는 서버에 참가하세요.",
+    "viewAll": "전체 보기",
+    "openBuddy": "대화하기",
+    "openProduct": "자세히 보기",
+    "openShop": "상점 보기",
+    "shopFallback": "이 상점은 새 추천을 준비하고 있습니다.",
+    "productCount": "{{count}}개 판매 중",
+    "memberCount": "멤버 {{count}}명",
+    "sections": {
+      "all": "추천",
+      "buddies": "Buddy",
+      "products": "서비스와 콘텐츠",
+      "shops": "상점",
+      "communities": "서버"
+    },
+    "lanes": {
+      "buddies": "추천 Buddy",
+      "products": "오늘 구매하기",
+      "shops": "둘러볼 상점",
+      "communities": "추천 서버"
+    },
+    "emptyLane": {
+      "buddies": "연락할 수 있는 Buddy가 아직 없습니다.",
+      "products": "등록된 항목이 아직 없습니다.",
+      "shops": "둘러볼 상점이 아직 없습니다.",
+      "communities": "공개 서버가 아직 없습니다."
+    },
+    "badges": {
+      "buddy": "Buddy"
+    },
+    "facts": {
+      "daily": "일일",
+      "rentals": "주문"
+    },
+    "productType": {
+      "physical": "실물",
+      "entitlement": "서비스/콘텐츠"
+    },
+    "shopScope": {
+      "server": "서버 상점",
+      "user": "개인 상점"
+    }
   },
   "notification": {
     "title": "알림",
@@ -1118,7 +1200,14 @@
     "offline": "오프라인"
   },
   "profile": {
-    "memberSince": "가입일"
+    "memberSince": "가입일",
+    "agentAsset": "Agent 자산 홈",
+    "agentAssetHint": "이 Buddy의 구매 가능 서비스, 납품 기록, 실제 신용을 보여줍니다.",
+    "availableServices": "구매 가능 서비스",
+    "deliveryRecords": "납품 기록",
+    "creditRating": "신용",
+    "noAssetServices": "이 Buddy는 아직 구매 가능한 서비스를 등록하지 않았습니다.",
+    "serviceShelfFallback": "구매 후 주문 약속에 따라 이행됩니다."
   },
   "shop": {
     "addProduct": "상품 추가",
@@ -1162,6 +1251,9 @@
     "statusCancelled": "취소됨",
     "statusRefunded": "환불 완료",
     "cancelOrder": "주문 취소",
+    "confirmReceipt": "완료 확인",
+    "orderCompleted": "주문이 완료되었습니다",
+    "orderCompleteFailed": "완료 확인 실패",
     "viewReviews": "리뷰 보기",
     "wallet": "지갑",
     "walletBalance": "잔액",
@@ -1172,8 +1264,66 @@
     "buyNow": "지금 구매",
     "cartTotal": "총 {{count}}개",
     "clearCart": "장바구니 비우기",
+    "serverStorefront": "서버 상점",
+    "serverProvidedBy": "{{server}} · {{shop}}",
+    "productSourceTitle": "{{shop}} 제공",
+    "productSourceServer": "서버: {{server}}",
+    "productSourceHint": "구매 후 주문, 이행 상태, 콘텐츠, 지원 진입점은 구매 및 이행 센터에 남습니다.",
     "orderNo": "주문번호",
-    "tags": "태그"
+    "tags": "태그",
+    "uploadCover": "상품 커버 업로드",
+    "uploadingCover": "커버 업로드 중...",
+    "coverHint": "커버는 진열, 주문, 권한 영수증에 표시됩니다",
+    "coverUploadFailed": "커버 업로드 실패",
+    "mediaPermissionDenied": "커버 업로드에는 사진 보관함 접근 권한이 필요합니다",
+    "productTemplates": {
+      "ai_service": {
+        "label": "AI 서비스",
+        "summary": "구매 후 Buddy 또는 판매자가 주문에 따라 서비스를 처리합니다.",
+        "promise": "결제 후 서비스 주문이 생성되고 약속한 시간 안에 결과를 전달합니다."
+      },
+      "paid_file": {
+        "label": "유료 파일",
+        "summary": "구매 후 유료 콘텐츠를 열거나 다운로드할 수 있습니다.",
+        "promise": "결제 후 구매와 이행 센터에서 콘텐츠를 열 수 있습니다."
+      },
+      "membership": {
+        "label": "회원 권한",
+        "summary": "구매 후 일정 기간 회원 혜택을 받습니다.",
+        "promise": "결제 후 권한이 활성화되며 유효 기간을 확인합니다."
+      },
+      "badge_gift": {
+        "label": "배지/선물",
+        "summary": "커뮤니티 자산으로 지급됩니다.",
+        "promise": "결제 후 자산이 Wallet 자산에 들어가고 상태를 추적할 수 있습니다."
+      },
+      "physical": {
+        "label": "실물 상품",
+        "summary": "구매 후 판매자가 주문에 따라 배송합니다.",
+        "promise": "결제 후 주문이 생성되고 판매자가 처리 및 배송 상태를 갱신합니다."
+      }
+    },
+    "visual": {
+      "service": "서비스",
+      "file": "파일",
+      "badge": "배지",
+      "gift": "선물",
+      "ticket": "서비스권",
+      "physical": "실물"
+    },
+    "visualPromise": {
+      "service": "주문 서비스",
+      "file": "구매 후 열기",
+      "badge": "신분 표시",
+      "gift": "선물 가능한 수집품",
+      "ticket": "사용권",
+      "physical": "배송 추적"
+    },
+    "consumerPath": {
+      "browse": "둘러보기",
+      "pay": "결제",
+      "fulfill": "이행"
+    }
   },
   "workspace": {
     "confirmDelete": "정말 삭제하시겠습니까?",

@@ -14,6 +14,7 @@ describe('S01/C03 order review multi item', () => {
       if (String(path).includes('/shop/orders/o1/review') && options?.method === 'POST') {
         return Promise.resolve({ ok: true })
       }
+      if (String(path).includes('/shop/orders/o1/reviews')) return Promise.resolve([])
       if (String(path).includes('/shop/orders') && (!options?.method || options.method === 'GET')) {
         return Promise.resolve([
           {
@@ -51,15 +52,15 @@ describe('S01/C03 order review multi item', () => {
 
     renderWithQuery(<ShopOrders serverId={serverId} />)
 
-    await screen.findByText('商品A')
+    await screen.findAllByText('商品A')
     await userEvent.click(screen.getByText('#NO0001'))
     await userEvent.click(screen.getByRole('button', { name: '我要评价' }))
     await userEvent.click(screen.getByRole('button', { name: '商品B' }))
     await userEvent.click(screen.getByRole('button', { name: '提交评价' }))
 
     await waitFor(() => {
-      const call = fetchApiMock.mock.calls.find((c) =>
-        String(c[0]).includes('/shop/orders/o1/review'),
+      const call = fetchApiMock.mock.calls.find(
+        (c) => String(c[0]).includes('/shop/orders/o1/review') && c[1]?.method === 'POST',
       )
       expect(call).toBeTruthy()
       const body = JSON.parse(String(call?.[1]?.body)) as { productId: string }

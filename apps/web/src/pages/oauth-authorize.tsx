@@ -127,6 +127,8 @@ export function OAuthAuthorizePage() {
     'workspaces:write': t('oauth.scopeWorkspacesWrite', 'Modify workspace files'),
     'buddies:create': t('oauth.scopeBuddiesCreate', 'Create Buddy bots'),
     'buddies:manage': t('oauth.scopeBuddiesManage', 'Manage Buddy bots and send messages'),
+    'commerce:read': t('oauth.scopeCommerceRead', 'Check purchases for this app'),
+    'commerce:write': t('oauth.scopeCommerceWrite', 'Redeem purchases for this app'),
   }
 
   const scopeGroups: { label: string; scopes: string[] }[] = [
@@ -145,6 +147,7 @@ export function OAuthAuthorizePage() {
       scopes: ['workspaces:read', 'workspaces:write'],
     },
     { label: t('oauth.groupBuddy', 'Buddy'), scopes: ['buddies:create', 'buddies:manage'] },
+    { label: t('oauth.groupCommerce', 'Commerce'), scopes: ['commerce:read', 'commerce:write'] },
   ]
 
   if (loading) {

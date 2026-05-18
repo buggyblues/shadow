@@ -16,7 +16,12 @@ import { ensureAuthenticatedSession } from './lib/auth-session'
 import { reloadOnceForChunkError } from './lib/chunk-reload'
 import { queryClient } from './lib/query-client'
 import { ChannelView } from './pages/channel-view'
-import { PersonalShopPage, ProductDetailPage } from './pages/commerce'
+import {
+  AssetHomePage,
+  PersonalShopPage,
+  ProductDetailPage,
+  PurchaseOrderDetailPage,
+} from './pages/commerce'
 import { ContractDetailPage } from './pages/contract-detail'
 import { CreateListingPage } from './pages/create-listing'
 import { DevelopersCloudPage } from './pages/developers-cloud'
@@ -80,6 +85,12 @@ function marketplaceSearch(search: Record<string, unknown>) {
     device: (search.device as string) || undefined,
     os: (search.os as string) || undefined,
     sort: (search.sort as string) || undefined,
+  }
+}
+
+function marketplaceDetailSearch(search: Record<string, unknown>) {
+  return {
+    from: search.from === 'discover' ? 'discover' : undefined,
   }
 }
 
@@ -346,6 +357,7 @@ const marketplaceRoute = createRoute({
 const marketplaceDetailRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/marketplace/$listingId',
+  validateSearch: marketplaceDetailSearch,
   component: MarketplaceDetailPage,
 })
 
@@ -395,18 +407,36 @@ const personalShopRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/shop/me',
   component: PersonalShopPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    view: (search.view as string) || undefined,
+  }),
 })
 
 const userShopRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/shop/users/$userId',
   component: PersonalShopPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    view: (search.view as string) || undefined,
+  }),
 })
 
 const productDetailRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/shop/products/$productId',
   component: ProductDetailPage,
+})
+
+const assetHomeRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/assets/$assetId',
+  component: AssetHomePage,
+})
+
+const purchaseOrderDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/wallet/orders/$entitlementId',
+  component: PurchaseOrderDetailPage,
 })
 
 const cloudRoute = createRoute({
@@ -480,6 +510,8 @@ const routeTree = rootRoute.addChildren([
     personalShopRoute,
     userShopRoute,
     productDetailRoute,
+    assetHomeRoute,
+    purchaseOrderDetailRoute,
     cloudRoute,
     diyCloudRoute,
     cloudSplatRoute,

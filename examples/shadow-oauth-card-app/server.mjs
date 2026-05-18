@@ -6,7 +6,8 @@ const SHADOW_BASE_URL = (process.env.SHADOW_BASE_URL ?? 'https://shadowob.com').
 const CLIENT_ID = process.env.SHADOW_CLIENT_ID ?? ''
 const CLIENT_SECRET = process.env.SHADOW_CLIENT_SECRET ?? ''
 const REDIRECT_URI = process.env.SHADOW_REDIRECT_URI ?? `http://localhost:${PORT}/callback`
-const SCOPES = ['user:read', 'servers:read', 'channels:read']
+const COMMERCE_RESOURCE_ID = process.env.SHADOW_COMMERCE_RESOURCE_ID ?? `${CLIENT_ID}:premium`
+const SCOPES = ['user:read', 'servers:read', 'channels:read', 'commerce:read', 'commerce:write']
 
 const sessions = new Map()
 
@@ -39,6 +40,21 @@ async function readShadow(path, accessToken) {
   })
   if (!response.ok) throw new Error(`${path} failed: ${response.status}`)
   return response.json()
+}
+
+async function writeShadow(path, accessToken, payload) {
+  const response = await fetch(`${SHADOW_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      accept: 'application/json',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(`${path} failed: ${response.status} ${JSON.stringify(body)}`)
+  return body
 }
 
 async function exchangeToken(payload) {
@@ -77,7 +93,7 @@ const server = createServer(async (req, res) => {
         avatarUrl: `http://localhost:${PORT}/avatar.svg`,
         iconUrl: `http://localhost:${PORT}/avatar.svg`,
         coverUrl: `http://localhost:${PORT}/cover.svg`,
-        permissions: ['user:read', 'servers:read', 'channels:read'],
+        permissions: SCOPES,
         fallbackUrl: `http://localhost:${PORT}/`,
       })
     }
@@ -111,7 +127,7 @@ const server = createServer(async (req, res) => {
         state,
       })
       res.setHeader('set-cookie', `shadow_sample_session=${nextSessionId}; HttpOnly; SameSite=Lax`)
-      return redirect(res, `${SHADOW_BASE_URL}/oauth/authorize?${params}`)
+      return redirect(res, `${SHADOW_BASE_URL}/app/oauth/authorize?${params}`)
     }
 
     if (url.pathname === '/callback') {
@@ -147,6 +163,11 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname === '/api/summary') {
       if (!session?.token?.access_token) return json(res, 401, { error: 'not_authenticated' })
+      const entitlementQuery = new URLSearchParams({
+        resourceType: 'external_app',
+        resourceId: COMMERCE_RESOURCE_ID,
+        capability: 'use',
+      })
       const [user, servers] = await Promise.all([
         readShadow('/api/oauth/userinfo', session.token.access_token),
         readShadow('/api/oauth/servers', session.token.access_token),
@@ -158,7 +179,34 @@ const server = createServer(async (req, res) => {
             session.token.access_token,
           )
         : []
-      return json(res, 200, { user, servers, channels })
+      const commerceAccess = await readShadow(
+        `/api/oauth/commerce/entitlements?${entitlementQuery}`,
+        session.token.access_token,
+      )
+      return json(res, 200, {
+        user,
+        servers,
+        channels,
+        commerceAccess,
+        lastRedemption: session.lastRedemption ?? null,
+      })
+    }
+
+    if (url.pathname === '/redeem-commerce') {
+      if (!session?.token?.access_token) throw new Error('No OAuth session in sample app')
+      const result = await writeShadow(
+        '/api/oauth/commerce/entitlements/redeem',
+        session.token.access_token,
+        {
+          idempotencyKey: `sample-${Date.now()}-${randomBytes(4).toString('hex')}`,
+          resourceType: 'external_app',
+          resourceId: COMMERCE_RESOURCE_ID,
+          capability: 'use',
+          metadata: { source: 'shadow-oauth-card-app' },
+        },
+      )
+      sessions.set(sessionId, { ...session, lastRedemption: result })
+      return redirect(res, '/')
     }
 
     if (url.pathname === '/card') {
@@ -191,7 +239,7 @@ fetch('/api/summary').then((r) => r.json()).then((data) => {
     res.end(
       html(
         session?.token
-          ? '<h1>Shadow OAuth Sample</h1><p>Authenticated.</p><p><a href="/card">Open card</a> <a href="/refresh">Refresh token</a></p><pre id="summary">Loading...</pre><script>fetch("/api/summary").then(r=>r.json()).then(v=>summary.textContent=JSON.stringify(v,null,2))</script>'
+          ? '<h1>Shadow OAuth Sample</h1><p>Authenticated.</p><p><a href="/card">Open card</a> <a href="/refresh">Refresh token</a> <a href="/redeem-commerce">Redeem commerce entitlement</a></p><pre id="summary">Loading...</pre><script>fetch("/api/summary").then(r=>r.json()).then(v=>summary.textContent=JSON.stringify(v,null,2))</script>'
           : '<h1>Shadow OAuth Sample</h1><p><a href="/login">Login with Shadow</a></p>',
       ),
     )

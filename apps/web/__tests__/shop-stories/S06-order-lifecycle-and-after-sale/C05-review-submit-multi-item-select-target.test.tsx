@@ -11,6 +11,7 @@ describe('S06/C05 review submit multi item select target', () => {
     fetchApiMock.mockImplementation((path: string, options?: RequestInit) => {
       if (String(path).includes('/shop/orders/o1/review') && options?.method === 'POST')
         return Promise.resolve({ ok: true })
+      if (String(path).includes('/shop/orders/o1/reviews')) return Promise.resolve([])
       if (String(path).includes('/shop/orders'))
         return Promise.resolve([
           {
@@ -50,8 +51,8 @@ describe('S06/C05 review submit multi item select target', () => {
     await userEvent.click(screen.getByRole('button', { name: '商品B' }))
     await userEvent.click(screen.getByRole('button', { name: '提交评价' }))
     await waitFor(() => {
-      const call = fetchApiMock.mock.calls.find((c) =>
-        String(c[0]).includes('/shop/orders/o1/review'),
+      const call = fetchApiMock.mock.calls.find(
+        (c) => String(c[0]).includes('/shop/orders/o1/review') && c[1]?.method === 'POST',
       )
       const body = JSON.parse(String(call?.[1]?.body)) as { productId: string }
       expect(body.productId).toBe('p2')

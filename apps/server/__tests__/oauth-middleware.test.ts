@@ -12,6 +12,11 @@ function createMockContainer(tokenResult: unknown) {
   return {
     resolve: vi.fn().mockReturnValue({
       findAccessTokenByHash: vi.fn().mockResolvedValue(tokenResult),
+      findById: vi.fn().mockResolvedValue({
+        id: 'app-1',
+        clientId: 'client-1',
+        isActive: true,
+      }),
     }),
   } as any
 }
@@ -105,12 +110,14 @@ describe('createOAuthAuthMiddleware', () => {
       tokenId: 't1',
       userId: 'u1',
       appId: 'app-1',
+      appClientId: 'client-1',
       scope: 'user:read servers:read',
     })
     expect(json.actor).toEqual({
       kind: 'oauth',
       userId: 'u1',
       appId: 'app-1',
+      appClientId: 'client-1',
       tokenId: 't1',
       scopes: ['user:read', 'servers:read'],
     })
@@ -125,7 +132,14 @@ describe('createOAuthAuthMiddleware', () => {
       expiresAt: new Date(Date.now() + 60_000),
     })
     const container = {
-      resolve: vi.fn().mockReturnValue({ findAccessTokenByHash: findFn }),
+      resolve: vi.fn().mockReturnValue({
+        findAccessTokenByHash: findFn,
+        findById: vi.fn().mockResolvedValue({
+          id: 'app-1',
+          clientId: 'client-1',
+          isActive: true,
+        }),
+      }),
     } as any
     const app = buildApp(container)
 
