@@ -2790,7 +2790,7 @@
     "visualPromise": {
       "service": "订单服务",
       "file": "购买后打开",
-      "badge": "身份展示",
+      "badge": "徽章",
       "gift": "可赠送收藏",
       "ticket": "可核销凭证",
       "asset": "进入钱包资产",

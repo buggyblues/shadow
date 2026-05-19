@@ -2589,7 +2589,7 @@
     "visualPromise": {
       "service": "주문 서비스",
       "file": "구매 후 열기",
-      "badge": "신분 표시",
+      "badge": "배지",
       "gift": "선물 가능한 수집품",
       "ticket": "사용권",
       "asset": "Wallet 자산으로",

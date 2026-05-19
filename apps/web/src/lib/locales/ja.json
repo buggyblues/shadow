@@ -2589,7 +2589,7 @@
     "visualPromise": {
       "service": "注文サービス",
       "file": "購入後に開く",
-      "badge": "身分表示",
+      "badge": "バッジ",
       "gift": "贈れるコレクション",
       "ticket": "利用券",
       "asset": "Wallet 資産へ",

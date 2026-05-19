@@ -2790,7 +2790,7 @@
     "visualPromise": {
       "service": "Order service",
       "file": "Unlock after purchase",
-      "badge": "Identity display",
+      "badge": "Badge",
       "gift": "Giftable collectible",
       "ticket": "Redeemable pass",
       "asset": "Lands in Wallet",
