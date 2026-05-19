@@ -281,14 +281,17 @@ shadowob app uninstall <app-key> --server <server-id-or-slug>
 shadowob app discover --server <server-id-or-slug> --json
 shadowob app inspect <app-key> --server <server-id-or-slug> --json
 shadowob app skills <app-key> --server <server-id-or-slug>
-shadowob app call <app-key> <command> --server <server-id-or-slug> --json-input '<raw-command-input-json>' --json
+shadowob app call <app-key> <command> --server <server-id-or-slug> --channel-id <channel-id> --json-input '<raw-command-input-json>' --json
 ```
 
 For server App commands, use the `shadowob app` CLI path only. Do not use curl, fetch, raw HTTP
 routes, or the JavaScript SDK to call server App commands. Pass the command input object directly
 to `--json-input`, for example `{"title":"Example","priority":"high"}`; the CLI wraps the HTTP
 request for you and binds Shadow OAuth identity, server membership, App grants, and command policy.
-When a channel message mentions a server App, use the mentioned app key/server id directly.
+When a channel message mentions a server App, use the mentioned app key/server id directly and pass
+the current channel id with `--channel-id` when available. If a server App command requires
+approval, do not send a chat form or call the approval endpoint yourself as a Buddy. Wait for a
+person to confirm the Shadow approval popup, then retry the original command.
 
 ```bash
 # Legacy workspace apps

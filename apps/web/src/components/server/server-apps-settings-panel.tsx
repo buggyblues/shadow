@@ -14,11 +14,13 @@ import {
   Search,
   ShieldCheck,
   Terminal,
+  Trash2,
   UserRound,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { useConfirmStore } from '../common/confirm-dialog'
 
 interface ServerAccess {
   canManage: boolean
@@ -75,6 +77,8 @@ interface ServerAppIntegration {
   iframeEntry?: string | null
   allowedOrigins: string[]
   manifest: ServerAppManifest
+  defaultPermissions: string[]
+  defaultApprovalMode: 'none' | 'first_time' | 'every_time' | 'policy'
   grants?: Array<{
     id: string
     buddyAgentId: string
@@ -118,6 +122,18 @@ function uniquePermissions(commands: ServerAppCommand[]) {
 
 function manifestAuthType(manifest: ServerAppManifest) {
   return manifest.api.auth?.type ?? 'oauth2-bearer'
+}
+
+function serverAppErrorMessage(error: unknown, t: (key: string) => string) {
+  if (!(error instanceof Error)) return String(error)
+  if (
+    error.message.includes('Private or local provider URLs') ||
+    error.message.includes('Local provider URLs') ||
+    error.message.includes('resolves to a private or local address')
+  ) {
+    return t('serverApps.privateUrlError')
+  }
+  return error.message
 }
 
 function AuthBadge({ manifest }: { manifest: ServerAppManifest }) {
@@ -165,6 +181,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
   const [discovery, setDiscovery] = useState<ServerAppDiscovery | null>(null)
   const [selectedBuddyAgentId, setSelectedBuddyAgentId] = useState('')
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
+  const [defaultPermissions, setDefaultPermissions] = useState<string[]>([])
 
   const { data: access } = useQuery({
     queryKey: ['server-access', serverSlug],
@@ -223,6 +240,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
   useEffect(() => {
     if (selectedApp) {
       setSelectedPermissions(uniquePermissions(selectedApp.manifest.commands))
+      setDefaultPermissions(selectedApp.defaultPermissions ?? [])
     }
   }, [selectedApp?.id, selectedApp?.manifest.commands])
 
@@ -271,6 +289,19 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
     },
   })
 
+  const uninstallApp = useMutation({
+    mutationFn: (app: ServerAppIntegration) =>
+      fetchApi(`/api/servers/${serverSlug}/apps/${app.appKey}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: (_result, app) => {
+      setSelectedAppKey((current) => (current === app.appKey ? '' : current))
+      queryClient.invalidateQueries({ queryKey: ['server-apps', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['server-app-catalog', serverSlug] })
+      queryClient.removeQueries({ queryKey: ['server-app-detail', serverSlug, app.appKey] })
+    },
+  })
+
   const grantBuddy = useMutation({
     mutationFn: () =>
       fetchApi(`/api/servers/${serverSlug}/apps/${selectedApp!.appKey}/grants`, {
@@ -288,8 +319,37 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
     },
   })
 
+  const updateAccessPolicy = useMutation({
+    mutationFn: () =>
+      fetchApi<ServerAppIntegration>(
+        `/api/servers/${serverSlug}/apps/${selectedApp!.appKey}/access-policy`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            defaultPermissions,
+            defaultApprovalMode: selectedApp?.defaultApprovalMode ?? 'none',
+          }),
+        },
+      ),
+    onSuccess: (app) => {
+      setDefaultPermissions(app.defaultPermissions ?? [])
+      queryClient.invalidateQueries({
+        queryKey: ['server-app-detail', serverSlug, selectedApp?.appKey],
+      })
+      queryClient.invalidateQueries({ queryKey: ['server-apps', serverSlug] })
+    },
+  })
+
   const togglePermission = (permission: string) => {
     setSelectedPermissions((current) =>
+      current.includes(permission)
+        ? current.filter((item) => item !== permission)
+        : [...current, permission],
+    )
+  }
+
+  const toggleDefaultPermission = (permission: string) => {
+    setDefaultPermissions((current) =>
       current.includes(permission)
         ? current.filter((item) => item !== permission)
         : [...current, permission],
@@ -395,7 +455,11 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
             setSelectedBuddyAgentId={setSelectedBuddyAgentId}
             selectedPermissions={selectedPermissions}
             togglePermission={togglePermission}
+            defaultPermissions={defaultPermissions}
+            toggleDefaultPermission={toggleDefaultPermission}
+            updateAccessPolicy={updateAccessPolicy}
             grantBuddy={grantBuddy}
+            uninstallApp={uninstallApp}
           />
         ) : (
           <div className="grid min-h-[280px] place-items-center text-center">
@@ -403,6 +467,12 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
               <AppWindow className="mx-auto mb-3 text-text-muted" size={28} />
               <p className="text-sm font-bold text-text-primary">{t('serverApps.selectApp')}</p>
               <p className="mt-1 text-sm text-text-muted">{t('serverApps.selectFromSidebar')}</p>
+              {access?.canManage && (
+                <Button variant="primary" size="sm" onClick={openAdd} className="mt-4">
+                  <CirclePlus size={14} />
+                  {t('serverApps.install')}
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -480,12 +550,23 @@ function AddAppView(props: {
             )
           })}
           {props.catalog.length === 0 && (
-            <div className="rounded-xl border border-dashed border-border-subtle p-4 text-sm text-text-muted">
-              {t('serverApps.catalogEmpty')}
+            <div className="rounded-xl border border-dashed border-border-subtle p-4">
+              <p className="text-sm text-text-muted">{t('serverApps.catalogEmpty')}</p>
+              <Button
+                variant="glass"
+                size="sm"
+                onClick={() => props.setAddMode('custom')}
+                className="mt-3"
+              >
+                <CirclePlus size={14} />
+                {t('serverApps.customInstall')}
+              </Button>
             </div>
           )}
           {props.installCatalogApp.error instanceof Error && (
-            <p className="text-xs text-danger">{props.installCatalogApp.error.message}</p>
+            <p className="text-xs text-danger">
+              {serverAppErrorMessage(props.installCatalogApp.error, t)}
+            </p>
           )}
         </div>
       ) : (
@@ -509,7 +590,9 @@ function AddAppView(props: {
             </Button>
           </div>
           {props.discoverApp.error instanceof Error && (
-            <p className="text-xs text-danger">{props.discoverApp.error.message}</p>
+            <p className="text-xs text-danger">
+              {serverAppErrorMessage(props.discoverApp.error, t)}
+            </p>
           )}
           {props.discovery && (
             <div className="rounded-xl border border-primary/25 bg-primary/10 p-4">
@@ -543,7 +626,9 @@ function AddAppView(props: {
                 {t('serverApps.authorizeInstall')}
               </Button>
               {props.installApp.error instanceof Error && (
-                <p className="mt-2 text-xs text-danger">{props.installApp.error.message}</p>
+                <p className="mt-2 text-xs text-danger">
+                  {serverAppErrorMessage(props.installApp.error, t)}
+                </p>
               )}
             </div>
           )}
@@ -561,12 +646,26 @@ function DetailView(props: {
   setSelectedBuddyAgentId: (id: string) => void
   selectedPermissions: string[]
   togglePermission: (permission: string) => void
+  defaultPermissions: string[]
+  toggleDefaultPermission: (permission: string) => void
+  updateAccessPolicy: UseMutationResult<ServerAppIntegration, Error, void>
   grantBuddy: UseMutationResult<unknown, Error, void>
+  uninstallApp: UseMutationResult<unknown, Error, ServerAppIntegration>
 }) {
   const { t } = useTranslation()
   const [commandsOpen, setCommandsOpen] = useState(false)
   const [accessOpen, setAccessOpen] = useState(false)
   const grantPermissions = uniquePermissions(props.app.manifest.commands)
+  const confirmUninstall = async () => {
+    const ok = await useConfirmStore.getState().confirm({
+      title: t('serverApps.uninstallConfirmTitle'),
+      message: t('serverApps.uninstallConfirmMessage', { name: props.app.name }),
+      confirmLabel: t('serverApps.uninstallApp'),
+      danger: true,
+    })
+    if (ok) props.uninstallApp.mutate(props.app)
+  }
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5">
       <div className="flex items-start gap-3">
@@ -580,7 +679,23 @@ function DetailView(props: {
             {props.app.description ?? t('serverApps.noDescription')}
           </p>
         </div>
+        {props.access?.canManage && (
+          <Button
+            variant="danger"
+            size="sm"
+            disabled={props.uninstallApp.isPending}
+            loading={props.uninstallApp.isPending}
+            onClick={confirmUninstall}
+            className="shrink-0"
+          >
+            <Trash2 size={14} />
+            {t('serverApps.uninstallApp')}
+          </Button>
+        )}
       </div>
+      {props.uninstallApp.error instanceof Error && (
+        <p className="text-xs text-danger">{props.uninstallApp.error.message}</p>
+      )}
 
       <section>
         <SectionToggle
@@ -625,63 +740,112 @@ function DetailView(props: {
             count={props.app.grants?.length ?? 0}
           />
           {accessOpen && (
-            <div className="mt-3 rounded-xl border border-border-subtle bg-bg-tertiary/20 p-3">
-              <p className="mb-3 text-xs leading-5 text-text-muted">
-                {t('serverApps.accessDescription')}
-              </p>
-              {props.buddies.length > 0 ? (
-                <div className="space-y-3">
-                  <select
-                    value={props.selectedBuddyAgentId}
-                    onChange={(event) => props.setSelectedBuddyAgentId(event.target.value)}
-                    className="h-9 w-full rounded-lg border border-border-subtle bg-bg-primary px-3 text-sm text-text-primary outline-none focus:border-primary"
-                  >
-                    {props.buddies.map((buddy) => (
-                      <option key={buddy.agent!.id} value={buddy.agent!.id}>
-                        {buddy.nickname}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="grid gap-1 md:grid-cols-2">
-                    {grantPermissions.map((permission) => (
-                      <label
-                        key={permission}
-                        className="flex items-center gap-2 rounded-md bg-bg-primary/50 px-2 py-2 text-xs text-text-secondary"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={props.selectedPermissions.includes(permission)}
-                          onChange={() => props.togglePermission(permission)}
-                          className="h-4 w-4 accent-primary"
-                        />
-                        <span className="min-w-0 break-all">{permission}</span>
-                      </label>
-                    ))}
+            <div className="mt-3 space-y-4 rounded-xl border border-border-subtle bg-bg-tertiary/20 p-3">
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-black text-text-primary">
+                      {t('serverApps.defaultAccessTitle')}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-text-muted">
+                      {t('serverApps.defaultAccessDescription')}
+                    </p>
                   </div>
                   <Button
-                    variant="primary"
+                    variant="glass"
                     size="sm"
-                    disabled={
-                      !props.selectedBuddyAgentId ||
-                      props.selectedPermissions.length === 0 ||
-                      props.grantBuddy.isPending
-                    }
-                    loading={props.grantBuddy.isPending}
-                    onClick={() => props.grantBuddy.mutate()}
+                    disabled={props.updateAccessPolicy.isPending}
+                    loading={props.updateAccessPolicy.isPending}
+                    onClick={() => props.updateAccessPolicy.mutate()}
                   >
-                    <UserRound size={14} />
-                    {t('serverApps.grantButton')}
+                    <ShieldCheck size={14} />
+                    {t('serverApps.saveDefaultAccess')}
                   </Button>
-                  {props.grantBuddy.isSuccess && (
-                    <p className="text-xs text-primary">{t('serverApps.grantSuccess')}</p>
-                  )}
-                  {props.grantBuddy.error instanceof Error && (
-                    <p className="text-xs text-danger">{props.grantBuddy.error.message}</p>
-                  )}
                 </div>
-              ) : (
-                <p className="text-sm text-text-muted">{t('serverApps.noBuddies')}</p>
-              )}
+                <div className="grid gap-1 md:grid-cols-2">
+                  {grantPermissions.map((permission) => (
+                    <label
+                      key={permission}
+                      className="flex items-center gap-2 rounded-md bg-bg-primary/50 px-2 py-2 text-xs text-text-secondary"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={props.defaultPermissions.includes(permission)}
+                        onChange={() => props.toggleDefaultPermission(permission)}
+                        className="h-4 w-4 accent-primary"
+                      />
+                      <span className="min-w-0 break-all">{permission}</span>
+                    </label>
+                  ))}
+                </div>
+                {props.updateAccessPolicy.isSuccess && (
+                  <p className="mt-2 text-xs text-primary">{t('serverApps.defaultAccessSaved')}</p>
+                )}
+                {props.updateAccessPolicy.error instanceof Error && (
+                  <p className="mt-2 text-xs text-danger">
+                    {props.updateAccessPolicy.error.message}
+                  </p>
+                )}
+              </div>
+              <div className="h-px bg-border-subtle" />
+              <div>
+                <p className="mb-3 text-xs leading-5 text-text-muted">
+                  {t('serverApps.accessDescription')}
+                </p>
+                {props.buddies.length > 0 ? (
+                  <div className="space-y-3">
+                    <select
+                      value={props.selectedBuddyAgentId}
+                      onChange={(event) => props.setSelectedBuddyAgentId(event.target.value)}
+                      className="h-9 w-full rounded-lg border border-border-subtle bg-bg-primary px-3 text-sm text-text-primary outline-none focus:border-primary"
+                    >
+                      {props.buddies.map((buddy) => (
+                        <option key={buddy.agent!.id} value={buddy.agent!.id}>
+                          {buddy.nickname}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="grid gap-1 md:grid-cols-2">
+                      {grantPermissions.map((permission) => (
+                        <label
+                          key={permission}
+                          className="flex items-center gap-2 rounded-md bg-bg-primary/50 px-2 py-2 text-xs text-text-secondary"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={props.selectedPermissions.includes(permission)}
+                            onChange={() => props.togglePermission(permission)}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          <span className="min-w-0 break-all">{permission}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={
+                        !props.selectedBuddyAgentId ||
+                        props.selectedPermissions.length === 0 ||
+                        props.grantBuddy.isPending
+                      }
+                      loading={props.grantBuddy.isPending}
+                      onClick={() => props.grantBuddy.mutate()}
+                    >
+                      <UserRound size={14} />
+                      {t('serverApps.grantButton')}
+                    </Button>
+                    {props.grantBuddy.isSuccess && (
+                      <p className="text-xs text-primary">{t('serverApps.grantSuccess')}</p>
+                    )}
+                    {props.grantBuddy.error instanceof Error && (
+                      <p className="text-xs text-danger">{props.grantBuddy.error.message}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-text-muted">{t('serverApps.noBuddies')}</p>
+                )}
+              </div>
             </div>
           )}
         </section>

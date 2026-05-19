@@ -9,6 +9,7 @@ export {
   type ServerAppManifest,
   serverAppBuddyGrants,
   serverAppCatalogEntries,
+  serverAppCommandConsents,
   serverAppCommandTokens,
   serverAppIntegrations,
 } from './app-integrations'

@@ -24,10 +24,30 @@ npx @shadowob/connector@latest connect \
   --token buddy-token
 ```
 
-Use `--dry-run` to preview writes and commands. Use `--json` with `plan` when embedding the plan in another tool.
+`--server-url` defaults to `https://shadowob.com`. Use `--dry-run` to preview writes and commands. Use `--json` with `plan`, `scan`, `status`, or `doctor` when embedding output in another tool.
 
-`connect` merges existing configuration instead of replacing it:
+Operational commands:
 
+```bash
+npx @shadowob/connector@latest scan
+npx @shadowob/connector@latest status --target cc-connect
+npx @shadowob/connector@latest doctor --target hermes
+npx @shadowob/connector@latest fix --target openclaw --server-url https://shadowob.com --token buddy-token
+npx @shadowob/connector@latest update --target cc-connect --server-url https://shadowob.com --token buddy-token
+```
+
+- `scan` probes local OpenClaw, Hermes Agent, and cc-connect installs/config files, then prints connection instructions for each target.
+- `status` checks local connector health and exits successfully.
+- `doctor` prints the same checks with fix guidance and exits non-zero when required config is broken.
+- `fix` reinstalls common Shadow CLI/skill assets and repairs the target connector config.
+- `update` refreshes the same assets/config and installs target runtime dependencies by default.
+
+`connect`, `fix`, and `update` merge existing configuration instead of replacing it:
+
+- Shadow CLI access is installed/configured for the Buddy: if `shadowob` is not
+  on `PATH`, the connector writes a `~/.local/bin/shadowob` shim; it installs
+  the official Shadow skill files into common agent skill directories; and it
+  writes a Buddy profile to `~/.shadowob/shadowob.config.json`.
 - OpenClaw JSON defaults to `~/.shadowob/openclaw.json` or `--openclaw-config`.
 - Hermes updates `~/.hermes/.env` and merges `~/.hermes/config.yaml`.
 - cc-connect merges the ShadowOB platform into `~/.cc-connect/config.toml`.

@@ -10,6 +10,7 @@ import type { OpenClawConfig } from '../config/schema.js'
 import { openclawContainerSpec } from './container.js'
 import { type RuntimeAdapter, registerRuntime } from './index.js'
 import {
+  addShadowobCliAuth,
   addShadowobSkill,
   hasRuntimeExtensions,
   json,
@@ -65,6 +66,7 @@ const openclawAdapter: RuntimeAdapter = {
       [SHADOW_SLASH_COMMANDS_PATH]: json(openClawSlashCommands),
     }
     addShadowobSkill(runtimeFiles, 'openclaw', context.agent.runtime)
+    addShadowobCliAuth(runtimeFiles, context.runtimeExtensions)
 
     const configData: Record<string, string> = {
       'config.json': JSON.stringify(openclawConfig, null, 2),

@@ -23,6 +23,12 @@ export interface ValidationResult {
 const DEFAULT_CONFIG_DIR = join(homedir(), '.shadowob')
 const _DEFAULT_CONFIG_FILE = join(DEFAULT_CONFIG_DIR, 'shadowob.config.json')
 
+function expandEnvPlaceholders(value: string): string {
+  return value.replace(/\$\{(?:env:)?([A-Za-z_][A-Za-z0-9_]*)\}/g, (_match, key: string) => {
+    return process.env[key] ?? ''
+  })
+}
+
 export class ConfigManager {
   private config: Config | null = null
   private configFile: string
@@ -60,7 +66,12 @@ export class ConfigManager {
     const config = await this.load()
     const profileName = name ?? config.currentProfile
     if (!profileName) return null
-    return config.profiles[profileName] ?? null
+    const profile = config.profiles[profileName]
+    if (!profile) return null
+    return {
+      serverUrl: expandEnvPlaceholders(profile.serverUrl),
+      token: expandEnvPlaceholders(profile.token),
+    }
   }
 
   async getCurrentProfileName(): Promise<string | null> {
@@ -149,22 +160,25 @@ export class ConfigManager {
     for (const [name, profile] of Object.entries(config.profiles)) {
       const profileResult = { valid: true }
 
-      if (!profile.serverUrl) {
+      const serverUrl = expandEnvPlaceholders(profile.serverUrl)
+      const token = expandEnvPlaceholders(profile.token)
+
+      if (!serverUrl) {
         profileResult.valid = false
         result.errors.push(`Profile "${name}" missing serverUrl`)
       } else {
         try {
-          new URL(profile.serverUrl)
+          new URL(serverUrl)
         } catch {
           profileResult.valid = false
-          result.errors.push(`Profile "${name}" has invalid serverUrl: ${profile.serverUrl}`)
+          result.errors.push(`Profile "${name}" has invalid serverUrl: ${serverUrl}`)
         }
       }
 
-      if (!profile.token) {
+      if (!token) {
         profileResult.valid = false
         result.errors.push(`Profile "${name}" missing token`)
-      } else if (!profile.token.includes('.')) {
+      } else if (!token.includes('.')) {
         result.warnings.push(`Profile "${name}" token does not look like a JWT`)
       }
 

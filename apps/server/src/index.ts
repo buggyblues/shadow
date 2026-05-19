@@ -123,11 +123,18 @@ async function main() {
     logger.warn({ err }, 'Cloud template seeding skipped')
   }
 
-  if (process.env.SHADOW_SERVER_APP_DEMO_MANIFEST_URL) {
+  const serverAppManifestUrls = [
+    process.env.SHADOW_SERVER_APP_DEMO_MANIFEST_URL,
+    ...(process.env.SHADOW_SERVER_APP_CATALOG_MANIFEST_URLS ?? '').split(','),
+  ]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+
+  for (const manifestUrl of serverAppManifestUrls) {
     try {
       const appIntegrationService = container.resolve('appIntegrationService')
       const result = await appIntegrationService.seedCatalogEntry({
-        manifestUrl: process.env.SHADOW_SERVER_APP_DEMO_MANIFEST_URL,
+        manifestUrl,
         status: 'active',
       })
       logger.info({ result }, 'Server app catalog seeded')

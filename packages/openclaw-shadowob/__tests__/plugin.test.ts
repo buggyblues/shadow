@@ -449,6 +449,158 @@ describe('Slash Commands', () => {
     }
   })
 
+  it('should inject installed server app context for natural-language channel tasks', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url)
+      if (href.endsWith('/api/servers/server-1/apps')) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: 'server-app-1',
+              serverId: 'server-1',
+              appKey: 'shadow-kanban',
+              name: 'Shadow Kanban',
+              description: 'Trello-style task board for server collaboration.',
+              iconUrl: null,
+              manifestUrl: null,
+              manifest: {
+                schemaVersion: 'shadow.app/1',
+                appKey: 'shadow-kanban',
+                name: 'Shadow Kanban',
+                version: '0.1.0',
+                entry: '/app',
+                permissions: [],
+                commands: [
+                  {
+                    name: 'list-cards',
+                    title: 'List Cards',
+                    description: 'List board cards by column.',
+                    path: '/api/commands/list-cards',
+                    method: 'POST',
+                    input: 'json',
+                    permission: 'kanban.cards:read',
+                    action: 'read',
+                    dataClass: 'server-private',
+                  },
+                ],
+              },
+              iframeEntry: '/app',
+              allowedOrigins: ['http://localhost:4201'],
+              apiBaseUrl: 'http://host.lima.internal:4201',
+              defaultPermissions: ['kanban.cards:read'],
+              defaultApprovalMode: 'first_time',
+              status: 'active',
+              installedByUserId: 'user-1',
+              createdAt: '2026-05-19T00:00:00.000Z',
+              updatedAt: '2026-05-19T00:00:00.000Z',
+            },
+          ],
+          text: async () => '',
+        }
+      }
+      if (href.endsWith('/api/servers/shadow-plays/apps/shadow-kanban/skills')) {
+        return {
+          ok: true,
+          json: async () => ({
+            markdown:
+              '# Shadow Kanban\nUse `shadowob app call "shadow-kanban" list-cards --json` to inspect the board.',
+          }),
+          text: async () => '',
+        }
+      }
+      return { ok: true, json: async () => ({}), text: async () => '' }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const dispatch = vi.fn(async () => undefined)
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: null,
+            sessionKey: null,
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      await processShadowMessage({
+        message: {
+          id: 'msg-kanban',
+          content: '当前 kanban 看板里有什么？按列总结一下。',
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          createdAt: '2026-05-19T09:07:40.000Z',
+          updatedAt: '2026-05-19T09:07:40.000Z',
+          author: {
+            id: 'user-1',
+            username: 'alice',
+            displayName: 'Alice',
+            isBot: false,
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime: {},
+        core,
+        botUserId: 'bot-1',
+        botUsername: 'strategy-buddy',
+        agentId: 'strategy-buddy',
+        channelPolicies: new Map(),
+        channelServerMap: new Map([
+          [
+            'ch-1',
+            {
+              serverId: 'server-1',
+              serverSlug: 'shadow-plays',
+              serverName: 'Shadow Plays',
+              channelName: 'general',
+            },
+          ],
+        ]),
+        slashCommands: [],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      const ctx = dispatch.mock.calls[0]?.[0]?.ctx as {
+        BodyForAgent?: string
+        ServerApps?: Array<{ appKey: string }>
+        ServerAppSummary?: string
+      }
+      expect(ctx.BodyForAgent).toContain('Shadow Server Apps available in this server')
+      expect(ctx.BodyForAgent).toContain('Shadow Kanban')
+      expect(ctx.BodyForAgent).toContain('Do not wait for the user to say a CLI command')
+      expect(ctx.BodyForAgent).toContain('shadowob app call')
+      expect(ctx.BodyForAgent).toContain('--channel-id "<current-channel-id>"')
+      expect(ctx.BodyForAgent).toContain('not chat interactive dialogs')
+      expect(ctx.ServerApps?.[0]?.appKey).toBe('shadow-kanban')
+      expect(ctx.ServerAppSummary).toContain('Shadow Kanban (shadow-kanban)')
+      vi.runOnlyPendingTimers()
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('should pass OpenClaw-native slash commands through without prompt rewriting', async () => {
     vi.useFakeTimers()
     const { processShadowMessage } = await import('../src/monitor/channel-message.js')

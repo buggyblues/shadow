@@ -10,10 +10,17 @@ export class ApiError extends Error {
   code?: string
   capability?: string
   membership?: unknown
+  params?: Record<string, unknown>
 
   constructor(
     message: string,
-    input: { status: number; code?: string; capability?: string; membership?: unknown },
+    input: {
+      status: number
+      code?: string
+      capability?: string
+      membership?: unknown
+      params?: Record<string, unknown>
+    },
   ) {
     super(message)
     this.name = 'ApiError'
@@ -21,6 +28,7 @@ export class ApiError extends Error {
     this.code = input.code
     this.capability = input.capability
     this.membership = input.membership
+    this.params = input.params
   }
 }
 
@@ -115,9 +123,13 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
     let code: string | undefined
     let capability: string | undefined
     let membership: unknown
+    let params: Record<string, unknown> | undefined
     if (typeof body === 'object' && body !== null) {
       const b = body as Record<string, unknown>
       if (typeof b.code === 'string') code = b.code
+      if (b.params && typeof b.params === 'object' && !Array.isArray(b.params)) {
+        params = b.params as Record<string, unknown>
+      }
       if (typeof b.capability === 'string') capability = b.capability
       if ('membership' in b) membership = b.membership
       if (typeof b.detail === 'string') {
@@ -135,7 +147,13 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
         errorMessage = b.message
       }
     }
-    throw new ApiError(errorMessage, { status: response.status, code, capability, membership })
+    throw new ApiError(errorMessage, {
+      status: response.status,
+      code,
+      capability,
+      membership,
+      params,
+    })
   }
 
   return response.json() as Promise<T>

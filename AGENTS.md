@@ -27,6 +27,33 @@ Shadow is a social/chat platform.
 - Use project-specific config files
 - **Ensure CI results match local results**
 
+### Command Output Hygiene
+
+Long-running infrastructure commands can flood the model context. Prefer quiet,
+focused command output by default, and only expand logs when diagnosing a failure.
+
+- For successful `pnpm build`, `docker build`, `docker compose`, `kind`, and
+  `kubectl` commands, report the exit status and the few important lines only.
+  Do not stream full successful build output into the conversation.
+- When using Codex terminal tools, set a small `max_output_tokens` for noisy
+  commands. Increase it only after a command fails and the extra output is needed.
+- For Docker Compose logs, always scope by service and time/line count, for
+  example `docker compose logs server --tail=120` or
+  `docker compose logs server --since=5m`. Pipe through `rg` when checking for a
+  known error, request id, command name, or marker.
+- For Kubernetes inspection, prefer compact queries before full YAML:
+  `kubectl get pod -o wide`, `kubectl get ... -o jsonpath=...`, or
+  `kubectl get ... -o custom-columns=...`. Use `kubectl describe` or full
+  `-o yaml` only when events/spec paths are actually needed.
+- For `kubectl logs`, always pass `--tail`, `--since`, and `-c <container>` when
+  the pod has multiple containers. Avoid dumping unbounded logs.
+- For long builds where the raw output may matter later, redirect the full log to
+  `.tmp/codex-logs/` and show only the tail or filtered failure summary in the
+  conversation.
+- If a command appears hung with no output, check process/container status with a
+  compact command before retrying or replacing the command. Do not keep polling a
+  silent process indefinitely.
+
 ### Feature Development
 
 - **New features must be implemented on both web and mobile**

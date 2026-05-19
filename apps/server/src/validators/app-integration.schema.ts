@@ -30,6 +30,8 @@ const originSchema = z.string().refine((value) => {
   }
 }, 'Origin must be a valid http(s) origin')
 
+const approvalModeSchema = z.enum(['none', 'first_time', 'every_time', 'policy'])
+
 export const serverAppCommandSchema = z.object({
   name: z
     .string()
@@ -52,7 +54,7 @@ export const serverAppCommandSchema = z.object({
     'secret',
     'cloud-secret',
   ]),
-  approvalMode: z.enum(['none', 'first_time', 'every_time', 'policy']).default('none').optional(),
+  approvalMode: approvalModeSchema.default('none').optional(),
   binary: z
     .object({
       supported: z.boolean().optional(),
@@ -89,6 +91,12 @@ export const serverAppManifestSchema = z.object({
       })
       .optional(),
   }),
+  access: z
+    .object({
+      defaultPermissions: z.array(z.string().min(1).max(160)).max(200).optional(),
+      defaultApprovalMode: approvalModeSchema.default('none').optional(),
+    })
+    .optional(),
   commands: z.array(serverAppCommandSchema).min(1).max(100),
   skills: z
     .array(
@@ -149,8 +157,19 @@ export const grantServerAppBuddySchema = z.object({
   buddyAgentId: z.string().uuid(),
   permissions: z.array(z.string().min(1).max(160)).min(1).max(200),
   resourceRules: z.record(z.unknown()).optional(),
-  approvalMode: z.enum(['none', 'first_time', 'every_time', 'policy']).default('none').optional(),
+  approvalMode: approvalModeSchema.default('none').optional(),
   expiresAt: z.string().datetime().optional(),
+})
+
+export const updateServerAppAccessPolicySchema = z.object({
+  defaultPermissions: z.array(z.string().min(1).max(160)).max(200),
+  defaultApprovalMode: approvalModeSchema.default('none').optional(),
+})
+
+export const approveServerAppCommandSchema = z.object({
+  commandName: z.string().min(1).max(120),
+  buddyAgentId: z.string().uuid().optional(),
+  remember: z.boolean().default(true).optional(),
 })
 
 export const callServerAppCommandSchema = z.object({
@@ -164,4 +183,6 @@ export type InstallServerAppInput = z.infer<typeof installServerAppSchema>
 export type CreateServerAppCatalogEntryInput = z.infer<typeof createServerAppCatalogEntrySchema>
 export type InstallServerAppFromCatalogInput = z.infer<typeof installServerAppFromCatalogSchema>
 export type GrantServerAppBuddyInput = z.infer<typeof grantServerAppBuddySchema>
+export type UpdateServerAppAccessPolicyInput = z.infer<typeof updateServerAppAccessPolicySchema>
+export type ApproveServerAppCommandInput = z.infer<typeof approveServerAppCommandSchema>
 export type CallServerAppCommandInput = z.infer<typeof callServerAppCommandSchema>

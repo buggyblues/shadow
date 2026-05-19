@@ -66,4 +66,12 @@ shadowob app call demo-desk files.summarize_upload \
 
 ## Docker Compose
 
-The repository `docker-compose.yml` includes this demo as `shadow-server-app-demo`. The server is configured with `SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS=shadow-server-app-demo` so Cloud templates can install the demo App from inside the compose network.
+The repository root `docker-compose.yml` does not build this demo App by default. Run the App as a separate process or compose project, then point Shadow at its manifest URL:
+
+```bash
+SHADOW_SERVER_APP_DEMO_MANIFEST_URL="http://host.lima.internal:4199/.well-known/shadow-app.json" \
+SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS="host.lima.internal" \
+docker compose up -d server
+```
+
+The manifest is the protocol boundary between Shadow and the App. Keep `SHADOW_APP_PUBLIC_BASE_URL` reachable by the browser and `SHADOW_APP_API_BASE_URL` reachable by the Shadow API server.

@@ -1189,6 +1189,13 @@
     "employerSignature": "雇主簽章",
     "approved": "已批准"
   },
+  "serverApps": {
+    "noIframe": "此應用未提供 iframe 入口。",
+    "commandApprovalTitle": "授權 App 命令",
+    "commandApprovalMessage": "{{app}} 想執行 {{command}}，需要使用 {{permission}}。",
+    "commandApprovalDenied": "已取消命令授權。",
+    "commandApprovalConfirm": "授權並繼續"
+  },
   "apps": {
     "noApps": "暫無應用"
   },

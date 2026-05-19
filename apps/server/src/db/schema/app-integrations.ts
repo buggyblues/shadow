@@ -29,6 +29,10 @@ export type ServerAppManifest = {
       type: 'oauth2-bearer'
     }
   }
+  access?: {
+    defaultPermissions?: string[]
+    defaultApprovalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+  }
   commands: Array<{
     name: string
     title?: string
@@ -83,6 +87,8 @@ export const serverAppIntegrations = pgTable(
     iframeEntry: text('iframe_entry'),
     allowedOrigins: jsonb('allowed_origins').$type<string[]>().notNull().default([]),
     apiBaseUrl: text('api_base_url').notNull(),
+    defaultPermissions: jsonb('default_permissions').$type<string[]>().notNull().default([]),
+    defaultApprovalMode: varchar('default_approval_mode', { length: 24 }).notNull().default('none'),
     status: varchar('status', { length: 24 }).notNull().default('active'),
     installedByUserId: uuid('installed_by_user_id')
       .notNull()
@@ -185,6 +191,49 @@ export const serverAppBuddyGrants = pgTable(
     ),
     serverAppBuddyGrantsBuddyAgentIdIdx: index('server_app_buddy_grants_buddy_agent_id_idx').on(
       t.buddyAgentId,
+    ),
+  }),
+)
+
+export const serverAppCommandConsents = pgTable(
+  'server_app_command_consents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    serverAppId: uuid('server_app_id')
+      .notNull()
+      .references(() => serverAppIntegrations.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
+    appKey: varchar('app_key', { length: 80 }).notNull(),
+    command: varchar('command', { length: 120 }).notNull(),
+    permission: text('permission').notNull(),
+    subjectKind: varchar('subject_kind', { length: 24 }).notNull(),
+    subjectKey: text('subject_key').notNull(),
+    subjectUserId: uuid('subject_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    buddyAgentId: uuid('buddy_agent_id').references(() => agents.id, { onDelete: 'cascade' }),
+    grantedByUserId: uuid('granted_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    approvalMode: varchar('approval_mode', { length: 24 }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    serverAppCommandConsentsUnique: uniqueIndex('server_app_command_consents_subject_unique').on(
+      t.serverAppId,
+      t.command,
+      t.subjectKind,
+      t.subjectKey,
+    ),
+    serverAppCommandConsentsServerAppIdIdx: index(
+      'server_app_command_consents_server_app_id_idx',
+    ).on(t.serverAppId),
+    serverAppCommandConsentsSubjectIdx: index('server_app_command_consents_subject_idx').on(
+      t.subjectKind,
+      t.subjectKey,
     ),
   }),
 )

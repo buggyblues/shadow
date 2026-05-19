@@ -69,6 +69,20 @@ function shadowobCliSkill(): string {
   return readFileSync(ROOT_SKILL_PATH, 'utf8')
 }
 
+function expectShadowCliAuth(files: Record<string, string>): void {
+  const raw = files['/home/shadow/.shadowob/shadowob.config.json']
+  expect(raw).toBeTypeOf('string')
+  const config = JSON.parse(raw ?? '{}') as {
+    profiles?: Record<string, { serverUrl?: string; token?: string }>
+    currentProfile?: string
+  }
+  expect(config.currentProfile).toBe('buddy-1')
+  expect(config.profiles?.['buddy-1']).toEqual({
+    serverUrl: '${SHADOW_SERVER_URL}',
+    token: '${SHADOW_TOKEN_BUDDY_1}',
+  })
+}
+
 describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
   beforeEach(registerShadowobOnly)
 
@@ -89,6 +103,7 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
     expect(openclawConfig.skills.load.extraDirs).toContain('/home/shadow/.openclaw/skills')
     const files = runtimeFiles(pkg)
     expect(files['/home/shadow/.openclaw/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
+    expectShadowCliAuth(files)
     expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -134,6 +149,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
 
     const files = runtimeFiles(pkg)
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
+    expectShadowCliAuth(files)
     const runtimeExtensions = JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}')
     expect(runtimeExtensions.openclaw).toBeUndefined()
     expect(files['/home/shadow/.cc-connect/config.toml']).toBe(ccConnectConfig)
@@ -171,6 +187,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(hermesConfig).toContain('${SHADOW_TOKEN_BUDDY_1}')
     expect(files['/home/shadow/.hermes/plugins/shadowob/plugin.yaml']).toContain('shadowob')
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
+    expectShadowCliAuth(files)
     expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

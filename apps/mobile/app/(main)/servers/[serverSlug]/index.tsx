@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
+  AppWindow,
   ArrowUpDown,
   Check,
   ChevronDown,
@@ -46,7 +47,7 @@ import {
   TextField,
 } from '../../../../src/components/ui'
 import { useChannelSort } from '../../../../src/hooks/use-channel-sort'
-import { fetchApi, getImageUrl } from '../../../../src/lib/api'
+import { API_BASE, fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { setLastChannel } from '../../../../src/lib/last-channel'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
@@ -85,6 +86,33 @@ interface Member {
     isBot?: boolean
   }
   role: string
+}
+
+interface ServerAppIntegration {
+  id: string
+  appKey: string
+  name: string
+  description?: string | null
+  iconUrl?: string | null
+  iframeEntry?: string | null
+}
+
+interface LaunchContext {
+  iframeEntry: string | null
+  launchToken: string
+  eventStreamPath: string
+}
+
+function withLaunchParams(entry: string, launch: LaunchContext) {
+  const url = new URL(entry)
+  url.searchParams.set('shadow_launch', launch.launchToken)
+  if (launch.eventStreamPath) {
+    url.searchParams.set(
+      'shadow_event_stream',
+      `${API_BASE}${launch.eventStreamPath.startsWith('/') ? '' : '/'}${launch.eventStreamPath}`,
+    )
+  }
+  return url.toString()
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -171,6 +199,39 @@ export default function ServerHomeScreen() {
     queryKey: ['members', server?.id],
     queryFn: () => fetchApi<Member[]>(`/api/servers/${server!.id}/members`),
     enabled: !!server?.id,
+  })
+
+  const { data: serverApps = [], isLoading: isAppsLoading } = useQuery({
+    queryKey: ['server-apps', serverSlug],
+    queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
+    enabled: !!serverSlug && canAccessServer,
+  })
+
+  const launchAppMutation = useMutation({
+    mutationFn: async (app: ServerAppIntegration) => {
+      const launch = await fetchApi<LaunchContext>(
+        `/api/servers/${serverSlug}/apps/${app.appKey}/launch`,
+        { method: 'POST' },
+      )
+      const entry = launch.iframeEntry ?? app.iframeEntry
+      if (!entry) throw new Error(t('serverApps.noIframe'))
+      return {
+        app,
+        url: withLaunchParams(entry, launch),
+      }
+    },
+    onSuccess: ({ app, url }) => {
+      router.push({
+        pathname: '/(main)/webview-preview',
+        params: {
+          url: encodeURIComponent(url),
+          title: app.name,
+          serverSlug,
+          appKey: app.appKey,
+        },
+      })
+    },
+    onError: (err: Error) => showToast(err?.message || t('common.error'), 'error'),
   })
 
   const members = memberData ?? []
@@ -553,6 +614,35 @@ export default function ServerHomeScreen() {
             </Reanimated.View>
           )}
         </View>
+
+        <View style={styles.appsSection}>
+          <AppText variant="title" style={styles.cuteSectionLabel}>
+            {t('server.apps')}
+          </AppText>
+          <GlassPanel style={styles.appsPanel}>
+            {serverApps.length > 0 ? (
+              serverApps.map((app) => (
+                <MenuItem
+                  key={app.id}
+                  icon={AppWindow}
+                  title={app.name}
+                  subtitle={app.description ?? app.appKey}
+                  tone="primary"
+                  disabled={launchAppMutation.isPending || !app.iframeEntry}
+                  right={<ChevronRight size={16} color={colors.textMuted} strokeWidth={2.6} />}
+                  onPress={() => launchAppMutation.mutate(app)}
+                />
+              ))
+            ) : (
+              <View style={styles.emptyApps}>
+                <AppWindow size={22} color={colors.textMuted} />
+                <AppText tone="secondary" style={styles.emptyAppsText}>
+                  {isAppsLoading ? t('common.loading') : t('apps.noApps')}
+                </AppText>
+              </View>
+            )}
+          </GlassPanel>
+        </View>
       </ScrollView>
 
       <Sheet
@@ -828,6 +918,24 @@ const styles = StyleSheet.create({
   channelsList: {
     paddingHorizontal: spacing.md,
     gap: spacing.md,
+  },
+  appsSection: {
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xl,
+    gap: spacing.sm,
+  },
+  appsPanel: {
+    padding: spacing.xs,
+  },
+  emptyApps: {
+    minHeight: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  emptyAppsText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   categoryBubble: {
     padding: spacing.sm,

@@ -1,0 +1,92 @@
+{
+  "id": "default",
+  "title": "Launch Board",
+  "updatedAt": "2026-05-19T10:26:53.905Z",
+  "columns": [
+    {
+      "id": "todo",
+      "title": "To do"
+    },
+    {
+      "id": "doing",
+      "title": "Doing"
+    },
+    {
+      "id": "review",
+      "title": "Review"
+    },
+    {
+      "id": "done",
+      "title": "Done"
+    }
+  ],
+  "cards": [
+    {
+      "id": "card_plan",
+      "columnId": "todo",
+      "title": "Map onboarding checklist",
+      "description": "Write the first-run steps that a human and Buddy can split.",
+      "labels": ["Planning"],
+      "assignees": ["Mia"],
+      "comments": [],
+      "createdBy": "system",
+      "createdAt": "2026-05-19T09:11:47.235Z",
+      "updatedAt": "2026-05-19T09:11:47.235Z"
+    },
+    {
+      "id": "card_bot",
+      "columnId": "doing",
+      "title": "Ask Strategy Buddy for launch risks",
+      "description": "Use the Shadow command surface so the board stays in sync.",
+      "labels": ["Buddy"],
+      "assignees": ["Strategy Buddy"],
+      "comments": [],
+      "createdBy": "system",
+      "createdAt": "2026-05-19T09:11:47.235Z",
+      "updatedAt": "2026-05-19T10:25:23.644Z"
+    },
+    {
+      "id": "card_assets",
+      "columnId": "review",
+      "title": "Review cover assets",
+      "description": "Confirm imagery and labels before publishing.",
+      "labels": ["Design"],
+      "assignees": ["Kai"],
+      "comments": [],
+      "createdBy": "system",
+      "createdAt": "2026-05-19T09:11:47.235Z",
+      "updatedAt": "2026-05-19T09:11:47.235Z"
+    },
+    {
+      "id": "card_8xbaa9y",
+      "columnId": "todo",
+      "title": "测试任务",
+      "description": "第二个大模型的测试卡片",
+      "labels": ["Testing"],
+      "assignees": [],
+      "comments": [],
+      "createdBy": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+      "createdAt": "2026-05-19T09:35:50.499Z",
+      "updatedAt": "2026-05-19T09:35:50.499Z"
+    },
+    {
+      "id": "card_b97of8n",
+      "columnId": "done",
+      "title": "批准弹窗验证 1779183843666",
+      "description": "验证系统授权弹窗链路",
+      "labels": [],
+      "assignees": ["Strategy Buddy"],
+      "comments": [
+        {
+          "id": "comment_xn2iyeu",
+          "body": "新 CLI channel-id 验证 1779185730741",
+          "author": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+          "createdAt": "2026-05-19T10:17:25.919Z"
+        }
+      ],
+      "createdBy": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+      "createdAt": "2026-05-19T09:44:10.139Z",
+      "updatedAt": "2026-05-19T10:26:53.905Z"
+    }
+  ]
+}

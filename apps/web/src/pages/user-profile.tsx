@@ -294,7 +294,11 @@ export function UserProfilePage() {
   >('weekly')
   const [showTipModal, setShowTipModal] = useState(false)
 
-  const { data: profile, isLoading } = useQuery({
+  const {
+    data: profile,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['user-profile', userId],
     queryFn: () => fetchApi<UserProfile>(`/api/auth/users/${userId}`),
     enabled: !!userId,
@@ -326,12 +330,37 @@ export function UserProfilePage() {
     enabled: Boolean(assetShop?.id),
   })
 
-  if (isLoading || !profile) {
+  if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-primary font-black tracking-widest text-xs uppercase animate-pulse">
           {t('common.loading')}...
         </div>
+      </div>
+    )
+  }
+
+  if (isError || !profile) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-4">
+        <GlassPanel className="w-full max-w-lg p-6 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-border-subtle bg-bg-tertiary/60 text-text-muted">
+            <Shield size={22} />
+          </div>
+          <h1 className="text-xl font-black text-text-primary">{t('profile.unavailableTitle')}</h1>
+          <p className="mt-3 text-sm leading-6 text-text-muted">
+            {t('profile.unavailableDescription')}
+          </p>
+          <Button
+            className="mt-5"
+            variant="glass"
+            size="sm"
+            onClick={() => window.history.back()}
+            icon={ChevronLeft}
+          >
+            {t('common.back')}
+          </Button>
+        </GlassPanel>
       </div>
     )
   }
@@ -356,7 +385,7 @@ export function UserProfilePage() {
           ? t('member.activityReady')
           : currentActivity === 'preparing'
             ? t('member.activityPreparing')
-          : currentActivity
+            : currentActivity
   const shopSearch = { view: 'buyer' } as const
   const assetProducts = assetProductsData?.products ?? []
 

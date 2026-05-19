@@ -2,17 +2,65 @@ import { zValidator } from '@hono/zod-validator'
 import { type Context, Hono } from 'hono'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import type { Actor } from '../security/actor'
 import {
+  approveServerAppCommandSchema,
   callServerAppCommandSchema,
   discoverServerAppSchema,
   grantServerAppBuddySchema,
   installServerAppFromCatalogSchema,
   installServerAppSchema,
+  updateServerAppAccessPolicySchema,
 } from '../validators/app-integration.schema'
 
 function parseJsonField(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) return {}
   return JSON.parse(value)
+}
+
+function approvalPayload(error: unknown): Record<string, unknown> | null {
+  if (!error || typeof error !== 'object') return null
+  const candidate = error as { code?: unknown; params?: { approval?: unknown } }
+  if (candidate.code !== 'SERVER_APP_COMMAND_APPROVAL_REQUIRED') return null
+  const approval = candidate.params?.approval
+  if (!approval || typeof approval !== 'object' || Array.isArray(approval)) return null
+  return approval as Record<string, unknown>
+}
+
+async function serverAppApprovalTargetUserId(
+  container: AppContainer,
+  actor: Actor,
+): Promise<string | null> {
+  if (actor.kind === 'system') return null
+  if (actor.kind === 'agent') {
+    if (actor.ownerId) return actor.ownerId
+    const agentDao = container.resolve('agentDao')
+    const agent =
+      (actor.agentId ? await agentDao.findById(actor.agentId) : null) ??
+      (await agentDao.findByUserId(actor.userId))
+    return agent?.ownerId ?? null
+  }
+  return actor.userId
+}
+
+async function emitServerAppApprovalRequired(
+  container: AppContainer,
+  actor: Actor,
+  error: unknown,
+) {
+  if (actor.kind !== 'agent') return
+  const approval = approvalPayload(error)
+  if (!approval) return
+  const targetUserId = await serverAppApprovalTargetUserId(container, actor)
+  if (!targetUserId) return
+
+  container
+    .resolve('io')
+    .to(`user:${targetUserId}`)
+    .emit('server-app:approval-required', {
+      ...approval,
+      requestedAt: new Date().toISOString(),
+    })
 }
 
 async function parseIntrospectionToken(c: Context) {
@@ -212,6 +260,36 @@ export function createAppIntegrationHandler(container: AppContainer) {
     },
   )
 
+  handler.patch(
+    '/servers/:serverId/apps/:appKey/access-policy',
+    zValidator('json', updateServerAppAccessPolicySchema),
+    async (c) => {
+      const appIntegrationService = container.resolve('appIntegrationService')
+      const app = await appIntegrationService.updateAccessPolicy(
+        c.req.param('serverId'),
+        c.req.param('appKey'),
+        c.get('actor'),
+        c.req.valid('json'),
+      )
+      return c.json(app)
+    },
+  )
+
+  handler.post(
+    '/servers/:serverId/apps/:appKey/approvals',
+    zValidator('json', approveServerAppCommandSchema),
+    async (c) => {
+      const appIntegrationService = container.resolve('appIntegrationService')
+      const result = await appIntegrationService.approveCommandAccess(
+        c.req.param('serverId'),
+        c.req.param('appKey'),
+        c.get('actor'),
+        c.req.valid('json'),
+      )
+      return c.json(result, 201)
+    },
+  )
+
   handler.post('/servers/:serverId/apps/:appKey/launch', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
     const launch = await appIntegrationService.createLaunch(
@@ -255,28 +333,40 @@ export function createAppIntegrationHandler(container: AppContainer) {
           }
         }
       }
-      const result = await appIntegrationService.callCommand({
-        serverIdOrSlug: c.req.param('serverId'),
-        appKey: c.req.param('appKey'),
-        commandName: c.req.param('commandName'),
-        actor: c.get('actor'),
-        body: callServerAppCommandSchema.parse({
-          input: parseJsonField(fields.input ?? fields.payload),
-          channelId: fields.channelId,
-        }),
-        multipart: { fields, files },
-      })
+      const actor = c.get('actor')
+      const result = await appIntegrationService
+        .callCommand({
+          serverIdOrSlug: c.req.param('serverId'),
+          appKey: c.req.param('appKey'),
+          commandName: c.req.param('commandName'),
+          actor,
+          body: callServerAppCommandSchema.parse({
+            input: parseJsonField(fields.input ?? fields.payload),
+            channelId: fields.channelId,
+          }),
+          multipart: { fields, files },
+        })
+        .catch(async (error) => {
+          await emitServerAppApprovalRequired(container, actor, error)
+          throw error
+        })
       return c.json(result)
     }
 
     const body = callServerAppCommandSchema.parse(await c.req.json().catch(() => ({})))
-    const result = await appIntegrationService.callCommand({
-      serverIdOrSlug: c.req.param('serverId'),
-      appKey: c.req.param('appKey'),
-      commandName: c.req.param('commandName'),
-      actor: c.get('actor'),
-      body,
-    })
+    const actor = c.get('actor')
+    const result = await appIntegrationService
+      .callCommand({
+        serverIdOrSlug: c.req.param('serverId'),
+        appKey: c.req.param('appKey'),
+        commandName: c.req.param('commandName'),
+        actor,
+        body,
+      })
+      .catch(async (error) => {
+        await emitServerAppApprovalRequired(container, actor, error)
+        throw error
+      })
     return c.json(result)
   })
 

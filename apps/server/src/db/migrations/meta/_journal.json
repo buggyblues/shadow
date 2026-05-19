@@ -533,6 +533,20 @@
       "when": 1780059600000,
       "tag": "0075_product_fulfillment_repeatable_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1780146000000,
+      "tag": "0076_server_app_default_access_and_consents",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1780232400000,
+      "tag": "0077_restore_server_app_command_tokens",
+      "breakpoints": true
     }
   ]
 }
