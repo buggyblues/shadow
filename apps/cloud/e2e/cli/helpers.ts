@@ -13,12 +13,11 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertCliBuilt, CLI_BIN, CLOUD_ROOT } from './cli-bin.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = join(__dirname, '..', 'fixtures')
-const CLOUD_ROOT = join(__dirname, '..', '..')
 const WORKSPACE_ROOT = join(CLOUD_ROOT, '..', '..')
-const CLI_BIN = join(CLOUD_ROOT, 'dist', 'index.js')
 const SEED_SCRIPT = join(CLOUD_ROOT, '..', '..', '..', 'scripts', 'e2e', 'seed-screenshot-env.mjs')
 
 /** Session file written by global-setup.ts — read in beforeAll */
@@ -69,12 +68,10 @@ export interface CLIOptions {
 
 /**
  * Run the shadowob-cloud CLI as a subprocess and return output.
- * Throws if the CLI binary doesn't exist (build first).
+ * Throws if the packaged CLI bin doesn't exist (run build:cli first).
  */
 export async function runCLI(args: string[], options: CLIOptions = {}): Promise<CLIResult> {
-  if (!existsSync(CLI_BIN)) {
-    throw new Error(`CLI binary not found at ${CLI_BIN}. Run 'pnpm build' in apps/cloud first.`)
-  }
+  assertCliBuilt()
 
   return new Promise((resolve) => {
     const env = {

@@ -12,7 +12,7 @@
  *   pnpm test:e2e:cli
  *
  * Prerequisites:
- *   pnpm build  (dist/index.js must exist)
+ *   pnpm build:cli  (packaged CLI bin must exist)
  */
 
 import UnpluginTypia from '@typia/unplugin/vite'

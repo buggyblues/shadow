@@ -9,30 +9,29 @@
  *   resolve check      → full resolution dry-run (warns on unset vars, not error)
  *
  * How it works:
- *   Runs `node dist/index.js validate -f <template>` as a real child process —
- *   exactly what a user does from their terminal.  No mocking.
+ *   Runs the packaged `shadowob-cloud` bin target from package.json as a real
+ *   child process — exactly what a user does from their terminal. No mocking.
  *
- * Prerequisites: pnpm build  (dist/index.js must exist)
+ * Prerequisites: pnpm build:cli  (packaged CLI bin must exist)
  */
 
 import { execFile } from 'node:child_process'
 import { readdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
+import { assertCliBuilt, CLI_BIN, CLOUD_ROOT } from './cli-bin.js'
 
 const execFileAsync = promisify(execFile)
 
-const __dir = dirname(fileURLToPath(import.meta.url))
-const CLOUD_ROOT = join(__dir, '..', '..')
-const CLI_BIN = join(CLOUD_ROOT, 'dist', 'index.js')
 const TEMPLATES_DIR = join(CLOUD_ROOT, 'templates')
 
 const TEMPLATES = readdirSync(TEMPLATES_DIR)
   .filter((f) => f.endsWith('.template.json'))
   .map((f) => f.replace('.template.json', ''))
   .sort()
+
+assertCliBuilt()
 
 describe.each(TEMPLATES)('shadowob-cloud validate: %s', (templateName) => {
   it('exits 0 and prints "Config is valid!"', async () => {

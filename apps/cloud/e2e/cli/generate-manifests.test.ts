@@ -11,26 +11,23 @@
  *   createSharedResources()  → Namespace + PVC construction
  *
  * How it works:
- *   1. Runs `node dist/index.js generate manifests` with all env vars stubbed
+ *   1. Runs the packaged `shadowob-cloud` bin target with all env vars stubbed
  *      (real API keys are NOT needed — we test structure, not connectivity)
  *   2. Reads the output JSON files and validates K8s resource structure
  *
- * Prerequisites: pnpm build  (dist/index.js must exist)
+ * Prerequisites: pnpm build:cli  (packaged CLI bin must exist)
  */
 
 import { execFile } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { assertCliBuilt, CLI_BIN, CLOUD_ROOT } from './cli-bin.js'
 
 const execFileAsync = promisify(execFile)
 
-const __dir = dirname(fileURLToPath(import.meta.url))
-const CLOUD_ROOT = join(__dir, '..', '..')
-const CLI_BIN = join(CLOUD_ROOT, 'dist', 'index.js')
 const TEMPLATES_DIR = join(CLOUD_ROOT, 'templates')
 
 // All env var placeholders used by any template — real values not needed;
@@ -79,7 +76,43 @@ const TEMPLATES = readdirSync(TEMPLATES_DIR)
 
 let tmpDirs: Map<string, string>
 
+type WorkloadManifest = {
+  apiVersion: string
+  kind: 'Deployment' | 'SandboxTemplate'
+  metadata: { name: string; namespace?: string; labels?: Record<string, string> }
+  spec?: unknown
+}
+
+function workloadManifests(
+  manifests: Array<{
+    apiVersion: string
+    kind: string
+    metadata: { name: string; namespace?: string }
+    spec?: unknown
+  }>,
+): WorkloadManifest[] {
+  return manifests.filter(
+    (manifest): manifest is WorkloadManifest =>
+      manifest.kind === 'Deployment' || manifest.kind === 'SandboxTemplate',
+  )
+}
+
+function workloadContainers(workload: WorkloadManifest): Array<{ name: string; image: string }> {
+  if (workload.kind === 'Deployment') {
+    const spec = workload.spec as {
+      template?: { spec?: { containers?: Array<{ name: string; image: string }> } }
+    }
+    return spec?.template?.spec?.containers ?? []
+  }
+
+  const spec = workload.spec as {
+    podTemplate?: { spec?: { containers?: Array<{ name: string; image: string }> } }
+  }
+  return spec?.podTemplate?.spec?.containers ?? []
+}
+
 beforeAll(() => {
+  assertCliBuilt()
   tmpDirs = new Map()
   for (const t of TEMPLATES) {
     tmpDirs.set(t, mkdtempSync(join(tmpdir(), `shadow-manifests-${t}-`)))
@@ -144,17 +177,17 @@ describe.each(TEMPLATES)('shadowob-cloud generate manifests: %s', (templateName)
     expect(ns?.metadata?.name.length).toBeGreaterThan(0)
   })
 
-  it('generates at least one Deployment', () => {
-    const deployments = manifests.filter((m) => m.kind === 'Deployment')
-    expect(deployments.length, 'No Deployment manifests found').toBeGreaterThan(0)
+  it('generates at least one workload resource', () => {
+    const workloads = workloadManifests(manifests)
+    expect(workloads.length, 'No Deployment or SandboxTemplate manifests found').toBeGreaterThan(0)
   })
 
-  it('each Deployment has correct apiVersion and labels', () => {
+  it('each workload has correct apiVersion and labels', () => {
     if (SKIP_MANIFEST_CHECK.includes(templateName)) return
-    const deployments = manifests.filter((m) => m.kind === 'Deployment')
-    for (const d of deployments) {
-      expect(d.apiVersion).toBe('apps/v1')
-      const labels = (d.metadata as Record<string, unknown>)?.labels as
+    const workloads = workloadManifests(manifests)
+    for (const workload of workloads) {
+      expect(['apps/v1', 'extensions.agents.x-k8s.io/v1alpha1']).toContain(workload.apiVersion)
+      const labels = (workload.metadata as Record<string, unknown>)?.labels as
         | Record<string, string>
         | undefined
       expect(labels?.app).toBe('shadowob-cloud')
@@ -163,14 +196,11 @@ describe.each(TEMPLATES)('shadowob-cloud generate manifests: %s', (templateName)
     }
   })
 
-  it('each Deployment has a container with an image', () => {
+  it('each workload has a container with an image', () => {
     if (SKIP_MANIFEST_CHECK.includes(templateName)) return
-    const deployments = manifests.filter((m) => m.kind === 'Deployment')
-    for (const d of deployments) {
-      const spec = d.spec as {
-        template: { spec: { containers: Array<{ name: string; image: string }> } }
-      }
-      const containers = spec?.template?.spec?.containers ?? []
+    const workloads = workloadManifests(manifests)
+    for (const workload of workloads) {
+      const containers = workloadContainers(workload)
       expect(containers.length).toBeGreaterThan(0)
       for (const c of containers) {
         expect(typeof c.image).toBe('string')
@@ -199,7 +229,15 @@ describe.each(TEMPLATES)('shadowob-cloud generate manifests: %s', (templateName)
 
   it('all resources belong to the same namespace', () => {
     if (SKIP_MANIFEST_CHECK.includes(templateName)) return
-    const namespacedKinds = ['Deployment', 'ConfigMap', 'Secret', 'Service']
+    const namespacedKinds = [
+      'Deployment',
+      'SandboxTemplate',
+      'SandboxClaim',
+      'ConfigMap',
+      'Secret',
+      'Service',
+      'NetworkPolicy',
+    ]
     const namespacedResources = manifests.filter((m) => namespacedKinds.includes(m.kind))
     const namespaces = new Set(
       namespacedResources.map((m) => m.metadata?.namespace).filter(Boolean),

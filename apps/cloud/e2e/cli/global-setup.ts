@@ -2,7 +2,7 @@
  * E2E Global Setup — runs once before all E2E tests.
  *
  * Responsibilities:
- * 1. Build the shadowob-cloud CLI if dist/ doesn't exist
+ * 1. Build the shadowob-cloud CLI if the packaged bin target doesn't exist
  * 2. Build the openclaw-runner Docker image (real production image, not a stub)
  * 3. Start Shadow server via docker-compose if not already running
  * 4. Wait for server to be healthy
@@ -12,16 +12,11 @@
 
 import { execSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dir = dirname(__filename)
+import { join, resolve } from 'node:path'
+import { CLI_BIN, CLOUD_ROOT } from './cli-bin.js'
 
 // Path anchors
-const CLOUD_ROOT = resolve(__dir, '..', '..') // apps/cloud
 const WORKSPACE_ROOT = resolve(CLOUD_ROOT, '..', '..') // monorepo root (shadow/)
-const CLI_BIN = join(CLOUD_ROOT, 'dist', 'index.js')
 const COMPOSE_FILE = join(WORKSPACE_ROOT, 'docker-compose.yml')
 const SEED_SCRIPT = join(WORKSPACE_ROOT, 'scripts', 'e2e', 'seed-screenshot-env.mjs')
 const IMAGES_DIR = join(CLOUD_ROOT, 'images')
@@ -79,7 +74,7 @@ export default async function globalSetup() {
   // ── 1. Build CLI ────────────────────────────────────────────────────────────
   if (!existsSync(CLI_BIN)) {
     console.log('\n[setup] Building shadowob-cloud CLI...')
-    run('pnpm build', CLOUD_ROOT)
+    run('pnpm build:cli', CLOUD_ROOT)
     console.log('[setup] CLI built ✓')
   } else {
     console.log('[setup] CLI already built ✓')
