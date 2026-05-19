@@ -1,6 +1,6 @@
 ---
 name: shadowob
-description: "Use when live Shadow context or actions are needed: channel/DM history, pins, members, server/channel/workspace/shop/app/agent data, or sending/managing Shadow content via the shadowob CLI."
+description: "Use when live Shadow context or actions are needed: channel/DM history, pins, members, server/channel/workspace/shop/app/buddy data, or sending/managing Shadow content via the shadowob CLI."
 metadata:
   {
     "openclaw":
@@ -18,7 +18,7 @@ allowed-tools: ["exec"]
 Use `shadowob` CLI to interact with Shadow servers.
 
 Activate this skill when you need current Shadow context, such as recent channel or DM history,
-pinned messages, member/server/channel state, workspace/shop/app/agent data, or when you need to
+pinned messages, member/server/channel state, workspace/shop/app/buddy data, or when you need to
 send or manage Shadow content. Prefer narrow `--json` reads before acting.
 
 ## Quickstart
@@ -78,13 +78,13 @@ shadowob servers discover --json
 
 ```bash
 # List channels
-shadowob channels list --server-id <server-id> --json
+shadowob channels list --server <server> --json
 
 # Get channel
 shadowob channels get <channel-id> --json
 
 # Create/Delete
-shadowob channels create --server-id <id> --name <name> [--type text] --json
+shadowob channels create --server <server> --name <name> [--type text] --json
 shadowob channels delete <channel-id>
 
 # Messages
@@ -141,29 +141,29 @@ shadowob dms send <dm-channel-id> --content "text" --json
 shadowob dms delete <dm-channel-id>
 ```
 
-## Agents
+## Buddies
 
 ```bash
-# List agents
-shadowob agents list --json
+# List buddies
+shadowob buddies list --json
 
-# Get agent
-shadowob agents get <agent-id> --json
+# Get buddy
+shadowob buddies get <buddy-id> --json
 
 # Create/Update/Delete
-shadowob agents create --name <name> [--display-name <name>] [--avatar-url <url>] --json
-shadowob agents update <agent-id> [--name <name>] [--display-name <name>] --json
-shadowob agents delete <agent-id>
+shadowob buddies create --name <name> --username <username> [--display-name <name>] [--avatar-url <url>] --json
+shadowob buddies update <buddy-id> [--name <name>] [--display-name <name>] --json
+shadowob buddies delete <buddy-id>
 
 # Control
-shadowob agents start <agent-id>
-shadowob agents stop <agent-id>
+shadowob buddies start <buddy-id>
+shadowob buddies stop <buddy-id>
 
 # Token
-shadowob agents token <agent-id> --json
+shadowob buddies token <buddy-id> --json
 
 # Config
-shadowob agents config <agent-id> --json
+shadowob buddies config <buddy-id> --json
 ```
 
 ## Workspace
@@ -211,7 +211,6 @@ shadowob shop me get --json
 shadowob shop products list <server-id> [--status active] [--keyword <text>] [--limit <n>] --json
 shadowob shop products list-by-shop <shop-id> [--status active] [--limit <n>] --json
 shadowob shop products get <server-id> <product-id> --json
-shadowob shop products context <product-id> --json
 shadowob shop products purchase <shop-id> <product-id> --idempotency-key <unique-operation-id> --json
 
 # Offers, deliverables, and shop assets
@@ -246,7 +245,7 @@ shadowob commerce cards list --channel-id <channel-id> [--keyword <text>] --json
 shadowob commerce cards purchase <message-id> <card-id> --idempotency-key <unique-operation-id> --json
 
 # Purchases, delivery, protected files, and community assets
-shadowob commerce entitlements list [--server-id <server-id>] --json
+shadowob commerce entitlements list [--server <server>] --json
 shadowob commerce entitlements get <entitlement-id> --json
 shadowob commerce entitlements verify <entitlement-id> --json
 shadowob commerce paid-files open <file-id> --json
@@ -277,6 +276,8 @@ shadowob commerce gifts send --recipient-user-id <user-id> --assets '<json-array
 # Server App integrations
 shadowob app list --server <server-id-or-slug> --json
 shadowob app preview --server <server-id-or-slug> --manifest-url <manifest-url> --json
+shadowob app install --server <server-id-or-slug> --manifest-url <manifest-url> --json
+shadowob app uninstall <app-key> --server <server-id-or-slug>
 shadowob app discover --server <server-id-or-slug> --json
 shadowob app inspect <app-key> --server <server-id-or-slug> --json
 shadowob app skills <app-key> --server <server-id-or-slug>
@@ -404,7 +405,7 @@ shadowob marketplace contracts extend <contract-id> --hours <n> --json
 
 ```bash
 # Upload a file
-shadowob media upload --file <path> [--server-id <id>] [--channel-id <id>] --json
+shadowob media upload --file <path> [--server <server>] [--channel-id <id>] --json
 
 # Download a file
 shadowob media download <file-url> [--output <path>]
@@ -414,7 +415,7 @@ shadowob media download <file-url> [--output <path>]
 
 ```bash
 # Search messages
-shadowob search messages --query <text> [--server-id <id>] [--channel-id <id>] [--author-id <id>] [--after <date>] [--before <date>] [--has-attachments] [--limit <n>] --json
+shadowob search messages --query <text> [--server <server>] [--channel-id <id>] [--author-id <id>] [--after <date>] [--before <date>] [--has-attachments] [--limit <n>] --json
 ```
 
 ## Listen (Real-time Events)

@@ -71,5 +71,4 @@ context = client.get_commerce_product_context("product-id")
 
 ```bash
 shadowob commerce products context <product-id> --json
-shadowob shop products context <product-id> --json
 ```

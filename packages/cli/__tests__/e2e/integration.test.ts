@@ -147,7 +147,7 @@ describe.skipIf(!SHOULD_RUN_INTEGRATION)('CLI Integration Tests', () => {
     it('should list channels in a server', async () => {
       const { stdout } = await execa(
         'node',
-        [CLI_PATH, 'channels', 'list', '--server-id', serverId, '--profile', 'test', '--json'],
+        [CLI_PATH, 'channels', 'list', '--server', serverId, '--profile', 'test', '--json'],
         {
           env: { ...process.env, HOME: tempDir },
         },
@@ -163,7 +163,7 @@ describe.skipIf(!SHOULD_RUN_INTEGRATION)('CLI Integration Tests', () => {
           CLI_PATH,
           'channels',
           'create',
-          '--server-id',
+          '--server',
           serverId,
           '--name',
           'test-channel',
@@ -228,11 +228,11 @@ describe.skipIf(!SHOULD_RUN_INTEGRATION)('CLI Integration Tests', () => {
     })
   })
 
-  describe('agents flow', () => {
-    it('should list agents', async () => {
+  describe('buddies flow', () => {
+    it('should list buddies', async () => {
       const { stdout } = await execa(
         'node',
-        [CLI_PATH, 'agents', 'list', '--profile', 'test', '--json'],
+        [CLI_PATH, 'buddies', 'list', '--profile', 'test', '--json'],
         {
           env: { ...process.env, HOME: tempDir },
         },
@@ -241,15 +241,15 @@ describe.skipIf(!SHOULD_RUN_INTEGRATION)('CLI Integration Tests', () => {
       expect(Array.isArray(result)).toBe(true)
     })
 
-    it('should create an agent', async () => {
+    it('should create a buddy', async () => {
       const { stdout } = await execa(
         'node',
         [
           CLI_PATH,
-          'agents',
+          'buddies',
           'create',
           '--name',
-          `test-agent-${Date.now()}`,
+          `test-buddy-${Date.now()}`,
           '--profile',
           'test',
           '--json',
@@ -259,7 +259,7 @@ describe.skipIf(!SHOULD_RUN_INTEGRATION)('CLI Integration Tests', () => {
         },
       )
       const result = JSON.parse(stdout)
-      expect(result.name).toContain('test-agent')
+      expect(result.name).toContain('test-buddy')
       expect(result.token).toBeDefined()
     })
   })

@@ -158,9 +158,9 @@ describe('CLI Functional Tests', () => {
     })
   })
 
-  describe('agents commands', () => {
-    it('should show agents help', async () => {
-      const { stdout } = await execa('node', [CLI_PATH, 'agents', '--help'])
+  describe('buddies commands', () => {
+    it('should show buddies help', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'buddies', '--help'])
       expect(stdout).toContain('list')
       expect(stdout).toContain('get')
       expect(stdout).toContain('create')
@@ -235,9 +235,9 @@ describe('CLI Functional Tests', () => {
       const { stdout } = await execa('node', [CLI_PATH, 'shop', 'products', '--help'])
       expect(stdout).toContain('list')
       expect(stdout).toContain('get')
-      expect(stdout).toContain('context')
       expect(stdout).toContain('purchase')
       expect(stdout).toContain('list-by-shop')
+      expect(stdout).toContain('create-by-shop')
     })
 
     it('should show shop offers help', async () => {

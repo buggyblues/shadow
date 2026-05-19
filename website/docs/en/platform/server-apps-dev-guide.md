@@ -110,7 +110,8 @@ Admins use the Apps page in server settings to choose a catalog App or review a 
 ```bash
 shadowob app preview --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json
 shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json
-shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-agent-id> --permissions tickets:write
+shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions tickets:write
+shadowob app uninstall demo-desk --server <server-id-or-slug>
 ```
 
 When a Buddy is triggered in a channel, Shadow injects the mentioned App Skills and the Buddy calls through the unified CLI:

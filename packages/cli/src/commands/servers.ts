@@ -14,7 +14,10 @@ export function createServersCommand(): Command {
       try {
         const client = await getClient(options.profile)
         const servers = await client.listServers()
-        output(servers, { json: options.json })
+        output(
+          (servers as unknown as Array<{ server: Record<string, unknown> }>).map((s) => s.server),
+          { json: options.json },
+        )
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
         process.exit(1)
@@ -132,7 +135,24 @@ export function createServersCommand(): Command {
       try {
         const client = await getClient(options.profile)
         const members = await client.getMembers(serverId)
-        output(members, { json: options.json })
+        output(
+          members.map(
+            (m: {
+              id?: unknown
+              userId?: unknown
+              user?: { username?: string }
+              nickname?: string
+              uid?: string
+              role?: unknown
+            }) => ({
+              id: m.id,
+              userId: m.userId,
+              username: m.user?.username ?? m.nickname ?? m.uid ?? '',
+              role: m.role,
+            }),
+          ),
+          { json: options.json },
+        )
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
         process.exit(1)
