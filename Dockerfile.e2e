@@ -50,16 +50,20 @@ RUN pnpm build:packages
 FROM mcr.microsoft.com/playwright:${PLAYWRIGHT_IMAGE_TAG} AS runner
 
 ARG OPENCLAW_VERSION=2026.5.7
+ARG PYTHON3_VENV_VERSION=3.12.3-0ubuntu2.1
 
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3-pip && \
+    apt-get install -y --no-install-recommends python3-venv=${PYTHON3_VENV_VERSION} && \
     rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 
 WORKDIR /workspace
+
+ENV VIRTUAL_ENV=/opt/shadow-python
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 # Copy all built artifacts from builder (node_modules + dist/)
 # .dockerignore excludes these from the build context, so COPY . . won't overwrite them
@@ -71,4 +75,5 @@ COPY --from=builder /workspace/packages ./packages
 # Excludes node_modules/ and dist/ per .dockerignore
 COPY . .
 
-RUN python3 -m pip install --no-cache-dir -e "packages/sdk-python[dev]"
+RUN python3 -m venv "${VIRTUAL_ENV}" && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -e "packages/sdk-python[dev]"
