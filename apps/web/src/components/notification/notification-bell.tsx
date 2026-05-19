@@ -187,6 +187,94 @@ export function NotificationBell() {
         })
       }
 
+      const navigateToOrder = (orderId: string, entitlementId?: string | null) => {
+        setShowPanel(false)
+        if (entitlementId) {
+          navigate({
+            to: '/settings/wallet/orders/$entitlementId',
+            params: { entitlementId },
+          })
+          return
+        }
+        navigate({
+          to: '/settings/wallet/orders/$entitlementId',
+          params: { entitlementId: orderId },
+          search: { by: 'order' },
+        })
+      }
+
+      const navigateToEntitlement = (entitlementId: string) => {
+        setShowPanel(false)
+        navigate({
+          to: '/settings/wallet/orders/$entitlementId',
+          params: { entitlementId },
+        })
+      }
+
+      const navigateToShop = async (shopId: string) => {
+        const shop = await fetchApi<{
+          id: string
+          serverId?: string | null
+          ownerUserId?: string | null
+        }>(`/api/shops/${shopId}`)
+        setShowPanel(false)
+        if (shop.serverId) {
+          navigate({
+            to: '/servers/$serverSlug/shop',
+            params: { serverSlug: shop.serverId },
+          })
+          return
+        }
+        if (shop.ownerUserId) {
+          navigate({
+            to: '/shop/users/$userId',
+            params: { userId: shop.ownerUserId },
+            search: { view: 'buyer' },
+          })
+        }
+      }
+
+      if (n.referenceType === 'order' && n.referenceId) {
+        navigateToOrder(n.referenceId, metaString(n, 'entitlementId'))
+        return
+      }
+
+      if (n.referenceType === 'entitlement' && n.referenceId) {
+        navigateToEntitlement(n.referenceId)
+        return
+      }
+
+      if (n.referenceType === 'shop' && n.referenceId) {
+        try {
+          await navigateToShop(n.referenceId)
+        } catch {
+          setShowPanel(false)
+          navigate({ to: '/settings/shop' })
+        }
+        return
+      }
+
+      if (n.referenceType === 'community_asset' && n.referenceId) {
+        setShowPanel(false)
+        navigate({ to: '/assets/$assetId', params: { assetId: n.referenceId } })
+        return
+      }
+
+      if (n.referenceType === 'wallet_transaction' || n.referenceType === 'settlement') {
+        setShowPanel(false)
+        navigate({
+          to:
+            n.referenceType === 'settlement' ? '/settings/wallet/settlements' : '/settings/wallet',
+        })
+        return
+      }
+
+      if (n.referenceType === 'payment_order') {
+        setShowPanel(false)
+        navigate({ to: '/settings/wallet' })
+        return
+      }
+
       if (n.referenceType === 'message' && n.referenceId) {
         try {
           const message = await fetchApi<{ id: string; channelId: string }>(

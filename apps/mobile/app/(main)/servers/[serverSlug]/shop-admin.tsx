@@ -15,7 +15,7 @@ import {
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { FlatList, Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
 import { EmptyState } from '../../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../../src/components/common/price-display'
@@ -83,6 +83,7 @@ export default function ShopAdminScreen() {
   const [newPrice, setNewPrice] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<ProductTemplate>('ai_service')
+  const [repeatable, setRepeatable] = useState(true)
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null)
   const [uploadingCover, setUploadingCover] = useState(false)
@@ -114,6 +115,7 @@ export default function ShopAdminScreen() {
             resourceType: template?.resourceType || 'service',
             capability: template?.capability || 'use',
             durationSeconds: selectedTemplate === 'paid_file' ? null : 30 * 24 * 60 * 60,
+            repeatable,
             privilegeDescription: newDesc || t(`shop.productTemplates.${selectedTemplate}.promise`),
           }
       return fetchApi(`/api/servers/${server!.id}/shop/products`, {
@@ -147,6 +149,7 @@ export default function ShopAdminScreen() {
       setNewPrice('')
       setNewDesc('')
       setSelectedTemplate('ai_service')
+      setRepeatable(true)
       setCoverUrl(null)
       setCoverPreviewUrl(null)
     },
@@ -170,7 +173,7 @@ export default function ShopAdminScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [3, 2],
       quality: 0.85,
     })
     if (result.canceled || !result.assets[0]) return
@@ -202,6 +205,7 @@ export default function ShopAdminScreen() {
     setNewName('')
     setNewPrice('')
     setNewDesc('')
+    setRepeatable(true)
     setCoverUrl(null)
     setCoverPreviewUrl(null)
   }
@@ -361,6 +365,19 @@ export default function ShopAdminScreen() {
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
             />
+            {selectedTemplate !== 'physical' && (
+              <View style={styles.repeatableRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.repeatableTitle, { color: colors.text }]}>
+                    {t('commerce.repeatablePurchase')}
+                  </Text>
+                  <Text style={[styles.repeatableHint, { color: colors.textMuted }]}>
+                    {t('commerce.repeatablePurchaseHint')}
+                  </Text>
+                </View>
+                <Switch value={repeatable} onValueChange={setRepeatable} />
+              </View>
+            )}
             <TextInput
               style={[
                 styles.input,
@@ -455,7 +472,7 @@ const styles = StyleSheet.create({
   },
   templateText: { fontSize: fontSize.xs, fontWeight: '800' },
   coverPicker: {
-    height: 150,
+    aspectRatio: 3 / 2,
     borderRadius: radius.xl,
     borderWidth: 1,
     overflow: 'hidden',
@@ -470,6 +487,16 @@ const styles = StyleSheet.create({
   },
   coverTitle: { marginTop: spacing.sm, fontSize: fontSize.md, fontWeight: '700' },
   coverHint: { marginTop: spacing.xs, fontSize: fontSize.xs, textAlign: 'center' },
+  repeatableRow: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  repeatableTitle: { fontSize: fontSize.sm, fontWeight: '800' },
+  repeatableHint: { marginTop: spacing.xs, fontSize: fontSize.xs },
   removeCoverBtn: {
     position: 'absolute',
     right: spacing.sm,

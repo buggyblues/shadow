@@ -61,6 +61,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
     import('./airtable/index.js'),
     import('./huggingface/index.js'),
     import('./linear/index.js'),
+    import('./lovart/index.js'),
     import('./atlassian/index.js'),
     import('./sentry/index.js'),
     import('./posthog/index.js'),

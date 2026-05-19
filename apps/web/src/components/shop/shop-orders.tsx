@@ -429,7 +429,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                 <div className="px-5 pb-4 pt-2">
                   {order.items.slice(0, isExpanded ? undefined : 1).map((item) => (
                     <div key={item.id} className="flex items-start gap-3 mt-4 first:mt-2">
-                      <div className="w-16 h-16 bg-bg-tertiary rounded-2xl overflow-hidden shrink-0 border border-border-subtle">
+                      <div className="aspect-[3/2] w-20 shrink-0 overflow-hidden rounded-2xl border border-border-subtle bg-bg-tertiary">
                         {item.imageUrl ? (
                           <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                         ) : (

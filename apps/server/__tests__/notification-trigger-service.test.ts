@@ -98,4 +98,36 @@ describe('NotificationTriggerService', () => {
       }),
     )
   })
+
+  it('dispatches commerce shipment notifications through platform delivery', async () => {
+    await service.triggerCommerceOrderShipped({
+      userId: 'buyer-1',
+      orderId: 'order-1',
+      orderNo: 'SH123',
+      productName: 'VIP pass',
+      trackingNo: 'TRACK-1',
+    })
+
+    expect(notificationTemplateService.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'commerce.order_shipped',
+        metadata: expect.objectContaining({
+          orderNo: 'SH123',
+          productName: 'VIP pass',
+          trackingNo: 'TRACK-1',
+        }),
+      }),
+    )
+    expect(notificationService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'buyer-1',
+        type: 'system',
+        kind: 'commerce.order_shipped',
+        referenceId: 'order-1',
+        referenceType: 'order',
+        aggregationKey: 'commerce:order-shipped:order-1',
+      }),
+    )
+    expect(notificationPlatformService.deliver).toHaveBeenCalledTimes(1)
+  })
 })

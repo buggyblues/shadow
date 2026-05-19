@@ -89,6 +89,11 @@ type CommerceCheckoutPreview = {
   nextAction: 'purchase' | 'open_paid_file' | 'view_entitlement'
 }
 
+type ServerRouteSummary = {
+  id: string
+  slug?: string | null
+}
+
 function formatCommercePrice(
   card: CommerceProductCard,
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -135,12 +140,21 @@ function CommerceProductCardViewBase({
     nextAction?: string
   } | null>(null)
   const checkoutPreviewQueryKey = ['commerce-checkout-preview', card.offerId, card.skuId]
+  const { data: shopServer } = useQuery({
+    queryKey: ['server', card.shopScope.kind === 'server' ? card.shopScope.id : null],
+    queryFn: () => fetchApi<ServerRouteSummary>(`/api/servers/${card.shopScope.id}`),
+    enabled: card.shopScope.kind === 'server',
+    staleTime: 60_000,
+  })
   const productHref = `/app/shop/products/${card.productId}`
+  const serverShopRouteKey = shopServer?.slug ?? card.shopScope.id
   const shopHref =
     card.shopScope.kind === 'server'
-      ? `/app/servers/${card.shopScope.id}/shop`
+      ? `/app/servers/${serverShopRouteKey}/shop`
       : `/app/shop/users/${card.shopScope.id}?view=buyer`
-  const purchaseDeliveryHref = deliveryDetailHref(purchaseResult?.entitlement?.id)
+  const purchaseDeliveryHref = deliveryDetailHref(purchaseResult?.entitlement?.id, {
+    openContent: purchaseResult?.nextAction === 'open_paid_file',
+  })
   const fetchCheckoutPreview = () =>
     fetchApi<CommerceCheckoutPreview>(
       `/api/commerce/offers/${card.offerId}/checkout-preview${
@@ -214,7 +228,11 @@ function CommerceProductCardViewBase({
 
     if (!fileId) {
       if (purchaseResult?.entitlement?.id) {
-        window.location.assign(deliveryDetailHref(purchaseResult.entitlement.id))
+        window.location.assign(
+          deliveryDetailHref(purchaseResult.entitlement.id, {
+            openContent: purchaseResult.nextAction === 'open_paid_file',
+          }),
+        )
         return
       }
       setShowPurchaseModal(false)
@@ -413,7 +431,7 @@ function CommerceProductCardViewBase({
                 src={card.snapshot.imageUrl}
                 alt={card.snapshot.name}
                 className={cn(
-                  'h-14 w-14 shrink-0 rounded-xl object-cover shadow-sm bg-bg-tertiary',
+                  'aspect-[3/2] w-20 shrink-0 rounded-xl bg-bg-tertiary object-cover shadow-sm',
                   !isUnlocked && 'opacity-90 grayscale-[20%]',
                 )}
               />

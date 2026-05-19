@@ -1818,6 +1818,7 @@ export default function ChannelViewScreen() {
       <VoiceChannelPanel
         channelId={channelId}
         channelName={channel.name}
+        serverSlug={serverSlug}
         onBack={() => router.back()}
       />
     )

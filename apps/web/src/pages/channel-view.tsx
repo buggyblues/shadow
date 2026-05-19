@@ -86,26 +86,29 @@ export function ChannelView() {
     },
   })
 
-  const markChannelScopeRead = useCallback(async () => {
-    if (!channelId) return
-    const key = `channel:${channelId}`
-    const now = Date.now()
-    const last = readScopeCooldownRef.current.get(key) ?? 0
-    if (now - last < 1200 || readScopeInFlightRef.current.has(key)) return
-    readScopeCooldownRef.current.set(key, now)
-    readScopeInFlightRef.current.add(key)
-    try {
-      await fetchApi('/api/notifications/read-scope', {
-        method: 'POST',
-        body: JSON.stringify({ channelId }),
-      })
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
-      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
-    } finally {
-      readScopeInFlightRef.current.delete(key)
-    }
-  }, [channelId, queryClient])
+  const markChannelScopeRead = useCallback(
+    async (options: { force?: boolean } = {}) => {
+      if (!channelId) return
+      const key = `channel:${channelId}`
+      const now = Date.now()
+      const last = readScopeCooldownRef.current.get(key) ?? 0
+      if (!options.force && (now - last < 1200 || readScopeInFlightRef.current.has(key))) return
+      readScopeCooldownRef.current.set(key, now)
+      readScopeInFlightRef.current.add(key)
+      try {
+        await fetchApi('/api/notifications/read-scope', {
+          method: 'POST',
+          body: JSON.stringify({ channelId }),
+        })
+        queryClient.invalidateQueries({ queryKey: ['notifications'] })
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+        queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+      } finally {
+        readScopeInFlightRef.current.delete(key)
+      }
+    },
+    [channelId, queryClient],
+  )
 
   // Sync channel ID from URL → store before paint
   useLayoutEffect(() => {
@@ -130,7 +133,7 @@ export function ChannelView() {
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
     const notificationChannelId = getNotificationChannelId(event)
     if (notificationChannelId === channelId) {
-      void markChannelScopeRead()
+      void markChannelScopeRead({ force: true })
     }
   })
 

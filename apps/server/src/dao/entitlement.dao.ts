@@ -220,6 +220,17 @@ export class EntitlementDao {
     }
   }
 
+  async findFirstByOrderIdWithDetails(orderId: string) {
+    const rows = await this.db
+      .select({ id: entitlements.id })
+      .from(entitlements)
+      .where(eq(entitlements.orderId, orderId))
+      .orderBy(desc(entitlements.createdAt))
+      .limit(1)
+    const entitlementId = rows[0]?.id
+    return entitlementId ? this.findByIdWithDetails(entitlementId) : null
+  }
+
   async findByShop(shopId: string, opts?: { limit?: number; offset?: number }) {
     const rows = await this.db
       .select({

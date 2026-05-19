@@ -221,6 +221,8 @@ export const products = pgTable(
           durationSeconds?: number | null
           /** Renewal period for subscription products, in seconds. */
           renewalPeriodSeconds?: number | null
+          /** Whether a buyer can purchase this entitlement repeatedly while active. */
+          repeatable?: boolean
           /** Human-readable description of the privilege */
           privilegeDescription?: string
         }
@@ -230,6 +232,7 @@ export const products = pgTable(
           capability?: string
           durationSeconds?: number | null
           renewalPeriodSeconds?: number | null
+          repeatable?: boolean
           privilegeDescription?: string
         }>
     >(),

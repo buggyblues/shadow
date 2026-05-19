@@ -17,6 +17,7 @@ const DEFAULT_CHANNELS: NotificationChannel[] = [
 
 const FORCE_IN_APP_KINDS = new Set([
   'commerce.purchase_completed',
+  'commerce.order_shipped',
   'commerce.renewal_failed',
   'commerce.subscription_cancelled',
   'commerce.refund_issued',

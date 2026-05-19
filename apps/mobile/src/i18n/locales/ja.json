@@ -1325,6 +1325,10 @@
       "fulfill": "履行"
     }
   },
+  "commerce": {
+    "repeatablePurchase": "繰り返し購入を許可",
+    "repeatablePurchaseHint": "オフにすると、有効な権限をすでに持つユーザーはこの商品を再購入できません。"
+  },
   "workspace": {
     "confirmDelete": "本当に削除しますか？",
     "createFolder": "フォルダ作成",
@@ -1401,6 +1405,8 @@
     "testMic": "マイクをテスト",
     "stopTest": "テスト停止",
     "yourScreen": "あなたの画面",
+    "focusScreen": "画面にフォーカス",
+    "activeCall": "ボイス通話中",
     "participants": "参加者",
     "noParticipants": "接続中の参加者はいません",
     "listening": "リスニング中",

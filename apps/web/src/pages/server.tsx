@@ -1,11 +1,10 @@
 import { GlassPanel } from '@shadowob/ui'
 import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Outlet, useNavigate, useParams } from '@tanstack/react-router'
+import { Outlet, useLocation, useNavigate, useParams } from '@tanstack/react-router'
 import { Clock, Loader2, Lock, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
-import { VoiceSessionProvider } from '../components/voice/voice-session-context'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
@@ -73,10 +72,12 @@ export function ServerLayout() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { serverSlug, channelId } = useParams({ strict: false }) as {
+  const { serverSlug, channelId, appKey } = useParams({ strict: false }) as {
     serverSlug: string
     channelId?: string
+    appKey?: string
   }
+  const location = useLocation()
   const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
   const { mobileView } = useUIStore()
   const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
@@ -182,15 +183,37 @@ export function ServerLayout() {
   // Redirect UUID URL → slug URL
   useEffect(() => {
     if (serverMeta?.slug && serverSlug !== serverMeta.slug) {
+      const pathname = location.pathname
+      const serverBase =
+        [`/app/servers/${serverSlug}`, `/servers/${serverSlug}`].find((base) =>
+          pathname.startsWith(base),
+        ) ?? `/servers/${serverSlug}`
+      const childPath = pathname.startsWith(serverBase) ? pathname.slice(serverBase.length) : ''
+      const target =
+        childPath.startsWith('/shop/admin') || childPath.startsWith('/shop/admin/')
+          ? '/servers/$serverSlug/shop/admin'
+          : childPath.startsWith('/shop') || childPath.startsWith('/shop/')
+            ? '/servers/$serverSlug/shop'
+            : childPath.startsWith('/workspace') || childPath.startsWith('/workspace/')
+              ? '/servers/$serverSlug/workspace'
+              : appKey
+                ? '/servers/$serverSlug/apps/$appKey'
+                : childPath.startsWith('/apps') || childPath.startsWith('/apps/')
+                  ? '/servers/$serverSlug/apps'
+                  : channelId
+                    ? '/servers/$serverSlug/channels/$channelId'
+                    : '/servers/$serverSlug'
       navigate({
-        to: channelId ? '/servers/$serverSlug/channels/$channelId' : '/servers/$serverSlug',
-        params: channelId
-          ? { serverSlug: serverMeta.slug, channelId }
-          : { serverSlug: serverMeta.slug },
+        to: target,
+        params: appKey
+          ? { serverSlug: serverMeta.slug, appKey }
+          : channelId
+            ? { serverSlug: serverMeta.slug, channelId }
+            : { serverSlug: serverMeta.slug },
         replace: true,
       })
     }
-  }, [serverMeta?.slug, serverSlug, channelId, navigate])
+  }, [appKey, channelId, location.pathname, navigate, serverMeta?.slug, serverSlug])
 
   // Sync server to store
   useEffect(() => {
@@ -309,30 +332,28 @@ export function ServerLayout() {
       (!!serverMeta?.id && !!routeChannel && routeChannel.serverId !== serverMeta.id))
 
   return (
-    <VoiceSessionProvider>
-      <div className="flex flex-1 min-w-0 overflow-hidden h-full gap-3 bg-transparent">
-        {/* Channel sidebar */}
-        <div
-          className={`${
-            mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
-          } md:flex flex-col w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
-        >
-          <ChannelSidebar
-            serverSlug={serverSlug}
-            deferInitialQueries={Boolean(channelId && bootstrapSeededChannelId !== channelId)}
-          />
-        </div>
-
-        {/* Content: child routes render here via Outlet */}
-        <div
-          className={`${
-            mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
-          } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
-        >
-          {routeChannelBlocked ? <RouteChannelContentLoading /> : <Outlet />}
-        </div>
+    <div className="flex flex-1 min-w-0 overflow-hidden h-full gap-3 bg-transparent">
+      {/* Channel sidebar */}
+      <div
+        className={`${
+          mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
+        } md:flex flex-col w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
+      >
+        <ChannelSidebar
+          serverSlug={serverSlug}
+          deferInitialQueries={Boolean(channelId && bootstrapSeededChannelId !== channelId)}
+        />
       </div>
-    </VoiceSessionProvider>
+
+      {/* Content: child routes render here via Outlet */}
+      <div
+        className={`${
+          mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
+        } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
+      >
+        {routeChannelBlocked ? <RouteChannelContentLoading /> : <Outlet />}
+      </div>
+    </div>
   )
 }
 

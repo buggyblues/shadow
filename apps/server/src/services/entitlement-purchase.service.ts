@@ -28,6 +28,23 @@ function addSeconds(seconds?: number | null) {
   return seconds ? new Date(Date.now() + seconds * 1000) : null
 }
 
+function entitlementConfigs(product: { entitlementConfig?: unknown }) {
+  if (Array.isArray(product.entitlementConfig)) return product.entitlementConfig
+  return product.entitlementConfig ? [product.entitlementConfig] : []
+}
+
+function productAllowsRepeatPurchase(product: { type?: string; entitlementConfig?: unknown }) {
+  if (product.type !== 'entitlement') return true
+  const configs = entitlementConfigs(product)
+  return (
+    configs.length === 0 ||
+    configs.every((config) => {
+      if (!config || typeof config !== 'object') return true
+      return (config as { repeatable?: boolean }).repeatable !== false
+    })
+  )
+}
+
 export class EntitlementPurchaseService {
   constructor(
     private deps: {
@@ -177,6 +194,25 @@ export class EntitlementPurchaseService {
         .returning({ id: commerceIdempotencyKeys.id })
       if (insertedKeys.length === 0) {
         throw apiError('PURCHASE_IN_PROGRESS', 409)
+      }
+
+      if (!productAllowsRepeatPurchase(product)) {
+        const existingEntitlement = await tx
+          .select({ id: entitlements.id })
+          .from(entitlements)
+          .where(
+            and(
+              eq(entitlements.userId, input.buyerId),
+              eq(entitlements.productId, product.id),
+              eq(entitlements.isActive, true),
+              eq(entitlements.status, 'active'),
+              sql`(${entitlements.expiresAt} IS NULL OR ${entitlements.expiresAt} > NOW())`,
+            ),
+          )
+          .limit(1)
+        if (existingEntitlement[0]) {
+          throw apiError('PRODUCT_ALREADY_PURCHASED', 409, { productId: product.id })
+        }
       }
 
       if (sku) {

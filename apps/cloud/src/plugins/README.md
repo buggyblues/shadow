@@ -55,6 +55,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 | [Kuaidi100](./kuaidi100/README.md) | `KUAIDI100_KEY`, `KUAIDI100_CUSTOMER` | Kuaidi100 MCP |
 | [Lark / Feishu](./lark/README.md) | `LARKSUITE_CLI_APP_ID`, `LARKSUITE_CLI_APP_SECRET`, `LARKSUITE_CLI_BRAND` | Lark CLI, MCP, skills |
 | [Linear](./linear/README.md) | `LINEAR_API_KEY`, `LINEAR_WORKSPACE_ID`, `LINEAR_TEAM_ID` | Linear MCP and API |
+| [Lovart](./lovart/README.md) | `LOVART_ACCESS_KEY`, `LOVART_SECRET_KEY` | Lovart OpenClaw skill |
 | [Meta Ads](./meta-ads/README.md) | `META_ACCESS_TOKEN`, `META_AD_ACCOUNT_ID` | Meta Marketing APIs |
 | [Xiaomi MiClaw](./miclaw/README.md) | `MICLAW_ACCESS_TOKEN` | Xiaomi MiClaw ecosystem |
 | [Model Provider](./model-provider/README.md) | Auto-detected provider env vars, optional OpenAI-compatible keys | Provider profile and secret detection |

@@ -1,13 +1,14 @@
-import { cn, GlassPanel, GlassSurface } from '@shadowob/ui'
+import { cn, GlassPanel } from '@shadowob/ui'
 import { X } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
 
 type SurfaceTone = 'default' | 'quiet' | 'accent'
 
 const surfaceToneClasses: Record<SurfaceTone, string> = {
-  default: 'rounded-2xl border-border-subtle/80',
-  quiet: 'rounded-2xl border-border-subtle/70',
-  accent: 'rounded-2xl border-primary/25 shadow-[0_20px_54px_rgba(0,198,209,0.10)]',
+  default: 'rounded-2xl border-border-subtle/80 bg-bg-secondary/45',
+  quiet: 'rounded-2xl border-border-subtle/70 bg-bg-secondary/30',
+  accent:
+    'rounded-2xl border-primary/25 bg-primary/[0.07] shadow-[0_20px_54px_rgba(0,198,209,0.10)]',
 }
 
 export function CommerceSurface({
@@ -15,13 +16,7 @@ export function CommerceSurface({
   tone = 'default',
   ...props
 }: HTMLAttributes<HTMLDivElement> & { tone?: SurfaceTone }) {
-  const Surface = tone === 'accent' ? GlassPanel : GlassSurface
-  return (
-    <Surface
-      className={cn(surfaceToneClasses[tone], tone === 'accent' && 'bg-primary/[0.08]', className)}
-      {...props}
-    />
-  )
+  return <div className={cn('border', surfaceToneClasses[tone], className)} {...props} />
 }
 
 export function CommerceDrawer({
@@ -306,12 +301,12 @@ export function CommerceListItem({
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 border-border-subtle px-4 py-4 transition first:border-t-0 hover:bg-bg-modifier-hover/35 sm:flex-row sm:items-center sm:justify-between',
+        'flex flex-col gap-3 border-border-subtle px-4 py-4 transition first:border-t-0 hover:bg-bg-modifier-hover/35 xl:flex-row xl:items-center xl:justify-between',
         className,
       )}
     >
-      <div className="flex min-w-0 flex-1 gap-3">
-        {media}
+      <div className="flex min-w-0 flex-1 flex-col gap-3 xl:flex-row">
+        {media && <div className="w-full shrink-0 xl:w-auto">{media}</div>}
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-black text-text-primary">{title}</div>
           {subtitle && <div className="mt-1 text-sm leading-5 text-text-secondary">{subtitle}</div>}
@@ -320,7 +315,7 @@ export function CommerceListItem({
         </div>
       </div>
       {action && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">{action}</div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">{action}</div>
       )}
     </div>
   )

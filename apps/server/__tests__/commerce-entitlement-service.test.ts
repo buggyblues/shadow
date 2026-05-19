@@ -94,6 +94,75 @@ function createOffer(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function createEntitlementPurchaseSubject(input?: {
+  product?: Record<string, unknown>
+  shop?: Record<string, unknown>
+  offer?: Record<string, unknown>
+  existingEntitlements?: Array<Record<string, unknown>>
+}) {
+  const db = createPurchaseDb({ activeEntitlements: input?.existingEntitlements })
+  const product = createProduct(input?.product)
+  const shop = createShop(input?.shop)
+  const offer = createOffer(input?.offer)
+  const ledgerService = {
+    credit: vi.fn(async () => undefined),
+    debit: vi.fn(async () => undefined),
+  }
+  const settlementService = {
+    createLine: vi.fn(async () => ({ id: 'settlement-line-1' })),
+  }
+  const notificationTriggerService = {
+    triggerCommercePurchaseCompleted: vi.fn(async () => undefined),
+  }
+  const commerceFulfillmentService = {
+    processJobs: vi.fn(async (jobIds: string[]) => jobIds.map((id) => ({ id, status: 'sent' }))),
+  }
+  const service = new EntitlementPurchaseService({
+    db: db as any,
+    productService: {
+      getProductById: vi.fn(async () => product),
+    } as any,
+    ledgerService: ledgerService as any,
+    notificationTriggerService: notificationTriggerService as any,
+    entitlementProvisionerService: {
+      validateProductConfig: vi.fn(async () => ({
+        serverId: null,
+        resourceType: 'workspace_file',
+        resourceId: fileId,
+        capability: 'view',
+      })),
+      provision: vi.fn(async () => ({
+        active: true,
+        entitlement: createEntitlement(),
+        provisioning: { status: 'provisioned', code: 'RESOURCE_ENTITLEMENT_RECORDED' },
+      })),
+    } as any,
+    commerceOfferService: {
+      requireActiveOfferForSurface: vi.fn(async () => ({ offer, product, shop })),
+      getOfferBundle: vi.fn(async () => ({ offer, product, shop })),
+      ensureDefaultOfferForProduct: vi.fn(async () => offer),
+      listDeliverablesForOffer: vi.fn(async () => []),
+    } as any,
+    commerceFulfillmentService: commerceFulfillmentService as any,
+    economyPolicyService: {
+      authorize: vi.fn(async () => ({ ok: true })),
+    } as any,
+    economyAuditService: {
+      record: vi.fn(async () => undefined),
+    } as any,
+    settlementService: settlementService as any,
+  })
+
+  return {
+    service,
+    db,
+    ledgerService,
+    settlementService,
+    notificationTriggerService,
+    commerceFulfillmentService,
+  }
+}
+
 function createCommerceCardService(input?: {
   product?: Record<string, unknown>
   shop?: Record<string, unknown>
@@ -554,6 +623,59 @@ describe('EntitlementPurchaseService', () => {
     expect(result.fulfillmentJobs).toEqual([{ id: fulfillmentJobId, status: 'sent' }])
     expect(result.nextAction).toBe('open_paid_file')
   })
+
+  it('rejects active repeat purchases for non-repeatable entitlement products', async () => {
+    const { service, ledgerService } = createEntitlementPurchaseSubject({
+      product: {
+        entitlementConfig: [
+          {
+            resourceType: 'workspace_file',
+            resourceId: fileId,
+            capability: 'view',
+            repeatable: false,
+          },
+        ],
+      },
+      existingEntitlements: [createEntitlement()],
+    })
+
+    await expect(
+      service.purchaseOffer({
+        buyerId,
+        offerId,
+        idempotencyKey: 'purchase-key-non-repeatable',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRODUCT_ALREADY_PURCHASED',
+      status: 409,
+    })
+    expect(ledgerService.debit).not.toHaveBeenCalled()
+  })
+
+  it('allows repeat purchases when entitlement config is repeatable', async () => {
+    const { service, ledgerService } = createEntitlementPurchaseSubject({
+      product: {
+        entitlementConfig: [
+          {
+            resourceType: 'workspace_file',
+            resourceId: fileId,
+            capability: 'view',
+            repeatable: true,
+          },
+        ],
+      },
+      existingEntitlements: [createEntitlement()],
+    })
+
+    const result = await service.purchaseOffer({
+      buyerId,
+      offerId,
+      idempotencyKey: 'purchase-key-repeatable',
+    })
+
+    expect(result.order).toMatchObject({ id: orderId, totalAmount: 900 })
+    expect(ledgerService.debit).toHaveBeenCalled()
+  })
 })
 
 describe('CommerceCheckoutService', () => {
@@ -774,6 +896,7 @@ describe('paid file routes', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-security-policy')).toContain("default-src 'none'")
+    expect(response.headers.get('content-security-policy')).toContain('https://cdn.jsdelivr.net')
     expect(response.headers.get('x-frame-options')).toBeNull()
     expect(await response.text()).toContain('<h1>match</h1>')
     expect(readGrantFile).toHaveBeenCalledWith({
@@ -864,11 +987,27 @@ function createFulfillmentDb(job: Record<string, unknown>, deliverable: Record<s
   }
 }
 
-function createPurchaseDb() {
+function createPurchaseDb(input?: { activeEntitlements?: Array<Record<string, unknown>> }) {
   const inserts: Array<{ table: unknown; data: Record<string, unknown> }> = []
   const updates: Array<{ table: unknown; data: Record<string, unknown> }> = []
   const tx = {
     insert: (table: unknown) => createPurchaseInsertBuilder(table, inserts),
+    select: () => ({
+      table: null as unknown,
+      from(table: unknown) {
+        this.table = table
+        return this
+      },
+      where() {
+        return this
+      },
+      limit() {
+        if (this.table === entitlements) {
+          return Promise.resolve(input?.activeEntitlements ?? [])
+        }
+        return Promise.resolve([])
+      },
+    }),
     update: (table: unknown) => createUpdateBuilder(table, { updates }),
   }
   return {

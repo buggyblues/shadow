@@ -14,6 +14,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Archive,
@@ -27,6 +28,7 @@ import {
   LogOut,
   type LucideProps,
   PawPrint,
+  ShoppingBag,
   Smartphone,
   UserPlus,
   Users,
@@ -246,6 +248,27 @@ export function ChatArea({
     size: number
   } | null>(null)
   const [previewOAuthLink, setPreviewOAuthLink] = useState<OAuthLinkPreview | null>(null)
+
+  const { data: serverShopEntry } = useQuery({
+    queryKey: ['chat-server-shop-entry', activeServerId],
+    queryFn: () =>
+      fetchApi<{ products: Array<{ id: string }>; total?: number }>(
+        `/api/servers/${activeServerId}/shop/products?limit=1`,
+      ),
+    enabled: Boolean(activeServerId),
+    retry: false,
+    staleTime: 60_000,
+  })
+  const hasServerShopProducts =
+    Boolean(activeServerId) &&
+    (serverShopEntry?.total ?? serverShopEntry?.products?.length ?? 0) > 0
+  const { data: activeServerSummary } = useQuery({
+    queryKey: ['server', activeServerId],
+    queryFn: () => fetchApi<{ id: string; slug?: string | null }>(`/api/servers/${activeServerId}`),
+    enabled: Boolean(activeServerId && hasServerShopProducts),
+    staleTime: 60_000,
+  })
+  const serverShopRouteKey = activeServerSummary?.slug ?? activeServerId
 
   const resolveWorkStatusName = useCallback(
     (payload: WorkStatusPayload, existingName?: string) => {
@@ -1219,6 +1242,17 @@ export function ChatArea({
                 </div>
               </PopoverContent>
             </Popover>
+            {hasServerShopProducts && (
+              <Link
+                to="/servers/$serverSlug/shop"
+                params={{ serverSlug: serverShopRouteKey! }}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition hover:bg-bg-modifier-hover hover:text-primary"
+                title={t('shop.openShop')}
+                aria-label={t('shop.openShop')}
+              >
+                <ShoppingBag size={18} />
+              </Link>
+            )}
             <NotificationBell />
             {showMemberToggle && activeServerId && (
               <Button

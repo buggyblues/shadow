@@ -1322,6 +1322,10 @@
       "fulfill": "履約"
     }
   },
+  "commerce": {
+    "repeatablePurchase": "允許重複購買",
+    "repeatablePurchaseHint": "關閉後，已擁有有效權益的使用者不能再次購買該商品。"
+  },
   "workspace": {
     "confirmDelete": "確定要刪除嗎？",
     "createFolder": "新增資料夾",
@@ -1398,6 +1402,8 @@
     "testMic": "測試麥克風",
     "stopTest": "停止測試",
     "yourScreen": "你的螢幕",
+    "focusScreen": "聚焦螢幕",
+    "activeCall": "語音通話中",
     "participants": "成員",
     "noParticipants": "暫時無人連線",
     "listening": "正在收聽",

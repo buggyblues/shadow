@@ -99,6 +99,7 @@ export class WalletService {
           order != null
             ? {
                 id: order.id,
+                entitlementId: order.entitlementId,
                 orderNo: order.orderNo,
                 status: order.status,
                 totalAmount: order.totalAmount,
@@ -108,6 +109,10 @@ export class WalletService {
                   ? {
                       id: order.shopId,
                       name: order.shopName,
+                      scopeKind: order.shopScopeKind,
+                      ownerUserId: order.shopOwnerUserId,
+                      serverId: order.shopServerId,
+                      serverSlug: order.shopServerSlug,
                     }
                   : null,
               }

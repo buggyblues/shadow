@@ -1562,7 +1562,7 @@ const styles = StyleSheet.create({
   grid: { padding: spacing.sm },
   gridRow: { gap: spacing.sm, paddingHorizontal: spacing.sm, marginBottom: spacing.sm },
   productCard: { flex: 1, borderRadius: radius.xl, overflow: 'hidden' },
-  productImage: { width: '100%', height: 130 },
+  productImage: { width: '100%', aspectRatio: 3 / 2 },
   productVisual: {
     overflow: 'hidden',
     borderWidth: 1,
@@ -1665,7 +1665,7 @@ const styles = StyleSheet.create({
   // Detail modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
-  detailImage: { width: '100%', height: 220 },
+  detailImage: { width: '100%', aspectRatio: 3 / 2 },
   detailBody: { padding: spacing.xl },
   detailPriceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   detailPrice: { fontSize: 24, fontWeight: '800' },

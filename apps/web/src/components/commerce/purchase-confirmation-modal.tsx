@@ -90,7 +90,7 @@ export function PurchaseConfirmationModal({
               resourceType={details.resourceType}
               assetType={details.assetType}
               showLabel={false}
-              className="h-20 w-20 shrink-0"
+              className="aspect-[3/2] w-28 shrink-0"
             />
             <div className="min-w-0 flex-1">
               <h3 className="line-clamp-2 text-base font-black text-text-primary">

@@ -14,6 +14,7 @@ export type NotificationKind =
   | 'friendship.request'
   | 'recharge.succeeded'
   | 'commerce.purchase_completed'
+  | 'commerce.order_shipped'
   | 'commerce.renewal_failed'
   | 'commerce.subscription_cancelled'
   | 'commerce.refund_issued'
@@ -104,6 +105,13 @@ export class NotificationTemplateService {
         return {
           title: 'Purchase completed',
           body: input.fallbackBody ?? `${productName} is now active.`,
+        }
+      case 'commerce.order_shipped':
+        return {
+          title: 'Order shipped',
+          body:
+            input.fallbackBody ??
+            `${productName} has been shipped${text(metadata.trackingNo) ? ` (${text(metadata.trackingNo)})` : ''}.`,
         }
       case 'commerce.renewal_failed':
         return {

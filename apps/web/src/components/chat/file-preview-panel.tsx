@@ -764,10 +764,19 @@ export function FilePreviewPanel({
 
   const ext = currentAttachment.filename.split('.').pop()?.toLowerCase() ?? ''
   const category = getFileCategory(currentAttachment.contentType, ext)
-  const showToggle = hasPreviewMode(category)
+  const showToggle =
+    hasPreviewMode(category) && !(category === 'html' && currentAttachment.paidFileId)
 
   // Fetch text content for text-based files
   useEffect(() => {
+    if (category === 'html' && currentAttachment.paidFileId) {
+      setLoading(false)
+      setError(null)
+      setTextContent(null)
+      setMode('preview')
+      return
+    }
+
     const isTextBased =
       category === 'text' || category === 'markdown' || category === 'html' || category === 'csv'
     if (!isTextBased && category !== 'xlsx') return
@@ -880,6 +889,15 @@ export function FilePreviewPanel({
     // Archive / ZIP
     if (category === 'archive') {
       return <ZipListing url={currentAttachment.url} />
+    }
+
+    // Paid HTML should be rendered directly by URL so the grant-view response owns CSP.
+    if (category === 'html' && currentAttachment.paidFileId) {
+      return (
+        <div className="flex-1 overflow-hidden p-2">
+          <HTMLPreview url={currentAttachment.url} />
+        </div>
+      )
     }
 
     // Excel / XLSX

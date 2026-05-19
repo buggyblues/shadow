@@ -1,8 +1,11 @@
 import { cn } from '@shadowob/ui'
+import { useParams } from '@tanstack/react-router'
 import {
   Headphones,
+  Maximize2,
   Mic,
   MicOff,
+  Minimize2,
   MonitorUp,
   Phone,
   PhoneOff,
@@ -10,9 +13,11 @@ import {
   Settings,
   UserPlus,
   Volume2,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type RemoteScreen, type VoiceParticipant } from '../../hooks/use-voice-channel'
 import { UserAvatar } from '../common/avatar'
@@ -52,19 +57,183 @@ function VideoTrackSurface({ track }: { track: RemoteScreen['track'] }) {
   )
 }
 
-function ScreenTile({ screen }: { screen: RemoteScreen }) {
+type ScreenStageItem = {
+  id: string
+  label: string
+  track: RemoteScreen['track']
+  local?: boolean
+}
+
+function ScreenShareStage({ items }: { items: ScreenStageItem[] }) {
+  const { t } = useTranslation()
+  const [activeId, setActiveId] = useState(items[0]?.id ?? '')
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [fullscreen, setFullscreen] = useState(false)
+  const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>())
+  const pinchRef = useRef<{ distance: number; zoom: number } | null>(null)
+  const active = items.find((item) => item.id === activeId) ?? items[0]
+
+  useEffect(() => {
+    if (!items.some((item) => item.id === activeId)) {
+      setActiveId(items[0]?.id ?? '')
+    }
+  }, [activeId, items])
+
+  useEffect(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [active?.id])
+
+  if (!active) return null
+
+  const updateZoom = (next: number) => {
+    const clamped = Math.max(0.75, Math.min(4, next))
+    setZoom(clamped)
+    if (clamped === 1) setPan({ x: 0, y: 0 })
+  }
+
+  const resetZoom = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }
+
+  const pointerDistance = () => {
+    const points = Array.from(pointersRef.current.values())
+    if (points.length < 2) return 0
+    return Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y)
+  }
+
   return (
-    <div className="relative min-h-[360px] overflow-hidden rounded-lg bg-[#050607] ring-1 ring-white/10">
-      <VideoTrackSurface track={screen.track} />
-      <div className="absolute bottom-3 left-3 rounded-md bg-black/65 px-3 py-1.5 text-sm font-black text-white">
-        {screen.displayName}
+    <div
+      className={cn(
+        'flex flex-col overflow-hidden rounded-lg bg-[#050607] ring-1 ring-primary/30',
+        fullscreen
+          ? 'fixed inset-3 z-[90] min-h-0 shadow-[0_24px_80px_rgba(0,0,0,0.55)] md:inset-6'
+          : 'min-h-[min(68vh,760px)]',
+      )}
+    >
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-black/55 p-2">
+        {items.length > 1 && (
+          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto scrollbar-hidden">
+            {items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                title={t('voice.focusScreen')}
+                onClick={() => setActiveId(item.id)}
+                className={cn(
+                  'inline-flex h-8 max-w-48 items-center gap-2 rounded-lg px-3 text-xs font-black transition',
+                  item.id === active.id
+                    ? 'bg-primary/20 text-primary'
+                    : 'bg-white/8 text-white/65 hover:bg-white/14 hover:text-white',
+                )}
+              >
+                <Maximize2 size={13} />
+                <span className="truncate">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="ml-auto flex items-center gap-2 rounded-xl border border-white/10 bg-white/6 p-1">
+          <button
+            type="button"
+            title={t('voice.zoomOut')}
+            className="grid h-8 w-8 place-items-center rounded-lg text-white/75 transition hover:bg-white/12 hover:text-white"
+            onClick={() => updateZoom(zoom - 0.2)}
+          >
+            <ZoomOut size={15} />
+          </button>
+          <button
+            type="button"
+            title={t('voice.resetZoom')}
+            className="h-8 rounded-lg px-2 text-xs font-black text-white/75 transition hover:bg-white/12 hover:text-white"
+            onClick={resetZoom}
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            title={t('voice.zoomIn')}
+            className="grid h-8 w-8 place-items-center rounded-lg text-white/75 transition hover:bg-white/12 hover:text-white"
+            onClick={() => updateZoom(zoom + 0.2)}
+          >
+            <ZoomIn size={15} />
+          </button>
+          <button
+            type="button"
+            title={fullscreen ? t('voice.exitFullscreen') : t('voice.fullscreen')}
+            className="grid h-8 w-8 place-items-center rounded-lg text-white/75 transition hover:bg-white/12 hover:text-white"
+            onClick={() => setFullscreen((value) => !value)}
+          >
+            {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+        </div>
+      </div>
+      <div
+        className="relative min-h-0 flex-1 touch-none cursor-grab overflow-hidden overscroll-contain active:cursor-grabbing"
+        onWheelCapture={(event) => {
+          if (!event.ctrlKey && !event.metaKey) return
+          event.preventDefault()
+          updateZoom(zoom + (event.deltaY < 0 ? 0.15 : -0.15))
+        }}
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.currentTarget.setPointerCapture(event.pointerId)
+          pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+          if (pointersRef.current.size >= 2) {
+            pinchRef.current = { distance: pointerDistance(), zoom }
+            dragRef.current = null
+            return
+          }
+          if (zoom <= 1) return
+          dragRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }
+        }}
+        onPointerMove={(event) => {
+          if (!pointersRef.current.has(event.pointerId)) return
+          event.preventDefault()
+          pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+          if (pointersRef.current.size >= 2 && pinchRef.current) {
+            const baseDistance = Math.max(pinchRef.current.distance, 1)
+            const rawRatio = pointerDistance() / baseDistance
+            const dampedRatio = 1 + (rawRatio - 1) * 0.58
+            updateZoom(pinchRef.current.zoom * dampedRatio)
+            return
+          }
+          if (!dragRef.current) return
+          setPan({
+            x: dragRef.current.panX + event.clientX - dragRef.current.x,
+            y: dragRef.current.panY + event.clientY - dragRef.current.y,
+          })
+        }}
+        onPointerUp={(event) => {
+          pointersRef.current.delete(event.pointerId)
+          event.currentTarget.releasePointerCapture(event.pointerId)
+          dragRef.current = null
+          pinchRef.current = null
+        }}
+        onPointerCancel={(event) => {
+          pointersRef.current.delete(event.pointerId)
+          dragRef.current = null
+          pinchRef.current = null
+        }}
+      >
+        <div
+          className="absolute inset-0 transition-transform duration-100"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: 'center center',
+          }}
+        >
+          <VideoTrackSurface track={active.track} />
+        </div>
+        <div className="absolute bottom-3 left-3 rounded-md bg-black/65 px-3 py-1.5 text-sm font-black">
+          {active.label}
+        </div>
       </div>
     </div>
   )
-}
-
-function LocalScreenPreview({ track }: { track: RemoteScreen['track'] }) {
-  return <VideoTrackSurface track={track} />
 }
 
 function VoiceWaves({ active, level = 0 }: { active: boolean; level?: number }) {
@@ -233,6 +402,7 @@ export function VoiceChannelPanel({
   channelName: string
 }) {
   const { t } = useTranslation()
+  const { serverSlug } = useParams({ strict: false }) as { serverSlug?: string }
   const {
     connectedVoiceChannel,
     voice,
@@ -248,6 +418,25 @@ export function VoiceChannelPanel({
   const participants = connectedToThisChannel ? voice.participants : []
   const screens = connectedToThisChannel ? voice.remoteScreens : []
   const localScreenTrack = connectedToThisChannel ? voice.localScreenTrack : null
+  const screenStageItems = useMemo<ScreenStageItem[]>(() => {
+    const items: ScreenStageItem[] = []
+    if (localScreenTrack) {
+      items.push({
+        id: 'local',
+        label: t('voice.yourScreen'),
+        track: localScreenTrack,
+        local: true,
+      })
+    }
+    for (const screen of screens) {
+      items.push({
+        id: String(screen.uid),
+        label: screen.displayName,
+        track: screen.track,
+      })
+    }
+    return items
+  }, [localScreenTrack, screens, t])
 
   const stageItems = useMemo(() => {
     if (localScreenTrack || screens.length > 0) return null
@@ -286,7 +475,9 @@ export function VoiceChannelPanel({
               <p className="mt-2 text-sm font-bold text-white/50">{t('voice.ready')}</p>
               <button
                 type="button"
-                onClick={() => void joinVoiceChannel({ id: channelId, name: channelName })}
+                onClick={() =>
+                  void joinVoiceChannel({ id: channelId, name: channelName, serverSlug })
+                }
                 className="mt-6 inline-flex h-12 items-center gap-2 rounded-xl bg-success px-5 text-sm font-black text-black transition hover:brightness-110"
               >
                 <Phone size={18} />
@@ -302,23 +493,13 @@ export function VoiceChannelPanel({
             errorMessage={errorMessage}
             isRetrying={connecting}
             onLeave={() => void leaveVoiceChannel()}
-            onRetry={() => void joinVoiceChannel({ id: channelId, name: channelName })}
+            onRetry={() => void joinVoiceChannel({ id: channelId, name: channelName, serverSlug })}
           />
         )}
 
         {connectedToThisChannel && voice.status !== 'error' && (
           <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center gap-4 pb-20">
-            {localScreenTrack && (
-              <div className="relative min-h-[420px] overflow-hidden rounded-lg bg-[#050607] ring-1 ring-primary/35">
-                <LocalScreenPreview track={localScreenTrack} />
-                <div className="absolute bottom-3 left-3 rounded-md bg-black/65 px-3 py-1.5 text-sm font-black">
-                  {t('voice.yourScreen')}
-                </div>
-              </div>
-            )}
-            {screens.map((screen) => (
-              <ScreenTile key={String(screen.uid)} screen={screen} />
-            ))}
+            {screenStageItems.length > 0 && <ScreenShareStage items={screenStageItems} />}
             {stageItems && stageItems.length > 0 && (
               <div
                 className={cn(

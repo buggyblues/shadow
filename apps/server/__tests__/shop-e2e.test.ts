@@ -815,6 +815,45 @@ describe('Order — creation & payment', () => {
     }
   })
 
+  it('rejects a second active non-repeatable entitlement order', async () => {
+    const productRes = await req('POST', `/api/servers/${serverId}/shop/products`, {
+      token: adminToken,
+      body: {
+        name: '一次性数字权益',
+        slug: `one-time-access-${Date.now()}`,
+        type: 'entitlement',
+        status: 'active',
+        summary: '只能购买一次的数字权益',
+        basePrice: 10,
+        categoryId: categoryId2,
+        entitlementConfig: {
+          resourceType: 'service',
+          resourceId: 'one-time-access',
+          capability: 'use',
+          durationSeconds: 86400,
+          repeatable: false,
+        },
+      },
+    })
+    expect(productRes.status).toBe(201)
+    const product = await json<{ id: string }>(productRes)
+
+    const firstOrderRes = await req('POST', `/api/servers/${serverId}/shop/orders`, {
+      token: buyerToken,
+      body: orderBody({ items: [{ productId: product.id, quantity: 1 }] }),
+    })
+    expect(firstOrderRes.status).toBe(201)
+
+    const repeatOrderRes = await req('POST', `/api/servers/${serverId}/shop/orders`, {
+      token: buyerToken,
+      body: orderBody({ items: [{ productId: product.id, quantity: 1 }] }),
+    })
+    expect(repeatOrderRes.status).toBe(409)
+    expect(await json<{ error: string }>(repeatOrderRes)).toMatchObject({
+      error: 'PRODUCT_ALREADY_PURCHASED',
+    })
+  })
+
   it('cart is cleared after order', async () => {
     const res = await req('GET', `/api/servers/${serverId}/shop/cart`, { token: buyerToken })
     expect(res.status).toBe(200)

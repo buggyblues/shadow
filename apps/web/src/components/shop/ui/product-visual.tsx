@@ -95,7 +95,6 @@ export function ProductVisual({
   iconClassName,
   labelClassName,
   showLabel = true,
-  showCaption = showLabel,
 }: {
   name?: string | null
   imageUrl?: string | null
@@ -118,7 +117,9 @@ export function ProductVisual({
 
   if (resolvedImage) {
     return (
-      <div className={cn('relative overflow-hidden rounded-lg bg-bg-tertiary', className)}>
+      <div
+        className={cn('relative self-start overflow-hidden rounded-lg bg-bg-tertiary', className)}
+      >
         <img src={resolvedImage} alt={name ?? ''} className="h-full w-full object-cover" />
         {showLabel && (
           <span
@@ -137,43 +138,22 @@ export function ProductVisual({
   return (
     <div
       className={cn(
-        'relative isolate flex flex-col justify-between overflow-hidden rounded-lg border p-4',
+        'relative isolate flex self-start items-center justify-center overflow-hidden rounded-lg border',
         config.className,
         className,
       )}
+      aria-label={name ?? label}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_52%),radial-gradient(circle_at_88%_14%,rgba(255,255,255,0.10),transparent_28%)]" />
-      <div className="relative flex items-start justify-between gap-3">
-        {showLabel && (
-          <span
-            className={cn(
-              'max-w-[70%] truncate rounded-full bg-black/20 px-2 py-1 text-[10px] font-black tracking-[0.08em] text-white/78 backdrop-blur-xl',
-              labelClassName,
-            )}
-          >
-            {label}
-          </span>
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.10),transparent_48%),radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.14),transparent_26%),radial-gradient(circle_at_12%_88%,rgba(0,198,209,0.14),transparent_34%)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/18 to-transparent" />
+      <div
+        className={cn(
+          'relative flex h-14 w-14 items-center justify-center rounded-2xl ring-1 backdrop-blur-xl sm:h-16 sm:w-16',
+          config.iconClassName,
+          iconClassName,
         )}
-        <div
-          className={cn(
-            'ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1',
-            config.iconClassName,
-            iconClassName,
-          )}
-          aria-label={name ?? label}
-        >
-          <Icon size={24} strokeWidth={2.4} />
-        </div>
-      </div>
-      <div className="relative min-w-0">
-        {name && (
-          <div className="line-clamp-2 text-sm font-black leading-tight text-white/92">{name}</div>
-        )}
-        {showCaption && (
-          <div className="mt-2 w-fit max-w-full truncate rounded-lg bg-black/18 px-2 py-1 text-[10px] font-bold text-white/70 backdrop-blur-xl">
-            {t(`commerce.visualPromise.${kind}`)}
-          </div>
-        )}
+      >
+        <Icon size={28} strokeWidth={2.2} />
       </div>
     </div>
   )
