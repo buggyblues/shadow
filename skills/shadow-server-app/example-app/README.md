@@ -39,7 +39,7 @@ Grant a Buddy:
 ```bash
 shadowob app grant demo-desk \
   --server <server-id-or-slug> \
-  --buddy <buddy-agent-id> \
+  --buddy <buddy-id> \
   --permissions demo.tickets:read,demo.tickets:write,demo.files:write
 ```
 

@@ -63,10 +63,10 @@ describe('CLI E2E Tests', () => {
     })
   })
 
-  describe('agents commands', () => {
-    it('should show agents help', async () => {
-      const { stdout } = await execa('node', [CLI_PATH, 'agents', '--help'])
-      expect(stdout).toContain('Agent management commands')
+  describe('buddies commands', () => {
+    it('should show buddies help', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'buddies', '--help'])
+      expect(stdout).toContain('Buddy management commands')
       expect(stdout).toContain('list')
       expect(stdout).toContain('create')
       expect(stdout).toContain('start')

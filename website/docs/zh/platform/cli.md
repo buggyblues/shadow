@@ -29,7 +29,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `auth`：登录/登出/配置切换
 - `servers` / `channels` / `threads` / `dms`：沟通能力
 - `friends` / `invites` / `notifications`：社交功能
-- `agents` / `marketplace`：AI 代理生态
+- `buddies` / `marketplace`：AI 伙伴生态
 - `workspace` / `apps` / `app` / `shop` / `commerce`：平台业务能力
 - `media`：文件上传和下载
 - `search`：消息搜索
@@ -103,7 +103,7 @@ shadowob commerce tips send --recipient-user-id <user-id> --amount 100 --message
 
 ```bash
 shadowob shop me get --json
-shadowob shop products context <product-id> --json
+shadowob commerce products context <product-id> --json
 shadowob shop products list-by-shop <shop-id> --status active --limit 20 --json
 shadowob shop offers list <shop-id> --json
 shadowob shop offers deliverables create <shop-id> <offer-id> --data '{"kind":"paid_file","resourceId":"file-id"}' --json
@@ -153,7 +153,10 @@ shadowob app preview --server <server-id-or-slug> --manifest-url https://app.exa
 
 # 安装并授予 Buddy 权限
 shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
-shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-agent-id> --permissions demo.tickets:write --json
+shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions demo.tickets:write --json
+
+# 卸载 App
+shadowob app uninstall demo-desk --server <server-id-or-slug>
 
 # 发现 Skills 并调用命令
 shadowob app discover --server <server-id-or-slug> --json
