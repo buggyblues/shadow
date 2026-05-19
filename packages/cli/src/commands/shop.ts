@@ -214,24 +214,6 @@ export function createShopCommand(): Command {
     )
 
   products
-    .command('context')
-    .description('Get buyer-facing product context')
-    .argument('<product-id>', 'Product ID')
-    .option('--profile <name>', 'Profile to use')
-    .option('--json', 'Output as JSON')
-    .action(async (productId: string, options: { profile?: string; json?: boolean }) => {
-      try {
-        const client = await getClient(options.profile)
-        output(await client.getCommerceProductContext(productId), { json: options.json })
-      } catch (error) {
-        outputError(error instanceof Error ? error.message : String(error), {
-          json: options.json,
-        })
-        process.exit(1)
-      }
-    })
-
-  products
     .command('create-by-shop')
     .description('Create a product by shop ID using a JSON payload')
     .argument('<shop-id>', 'Shop ID')

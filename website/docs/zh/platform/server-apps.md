@@ -20,7 +20,7 @@ App 是服务器级别的。一个服务器可以安装多个 App，每个 Buddy
 ```bash
 shadowob app grant demo-desk \
   --server <server-id-or-slug> \
-  --buddy <buddy-agent-id> \
+  --buddy <buddy-id> \
   --permissions demo.tickets:read,demo.tickets:write
 ```
 

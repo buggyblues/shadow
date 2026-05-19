@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Command } from 'commander'
-import { getClient } from '../utils/client.js'
+import { getClient, resolveServerFlag } from '../utils/client.js'
 import { output, outputError } from '../utils/output.js'
 
 type CommonOptions = { profile?: string; json?: boolean }
@@ -166,14 +166,14 @@ export function createCommerceCommand(): Command {
   entitlements
     .command('list')
     .description('List my purchase entitlements')
-    .option('--server-id <id>', 'Limit to a server shop entitlement list')
+    .option('--server <server>', 'Limit to a server shop entitlement list')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
-    .action((options: CommonOptions & { serverId?: string }) =>
+    .action((options: CommonOptions & { server?: string }) =>
       runCommand(options, async () => {
         const client = await getClient(options.profile)
-        return options.serverId
-          ? client.getEntitlements(options.serverId)
+        return options.server
+          ? client.getEntitlements(resolveServerFlag(options.server))
           : client.getAllEntitlements()
       }),
     )
