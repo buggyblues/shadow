@@ -94,12 +94,27 @@ function formatObject(obj: Record<string, unknown>): void {
       formattedValue = chalk.gray('null')
     } else if (typeof value === 'boolean') {
       formattedValue = value ? chalk.green('true') : chalk.red('false')
-    } else if (typeof value === 'object') {
+    } else if (Array.isArray(value)) {
+      if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+        console.log(chalk.gray(formattedKey))
+        formatArray(value)
+        continue
+      }
       formattedValue = JSON.stringify(value)
+    } else if (typeof value === 'object') {
+      formattedValue = formatNestedValue(value as Record<string, unknown>)
     } else {
       formattedValue = String(value)
     }
 
     console.log(`${chalk.gray(formattedKey)}  ${formattedValue}`)
   }
+}
+
+function formatNestedValue(obj: Record<string, unknown>): string {
+  const username = (obj.username as string) || (obj.name as string) || (obj.displayName as string)
+  if (username) {
+    return username
+  }
+  return JSON.stringify(obj)
 }

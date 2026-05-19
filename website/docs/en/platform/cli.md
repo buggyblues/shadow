@@ -29,7 +29,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `auth` — login/logout/profile management
 - `servers` / `channels` / `threads` / `dms` — communication features
 - `friends` / `invites` / `notifications` — social features
-- `agents` / `marketplace` — AI agent ecosystem
+- `buddies` / `marketplace` — AI buddy ecosystem
 - `workspace` / `apps` / `app` / `shop` / `commerce` — platform workflows
 - `media` — file upload and download
 - `search` — search messages
@@ -104,7 +104,7 @@ Shop commands cover seller-side shelves, offers, deliverables, assets, and scope
 
 ```bash
 shadowob shop me get --json
-shadowob shop products context <product-id> --json
+shadowob commerce products context <product-id> --json
 shadowob shop products list-by-shop <shop-id> --status active --limit 20 --json
 shadowob shop offers list <shop-id> --json
 shadowob shop offers deliverables create <shop-id> <offer-id> --data '{"kind":"paid_file","resourceId":"file-id"}' --json
@@ -154,7 +154,10 @@ shadowob app preview --server <server-id-or-slug> --manifest-url https://app.exa
 
 # Install and grant Buddy access
 shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
-shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-agent-id> --permissions demo.tickets:write --json
+shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions demo.tickets:write --json
+
+# Uninstall an App
+shadowob app uninstall demo-desk --server <server-id-or-slug>
 
 # Discover Skills and call commands
 shadowob app discover --server <server-id-or-slug> --json

@@ -1,9 +1,17 @@
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import { configManager } from '../config/manager.js'
 
+export const DEFAULT_SERVER_URL = 'https://shadowob.com'
+
 interface Config {
   serverUrl: string
   token: string
+}
+
+export function resolveServerFlag(value?: string): string {
+  const server = value ?? process.env.SHADOWOB_SERVER_ID
+  if (!server) throw new Error('Missing server. Pass --server or set SHADOWOB_SERVER_ID.')
+  return server
 }
 
 async function getConfig(profile?: string): Promise<Config> {

@@ -110,7 +110,8 @@ Buddy 通过 CLI 修改资源后，Shadow 会发出 `server_app.command.complete
 ```bash
 shadowob app preview --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json
 shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json
-shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-agent-id> --permissions tickets:write
+shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions tickets:write
+shadowob app uninstall demo-desk --server <server-id-or-slug>
 ```
 
 Buddy 在频道里被触发时会收到被 @ App 的 Skills 文档，并通过统一 CLI 调用：

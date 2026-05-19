@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import { createAgentsCommand } from './commands/agents.js'
 import { createApiTokensCommand } from './commands/api-tokens.js'
 import { createAppCommand } from './commands/app.js'
 import { createAuthCommand } from './commands/auth.js'
+import { createBuddiesCommand } from './commands/buddies.js'
 import { createChannelsCommand } from './commands/channels.js'
 import { createCloudCommand } from './commands/cloud.js'
 import { createCommerceCommand } from './commands/commerce.js'
@@ -47,7 +47,7 @@ program.addCommand(createAppCommand())
 program.addCommand(createServersCommand())
 program.addCommand(createChannelsCommand())
 program.addCommand(createThreadsCommand())
-program.addCommand(createAgentsCommand())
+program.addCommand(createBuddiesCommand())
 program.addCommand(createListenCommand())
 program.addCommand(createDirectMessagesCommand())
 program.addCommand(createWorkspaceCommand())

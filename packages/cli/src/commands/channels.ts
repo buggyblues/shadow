@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { getClient } from '../utils/client.js'
+import { getClient, resolveServerFlag } from '../utils/client.js'
 import { type OutputOptions, output, outputError, outputSuccess } from '../utils/output.js'
 
 export function createChannelsCommand(): Command {
@@ -8,13 +8,13 @@ export function createChannelsCommand(): Command {
   channels
     .command('list')
     .description('List channels in a server')
-    .requiredOption('--server-id <id>', 'Server ID')
+    .requiredOption('--server <server>', 'Server ID or slug')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
-    .action(async (options: { serverId: string; profile?: string; json?: boolean }) => {
+    .action(async (options: { server: string; profile?: string; json?: boolean }) => {
       try {
         const client = await getClient(options.profile)
-        const channels = await client.getServerChannels(options.serverId)
+        const channels = await client.getServerChannels(resolveServerFlag(options.server))
         output(channels, { json: options.json })
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
@@ -42,7 +42,7 @@ export function createChannelsCommand(): Command {
   channels
     .command('create')
     .description('Create a channel')
-    .requiredOption('--server-id <id>', 'Server ID')
+    .requiredOption('--server <server>', 'Server ID or slug')
     .requiredOption('--name <name>', 'Channel name')
     .option('--type <type>', 'Channel type', 'text')
     .option('--description <desc>', 'Channel description')
@@ -50,7 +50,7 @@ export function createChannelsCommand(): Command {
     .option('--json', 'Output as JSON')
     .action(
       async (options: {
-        serverId: string
+        server: string
         name: string
         type?: string
         description?: string
@@ -59,7 +59,7 @@ export function createChannelsCommand(): Command {
       }) => {
         try {
           const client = await getClient(options.profile)
-          const channel = await client.createChannel(options.serverId, {
+          const channel = await client.createChannel(resolveServerFlag(options.server), {
             name: options.name,
             type: options.type,
             description: options.description,

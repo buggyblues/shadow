@@ -1,14 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { Command } from 'commander'
-import { getClient } from '../utils/client.js'
+import { getClient, resolveServerFlag } from '../utils/client.js'
 import { output, outputError, outputSuccess } from '../utils/output.js'
-
-function resolveServer(value?: string) {
-  const server = value ?? process.env.SHADOWOB_SERVER_ID
-  if (!server) throw new Error('Missing server. Pass --server or set SHADOWOB_SERVER_ID.')
-  return server
-}
 
 function parseJsonInput(value?: string) {
   if (!value) return {}
@@ -46,7 +40,14 @@ export function createAppCommand(): Command {
     .action(async (options: { server: string; profile?: string; json?: boolean }) => {
       try {
         const client = await getClient(options.profile)
-        output(await client.listServerApps(resolveServer(options.server)), { json: options.json })
+        const apps = await client.listServerApps(resolveServerFlag(options.server))
+        output(
+          apps.map((entry) => ({
+            id: entry.id,
+            name: `${entry.appKey} (${entry.name})`,
+          })),
+          { json: options.json },
+        )
       } catch (error) {
         commandHandlerError(error, options.json)
       }
@@ -77,7 +78,7 @@ export function createAppCommand(): Command {
             ? await readJsonFile(options.manifestFile)
             : undefined
           output(
-            await client.discoverServerApp(resolveServer(options.server), {
+            await client.discoverServerApp(resolveServerFlag(options.server), {
               manifestUrl: options.manifestUrl,
               manifest: manifest as never,
             }),
@@ -113,7 +114,7 @@ export function createAppCommand(): Command {
           const manifest = options.manifestFile
             ? await readJsonFile(options.manifestFile)
             : undefined
-          const result = await client.installServerApp(resolveServer(options.server), {
+          const result = await client.installServerApp(resolveServerFlag(options.server), {
             manifestUrl: options.manifestUrl,
             manifest: manifest as never,
           })
@@ -135,7 +136,7 @@ export function createAppCommand(): Command {
       async (appKey: string, options: { server: string; profile?: string; json?: boolean }) => {
         try {
           const client = await getClient(options.profile)
-          output(await client.getServerApp(resolveServer(options.server), appKey), {
+          output(await client.getServerApp(resolveServerFlag(options.server), appKey), {
             json: options.json,
           })
         } catch (error) {
@@ -149,7 +150,7 @@ export function createAppCommand(): Command {
     .description('Grant a Buddy access to an installed server App')
     .argument('<app-key>', 'App key')
     .requiredOption('--server <server>', 'Server ID or slug')
-    .requiredOption('--buddy <agent-id>', 'Buddy agent ID')
+    .requiredOption('--buddy <buddy-id>', 'Buddy ID')
     .requiredOption('--permissions <permissions>', 'Comma-separated permissions, or *')
     .option('--approval-mode <mode>', 'none, first_time, every_time, or policy', 'none')
     .option('--profile <name>', 'Profile to use')
@@ -172,11 +173,15 @@ export function createAppCommand(): Command {
             .split(',')
             .map((item) => item.trim())
             .filter(Boolean)
-          const result = await client.grantServerAppToBuddy(resolveServer(options.server), appKey, {
-            buddyAgentId: options.buddy,
-            permissions,
-            approvalMode: options.approvalMode,
-          })
+          const result = await client.grantServerAppToBuddy(
+            resolveServerFlag(options.server),
+            appKey,
+            {
+              buddyAgentId: options.buddy,
+              permissions,
+              approvalMode: options.approvalMode,
+            },
+          )
           output(result, { json: options.json })
         } catch (error) {
           commandHandlerError(error, options.json)
@@ -193,7 +198,7 @@ export function createAppCommand(): Command {
     .action(async (options: { server: string; profile?: string; json?: boolean }) => {
       try {
         const client = await getClient(options.profile)
-        const server = resolveServer(options.server)
+        const server = resolveServerFlag(options.server)
         const apps = await client.listServerApps(server)
         const docs = await Promise.all(
           apps.map((entry) => client.getServerAppSkills(server, entry.appKey)),
@@ -219,7 +224,7 @@ export function createAppCommand(): Command {
       async (appKey: string, options: { server: string; profile?: string; json?: boolean }) => {
         try {
           const client = await getClient(options.profile)
-          const result = await client.getServerAppSkills(resolveServer(options.server), appKey)
+          const result = await client.getServerAppSkills(resolveServerFlag(options.server), appKey)
           if (options.json) output(result, { json: true })
           else console.log(result.markdown)
         } catch (error) {
@@ -261,7 +266,7 @@ export function createAppCommand(): Command {
           const input = options.inputFile
             ? await readJsonFile(options.inputFile)
             : parseJsonInput(options.jsonInput)
-          const server = resolveServer(options.server)
+          const server = resolveServerFlag(options.server)
           const result = options.file
             ? await client.callServerAppCommandMultipart(server, appKey, commandName, {
                 input,
@@ -286,6 +291,27 @@ export function createAppCommand(): Command {
             return
           }
           output(result, { json: options.json })
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('uninstall')
+    .description('Uninstall a server App')
+    .argument('<app-key>', 'App key')
+    .requiredOption('--server <server>', 'Server ID or slug')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (appKey: string, options: { server: string; profile?: string; json?: boolean }) => {
+        try {
+          const client = await getClient(options.profile)
+          await client.deleteServerApp(resolveServerFlag(options.server), appKey)
+          const outputOpts = { json: options.json }
+          if (options.json) output({ ok: true }, outputOpts)
+          else outputSuccess(`Uninstalled ${appKey}`, outputOpts)
         } catch (error) {
           commandHandlerError(error, options.json)
         }

@@ -9,7 +9,7 @@ export function createAuthCommand(): Command {
   auth
     .command('login')
     .description('Authenticate with a Shadow server')
-    .requiredOption('--server-url <url>', 'Shadow server URL')
+    .option('--server-url <url>', 'Shadow server URL', 'https://shadowob.com')
     .requiredOption('--token <token>', 'JWT token')
     .option('--profile <name>', 'Profile name', 'default')
     .option('--json', 'Output as JSON')

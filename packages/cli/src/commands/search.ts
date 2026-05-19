@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { getClient } from '../utils/client.js'
+import { getClient, resolveServerFlag } from '../utils/client.js'
 import { output, outputError } from '../utils/output.js'
 
 export function createSearchCommand(): Command {
@@ -10,7 +10,7 @@ export function createSearchCommand(): Command {
     .command('messages')
     .description('Search messages')
     .requiredOption('--query <text>', 'Search query')
-    .option('--server-id <id>', 'Limit to server')
+    .option('--server <server>', 'Limit to server')
     .option('--channel-id <id>', 'Limit to channel')
     .option('--limit <n>', 'Number of results (1-100)', '20')
     .option('--profile <name>', 'Profile to use')
@@ -18,7 +18,7 @@ export function createSearchCommand(): Command {
     .action(
       async (options: {
         query: string
-        serverId?: string
+        server?: string
         channelId?: string
         limit?: string
         profile?: string
@@ -29,7 +29,7 @@ export function createSearchCommand(): Command {
           const limit = Math.min(Math.max(parseInt(options.limit ?? '20', 10), 1), 100)
           const results = await client.searchMessages({
             q: options.query,
-            serverId: options.serverId,
+            serverId: options.server ? resolveServerFlag(options.server) : undefined,
             channelId: options.channelId,
             limit,
           })
