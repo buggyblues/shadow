@@ -162,18 +162,12 @@ importers:
       '@pulumi/pulumi':
         specifier: ^3.160.0
         version: 3.228.0(ts-node@10.9.2(@types/node@22.19.15)(typescript@5.9.3))(typescript@5.9.3)
-      '@shadowob/cloud-ui':
-        specifier: workspace:*
-        version: link:packages/ui
       '@shadowob/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       '@shadowob/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@shadowob/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: ^5.80.7
         version: 5.90.21(react@19.2.5)
@@ -262,6 +256,9 @@ importers:
       '@rsbuild/plugin-react':
         specifier: ^1.4.6
         version: 1.4.6(@rsbuild/core@1.7.3)
+      '@shadowob/cloud-ui':
+        specifier: workspace:*
+        version: link:packages/ui
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0

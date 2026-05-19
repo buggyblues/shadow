@@ -9,9 +9,14 @@ import readline from 'node:readline'
 const ROOT = path.resolve(import.meta.dirname, '..')
 const PACKAGES_DIR = path.join(ROOT, 'packages')
 const FLASH_PACKAGES_DIR = path.join(ROOT, 'apps', 'flash', 'packages')
+const CLOUD_PACKAGE_DIR = path.join(ROOT, 'apps', 'cloud')
+const CLOUD_PACKAGES_DIR = path.join(CLOUD_PACKAGE_DIR, 'packages')
 
 /** All directories that may contain publishable packages. */
 const PUBLISHABLE_SCAN_DIRS = [PACKAGES_DIR, FLASH_PACKAGES_DIR]
+const DIRECT_PUBLISHABLE_PACKAGE_DIRS = [CLOUD_PACKAGE_DIR]
+const WORKSPACE_SCAN_DIRS = [PACKAGES_DIR, FLASH_PACKAGES_DIR, CLOUD_PACKAGES_DIR]
+const DIRECT_WORKSPACE_PACKAGE_DIRS = [CLOUD_PACKAGE_DIR]
 
 const BUMP_TYPES = ['patch', 'minor', 'major']
 
@@ -102,13 +107,26 @@ function getPublishablePackages() {
       })
     }
   }
+  for (const pkgDir of DIRECT_PUBLISHABLE_PACKAGE_DIRS) {
+    const pkgJsonPath = path.join(pkgDir, 'package.json')
+    if (!fs.existsSync(pkgJsonPath)) continue
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+    if (pkg.private) continue
+    packages.push({
+      dir: path.relative(ROOT, pkgDir),
+      name: pkg.name,
+      version: pkg.version,
+      pkgDir,
+      pkgJsonPath,
+    })
+  }
   return packages
 }
 
 /** Build a name→version map of every workspace package (including private). */
 function getWorkspaceVersionMap() {
   const map = new Map()
-  for (const scanDir of PUBLISHABLE_SCAN_DIRS) {
+  for (const scanDir of WORKSPACE_SCAN_DIRS) {
     if (!fs.existsSync(scanDir)) continue
     const dirs = fs
       .readdirSync(scanDir)
@@ -120,22 +138,29 @@ function getWorkspaceVersionMap() {
       map.set(pkg.name, { version: pkg.version, private: !!pkg.private })
     }
   }
+  for (const pkgDir of DIRECT_WORKSPACE_PACKAGE_DIRS) {
+    const pkgJsonPath = path.join(pkgDir, 'package.json')
+    if (!fs.existsSync(pkgJsonPath)) continue
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+    map.set(pkg.name, { version: pkg.version, private: !!pkg.private })
+  }
   return map
 }
 
 // ─── Validation ───────────────────────────────────────────────────
 
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
+const RUNTIME_DEP_FIELDS = ['dependencies', 'peerDependencies', 'optionalDependencies']
 
 /**
- * Pre-publish check: warn if a workspace:* dep points to a private package
- * (which cannot be resolved from npm).
+ * Pre-publish check: block when a runtime workspace:* dep points to a private
+ * package, because consumers must be able to resolve runtime deps from npm.
  */
 function checkPrivateWorkspaceDeps(pkgJsonPath, wsMap) {
   const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
   const issues = []
 
-  for (const field of DEP_FIELDS) {
+  for (const field of RUNTIME_DEP_FIELDS) {
     const deps = pkg[field]
     if (!deps) continue
     for (const [name, ver] of Object.entries(deps)) {
