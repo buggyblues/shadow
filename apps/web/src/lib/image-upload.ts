@@ -30,6 +30,8 @@ export async function compressImageForUpload(
   if (typeof document === 'undefined' || !file.type.startsWith('image/')) return file
   if (file.type === 'image/svg+xml' || file.type === 'image/gif') return file
 
+  if (typeof createImageBitmap !== 'function') return file
+
   const bitmap = await createImageBitmap(file).catch(() => null)
   if (!bitmap) return file
 

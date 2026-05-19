@@ -322,8 +322,8 @@ function ProductManager({ serverId }: { serverId: string }) {
                   size="icon"
                   icon={Trash2}
                   className="hover:!text-danger"
-                  title={t('shop.deleteProduct')}
-                  aria-label={t('shop.deleteProduct')}
+                  title={t('shop.deleteThisProduct')}
+                  aria-label={t('shop.deleteThisProduct')}
                   onClick={async () => {
                     const ok = await useConfirmStore.getState().confirm({
                       title: t('shop.deleteProduct'),
