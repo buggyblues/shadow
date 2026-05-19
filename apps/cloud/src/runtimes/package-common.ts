@@ -131,13 +131,23 @@ export function buildIdentityWorkspaceFiles(agent: AgentDeployment): RuntimeFile
 
 function shadowobSkillMarkdown(): string {
   const here = dirname(fileURLToPath(import.meta.url))
-  const candidates = [
-    resolve(process.cwd(), 'skills/shadowob-cli/SKILL.md'),
-    resolve(process.cwd(), '../skills/shadowob-cli/SKILL.md'),
-    resolve(here, '../../../../skills/shadowob-cli/SKILL.md'),
-    resolve(here, '../../../../../skills/shadowob-cli/SKILL.md'),
-  ]
-  const path = candidates.find((candidate) => existsSync(candidate))
+  let currentDir = here
+  let path: string | undefined
+
+  while (true) {
+    const candidate = resolve(currentDir, 'skills/shadowob-cli/SKILL.md')
+    if (existsSync(candidate)) {
+      path = candidate
+      break
+    }
+
+    const parentDir = dirname(currentDir)
+    if (parentDir === currentDir) {
+      break
+    }
+    currentDir = parentDir
+  }
+
   if (!path) {
     throw new Error('Cannot find skills/shadowob-cli/SKILL.md for runner package generation')
   }

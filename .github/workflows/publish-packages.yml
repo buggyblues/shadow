@@ -1,11 +1,16 @@
 name: publish-packages
 
 on:
+  workflow_run:
+    workflows: [post-merge-validation]
+    branches: [main]
+    types: [completed]
   workflow_dispatch:
     inputs:
       bump:
         description: Version bump type
-        required: true
+        required: false
+        default: patch
         type: choice
         options:
           - patch
@@ -19,7 +24,7 @@ on:
           - stable
           - test
       publish_npm:
-        description: Publish all public npm packages under packages/
+        description: Publish all public npm packages under packages/, apps/flash/packages/, and apps/cloud
         type: boolean
         default: true
       publish_pypi:
@@ -29,7 +34,7 @@ on:
       create_release:
         description: Create GitHub Release after publishing
         type: boolean
-        default: true
+        default: false
       dry_run:
         description: Dry run only (skip publish / tag / release)
         type: boolean
@@ -44,7 +49,13 @@ concurrency:
 
 jobs:
   release-sdk:
-    name: Publish SDK packages
+    name: Publish packages
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+        !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): packages v'))
+      }}
     runs-on: ubuntu-latest
     environment: ShadowOB SDK
 
@@ -53,6 +64,36 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+
+      - name: Resolve effective release settings
+        id: settings
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            bump='${{ inputs.bump }}'
+            release_channel='${{ inputs.release_channel }}'
+            publish_npm='${{ inputs.publish_npm }}'
+            publish_pypi='${{ inputs.publish_pypi }}'
+            create_release='${{ inputs.create_release }}'
+            dry_run='${{ inputs.dry_run }}'
+          else
+            bump='patch'
+            release_channel='stable'
+            publish_npm='true'
+            publish_pypi='true'
+            create_release='false'
+            dry_run='false'
+          fi
+
+          echo "bump=${bump}" >> "$GITHUB_OUTPUT"
+          echo "release_channel=${release_channel}" >> "$GITHUB_OUTPUT"
+          echo "publish_npm=${publish_npm}" >> "$GITHUB_OUTPUT"
+          echo "publish_pypi=${publish_pypi}" >> "$GITHUB_OUTPUT"
+          echo "create_release=${create_release}" >> "$GITHUB_OUTPUT"
+          echo "dry_run=${dry_run}" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -64,8 +105,8 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Setup Python
+        if: steps.settings.outputs.publish_pypi == 'true'
         uses: actions/setup-python@v5
-        if: inputs.publish_pypi
         with:
           python-version: "3.12"
 
@@ -79,7 +120,9 @@ jobs:
         run: |
           pnpm install --frozen-lockfile \
             --filter ./packages/*... \
-            --filter ./apps/flash/packages/*...
+            --filter ./apps/flash/packages/*... \
+            --filter ./apps/cloud... \
+            --filter ./apps/cloud/packages/ui...
 
       - name: Compute publish targets and unified release version
         id: publish_targets
@@ -93,6 +136,9 @@ jobs:
           const scanDirs = [
             path.resolve(cwd, 'packages'),
             path.resolve(cwd, 'apps', 'flash', 'packages'),
+          ]
+          const directPackageJsonPaths = [
+            path.resolve(cwd, 'apps', 'cloud', 'package.json'),
           ]
 
           function parseSemver(version) {
@@ -122,6 +168,7 @@ jobs:
 
           const filters = []
           const versions = []
+
           for (const scanDir of scanDirs) {
             if (!fs.existsSync(scanDir)) continue
             const dirs = fs.readdirSync(scanDir).filter((d) => {
@@ -136,6 +183,14 @@ jobs:
               filters.push(`--filter=${pkg.name}`)
               versions.push(pkg.version)
             }
+          }
+
+          for (const pkgJsonPath of directPackageJsonPaths) {
+            if (!fs.existsSync(pkgJsonPath)) continue
+            const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+            if (pkg.private) continue
+            filters.push(`--filter=${pkg.name}`)
+            versions.push(pkg.version)
           }
 
           const packagesDir = path.resolve(cwd, 'packages')
@@ -181,7 +236,7 @@ jobs:
           TEST_BUILD_NUMBER=$(node -e "const d=JSON.parse(process.argv[1]); process.stdout.write(d.testBuildNumber)" "$TARGETS")
 
           if [ -z "$FILTERS" ]; then
-            echo "No publishable npm packages found under packages/ or apps/flash/packages/."
+            echo "No publishable npm packages found under packages/, apps/flash/packages/, or apps/cloud."
             exit 1
           fi
 
@@ -198,18 +253,19 @@ jobs:
           echo "Release version: $RELEASE_VERSION"
           echo "Python version: $PYTHON_VERSION"
         env:
-          BUMP_TYPE: ${{ inputs.bump }}
-          RELEASE_CHANNEL: ${{ inputs.release_channel }}
+          BUMP_TYPE: ${{ steps.settings.outputs.bump }}
+          RELEASE_CHANNEL: ${{ steps.settings.outputs.release_channel }}
 
       - name: Verify workspace dependencies before bump
         run: pnpm check:workspace-deps
 
-      - name: Ensure connector is included in npm release targets
-        if: inputs.publish_npm
+      - name: Ensure connector and cloud are included in npm release targets
+        if: steps.settings.outputs.publish_npm == 'true'
         shell: bash
         run: |
           echo "$NPM_FILTERS"
           grep -q -- '--filter=@shadowob/connector' <<< "$NPM_FILTERS"
+          grep -q -- '--filter=@shadowob/cloud' <<< "$NPM_FILTERS"
 
       - name: Bump all public npm package versions
         shell: bash
@@ -228,22 +284,22 @@ jobs:
             echo "Test channel uses npm ${RELEASE_VERSION} and Python ${PYTHON_VERSION} for registry-compatible prerelease syntax."
           fi
         env:
-          RELEASE_CHANNEL: ${{ inputs.release_channel }}
+          RELEASE_CHANNEL: ${{ steps.settings.outputs.release_channel }}
 
       - name: Build npm publish artifacts
-        if: inputs.publish_npm
+        if: steps.settings.outputs.publish_npm == 'true'
         shell: bash
         run: |
           pnpm -r ${NPM_FILTERS} build
 
       - name: Build Python distribution
-        if: inputs.publish_pypi
+        if: steps.settings.outputs.publish_pypi == 'true'
         run: |
           python -m pip install --upgrade pip build
           python -m build --wheel --sdist packages/sdk-python
 
       - name: Publish public npm packages
-        if: inputs.publish_npm && !inputs.dry_run
+        if: steps.settings.outputs.publish_npm == 'true' && steps.settings.outputs.dry_run != 'true'
         run: |
           if [ "${RELEASE_CHANNEL}" = "test" ]; then
             PUBLISH_TAG="test"
@@ -253,10 +309,10 @@ jobs:
           pnpm -r ${NPM_FILTERS} publish --no-git-checks --access public --tag "${PUBLISH_TAG}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          RELEASE_CHANNEL: ${{ inputs.release_channel }}
+          RELEASE_CHANNEL: ${{ steps.settings.outputs.release_channel }}
 
       - name: Publish shadowob-sdk to PyPI
-        if: inputs.publish_pypi && !inputs.dry_run
+        if: steps.settings.outputs.publish_pypi == 'true' && steps.settings.outputs.dry_run != 'true'
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
@@ -265,13 +321,13 @@ jobs:
           python -m twine upload packages/sdk-python/dist/*
 
       - name: Dry run summary
-        if: inputs.dry_run
+        if: steps.settings.outputs.dry_run == 'true'
         run: |
           echo "dry_run=true, publish/tag/release steps were skipped."
           echo "built npm/python artifacts and verified version consistency only."
 
       - name: Verify published npm package metadata
-        if: inputs.publish_npm && !inputs.dry_run
+        if: steps.settings.outputs.publish_npm == 'true' && steps.settings.outputs.dry_run != 'true'
         shell: bash
         run: |
           node <<'NODE' > /tmp/shadow-published-npm-packages.txt
@@ -284,11 +340,11 @@ jobs:
 
           while read -r package_name; do
             [ -n "$package_name" ] || continue
-            for attempt in 1 2 3 4 5 6; do
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
               if npm view "${package_name}@${RELEASE_VERSION}" version; then
                 break
               fi
-              if [ "$attempt" = "6" ]; then
+              if [ "$attempt" = "18" ]; then
                 echo "Package ${package_name}@${RELEASE_VERSION} was not visible in the registry."
                 exit 1
               fi
@@ -296,14 +352,23 @@ jobs:
             done
           done < /tmp/shadow-published-npm-packages.txt
 
-      - name: Verify cold connector install from npm
-        if: inputs.publish_npm && !inputs.dry_run
+      - name: Verify cold npm installs from registry
+        if: steps.settings.outputs.publish_npm == 'true' && steps.settings.outputs.dry_run != 'true'
         shell: bash
         run: |
           tmpdir="$(mktemp -d)"
           cd "$tmpdir"
           npm init -y
-          npm install "@shadowob/connector@${RELEASE_VERSION}"
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if npm install "@shadowob/connector@${RELEASE_VERSION}" "@shadowob/cloud@${RELEASE_VERSION}"; then
+              break
+            fi
+            if [ "$attempt" = "12" ]; then
+              echo "npm install did not succeed for published packages after registry retries."
+              exit 1
+            fi
+            sleep 10
+          done
           node node_modules/@shadowob/connector/dist/cli.js plan \
             --target hermes \
             --server-url https://shadowob.example.com \
@@ -316,9 +381,20 @@ jobs:
             throw new Error('Hermes connector plan still contains static agent/channel flags')
           }
           NODE
+          node node_modules/@shadowob/cloud/dist/cli.js --help >/tmp/shadow-cloud-help.txt
+          grep -q "shadowob-cloud" /tmp/shadow-cloud-help.txt
+          node --input-type=module <<'NODE'
+          const mod = await import('@shadowob/cloud')
+          if (!mod || typeof mod !== 'object') {
+            throw new Error('Failed to import @shadowob/cloud')
+          }
+          if (!('createCLI' in mod)) {
+            throw new Error('Expected createCLI export was not found')
+          }
+          NODE
 
       - name: Verify cold Python SDK install from PyPI
-        if: inputs.publish_pypi && !inputs.dry_run
+        if: steps.settings.outputs.publish_pypi == 'true' && steps.settings.outputs.dry_run != 'true'
         shell: bash
         run: |
           python -m venv /tmp/shadow-sdk-verify
@@ -339,7 +415,7 @@ jobs:
           PY
 
       - name: Test publish summary
-        if: inputs.release_channel == 'test' && !inputs.dry_run
+        if: steps.settings.outputs.release_channel == 'test' && steps.settings.outputs.dry_run != 'true'
         run: |
           {
             echo "## Test package publish"
@@ -350,20 +426,20 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit and tag release
-        if: ${{ inputs.release_channel == 'stable' && !inputs.dry_run }}
+        if: steps.settings.outputs.release_channel == 'stable' && steps.settings.outputs.dry_run != 'true'
         shell: bash
         run: |
           VERSION="${SDK_VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/*/package.json apps/flash/packages/*/package.json packages/sdk-python/pyproject.toml pnpm-lock.yaml
+          git add packages/*/package.json apps/flash/packages/*/package.json apps/cloud/package.json packages/sdk-python/pyproject.toml pnpm-lock.yaml
           git commit -m "chore(release): packages v${VERSION}"
           git tag "sdk-v${VERSION}"
           git push
           git push --tags
 
       - name: Create GitHub Release
-        if: inputs.release_channel == 'stable' && inputs.create_release && !inputs.dry_run
+        if: steps.settings.outputs.release_channel == 'stable' && steps.settings.outputs.create_release == 'true' && steps.settings.outputs.dry_run != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: sdk-v${{ env.SDK_VERSION }}
@@ -372,5 +448,5 @@ jobs:
             SDK release version: `${{ env.SDK_VERSION }}`
 
             Published packages:
-            - npm: all public packages under `packages/` and `apps/flash/packages/`
+            - npm: all public packages under `packages/`, `apps/flash/packages/`, and `apps/cloud`
             - PyPI: `shadowob-sdk==${{ env.SDK_VERSION }}`

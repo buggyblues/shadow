@@ -14,13 +14,7 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dir = dirname(fileURLToPath(import.meta.url))
-const CLOUD_ROOT = join(__dir, '..', '..')
-const CLI_BIN = join(CLOUD_ROOT, 'dist', 'index.js')
+import { assertCliBuilt, CLI_BIN, CLOUD_ROOT } from './cli-bin.js'
 
 export interface ServeHandle {
   origin: string
@@ -50,9 +44,7 @@ async function waitForServe(port: number, timeoutMs = 15_000): Promise<void> {
  * Resolves once the /api/templates endpoint responds.
  */
 export async function startServe(port = 4747): Promise<ServeHandle> {
-  if (!existsSync(CLI_BIN)) {
-    throw new Error(`CLI binary not found at ${CLI_BIN}. Run 'pnpm build' in apps/cloud first.`)
-  }
+  assertCliBuilt()
 
   let proc: ChildProcess | null = null
 

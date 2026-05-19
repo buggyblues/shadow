@@ -31,6 +31,7 @@ COPY packages/ packages/
 COPY apps/server/ apps/server/
 COPY apps/cloud/ apps/cloud/
 COPY apps/web/src/styles/ apps/web/src/styles/
+COPY skills/shadowob-cli/SKILL.md skills/shadowob-cli/SKILL.md
 
 # Build dependencies first (need devDependencies for tsup)
 ENV SHADOW_BUILD_DTS=0

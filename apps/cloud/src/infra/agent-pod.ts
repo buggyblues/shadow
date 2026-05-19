@@ -2,6 +2,7 @@ import type * as k8s from '@pulumi/kubernetes'
 import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import '../runtimes/loader.js'
 import {
+  RUNNER_AGENTS_VOLUME_NAME,
   RUNNER_CONFIG_MOUNT_PATH,
   RUNNER_CONFIG_VOLUME_NAME,
   RUNNER_LOG_VOLUME_NAME,
@@ -72,6 +73,7 @@ function baseVolumeMounts(runtime: RuntimeAdapter): k8s.types.input.core.v1.Volu
     { name: RUNNER_CONFIG_VOLUME_NAME, mountPath: RUNNER_CONFIG_MOUNT_PATH, readOnly: true },
     { name: RUNNER_LOG_VOLUME_NAME, mountPath: runtime.container.logPath },
     { name: RUNNER_TMP_VOLUME_NAME, mountPath: '/tmp' },
+    { name: RUNNER_AGENTS_VOLUME_NAME, mountPath: '/workspace/.agents' },
   ]
 }
 
@@ -81,6 +83,7 @@ function baseVolumes(configMapName: string): k8s.types.input.core.v1.Volume[] {
     { name: RUNNER_CONFIG_VOLUME_NAME, configMap: { name: configMapName } },
     { name: RUNNER_LOG_VOLUME_NAME, emptyDir: {} },
     { name: RUNNER_TMP_VOLUME_NAME, emptyDir: {} },
+    { name: RUNNER_AGENTS_VOLUME_NAME, emptyDir: {} },
   ]
 }
 

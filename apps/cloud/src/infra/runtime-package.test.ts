@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parse as parseToml } from 'smol-toml'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
@@ -11,6 +12,8 @@ import { buildAgentRuntimePackage } from './runtime-package.js'
 
 const SHADOW_SERVER_URL = 'https://shadow.example.com'
 const SHADOW_TOKEN = 'shadow-secret-token'
+const HERE = dirname(fileURLToPath(import.meta.url))
+const ROOT_SKILL_PATH = resolve(HERE, '../../../../skills/shadowob-cli/SKILL.md')
 
 function registerShadowobOnly(): void {
   resetPluginRegistry()
@@ -63,7 +66,7 @@ function runtimeFiles(pkg: ReturnType<typeof buildAgentRuntimePackage>): Record<
 }
 
 function shadowobCliSkill(): string {
-  return readFileSync(resolve(process.cwd(), '../../skills/shadowob-cli/SKILL.md'), 'utf8')
+  return readFileSync(ROOT_SKILL_PATH, 'utf8')
 }
 
 describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
