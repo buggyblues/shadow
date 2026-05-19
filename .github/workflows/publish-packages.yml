@@ -340,11 +340,11 @@ jobs:
 
           while read -r package_name; do
             [ -n "$package_name" ] || continue
-            for attempt in 1 2 3 4 5 6; do
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
               if npm view "${package_name}@${RELEASE_VERSION}" version; then
                 break
               fi
-              if [ "$attempt" = "6" ]; then
+              if [ "$attempt" = "18" ]; then
                 echo "Package ${package_name}@${RELEASE_VERSION} was not visible in the registry."
                 exit 1
               fi
@@ -359,7 +359,16 @@ jobs:
           tmpdir="$(mktemp -d)"
           cd "$tmpdir"
           npm init -y
-          npm install "@shadowob/connector@${RELEASE_VERSION}" "@shadowob/cloud@${RELEASE_VERSION}"
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if npm install "@shadowob/connector@${RELEASE_VERSION}" "@shadowob/cloud@${RELEASE_VERSION}"; then
+              break
+            fi
+            if [ "$attempt" = "12" ]; then
+              echo "npm install did not succeed for published packages after registry retries."
+              exit 1
+            fi
+            sleep 10
+          done
           node node_modules/@shadowob/connector/dist/cli.js plan \
             --target hermes \
             --server-url https://shadowob.example.com \
