@@ -248,8 +248,8 @@ describe('1. Shop initialization & settings', () => {
     }>(res)
     expect(shop.name).toBe('极客数码旗舰店')
     expect(shop.description).toBe('为您提供高品质的数码产品与专属权益')
-    expect(shop.logoUrl).toBe('/shadow/uploads/shop-logo.png')
-    expect(shop.bannerUrl).toBe('/shadow/uploads/shop-banner.jpg')
+    expect(shop.logoUrl).toContain('/api/media/signed/')
+    expect(shop.bannerUrl).toContain('/api/media/signed/')
   })
 
   it('buyer cannot update shop settings', async () => {
@@ -265,8 +265,8 @@ describe('1. Shop initialization & settings', () => {
     expect(res.status).toBe(200)
     const shop = await json<{ name: string; logoUrl: string; bannerUrl: string }>(res)
     expect(shop.name).toBe('极客数码旗舰店')
-    expect(shop.logoUrl).toBe('/shadow/uploads/shop-logo.png')
-    expect(shop.bannerUrl).toBe('/shadow/uploads/shop-banner.jpg')
+    expect(shop.logoUrl).toContain('/api/media/signed/')
+    expect(shop.bannerUrl).toContain('/api/media/signed/')
   })
 })
 
