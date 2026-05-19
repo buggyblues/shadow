@@ -1,7 +1,9 @@
 # ─────────────────────────────────────────────
 # Stage 1: Builder - install deps & build packages
 # ─────────────────────────────────────────────
-FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS builder
+ARG PLAYWRIGHT_IMAGE_TAG=v1.59.1-noble
+
+FROM mcr.microsoft.com/playwright:${PLAYWRIGHT_IMAGE_TAG} AS builder
 
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
@@ -45,14 +47,14 @@ RUN pnpm build:packages
 # ─────────────────────────────────────────────
 # Stage 2: Runner - copy built artifacts + source for e2e
 # ─────────────────────────────────────────────
-FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS runner
+FROM mcr.microsoft.com/playwright:${PLAYWRIGHT_IMAGE_TAG} AS runner
 
 ARG OPENCLAW_VERSION=2026.5.7
 
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3-pip=22.0.2+dfsg-1ubuntu0.7 && \
+    apt-get install -y --no-install-recommends python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
