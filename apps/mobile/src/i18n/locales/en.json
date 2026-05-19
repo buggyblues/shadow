@@ -1325,6 +1325,10 @@
       "fulfill": "Fulfill"
     }
   },
+  "commerce": {
+    "repeatablePurchase": "Allow repeat purchases",
+    "repeatablePurchaseHint": "When off, users who already own an active entitlement cannot buy this product again."
+  },
   "workspace": {
     "confirmDelete": "Are you sure you want to delete?",
     "createFolder": "Create folder",
@@ -1401,6 +1405,8 @@
     "testMic": "Test mic",
     "stopTest": "Stop test",
     "yourScreen": "Your screen",
+    "focusScreen": "Focus screen",
+    "activeCall": "Voice call active",
     "participants": "Participants",
     "noParticipants": "No one is connected",
     "listening": "Listening",

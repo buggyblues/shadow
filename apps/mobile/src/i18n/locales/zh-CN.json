@@ -1324,6 +1324,10 @@
       "fulfill": "履约"
     }
   },
+  "commerce": {
+    "repeatablePurchase": "允许重复购买",
+    "repeatablePurchaseHint": "关闭后，已拥有有效权益的用户不能再次购买该商品。"
+  },
   "workspace": {
     "confirmDelete": "确定要删除吗？",
     "createFolder": "新建文件夹",
@@ -1400,6 +1404,8 @@
     "testMic": "测试麦克风",
     "stopTest": "停止测试",
     "yourScreen": "你的屏幕",
+    "focusScreen": "聚焦屏幕",
+    "activeCall": "语音通话中",
     "participants": "成员",
     "noParticipants": "暂时无人连接",
     "listening": "正在收听",

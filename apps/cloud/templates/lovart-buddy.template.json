@@ -1,0 +1,110 @@
+{
+  "version": "1.0.0",
+  "name": "lovart-buddy",
+  "title": "${i18n:title}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "use": [
+    {
+      "plugin": "model-provider"
+    },
+    {
+      "plugin": "lovart"
+    },
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "lovart-studio",
+            "name": "Lovart Studio",
+            "slug": "lovart-studio",
+            "channels": [
+              {
+                "id": "briefs",
+                "title": "Briefs",
+                "type": "text"
+              },
+              {
+                "id": "assets",
+                "title": "Assets",
+                "type": "text"
+              },
+              {
+                "id": "projects",
+                "title": "Projects",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "lovart-bot",
+            "name": "Lovart Buddy"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "lovart-bot",
+            "targetType": "buddy",
+            "servers": ["lovart-studio"],
+            "channels": ["briefs", "assets", "projects"],
+            "agentId": "lovart-buddy"
+          }
+        ]
+      }
+    }
+  ],
+  "deployments": {
+    "namespace": "lovart-buddy",
+    "agents": [
+      {
+        "id": "lovart-buddy",
+        "runtime": "openclaw",
+        "description": "Creative production Buddy powered by the Lovart OpenClaw skill for image, video, audio, project, thread, and canvas workflows.",
+        "identity": {
+          "name": "Lovart Buddy",
+          "description": "Creative production partner for Lovart image, video, audio, canvas, project, and thread workflows.",
+          "personality": "You are a precise creative production partner. You preserve the user's brief, route Lovart work through the mounted skill, and make costs and generated assets easy to audit.",
+          "systemPrompt": "Workflow:\n1. Use the mounted Lovart OpenClaw skill for image, video, audio, music, poster, logo, design asset, canvas, project, and thread requests.\n2. Do not call Lovart APIs directly, do not construct Lovart URLs manually, and do not modify the mounted skill source.\n3. Before the first generation in a conversation, follow the Lovart skill's local state checks: inspect config, inspect threads, then reuse the active project and relevant recent thread when available.\n4. Pass the user's creative description through to Lovart without rewriting it into a new prompt unless the user explicitly asks for prompt editing.\n5. Ask for explicit confirmation before any high-cost pending confirmation, then deliver downloaded files and the Lovart project canvas link."
+        },
+        "configuration": {
+          "openclaw": {
+            "agents": {
+              "list": [
+                {
+                  "id": "lovart-buddy",
+                  "identity": {
+                    "name": "Lovart Buddy",
+                    "theme": "Creative production partner for Lovart design workflows."
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "resources": {
+          "requests": {
+            "cpu": "100m",
+            "memory": "384Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
+        }
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "title": "Lovart Buddy",
+      "description": "A creative production template that connects Shadow Buddy to Lovart for image, video, audio, canvas, project, and thread workflows through the official OpenClaw skill."
+    },
+    "zh-CN": {
+      "title": "Lovart 创作 Buddy",
+      "description": "面向创意生产的 Buddy 模板，通过官方 OpenClaw skill 接入 Lovart，支持图片、视频、音频、画布、项目和对话工作流。"
+    }
+  }
+}

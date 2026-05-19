@@ -81,10 +81,11 @@ function socketCall<T>(event: string, payload: unknown): Promise<T> {
   })
 }
 
-export function useVoiceChannel(channelId: string) {
+export function useVoiceChannel(channelId: string | null) {
   const { t } = useTranslation()
   const engineRef = useRef<any>(null)
   const credentialsRef = useRef<VoiceCredentials | null>(null)
+  const channelIdRef = useRef<string | null>(channelId)
   const clientIdRef = useRef(`shadow-mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tokenRenewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -98,10 +99,36 @@ export function useVoiceChannel(channelId: string) {
   const [speakerEnabled, setSpeakerEnabled] = useState(true)
   const [remoteVideoUids, setRemoteVideoUids] = useState<number[]>([])
 
+  useEffect(() => {
+    channelIdRef.current = channelId
+  }, [channelId])
+
   const applyState = useCallback((state?: VoiceState) => {
     if (!state) return
+    const activeChannelId = credentialsRef.current?.channelId ?? channelIdRef.current
+    if (!activeChannelId || state.channelId !== activeChannelId) return
     setParticipants(state.participants)
   }, [])
+
+  const updateLocalParticipant = useCallback(
+    (patch: Partial<Pick<VoiceParticipant, 'isMuted' | 'isDeafened' | 'isSpeaking'>>) => {
+      const cleanPatch = Object.fromEntries(
+        Object.entries(patch).filter(([, value]) => value !== undefined),
+      ) as Partial<Pick<VoiceParticipant, 'isMuted' | 'isDeafened' | 'isSpeaking'>>
+      if (Object.keys(cleanPatch).length === 0) return
+      setParticipants((current) =>
+        current.map((participant) => {
+          const isLocal =
+            participant.clientId === clientIdRef.current ||
+            (credentialsRef.current && participant.uid === credentialsRef.current.uid)
+          return isLocal
+            ? { ...participant, ...cleanPatch, updatedAt: new Date().toISOString() }
+            : participant
+        }),
+      )
+    },
+    [],
+  )
 
   const updateVoiceState = useCallback(
     (patch: {
@@ -110,6 +137,7 @@ export function useVoiceChannel(channelId: string) {
       speaking?: boolean
       screenSharing?: boolean
     }) => {
+      if (!channelId) return
       void socketCall('voice:state:update', {
         channelId,
         clientId: clientIdRef.current,
@@ -141,6 +169,7 @@ export function useVoiceChannel(channelId: string) {
 
   const renewTokens = useCallback(async () => {
     const activeChannelId = credentialsRef.current?.channelId ?? channelId
+    if (!activeChannelId) return
     const result = await socketCall<VoiceRenewResult>('voice:token:renew', {
       channelId: activeChannelId,
       clientId: clientIdRef.current,
@@ -158,6 +187,7 @@ export function useVoiceChannel(channelId: string) {
   }, [renewTokens])
 
   const join = useCallback(async () => {
+    if (!channelId) return
     if (status === 'connected' || status === 'connecting') return
     setStatus('connecting')
     setError(null)
@@ -258,6 +288,7 @@ export function useVoiceChannel(channelId: string) {
   ])
 
   const leave = useCallback(async () => {
+    const activeChannelId = credentialsRef.current?.channelId ?? channelId
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current)
       heartbeatRef.current = null
@@ -273,23 +304,30 @@ export function useVoiceChannel(channelId: string) {
     credentialsRef.current = null
     setRemoteVideoUids([])
     setParticipants([])
-    await socketCall('voice:leave', { channelId, clientId: clientIdRef.current }).catch(() => null)
+    if (activeChannelId) {
+      await socketCall('voice:leave', {
+        channelId: activeChannelId,
+        clientId: clientIdRef.current,
+      }).catch(() => null)
+    }
     setStatus('idle')
   }, [channelId, clearTokenRenewal])
 
   const toggleMute = useCallback(() => {
     const next = !isMuted
     setIsMuted(next)
+    updateLocalParticipant({ isMuted: next, isSpeaking: next ? false : undefined })
     engineRef.current?.muteLocalAudioStream?.(next)
-    updateVoiceState({ muted: next })
-  }, [isMuted, updateVoiceState])
+    updateVoiceState({ muted: next, speaking: next ? false : undefined })
+  }, [isMuted, updateLocalParticipant, updateVoiceState])
 
   const toggleDeafen = useCallback(() => {
     const next = !isDeafened
     setIsDeafened(next)
+    updateLocalParticipant({ isDeafened: next })
     engineRef.current?.muteAllRemoteAudioStreams?.(next)
     updateVoiceState({ deafened: next })
-  }, [isDeafened, updateVoiceState])
+  }, [isDeafened, updateLocalParticipant, updateVoiceState])
 
   const toggleSpeaker = useCallback(() => {
     const next = !speakerEnabled
@@ -337,3 +375,5 @@ export function useVoiceChannel(channelId: string) {
     toggleSpeaker,
   }
 }
+
+export type VoiceChannelController = ReturnType<typeof useVoiceChannel>

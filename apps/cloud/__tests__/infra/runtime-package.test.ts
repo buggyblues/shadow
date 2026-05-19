@@ -261,6 +261,62 @@ describe('buildAgentRuntimePackage', () => {
       '/home/shadow/.config/gws/credentials.json',
     )
   })
+
+  it('includes Lovart skill mounts and keeps credentials in secrets', () => {
+    const config: CloudConfig = {
+      version: '1',
+      use: [
+        {
+          plugin: 'lovart',
+        },
+      ],
+      deployments: {
+        agents: [
+          {
+            id: 'lovart-agent',
+            runtime: 'openclaw',
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const runtimePackage = buildAgentRuntimePackage({
+      agent: config.deployments!.agents[0]!,
+      config,
+      extraEnv: {
+        LOVART_ACCESS_KEY: 'ak_test',
+        LOVART_SECRET_KEY: 'sk_test',
+      },
+    })
+    const runtimeExtensions = JSON.parse(runtimePackage.configData['runtime-extensions.json']!)
+
+    expect(runtimeExtensions.skillSources).toContainEqual(
+      expect.objectContaining({
+        id: 'lovart-openclaw-skill',
+        url: 'https://github.com/lovartai/lovart-skill.git',
+        include: ['lovart-skill'],
+      }),
+    )
+    expect(runtimePackage.openclawConfig?.skills?.load?.extraDirs).toContain(
+      '/workspace/.agents/plugin-skills/lovart',
+    )
+    expect(runtimePackage.openclawConfig?.skills?.entries?.['lovart-skill']).toMatchObject({
+      enabled: true,
+      env: {
+        LOVART_ACCESS_KEY: '${env:LOVART_ACCESS_KEY}',
+        LOVART_SECRET_KEY: '${env:LOVART_SECRET_KEY}',
+      },
+    })
+    expect(runtimePackage.configData['config.json']).not.toContain('ak_test')
+    expect(runtimePackage.configData['config.json']).not.toContain('sk_test')
+    expect(runtimePackage.plainEnv.LOVART_ACCESS_KEY).toBeUndefined()
+    expect(runtimePackage.plainEnv.LOVART_SECRET_KEY).toBeUndefined()
+    expect(runtimePackage.secretData).toMatchObject({
+      LOVART_ACCESS_KEY: 'ak_test',
+      LOVART_SECRET_KEY: 'sk_test',
+    })
+  })
 })
 
 describe('buildManifests', () => {

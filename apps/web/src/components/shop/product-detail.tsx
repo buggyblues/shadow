@@ -26,8 +26,13 @@ import {
   type CommerceDeliveryEntitlement,
   type CommercePurchaseOrder,
   deliveryDetailHref,
+  entitlementHasOpenablePaidFile,
   findPurchaseEntitlement,
 } from '../../lib/commerce-delivery'
+import {
+  type EntitlementOwnership,
+  hasActivePurchasedEntitlement,
+} from '../../lib/commerce-products'
 import { showToast } from '../../lib/toast'
 import { OrderConfirm } from './order-confirm'
 import type { Product, ProductMediaItem, ServerSummary, Shop, SkuItem } from './shop-page'
@@ -82,6 +87,13 @@ function productAssetType(product?: Product | null) {
   )
 }
 
+function splitPrivilegeLines(value?: string | null) {
+  return (value ?? '')
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
 function FulfillmentPanel({ product }: { product: Product }) {
   const { t } = useTranslation()
   const config = firstEntitlementConfig(product)
@@ -128,11 +140,13 @@ function PurchaseNextPanel({
   entitlement?: CommerceDeliveryEntitlement | null
 }) {
   const { t } = useTranslation()
-  const detailHref = deliveryDetailHref(entitlement?.id)
+  const detailHref = deliveryDetailHref(entitlement?.id, {
+    openContent: entitlementHasOpenablePaidFile(entitlement),
+  })
   const hasDeliveryDetail = Boolean(entitlement?.id)
 
   return (
-    <GlassPanel className="mb-6 rounded-lg border-success/25 bg-success/10 p-4">
+    <div className="mb-6 rounded-lg border border-success/25 bg-success/10 p-4">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-success/15 text-success">
           <CheckCircle2 size={18} />
@@ -165,7 +179,7 @@ function PurchaseNextPanel({
           </div>
         </div>
       </div>
-    </GlassPanel>
+    </div>
   )
 }
 
@@ -262,8 +276,12 @@ function ProductSourcePanel({
   return (
     <div className="mb-6 rounded-lg border border-border-subtle bg-bg-secondary/55 p-4">
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Store size={18} />
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10 text-primary">
+          {shop?.logoUrl ? (
+            <img src={shop.logoUrl} alt={shopName} className="h-full w-full object-cover" />
+          ) : (
+            <Store size={18} />
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-sm font-black text-text-primary">
@@ -326,6 +344,11 @@ export function ProductDetail({
     queryKey: ['product-reviews', productId],
     queryFn: () =>
       fetchApi<Review[]>(`/api/servers/${serverId}/shop/products/${productId}/reviews`),
+  })
+
+  const { data: entitlements = [] } = useQuery({
+    queryKey: ['entitlements'],
+    queryFn: () => fetchApi<EntitlementOwnership[]>('/api/entitlements'),
   })
 
   // Cart operations
@@ -434,7 +457,7 @@ export function ProductDetail({
         <div className="h-14 flex items-center px-4">
           <div className="w-8 h-8 rounded-xl bg-bg-tertiary animate-pulse" />
         </div>
-        <div className="w-full aspect-square bg-bg-tertiary animate-pulse" />
+        <div className="w-full aspect-[3/2] bg-bg-tertiary animate-pulse" />
       </div>
     )
   }
@@ -444,12 +467,21 @@ export function ProductDetail({
   const stock = selectedSku?.stock ?? product.skus?.[0]?.stock ?? 999
   const hasSpecs = product.specNames.length > 0 && (product.skus?.length ?? 0) > 0
   const entitlementConfig = firstEntitlementConfig(product)
+  const alreadyPurchased = hasActivePurchasedEntitlement(product, entitlements)
 
   const handleAddToCart = () => {
+    if (alreadyPurchased) {
+      showToast(t('shop.alreadyPurchased'), 'info')
+      return
+    }
     addToCart.mutate({ productId: product.id, skuId: selectedSkuId ?? undefined, quantity })
   }
 
   const handleBuyNow = async () => {
+    if (alreadyPurchased) {
+      showToast(t('shop.alreadyPurchased'), 'info')
+      return
+    }
     if (buyingNow) return
     if ((!hasSpecs || !!selectedSkuId) && quantity === 1) {
       setBuyingNow(true)
@@ -474,6 +506,10 @@ export function ProductDetail({
           orderId: order.id,
           productId: product.id,
         }).catch(() => null)
+        if (entitlement && entitlementHasOpenablePaidFile(entitlement)) {
+          window.location.assign(deliveryDetailHref(entitlement.id, { openContent: true }))
+          return
+        }
         setLastPurchase({ order, entitlement })
       } catch (err) {
         showToast((err as Error)?.message || t('shop.purchaseError'), 'error')
@@ -587,12 +623,12 @@ export function ProductDetail({
             embedded ? 'px-5 pt-5 md:pt-6' : 'pt-0',
           )}
         >
-          <div className="flex flex-col md:flex-row gap-0 md:gap-8 lg:gap-12">
+          <div className="grid gap-5 md:grid-cols-[minmax(0,0.92fr)_minmax(300px,0.68fr)] md:items-start">
             {/* ═══ Left Column: Media Gallery ═══ */}
-            <div className="w-full md:w-1/2 lg:w-[45%] shrink-0">
-              <div className="md:sticky md:top-6">
+            <div className="w-full md:sticky md:top-6">
+              <div className="mx-auto w-full max-w-[760px] md:max-w-none">
                 {media.length > 0 ? (
-                  <div className="relative w-full bg-bg-tertiary aspect-square md:rounded-3xl flex items-center justify-center overflow-hidden border border-border-subtle shadow-sm">
+                  <div className="relative w-full bg-bg-tertiary aspect-[3/2] md:rounded-3xl flex items-center justify-center overflow-hidden border border-border-subtle shadow-sm">
                     {media[currentMediaIndex]?.type === 'video' ? (
                       <video
                         src={media[currentMediaIndex].url}
@@ -634,7 +670,7 @@ export function ProductDetail({
                     productType={product.type}
                     resourceType={entitlementConfig?.resourceType}
                     assetType={productAssetType(product)}
-                    className="aspect-square w-full rounded-lg md:rounded-lg"
+                    className="aspect-[3/2] w-full rounded-lg md:rounded-lg"
                   />
                 )}
 
@@ -646,7 +682,7 @@ export function ProductDetail({
                         type="button"
                         key={`thumb-${m.id}`}
                         onClick={() => goToMedia(i)}
-                        className={`w-20 h-20 rounded-xl overflow-hidden shrink-0 border-2 transition-all ${
+                        className={`aspect-[3/2] w-24 rounded-xl overflow-hidden shrink-0 border-2 transition-all ${
                           i === currentMediaIndex
                             ? 'border-primary p-0.5'
                             : 'border-transparent opacity-70 hover:opacity-100'
@@ -669,8 +705,8 @@ export function ProductDetail({
             </div>
 
             {/* ═══ Right Column: Product Info & Actions ═══ */}
-            <div className="w-full md:w-1/2 lg:w-[55%] flex flex-col border-t md:border-t-0 border-border-subtle bg-bg-primary md:bg-transparent">
-              <div className="p-5 md:p-0">
+            <div className="flex w-full flex-col rounded-3xl border border-border-subtle bg-bg-primary/45">
+              <div className="p-5 md:p-6">
                 <div className="flex flex-col gap-2 mb-4">
                   <div className="flex items-end justify-between">
                     <span className="text-danger font-black text-3xl flex items-baseline gap-1">
@@ -697,11 +733,46 @@ export function ProductDetail({
                   </p>
                 )}
 
-                <ProductSourcePanel
-                  product={product}
-                  shop={shop}
-                  server={server}
-                />
+                <div className="hidden md:flex gap-3 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setSupportOpen(true)}
+                    className="flex w-14 flex-col items-center justify-center rounded-2xl border border-border-subtle bg-bg-tertiary/50 text-text-muted transition-colors hover:text-primary"
+                  >
+                    <MessageSquare size={20} />
+                    <span className="mt-1 text-[11px] font-black">{t('shop.customerService')}</span>
+                  </button>
+                  <Button
+                    variant="glass"
+                    className="flex-1 py-4"
+                    onClick={handleAddToCart}
+                    disabled={alreadyPurchased || addToCart.isPending || stock === 0}
+                  >
+                    {alreadyPurchased ? (
+                      t('shop.purchased')
+                    ) : addedToCart ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <CheckCircle2 size={18} /> {t('shop.addedToCart')}
+                      </span>
+                    ) : (
+                      t('shop.addToCart')
+                    )}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="flex-1 py-4"
+                    onClick={handleBuyNow}
+                    disabled={alreadyPurchased || stock === 0 || buyingNow}
+                  >
+                    {alreadyPurchased
+                      ? t('shop.purchased')
+                      : buyingNow
+                        ? t('shop.paymentProcessing')
+                        : t('shop.buyNow')}
+                  </Button>
+                </div>
+
+                <ProductSourcePanel product={product} shop={shop} server={server} />
                 <AssetTrustPanel product={product} />
                 <FulfillmentPanel product={product} />
                 {lastPurchase && (
@@ -788,7 +859,7 @@ export function ProductDetail({
                           <button
                             type="button"
                             onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                            disabled={quantity <= 1}
+                            disabled={alreadyPurchased || quantity <= 1}
                             className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-white disabled:opacity-30 rounded-lg transition-all"
                           >
                             <Minus size={14} strokeWidth={3} />
@@ -799,7 +870,7 @@ export function ProductDetail({
                           <button
                             type="button"
                             onClick={() => setQuantity(Math.min(stock, quantity + 1))}
-                            disabled={quantity >= stock}
+                            disabled={alreadyPurchased || quantity >= stock}
                             className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-white disabled:opacity-30 rounded-lg transition-all"
                           >
                             <Plus size={14} strokeWidth={3} />
@@ -817,8 +888,7 @@ export function ProductDetail({
                     const entitlementRules = Array.isArray(product.entitlementConfig)
                       ? product.entitlementConfig
                       : [product.entitlementConfig]
-                    const primaryRule = entitlementRules[0]
-                    if (!primaryRule) return null
+                    if (entitlementRules.length === 0) return null
                     return (
                       <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20 mb-6">
                         <div className="flex items-center gap-2 text-primary text-sm font-bold mb-3">
@@ -827,71 +897,65 @@ export function ProductDetail({
                           </div>
                           {t('shop.entitlementDesc')}
                         </div>
-                        {primaryRule.privilegeDescription && (
-                          <p className="text-primary/80 text-sm leading-relaxed mb-3">
-                            {primaryRule.privilegeDescription}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 text-primary/80 text-sm font-medium border-t border-primary/20 pt-3">
-                          <Clock size={14} />
-                          {t('shop.validity')}
-                          <span className="font-bold">
-                            {primaryRule.durationSeconds
-                              ? primaryRule.durationSeconds >= 86400
-                                ? `${Math.floor(primaryRule.durationSeconds / 86400)}${t('shop.days')}`
-                                : `${Math.floor(primaryRule.durationSeconds / 3600)}${t('shop.hours')}`
-                              : t('shop.permanent')}
-                          </span>
+                        <div className="space-y-2">
+                          {entitlementRules.map((rule, index) => (
+                            <div
+                              key={`${rule.resourceType ?? 'service'}-${rule.resourceId ?? index}`}
+                              className="rounded-xl border border-primary/15 bg-bg-primary/45 p-3"
+                            >
+                              {(() => {
+                                const lines = splitPrivilegeLines(rule.privilegeDescription)
+                                if (lines.length <= 1) {
+                                  return (
+                                    <p className="text-sm font-bold leading-relaxed text-primary/85">
+                                      {lines[0] || t('shop.entitlementRuleFallback')}
+                                    </p>
+                                  )
+                                }
+                                return (
+                                  <ul className="grid gap-1.5 text-sm font-bold leading-relaxed text-primary/85">
+                                    {lines.map((line) => (
+                                      <li key={line} className="flex gap-2">
+                                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+                                        <span>{line}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )
+                              })()}
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-bold text-primary/75">
+                                <span>
+                                  {t('shop.entitlementRuleTarget', {
+                                    resource:
+                                      rule.resourceType ??
+                                      t('commerce.resourceTypes.service', {
+                                        defaultValue: 'service',
+                                      }),
+                                  })}
+                                </span>
+                                <span className="text-primary/35">·</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock size={13} />
+                                  {rule.durationSeconds
+                                    ? rule.durationSeconds >= 86400
+                                      ? `${Math.floor(rule.durationSeconds / 86400)}${t('shop.days')}`
+                                      : `${Math.floor(rule.durationSeconds / 3600)}${t('shop.hours')}`
+                                    : t('shop.permanent')}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        {entitlementRules.length > 1 && (
-                          <p className="text-xs text-primary/80 mt-2">
-                            {t('shop.totalRules')} {entitlementRules.length} {t('shop.rulesSuffix')}
-                          </p>
-                        )}
                       </div>
                     )
                   })()}
-
-                {/* Actions on PC (hidden on mobile, shown in bottom bar instead) */}
-                <div className="hidden md:flex gap-4 mt-8">
-                  <button
-                    type="button"
-                    onClick={() => setSupportOpen(true)}
-                    className="flex flex-col items-center justify-center text-text-muted hover:text-primary w-14 bg-bg-tertiary/50 border border-border-subtle rounded-2xl transition-colors"
-                  >
-                    <MessageSquare size={20} />
-                    <span className="text-[11px] mt-1 font-black">{t('shop.customerService')}</span>
-                  </button>
-                  <Button
-                    variant="glass"
-                    className="flex-1 py-4"
-                    onClick={handleAddToCart}
-                    disabled={addToCart.isPending || stock === 0}
-                  >
-                    {addedToCart ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <CheckCircle2 size={18} /> {t('shop.addedToCart')}
-                      </span>
-                    ) : (
-                      t('shop.addToCart')
-                    )}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    className="flex-1 py-4"
-                    onClick={handleBuyNow}
-                    disabled={stock === 0 || buyingNow}
-                  >
-                    {buyingNow ? t('shop.paymentProcessing') : t('shop.buyNow')}
-                  </Button>
-                </div>
               </div>
             </div>
           </div>
 
           {/* ═══ Details & Reviews Tabs ═══ */}
-          <GlassPanel className="mt-6 min-h-[500px] overflow-hidden rounded-lg md:mt-12 md:rounded-3xl">
-            <div className="flex border-b border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl px-2 md:px-6">
+          <div className="mt-6 min-h-[500px] overflow-hidden rounded-lg border border-border-subtle bg-bg-primary/45 md:mt-12 md:rounded-3xl">
+            <div className="flex border-b border-border-subtle bg-bg-secondary/55 px-2 md:px-6">
               <button
                 type="button"
                 onClick={() => setActiveTab('detail')}
@@ -988,7 +1052,7 @@ export function ProductDetail({
                 </div>
               )}
             </div>
-          </GlassPanel>
+          </div>
         </div>
       </div>
 
@@ -1011,18 +1075,26 @@ export function ProductDetail({
             variant="glass"
             className="flex-1"
             onClick={handleAddToCart}
-            disabled={addToCart.isPending || stock === 0}
+            disabled={alreadyPurchased || addToCart.isPending || stock === 0}
           >
-            {addedToCart ? t('shop.addedToCart') : t('shop.addToCart')}
+            {alreadyPurchased
+              ? t('shop.purchased')
+              : addedToCart
+                ? t('shop.addedToCart')
+                : t('shop.addToCart')}
           </Button>
 
           <Button
             variant="primary"
             className="flex-1"
             onClick={handleBuyNow}
-            disabled={stock === 0 || buyingNow}
+            disabled={alreadyPurchased || stock === 0 || buyingNow}
           >
-            {buyingNow ? t('shop.paymentProcessing') : t('shop.buyNow')}
+            {alreadyPurchased
+              ? t('shop.purchased')
+              : buyingNow
+                ? t('shop.paymentProcessing')
+                : t('shop.buyNow')}
           </Button>
         </div>
       </div>

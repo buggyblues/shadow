@@ -4,6 +4,7 @@ export type ProductEntitlementResourceConfig = {
   capability?: string | null
   durationSeconds?: number | null
   renewalPeriodSeconds?: number | null
+  repeatable?: boolean
   privilegeDescription?: string
 }
 

@@ -47,6 +47,7 @@ export const entitlementConfigSchema = z.object({
   capability: z.string().min(1).max(80).optional().default('use'),
   durationSeconds: z.number().int().positive().nullable().optional(),
   renewalPeriodSeconds: z.number().int().positive().nullable().optional(),
+  repeatable: z.boolean().optional(),
   privilegeDescription: z.string().max(500).optional(),
 })
 

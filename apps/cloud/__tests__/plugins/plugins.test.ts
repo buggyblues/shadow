@@ -220,6 +220,7 @@ describe('loadAllPlugins', () => {
       'kuaidi100',
       'lark',
       'linear',
+      'lovart',
       'meta-ads',
       'miclaw',
       'model-provider',
@@ -488,6 +489,7 @@ describe('loadAllPlugins', () => {
     const playwright = registry.get('playwright')
     const browserbase = registry.get('browserbase')
     const linear = registry.get('linear')
+    const lovart = registry.get('lovart')
     const atlassian = registry.get('atlassian')
     const posthog = registry.get('posthog')
     const supabase = registry.get('supabase')
@@ -552,6 +554,23 @@ describe('loadAllPlugins', () => {
     )
     expect(linear?.runtime?.mcpServers).toContainEqual(
       expect.objectContaining({ id: 'linear-mcp', url: 'https://mcp.linear.app/sse' }),
+    )
+    expect(lovart?.secretFields?.map((field) => field.key)).toEqual(
+      expect.arrayContaining(['LOVART_ACCESS_KEY', 'LOVART_SECRET_KEY']),
+    )
+    expect(lovart?.runtime?.skillSources).toContainEqual(
+      expect.objectContaining({
+        id: 'lovart-openclaw-skill',
+        url: 'https://github.com/lovartai/lovart-skill.git',
+        from: 'skills',
+        include: ['lovart-skill'],
+      }),
+    )
+    expect(lovart?.runtime?.verificationChecks).toContainEqual(
+      expect.objectContaining({
+        id: 'lovart-skill-mounted',
+        command: ['test', '-f', '/workspace/.agents/plugin-skills/lovart/lovart-skill/SKILL.md'],
+      }),
     )
     expect(atlassian?.runtime?.mcpServers).toContainEqual(
       expect.objectContaining({ id: 'atlassian-mcp', url: 'https://mcp.atlassian.com/v1/sse' }),
@@ -1369,6 +1388,46 @@ describe('Tool plugins', () => {
           readOnly: true,
         },
       ]),
+    )
+  })
+
+  it('lovart plugin should mount the OpenClaw skill with credential env refs', async () => {
+    const mod = await import('../../src/plugins/lovart/index.js')
+    const plugin = mod.default as PluginDefinition
+    expect(plugin.manifest.id).toBe('lovart')
+
+    const ctx = makeBuildContext({
+      secrets: {
+        LOVART_ACCESS_KEY: 'ak_test',
+        LOVART_SECRET_KEY: 'sk_test',
+      },
+    })
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
+    expect(fragment?.skills).toMatchObject({
+      load: { extraDirs: ['/workspace/.agents/plugin-skills/lovart'] },
+      entries: {
+        'lovart-skill': {
+          enabled: true,
+          env: {
+            LOVART_ACCESS_KEY: '${env:LOVART_ACCESS_KEY}',
+            LOVART_SECRET_KEY: '${env:LOVART_SECRET_KEY}',
+          },
+        },
+      },
+    })
+
+    const env = plugin._hooks.buildEnv[0]!(ctx)
+    expect(env).toMatchObject({
+      LOVART_ACCESS_KEY: 'ak_test',
+      LOVART_SECRET_KEY: 'sk_test',
+    })
+
+    const runtime = plugin._hooks.buildRuntime[0]!(ctx)
+    expect(runtime?.skillSources).toContainEqual(
+      expect.objectContaining({
+        id: 'lovart-openclaw-skill',
+        targetPath: '/workspace/.agents/plugin-skills/lovart',
+      }),
     )
   })
 

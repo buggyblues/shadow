@@ -18,6 +18,10 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import {
+  type EntitlementOwnership,
+  hasActivePurchasedEntitlement,
+} from '../../lib/commerce-products'
 import { showToast } from '../../lib/toast'
 import { useRechargeStore } from '../../stores/recharge.store'
 import { useShopStore } from '../../stores/shop.store'
@@ -72,6 +76,7 @@ export interface Product {
         capability?: string
         durationSeconds?: number | null
         renewalPeriodSeconds?: number | null
+        repeatable?: boolean | null
         privilegeDescription?: string
       }
     | Array<{
@@ -80,6 +85,7 @@ export interface Product {
         capability?: string
         durationSeconds?: number | null
         renewalPeriodSeconds?: number | null
+        repeatable?: boolean | null
         privilegeDescription?: string
       }>
   media?: ProductMediaItem[]
@@ -420,6 +426,11 @@ function FavoriteProducts({
       fetchApi<{ products: Product[]; total: number }>(`/api/servers/${serverId}/shop/products`),
   })
 
+  const { data: entitlements = [] } = useQuery({
+    queryKey: ['entitlements'],
+    queryFn: () => fetchApi<EntitlementOwnership[]>('/api/entitlements'),
+  })
+
   const products = (productsData?.products || []).filter((p) => favoriteIds.includes(p.id))
 
   if (isLoading) {
@@ -428,7 +439,7 @@ function FavoriteProducts({
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i} className="animate-pulse overflow-hidden !rounded-lg">
-              <div className="aspect-[4/5] bg-bg-modifier-hover rounded-t-[40px]" />
+              <div className="aspect-[3/2] bg-bg-modifier-hover rounded-t-[40px]" />
               <div className="p-4 space-y-3">
                 <div className="h-4 bg-bg-modifier-hover rounded w-3/4" />
                 <div className="h-3 bg-bg-modifier-hover rounded w-1/2" />
@@ -455,14 +466,18 @@ function FavoriteProducts({
   return (
     <div className="h-full overflow-y-auto scrollbar-hidden px-4 md:px-8 py-6">
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-        {products.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            onClick={() => onOpenProduct(product.id)}
-            onAddToCart={onAddToCart}
-          />
-        ))}
+        {products.map((product) => {
+          const purchased = hasActivePurchasedEntitlement(product, entitlements)
+          return (
+            <ProductCard
+              key={product.id}
+              product={product}
+              onClick={() => onOpenProduct(product.id)}
+              onAddToCart={purchased ? undefined : onAddToCart}
+              purchased={purchased}
+            />
+          )
+        })}
       </div>
     </div>
   )
@@ -543,6 +558,11 @@ function ShopBrowse({
       ),
   })
 
+  const { data: entitlements = [] } = useQuery({
+    queryKey: ['entitlements'],
+    queryFn: () => fetchApi<EntitlementOwnership[]>('/api/entitlements'),
+  })
+
   const categories = categoriesData || []
   const products = productsData?.products || []
 
@@ -620,7 +640,7 @@ function ShopBrowse({
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-r from-bg-primary/95 via-bg-primary/70 to-bg-primary/30" />
-          <div className="relative grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] md:p-6">
+          <div className="relative grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] md:p-6">
             <div className="flex min-w-0 gap-4">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-bg-primary/60 text-primary shadow-inner">
                 {shop?.logoUrl ? (
@@ -630,11 +650,11 @@ function ShopBrowse({
                 )}
               </div>
               <div className="min-w-0">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
+                <div className="mb-2 inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
                   <ShoppingBag size={13} />
-                  {t('shop.serverStorefront')}
+                  <span className="truncate whitespace-nowrap">{t('shop.serverStorefront')}</span>
                 </div>
-                <h1 className="truncate text-2xl font-black tracking-tight text-text-primary md:text-3xl">
+                <h1 className="break-words text-2xl font-black tracking-tight text-text-primary md:text-3xl">
                   {shop?.name ?? t('server.settingsShop', { defaultValue: '店铺' })}
                 </h1>
                 {shop?.description && (
@@ -671,7 +691,7 @@ function ShopBrowse({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
               <ShopSignal
                 icon={<Package size={15} />}
                 label={t('shop.allProducts')}
@@ -824,7 +844,7 @@ function ShopBrowse({
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {Array.from({ length: 8 }).map((_, i) => (
                 <Card key={i} className="animate-pulse overflow-hidden !rounded-lg">
-                  <div className="aspect-[4/5] bg-bg-modifier-hover" />
+                  <div className="aspect-[3/2] bg-bg-modifier-hover" />
                   <div className="p-4 space-y-3">
                     <div className="h-5 bg-bg-modifier-hover rounded-lg w-3/4" />
                     <div className="h-4 bg-bg-modifier-hover rounded-lg w-1/2" />
@@ -850,16 +870,20 @@ function ShopBrowse({
             </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-              {filtered.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onClick={() => setActiveProductId(product.id)}
-                  onAddToCart={onAddToCart}
-                  shopName={shop?.name}
-                  serverName={serverName}
-                />
-              ))}
+              {filtered.map((product) => {
+                const purchased = hasActivePurchasedEntitlement(product, entitlements)
+                return (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onClick={() => setActiveProductId(product.id)}
+                    onAddToCart={purchased ? undefined : onAddToCart}
+                    shopName={shop?.name}
+                    serverName={serverName}
+                    purchased={purchased}
+                  />
+                )
+              })}
             </div>
           )}
         </div>

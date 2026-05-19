@@ -106,6 +106,32 @@ export class NotificationTriggerService {
     })
   }
 
+  async triggerCommerceOrderShipped(input: {
+    userId: string
+    orderId: string
+    orderNo: string
+    productName?: string | null
+    entitlementId?: string | null
+    trackingNo?: string | null
+  }) {
+    return this.dispatch({
+      userId: input.userId,
+      type: 'system',
+      kind: 'commerce.order_shipped',
+      referenceId: input.orderId,
+      referenceType: 'order',
+      aggregationKey: `commerce:order-shipped:${input.orderId}`,
+      aggregate: false,
+      bypassPreferences: false,
+      metadata: {
+        orderNo: input.orderNo,
+        productName: input.productName,
+        entitlementId: input.entitlementId,
+        trackingNo: input.trackingNo,
+      },
+    })
+  }
+
   async triggerCommerceSubscriptionCancelled(input: {
     userId: string
     entitlementId: string

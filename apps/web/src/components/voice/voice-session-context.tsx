@@ -6,6 +6,8 @@ import { useAuthStore } from '../../stores/auth.store'
 export interface VoiceChannelSummary {
   id: string
   name: string
+  serverSlug?: string | null
+  serverId?: string | null
 }
 
 type VoiceSessionContextValue = {

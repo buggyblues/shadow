@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, AppState } from 'react-native'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
+import { VoiceSessionProvider } from '../../src/components/voice/voice-session-provider'
 import { fetchApi } from '../../src/lib/api'
 import {
   registerRemotePushToken,
@@ -128,38 +129,40 @@ export default function MainLayout() {
   )
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.text,
-        headerTitleStyle: { fontWeight: '700' },
-        headerBackVisible: false,
-        headerBackTitle: '',
-        headerLeft,
-      }}
-    >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="servers/[serverSlug]" />
-      <Stack.Screen name="friends" options={{ headerShown: false }} />
-      <Stack.Screen name="friends/new-friends" options={{ headerShown: false }} />
-      <Stack.Screen name="settings" options={{ headerShown: false }} />
-      <Stack.Screen name="dashboard" options={{ headerShown: false }} />
-      <Stack.Screen name="create-server" options={{ headerShown: true, title: '', headerLeft }} />
-      <Stack.Screen
-        name="buddy-management"
-        options={{ headerShown: true, title: '', headerLeft }}
-      />
-      <Stack.Screen
-        name="profile/[userId]"
-        options={{ headerShown: true, title: '', headerLeft }}
-      />
-      <Stack.Screen name="media-preview" options={{ headerShown: true, title: '', headerLeft }} />
-      <Stack.Screen name="discover" options={{ headerShown: true, title: '', headerLeft }} />
-      <Stack.Screen
-        name="notifications"
-        options={{ headerShown: true, title: '通知', headerLeft }}
-      />
-    </Stack>
+    <VoiceSessionProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontWeight: '700' },
+          headerBackVisible: false,
+          headerBackTitle: '',
+          headerLeft,
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="servers/[serverSlug]" />
+        <Stack.Screen name="friends" options={{ headerShown: false }} />
+        <Stack.Screen name="friends/new-friends" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="dashboard" options={{ headerShown: false }} />
+        <Stack.Screen name="create-server" options={{ headerShown: true, title: '', headerLeft }} />
+        <Stack.Screen
+          name="buddy-management"
+          options={{ headerShown: true, title: '', headerLeft }}
+        />
+        <Stack.Screen
+          name="profile/[userId]"
+          options={{ headerShown: true, title: '', headerLeft }}
+        />
+        <Stack.Screen name="media-preview" options={{ headerShown: true, title: '', headerLeft }} />
+        <Stack.Screen name="discover" options={{ headerShown: true, title: '', headerLeft }} />
+        <Stack.Screen
+          name="notifications"
+          options={{ headerShown: true, title: '通知', headerLeft }}
+        />
+      </Stack>
+    </VoiceSessionProvider>
   )
 }

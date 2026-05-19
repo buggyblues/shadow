@@ -57,11 +57,11 @@ export function createPaidFileHandler(container: AppContainer) {
     if (/html/i.test(String(contentType))) {
       headers['Content-Security-Policy'] = [
         "default-src 'none'",
-        "script-src 'unsafe-inline'",
-        "style-src 'unsafe-inline'",
-        'img-src data: blob:',
-        'media-src data: blob:',
-        "font-src 'none'",
+        "script-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com",
+        "style-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com",
+        'img-src data: blob: https:',
+        'media-src data: blob: https:',
+        'font-src data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com',
         "connect-src 'none'",
         "frame-ancestors 'self'",
       ].join('; ')

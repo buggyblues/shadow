@@ -8,6 +8,7 @@ import {
   type CommerceDeliveryEntitlement,
   type CommercePurchaseOrder,
   deliveryDetailHref,
+  entitlementHasOpenablePaidFile,
   findPurchaseEntitlement,
 } from '../../lib/commerce-delivery'
 import { showToast } from '../../lib/toast'
@@ -69,6 +70,10 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
         orderId: res.id,
         productId,
       }).catch(() => null)
+      if (entitlement && entitlementHasOpenablePaidFile(entitlement)) {
+        window.location.assign(deliveryDetailHref(entitlement.id, { openContent: true }))
+        return
+      }
       setPurchaseResult({ order: res, entitlement })
     },
     onError: (err: Error) => showToast(err.message || t('shop.paymentFailed'), 'error'),
@@ -97,7 +102,9 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
 
   // Show success state
   if (paid) {
-    const detailHref = deliveryDetailHref(purchaseResult?.entitlement?.id)
+    const detailHref = deliveryDetailHref(purchaseResult?.entitlement?.id, {
+      openContent: entitlementHasOpenablePaidFile(purchaseResult?.entitlement),
+    })
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-bg-primary h-full gap-6">
         <div className="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center animate-in zoom-in duration-300">
@@ -167,7 +174,7 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
               {t('shop.orderProductDetails')}
             </h3>
             <div className="flex gap-4">
-              <div className="w-20 h-20 rounded-2xl bg-bg-tertiary shrink-0 overflow-hidden border border-border-subtle">
+              <div className="aspect-[3/2] w-28 shrink-0 overflow-hidden rounded-2xl border border-border-subtle bg-bg-tertiary">
                 {imageUrl ? (
                   <img src={imageUrl} alt={product.name} className="w-full h-full object-cover" />
                 ) : (

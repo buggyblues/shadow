@@ -18,6 +18,7 @@ import {
   type CommerceDeliveryEntitlement,
   type CommercePurchaseOrder,
   deliveryDetailHref,
+  entitlementHasOpenablePaidFile,
   findPurchaseEntitlement,
 } from '../../lib/commerce-delivery'
 import { showToast } from '../../lib/toast'
@@ -101,6 +102,10 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       setSelectedIds(new Set())
       showToast(t('shop.orderSuccess'), 'success')
       const entitlement = await findPurchaseEntitlement({ orderId: data.id }).catch(() => null)
+      if (entitlement && entitlementHasOpenablePaidFile(entitlement)) {
+        window.location.assign(deliveryDetailHref(entitlement.id, { openContent: true }))
+        return
+      }
       setCheckoutResult({ order: data, entitlement })
     },
     onError: (err: Error) => showToast(err.message || t('shop.orderFailed'), 'error'),
@@ -144,7 +149,9 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
   }
 
   if (checkoutResult) {
-    const detailHref = deliveryDetailHref(checkoutResult.entitlement?.id)
+    const detailHref = deliveryDetailHref(checkoutResult.entitlement?.id, {
+      openContent: entitlementHasOpenablePaidFile(checkoutResult.entitlement),
+    })
     return (
       <div className="flex h-full flex-1 flex-col items-center justify-center gap-5 bg-bg-primary p-8 text-center">
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10 text-success">
@@ -268,7 +275,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
                 </label>
 
                 {/* Image */}
-                <div className="w-20 h-20 bg-bg-tertiary rounded-2xl overflow-hidden shrink-0 border border-border-subtle relative">
+                <div className="relative aspect-[3/2] w-24 shrink-0 overflow-hidden rounded-2xl border border-border-subtle bg-bg-tertiary">
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                   ) : (

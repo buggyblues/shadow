@@ -94,6 +94,64 @@ type CaptureFeature = 'microphone' | 'display-capture'
 const VOICE_MICROPHONE_POLICY_BLOCKED = 'VOICE_MICROPHONE_POLICY_BLOCKED'
 const VOICE_MICROPHONE_PERMISSION_DENIED = 'VOICE_MICROPHONE_PERMISSION_DENIED'
 const VOICE_SCREEN_POLICY_BLOCKED = 'VOICE_SCREEN_POLICY_BLOCKED'
+const VOICE_MICROPHONE_DEVICE_KEY = 'shadow.voice.microphoneDevice:v1'
+const VOICE_SPEAKER_DEVICE_KEY = 'shadow.voice.speakerDevice:v1'
+
+function loadStoredVoiceDevice(key: string) {
+  if (typeof window === 'undefined') return ''
+  try {
+    return localStorage.getItem(key) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function storeVoiceDevice(key: string, deviceId: string) {
+  if (typeof window === 'undefined') return
+  try {
+    if (deviceId) localStorage.setItem(key, deviceId)
+    else localStorage.removeItem(key)
+  } catch {
+    // Device persistence is a convenience only.
+  }
+}
+
+function deviceLabel(device: VoiceDevice | { label?: string | null }) {
+  return (device.label ?? '').toLowerCase()
+}
+
+function scoreVoiceDevice(device: VoiceDevice, kind: 'input' | 'output') {
+  const label = deviceLabel(device)
+  let score = 0
+
+  if (device.deviceId === 'default') score += 8
+  if (/airpods|headphone|headset|earbud|buds|usb|bluetooth|wireless|耳机|耳麥|耳麦/.test(label)) {
+    score += 70
+  }
+  if (/external|interface|scarlett|yeti|rode|shure|anker|jabra|sony|bose|beats/.test(label)) {
+    score += 35
+  }
+  if (/built.?in|macbook|display audio|speakers?/.test(label)) score += kind === 'output' ? 12 : 4
+  if (/iphone|ipad|continuity|phone/.test(label)) score -= 90
+  if (/camera/.test(label) && kind === 'input') score -= 20
+
+  return score
+}
+
+function choosePreferredVoiceDevice(
+  devices: VoiceDevice[],
+  currentDeviceId: string,
+  kind: 'input' | 'output',
+) {
+  if (devices.length === 0) return ''
+  const current = devices.find((device) => device.deviceId === currentDeviceId)
+  const ranked = [...devices].sort((a, b) => scoreVoiceDevice(b, kind) - scoreVoiceDevice(a, kind))
+  const best = ranked[0]
+  if (!best) return currentDeviceId
+  if (!current) return best.deviceId
+  if (scoreVoiceDevice(best, kind) - scoreVoiceDevice(current, kind) >= 35) return best.deviceId
+  return current.deviceId
+}
 
 interface BrowserPermissionsPolicy {
   allowsFeature?: (feature: string, origin?: string) => boolean
@@ -302,8 +360,12 @@ export function useVoiceChannel(channelId: string | null) {
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [microphones, setMicrophones] = useState<VoiceDevice[]>([])
   const [speakers, setSpeakers] = useState<VoiceDevice[]>([])
-  const [selectedMicrophoneId, setSelectedMicrophoneId] = useState<string>('')
-  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>('')
+  const [selectedMicrophoneId, setSelectedMicrophoneId] = useState<string>(() =>
+    loadStoredVoiceDevice(VOICE_MICROPHONE_DEVICE_KEY),
+  )
+  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>(() =>
+    loadStoredVoiceDevice(VOICE_SPEAKER_DEVICE_KEY),
+  )
   const [micTestLevel, setMicTestLevel] = useState(0)
   const [inputVolume, setInputVolume] = useState(0)
   const [outputVolume, setOutputVolumeState] = useState(100)
@@ -336,14 +398,131 @@ export function useVoiceChannel(channelId: string | null) {
     [channelId],
   )
 
+  const applySpeakerDevice = useCallback(
+    async (deviceId: string) => {
+      for (const track of remoteAudioTracksRef.current.values()) {
+        if (deviceId && typeof track.setPlaybackDevice === 'function') {
+          await track.setPlaybackDevice(deviceId).catch(() => undefined)
+        }
+        if (typeof track.setVolume === 'function') {
+          track.setVolume(outputVolume)
+        }
+        if (!isDeafened) {
+          track.play?.()
+        }
+      }
+    },
+    [isDeafened, outputVolume],
+  )
+
+  const updateLocalParticipant = useCallback(
+    (
+      patch: Partial<
+        Pick<VoiceParticipant, 'isMuted' | 'isDeafened' | 'isSpeaking' | 'isScreenSharing'>
+      >,
+    ) => {
+      const cleanPatch = Object.fromEntries(
+        Object.entries(patch).filter(([, value]) => value !== undefined),
+      ) as Partial<
+        Pick<VoiceParticipant, 'isMuted' | 'isDeafened' | 'isSpeaking' | 'isScreenSharing'>
+      >
+      if (Object.keys(cleanPatch).length === 0) return
+      const credentials = credentialsRef.current
+      let changed = false
+      const nextParticipants = participantsRef.current.map((participant) => {
+        const isLocal =
+          participant.clientId === clientId || (credentials && participant.uid === credentials.uid)
+        if (!isLocal) return participant
+        changed = true
+        return {
+          ...participant,
+          ...cleanPatch,
+          updatedAt: new Date().toISOString(),
+        }
+      })
+      if (!changed) return
+      participantsRef.current = nextParticipants
+      setParticipants(nextParticipants)
+    },
+    [clientId],
+  )
+
+  const replacePublishedMicrophone = useCallback(
+    async (deviceId: string) => {
+      const currentTrack = localAudioTrackRef.current
+      const client = clientRef.current
+
+      if (currentTrack?.setDevice && deviceId) {
+        try {
+          await currentTrack.setDevice(deviceId)
+          await currentTrack.setEnabled?.(!isMuted)
+          emitVoiceState({ muted: isMuted, speaking: false })
+          return
+        } catch {
+          // Fall back to recreating and republishing the track below.
+        }
+      }
+
+      const connectionState = (client as { connectionState?: string } | null)?.connectionState
+      if (!client || (connectionState && connectionState !== 'CONNECTED')) return
+
+      const nextTrack = await AgoraRTC.createMicrophoneAudioTrack({
+        microphoneId: deviceId || undefined,
+        encoderConfig: 'music_standard',
+      })
+      await nextTrack.setEnabled(!isMuted)
+
+      if (currentTrack) {
+        await client.unpublish([currentTrack]).catch(() => undefined)
+        currentTrack.stop?.()
+        currentTrack.close?.()
+      }
+      localAudioTrackRef.current = nextTrack
+      await client.publish([nextTrack])
+      emitVoiceState({ muted: isMuted, speaking: false })
+    },
+    [emitVoiceState, isMuted],
+  )
+
   const refreshDevices = useCallback(async () => {
     const [micList, speakerList] = await Promise.all([
       AgoraRTC.getMicrophones().catch(() => []),
       AgoraRTC.getPlaybackDevices().catch(() => []),
     ])
-    setMicrophones(micList.map((device) => ({ deviceId: device.deviceId, label: device.label })))
-    setSpeakers(speakerList.map((device) => ({ deviceId: device.deviceId, label: device.label })))
-  }, [])
+    const nextMicrophones = micList.map((device) => ({
+      deviceId: device.deviceId,
+      label: device.label,
+    }))
+    const nextSpeakers = speakerList.map((device) => ({
+      deviceId: device.deviceId,
+      label: device.label,
+    }))
+
+    setMicrophones(nextMicrophones)
+    setSpeakers(nextSpeakers)
+
+    const nextMicrophoneId = choosePreferredVoiceDevice(
+      nextMicrophones,
+      selectedMicrophoneId,
+      'input',
+    )
+    if (nextMicrophoneId && nextMicrophoneId !== selectedMicrophoneId) {
+      setSelectedMicrophoneId(nextMicrophoneId)
+      storeVoiceDevice(VOICE_MICROPHONE_DEVICE_KEY, nextMicrophoneId)
+      await replacePublishedMicrophone(nextMicrophoneId).catch((err) => {
+        const message = err instanceof Error ? err.message : 'Failed to switch microphone'
+        setError(message)
+        setErrorKey(voiceErrorKey(err))
+      })
+    }
+
+    const nextSpeakerId = choosePreferredVoiceDevice(nextSpeakers, selectedSpeakerId, 'output')
+    if (nextSpeakerId && nextSpeakerId !== selectedSpeakerId) {
+      setSelectedSpeakerId(nextSpeakerId)
+      storeVoiceDevice(VOICE_SPEAKER_DEVICE_KEY, nextSpeakerId)
+      await applySpeakerDevice(nextSpeakerId)
+    }
+  }, [applySpeakerDevice, replacePublishedMicrophone, selectedMicrophoneId, selectedSpeakerId])
 
   const stopMicTest = useCallback(() => {
     if (micTestTimerRef.current) {
@@ -627,35 +806,44 @@ export function useVoiceChannel(channelId: string | null) {
   const toggleMute = useCallback(async () => {
     const next = !isMuted
     setIsMuted(next)
+    updateLocalParticipant({ isMuted: next, isSpeaking: next ? false : undefined })
     await localAudioTrackRef.current?.setEnabled?.(!next)
-    emitVoiceState({ muted: next })
-  }, [emitVoiceState, isMuted])
+    emitVoiceState({ muted: next, speaking: next ? false : undefined })
+  }, [emitVoiceState, isMuted, updateLocalParticipant])
 
   const toggleDeafen = useCallback(() => {
     const next = !isDeafened
     setIsDeafened(next)
+    updateLocalParticipant({ isDeafened: next })
     for (const track of remoteAudioTracksRef.current.values()) {
       if (next) track.stop?.()
-      else track.play?.()
-    }
-    emitVoiceState({ deafened: next })
-  }, [emitVoiceState, isDeafened])
-
-  const setMicrophoneDevice = useCallback(async (deviceId: string) => {
-    setSelectedMicrophoneId(deviceId)
-    if (localAudioTrackRef.current?.setDevice) {
-      await localAudioTrackRef.current.setDevice(deviceId)
-    }
-  }, [])
-
-  const setSpeakerDevice = useCallback(async (deviceId: string) => {
-    setSelectedSpeakerId(deviceId)
-    for (const track of remoteAudioTracksRef.current.values()) {
-      if (typeof track.setPlaybackDevice === 'function') {
-        await track.setPlaybackDevice(deviceId).catch(() => undefined)
+      else {
+        if (selectedSpeakerId && typeof track.setPlaybackDevice === 'function') {
+          void track.setPlaybackDevice(selectedSpeakerId).catch(() => undefined)
+        }
+        track.play?.()
       }
     }
-  }, [])
+    emitVoiceState({ deafened: next })
+  }, [emitVoiceState, isDeafened, selectedSpeakerId, updateLocalParticipant])
+
+  const setMicrophoneDevice = useCallback(
+    async (deviceId: string) => {
+      setSelectedMicrophoneId(deviceId)
+      storeVoiceDevice(VOICE_MICROPHONE_DEVICE_KEY, deviceId)
+      await replacePublishedMicrophone(deviceId)
+    },
+    [replacePublishedMicrophone],
+  )
+
+  const setSpeakerDevice = useCallback(
+    async (deviceId: string) => {
+      setSelectedSpeakerId(deviceId)
+      storeVoiceDevice(VOICE_SPEAKER_DEVICE_KEY, deviceId)
+      await applySpeakerDevice(deviceId)
+    },
+    [applySpeakerDevice],
+  )
 
   const setOutputVolume = useCallback((volume: number) => {
     const next = Math.max(0, Math.min(100, Math.round(volume)))
@@ -675,8 +863,9 @@ export function useVoiceChannel(channelId: string | null) {
     await screenClientRef.current?.leave().catch(() => undefined)
     screenClientRef.current = null
     setIsScreenSharing(false)
+    updateLocalParticipant({ isScreenSharing: false })
     emitVoiceState({ screenSharing: false })
-  }, [emitVoiceState])
+  }, [emitVoiceState, updateLocalParticipant])
 
   const startScreenShare = useCallback(async () => {
     const credentials = credentialsRef.current
@@ -714,6 +903,7 @@ export function useVoiceChannel(channelId: string | null) {
         prev.filter((screen) => Number(screen.uid) !== credentials.screenUid),
       )
       setIsScreenSharing(true)
+      updateLocalParticipant({ isScreenSharing: true })
       emitVoiceState({ screenSharing: true })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to share screen'
@@ -724,13 +914,14 @@ export function useVoiceChannel(channelId: string | null) {
       await screenClientRef.current?.leave().catch(() => undefined)
       screenClientRef.current = null
       setIsScreenSharing(false)
+      updateLocalParticipant({ isScreenSharing: false })
       setError(message)
       setErrorKey(screenShareErrorKey(err))
       emitVoiceState({ screenSharing: false })
       screenTrack?.stop?.()
       screenTrack?.close?.()
     }
-  }, [emitVoiceState, isScreenSharing, stopScreenShare])
+  }, [emitVoiceState, isScreenSharing, stopScreenShare, updateLocalParticipant])
 
   useEffect(() => {
     const socket = getSocket()
@@ -746,6 +937,20 @@ export function useVoiceChannel(channelId: string | null) {
       socket.off('voice:participant-updated', update)
     }
   }, [applyState])
+
+  useEffect(() => {
+    void refreshDevices()
+    if (typeof navigator === 'undefined') return undefined
+    const mediaDevices = navigator.mediaDevices
+    if (!mediaDevices?.addEventListener) return undefined
+    const onDeviceChange = () => {
+      void refreshDevices()
+    }
+    mediaDevices.addEventListener('devicechange', onDeviceChange)
+    return () => {
+      mediaDevices.removeEventListener('devicechange', onDeviceChange)
+    }
+  }, [refreshDevices])
 
   useEffect(() => {
     leaveRef.current = leave

@@ -30,6 +30,13 @@ export interface CommercePurchaseOrder {
 
 const wait = (delayMs: number) => new Promise((resolve) => window.setTimeout(resolve, delayMs))
 
+export function entitlementHasOpenablePaidFile(entitlement?: CommerceDeliveryEntitlement | null) {
+  return Boolean(
+    entitlement?.paidFile?.id ||
+      (entitlement?.resourceType === 'workspace_file' && entitlement.resourceId),
+  )
+}
+
 export async function findPurchaseEntitlement({
   orderId,
   productId,
@@ -54,8 +61,11 @@ export async function findPurchaseEntitlement({
   return null
 }
 
-export function deliveryDetailHref(entitlementId?: string | null) {
-  return entitlementId
-    ? `/app/settings/wallet/orders/${entitlementId}`
-    : '/app/settings/wallet/entitlements'
+export function deliveryDetailHref(
+  entitlementId?: string | null,
+  options?: { openContent?: boolean },
+) {
+  if (!entitlementId) return '/app/settings/wallet/entitlements'
+  const params = options?.openContent ? '?open=1' : ''
+  return `/app/settings/wallet/orders/${entitlementId}${params}`
 }

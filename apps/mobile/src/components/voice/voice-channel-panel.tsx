@@ -1,25 +1,51 @@
 import { Headphones, Mic, MicOff, PhoneOff, Volume2, VolumeX } from 'lucide-react-native'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { RtcSurfaceView } from 'react-native-agora'
-import { useVoiceChannel } from '../../hooks/use-voice-channel'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import { AppText, BackgroundSurface, Button, GlassHeader, GlassPanel } from '../ui'
+import { useVoiceSession } from './voice-session-provider'
 
 export function VoiceChannelPanel({
   channelId,
   channelName,
+  serverSlug,
   onBack,
 }: {
   channelId: string
   channelName: string
+  serverSlug?: string | null
   onBack: () => void
 }) {
   const { t } = useTranslation()
   const colors = useColors()
-  const voice = useVoiceChannel(channelId)
-  const connected = voice.status === 'connected'
-  const connecting = voice.status === 'connecting'
+  const { activeChannel, setActiveChannel, voice } = useVoiceSession()
+  const [focusedVideoUid, setFocusedVideoUid] = useState<number | null>(null)
+  const isCurrentSession = activeChannel?.channelId === channelId
+  const connected = isCurrentSession && voice.status === 'connected'
+  const connecting = isCurrentSession && voice.status === 'connecting'
+
+  useEffect(() => {
+    const sameChannel =
+      activeChannel?.channelId === channelId &&
+      activeChannel.channelName === channelName &&
+      activeChannel.serverSlug === serverSlug
+    if (sameChannel) return
+    if (!activeChannel || activeChannel.channelId === channelId || voice.status === 'idle') {
+      setActiveChannel({ channelId, channelName, serverSlug })
+    }
+  }, [activeChannel, channelId, channelName, serverSlug, setActiveChannel, voice.status])
+
+  useEffect(() => {
+    if (voice.remoteVideoUids.length === 0) {
+      setFocusedVideoUid(null)
+      return
+    }
+    if (!focusedVideoUid || !voice.remoteVideoUids.includes(focusedVideoUid)) {
+      setFocusedVideoUid(voice.remoteVideoUids[0] ?? null)
+    }
+  }, [focusedVideoUid, voice.remoteVideoUids])
 
   return (
     <BackgroundSurface style={styles.container}>
@@ -39,7 +65,13 @@ export function VoiceChannelPanel({
           size="sm"
           icon={connected ? PhoneOff : Volume2}
           loading={connecting}
-          onPress={() => (connected ? void voice.leave() : void voice.join())}
+          onPress={() => {
+            if (!isCurrentSession) {
+              setActiveChannel({ channelId, channelName, serverSlug })
+              return
+            }
+            connected ? void voice.leave() : void voice.join()
+          }}
         >
           {connected ? t('voice.leave') : t('voice.join')}
         </Button>
@@ -102,14 +134,51 @@ export function VoiceChannelPanel({
           </Pressable>
         </View>
 
-        {voice.remoteVideoUids.length > 0 && (
-          <View style={styles.screens}>
-            {voice.remoteVideoUids.map((uid) => (
-              <View key={uid} style={styles.screenTile}>
-                <RtcSurfaceView style={styles.screen} canvas={{ uid }} />
-              </View>
-            ))}
-          </View>
+        {focusedVideoUid !== null && (
+          <GlassPanel style={styles.screenStage}>
+            {voice.remoteVideoUids.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.screenTabs}
+              >
+                {voice.remoteVideoUids.map((uid, index) => (
+                  <Pressable
+                    key={uid}
+                    accessibilityLabel={t('voice.focusScreen')}
+                    onPress={() => setFocusedVideoUid(uid)}
+                    style={[
+                      styles.screenTab,
+                      {
+                        backgroundColor: focusedVideoUid === uid ? colors.primary : colors.surface,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.screenTabText,
+                        { color: focusedVideoUid === uid ? '#fff' : colors.text },
+                      ]}
+                    >
+                      {index + 1}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+            <ScrollView
+              style={styles.screenViewport}
+              contentContainerStyle={styles.screenZoomContent}
+              maximumZoomScale={3}
+              minimumZoomScale={1}
+              bouncesZoom={false}
+              decelerationRate="fast"
+              centerContent
+            >
+              <RtcSurfaceView style={styles.screen} canvas={{ uid: focusedVideoUid }} />
+            </ScrollView>
+          </GlassPanel>
         )}
 
         <GlassPanel style={styles.participants}>
@@ -203,17 +272,39 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '800',
   },
-  screens: {
-    gap: spacing.md,
+  screenStage: {
+    padding: spacing.sm,
+    gap: spacing.sm,
   },
-  screenTile: {
-    height: 220,
+  screenTabs: {
+    gap: spacing.sm,
+  },
+  screenTab: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  screenTabText: {
+    fontSize: fontSize.sm,
+    fontWeight: '900',
+  },
+  screenViewport: {
+    maxHeight: 360,
     borderRadius: radius.lg,
-    overflow: 'hidden',
     backgroundColor: '#000',
+    overflow: 'hidden',
+  },
+  screenZoomContent: {
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   screen: {
-    flex: 1,
+    width: '100%',
+    aspectRatio: 16 / 9,
   },
   participants: {
     flex: 1,

@@ -1,5 +1,6 @@
 import { Badge, Button, Card, cn, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
   Award,
@@ -29,7 +30,9 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { compressImageForUpload } from '../../lib/image-upload'
 import { showToast } from '../../lib/toast'
+import { useShopStore } from '../../stores/shop.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { WorkspaceFilePicker } from '../workspace/WorkspaceFilePicker'
 import type { Product, ProductCategory, Shop } from './shop-page'
@@ -131,29 +134,27 @@ export function ShopAdmin({ serverId, onBack, embedded = false }: ShopAdminProps
         </div>
       )}
 
-      {/* ── Section Tabs ── */}
-      <div
-        className={cn(
-          'sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-border-subtle px-3 py-2 scrollbar-hidden',
-          embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/50 shadow-sm backdrop-blur-xl',
-        )}
-      >
-        {sections.map((s) => (
-          <Button
-            key={s.key}
-            variant={section === s.key ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => setSection(s.key)}
-            className="whitespace-nowrap"
-          >
-            {s.icon}
-            {s.label}
-          </Button>
-        ))}
-      </div>
-
       {/* ── Section Content ── */}
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hidden">
+        <div
+          className={cn(
+            'sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-border-subtle px-3 py-2 scrollbar-hidden',
+            embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/50 shadow-sm backdrop-blur-xl',
+          )}
+        >
+          {sections.map((s) => (
+            <Button
+              key={s.key}
+              variant={section === s.key ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setSection(s.key)}
+              className="whitespace-nowrap"
+            >
+              {s.icon}
+              {s.label}
+            </Button>
+          ))}
+        </div>
         <div className={cn('w-full', embedded ? 'max-w-none' : 'mx-auto max-w-4xl')}>
           {section === 'products' && <ProductManager serverId={serverId} />}
           {section === 'categories' && <CategoryManager serverId={serverId} />}
@@ -172,6 +173,7 @@ export function ShopAdmin({ serverId, onBack, embedded = false }: ShopAdminProps
 function ProductManager({ serverId }: { serverId: string }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [search, setSearch] = useState('')
@@ -211,10 +213,15 @@ function ProductManager({ serverId }: { serverId: string }) {
           setIsCreating(false)
           setEditingProduct(null)
         }}
-        onSaved={() => {
+        onSaved={(savedProduct) => {
+          const shouldOpenProduct = isCreating && savedProduct?.id
           setIsCreating(false)
           setEditingProduct(null)
           queryClient.invalidateQueries({ queryKey: ['shop-products', serverId] })
+          if (shouldOpenProduct) {
+            useShopStore.getState().setActiveProductId(savedProduct.id)
+            navigate({ to: '/servers/$serverSlug/shop', params: { serverSlug: serverId } })
+          }
         }}
       />
     )
@@ -260,7 +267,7 @@ function ProductManager({ serverId }: { serverId: string }) {
               className="!rounded-[40px] flex items-center gap-4 !p-4 group"
             >
               {/* Thumbnail */}
-              <div className="w-16 h-16 rounded-xl overflow-hidden bg-bg-tertiary shrink-0 border border-border-subtle">
+              <div className="aspect-[3/2] w-24 shrink-0 overflow-hidden rounded-xl border border-border-subtle bg-bg-tertiary">
                 {product.media?.[0]?.url ? (
                   <img
                     src={product.media[0].url}
@@ -307,21 +314,21 @@ function ProductManager({ serverId }: { serverId: string }) {
                   size="icon"
                   icon={Edit3}
                   onClick={() => setEditingProduct(product)}
-                  title="编辑商品"
-                  aria-label="编辑商品"
+                  title={t('shop.editProduct')}
+                  aria-label={t('shop.editProduct')}
                 />
                 <Button
                   variant="ghost"
                   size="icon"
                   icon={Trash2}
                   className="hover:!text-danger"
-                  title="删除此商品"
-                  aria-label="删除此商品"
+                  title={t('shop.deleteProduct')}
+                  aria-label={t('shop.deleteProduct')}
                   onClick={async () => {
                     const ok = await useConfirmStore.getState().confirm({
-                      title: '删除商品',
-                      message: '确定要删除该商品吗? 删除后将不可恢复。',
-                      confirmLabel: '删除',
+                      title: t('shop.deleteProduct'),
+                      message: t('shop.deleteProductConfirm'),
+                      confirmLabel: t('common.delete'),
                       danger: true,
                     })
                     if (ok) deleteMutation.mutate(product.id)
@@ -359,7 +366,7 @@ interface ProductFormProps {
   serverId: string
   product: Product | null
   onCancel: () => void
-  onSaved: () => void
+  onSaved: (product?: Product | null) => void
 }
 
 type EntitlementRule = {
@@ -367,6 +374,7 @@ type EntitlementRule = {
   resourceId: string
   capability: string
   durationSeconds: string
+  repeatable: boolean
   privilegeDescription: string
 }
 
@@ -378,6 +386,7 @@ function normalizeEntitlementRules(product: Product | null): EntitlementRule[] {
         resourceId: '',
         capability: 'use',
         durationSeconds: '',
+        repeatable: true,
         privilegeDescription: '',
       },
     ]
@@ -393,6 +402,7 @@ function normalizeEntitlementRules(product: Product | null): EntitlementRule[] {
         resourceId?: string
         capability?: string
         durationSeconds?: number | null
+        repeatable?: boolean | null
         privilegeDescription?: string
       }
       return {
@@ -403,6 +413,7 @@ function normalizeEntitlementRules(product: Product | null): EntitlementRule[] {
           item.durationSeconds === null || item.durationSeconds === undefined
             ? ''
             : String(item.durationSeconds),
+        repeatable: item.repeatable !== false,
         privilegeDescription: item.privilegeDescription || '',
       }
     })
@@ -427,12 +438,13 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
   const [name, setName] = useState(product?.name || '')
   const [slug, setSlug] = useState(product?.slug || '')
   const [type, setType] = useState<'physical' | 'entitlement'>(product?.type || 'physical')
-  const [status, setStatus] = useState<'draft' | 'active' | 'archived'>(
-    product?.status || 'active',
-  )
+  const [status, setStatus] = useState<'draft' | 'active' | 'archived'>(product?.status || 'active')
   const [summary, setSummary] = useState(product?.summary || '')
   const [description, setDescription] = useState(product?.description || '')
   const [basePrice, setBasePrice] = useState(product?.basePrice?.toString() || '0')
+  const [billingMode, setBillingMode] = useState<'one_time' | 'fixed_duration' | 'subscription'>(
+    product?.billingMode || 'one_time',
+  )
   const [tags, setTags] = useState(product?.tags?.join(', ') || '')
   const [categoryId, setCategoryId] = useState(product?.categoryId || '')
   const [selectedTemplate, setSelectedTemplate] = useState<ProductTemplate>(
@@ -485,6 +497,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
     setSummary(source.summary || '')
     setDescription(source.description || '')
     setBasePrice(source.basePrice?.toString() || '0')
+    setBillingMode(source.billingMode || 'one_time')
     setTags(source.tags?.join(', ') || '')
     setSelectedTemplate(inferProductTemplate(source))
     setCategoryId(source.categoryId || '')
@@ -502,6 +515,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
   }, [editingProductDetail, isEditing, product])
 
   const bindPaidFileNode = (node: WorkspaceUploadNode) => {
+    setPaidFilePickerOpen(false)
     setPaidFileNode(node)
     setEntitlementRules((rules) => {
       const next = rules.length
@@ -512,6 +526,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               resourceId: '',
               capability: 'download',
               durationSeconds: '',
+              repeatable: true,
               privilegeDescription: '',
             },
           ]
@@ -583,6 +598,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
     if (template !== 'paid_file') setPaidFileNode(null)
     const option = templateOptions.find((item) => item.key === template)
     setType(template === 'physical' ? 'physical' : 'entitlement')
+    setBillingMode(template === 'membership' ? 'fixed_duration' : 'one_time')
     setTags(
       template === 'badge_gift'
         ? 'badge, gift'
@@ -598,6 +614,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
           resourceId: '',
           capability: option.capability,
           durationSeconds: template === 'paid_file' ? '' : '2592000',
+          repeatable: true,
           privilegeDescription: t(`shop.productTemplates.${template}.promise`),
         },
       ])
@@ -630,6 +647,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
         name,
         slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
         type,
+        billingMode,
         status,
         summary: summary || undefined,
         description: description || undefined,
@@ -657,32 +675,36 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
           resourceType: rule.resourceType || 'service',
           resourceId: rule.resourceId || undefined,
           capability: rule.capability || 'use',
-          durationSeconds: rule.durationSeconds ? Number(rule.durationSeconds) : null,
+          durationSeconds:
+            billingMode === 'one_time' || !rule.durationSeconds
+              ? null
+              : Number(rule.durationSeconds),
+          repeatable: rule.repeatable,
           privilegeDescription: rule.privilegeDescription || undefined,
         }))
       }
 
       if (isEditing) {
-        return fetchApi(`/api/servers/${serverId}/shop/products/${product!.id}`, {
+        return fetchApi<Product>(`/api/servers/${serverId}/shop/products/${product!.id}`, {
           method: 'PUT',
           body: JSON.stringify(body),
           headers: { 'Content-Type': 'application/json' },
         })
       }
-      return fetchApi(`/api/servers/${serverId}/shop/products`, {
+      return fetchApi<Product>(`/api/servers/${serverId}/shop/products`, {
         method: 'POST',
         body: JSON.stringify(body),
         headers: { 'Content-Type': 'application/json' },
       })
     },
-    onSuccess: async () => {
+    onSuccess: async (savedProduct) => {
       if (product?.id) {
         await queryClient.invalidateQueries({
           queryKey: ['shop-product-detail', serverId, product.id],
         })
       }
       await queryClient.invalidateQueries({ queryKey: ['shop-products', serverId] })
-      onSaved()
+      onSaved(savedProduct)
     },
   })
 
@@ -856,7 +878,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
 
         {/* ── Section: 价格 ── */}
         <FormSection title={t('shop.publishPricing')}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
             <FormField label="商品底价 (美元 / 虾币)">
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
@@ -869,6 +891,27 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                   onChange={(e) => setBasePrice(e.target.value)}
                   className="w-full p-3 pl-9 bg-bg-tertiary text-danger text-lg font-black rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
                 />
+              </div>
+            </FormField>
+
+            <FormField label={t('commerce.billingMode')}>
+              <div className="relative">
+                <select
+                  value={billingMode}
+                  onChange={(e) =>
+                    setBillingMode(e.target.value as 'one_time' | 'fixed_duration' | 'subscription')
+                  }
+                  className="w-full p-3 pr-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all appearance-none font-medium"
+                >
+                  <option value="one_time">{t('commerce.billingModes.one_time')}</option>
+                  <option value="fixed_duration">
+                    {t('commerce.billingModes.fixed_duration')}
+                  </option>
+                  <option value="subscription">{t('commerce.billingModes.subscription')}</option>
+                </select>
+                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-text-muted">
+                  <ChevronDown size={14} />
+                </div>
               </div>
             </FormField>
 
@@ -916,7 +959,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
             {mediaUrls.map((url, idx) => (
               <div
                 key={idx}
-                className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-sm border border-border-subtle bg-bg-tertiary group"
+                className="relative aspect-[3/2] w-32 rounded-2xl overflow-hidden shadow-sm border border-border-subtle bg-bg-tertiary group"
               >
                 <img src={url} alt="" className="w-full h-full object-cover" />
                 <button
@@ -931,12 +974,10 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
 
             <ImageUploadInput
               onUpload={(url) => setMediaUrls([...mediaUrls, url])}
-              className="w-24 h-24"
+              className="aspect-[3/2] w-32"
             />
           </div>
-          <p className="text-xs text-text-muted ">
-            首张图片将作为商品的默认封面，建议使用 4:5 或正方形比例的高清套图。
-          </p>
+          <p className="text-xs text-text-muted ">{t('commerce.productCoverRatioHint')}</p>
         </FormSection>
 
         {/* ── Section: SKU ── */}
@@ -1173,28 +1214,45 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                     />
                   </FormField>
 
-                  <FormField label="生效时长 (秒)">
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted">
-                        <Clock size={16} />
-                      </span>
+                  {billingMode !== 'one_time' && (
+                    <FormField label={t('commerce.durationSeconds')}>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted">
+                          <Clock size={16} />
+                        </span>
+                        <input
+                          type="number"
+                          value={rule.durationSeconds}
+                          onChange={(e) => {
+                            const next = [...entitlementRules]
+                            next[idx] = { ...rule, durationSeconds: e.target.value }
+                            setEntitlementRules(next)
+                          }}
+                          placeholder={t('commerce.durationSecondsPlaceholder')}
+                          className="w-full p-3 pl-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
+                        />
+                      </div>
+                    </FormField>
+                  )}
+
+                  <FormField label={t('commerce.repeatablePurchase')}>
+                    <label className="flex min-h-12 items-center gap-3 rounded-xl border border-border-subtle bg-bg-tertiary px-3 py-2 text-sm font-bold text-text-primary">
                       <input
-                        type="number"
-                        value={rule.durationSeconds}
+                        type="checkbox"
+                        checked={rule.repeatable}
                         onChange={(e) => {
                           const next = [...entitlementRules]
-                          next[idx] = { ...rule, durationSeconds: e.target.value }
+                          next[idx] = { ...rule, repeatable: e.target.checked }
                           setEntitlementRules(next)
                         }}
-                        placeholder="留空即表示永久有效"
-                        className="w-full p-3 pl-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
+                        className="h-4 w-4 accent-primary"
                       />
-                    </div>
+                      {t('commerce.repeatablePurchaseHint')}
+                    </label>
                   </FormField>
 
                   <FormField label="面向买家的白话说明">
-                    <input
-                      type="text"
+                    <textarea
                       value={rule.privilegeDescription}
                       onChange={(e) => {
                         const next = [...entitlementRules]
@@ -1202,7 +1260,8 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                         setEntitlementRules(next)
                       }}
                       placeholder="例：付款后自动拥有 VIP 大群浏览发言权限"
-                      className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all"
+                      rows={3}
+                      className="min-h-24 w-full resize-y rounded-xl border border-border-subtle bg-bg-tertiary p-3 text-sm text-white transition-all focus:border-primary focus:outline-none"
                     />
                   </FormField>
 
@@ -1232,6 +1291,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                       resourceId: '',
                       capability: 'use',
                       durationSeconds: '',
+                      repeatable: true,
                       privilegeDescription: '',
                     },
                   ])
@@ -1253,7 +1313,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               productType={type}
               resourceType={entitlementRules[0]?.resourceType}
               assetType={tags.includes('badge') ? 'badge' : tags.includes('gift') ? 'gift' : null}
-              className="h-32 w-full"
+              className="aspect-[3/2] w-full"
             />
             <div className="min-w-0">
               <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
@@ -1576,7 +1636,7 @@ function OrderManager({ serverId }: { serverId: string }) {
               <div className="space-y-3">
                 {order.items.map((item) => (
                   <div key={item.id} className="flex gap-3 items-center">
-                    <div className="w-12 h-12 rounded-lg bg-bg-tertiary overflow-hidden border border-border-subtle shrink-0">
+                    <div className="aspect-[3/2] w-20 shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-bg-tertiary">
                       {item.imageUrl ? (
                         <img
                           src={item.imageUrl}
@@ -1889,8 +1949,9 @@ function ImageUploadInput({
 
     setIsUploading(true)
     try {
+      const uploadFile = await compressImageForUpload(file)
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', uploadFile)
       const res = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,

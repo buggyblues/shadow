@@ -25,6 +25,12 @@ export class EntitlementService {
     return entitlement
   }
 
+  async getEntitlementDetailByOrder(orderId: string) {
+    const entitlement = await this.deps.entitlementDao.findFirstByOrderIdWithDetails(orderId)
+    if (!entitlement) throw apiError('ENTITLEMENT_NOT_FOUND', 404)
+    return entitlement
+  }
+
   async getShopEntitlements(shopId: string, opts?: { limit?: number; offset?: number }) {
     return this.deps.entitlementDao.findByShop(shopId, opts)
   }

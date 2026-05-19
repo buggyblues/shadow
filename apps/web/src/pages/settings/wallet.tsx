@@ -15,8 +15,8 @@ import {
   HeartHandshake,
   LockKeyhole,
   Package,
-  RefreshCw,
   ReceiptText,
+  RefreshCw,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
@@ -80,12 +80,20 @@ interface WalletTransaction {
   } | null
   order?: {
     id: string
+    entitlementId?: string | null
     orderNo: string
     status: string
     totalAmount: number
     currency: string
     productName?: string | null
-    shop?: { id: string; name?: string | null } | null
+    shop?: {
+      id: string
+      name?: string | null
+      scopeKind?: 'server' | 'user' | null
+      ownerUserId?: string | null
+      serverId?: string | null
+      serverSlug?: string | null
+    } | null
   } | null
   counterparty?: {
     userId?: string | null
@@ -103,6 +111,8 @@ interface WalletEntitlement {
   resourceId?: string | null
   paidFile?: { id: string } | null
 }
+
+type WalletTransactionShop = NonNullable<NonNullable<WalletTransaction['order']>['shop']>
 
 const TYPE_ICONS: Record<TransactionType, typeof CreditCard> = {
   topup: CreditCard,
@@ -160,6 +170,19 @@ function walletEntitlementOpenable(entitlement: WalletEntitlement) {
         (entitlement.resourceType === 'workspace_file' && entitlement.resourceId),
     )
   )
+}
+
+function walletShopHref(shop?: WalletTransactionShop | null) {
+  if (!shop) return null
+  if (shop.ownerUserId) return `/app/shop/users/${shop.ownerUserId}?view=buyer`
+  if (shop.serverSlug || shop.serverId)
+    return `/app/servers/${shop.serverSlug ?? shop.serverId}/shop`
+  return null
+}
+
+function walletCounterpartyName(tx: WalletTransaction) {
+  const counterparty = tx.counterparty
+  return counterparty?.displayName ?? counterparty?.username ?? counterparty?.userId ?? null
 }
 
 export function WalletSettings({
@@ -447,6 +470,13 @@ export function WalletSettings({
                   const colorClass = TYPE_COLORS[tx.type] ?? 'text-text-muted bg-text-muted/10'
                   const isPositive = tx.amount > 0
                   const transactionTitle = tx.display?.title ?? tx.note
+                  const counterpartyName = walletCounterpartyName(tx)
+                  const orderHref = tx.order?.entitlementId
+                    ? `/app/settings/wallet/orders/${tx.order.entitlementId}`
+                    : tx.order?.id
+                      ? `/app/settings/wallet/orders/${tx.order.id}?by=order`
+                      : null
+                  const shopHref = walletShopHref(tx.order?.shop)
 
                   return (
                     <div
@@ -478,6 +508,36 @@ export function WalletSettings({
                         <p className="text-[11px] text-text-muted/60 mt-0.5">
                           {formatDate(tx.createdAt)}
                         </p>
+                        {(counterpartyName || orderHref || shopHref) && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-black">
+                            {counterpartyName && (
+                              <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-bg-primary/55 px-2 py-1 text-text-muted">
+                                <span className="text-text-secondary">{t('commerce.buyer')}</span>
+                                <span className="truncate text-text-primary">
+                                  {counterpartyName}
+                                </span>
+                              </span>
+                            )}
+                            {orderHref && (
+                              <a
+                                href={orderHref}
+                                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-primary transition hover:bg-primary/15"
+                              >
+                                <ReceiptText size={12} />
+                                {t('commerce.viewOrderDetail')}
+                              </a>
+                            )}
+                            {shopHref && (
+                              <a
+                                href={shopHref}
+                                className="inline-flex items-center gap-1 rounded-full bg-bg-primary/55 px-2 py-1 text-text-secondary transition hover:text-primary"
+                              >
+                                <ShoppingBag size={12} />
+                                {t('commerce.openShop')}
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="text-right shrink-0">
@@ -734,7 +794,7 @@ function CommunityAssetsSection() {
           }
         />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 xl:grid-cols-2">
           {filteredAssets.map((asset) => (
             <CommunityAssetCard
               key={asset.grant.id}
@@ -790,23 +850,27 @@ function CommunityAssetCard({
   ]
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border-subtle bg-bg-secondary/30">
+    <div className="grid gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/35 p-3 sm:grid-cols-[132px_minmax(0,1fr)]">
       <ProductVisual
         name={definition.name}
         imageUrl={definition.imageUrl}
         resourceType="community_asset"
         assetType={definition.assetType}
-        className="h-32 w-full rounded-none"
+        className="aspect-[3/2] w-full rounded-xl border border-border-subtle sm:w-[132px]"
       />
-      <div className="space-y-3 p-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h4 className="truncate text-sm font-black text-text-primary">{definition.name}</h4>
+      <div className="min-w-0 space-y-3">
+        <div className="min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h4 className="truncate text-base font-black text-text-primary">{definition.name}</h4>
+              {definition.description && (
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
+                  {definition.description}
+                </p>
+              )}
+            </div>
             <StatusPill status={grant.status} />
           </div>
-          {definition.description && (
-            <p className="mt-1 line-clamp-2 text-xs text-text-muted">{definition.description}</p>
-          )}
           <div className="mt-2 flex flex-wrap gap-1.5">
             <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-black text-primary">
               {assetTypeLabel}
@@ -823,22 +887,20 @@ function CommunityAssetCard({
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <AssetMeta label={t('communityEconomy.quantity')} value={String(grant.quantity)} />
           <AssetMeta
             label={t('communityEconomy.remaining')}
-            value={String(grant.remainingQuantity)}
+            value={`${grant.remainingQuantity}/${grant.quantity}`}
           />
-          <AssetMeta label={t('communityEconomy.type')} value={assetTypeLabel} />
           <AssetMeta
             label={t('communityEconomy.expiresAt')}
             value={expiresAt ?? t('communityEconomy.never')}
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid gap-2 min-[520px]:grid-cols-2">
           <a
             href={`/app/assets/${grant.id}`}
-            className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border-subtle bg-bg-primary/70 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
           >
             <Package size={14} />
             {t('communityEconomy.assetHome')}
@@ -977,7 +1039,7 @@ function CommunitySettlementsSection() {
           description={t('communityEconomy.noSettlementsHint')}
         />
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-3">
           {settlements.map((line) => (
             <SettlementRow key={line.id} line={line} />
           ))}
@@ -995,20 +1057,28 @@ function SettlementRow({ line }: { line: SettlementLine }) {
   const settledAt = formatOptionalDate(line.settledAt)
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/30 p-3 md:flex-row md:items-center">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-black text-text-primary">
-            {t(`communityEconomy.source.${line.sourceType}`, line.sourceType)}
+    <div className="grid gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/35 p-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.42fr)] md:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-success/10 text-success">
+            <HandCoins size={18} />
           </span>
-          <StatusPill status={line.status} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-black text-text-primary">
+                {t(`communityEconomy.source.${line.sourceType}`, line.sourceType)}
+              </span>
+              <StatusPill status={line.status} />
+            </div>
+            <p className="mt-1 truncate text-xs font-bold text-text-muted">
+              {t('communityEconomy.availableAt')}:{' '}
+              {availableAt ?? t('communityEconomy.notAvailable')}
+              {settledAt ? ` · ${t('communityEconomy.settledAt')}: ${settledAt}` : ''}
+            </p>
+          </div>
         </div>
-        <p className="mt-1 truncate text-xs text-text-muted">
-          {t('communityEconomy.availableAt')}: {availableAt ?? t('communityEconomy.notAvailable')}
-          {settledAt ? ` · ${t('communityEconomy.settledAt')}: ${settledAt}` : ''}
-        </p>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-right text-xs md:w-72">
+      <div className="grid grid-cols-3 gap-2 text-xs">
         <AmountMeta label={t('communityEconomy.gross')} amount={line.grossAmount} />
         <AmountMeta label={t('communityEconomy.fee')} amount={line.platformFee} />
         <AmountMeta label={t('communityEconomy.net')} amount={line.netAmount} emphasis />

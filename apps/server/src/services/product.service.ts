@@ -7,6 +7,7 @@ type EntitlementConfig = {
   capability?: string
   durationSeconds?: number | null
   renewalPeriodSeconds?: number | null
+  repeatable?: boolean
   privilegeDescription?: string
 }
 

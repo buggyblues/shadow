@@ -335,6 +335,20 @@ export class ShopUseCase {
     })
   }
 
+  async completeOrderById(
+    input: SecureUseCaseInput & {
+      orderId: string
+      userId: string
+    },
+  ) {
+    return auditUseCase(this.deps, input, {
+      action: 'order.complete',
+      run: async () => {
+        return this.deps.orderService.completeOrder(input.orderId, input.userId)
+      },
+    })
+  }
+
   /* ───────── Support Ticket ───────── */
 
   async createSupportTicket(

@@ -3,7 +3,8 @@ import { nanoid } from 'nanoid'
 import type { OrderDao } from '../dao/order.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { Database } from '../db'
-import { cartItems, orderItems, orders, products, skus } from '../db/schema'
+import { cartItems, entitlements, orderItems, orders, products, skus } from '../db/schema'
+import { apiError } from '../lib/api-error'
 import { type Actor, actorFromUserId } from '../security/actor'
 import type { CartService } from './cart.service'
 import type { EconomyAuditService } from './economy-audit.service'
@@ -12,11 +13,29 @@ import type { EconomyPolicyService } from './economy-policy.service'
 import type { EntitlementService } from './entitlement.service'
 import { resolveProductEntitlementResource } from './entitlement-resource'
 import type { LedgerService } from './ledger.service'
+import type { NotificationTriggerService } from './notification-trigger.service'
 import type { ProductService } from './product.service'
 import type { ShopService } from './shop.service'
 
 /** Platform fee rate in basis points (500 = 5%) */
 const PLATFORM_FEE_BPS = 500
+
+function entitlementConfigs(product: { entitlementConfig?: unknown }) {
+  if (Array.isArray(product.entitlementConfig)) return product.entitlementConfig
+  return product.entitlementConfig ? [product.entitlementConfig] : []
+}
+
+function productAllowsRepeatPurchase(product: { type?: string; entitlementConfig?: unknown }) {
+  if (product.type !== 'entitlement') return true
+  const configs = entitlementConfigs(product)
+  return (
+    configs.length === 0 ||
+    configs.every((config) => {
+      if (!config || typeof config !== 'object') return true
+      return (config as { repeatable?: boolean }).repeatable !== false
+    })
+  )
+}
 
 const ORDER_STATE_TRANSITIONS: Record<
   string,
@@ -25,7 +44,7 @@ const ORDER_STATE_TRANSITIONS: Record<
   pending: ['cancelled'],
   paid: ['processing', 'cancelled', 'refunded'],
   processing: ['shipped', 'cancelled', 'refunded'],
-  shipped: ['delivered', 'refunded'],
+  shipped: ['delivered', 'completed', 'refunded'],
   delivered: ['completed', 'refunded'],
   completed: ['refunded'],
   cancelled: [],
@@ -50,6 +69,7 @@ export class OrderService {
       entitlementService: EntitlementService
       cartService: CartService
       shopService: ShopService
+      notificationTriggerService: NotificationTriggerService
     },
   ) {}
 
@@ -103,6 +123,7 @@ export class OrderService {
       quantity: number
       imageUrl?: string
     }> = []
+    const nonRepeatableProductIds = new Set<string>()
 
     for (const item of items) {
       const product = await this.deps.productService.getProductById(item.productId)
@@ -127,6 +148,28 @@ export class OrderService {
         throw Object.assign(new Error(`Product "${product.name}" does not belong to this shop`), {
           status: 400,
         })
+      }
+      if (!productAllowsRepeatPurchase(product)) {
+        if (item.quantity > 1 || nonRepeatableProductIds.has(product.id)) {
+          throw apiError('PRODUCT_ALREADY_PURCHASED', 409, { productId: product.id })
+        }
+        const existingEntitlement = await this.deps.db
+          .select({ id: entitlements.id })
+          .from(entitlements)
+          .where(
+            and(
+              eq(entitlements.userId, buyerId),
+              eq(entitlements.productId, product.id),
+              eq(entitlements.isActive, true),
+              eq(entitlements.status, 'active'),
+              sql`(${entitlements.expiresAt} IS NULL OR ${entitlements.expiresAt} > NOW())`,
+            ),
+          )
+          .limit(1)
+        if (existingEntitlement[0]) {
+          throw apiError('PRODUCT_ALREADY_PURCHASED', 409, { productId: product.id })
+        }
+        nonRepeatableProductIds.add(product.id)
       }
 
       let price = product.basePrice
@@ -413,6 +456,22 @@ export class OrderService {
     if (status === 'completed' && isStateChange) {
       await this.settleOrder(currentOrder)
     }
+    if (status === 'shipped' && isStateChange) {
+      const items = await this.deps.orderDao.getItems(orderId)
+      const entitlementRows = await this.deps.db
+        .select({ id: entitlements.id })
+        .from(entitlements)
+        .where(eq(entitlements.orderId, currentOrder.id))
+        .limit(1)
+      await this.deps.notificationTriggerService.triggerCommerceOrderShipped({
+        userId: currentOrder.buyerId,
+        orderId: currentOrder.id,
+        orderNo: currentOrder.orderNo,
+        productName: items[0]?.productName,
+        entitlementId: entitlementRows[0]?.id ?? null,
+        trackingNo: extra?.trackingNo,
+      })
+    }
 
     return result
   }
@@ -426,10 +485,23 @@ export class OrderService {
       throw Object.assign(new Error('Not your order'), { status: 403 })
     }
     if (order.status === 'completed') return order
-    if (order.status !== 'delivered') {
+    if (!['shipped', 'delivered'].includes(order.status)) {
       throw Object.assign(new Error('Order must be delivered before completion'), { status: 400 })
     }
     return this.updateOrderStatusInShop(shopId, orderId, 'completed')
+  }
+
+  async completeOrder(orderId: string, userId: string) {
+    const order = await this.deps.orderDao.findById(orderId)
+    if (!order) throw Object.assign(new Error('Order not found'), { status: 404 })
+    if (order.buyerId !== userId) {
+      throw Object.assign(new Error('Not your order'), { status: 403 })
+    }
+    if (order.status === 'completed') return order
+    if (!['shipped', 'delivered'].includes(order.status)) {
+      throw Object.assign(new Error('Order must be delivered before completion'), { status: 400 })
+    }
+    return this.updateOrderStatusInShop(order.shopId, orderId, 'completed')
   }
 
   /**

@@ -11,6 +11,7 @@ import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
+import { fetchApi } from './lib/api'
 import { authenticatedRouterPathFromRedirect, currentAppRedirect } from './lib/auth-redirect'
 import { ensureAuthenticatedSession } from './lib/auth-session'
 import { reloadOnceForChunkError } from './lib/chunk-reload'
@@ -94,6 +95,98 @@ function marketplaceDetailSearch(search: Record<string, unknown>) {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+type ServerRouteSummary = {
+  id: string
+  slug?: string | null
+}
+
+type ServerRouteBeforeLoadContext = {
+  params: {
+    serverSlug?: string
+  }
+  location: {
+    pathname: string
+    search?: Record<string, unknown>
+  }
+}
+
+function serverChildPathFromLocation(pathname: string, serverSlug: string) {
+  const encodedSlug = encodeURIComponent(serverSlug)
+  const bases = [
+    `/app/servers/${serverSlug}`,
+    `/servers/${serverSlug}`,
+    `/app/servers/${encodedSlug}`,
+    `/servers/${encodedSlug}`,
+  ]
+  const base = bases.find((candidate) => pathname.startsWith(candidate))
+  return base ? pathname.slice(base.length) : ''
+}
+
+function canonicalServerChildRoute(childPath: string, serverSlug: string) {
+  if (childPath.startsWith('/shop/admin')) {
+    return {
+      to: '/servers/$serverSlug/shop/admin' as const,
+      params: { serverSlug },
+    }
+  }
+  if (childPath.startsWith('/shop')) {
+    return {
+      to: '/servers/$serverSlug/shop' as const,
+      params: { serverSlug },
+    }
+  }
+  if (childPath.startsWith('/workspace')) {
+    return {
+      to: '/servers/$serverSlug/workspace' as const,
+      params: { serverSlug },
+    }
+  }
+  const channelMatch = childPath.match(/^\/channels\/([^/?#]+)/u)
+  if (channelMatch?.[1]) {
+    return {
+      to: '/servers/$serverSlug/channels/$channelId' as const,
+      params: { serverSlug, channelId: decodeURIComponent(channelMatch[1]) },
+    }
+  }
+  const appMatch = childPath.match(/^\/apps\/([^/?#]+)/u)
+  if (appMatch?.[1]) {
+    return {
+      to: '/servers/$serverSlug/apps/$appKey' as const,
+      params: { serverSlug, appKey: decodeURIComponent(appMatch[1]) },
+    }
+  }
+  if (childPath.startsWith('/apps')) {
+    return {
+      to: '/servers/$serverSlug/apps' as const,
+      params: { serverSlug },
+    }
+  }
+  return {
+    to: '/servers/$serverSlug' as const,
+    params: { serverSlug },
+  }
+}
+
+async function canonicalizeServerRoute({ params, location }: ServerRouteBeforeLoadContext) {
+  const serverSlug = params.serverSlug
+  if (!serverSlug || !UUID_RE.test(serverSlug)) return
+  const server = await queryClient.fetchQuery({
+    queryKey: ['server', serverSlug],
+    queryFn: () => fetchApi<ServerRouteSummary>(`/api/servers/${encodeURIComponent(serverSlug)}`),
+    staleTime: 30_000,
+  })
+  if (!server.slug || server.slug === serverSlug) return
+
+  const childPath = serverChildPathFromLocation(location.pathname, serverSlug)
+  const target = canonicalServerChildRoute(childPath, server.slug)
+  throw redirect({
+    ...target,
+    search: location.search,
+  })
+}
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
@@ -157,6 +250,7 @@ const playLaunchRoute = createRoute({
 const serverLayoutRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/servers/$serverSlug',
+  beforeLoad: canonicalizeServerRoute,
   component: ServerLayout,
 })
 

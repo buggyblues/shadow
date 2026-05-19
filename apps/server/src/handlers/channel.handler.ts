@@ -488,7 +488,7 @@ export function createChannelHandler(container: AppContainer) {
     try {
       container
         .resolve('io')
-        .to(`voice:${id}`)
+        .to([`voice:${id}`, `channel:${id}`])
         .emit(result.joined ? 'voice:participant-joined' : 'voice:participant-updated', {
           channelId: id,
           participant: result.participant,
@@ -519,11 +519,14 @@ export function createChannelHandler(container: AppContainer) {
     const result = await container.resolve('voiceChannelService').leave(c.get('actor'), id, input)
     try {
       if (result.left) {
-        container.resolve('io').to(`voice:${id}`).emit('voice:participant-left', {
-          channelId: id,
-          participant: result.participant,
-          state: result.state,
-        })
+        container
+          .resolve('io')
+          .to([`voice:${id}`, `channel:${id}`])
+          .emit('voice:participant-left', {
+            channelId: id,
+            participant: result.participant,
+            state: result.state,
+          })
       }
     } catch {
       /* non-critical */
@@ -547,11 +550,14 @@ export function createChannelHandler(container: AppContainer) {
       { clientId: input.clientId },
     )
     try {
-      container.resolve('io').to(`voice:${id}`).emit('voice:participant-updated', {
-        channelId: id,
-        participant: result.participant,
-        state: result.state,
-      })
+      container
+        .resolve('io')
+        .to([`voice:${id}`, `channel:${id}`])
+        .emit('voice:participant-updated', {
+          channelId: id,
+          participant: result.participant,
+          state: result.state,
+        })
     } catch {
       /* non-critical */
     }

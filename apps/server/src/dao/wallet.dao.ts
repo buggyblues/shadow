@@ -1,6 +1,15 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { orderItems, orders, shops, users, wallets, walletTransactions } from '../db/schema'
+import {
+  entitlements,
+  orderItems,
+  orders,
+  servers,
+  shops,
+  users,
+  wallets,
+  walletTransactions,
+} from '../db/schema'
 
 export type WalletTransactionAudience = 'ledger' | 'consumer'
 export type WalletTransactionDirection = 'all' | 'income' | 'expense'
@@ -87,10 +96,15 @@ export class WalletDao {
         id: orders.id,
         orderNo: orders.orderNo,
         status: orders.status,
+        entitlementId: entitlements.id,
         totalAmount: orders.totalAmount,
         currency: orders.currency,
         shopId: shops.id,
         shopName: shops.name,
+        shopScopeKind: shops.scopeKind,
+        shopOwnerUserId: shops.ownerUserId,
+        shopServerId: shops.serverId,
+        shopServerSlug: servers.slug,
         buyerId: users.id,
         buyerUsername: users.username,
         buyerDisplayName: users.displayName,
@@ -99,7 +113,9 @@ export class WalletDao {
       })
       .from(orders)
       .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
+      .leftJoin(entitlements, eq(entitlements.orderId, orders.id))
       .leftJoin(shops, eq(shops.id, orders.shopId))
+      .leftJoin(servers, eq(servers.id, shops.serverId))
       .leftJoin(users, eq(users.id, orders.buyerId))
       .where(inArray(orders.id, orderIds))
   }

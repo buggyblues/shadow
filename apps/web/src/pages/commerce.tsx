@@ -1,6 +1,6 @@
-import { Button, cn, GlassPanel, Input } from '@shadowob/ui'
+import { Button, cn, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams, useSearch } from '@tanstack/react-router'
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import {
   ArrowLeft,
   Award,
@@ -31,7 +31,7 @@ import {
   WalletCards,
   XCircle,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FilePreviewPanel } from '../components/chat/file-preview-panel'
 import {
@@ -44,6 +44,7 @@ import {
   CommerceSurface,
 } from '../components/commerce/commerce-atoms'
 import { PurchaseConfirmationModal } from '../components/commerce/purchase-confirmation-modal'
+import { useConfirmStore } from '../components/common/confirm-dialog'
 import type { Product, Shop } from '../components/shop/shop-page'
 import { ShrimpCoinIcon } from '../components/shop/ui/currency'
 import { ProductCard } from '../components/shop/ui/product-card'
@@ -52,7 +53,9 @@ import { WorkspaceFilePicker } from '../components/workspace/WorkspaceFilePicker
 import type { CommunityAsset } from '../hooks/use-community-economy'
 import { fetchApi } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
-import { deliveryDetailHref } from '../lib/commerce-delivery'
+import { deliveryDetailHref, entitlementHasOpenablePaidFile } from '../lib/commerce-delivery'
+import { hasActivePurchasedEntitlement } from '../lib/commerce-products'
+import { compressImageForUpload } from '../lib/image-upload'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 import type { WorkspaceNode } from '../stores/workspace.store'
@@ -137,6 +140,33 @@ type Entitlement = {
   fulfillmentJobs?: FulfillmentJob[]
 }
 
+type OrderDetailFallback = {
+  id: string
+  orderNo?: string | null
+  shopId: string
+  buyerId: string
+  status: string
+  totalAmount: number
+  buyerNote?: string | null
+  sellerNote?: string | null
+  paidAt?: string | null
+  shippedAt?: string | null
+  completedAt?: string | null
+  cancelledAt?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  items: Array<{
+    productId: string
+    productName: string
+    price: number
+    quantity: number
+    imageUrl?: string | null
+    specValues?: string[] | null
+  }>
+  shop?: Entitlement['shop']
+  product?: Product | null
+}
+
 async function loadEntitlementDetail(entitlementId: string): Promise<Entitlement> {
   try {
     return await fetchApi<Entitlement>(`/api/entitlements/${entitlementId}`)
@@ -145,6 +175,95 @@ async function loadEntitlementDetail(entitlementId: string): Promise<Entitlement
     const entitlement = entitlements.find((item) => item.id === entitlementId)
     if (!entitlement) throw err
     return entitlement
+  }
+}
+
+async function loadEntitlementDetailByOrder(orderId: string): Promise<Entitlement> {
+  try {
+    return await fetchApi<Entitlement>(`/api/entitlements/by-order/${orderId}`)
+  } catch (err) {
+    try {
+      const entitlements = await fetchApi<Entitlement[]>('/api/entitlements')
+      const entitlement = entitlements.find(
+        (item) => item.order?.id === orderId || item.orderId === orderId,
+      )
+      if (entitlement) return entitlement
+    } catch {
+      // Fall through to the order-only detail below.
+    }
+
+    const order = await fetchApi<OrderDetailFallback>(`/api/orders/${orderId}`)
+    const firstItem = order.items[0]
+    const product: Entitlement['product'] = order.product
+      ? {
+          id: order.product.id,
+          shopId: order.product.shopId,
+          name: order.product.name,
+          summary: order.product.summary ?? null,
+          type: order.product.type,
+          basePrice: order.product.basePrice,
+          currency: order.product.currency,
+          billingMode: order.product.billingMode ?? 'one_time',
+          entitlementConfig: order.product.entitlementConfig ?? null,
+        }
+      : firstItem
+        ? {
+            id: firstItem.productId,
+            shopId: order.shopId,
+            name: firstItem.productName,
+            summary: firstItem.specValues?.join(' / ') || order.sellerNote || null,
+            type: 'physical' as const,
+            basePrice: firstItem.price,
+            currency: 'SHRIMP',
+            billingMode: 'one_time' as const,
+            entitlementConfig: null,
+          }
+        : null
+
+    return {
+      id: order.id,
+      userId: order.buyerId,
+      serverId: order.shop?.serverId ?? null,
+      shopId: order.shopId,
+      orderId: order.id,
+      productId: product?.id ?? firstItem?.productId ?? null,
+      offerId: null,
+      scopeKind: order.shop?.scopeKind ?? null,
+      status: order.status,
+      isActive: false,
+      resourceType: 'service',
+      resourceId: order.id,
+      capability: 'use',
+      expiresAt: null,
+      nextRenewalAt: null,
+      createdAt: order.createdAt ?? new Date().toISOString(),
+      metadata: {
+        orderOnly: true,
+        productImageUrl: firstItem?.imageUrl ?? null,
+      },
+      shop: order.shop ?? null,
+      product,
+      offer: null,
+      paidFile: null,
+      buyer: null,
+      order: {
+        id: order.id,
+        orderNo: order.orderNo,
+        shopId: order.shopId,
+        buyerId: order.buyerId,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        buyerNote: order.buyerNote,
+        sellerNote: order.sellerNote,
+        paidAt: order.paidAt,
+        shippedAt: order.shippedAt,
+        completedAt: order.completedAt,
+        cancelledAt: order.cancelledAt,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      },
+      fulfillmentJobs: [],
+    }
   }
 }
 
@@ -241,6 +360,7 @@ type ProductEntitlementConfig = {
   capability?: string
   durationSeconds?: number | null
   renewalPeriodSeconds?: number | null
+  repeatable?: boolean | null
   privilegeDescription?: string
 }
 
@@ -316,6 +436,13 @@ function firstEntitlementConfig(product?: Product | null): ProductEntitlementCon
     : product?.entitlementConfig
   if (!config || typeof config !== 'object') return null
   return config as ProductEntitlementConfig
+}
+
+function splitPrivilegeLines(value?: string | null) {
+  return (value ?? '')
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
 }
 
 function isInstantDeliveryProduct(product?: Product | null) {
@@ -593,9 +720,9 @@ function entitlementDeliveryState(entitlement: Entitlement): DeliveryState {
   }
   if (provisioning?.status === 'manual_pending') return 'pending'
   if (!activeEntitlement(entitlement)) return 'completed'
+  if (orderStatus === 'completed') return 'completed'
   if (entitlementPaidFileId(entitlement)) return 'usable'
   if (orderStatus === 'delivered') return 'awaiting_review'
-  if (orderStatus === 'completed') return 'completed'
   if (provisioning?.status === 'provisioned') return 'delivered'
   return 'usable'
 }
@@ -673,6 +800,7 @@ function ProductDeliverySummary({
         : isExternalApp
           ? t('shop.fulfillmentExternalAppHint')
           : t('shop.fulfillmentServiceHint'))
+  const descriptionLines = splitPrivilegeLines(description)
   const Icon = isCommunityAsset ? Package : ShieldCheck
 
   if (compact) {
@@ -682,7 +810,7 @@ function ProductDeliverySummary({
         <span className="min-w-0">
           <span className="font-black text-text-primary">{title}</span>
           <span className="mx-1 text-text-muted">·</span>
-          <span>{description}</span>
+          <span>{descriptionLines.join(' / ') || description}</span>
         </span>
       </div>
     )
@@ -695,7 +823,18 @@ function ProductDeliverySummary({
         {t('communityEconomy.deliveryType')}
       </div>
       <div className="mt-2 text-sm font-black text-text-primary">{title}</div>
-      <p className="mt-1 text-sm leading-6 text-text-secondary">{description}</p>
+      {descriptionLines.length > 1 ? (
+        <ul className="mt-2 grid gap-1.5 text-sm leading-6 text-text-secondary">
+          {descriptionLines.map((line) => (
+            <li key={line} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-sm leading-6 text-text-secondary">{description}</p>
+      )}
     </div>
   )
 }
@@ -910,6 +1049,7 @@ export function PersonalShopPage({
 } = {}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const params = useParams({ strict: false }) as { userId?: string }
   const search = useSearch({ strict: false }) as { view?: string }
   const currentUser = useAuthStore((s) => s.user)
@@ -931,6 +1071,7 @@ export function PersonalShopPage({
   const [capability, setCapability] = useState<ResourceCapability>('use')
   const [durationDays, setDurationDays] = useState('30')
   const [billingMode, setBillingMode] = useState<BillingMode>('fixed_duration')
+  const [repeatable, setRepeatable] = useState(true)
   const [privilegeDescription, setPrivilegeDescription] = useState('')
   const [deliveryPreset, setDeliveryPreset] = useState<DeliveryPreset>('service')
   const [assetName, setAssetName] = useState('')
@@ -944,6 +1085,7 @@ export function PersonalShopPage({
   const [paidFilePickerOpen, setPaidFilePickerOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<ShopSettingsSection>(initialSection)
   const [shopSheet, setShopSheet] = useState<'store' | 'product' | null>(null)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const numericPrice = Number(price)
   const numericDurationDays = Number(durationDays)
   const durationInvalid =
@@ -1026,6 +1168,57 @@ export function PersonalShopPage({
     setPaidFileServerId(serverEntries[0]?.server.id ?? '')
   }, [paidFileServerId, serverEntries])
 
+  const resetProductForm = () => {
+    setEditingProduct(null)
+    setName('')
+    setSummary('')
+    setPrice('100')
+    setResourceType('service')
+    setResourceId('')
+    setCapability('use')
+    setDurationDays('30')
+    setBillingMode('fixed_duration')
+    setRepeatable(true)
+    setPrivilegeDescription('')
+    setDeliveryPreset('service')
+    setAssetName('')
+    setAssetDescription('')
+    setProductImageUrl('')
+    setProductImagePreviewUrl('')
+    setPaidFileNode(null)
+  }
+
+  const beginEditProduct = (product: Product) => {
+    const config = firstEntitlementConfig(product)
+    const durationSeconds = config?.durationSeconds ?? config?.renewalPeriodSeconds ?? null
+    const assetType = productAssetType(product)
+    const preset: DeliveryPreset =
+      config?.resourceType === 'workspace_file'
+        ? 'paid_file'
+        : assetType === 'badge' || assetType === 'gift' || assetType === 'service_ticket'
+          ? assetType
+          : 'service'
+    const coverUrl = product.media?.[0]?.thumbnailUrl ?? product.media?.[0]?.url ?? ''
+    setEditingProduct(product)
+    setName(product.name)
+    setSummary(product.summary ?? '')
+    setPrice(String(product.basePrice ?? 0))
+    setResourceType(config?.resourceType ?? 'service')
+    setResourceId(config?.resourceId ?? '')
+    setCapability((config?.capability as ResourceCapability | undefined) ?? 'use')
+    setDurationDays(durationSeconds ? String(Math.ceil(durationSeconds / 86400)) : '30')
+    setBillingMode(product.billingMode ?? 'fixed_duration')
+    setRepeatable(config?.repeatable !== false)
+    setPrivilegeDescription(config?.privilegeDescription ?? '')
+    setDeliveryPreset(preset)
+    setAssetName(product.name)
+    setAssetDescription(config?.privilegeDescription ?? product.summary ?? '')
+    setProductImageUrl(coverUrl)
+    setProductImagePreviewUrl(coverUrl)
+    setPaidFileNode(null)
+    setShopSheet('product')
+  }
+
   const { data: productsData, isFetching: isFetchingProducts } = useQuery({
     queryKey: ['personal-shop-products', shop?.id, keyword],
     queryFn: () =>
@@ -1076,61 +1269,76 @@ export function PersonalShopPage({
       const durationSeconds = numericDurationDays > 0 ? numericDurationDays * 24 * 60 * 60 : null
       const selectedPreset = DELIVERY_PRESETS.find((preset) => preset.value === deliveryPreset)
       const coverUrl = productImageUrl.trim() || null
+      const editingConfig = editingProduct ? firstEntitlementConfig(editingProduct) : null
       let assetDefinition: ShopAssetDefinition | null = null
+      let assetDefinitionId: string | null = null
       if (selectedPreset?.assetType) {
-        assetDefinition = await fetchApi<ShopAssetDefinition>(`/api/shops/${shop!.id}/assets`, {
-          method: 'POST',
-          body: JSON.stringify({
-            assetType: selectedPreset.assetType,
-            name: assetName.trim() || name.trim(),
-            description: assetDescription.trim() || summary.trim() || null,
-            imageUrl: coverUrl,
-            giftable: true,
-            transferable: true,
-            consumable: selectedPreset.assetType === 'service_ticket',
-            revocable: true,
-            expiresAfterDays:
-              billingMode === 'one_time' || !numericDurationDays ? null : numericDurationDays,
-            status: 'active',
-            metadata: { createdFrom: 'creator_product', deliveryPreset },
-          }),
-        })
+        if (editingConfig?.resourceType === 'community_asset' && editingConfig.resourceId) {
+          assetDefinitionId = editingConfig.resourceId
+        } else {
+          assetDefinition = await fetchApi<ShopAssetDefinition>(`/api/shops/${shop!.id}/assets`, {
+            method: 'POST',
+            body: JSON.stringify({
+              assetType: selectedPreset.assetType,
+              name: assetName.trim() || name.trim(),
+              description: assetDescription.trim() || summary.trim() || null,
+              imageUrl: coverUrl,
+              giftable: true,
+              transferable: true,
+              consumable: selectedPreset.assetType === 'service_ticket',
+              revocable: true,
+              expiresAfterDays:
+                billingMode === 'one_time' || !numericDurationDays ? null : numericDurationDays,
+              status: 'active',
+              metadata: { createdFrom: 'creator_product', deliveryPreset },
+            }),
+          })
+          assetDefinitionId = assetDefinition.id
+        }
       }
 
-      const product = await fetchApi<Product>(`/api/shops/${shop!.id}/products`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: name.trim(),
-          slug: toProductSlug(name),
-          type: 'entitlement',
-          billingMode,
-          status: 'active',
-          summary: summary.trim() || undefined,
-          media: coverUrl
-            ? [{ type: 'image', url: coverUrl, thumbnailUrl: coverUrl, position: 0 }]
-            : undefined,
-          tags: selectedPreset?.assetType
-            ? [selectedPreset.assetType]
-            : deliveryPreset === 'paid_file'
-              ? ['paid_file']
-              : deliveryPreset === 'service'
-                ? ['service']
-                : [],
-          basePrice: Math.round(numericPrice),
-          entitlementConfig: {
-            resourceType: assetDefinition ? 'community_asset' : resourceType.trim() || 'service',
-            resourceId: assetDefinition?.id ?? (resourceId.trim() || undefined),
-            capability: assetDefinition ? 'redeem' : capability,
-            durationSeconds: billingMode === 'one_time' ? null : durationSeconds,
-            renewalPeriodSeconds: billingMode === 'subscription' ? durationSeconds : undefined,
-            privilegeDescription:
-              privilegeDescription.trim() ||
-              assetDescription.trim() ||
-              (assetDefinition ? assetDefinition.description : undefined),
-          },
-        }),
-      })
-      if (assetDefinition) {
+      const productPayload = {
+        name: name.trim(),
+        slug: editingProduct?.slug ?? toProductSlug(name),
+        type: 'entitlement',
+        billingMode,
+        status: 'active',
+        summary: summary.trim() || undefined,
+        media: coverUrl
+          ? [{ type: 'image', url: coverUrl, thumbnailUrl: coverUrl, position: 0 }]
+          : undefined,
+        tags: selectedPreset?.assetType
+          ? [selectedPreset.assetType]
+          : deliveryPreset === 'paid_file'
+            ? ['paid_file']
+            : deliveryPreset === 'service'
+              ? ['service']
+              : [],
+        basePrice: Math.round(numericPrice),
+        entitlementConfig: {
+          resourceType: assetDefinitionId ? 'community_asset' : resourceType.trim() || 'service',
+          resourceId: assetDefinitionId ?? (resourceId.trim() || undefined),
+          capability: assetDefinitionId ? 'redeem' : capability,
+          durationSeconds: billingMode === 'one_time' ? null : durationSeconds,
+          renewalPeriodSeconds: billingMode === 'subscription' ? durationSeconds : undefined,
+          repeatable,
+          privilegeDescription:
+            privilegeDescription.trim() ||
+            assetDescription.trim() ||
+            (assetDefinition ? assetDefinition.description : undefined),
+        },
+      }
+
+      const product = await fetchApi<Product>(
+        editingProduct
+          ? `/api/shops/${shop!.id}/products/${editingProduct.id}`
+          : `/api/shops/${shop!.id}/products`,
+        {
+          method: editingProduct ? 'PUT' : 'POST',
+          body: JSON.stringify(productPayload),
+        },
+      )
+      if (assetDefinition && !editingProduct) {
         const offers = await fetchApi<{ offers: Array<{ id: string; productId: string }> }>(
           `/api/shops/${shop!.id}/offers?keyword=${encodeURIComponent(name.trim())}`,
         )
@@ -1149,21 +1357,19 @@ export function PersonalShopPage({
       }
       return product
     },
-    onSuccess: async () => {
-      setName('')
-      setSummary('')
-      setResourceId('')
-      setPaidFileNode(null)
-      setPrivilegeDescription('')
-      setAssetName('')
-      setAssetDescription('')
-      setProductImageUrl('')
-      setProductImagePreviewUrl('')
-      setDeliveryPreset('service')
+    onSuccess: async (product) => {
+      const wasEditing = Boolean(editingProduct)
+      resetProductForm()
       setShopSheet(null)
       await queryClient.invalidateQueries({ queryKey: ['personal-shop-products', shop?.id] })
       await queryClient.invalidateQueries({ queryKey: ['shop-community-assets', shop?.id] })
-      showToast(t('commerce.productCreated'), 'success')
+      showToast(wasEditing ? t('commerce.productUpdated') : t('commerce.productCreated'), 'success')
+      if (!wasEditing) {
+        navigate({
+          to: '/shop/products/$productId',
+          params: { productId: product.id },
+        })
+      }
     },
     onError: (err) =>
       showToast(getApiErrorMessage(err, t, 'commerce.productCreateFailed'), 'error'),
@@ -1179,6 +1385,16 @@ export function PersonalShopPage({
     onError: (err) =>
       showToast(getApiErrorMessage(err, t, 'commerce.productDeleteFailed'), 'error'),
   })
+
+  const confirmDeleteProduct = async (product: Product) => {
+    const ok = await useConfirmStore.getState().confirm({
+      title: t('commerce.deleteProduct'),
+      message: t('commerce.deleteProductConfirm'),
+      confirmLabel: t('common.delete'),
+      danger: true,
+    })
+    if (ok) deleteProduct.mutate(product)
+  }
 
   const canSubmitProduct =
     canManage &&
@@ -1233,8 +1449,9 @@ export function PersonalShopPage({
     }
     setProductImageUploading(true)
     try {
+      const uploadFile = await compressImageForUpload(file)
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', uploadFile)
       const result = await fetchApi<MediaUploadResult>('/api/media/upload', {
         method: 'POST',
         body: formData,
@@ -1256,8 +1473,12 @@ export function PersonalShopPage({
     }
     setShopMediaUploading(kind)
     try {
+      const uploadFile = await compressImageForUpload(file, {
+        maxWidth: kind === 'banner' ? 1800 : 640,
+        maxHeight: kind === 'banner' ? 600 : 640,
+      })
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', uploadFile)
       const result = await fetchApi<MediaUploadResult>('/api/media/upload', {
         method: 'POST',
         body: formData,
@@ -1303,6 +1524,7 @@ export function PersonalShopPage({
     }
   }
   const bindPaidFileNode = (node: WorkspaceNode) => {
+    setPaidFilePickerOpen(false)
     setPaidFileNode(node)
     setResourceId(node.id)
     if (!name.trim()) setName(node.name.replace(/\.[^.]+$/, ''))
@@ -1368,30 +1590,15 @@ export function PersonalShopPage({
                   {t('commerce.assetProducts')}
                 </span>
                 {canManage && (
-                  <>
-                    <span>
-                      {t('communityEconomy.assetDefinitionsCount', { count: shopAssets.length })}
-                    </span>
-                    <span>
-                      {t('commerce.currentSection')}{' '}
-                      <span className="text-text-primary">
-                        {activeSection === 'shop'
-                          ? t('commerce.sectionProducts')
-                          : t('commerce.sectionOrders')}
-                      </span>
-                    </span>
-                  </>
+                  <span>
+                    {t('communityEconomy.assetDefinitionsCount', { count: shopAssets.length })}
+                  </span>
                 )}
               </div>
             </div>
           </div>
           {canManage && (
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              <CommerceSegmentedControl
-                value={activeSection}
-                options={sectionOptions}
-                onChange={setActiveSection}
-              />
               <a
                 href={buyerShopPath}
                 className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
@@ -1452,6 +1659,26 @@ export function PersonalShopPage({
         />
       )}
 
+      {canManage && (
+        <CommerceSurface tone="quiet" className="p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CommerceSegmentedControl
+              value={activeSection}
+              options={sectionOptions}
+              onChange={setActiveSection}
+            />
+            <div className="inline-flex items-center gap-2 rounded-full bg-bg-primary/50 px-3 py-1.5 text-xs font-black text-text-muted">
+              {t('commerce.currentSection')}
+              <span className="text-text-primary">
+                {activeSection === 'shop'
+                  ? t('commerce.sectionProducts')
+                  : t('commerce.sectionOrders')}
+              </span>
+            </div>
+          </div>
+        </CommerceSurface>
+      )}
+
       {canManage && activeSection === 'shop' && (
         <CommerceSurface tone="quiet" className="p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1467,7 +1694,7 @@ export function PersonalShopPage({
               {t('commerce.creatorStudio')}
             </CommercePill>
           </div>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 xl:grid-cols-2 2xl:grid-cols-4">
             {starterPresets.map((preset) => {
               const meta = DELIVERY_PRESETS.find((item) => item.value === preset)
               const Icon = meta?.icon ?? ShieldCheck
@@ -1579,7 +1806,7 @@ export function PersonalShopPage({
                             resourceType={config?.resourceType}
                             assetType={productAssetType(product)}
                             showLabel={false}
-                            className="h-20 w-20 shrink-0"
+                            className="aspect-[3/2] w-full shrink-0 xl:w-44"
                           />
                         }
                         title={product.name}
@@ -1600,14 +1827,24 @@ export function PersonalShopPage({
                               <ChevronRight size={14} />
                             </a>
                             {canManage && (
-                              <button
-                                type="button"
-                                title={t('commerce.deleteProduct')}
-                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-danger/10 hover:text-danger"
-                                onClick={() => deleteProduct.mutate(product)}
-                              >
-                                <Trash2 size={15} />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  title={t('commerce.editProduct')}
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-primary/10 hover:text-primary"
+                                  onClick={() => beginEditProduct(product)}
+                                >
+                                  <Settings2 size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title={t('commerce.deleteProduct')}
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-danger/10 hover:text-danger"
+                                  onClick={() => void confirmDeleteProduct(product)}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </>
                             )}
                           </>
                         }
@@ -1689,17 +1926,26 @@ export function PersonalShopPage({
 
           <CommerceDrawer
             open={shopSheet === 'product'}
-            title={t('commerce.publishService')}
-            description={t('commerce.publishServiceHint')}
+            title={editingProduct ? t('commerce.editProduct') : t('commerce.publishService')}
+            description={
+              editingProduct ? t('commerce.editProductHint') : t('commerce.publishServiceHint')
+            }
             closeLabel={t('common.close')}
-            onClose={() => setShopSheet(null)}
+            onClose={() => {
+              setShopSheet(null)
+              setEditingProduct(null)
+            }}
             footer={
               <Button
                 className="w-full"
                 onClick={() => createProduct.mutate()}
                 disabled={!canSubmitProduct}
               >
-                {createProduct.isPending ? t('commerce.saving') : t('commerce.createProduct')}
+                {createProduct.isPending
+                  ? t('commerce.saving')
+                  : editingProduct
+                    ? t('commerce.saveProductChanges')
+                    : t('commerce.createProduct')}
               </Button>
             }
           >
@@ -1717,7 +1963,7 @@ export function PersonalShopPage({
                       resourceType={deliveryPreset === 'service' ? resourceType : 'community_asset'}
                       assetType={selectedDeliveryPreset?.assetType}
                       showLabel={false}
-                      className="h-32 w-full"
+                      className="aspect-[3/2] w-full"
                     />
                     {productImageUploading && (
                       <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-bg-deep/45 text-primary backdrop-blur-sm">
@@ -1874,21 +2120,34 @@ export function PersonalShopPage({
                       </span>
                     )}
                   </label>
-                  <label className="grid gap-1.5">
-                    <span className="text-xs font-black uppercase tracking-[0.12em] text-text-muted">
-                      {t('commerce.durationDays')}
-                    </span>
-                    <Input
-                      value={durationDays}
-                      onChange={(e) => setDurationDays(e.target.value)}
-                      placeholder={t('commerce.durationDays')}
-                      inputMode="numeric"
-                    />
-                    {durationInvalid && (
-                      <span className="text-xs font-bold text-danger">
-                        {t('commerce.durationInvalidHint')}
+                  {billingMode !== 'one_time' && (
+                    <label className="grid gap-1.5">
+                      <span className="text-xs font-black uppercase tracking-[0.12em] text-text-muted">
+                        {t('commerce.durationDays')}
                       </span>
-                    )}
+                      <Input
+                        value={durationDays}
+                        onChange={(e) => setDurationDays(e.target.value)}
+                        placeholder={t('commerce.durationDays')}
+                        inputMode="numeric"
+                      />
+                      {durationInvalid && (
+                        <span className="text-xs font-bold text-danger">
+                          {t('commerce.durationInvalidHint')}
+                        </span>
+                      )}
+                    </label>
+                  )}
+                  <label className="flex items-center gap-3 rounded-xl border border-border-subtle bg-bg-secondary/50 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={repeatable}
+                      onChange={(e) => setRepeatable(e.target.checked)}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    <span className="text-xs font-black text-text-primary">
+                      {t('commerce.repeatablePurchase')}
+                    </span>
                   </label>
                 </div>
               </ProductFormSection>
@@ -2047,10 +2306,12 @@ export function PersonalShopPage({
                     onClose={() => setPaidFilePickerOpen(false)}
                   />
                 )}
-                <Input
+                <textarea
                   value={privilegeDescription}
                   onChange={(e) => setPrivilegeDescription(e.target.value)}
                   placeholder={t('commerce.privilegeDescription')}
+                  rows={3}
+                  className="min-h-24 w-full resize-y rounded-xl border border-border-subtle bg-bg-secondary px-3 py-2 text-sm font-bold text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/60"
                 />
               </ProductFormSection>
 
@@ -2066,7 +2327,7 @@ export function PersonalShopPage({
                       productType="entitlement"
                       resourceType={deliveryPreset === 'service' ? resourceType : 'community_asset'}
                       assetType={selectedDeliveryPreset?.assetType}
-                      className="h-32 w-full"
+                      className="aspect-[3/2] w-full"
                     />
                     <div className="min-w-0">
                       <div className="mb-3 flex items-center justify-between gap-3">
@@ -2127,6 +2388,10 @@ export function ProductDetailPage() {
   const product = productContext?.product
   const productShop = productContext?.shop
   const productServer = productContext?.server
+  const { data: entitlements = [] } = useQuery({
+    queryKey: ['entitlements'],
+    queryFn: () => fetchApi<Entitlement[]>('/api/entitlements'),
+  })
 
   const purchase = useMutation({
     mutationFn: () =>
@@ -2138,11 +2403,14 @@ export function ProductDetailPage() {
         method: 'POST',
         body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
       }),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setPurchaseError(null)
       await queryClient.invalidateQueries({ queryKey: ['entitlements'] })
       await queryClient.invalidateQueries({ queryKey: ['community-assets'] })
       showToast(t('commerce.purchaseCompleted'), 'success')
+      if (entitlementHasOpenablePaidFile(result.entitlement)) {
+        window.location.assign(deliveryDetailHref(result.entitlement.id, { openContent: true }))
+      }
     },
     onError: (err) => {
       const message = getApiErrorMessage(err, t, 'commerce.purchaseFailed')
@@ -2177,7 +2445,15 @@ export function ProductDetailPage() {
   const durationDays = durationSeconds ? Math.ceil(durationSeconds / 86400) : null
   const productIsCommunityAsset = config?.resourceType === 'community_asset'
   const productIsInstantDelivery = isInstantDeliveryProduct(product)
-  const deliveryHref = deliveryDetailHref(purchase.data?.entitlement?.id)
+  const purchasedEntitlement = entitlements.find(
+    (entitlement) => entitlement.productId === product.id && activeEntitlement(entitlement),
+  )
+  const alreadyPurchased = hasActivePurchasedEntitlement(product, entitlements)
+  const deliveryEntitlement = purchase.data?.entitlement ?? purchasedEntitlement
+  const canOpenPurchasedContent = entitlementHasOpenablePaidFile(deliveryEntitlement)
+  const deliveryHref = deliveryDetailHref(deliveryEntitlement?.id, {
+    openContent: canOpenPurchasedContent,
+  })
   const modalDetails = {
     name: product.name,
     summary: product.summary,
@@ -2206,79 +2482,101 @@ export function ProductDetailPage() {
 
   return (
     <PageShell>
-      <GlassPanel className="overflow-hidden">
-        <div className="grid gap-0 lg:grid-cols-[340px_minmax(0,1fr)]">
-          <ProductVisual
-            name={product.name}
-            media={product.media}
-            productType={product.type}
-            resourceType={config?.resourceType}
-            assetType={productAssetType(product)}
-            className="aspect-square min-h-[280px] rounded-none lg:aspect-auto"
-          />
-          <div className="flex min-w-0 flex-col gap-4 p-5">
-            <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
-                <ShieldCheck size={13} />
-                {t('commerce.productDetail')}
-              </div>
-              <h1 className="text-2xl font-black text-text-primary">{product.name}</h1>
-              {product.summary && (
-                <p className="mt-2 text-sm leading-6 text-text-secondary">{product.summary}</p>
-              )}
-            </div>
-            <ProductMeta product={product} />
-            <ProductSourceSummary product={product} shop={productShop} server={productServer} />
-            <ProductFulfillmentPanel product={product} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-border-subtle bg-bg-secondary/60 p-3">
-                <div className="text-xs font-bold text-text-muted">
-                  {t('commerce.productPrice')}
+      <CommerceSurface tone="accent" className="overflow-hidden p-4 sm:p-5">
+        <div className="grid gap-5 sm:grid-cols-[minmax(0,0.9fr)_minmax(280px,0.82fr)] sm:items-start lg:grid-cols-[minmax(0,0.82fr)_minmax(320px,0.58fr)]">
+          <div className="rounded-2xl border border-border-subtle bg-bg-primary/30 p-3">
+            <ProductVisual
+              name={product.name}
+              media={product.media}
+              productType={product.type}
+              resourceType={config?.resourceType}
+              assetType={productAssetType(product)}
+              className="mx-auto aspect-[3/2] max-h-[300px] w-full rounded-xl border border-border-subtle sm:max-h-[360px] lg:max-h-[420px]"
+            />
+          </div>
+          <div className="grid min-w-0 gap-4 p-1 sm:p-0 lg:p-5">
+            <div className="min-w-0 space-y-4">
+              <div className="min-w-0">
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
+                  <ShieldCheck size={13} />
+                  {t('commerce.productDetail')}
                 </div>
-                <div className="mt-2 text-2xl">
-                  <PriceBadge amount={product.basePrice} />
+                <h1 className="text-2xl font-black text-text-primary">{product.name}</h1>
+                {product.summary && (
+                  <p className="mt-2 text-sm leading-6 text-text-secondary">{product.summary}</p>
+                )}
+              </div>
+              <ProductMeta product={product} />
+              <aside className="flex min-w-0 flex-col gap-4 rounded-2xl border border-border-subtle bg-bg-secondary/45 p-4">
+                <div className="rounded-xl border border-border-subtle bg-bg-primary/50 p-3">
+                  <div className="text-xs font-bold text-text-muted">
+                    {t('commerce.productPrice')}
+                  </div>
+                  <div className="mt-2 text-2xl">
+                    <PriceBadge amount={product.basePrice} />
+                  </div>
                 </div>
-              </div>
-              <ProductDeliverySummary product={product} />
-            </div>
-            {product.description && (
-              <div className="rounded-xl border border-border-subtle bg-bg-secondary/60 p-3 text-sm leading-6 text-text-secondary">
-                {product.description}
-              </div>
-            )}
-            {purchase.data && (
-              <PurchaseDeliveryStatus
-                provisioning={provisioning}
-                fulfillmentJobs={purchase.data.fulfillmentJobs ?? []}
-              />
-            )}
-            <div className="mt-auto flex flex-wrap items-center gap-3">
-              <Button onClick={() => setShowPurchaseModal(true)} disabled={purchase.isPending}>
-                {purchase.isPending ? t('commerce.purchasing') : t('commerce.buyNow')}
-              </Button>
-              {purchase.data && (
+                <ProductDeliverySummary product={product} />
                 <div className="flex flex-wrap items-center gap-3">
-                  <a
-                    href={deliveryHref}
-                    className="inline-flex items-center gap-2 text-sm font-bold text-success"
-                  >
-                    <ReceiptText size={16} />
-                    {t('shop.viewDeliveryDetail')}
-                  </a>
-                  <a
-                    href="/app/settings/wallet/entitlements"
-                    className="inline-flex items-center gap-2 text-sm font-bold text-primary"
-                  >
-                    <ShieldCheck size={16} />
-                    {t('shop.openPurchaseDelivery')}
-                  </a>
+                  {canOpenPurchasedContent ? (
+                    <a
+                      href={deliveryHref}
+                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-black text-white shadow-[0_0_24px_rgba(0,198,209,0.24)] transition hover:bg-primary/90"
+                    >
+                      <ExternalLink size={16} />
+                      {t('commerce.openResource')}
+                    </a>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      onClick={() => setShowPurchaseModal(true)}
+                      disabled={purchase.isPending || alreadyPurchased}
+                    >
+                      {alreadyPurchased
+                        ? t('shop.purchased')
+                        : purchase.isPending
+                          ? t('commerce.purchasing')
+                          : t('commerce.buyNow')}
+                    </Button>
+                  )}
+                  {purchase.data && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <a
+                        href={deliveryHref}
+                        className="inline-flex items-center gap-2 text-sm font-bold text-success"
+                      >
+                        <ReceiptText size={16} />
+                        {t('shop.viewDeliveryDetail')}
+                      </a>
+                      <a
+                        href="/app/settings/wallet/entitlements"
+                        className="inline-flex items-center gap-2 text-sm font-bold text-primary"
+                      >
+                        <ShieldCheck size={16} />
+                        {t('shop.openPurchaseDelivery')}
+                      </a>
+                    </div>
+                  )}
+                  <ProvisioningPill provisioning={provisioning} />
+                </div>
+              </aside>
+              <ProductSourceSummary product={product} shop={productShop} server={productServer} />
+              <ProductFulfillmentPanel product={product} />
+              {product.description && (
+                <div className="rounded-xl border border-border-subtle bg-bg-secondary/60 p-3 text-sm leading-6 text-text-secondary">
+                  {product.description}
                 </div>
               )}
-              <ProvisioningPill provisioning={provisioning} />
+              {purchase.data && (
+                <PurchaseDeliveryStatus
+                  provisioning={provisioning}
+                  fulfillmentJobs={purchase.data.fulfillmentJobs ?? []}
+                />
+              )}
             </div>
           </div>
         </div>
-      </GlassPanel>
+      </CommerceSurface>
       <PurchaseConfirmationModal
         open={showPurchaseModal}
         details={modalDetails}
@@ -2292,7 +2590,13 @@ export function ProductDetailPage() {
           setShowPurchaseModal(false)
           setPurchaseError(null)
         }}
-        onConfirm={() => purchase.mutate()}
+        onConfirm={() => {
+          if (alreadyPurchased) {
+            setPurchaseError(t('shop.alreadyPurchased'))
+            return
+          }
+          purchase.mutate()
+        }}
       />
     </PageShell>
   )
@@ -2347,95 +2651,91 @@ export function AssetHomePage() {
   return (
     <PageShell>
       <CommerceSurface tone="accent" className="overflow-hidden p-0">
-        <div className="grid gap-0 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="border-b border-border-subtle/70 bg-bg-primary/20 p-4 sm:p-5">
           <ProductVisual
             name={definition.name}
             imageUrl={definition.imageUrl}
             resourceType="community_asset"
             assetType={definition.assetType}
-            className="aspect-square min-h-[320px] rounded-none lg:aspect-auto"
+            className="mx-auto aspect-[3/2] w-full max-w-[760px] rounded-2xl border border-border-subtle"
           />
-          <div className="flex min-w-0 flex-col gap-5 p-5 sm:p-6">
-            <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
-                <Package size={13} />
-                {t('communityEconomy.assetHome')}
-              </div>
-              <h1 className="text-2xl font-black text-text-primary sm:text-3xl">
-                {definition.name}
-              </h1>
-              {definition.description && (
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
-                  {definition.description}
-                </p>
-              )}
+        </div>
+        <div className="flex min-w-0 flex-col gap-5 p-5 sm:p-6">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
+              <Package size={13} />
+              {t('communityEconomy.assetHome')}
             </div>
+            <h1 className="text-2xl font-black text-text-primary sm:text-3xl">{definition.name}</h1>
+            {definition.description && (
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
+                {definition.description}
+              </p>
+            )}
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <AssetProfileMetric
-                label={t('communityEconomy.type')}
-                value={assetTypeLabel}
-                icon={<Package size={15} />}
-              />
-              <AssetProfileMetric
-                label={t('communityEconomy.remaining')}
-                value={`${grant.remainingQuantity}/${grant.quantity}`}
-                icon={<ShieldCheck size={15} />}
-              />
-              <AssetProfileMetric
-                label={t('communityEconomy.expiresAt')}
-                value={expiresAt}
-                icon={<CalendarClock size={15} />}
-              />
-            </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <AssetProfileMetric
+              label={t('communityEconomy.type')}
+              value={assetTypeLabel}
+              icon={<Package size={15} />}
+            />
+            <AssetProfileMetric
+              label={t('communityEconomy.remaining')}
+              value={`${grant.remainingQuantity}/${grant.quantity}`}
+              icon={<ShieldCheck size={15} />}
+            />
+            <AssetProfileMetric
+              label={t('communityEconomy.expiresAt')}
+              value={expiresAt}
+              icon={<CalendarClock size={15} />}
+            />
+          </div>
 
-            <div className="grid gap-3 rounded-2xl border border-border-subtle bg-bg-primary/35 p-4 sm:grid-cols-3">
-              <AssetProfileMetric
-                label={t('commerce.assetMetricSales')}
-                value={String(salesCount)}
-                icon={<ShoppingBag size={15} />}
-              />
-              <AssetProfileMetric
-                label={t('commerce.assetMetricRating')}
-                value={
-                  ratingCount > 0 ? averageRating.toFixed(1) : t('commerce.assetMetricNoRating')
-                }
-                icon={<Award size={15} />}
-              />
-              <AssetProfileMetric
-                label={t('communityEconomy.source.purchase')}
-                value={shop?.name ?? definition.issuerKind ?? t('common.unknown')}
-                icon={<Store size={15} />}
-              />
-            </div>
+          <div className="grid gap-3 rounded-2xl border border-border-subtle bg-bg-primary/35 p-4 sm:grid-cols-3">
+            <AssetProfileMetric
+              label={t('commerce.assetMetricSales')}
+              value={String(salesCount)}
+              icon={<ShoppingBag size={15} />}
+            />
+            <AssetProfileMetric
+              label={t('commerce.assetMetricRating')}
+              value={ratingCount > 0 ? averageRating.toFixed(1) : t('commerce.assetMetricNoRating')}
+              icon={<Award size={15} />}
+            />
+            <AssetProfileMetric
+              label={t('communityEconomy.source.purchase')}
+              value={shop?.name ?? definition.issuerKind ?? t('common.unknown')}
+              icon={<Store size={15} />}
+            />
+          </div>
 
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/app/settings/wallet/assets"
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+            >
+              <WalletCards size={16} />
+              {t('communityEconomy.viewAssets')}
+            </a>
+            {shop?.ownerUserId && (
               <a
-                href="/app/settings/wallet/assets"
+                href={`/app/shop/users/${shop.ownerUserId}?view=buyer`}
                 className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
-                <WalletCards size={16} />
-                {t('communityEconomy.viewAssets')}
+                <Store size={16} />
+                {t('commerce.consumerStorefront')}
               </a>
-              {shop?.ownerUserId && (
-                <a
-                  href={`/app/shop/users/${shop.ownerUserId}?view=buyer`}
-                  className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
-                >
-                  <Store size={16} />
-                  {t('commerce.consumerStorefront')}
-                </a>
-              )}
-              {shop?.ownerUserId && (
-                <a
-                  href={`/app/profile/${shop.ownerUserId}`}
-                  className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
-                >
-                  <ExternalLink size={16} />
-                  {t('shop.openOwnerProfile')}
-                </a>
-              )}
-            </div>
+            )}
+            {shop?.ownerUserId && (
+              <a
+                href={`/app/profile/${shop.ownerUserId}`}
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+              >
+                <ExternalLink size={16} />
+                {t('shop.openOwnerProfile')}
+              </a>
+            )}
           </div>
         </div>
       </CommerceSurface>
@@ -2474,7 +2774,7 @@ export function AssetHomePage() {
                     resourceType="community_asset"
                     assetType={definition.assetType}
                     showLabel={false}
-                    className="h-16 w-16 shrink-0"
+                    className="aspect-[3/2] w-full shrink-0 xl:w-28"
                   />
                 }
                 title={product.name}
@@ -2771,7 +3071,7 @@ export function EntitlementsPage({ embedded = false }: { embedded?: boolean } = 
                             }
                             assetType={metadataString(entitlement.metadata, 'productAssetType')}
                             showLabel={false}
-                            className="h-16 w-16 shrink-0"
+                            className="aspect-[3/2] w-full shrink-0 xl:w-28"
                           />
                         }
                         title={title}
@@ -2853,6 +3153,9 @@ function PurchaseTimeline({ entitlement }: { entitlement: Entitlement }) {
   const order = entitlement.order
   const primaryJob = entitlement.fulfillmentJobs?.[0]
   const orderStatus = order?.status
+  const isInstantOpenable =
+    Boolean(entitlementPaidFileId(entitlement)) ||
+    ['workspace_file', 'community_asset', 'external_app'].includes(entitlement.resourceType ?? '')
   const completedTime =
     order?.completedAt ?? (!activeEntitlement(entitlement) ? entitlement.expiresAt : null)
   const processingDone =
@@ -2869,32 +3172,53 @@ function PurchaseTimeline({ entitlement }: { entitlement: Entitlement }) {
     (orderStatus === 'delivered' ? order?.updatedAt : null) ??
     order?.shippedAt ??
     (deliveredDone ? (completedTime ?? order?.updatedAt ?? order?.paidAt ?? null) : null)
-  const steps = [
-    {
-      key: 'paid',
-      label: t('shop.timelinePaid'),
-      time: order?.paidAt ?? entitlement.createdAt,
-      done: Boolean(order?.paidAt ?? entitlement.createdAt),
-    },
-    {
-      key: 'processing',
-      label: t('shop.timelineProcessing'),
-      time: processingDone ? processingTime : null,
-      done: processingDone,
-    },
-    {
-      key: 'delivered',
-      label: t('shop.timelineDelivered'),
-      time: deliveredDone ? deliveredTime : null,
-      done: deliveredDone,
-    },
-    {
-      key: 'completed',
-      label: t('shop.timelineCompleted'),
-      time: completedTime,
-      done: state === 'completed',
-    },
-  ]
+  const steps = isInstantOpenable
+    ? [
+        {
+          key: 'paid',
+          label: t('shop.timelinePaid'),
+          time: order?.paidAt ?? entitlement.createdAt,
+          done: Boolean(order?.paidAt ?? entitlement.createdAt),
+        },
+        {
+          key: 'ready',
+          label: t('commerce.timelineReadyToOpen'),
+          time: deliveredDone ? deliveredTime : null,
+          done: deliveredDone,
+        },
+        {
+          key: 'completed',
+          label: t('shop.timelineCompleted'),
+          time: completedTime ?? deliveredTime,
+          done: deliveredDone || state === 'completed' || orderStatus === 'completed',
+        },
+      ]
+    : [
+        {
+          key: 'paid',
+          label: t('shop.timelinePaid'),
+          time: order?.paidAt ?? entitlement.createdAt,
+          done: Boolean(order?.paidAt ?? entitlement.createdAt),
+        },
+        {
+          key: 'processing',
+          label: t('shop.timelineProcessing'),
+          time: processingDone ? processingTime : null,
+          done: processingDone,
+        },
+        {
+          key: 'delivered',
+          label: t('shop.timelineDelivered'),
+          time: deliveredDone ? deliveredTime : null,
+          done: deliveredDone,
+        },
+        {
+          key: 'completed',
+          label: t('shop.timelineCompleted'),
+          time: completedTime,
+          done: state === 'completed',
+        },
+      ]
 
   return (
     <CommerceSurface className="p-5">
@@ -2907,7 +3231,7 @@ function PurchaseTimeline({ entitlement }: { entitlement: Entitlement }) {
         </div>
         <EntitlementStatus entitlement={entitlement} />
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className={cn('grid gap-3', isInstantOpenable ? 'md:grid-cols-3' : 'md:grid-cols-4')}>
         {steps.map((step) => (
           <div
             key={step.key}
@@ -2940,7 +3264,15 @@ function PurchaseTimeline({ entitlement }: { entitlement: Entitlement }) {
 export function PurchaseOrderDetailPage() {
   const { t } = useTranslation()
   const params = useParams({ strict: false }) as { entitlementId: string }
+  const search = useSearch({ strict: false }) as { by?: string; open?: string | number | boolean }
+  const lookupByOrder = search.by === 'order'
   const queryClient = useQueryClient()
+  const autoOpenAttemptedRef = useRef(false)
+  const entitlementDetailQueryKey = [
+    'entitlement-detail',
+    lookupByOrder ? 'order' : 'entitlement',
+    params.entitlementId,
+  ] as const
   const [previewFile, setPreviewFile] = useState<{
     id: string
     filename: string
@@ -2959,8 +3291,11 @@ export function PurchaseOrderDetailPage() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ['entitlement-detail', params.entitlementId],
-    queryFn: () => loadEntitlementDetail(params.entitlementId),
+    queryKey: entitlementDetailQueryKey,
+    queryFn: () =>
+      lookupByOrder
+        ? loadEntitlementDetailByOrder(params.entitlementId)
+        : loadEntitlementDetail(params.entitlementId),
     enabled: Boolean(params.entitlementId),
   })
   const reviewServerId = entitlement?.shop?.serverId ?? entitlement?.serverId ?? null
@@ -3000,15 +3335,15 @@ export function PurchaseOrderDetailPage() {
   })
 
   const cancelEntitlement = useMutation({
-    mutationFn: () =>
-      fetchApi(`/api/entitlements/${params.entitlementId}/cancel`, {
+    mutationFn: () => {
+      if (!entitlement || entitlement.metadata?.orderOnly) throw new Error('ENTITLEMENT_NOT_FOUND')
+      return fetchApi(`/api/entitlements/${entitlement.id}/cancel`, {
         method: 'POST',
         body: JSON.stringify({ reason: t('commerce.refundRequestReason') }),
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['entitlement-detail', params.entitlementId],
       })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: entitlementDetailQueryKey })
       await queryClient.invalidateQueries({ queryKey: ['entitlements'] })
       showToast(t('commerce.refundRequestSubmitted'), 'success')
     },
@@ -3016,15 +3351,15 @@ export function PurchaseOrderDetailPage() {
   })
 
   const cancelRenewal = useMutation({
-    mutationFn: () =>
-      fetchApi(`/api/entitlements/${params.entitlementId}/cancel-renewal`, {
+    mutationFn: () => {
+      if (!entitlement || entitlement.metadata?.orderOnly) throw new Error('ENTITLEMENT_NOT_FOUND')
+      return fetchApi(`/api/entitlements/${entitlement.id}/cancel-renewal`, {
         method: 'POST',
         body: JSON.stringify({ reason: t('commerce.cancelRenewalReason') }),
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['entitlement-detail', params.entitlementId],
       })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: entitlementDetailQueryKey })
       await queryClient.invalidateQueries({ queryKey: ['entitlements'] })
       showToast(t('commerce.renewalCancelled'), 'success')
     },
@@ -3033,15 +3368,16 @@ export function PurchaseOrderDetailPage() {
 
   const confirmOrder = useMutation({
     mutationFn: () => {
-      if (!reviewServerId || !reviewOrderId) throw new Error('ORDER_CONTEXT_MISSING')
-      return fetchApi(`/api/servers/${reviewServerId}/shop/orders/${reviewOrderId}/complete`, {
+      if (!reviewOrderId) throw new Error('ORDER_CONTEXT_MISSING')
+      const path = reviewServerId
+        ? `/api/servers/${reviewServerId}/shop/orders/${reviewOrderId}/complete`
+        : `/api/orders/${reviewOrderId}/complete`
+      return fetchApi(path, {
         method: 'POST',
       })
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['entitlement-detail', params.entitlementId],
-      })
+      await queryClient.invalidateQueries({ queryKey: entitlementDetailQueryKey })
       await queryClient.invalidateQueries({ queryKey: ['entitlements'] })
       await queryClient.invalidateQueries({ queryKey: ['wallet'] })
       showToast(t('shop.orderCompleted'), 'success')
@@ -3072,14 +3408,24 @@ export function PurchaseOrderDetailPage() {
       await queryClient.invalidateQueries({
         queryKey: ['purchase-order-reviews', reviewServerId, reviewOrderId],
       })
-      await queryClient.invalidateQueries({
-        queryKey: ['entitlement-detail', params.entitlementId],
-      })
+      await queryClient.invalidateQueries({ queryKey: entitlementDetailQueryKey })
       await queryClient.invalidateQueries({ queryKey: ['product-reviews', reviewProductId] })
       showToast(t('shop.reviewSubmitted'), 'success')
     },
     onError: (err) => showToast(getApiErrorMessage(err, t, 'shop.reviewSubmitFailed'), 'error'),
   })
+
+  const autoOpenFileId = entitlement ? entitlementPaidFileId(entitlement) : null
+  const shouldOpenFromSearch = ['1', 'true'].includes(String(search.open ?? ''))
+  const shouldAutoOpenContent = Boolean(
+    shouldOpenFromSearch && entitlement && autoOpenFileId && activeEntitlement(entitlement),
+  )
+
+  useEffect(() => {
+    if (!shouldAutoOpenContent || autoOpenAttemptedRef.current || openPaidFile.isPending) return
+    autoOpenAttemptedRef.current = true
+    openPaidFile.mutate()
+  }, [openPaidFile, shouldAutoOpenContent])
 
   if (isLoading || !entitlement) {
     if (isError) {
@@ -3118,9 +3464,11 @@ export function PurchaseOrderDetailPage() {
   const isExternalAppEntitlement = entitlement.resourceType === 'external_app'
   const isManualServiceEntitlement = entitlement.resourceType === 'service'
   const isCompletedService = isManualServiceEntitlement && entitlement.order?.status === 'completed'
-  const canCancel = entitlement.status === 'active' && entitlement.isActive
+  const isOrderOnlyDetail = entitlement.metadata?.orderOnly === true
+  const canCancel = !isOrderOnlyDetail && entitlement.status === 'active' && entitlement.isActive
   const canCancelRenewal = canCancel && Boolean(entitlement.nextRenewalAt)
-  const canConfirmOrder = entitlement.order?.status === 'delivered' && Boolean(reviewServerId)
+  const canConfirmOrder =
+    ['shipped', 'delivered'].includes(entitlement.order?.status ?? '') && Boolean(reviewOrderId)
   const hasReviewed = orderReviews.length > 0
   const canReview =
     entitlement.order?.status === 'completed' &&
@@ -3141,85 +3489,121 @@ export function PurchaseOrderDetailPage() {
             {t('commerce.backToPurchases')}
           </a>
 
-          <CommerceSurface tone="accent" className="overflow-hidden p-0">
-            <div className="grid gap-0 lg:grid-cols-[300px_minmax(0,1fr)]">
-              <ProductVisual
-                name={title}
-                imageUrl={entitlementImage(entitlement)}
-                productType={entitlement.product?.type}
-                resourceType={entitlement.resourceType ?? undefined}
-                assetType={metadataString(entitlement.metadata, 'productAssetType')}
-                className="aspect-square min-h-[260px] rounded-none lg:aspect-auto"
-              />
-              <div className="flex min-w-0 flex-col gap-4 p-5 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
-                      <ReceiptText size={13} />
-                      {t('commerce.orderDetail')}
-                    </div>
-                    <h1 className="text-2xl font-black text-text-primary sm:text-3xl">{title}</h1>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
-                      {summary}
-                    </p>
+          <CommerceSurface tone="accent" className="overflow-hidden p-4 sm:p-5">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.42fr)] lg:items-stretch">
+              <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(132px,240px)_minmax(0,1fr)] sm:items-start">
+                <ProductVisual
+                  name={title}
+                  imageUrl={entitlementImage(entitlement)}
+                  productType={entitlement.product?.type}
+                  resourceType={entitlement.resourceType ?? undefined}
+                  assetType={metadataString(entitlement.metadata, 'productAssetType')}
+                  className="aspect-[3/2] w-full rounded-2xl border border-border-subtle"
+                />
+                <div className="min-w-0">
+                  <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
+                    <ReceiptText size={13} />
+                    {t('commerce.orderDetail')}
                   </div>
-                  <EntitlementStatus entitlement={entitlement} />
-                </div>
+                  <h1 className="text-2xl font-black leading-tight text-text-primary sm:text-3xl">
+                    {title}
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">{summary}</p>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <AssetProfileMetric
-                    label={t('shop.orderNo')}
-                    value={entitlement.order?.orderNo ?? entitlement.orderId ?? entitlement.id}
-                    icon={<ReceiptText size={15} />}
-                  />
-                  <AssetProfileMetric
-                    label={t('commerce.productPrice')}
-                    value={
-                      <PriceBadge
-                        amount={
-                          entitlement.order?.totalAmount ?? entitlement.product?.basePrice ?? 0
-                        }
-                      />
-                    }
-                    icon={<ShrimpCoinIcon size={15} />}
-                  />
-                  <AssetProfileMetric
-                    label={t('commerce.buyer')}
-                    value={buyerName}
-                    icon={<WalletCards size={15} />}
-                  />
-                </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    <AssetProfileMetric
+                      label={t('shop.orderNo')}
+                      value={entitlement.order?.orderNo ?? entitlement.orderId ?? entitlement.id}
+                      icon={<ReceiptText size={15} />}
+                    />
+                    <AssetProfileMetric
+                      label={t('commerce.productPrice')}
+                      value={
+                        <PriceBadge
+                          amount={
+                            entitlement.order?.totalAmount ?? entitlement.product?.basePrice ?? 0
+                          }
+                        />
+                      }
+                      icon={<ShrimpCoinIcon size={15} />}
+                    />
+                    <AssetProfileMetric
+                      label={t('commerce.buyer')}
+                      value={buyerName}
+                      icon={<WalletCards size={15} />}
+                    />
+                  </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {productHref && (
-                    <a
-                      href={productHref}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
-                    >
-                      <Package size={16} />
-                      {t('commerce.viewProduct')}
-                    </a>
-                  )}
-                  {shopHref && (
-                    <a
-                      href={shopHref}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
-                    >
-                      <Store size={16} />
-                      {t('shop.openShop')}
-                    </a>
-                  )}
-                  {ownerProfileHref && (
-                    <a
-                      href={ownerProfileHref}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
-                    >
-                      <ExternalLink size={16} />
-                      {t('shop.openOwnerProfile')}
-                    </a>
-                  )}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {productHref && (
+                      <a
+                        href={productHref}
+                        className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
+                      >
+                        <Package size={14} />
+                        {t('commerce.viewProduct')}
+                      </a>
+                    )}
+                    {shopHref && (
+                      <a
+                        href={shopHref}
+                        className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
+                      >
+                        <Store size={14} />
+                        {t('shop.openShop')}
+                      </a>
+                    )}
+                    {ownerProfileHref && (
+                      <a
+                        href={ownerProfileHref}
+                        className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
+                      >
+                        <ExternalLink size={14} />
+                        {t('shop.openOwnerProfile')}
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              <aside className="flex min-w-0 flex-col justify-between gap-4 rounded-2xl border border-border-subtle bg-bg-primary/55 p-4">
+                <div className="min-w-0">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <CommercePill
+                      tone={canOpen ? 'success' : 'primary'}
+                      icon={canOpen ? <ExternalLink size={13} /> : <ShieldCheck size={13} />}
+                    >
+                      {canOpen ? t('commerce.openableContent') : t('commerce.orderDetail')}
+                    </CommercePill>
+                    <EntitlementStatus entitlement={entitlement} />
+                  </div>
+                  <h2 className="text-lg font-black text-text-primary">
+                    {canOpen ? t('commerce.openContentTitle') : t('commerce.orderStatusTitle')}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-text-muted">
+                    {canOpen
+                      ? t('commerce.openContentHeroHint')
+                      : t('commerce.orderStatusHeroHint')}
+                  </p>
+                </div>
+                {canOpen ? (
+                  <Button
+                    className="h-12 w-full text-base"
+                    variant="primary"
+                    onClick={() => openPaidFile.mutate()}
+                    disabled={openPaidFile.isPending}
+                  >
+                    <ExternalLink size={18} />
+                    {openPaidFile.isPending
+                      ? t('commerce.openingResource')
+                      : t('commerce.openResource')}
+                  </Button>
+                ) : (
+                  <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 px-3 py-3">
+                    <EntitlementStatus entitlement={entitlement} />
+                  </div>
+                )}
+              </aside>
             </div>
           </CommerceSurface>
 
@@ -3491,7 +3875,7 @@ function ShopOrdersContent() {
                     resourceType={entitlement.resourceType ?? undefined}
                     assetType={metadataString(entitlement.metadata, 'productAssetType')}
                     showLabel={false}
-                    className="h-12 w-12 shrink-0"
+                    className="aspect-[3/2] w-full shrink-0 xl:w-28"
                   />
                 }
                 title={title}

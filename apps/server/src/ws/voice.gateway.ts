@@ -58,6 +58,10 @@ function voicePayload(
   }
 }
 
+function voiceRooms(channelId: string) {
+  return [`voice:${channelId}`, `channel:${channelId}`]
+}
+
 function errorAck(err: unknown): VoiceAck {
   const error = err as { message?: string; code?: string }
   return { ok: false, error: error.message ?? 'Voice operation failed', code: error.code }
@@ -78,13 +82,13 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
         socketVoiceChannels(socket).add(payload.channelId)
         socketVoiceParticipantClients(socket).set(payload.channelId, payload.clientId ?? null)
         if (result.joined) {
-          socket.to(`voice:${payload.channelId}`).emit('voice:participant-joined', {
+          socket.to(voiceRooms(payload.channelId)).emit('voice:participant-joined', {
             channelId: payload.channelId,
             participant: result.participant,
             state: result.state,
           })
         } else {
-          socket.to(`voice:${payload.channelId}`).emit('voice:participant-updated', {
+          socket.to(voiceRooms(payload.channelId)).emit('voice:participant-updated', {
             channelId: payload.channelId,
             participant: result.participant,
             state: result.state,
@@ -113,7 +117,7 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
           socketVoiceChannels(socket).delete(channelId)
           socketVoiceParticipantClients(socket).delete(channelId)
           if (result.left) {
-            socket.to(`voice:${channelId}`).emit('voice:participant-left', {
+            socket.to(voiceRooms(channelId)).emit('voice:participant-left', {
               channelId,
               participant: result.participant,
               state: result.state,
@@ -148,7 +152,7 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
             },
             { clientId },
           )
-          io.to(`voice:${payload.channelId}`).emit('voice:participant-updated', {
+          io.to(voiceRooms(payload.channelId)).emit('voice:participant-updated', {
             channelId: payload.channelId,
             participant: result.participant,
             state: result.state,
@@ -196,32 +200,12 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
       },
     )
 
-    socket.on('disconnect', async () => {
-      const voiceChannelService = container.resolve('voiceChannelService')
-      const actor = (() => {
-        try {
-          return socketActor(socket)
-        } catch {
-          return null
-        }
-      })()
-      if (!actor) return
+    socket.on('disconnect', () => {
       for (const channelId of socketVoiceChannels(socket)) {
-        try {
-          const result = await voiceChannelService.leave(actor, channelId, {
-            clientId: socketVoiceParticipantClients(socket).get(channelId),
-          })
-          if (result.left) {
-            socket.to(`voice:${channelId}`).emit('voice:participant-left', {
-              channelId,
-              participant: result.participant,
-              state: result.state,
-            })
-          }
-        } catch (err) {
-          logger.warn({ err, channelId, socketId: socket.id }, 'voice disconnect cleanup failed')
-        }
+        socket.leave(`voice:${channelId}`)
       }
+      socketVoiceChannels(socket).clear()
+      socketVoiceParticipantClients(socket).clear()
     })
   })
 }

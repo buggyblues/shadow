@@ -17,6 +17,7 @@ type ProductCardEntitlementConfig = {
   capability?: string | null
   durationSeconds?: number | null
   renewalPeriodSeconds?: number | null
+  repeatable?: boolean | null
   privilegeDescription?: string | null
 } | null
 
@@ -44,6 +45,7 @@ interface ProductCardProps<TProduct extends ProductCardProduct> {
   onShopClick?: (e: React.MouseEvent) => void
   shopName?: string | null
   serverName?: string | null
+  purchased?: boolean
   className?: string
 }
 
@@ -54,6 +56,7 @@ export function ProductCard<TProduct extends ProductCardProduct>({
   onShopClick,
   shopName,
   serverName,
+  purchased,
   className,
 }: ProductCardProps<TProduct>) {
   const { t } = useTranslation()
@@ -90,7 +93,7 @@ export function ProductCard<TProduct extends ProductCardProduct>({
         onClick(product.id)
       }}
     >
-      <div className="relative h-36 w-full overflow-hidden border-b border-border-subtle/70 bg-bg-tertiary/30">
+      <div className="relative aspect-[3/2] w-full overflow-hidden border-b border-border-subtle/70 bg-bg-tertiary/30">
         <ProductVisual
           name={product.name}
           imageUrl={product.imageUrl}
@@ -101,7 +104,13 @@ export function ProductCard<TProduct extends ProductCardProduct>({
           className="h-full w-full rounded-none border-0 transition-transform duration-500 group-hover:scale-[1.03]"
         />
 
-        {onAddToCart && (
+        {purchased && (
+          <div className="absolute left-3 top-3 z-10 rounded-full border border-success/25 bg-success/90 px-2.5 py-1 text-[11px] font-black text-white shadow-lg">
+            {t('shop.purchased')}
+          </div>
+        )}
+
+        {onAddToCart && !purchased && (
           <div className="absolute bottom-4 right-4 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 z-10 hidden md:block">
             <Button
               variant="glass"

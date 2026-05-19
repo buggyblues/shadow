@@ -101,6 +101,12 @@ interface NotificationEvent {
   metadata?: Record<string, unknown> | null
 }
 
+interface VoicePresenceEvent {
+  channelId?: string
+  state?: VoiceState
+  participant?: VoiceParticipant | null
+}
+
 function getMetaString(event: NotificationEvent, key: string) {
   const value = event.metadata?.[key]
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -203,6 +209,7 @@ export function ChannelSidebar({
   const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null)
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
+  const localUnreadEventIdsRef = useRef<Set<string>>(new Set())
   const lastMarkedChannelRef = useRef<string | null>(null)
   const canLoadInitialQueries = Boolean(serverSlug) && !deferInitialQueries
   const loadNonCritical = useDeferredQueryEnabled({
@@ -284,12 +291,22 @@ export function ChannelSidebar({
     return states
   }, [connectedVoiceChannel, voice.participants, voiceChannels, voiceStateQueries])
 
+  const applyVoicePresenceEvent = useCallback(
+    (event: VoicePresenceEvent) => {
+      const state = event.state
+      if (!state?.channelId) return
+      queryClient.setQueryData<VoiceState>(['voice-state', state.channelId], state)
+    },
+    [queryClient],
+  )
+
   const { data: scopedUnread } = useQuery({
     queryKey: ['notification-scoped-unread'],
     queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
     enabled: loadNonCritical,
     refetchInterval: 15_000,
   })
+  const [localMessageUnread, setLocalMessageUnread] = useState<Record<string, number>>({})
 
   const { data: notificationPreference } = useQuery({
     queryKey: ['notification-preferences'],
@@ -312,8 +329,6 @@ export function ChannelSidebar({
     },
   })
 
-  const serverUnreadCount = scopedUnread?.serverUnread?.[server?.id ?? serverSlug] ?? 0
-
   const createChannel = useMutation({
     mutationFn: (data: { name: string; type: string; isPrivate?: boolean }) =>
       fetchApi<Channel>(`/api/servers/${serverSlug}/channels`, {
@@ -335,7 +350,7 @@ export function ChannelSidebar({
   })
 
   const requestMarkScopeRead = useCallback(
-    async (payload: { serverId?: string; channelId?: string }) => {
+    async (payload: { serverId?: string; channelId?: string; force?: boolean }) => {
       const key = payload.channelId
         ? `channel:${payload.channelId}`
         : payload.serverId
@@ -345,8 +360,8 @@ export function ChannelSidebar({
 
       const now = Date.now()
       const last = scopeReadCooldownRef.current.get(key) ?? 0
-      if (now - last < 1200) return
-      if (scopeReadInFlightRef.current.has(key)) return
+      if (!payload.force && now - last < 1200) return
+      if (!payload.force && scopeReadInFlightRef.current.has(key)) return
 
       scopeReadCooldownRef.current.set(key, now)
       scopeReadInFlightRef.current.add(key)
@@ -451,6 +466,12 @@ export function ChannelSidebar({
   const handleSelectChannel = useCallback(
     (channelId: string) => {
       requestMarkScopeRead({ channelId })
+      setLocalMessageUnread((prev) => {
+        if (!prev[channelId]) return prev
+        const next = { ...prev }
+        delete next[channelId]
+        return next
+      })
       updateLastAccessed(channelId)
       setMobileView('chat')
       // Navigate to channel URL using channel ID
@@ -488,7 +509,7 @@ export function ChannelSidebar({
         return
       }
 
-      await joinVoiceChannel(channel)
+      await joinVoiceChannel({ ...channel, serverSlug: server?.slug ?? serverSlug })
       handleSelectChannel(channel.id)
     },
     [
@@ -534,6 +555,12 @@ export function ChannelSidebar({
       lastMarkedChannelRef.current = null
       return
     }
+    setLocalMessageUnread((prev) => {
+      if (!prev[activeChannelId]) return prev
+      const next = { ...prev }
+      delete next[activeChannelId]
+      return next
+    })
     if (lastMarkedChannelRef.current === activeChannelId) return
     lastMarkedChannelRef.current = activeChannelId
     requestMarkScopeRead({ channelId: activeChannelId })
@@ -546,6 +573,10 @@ export function ChannelSidebar({
     }
   })
 
+  useSocketEvent<VoicePresenceEvent>('voice:participant-joined', applyVoicePresenceEvent)
+  useSocketEvent<VoicePresenceEvent>('voice:participant-left', applyVoicePresenceEvent)
+  useSocketEvent<VoicePresenceEvent>('voice:participant-updated', applyVoicePresenceEvent)
+
   useSocketEvent<NotificationEvent>('notification:new', (event) => {
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
@@ -554,20 +585,39 @@ export function ChannelSidebar({
     const notificationChannelId = getNotificationChannelId(event)
     const currentChannelId = useChatStore.getState().activeChannelId
     if (notificationChannelId && notificationChannelId === currentChannelId) {
-      void requestMarkScopeRead({ channelId: notificationChannelId })
+      void requestMarkScopeRead({ channelId: notificationChannelId, force: true })
     }
   })
 
-  useSocketEvent<{ channelId?: string }>('message:new', (event) => {
-    if (event.channelId && rawChannels.some((channel) => channel.id === event.channelId)) {
+  const recordChannelMessageActivity = useCallback(
+    (event: { id?: string; channelId?: string }) => {
+      if (!event.channelId || !rawChannels.some((channel) => channel.id === event.channelId)) return
       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
-    }
-  })
-  useSocketEvent<{ channelId?: string }>('message:created', (event) => {
-    if (event.channelId && rawChannels.some((channel) => channel.id === event.channelId)) {
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
-    }
-  })
+      const currentChannelId = useChatStore.getState().activeChannelId
+      if (event.channelId === currentChannelId) {
+        void requestMarkScopeRead({ channelId: event.channelId, force: true })
+        return
+      }
+      if (event.id) {
+        if (localUnreadEventIdsRef.current.has(event.id)) return
+        localUnreadEventIdsRef.current.add(event.id)
+        if (localUnreadEventIdsRef.current.size > 300) {
+          localUnreadEventIdsRef.current = new Set([...localUnreadEventIdsRef.current].slice(-150))
+        }
+      }
+      setLocalMessageUnread((prev) => ({
+        ...prev,
+        [event.channelId!]: (prev[event.channelId!] ?? 0) + 1,
+      }))
+    },
+    [queryClient, rawChannels, requestMarkScopeRead, serverSlug],
+  )
+
+  useSocketEvent<{ id?: string; channelId?: string }>('message:new', recordChannelMessageActivity)
+  useSocketEvent<{ id?: string; channelId?: string }>(
+    'message:created',
+    recordChannelMessageActivity,
+  )
 
   const renderVoiceParticipant = (participant: VoiceParticipant) => {
     const displayName = participant.displayName ?? participant.username
@@ -611,54 +661,86 @@ export function ChannelSidebar({
     const isVoiceActive = isConnectedChannel && voice.status === 'connected'
     const isVoiceConnecting = isConnectedChannel && voice.status === 'connecting'
     const isRouteActive = activeChannelId === ch.id
+    const isEditing = editingChannel?.id === ch.id
 
     return (
       <div key={ch.id} className="space-y-1">
-        <button
-          type="button"
-          data-channel-item
-          onClick={() => void handleJoinVoiceChannel(ch)}
-          onContextMenu={(e) => handleContextMenu(e, ch)}
-          className={cn(
-            'group flex w-full items-center gap-2 rounded-xl px-2 py-[6px] text-left text-sm font-bold transition-all duration-200',
-            isVoiceActive
-              ? 'bg-success/10 text-success ring-1 ring-success/20'
-              : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
-            isRouteActive &&
-              !isVoiceActive &&
-              'channel-pill-active text-primary ring-1 ring-primary/20',
-          )}
-        >
-          <div
+        {isEditing ? (
+          <div className="relative flex items-center gap-1.5 rounded-xl border border-primary/20 bg-primary/10 px-2 py-1">
+            <Volume2 size={16} className="shrink-0 text-text-muted" />
+            <Input
+              type="text"
+              value={editChannelName}
+              onChange={(e) => setEditChannelName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && editChannelName.trim()) {
+                  updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
+                } else if (e.key === 'Escape') {
+                  setEditingChannel(null)
+                }
+              }}
+              autoFocus
+              className="flex-1 !rounded-md !border-none !bg-transparent !px-2 !py-1 pr-8 text-sm font-black text-text-primary !shadow-none !ring-0 focus:!ring-1 focus:!ring-primary"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (editChannelName.trim()) {
+                  updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
+                }
+              }}
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-success/20 text-success transition-colors hover:text-success/80"
+            >
+              <Check size={14} />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            data-channel-item
+            onClick={() => void handleJoinVoiceChannel(ch)}
+            onContextMenu={(e) => handleContextMenu(e, ch)}
             className={cn(
-              'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition',
+              'group flex w-full items-center gap-2 rounded-xl px-2 py-[6px] text-left text-sm font-bold transition-all duration-200',
               isVoiceActive
-                ? 'bg-success/15 text-success'
-                : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
+                ? 'bg-success/10 text-success ring-1 ring-success/20'
+                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
+              isRouteActive &&
+                !isVoiceActive &&
+                'channel-pill-active text-primary ring-1 ring-primary/20',
             )}
           >
-            <Volume2 size={14} />
-          </div>
-          <span
-            className={cn('min-w-0 flex-1 truncate', ch.isArchived && 'italic text-text-muted')}
-          >
-            {ch.name}
-          </span>
-          {isVoiceConnecting && (
-            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-success" />
-          )}
-          {participants.length > 0 && (
-            <span className="shrink-0 rounded-full bg-bg-tertiary px-1.5 py-0.5 text-[10px] font-black text-text-muted">
-              {participants.length}
+            <div
+              className={cn(
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition',
+                isVoiceActive
+                  ? 'bg-success/15 text-success'
+                  : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
+              )}
+            >
+              <Volume2 size={14} />
+            </div>
+            <span
+              className={cn('min-w-0 flex-1 truncate', ch.isArchived && 'italic text-text-muted')}
+            >
+              {ch.name}
             </span>
-          )}
-          {ch.isPrivate && <Lock size={12} className="shrink-0 text-text-muted/60" />}
-          {ch.isMember === false && (
-            <Badge variant="primary" size="xs" className="shrink-0">
-              {t('channel.joinButton')}
-            </Badge>
-          )}
-        </button>
+            {isVoiceConnecting && (
+              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-success" />
+            )}
+            {participants.length > 0 && (
+              <span className="shrink-0 rounded-full bg-bg-tertiary px-1.5 py-0.5 text-[10px] font-black text-text-muted">
+                {participants.length}
+              </span>
+            )}
+            {ch.isPrivate && <Lock size={12} className="shrink-0 text-text-muted/60" />}
+            {ch.isMember === false && (
+              <Badge variant="primary" size="xs" className="shrink-0">
+                {t('channel.joinButton')}
+              </Badge>
+            )}
+          </button>
+        )}
 
         {isConnectedChannel && voiceErrorMessage && (
           <div className="ml-8 space-y-2 rounded-lg border border-danger/20 bg-danger/10 px-2 py-1.5 text-xs font-bold text-danger">
@@ -706,7 +788,8 @@ export function ChannelSidebar({
     const Icon = channelIcons[ch.type] ?? Hash
     const isActive = activeChannelId === ch.id
     const isEditing = editingChannel?.id === ch.id
-    const unreadCount = scopedUnread?.channelUnread?.[ch.id] ?? 0
+    const unreadCount =
+      (scopedUnread?.channelUnread?.[ch.id] ?? 0) + (localMessageUnread[ch.id] ?? 0)
     const isUnread = !isActive && unreadCount > 0
 
     return (
@@ -781,7 +864,9 @@ export function ChannelSidebar({
             >
               <Icon size={14} />
             </div>
-            <span className={cn('truncate', ch.isArchived && 'text-text-muted italic')}>
+            <span
+              className={cn('min-w-0 flex-1 truncate', ch.isArchived && 'text-text-muted italic')}
+            >
               {ch.name}
             </span>
             {ch.isArchived && <Archive size={12} className="text-text-muted/60 shrink-0" />}
@@ -792,7 +877,7 @@ export function ChannelSidebar({
               </Badge>
             )}
             {isUnread && (
-              <span className="ml-auto w-2 h-2 rounded-full bg-danger shadow-lg shadow-danger/25 shrink-0" />
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-danger shadow-lg shadow-danger/25" />
             )}
           </button>
         )}
@@ -831,9 +916,6 @@ export function ChannelSidebar({
           <h2 className="font-black text-text-primary truncate tracking-tight group-hover/header:text-primary transition-colors">
             {server?.name ?? '...'}
           </h2>
-          {serverUnreadCount > 0 && (
-            <span className="w-2.5 h-2.5 rounded-full bg-danger shrink-0 shadow-lg shadow-danger/20 animate-pulse" />
-          )}
         </div>
         <div className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent group-hover/header:bg-bg-modifier-hover text-text-muted group-hover/header:text-primary transition-all">
           <ChevronDown

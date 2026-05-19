@@ -52,6 +52,9 @@ export class EntitlementCancellationService {
     if (entitlement.userId !== input.actorUserId) {
       throw apiError('ENTITLEMENT_OWNER_MISMATCH', 403)
     }
+    if (!entitlement.isActive && entitlement.status === 'cancelled') {
+      return { entitlement, refundAmount: 0, alreadyCancelled: true }
+    }
     if (!entitlement.isActive || entitlement.status !== 'active') {
       throw apiError('ENTITLEMENT_NOT_ACTIVE', 400)
     }
@@ -142,7 +145,7 @@ export class EntitlementCancellationService {
       throw apiError('ENTITLEMENT_NOT_ACTIVE', 400)
     }
     if (!entitlement.nextRenewalAt) {
-      throw apiError('ENTITLEMENT_RENEWAL_NOT_ACTIVE', 400)
+      return { entitlement, refundAmount: 0, renewalCancelled: true, alreadyCancelled: true }
     }
 
     await this.deps.economyPolicyService.authorize({

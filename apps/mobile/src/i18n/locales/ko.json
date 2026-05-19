@@ -1325,6 +1325,10 @@
       "fulfill": "이행"
     }
   },
+  "commerce": {
+    "repeatablePurchase": "반복 구매 허용",
+    "repeatablePurchaseHint": "끄면 활성 권한을 이미 가진 사용자는 이 상품을 다시 구매할 수 없습니다."
+  },
   "workspace": {
     "confirmDelete": "정말 삭제하시겠습니까?",
     "createFolder": "폴더 만들기",
@@ -1401,6 +1405,8 @@
     "testMic": "마이크 테스트",
     "stopTest": "테스트 중지",
     "yourScreen": "내 화면",
+    "focusScreen": "화면 포커스",
+    "activeCall": "음성 통화 중",
     "participants": "참가자",
     "noParticipants": "연결된 참가자가 없습니다",
     "listening": "듣는 중",
