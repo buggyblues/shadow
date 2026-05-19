@@ -9,7 +9,10 @@
     "types": ["node"],
     "paths": {
       "@/*": ["./src/*"],
-      "@web/*": ["../web/src/*"]
+      "@web/*": ["../web/src/*"],
+      "@shadowob/cloud-ui/components/*": ["../cloud/packages/ui/src/components/*"],
+      "@shadowob/cloud-ui/lib/*": ["../cloud/packages/ui/src/lib/*"],
+      "@shadowob/cloud-ui/web-saas": ["../web/src/types/cloud-ui.d.ts"]
     },
     "rootDirs": ["./src", "../web/src"],
     "resolveJsonModule": true,

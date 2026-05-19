@@ -146,7 +146,7 @@ export function DiscoverCloudTemplateCard({
       metadata={
         template.highlights.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {template.highlights.slice(0, 2).map((highlight) => (
+            {template.highlights.slice(0, 2).map((highlight: string) => (
               <TemplateCardMetric
                 key={highlight}
                 icon={<Sparkles size={12} className="text-primary" />}
