@@ -7,6 +7,7 @@ export const RUNNER_STATE_VOLUME_NAME = 'shadow-runner-state'
 export const RUNNER_LOG_VOLUME_NAME = 'shadow-runner-logs'
 export const RUNNER_CONFIG_VOLUME_NAME = 'shadow-runner-config'
 export const RUNNER_TMP_VOLUME_NAME = 'shadow-runner-tmp'
+export const RUNNER_AGENTS_VOLUME_NAME = 'shadow-runner-agents'
 
 export const NATIVE_RUNNER_HEALTH_PORT = 3100
 export const OPENCLAW_GATEWAY_PORT = 3101
