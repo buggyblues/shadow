@@ -1428,11 +1428,11 @@ export class ShadowClient {
     messageId?: string | { messageId?: string },
   ): Promise<{ url: string; key: string; size: number }> {
     // Dynamic imports for Node.js fs/path/os
-    // @ts-expect-error - Dynamic import types may not resolve in Alpine Docker builds
+    // @ts-ignore - Dynamic import types may not resolve in Alpine Docker builds
     const { readFile } = await import('node:fs/promises')
-    // @ts-expect-error
+    // @ts-ignore
     const { basename } = await import('node:path')
-    // @ts-expect-error
+    // @ts-ignore
     const { homedir } = await import('node:os')
 
     // Strip MEDIA: prefix used by agent tools to tag media paths
@@ -1465,9 +1465,9 @@ export class ShadowClient {
       !normalizedUrl.startsWith('https://') &&
       !normalizedUrl.startsWith('//')
     ) {
-      // @ts-expect-error - Dynamic import types may not resolve in Alpine Docker builds
+      // @ts-ignore - Dynamic import types may not resolve in Alpine Docker builds
       const { existsSync } = await import('node:fs')
-      // @ts-expect-error
+      // @ts-ignore
       const { resolve } = await import('node:path')
 
       const cwd = (globalThis as Record<string, unknown>).process

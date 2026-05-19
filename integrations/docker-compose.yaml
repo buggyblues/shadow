@@ -1,0 +1,52 @@
+name: shadow-integrations
+
+services:
+  kanban:
+    build:
+      context: ..
+      dockerfile: integrations/kanban/Dockerfile
+    environment:
+      PORT: '4201'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4201}
+      SHADOW_APP_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.lima.internal:4201}
+      KANBAN_DATA_FILE: /data/kanban-board.json
+    ports:
+      - ${KANBAN_PORT:-4201}:4201
+    volumes:
+      - kanban-data:/data
+
+  qna:
+    build:
+      context: ..
+      dockerfile: integrations/qna/Dockerfile
+    environment:
+      PORT: '4210'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4210}
+      SHADOW_APP_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.lima.internal:4210}
+      QNA_DATA_FILE: /data/qna.json
+    ports:
+      - ${QNA_PORT:-4210}:4210
+    volumes:
+      - qna-data:/data
+
+  quiz:
+    build:
+      context: ..
+      dockerfile: integrations/quiz/Dockerfile
+    environment:
+      PORT: '4211'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4211}
+      SHADOW_APP_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.lima.internal:4211}
+      QUIZ_DATA_FILE: /data/quiz.json
+    ports:
+      - ${QUIZ_PORT:-4211}:4211
+    volumes:
+      - quiz-data:/data
+
+volumes:
+  kanban-data:
+  qna-data:
+  quiz-data:

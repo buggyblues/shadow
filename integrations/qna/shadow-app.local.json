@@ -1,0 +1,184 @@
+{
+  "schemaVersion": "shadow.app/1",
+  "appKey": "shadow-answers",
+  "name": "Shadow Answers",
+  "description": "A blue Q&A Server App for questions, Markdown answers, comments, topics, search, and Buddy participation.",
+  "version": "1.0.0",
+  "iconUrl": "http://localhost:4210/assets/icon.svg",
+  "iframe": {
+    "entry": "http://localhost:4210/shadow/server",
+    "allowedOrigins": ["http://localhost:4210"]
+  },
+  "api": {
+    "baseUrl": "http://localhost:4210",
+    "auth": {
+      "type": "oauth2-bearer"
+    }
+  },
+  "access": {
+    "defaultPermissions": ["qna.questions:read"],
+    "defaultApprovalMode": "none"
+  },
+  "commands": [
+    {
+      "name": "questions.list",
+      "title": "List questions",
+      "description": "Search and list questions with topics, answer counts, and latest activity.",
+      "path": "/api/shadow/commands/questions.list",
+      "permission": "qna.questions:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "questions.get",
+      "title": "Open question",
+      "description": "Read one question with Markdown answers and comments.",
+      "path": "/api/shadow/commands/questions.get",
+      "permission": "qna.questions:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["questionId"],
+        "properties": {
+          "questionId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "questions.ask",
+      "title": "Ask question",
+      "description": "Create a new question with optional body and topics.",
+      "path": "/api/shadow/commands/questions.ask",
+      "permission": "qna.questions:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 220
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "topics": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "answers.create",
+      "title": "Answer question",
+      "description": "Add a Markdown answer to a question.",
+      "path": "/api/shadow/commands/answers.create",
+      "permission": "qna.answers:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["questionId", "body"],
+        "properties": {
+          "questionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12000
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "comments.create",
+      "title": "Comment",
+      "description": "Comment on a question or answer.",
+      "path": "/api/shadow/commands/comments.create",
+      "permission": "qna.comments:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["targetType", "targetId", "body"],
+        "properties": {
+          "targetType": {
+            "enum": ["question", "answer"]
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "topics.list",
+      "title": "List topics",
+      "description": "List Q&A topics with question counts.",
+      "path": "/api/shadow/commands/topics.list",
+      "permission": "qna.questions:read",
+      "action": "read",
+      "dataClass": "server-private"
+    }
+  ],
+  "skills": [
+    {
+      "name": "shadow-answers-qna-ops",
+      "description": "Use when a Buddy needs to search questions, ask a question, answer with Markdown, comment, or inspect topics.",
+      "commandHints": [
+        "shadow-answers questions.list",
+        "shadow-answers questions.get",
+        "shadow-answers questions.ask",
+        "shadow-answers answers.create",
+        "shadow-answers comments.create",
+        "shadow-answers topics.list"
+      ]
+    }
+  ],
+  "events": ["qna.updated"]
+}

@@ -11,7 +11,9 @@
   },
   "api": {
     "baseUrl": "http://localhost:4201",
-    "auth": { "type": "oauth2-bearer" }
+    "auth": {
+      "type": "oauth2-bearer"
+    }
   },
   "access": {
     "defaultPermissions": ["kanban.boards:read"],
@@ -21,16 +23,36 @@
     {
       "name": "boards.get",
       "title": "Open board",
-      "description": "Read the current task board with columns and cards.",
+      "description": "Read the current task board with columns, cards, assignees, and comments.",
       "path": "/api/shadow/commands/boards.get",
       "permission": "kanban.boards:read",
       "action": "read",
       "dataClass": "server-private"
     },
     {
+      "name": "cards.get",
+      "title": "Open card detail",
+      "description": "Read a single task card with assignees, description, and comments.",
+      "path": "/api/shadow/commands/cards.get",
+      "permission": "kanban.boards:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["cardId"],
+        "properties": {
+          "cardId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "cards.create",
       "title": "Create card",
-      "description": "Create a new task card in a board column.",
+      "description": "Create a new task card in a board column. The calling actor is captured as creator and default assignee.",
       "path": "/api/shadow/commands/cards.create",
       "permission": "kanban.cards:write",
       "action": "write",
@@ -40,11 +62,25 @@
         "type": "object",
         "required": ["title"],
         "properties": {
-          "title": { "type": "string" },
-          "columnId": { "type": "string" },
-          "description": { "type": "string" },
-          "label": { "type": "string" }
-        }
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 180
+          },
+          "columnId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "additionalProperties": false
       }
     },
     {
@@ -60,15 +96,22 @@
         "type": "object",
         "required": ["cardId", "columnId"],
         "properties": {
-          "cardId": { "type": "string" },
-          "columnId": { "type": "string" }
-        }
+          "cardId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "columnId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
       }
     },
     {
       "name": "cards.assign",
       "title": "Assign card",
-      "description": "Assign a person or Buddy label to a task card.",
+      "description": "Assign a person or Buddy to a task card. Omit assignee to assign the calling actor with profile and avatar.",
       "path": "/api/shadow/commands/cards.assign",
       "permission": "kanban.cards:write",
       "action": "write",
@@ -76,11 +119,19 @@
       "approvalMode": "first_time",
       "inputSchema": {
         "type": "object",
-        "required": ["cardId", "assignee"],
+        "required": ["cardId"],
         "properties": {
-          "cardId": { "type": "string" },
-          "assignee": { "type": "string" }
-        }
+          "cardId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "assignee": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "additionalProperties": false
       }
     },
     {
@@ -96,9 +147,17 @@
         "type": "object",
         "required": ["cardId", "body"],
         "properties": {
-          "cardId": { "type": "string" },
-          "body": { "type": "string" }
-        }
+          "cardId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "additionalProperties": false
       }
     }
   ],
@@ -108,6 +167,7 @@
       "description": "Use when a Buddy needs to read, create, move, assign, or comment on Shadow Kanban task cards.",
       "commandHints": [
         "shadow-kanban boards.get",
+        "shadow-kanban cards.get",
         "shadow-kanban cards.create",
         "shadow-kanban cards.move",
         "shadow-kanban cards.assign",

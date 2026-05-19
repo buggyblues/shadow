@@ -9,11 +9,30 @@ The server management modal owns App add, list, and grant flows. Installed Apps 
 ```bash
 shadowob app install \
   --server <server-id-or-slug> \
-  --manifest-file skills/shadow-server-app/example-app/shadow-app.local.json
+  --manifest-file integrations/kanban/shadow-app.local.json
 ```
 
 Apps are server-scoped. A server can install many Apps, and each Buddy needs an explicit grant before it can call App commands.
 Command calls use short-lived opaque Shadow-issued OAuth Bearer tokens. The App backend introspects the token to resolve the user/Buddy identity and does not receive user JWTs or static shared secrets.
+
+## Local Demos
+
+The repo ships three standard demo Apps: Kanban, Answers, and Quiz. Run them together with Docker Compose:
+
+```bash
+cp integrations/.env.example integrations/.env
+docker compose -f integrations/compose.yaml --env-file integrations/.env up -d --build
+```
+
+For the local Shadow Docker stack, keep iframe URLs browser-facing on `localhost`, and keep API/manifest URLs Shadow-facing on `host.lima.internal`:
+
+```bash
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4201/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4210/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4211/.well-known/shadow-app.json
+```
+
+Each demo persists app data in a named Compose volume. `docker compose -f integrations/compose.yaml restart` keeps the data; `down -v` removes it.
 
 ## Buddy Access
 
@@ -22,6 +41,14 @@ shadowob app grant demo-desk \
   --server <server-id-or-slug> \
   --buddy <buddy-id> \
   --permissions demo.tickets:read,demo.tickets:write
+```
+
+Commands with `approvalMode: "first_time"` still need a one-time approval for that Buddy:
+
+```bash
+shadowob app approve demo-desk tickets.create \
+  --server <server-id-or-slug> \
+  --buddy <buddy-id>
 ```
 
 Buddies discover App usage through generated Skill text:
@@ -57,4 +84,4 @@ The `shadowob` Cloud plugin supports `serverApps` in templates. Provisioning cre
 
 The Shadow Admin “App Integrations” tab manages the global App catalog and lists every installed server App, command count, Skill count, Buddy grant count, iframe entry, and API endpoint. Global admins can add catalog entries from manifest URLs and uninstall an integration during an incident or support workflow.
 
-See [Server App development guide](./server-apps-dev-guide), `docs/api/server-app-integrations.md`, and `skills/shadow-server-app/example-app` for the full protocol and demo project.
+See [Server App development guide](./server-apps-dev-guide), `docs/api/server-app-integrations.md`, and `integrations/kanban` for the full protocol and copyable demo project. Additional demos live in `integrations/qna` and `integrations/quiz`, and `integrations/compose.yaml` can run all standard demo Apps locally with dotenv overrides.

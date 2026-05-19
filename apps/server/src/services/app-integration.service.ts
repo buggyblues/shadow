@@ -4,6 +4,7 @@ import { ZodError } from 'zod'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AppIntegrationDao } from '../dao/app-integration.dao'
 import type { ServerDao } from '../dao/server.dao'
+import type { UserDao } from '../dao/user.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { validateJsonLimits } from '../lib/json-limits'
 import type { Actor } from '../security/actor'
@@ -19,6 +20,7 @@ import {
   type UpdateServerAppAccessPolicyInput,
 } from '../validators/app-integration.schema'
 import type { AppIntegrationEventBus } from './app-integration-event-bus'
+import type { MediaService } from './media.service'
 import type { PolicyService } from './policy.service'
 
 const MANIFEST_LIMITS = {
@@ -190,9 +192,11 @@ export class AppIntegrationService {
     private deps: {
       appIntegrationDao: AppIntegrationDao
       agentDao: AgentDao
+      userDao: UserDao
       appIntegrationEventBus: AppIntegrationEventBus
       serverDao: ServerDao
       policyService: PolicyService
+      mediaService: MediaService
       safeHttpClient: SafeHttpClient
       logger: Logger
     },
@@ -1135,6 +1139,8 @@ export class AppIntegrationService {
       return { active: false }
     }
 
+    const actorProfile = payload.userId ? await this.commandActorProfile(payload.userId) : null
+
     return {
       active: true,
       token_type: 'Bearer',
@@ -1159,12 +1165,26 @@ export class AppIntegrationService {
           userId: payload.userId,
           buddyAgentId: payload.buddyAgentId ?? null,
           ownerId: payload.ownerId ?? null,
+          profile: actorProfile,
         },
         channelId: payload.channelId ?? null,
         permission: payload.permission,
         action: payload.action,
         dataClass: payload.dataClass,
       },
+    }
+  }
+
+  private async commandActorProfile(userId: string) {
+    const user = await this.deps.userDao.findById(userId)
+    if (!user) return null
+    return {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: this.deps.mediaService.resolveMediaUrl(user.avatarUrl, 'image/png', {
+        variant: 'avatar',
+      }),
     }
   }
 

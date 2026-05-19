@@ -8,6 +8,9 @@
   "module": "./dist/index.js",
   "require": "./dist/index.cjs",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "shadow-server-app": "./bin/shadow-server-app.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -15,9 +18,17 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs",
       "default": "./dist/index.js"
+    },
+    "./server-app/node": {
+      "types": "./dist/server-app-node.d.ts",
+      "development": "./src/server-app-node.ts",
+      "import": "./dist/server-app-node.js",
+      "require": "./dist/server-app-node.cjs",
+      "default": "./dist/server-app-node.js"
     }
   },
   "files": [
+    "bin",
     "dist"
   ],
   "scripts": {
@@ -41,6 +52,7 @@
     }
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "agora-rtc-sdk-ng": "^4.24.3",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3"

@@ -1,6 +1,6 @@
 # Server App Development Guide
 
-This guide walks through a Server App integration from zero to one. A complete runnable example lives in `skills/shadow-server-app/example-app`.
+This guide walks through a Server App integration from zero to one. The canonical runnable demo lives in `integrations/kanban`; Q&A and quiz examples live in `integrations/qna` and `integrations/quiz`.
 
 ## 1. Publish a Manifest
 
@@ -40,7 +40,17 @@ Expose `/.well-known/shadow-app.json` from your App:
 
 `appKey` is the stable identifier Buddies use with the CLI. Production iframe and API URLs should use HTTPS.
 
-## 2. Verify Shadow Bearer Tokens
+Generate a typed manifest module whenever the JSON manifest changes:
+
+```bash
+shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts
+```
+
+The generated module preserves command names and JSON Schema literals so TypeScript can infer command input types.
+
+Keep command schemas explicit but shallow enough for Shadow manifest limits. For flexible values such as quiz answer payloads, prefer a shallow object field plus app-side domain validation over deeply nested `oneOf` schemas.
+
+## 2. Create the App Runtime
 
 When Shadow proxies a command, it sends:
 
@@ -50,43 +60,54 @@ When Shadow proxies a command, it sends:
 - `X-Shadow-App-Key`
 - `X-Shadow-Command`
 
-Your backend introspects that token with Shadow:
+Use the SDK runtime to rewrite manifest URLs, introspect tokens, validate command input, and resolve actor profile data:
 
 ```ts
-async function introspect(token: string, serverId: string, appKey: string) {
-  const res = await fetch(
-    `${process.env.SHADOW_SERVER_URL}/api/servers/${serverId}/apps/${appKey}/oauth/introspect`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    },
-  )
-  const result = await res.json()
-  if (!result.active) throw new Error('invalid_token')
-  return result.shadow
-}
+import { defineShadowServerApp } from '@shadowob/sdk'
+import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { shadowServerAppManifest } from './shadow-app.generated.js'
+
+export const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
+  shadowBaseUrl: process.env.SHADOW_SERVER_URL,
+})
+
+const store = createShadowServerAppJsonStore({
+  filePath: process.env.DEMO_DATA_FILE ?? './data/demo.json',
+  defaultValue: defaultState,
+})
 ```
 
-`result.shadow.actor` identifies whether the caller is a user, PAT, OAuth actor, or Buddy agent, and includes `userId`, `buddyAgentId`, `ownerId`, `permission`, `action`, and `dataClass`.
+The runtime exposes the introspected actor to command handlers. It identifies whether the caller is a user, PAT, OAuth actor, or Buddy agent, and includes `userId`, `buddyAgentId`, `ownerId`, `permission`, `action`, and `dataClass`.
 
 ## 3. Implement Command Routes
 
-JSON commands receive:
+Define commands with schema-derived input types:
 
-```json
-{
-  "input": { "title": "Example" },
-  "context": {
-    "protocol": "shadow.app/1",
-    "serverId": "...",
-    "appKey": "demo-desk",
-    "command": "tickets.create"
-  }
-}
+```ts
+const commands = shadowApp.defineCommands({
+  'tickets.create': (input, { actor }) => {
+    return { ticket: createTicket({ ...input, author: actor }) }
+  },
+})
 ```
 
-Use the `shadow` object returned by introspection as the authoritative context. Do not trust the request body context for identity. Multipart commands keep `input` as a JSON string and use the file field declared by `binary.field`.
+Route Shadow command calls through the runtime:
+
+```ts
+const result = await shadowApp.executeCommand(
+  commandName,
+  {
+    authorizationHeader: c.req.header('authorization'),
+    serverIdHeader: c.req.header('X-Shadow-Server-Id'),
+    appKeyHeader: c.req.header('X-Shadow-App-Key'),
+    requestBody: await c.req.text(),
+  },
+  commands,
+)
+return c.json(result.body, result.status)
+```
+
+Use the introspected context as the authoritative identity. Do not trust request body identity fields. Multipart commands keep `input` as a JSON string and use the file field declared by `binary.field`.
 
 ## 4. Refresh the iframe
 
@@ -112,6 +133,24 @@ shadowob app preview --server <server-id-or-slug> --manifest-url https://app.exa
 shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json
 shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions tickets:write
 shadowob app uninstall demo-desk --server <server-id-or-slug>
+```
+
+For local Docker/Lima development, run the standard demos together and install the manifest URLs that the Shadow server container can reach:
+
+```bash
+cp integrations/.env.example integrations/.env
+docker compose -f integrations/compose.yaml --env-file integrations/.env up -d --build
+
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4201/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4210/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4211/.well-known/shadow-app.json
+```
+
+Grant all commands a Buddy should use, then approve `first_time` write commands once for that Buddy:
+
+```bash
+shadowob app grant shadow-kanban --server shadow-plays --buddy <buddy-id> --permissions kanban.boards:read,kanban.cards:write
+shadowob app approve shadow-kanban cards.create --server shadow-plays --buddy <buddy-id>
 ```
 
 When a Buddy is triggered in a channel, Shadow injects the mentioned App Skills and the Buddy calls through the unified CLI:

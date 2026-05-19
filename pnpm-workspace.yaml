@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "apps/cloud/packages/*"
   - "apps/flash/packages/*"
+  - "integrations/*"
   - "packages/*"
   - "packages/views"
   - "website"

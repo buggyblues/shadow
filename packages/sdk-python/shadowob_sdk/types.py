@@ -224,6 +224,37 @@ class ShadowSignedMediaUrl:
 
 
 @dataclass
+class ShadowServerAppActorProfile:
+    id: str | None = None
+    username: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
+
+
+@dataclass
+class ShadowServerAppActor:
+    kind: str | None = None
+    user_id: str | None = None
+    buddy_agent_id: str | None = None
+    owner_id: str | None = None
+    profile: ShadowServerAppActorProfile | dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowServerAppCommandContext:
+    protocol: str
+    server_id: str
+    server_app_id: str
+    app_key: str
+    actor: ShadowServerAppActor | dict[str, Any]
+    command: str | None = None
+    channel_id: str | None = None
+    permission: str | None = None
+    action: str | None = None
+    data_class: str | None = None
+
+
+@dataclass
 class ShadowServerAppTokenIntrospection:
     active: bool
     token_type: str | None = None
@@ -234,7 +265,7 @@ class ShadowServerAppTokenIntrospection:
     client_id: str | None = None
     exp: int | None = None
     iat: int | None = None
-    shadow: dict[str, Any] | None = None
+    shadow: ShadowServerAppCommandContext | dict[str, Any] | None = None
 
 
 @dataclass

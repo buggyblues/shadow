@@ -210,7 +210,7 @@ export interface ShadowServerAppCommand {
     supported?: boolean
     field?: string
     maxBytes?: number
-    contentTypes?: string[]
+    contentTypes?: readonly string[]
   }
 }
 
@@ -223,7 +223,7 @@ export interface ShadowServerAppManifest {
   iconUrl: string
   iframe?: {
     entry: string
-    allowedOrigins: string[]
+    allowedOrigins: readonly string[]
   }
   api: {
     baseUrl: string
@@ -233,17 +233,17 @@ export interface ShadowServerAppManifest {
     defaultPermissions?: string[]
     defaultApprovalMode?: ShadowServerAppApprovalMode
   }
-  commands: ShadowServerAppCommand[]
-  skills?: Array<{
+  commands: readonly ShadowServerAppCommand[]
+  skills?: readonly {
     name: string
     description: string
-    commandHints?: string[]
-  }>
-  events?: string[]
+    commandHints?: readonly string[]
+  }[]
+  events?: readonly string[]
   binary?: {
     supported: boolean
     maxBytes?: number
-    contentTypes?: string[]
+    contentTypes?: readonly string[]
   }
 }
 
@@ -345,6 +345,13 @@ export interface ShadowServerAppSkillDocument {
   }>
 }
 
+export interface ShadowServerAppActorProfile {
+  id?: string | null
+  username?: string | null
+  displayName?: string | null
+  avatarUrl?: string | null
+}
+
 export interface ShadowServerAppTokenIntrospection {
   active: boolean
   token_type?: 'Bearer'
@@ -366,6 +373,7 @@ export interface ShadowServerAppTokenIntrospection {
       userId?: string | null
       buddyAgentId?: string | null
       ownerId?: string | null
+      profile?: ShadowServerAppActorProfile | null
     }
     channelId?: string | null
     permission?: string

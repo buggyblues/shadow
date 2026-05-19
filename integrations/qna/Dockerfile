@@ -1,0 +1,21 @@
+FROM node:22-alpine
+
+WORKDIR /repo
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY packages/shared ./packages/shared
+COPY packages/sdk ./packages/sdk
+COPY integrations/qna ./integrations/qna
+
+RUN corepack enable \
+  && corepack prepare pnpm@10.19.0 --activate \
+  && pnpm install --filter @shadowob/qna-app... --prod=false --ignore-scripts \
+  && pnpm --filter @shadowob/shared build \
+  && pnpm --filter @shadowob/sdk build \
+  && pnpm --filter @shadowob/qna-app build
+
+WORKDIR /repo/integrations/qna
+
+EXPOSE 4210
+
+CMD ["pnpm", "start"]
