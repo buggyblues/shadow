@@ -23,6 +23,13 @@ async function readJsonFile(path: string) {
   return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
 }
 
+function parsePermissions(value: string) {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 function commandHandlerError(error: unknown, json?: boolean) {
   outputError(error instanceof Error ? error.message : String(error), { json })
   process.exit(1)
@@ -169,10 +176,7 @@ export function createAppCommand(): Command {
       ) => {
         try {
           const client = await getClient(options.profile)
-          const permissions = options.permissions
-            .split(',')
-            .map((item) => item.trim())
-            .filter(Boolean)
+          const permissions = parsePermissions(options.permissions)
           const result = await client.grantServerAppToBuddy(
             resolveServerFlag(options.server),
             appKey,
@@ -180,6 +184,83 @@ export function createAppCommand(): Command {
               buddyAgentId: options.buddy,
               permissions,
               approvalMode: options.approvalMode,
+            },
+          )
+          output(result, { json: options.json })
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('defaults')
+    .description('Set default app permissions that members and Buddies can use without prompting')
+    .argument('<app-key>', 'App key')
+    .requiredOption('--server <server>', 'Server ID or slug')
+    .requiredOption('--permissions <permissions>', 'Comma-separated permissions, or *')
+    .option('--approval-mode <mode>', 'none, first_time, every_time, or policy', 'none')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        appKey: string,
+        options: {
+          server: string
+          permissions: string
+          approvalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+          profile?: string
+          json?: boolean
+        },
+      ) => {
+        try {
+          const client = await getClient(options.profile)
+          const result = await client.updateServerAppAccessPolicy(
+            resolveServerFlag(options.server),
+            appKey,
+            {
+              defaultPermissions: parsePermissions(options.permissions),
+              defaultApprovalMode: options.approvalMode,
+            },
+          )
+          output(result, { json: options.json })
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('approve')
+    .description('Approve one app command for yourself or a Buddy after a first-use prompt')
+    .argument('<app-key>', 'App key')
+    .argument('<command>', 'Command name')
+    .requiredOption('--server <server>', 'Server ID or slug')
+    .option('--buddy <buddy-id>', 'Buddy ID to approve for')
+    .option('--no-remember', 'Approve only the immediate retry window')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        appKey: string,
+        commandName: string,
+        options: {
+          server: string
+          buddy?: string
+          remember?: boolean
+          profile?: string
+          json?: boolean
+        },
+      ) => {
+        try {
+          const client = await getClient(options.profile)
+          const result = await client.approveServerAppCommand(
+            resolveServerFlag(options.server),
+            appKey,
+            {
+              commandName,
+              buddyAgentId: options.buddy,
+              remember: options.remember,
             },
           )
           output(result, { json: options.json })
@@ -241,6 +322,7 @@ export function createAppCommand(): Command {
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--json-input <json>', 'JSON command input')
     .option('--input-file <path>', 'Read JSON command input from file')
+    .option('--channel-id <id>', 'Current Shadow channel ID for approval prompts and app context')
     .option('--file <path>', 'Attach a binary file')
     .option('--field <field>', 'Multipart file field name', 'file')
     .option('--output <path>', 'Write binary dataBase64 response to this path')
@@ -254,6 +336,7 @@ export function createAppCommand(): Command {
           server: string
           jsonInput?: string
           inputFile?: string
+          channelId?: string
           file?: string
           field?: string
           output?: string
@@ -270,11 +353,15 @@ export function createAppCommand(): Command {
           const result = options.file
             ? await client.callServerAppCommandMultipart(server, appKey, commandName, {
                 input,
+                channelId: options.channelId,
                 file: new Blob([await readFile(options.file)]),
                 filename: basename(options.file),
                 field: options.field,
               })
-            : await client.callServerAppCommand(server, appKey, commandName, { input })
+            : await client.callServerAppCommand(server, appKey, commandName, {
+                input,
+                channelId: options.channelId,
+              })
 
           if (
             options.output &&

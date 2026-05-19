@@ -49,6 +49,7 @@ const manifest: ServerAppManifestInput = {
 
 function createService(overrides: Record<string, unknown> = {}) {
   const commandTokens: any[] = []
+  const commandConsents: any[] = []
   const appRow = {
     id: 'app-1',
     serverId: 'srv-1',
@@ -61,6 +62,8 @@ function createService(overrides: Record<string, unknown> = {}) {
     iframeEntry: manifest.iframe!.entry,
     allowedOrigins: manifest.iframe!.allowedOrigins,
     apiBaseUrl: manifest.api.baseUrl,
+    defaultPermissions: ['demo.tickets:read'],
+    defaultApprovalMode: 'none',
     status: 'active',
     installedByUserId: 'user-1',
     createdAt: new Date(),
@@ -76,9 +79,50 @@ function createService(overrides: Record<string, unknown> = {}) {
       findBuddyGrant: vi.fn().mockResolvedValue({
         id: 'grant-1',
         permissions: ['demo.tickets:read'],
+        approvalMode: 'none',
         expiresAt: null,
       }),
       upsertBuddyGrant: vi.fn().mockResolvedValue({ id: 'grant-1' }),
+      updateAccessPolicy: vi.fn().mockImplementation(async (_serverAppId, data) => ({
+        ...appRow,
+        defaultPermissions: data.defaultPermissions,
+        defaultApprovalMode: data.defaultApprovalMode ?? 'none',
+      })),
+      upsertCommandConsent: vi.fn().mockImplementation(async (data) => {
+        const existingIndex = commandConsents.findIndex(
+          (consent) =>
+            consent.serverAppId === data.serverAppId &&
+            consent.command === data.command &&
+            consent.subjectKind === data.subjectKind &&
+            consent.subjectKey === data.subjectKey,
+        )
+        const row = {
+          id: commandConsents[existingIndex]?.id ?? `consent-${commandConsents.length + 1}`,
+          ...data,
+          createdAt: commandConsents[existingIndex]?.createdAt ?? new Date(),
+          updatedAt: new Date(),
+          consumedAt: null,
+        }
+        if (existingIndex >= 0) commandConsents[existingIndex] = row
+        else commandConsents.push(row)
+        return row
+      }),
+      findCommandConsent: vi
+        .fn()
+        .mockImplementation(
+          async (input) =>
+            commandConsents.find(
+              (consent) =>
+                consent.serverAppId === input.serverAppId &&
+                consent.command === input.command &&
+                consent.subjectKind === input.subjectKind &&
+                consent.subjectKey === input.subjectKey,
+            ) ?? null,
+        ),
+      markCommandConsentConsumed: vi.fn().mockImplementation(async (id) => {
+        const consent = commandConsents.find((item) => item.id === id)
+        if (consent) consent.consumedAt = new Date()
+      }),
       createCommandToken: vi.fn().mockImplementation(async (data) => {
         const row = { id: 'token-1', ...data, createdAt: new Date() }
         commandTokens.push(row)
@@ -166,6 +210,7 @@ function createService(overrides: Record<string, unknown> = {}) {
 describe('AppIntegrationService', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('installs an OAuth manifest without storing a shared secret', async () => {
@@ -195,6 +240,8 @@ describe('AppIntegrationService', () => {
         serverId: 'srv-1',
         appKey: 'demo-desk',
         apiBaseUrl: 'http://localhost:4199',
+        defaultPermissions: ['demo.tickets:read'],
+        defaultApprovalMode: 'none',
       }),
     )
   })
@@ -214,6 +261,94 @@ describe('AppIntegrationService', () => {
         },
       ),
     ).rejects.toThrow('Unknown app permission')
+  })
+
+  it('lets a default-allowed member call a read command without a Buddy grant', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { tickets: [] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService()
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+    })
+
+    expect(result).toEqual({ ok: true, result: { tickets: [] } })
+    expect(deps.appIntegrationDao.findBuddyGrant).not.toHaveBeenCalled()
+  })
+
+  it('requires approval for a non-default command and allows the confirmed command', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { ticket: { id: 'ticket-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...createService().deps.appIntegrationDao,
+        findBuddyGrant: vi.fn().mockResolvedValue(null),
+      },
+    })
+    const actor = {
+      kind: 'user' as const,
+      userId: 'user-1',
+      authMethod: 'jwt' as const,
+      scopes: [],
+    }
+
+    await expect(
+      service.callCommand({
+        serverIdOrSlug: 'srv-1',
+        appKey: 'demo-desk',
+        commandName: 'tickets.create',
+        actor,
+        body: { input: { title: 'Need help' }, channelId: 'channel-1' },
+      }),
+    ).rejects.toMatchObject({
+      status: 428,
+      code: 'SERVER_APP_COMMAND_APPROVAL_REQUIRED',
+      params: {
+        approval: expect.objectContaining({
+          appKey: 'demo-desk',
+          commandName: 'tickets.create',
+          permission: 'demo.tickets:write',
+          subjectKind: 'user',
+          channelId: 'channel-1',
+        }),
+      },
+    })
+
+    await service.approveCommandAccess('srv-1', 'demo-desk', actor, {
+      commandName: 'tickets.create',
+      remember: true,
+    })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.create',
+      actor,
+      body: { input: { title: 'Need help' } },
+    })
+
+    expect(result).toEqual({ ok: true, result: { ticket: { id: 'ticket-1' } } })
+    expect(deps.appIntegrationDao.upsertCommandConsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'tickets.create',
+        subjectKind: 'user',
+        subjectKey: 'user-1',
+      }),
+    )
   })
 
   it('lets a granted Buddy call a command through the app proxy', async () => {
@@ -331,6 +466,13 @@ describe('AppIntegrationService', () => {
   })
 
   it('installs an app from a catalog entry', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(manifest), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
     const { service, deps } = createService()
 
     await service.installFromCatalog(
@@ -346,8 +488,68 @@ describe('AppIntegrationService', () => {
     )
 
     expect(deps.appIntegrationDao.findCatalogEntryById).toHaveBeenCalledWith('catalog-1')
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4199/.well-known/shadow-app.json', {
+      redirect: 'manual',
+    })
     expect(deps.appIntegrationDao.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ appKey: 'demo-desk', serverId: 'srv-1' }),
+    )
+  })
+
+  it('refreshes catalog manifests from URL during install', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(manifest), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const staleManifest = {
+      ...manifest,
+      api: { ...manifest.api, auth: { type: 'hmac-sha256' } },
+    }
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...createService().deps.appIntegrationDao,
+        findCatalogEntryById: vi.fn().mockResolvedValue({
+          id: 'catalog-1',
+          appKey: 'demo-desk',
+          name: 'Demo Desk',
+          description: null,
+          iconUrl: manifest.iconUrl,
+          manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+          manifest: staleManifest,
+          status: 'active',
+          createdByUserId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      },
+    })
+
+    await service.installFromCatalog(
+      'srv-1',
+      'catalog-1',
+      {
+        kind: 'user',
+        userId: 'user-1',
+        authMethod: 'jwt',
+        scopes: [],
+      },
+      {},
+    )
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4199/.well-known/shadow-app.json', {
+      redirect: 'manual',
+    })
+    expect(deps.appIntegrationDao.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appKey: 'demo-desk',
+        apiBaseUrl: 'http://localhost:4199',
+        manifest: expect.objectContaining({
+          api: expect.objectContaining({ auth: { type: 'oauth2-bearer' } }),
+        }),
+      }),
     )
   })
 })

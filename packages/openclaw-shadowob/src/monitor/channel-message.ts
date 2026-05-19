@@ -1,4 +1,4 @@
-import type { ShadowChannelPolicy, ShadowMessage } from '@shadowob/sdk'
+import type { ShadowChannelPolicy, ShadowMessage, ShadowServerAppIntegration } from '@shadowob/sdk'
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import type { ReplyPayload } from 'openclaw/plugin-sdk'
 import { createChannelReplyPipeline } from 'openclaw/plugin-sdk/channel-reply-pipeline'
@@ -76,28 +76,115 @@ function resolveOwnerAllowFrom(policyConfig: ShadowPolicyConfig | undefined) {
   return ownerId ? [ownerId] : undefined
 }
 
-async function buildMentionedServerAppSkillsContext(params: {
+type ServerAppPromptRef = {
+  appKey: string
+  server: string
+  label: string
+  app?: ShadowServerAppIntegration
+  mentioned: boolean
+}
+
+const MAX_SERVER_APPS_IN_CONTEXT = 8
+
+function serverAppCommandSummary(app: ShadowServerAppIntegration) {
+  return app.manifest.commands
+    .slice(0, 6)
+    .map(
+      (command) =>
+        `${command.name}(${command.action}, permission=${command.permission}, approval=${command.approvalMode ?? app.defaultApprovalMode})`,
+    )
+    .join('; ')
+}
+
+function formatInstalledServerAppSummary(ref: ServerAppPromptRef) {
+  const app = ref.app
+  if (!app) {
+    return `- ${ref.label}: appKey=${ref.appKey}, server=${ref.server}${ref.mentioned ? ', mentioned=true' : ''}`
+  }
+  return [
+    `- ${app.name}: appKey=${app.appKey}, server=${ref.server}, defaultPermissions=${app.defaultPermissions.join(',') || 'none'}, defaultApproval=${app.defaultApprovalMode}`,
+    app.description ? `  description=${app.description}` : '',
+    `  commands=${serverAppCommandSummary(app)}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function serverAppContextFields(apps: ShadowServerAppIntegration[]) {
+  if (apps.length === 0) return {}
+  return {
+    ServerApps: apps.map((app) => ({
+      id: app.id,
+      serverId: app.serverId,
+      appKey: app.appKey,
+      name: app.name,
+      description: app.description,
+      defaultPermissions: app.defaultPermissions,
+      defaultApprovalMode: app.defaultApprovalMode,
+      commands: app.manifest.commands.map((command) => ({
+        name: command.name,
+        title: command.title,
+        description: command.description,
+        permission: command.permission,
+        action: command.action,
+        dataClass: command.dataClass,
+        approvalMode: command.approvalMode ?? app.defaultApprovalMode,
+      })),
+    })),
+    ServerAppSummary: apps.map((app) => `${app.name} (${app.appKey})`).join(', '),
+  }
+}
+
+async function buildServerAppSkillsContext(params: {
   mentions: ReturnType<typeof getShadowMessageMentions>
   client: ShadowClient
   serverInfo: ChannelServerInfo | undefined
   runtime: ShadowRuntimeLogger
-}) {
-  const appRefs = new Map<string, { appKey: string; server: string; label: string }>()
+}): Promise<{ prompt: string; fields: Record<string, unknown> }> {
+  const appRefs = new Map<string, ServerAppPromptRef>()
+  const installedApps: ShadowServerAppIntegration[] = []
+
+  if (params.serverInfo) {
+    const server = params.serverInfo.serverSlug || params.serverInfo.serverId
+    try {
+      const apps = await params.client.listServerApps(params.serverInfo.serverId)
+      for (const app of apps.filter((item) => item.status !== 'disabled')) {
+        installedApps.push(app)
+        appRefs.set(`${params.serverInfo.serverId}:${app.appKey}`, {
+          appKey: app.appKey,
+          server,
+          label: app.name,
+          app,
+          mentioned: false,
+        })
+      }
+    } catch (err) {
+      params.runtime.error?.(
+        `[server-app] Failed listing apps for ${params.serverInfo.serverId}: ${String(err)}`,
+      )
+    }
+  }
+
   for (const mention of params.mentions) {
     if (mention.kind !== 'app') continue
     const appKey = mention.appKey ?? mention.targetId
     const server = mention.serverId ?? mention.serverSlug ?? params.serverInfo?.serverId
     if (!appKey || !server) continue
-    appRefs.set(`${server}:${appKey}`, {
+    const key = `${server}:${appKey}`
+    const existing = appRefs.get(key)
+    appRefs.set(key, {
+      ...existing,
       appKey,
       server,
       label: mention.label || mention.sourceToken || mention.token || appKey,
+      mentioned: true,
     })
   }
-  if (appRefs.size === 0) return ''
+  if (appRefs.size === 0) return { prompt: '', fields: {} }
 
+  const refs = Array.from(appRefs.values()).slice(0, MAX_SERVER_APPS_IN_CONTEXT)
   const documents = await Promise.all(
-    Array.from(appRefs.values()).map(async (ref) => {
+    refs.map(async (ref) => {
       try {
         const skill = await params.client.getServerAppSkills(ref.server, ref.appKey)
         return [
@@ -117,13 +204,20 @@ async function buildMentionedServerAppSkillsContext(params: {
   )
 
   const loaded = documents.filter(Boolean)
-  if (loaded.length === 0) return ''
-  return [
-    'Injected Shadow Server App Skills:',
-    'These instructions are authoritative for mentioned server apps in this message. Use the Shadow CLI path described below so Shadow can bind identity, app grants, and policy.',
+  const prompt = [
+    'Shadow Server Apps available in this server:',
+    ...refs.map(formatInstalledServerAppSummary),
     '',
+    'Use these apps when the user asks natural-language questions or tasks that match an installed app name, description, or command capability. Do not wait for the user to say a CLI command or explicitly mention the app.',
+    'Operate server apps through the mounted Shadow CLI only so Shadow can bind the Buddy identity, app grants, approval prompts, and policy: run `shadowob app discover --server "<current-server-id-or-slug>" --json` when needed, then `shadowob app call "<appKey>" <command> --server "<current-server-id-or-slug>" --channel-id "<current-channel-id>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or SDK calls for server-app commands.',
+    'Shadow App command approvals are system permission prompts, not chat interactive dialogs. Never send a Shadow interactive form/buttons/approval message as a substitute for App command approval, and never call the App approval endpoint yourself as a Buddy. If the CLI returns SERVER_APP_COMMAND_APPROVAL_REQUIRED, tell the user that Shadow opened the approval popup, then stop until a person confirms and asks you to retry.',
+    loaded.length > 0 ? 'Injected Shadow Server App Skills:' : '',
     ...loaded,
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return { prompt, fields: serverAppContextFields(installedApps) }
 }
 
 export async function processShadowMessage(params: {
@@ -254,7 +348,7 @@ export async function processShadowMessage(params: {
   const conversationLabel = serverInfo ? `${serverInfo.serverName} ${channelLabel}` : peerId
   const messageBodyForAgent = interactiveResponseContext.text || baseBodyForAgent
   const client = new ShadowClient(account.serverUrl, account.token)
-  const serverAppSkillsContext = await buildMentionedServerAppSkillsContext({
+  const serverAppContext = await buildServerAppSkillsContext({
     mentions: structuredMentions,
     client,
     serverInfo,
@@ -270,7 +364,7 @@ export async function processShadowMessage(params: {
     buildCommerceContextForAgent(account),
     viewerCommerceContext,
     mentionContext,
-    serverAppSkillsContext,
+    serverAppContext.prompt,
     messageBodyForAgent,
   ]
     .filter(Boolean)
@@ -313,6 +407,7 @@ export async function processShadowMessage(params: {
     MessageSid: message.id,
     WasMentioned: wasMentioned,
     ...mentionContextFields(structuredMentions),
+    ...serverAppContext.fields,
     OriginatingChannel: 'shadowob',
     OriginatingTo: `shadowob:channel:${channelId}`,
     NativeChannelId: channelId,

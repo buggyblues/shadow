@@ -36,6 +36,12 @@ export interface CcConnectInstallResult {
   source: 'env' | 'cache' | 'release' | 'source'
 }
 
+export interface CcConnectBinaryStatus {
+  binaryPath: string
+  usable: boolean
+  source: 'env' | 'cache'
+}
+
 const NAME = 'cc-connect'
 
 const RELEASE_ARCHIVE_SHA256: Record<string, string> = {
@@ -303,6 +309,17 @@ function binaryLooksUsable(path: string): boolean {
   } catch {
     return false
   }
+}
+
+export function getCcConnectBinaryStatus(): CcConnectBinaryStatus {
+  const override = process.env.SHADOW_CC_CONNECT_BIN?.trim()
+  if (override) {
+    const binaryPath = expandHome(override)
+    return { binaryPath, usable: binaryLooksUsable(binaryPath), source: 'env' }
+  }
+
+  const binaryPath = cachedBinaryPath()
+  return { binaryPath, usable: binaryLooksUsable(binaryPath), source: 'cache' }
 }
 
 export async function ensureCcConnectFork(

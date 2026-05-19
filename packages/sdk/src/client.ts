@@ -74,7 +74,9 @@ import type {
   ShadowScopedUnread,
   ShadowServer,
   ShadowServerAccess,
+  ShadowServerAppApprovalMode,
   ShadowServerAppCatalogEntry,
+  ShadowServerAppCommandConsent,
   ShadowServerAppDiscovery,
   ShadowServerAppIntegration,
   ShadowServerAppLaunchContext,
@@ -677,12 +679,47 @@ export class ShadowClient {
       buddyAgentId: string
       permissions: string[]
       resourceRules?: Record<string, unknown>
-      approvalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+      approvalMode?: ShadowServerAppApprovalMode
       expiresAt?: string
     },
   ): Promise<Record<string, unknown>> {
     return this.request(
       `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/grants`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async updateServerAppAccessPolicy(
+    serverIdOrSlug: string,
+    appKey: string,
+    data: {
+      defaultPermissions: string[]
+      defaultApprovalMode?: ShadowServerAppApprovalMode
+    },
+  ): Promise<ShadowServerAppIntegration & { grants?: Record<string, unknown>[] }> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/access-policy`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async approveServerAppCommand(
+    serverIdOrSlug: string,
+    appKey: string,
+    data: {
+      commandName: string
+      buddyAgentId?: string
+      remember?: boolean
+    },
+  ): Promise<{ ok: true; consent: ShadowServerAppCommandConsent }> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/approvals`,
       {
         method: 'POST',
         body: JSON.stringify(data),

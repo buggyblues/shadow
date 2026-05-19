@@ -1,7 +1,17 @@
-import { Button, cn, GlassPanel } from '@shadowob/ui'
+import {
+  Button,
+  cn,
+  GlassPanel,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
-import { GripVertical, Menu, Mic, MicOff, Phone, PhoneOff } from 'lucide-react'
+import { GripVertical, Menu, Mic, MicOff, Phone, PhoneOff, ShieldCheck } from 'lucide-react'
 import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
@@ -24,6 +34,42 @@ export function AppLayout() {
   )
 }
 
+interface ServerAppApprovalRequest {
+  serverId: string
+  appKey: string
+  appName: string
+  commandName: string
+  commandTitle: string
+  commandDescription?: string | null
+  permission: string
+  action: string
+  dataClass: string
+  subjectKind: 'user' | 'buddy'
+  buddyAgentId?: string | null
+  approvalMode: string
+  reason: string
+  channelId?: string | null
+  requestedAt?: string
+}
+
+function isServerAppApprovalRequest(value: unknown): value is ServerAppApprovalRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const item = value as Record<string, unknown>
+  return (
+    typeof item.serverId === 'string' &&
+    typeof item.appKey === 'string' &&
+    typeof item.appName === 'string' &&
+    typeof item.commandName === 'string' &&
+    typeof item.commandTitle === 'string' &&
+    typeof item.permission === 'string' &&
+    typeof item.action === 'string' &&
+    typeof item.dataClass === 'string' &&
+    (item.subjectKind === 'user' || item.subjectKind === 'buddy') &&
+    typeof item.approvalMode === 'string' &&
+    typeof item.reason === 'string'
+  )
+}
+
 function AppLayoutInner() {
   const { t } = useTranslation()
   const location = useLocation()
@@ -32,6 +78,9 @@ function AppLayoutInner() {
   const { backgroundImage } = useUIStore()
   const { mobileServerSidebarOpen, closeMobileServerSidebar, openMobileServerSidebar } =
     useUIStore()
+  const [pendingServerAppApproval, setPendingServerAppApproval] =
+    useState<ServerAppApprovalRequest | null>(null)
+  const [serverAppApprovalSubmitting, setServerAppApprovalSubmitting] = useState(false)
   const isCloudRoute = /^\/app\/cloud(?:\/|$)/.test(pathname)
   const showAtmosphereOrbs = !backgroundImage
 
@@ -76,12 +125,49 @@ function AppLayoutInner() {
       showToast(t('settings.sessionRevokedNotice'), 'error')
       clearAuthenticatedSession({ redirectToLogin: true })
     }
+    const handleServerAppApprovalRequired = (payload: unknown) => {
+      if (!isServerAppApprovalRequest(payload)) return
+      setPendingServerAppApproval(payload)
+    }
     socket.on('auth:session-revoked', handleSessionRevoked)
+    socket.on('server-app:approval-required', handleServerAppApprovalRequired)
     return () => {
       socket.off('auth:session-revoked', handleSessionRevoked)
+      socket.off('server-app:approval-required', handleServerAppApprovalRequired)
       disconnectSocket()
     }
   }, [t])
+
+  const closeServerAppApproval = () => {
+    setPendingServerAppApproval(null)
+  }
+
+  const approveServerAppCommand = async () => {
+    if (!pendingServerAppApproval) return
+    setServerAppApprovalSubmitting(true)
+    try {
+      await fetchApi(
+        `/api/servers/${pendingServerAppApproval.serverId}/apps/${pendingServerAppApproval.appKey}/approvals`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            commandName: pendingServerAppApproval.commandName,
+            buddyAgentId: pendingServerAppApproval.buddyAgentId ?? undefined,
+            remember: pendingServerAppApproval.approvalMode !== 'every_time',
+          }),
+        },
+      )
+      showToast(t('serverApps.commandApprovalSuccess'), 'success')
+      setPendingServerAppApproval(null)
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : t('serverApps.commandApprovalFailed'),
+        'error',
+      )
+    } finally {
+      setServerAppApprovalSubmitting(false)
+    }
+  }
 
   return (
     <div className="relative flex h-dvh w-screen overflow-hidden bg-transparent p-3 gap-3">
@@ -165,6 +251,73 @@ function AppLayoutInner() {
       )}
 
       <ConfirmDialog />
+      <Modal open={!!pendingServerAppApproval} onClose={closeServerAppApproval}>
+        <ModalContent maxWidth="max-w-[460px]">
+          <ModalHeader
+            title={t('serverApps.commandApprovalTitle')}
+            closeLabel={t('common.close')}
+          />
+          <ModalBody className="space-y-3">
+            <div className="flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-tertiary/40 p-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+                <ShieldCheck size={18} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black text-text-primary">
+                  {pendingServerAppApproval?.appName}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-text-muted">
+                  {pendingServerAppApproval?.commandTitle}
+                </p>
+                {pendingServerAppApproval?.commandDescription ? (
+                  <p className="mt-1 text-xs leading-5 text-text-muted">
+                    {pendingServerAppApproval.commandDescription}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <div className="grid gap-2 text-xs text-text-muted">
+              <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2">
+                {t('serverApps.commandApprovalSubject')}:{' '}
+                <span className="text-text-primary">
+                  {pendingServerAppApproval?.subjectKind === 'buddy'
+                    ? t('serverApps.commandApprovalBuddy')
+                    : t('serverApps.commandApprovalPerson')}
+                </span>
+              </div>
+              <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2">
+                {t('serverApps.commandApprovalPermission')}:{' '}
+                <span className="font-mono text-text-primary">
+                  {pendingServerAppApproval?.permission}
+                </span>
+              </div>
+              <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2">
+                {t('serverApps.commandApprovalScope')}:{' '}
+                <span className="text-text-primary">
+                  {pendingServerAppApproval?.action} / {pendingServerAppApproval?.dataClass}
+                </span>
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button variant="ghost" size="sm" onClick={closeServerAppApproval}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={approveServerAppCommand}
+                loading={serverAppApprovalSubmitting}
+                disabled={serverAppApprovalSubmitting}
+              >
+                <ShieldCheck size={14} />
+                {t('serverApps.commandApprovalConfirm')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
       <RechargeModal />
       <FloatingVoiceCall />
     </div>

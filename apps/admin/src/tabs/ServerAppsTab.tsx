@@ -79,7 +79,7 @@ export function ServerAppsTab() {
   }
 
   const deleteCatalogEntry = async (entry: ServerAppCatalogEntry) => {
-    if (!confirm(`确定要从 App 名录删除 ${entry.name} 吗？已安装的服务器 App 不会被卸载。`)) return
+    if (!confirm(`确定要从 App 商店删除 ${entry.name} 吗？已安装的服务器 App 不会被卸载。`)) return
     await apiFetch(`/server-app-catalog/${entry.id}`, { method: 'DELETE' })
     setCatalog((current) => current.filter((item) => item.id !== entry.id))
   }
@@ -130,10 +130,10 @@ export function ServerAppsTab() {
             <div>
               <h3 className="flex items-center gap-2 text-sm font-bold text-white">
                 <BookOpen className="h-4 w-4 text-indigo-300" />
-                App 名录
+                App 商店
               </h3>
               <p className="mt-1 text-xs text-zinc-500">
-                管理端维护可安装 App，服务器页面可从名录一键安装，也可以继续自定义 manifest。
+                管理端维护可安装 App，服务器页面可从商店一键安装，也可以继续自定义 manifest。
               </p>
             </div>
             <span className="rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-400">
@@ -175,7 +175,7 @@ export function ServerAppsTab() {
             ))}
             {catalog.length === 0 && (
               <div className="rounded-lg border border-dashed border-zinc-800 p-5 text-sm text-zinc-500">
-                暂无 App 名录。
+                暂无 App 商店条目。
               </div>
             )}
           </div>
@@ -199,7 +199,7 @@ export function ServerAppsTab() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-60"
             >
               <Plus className="h-4 w-4" />
-              {catalogSaving ? '保存中…' : '保存到名录'}
+              {catalogSaving ? '保存中…' : '保存到商店'}
             </button>
             {catalogError && (
               <p className="rounded-lg bg-red-500/10 p-2 text-xs text-red-300">{catalogError}</p>

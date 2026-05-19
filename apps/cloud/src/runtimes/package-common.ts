@@ -11,6 +11,7 @@ export const HOME_DIR = RUNNER_HOME_DIR
 export const WORKSPACE_DIR = '/workspace'
 export const OPENCLAW_SKILLS_DIR = `${HOME_DIR}/.openclaw/skills`
 export const CC_CONNECT_CONFIG_PATH = `${HOME_DIR}/.cc-connect/config.toml`
+export const SHADOWOB_CLI_CONFIG_PATH = `${HOME_DIR}/.shadowob/shadowob.config.json`
 export const SHADOW_SLASH_COMMANDS_PATH = `${SHADOWOB_CONFIG_MOUNT_PATH}/slash-commands.json`
 
 export interface ShadowRuntimeBinding {
@@ -180,4 +181,23 @@ export function addShadowobSkill(
   if (runtimeKind === 'hermes') {
     files[`${HOME_DIR}/.hermes/skills/shadowob/SKILL.md`] = skill
   }
+}
+
+export function addShadowobCliAuth(files: RuntimeFiles, runtimeExtensions: PluginRuntimeExtension) {
+  const bindings = shadowBindings(runtimeExtensions)
+  const profiles: Record<string, { serverUrl: string; token: string }> = {}
+
+  for (const [index, binding] of bindings.entries()) {
+    const profileName = binding.buddyId?.trim() || (index === 0 ? 'default' : `shadow-${index + 1}`)
+    profiles[profileName] = {
+      serverUrl: envPlaceholder(binding.serverUrlEnvKey),
+      token: envPlaceholder(binding.tokenEnvKey),
+    }
+  }
+
+  const currentProfile = Object.keys(profiles)[0] ?? 'default'
+  files[SHADOWOB_CLI_CONFIG_PATH] = json({
+    profiles,
+    currentProfile,
+  })
 }

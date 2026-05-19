@@ -2,15 +2,36 @@ import { useLocalSearchParams, useNavigation } from 'expo-router'
 import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native'
 import WebView from 'react-native-webview'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
+import { ApiError, fetchApi } from '../../src/lib/api'
 import { useColors } from '../../src/theme'
 
+interface AppCommandApproval {
+  appName: string
+  commandName: string
+  commandTitle: string
+  permission: string
+  action: string
+  dataClass: string
+  buddyAgentId?: string | null
+  approvalMode: string
+}
+
+interface BridgeRequest {
+  requestId: string
+  commandName: string
+  input?: unknown
+  channelId?: string
+}
+
 export default function WebViewPreviewScreen() {
-  const { url, title } = useLocalSearchParams<{
+  const { url, title, serverSlug, appKey } = useLocalSearchParams<{
     url: string
     title?: string
+    serverSlug?: string
+    appKey?: string
   }>()
   const { t } = useTranslation()
   const colors = useColors()
@@ -24,6 +45,139 @@ export default function WebViewPreviewScreen() {
   const [pageTitle, setPageTitle] = useState(title ?? '')
 
   const decodedUrl = url ? decodeURIComponent(url) : ''
+
+  const postBridgeResponse = useCallback(
+    (requestId: string, payload: { ok: true; result: unknown } | { ok: false; error: string }) => {
+      const message = JSON.stringify({
+        type: 'shadow.app.command.response',
+        requestId,
+        ...payload,
+      })
+      webViewRef.current?.injectJavaScript(
+        `window.dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(
+          message,
+        )} })); true;`,
+      )
+    },
+    [],
+  )
+
+  const approveAndRetry = useCallback(
+    async (request: BridgeRequest, approval: AppCommandApproval) => {
+      if (!serverSlug || !appKey) return
+      try {
+        await fetchApi(`/api/servers/${serverSlug}/apps/${appKey}/approvals`, {
+          method: 'POST',
+          body: JSON.stringify({
+            commandName: request.commandName,
+            buddyAgentId: approval.buddyAgentId ?? undefined,
+            remember: approval.approvalMode !== 'every_time',
+          }),
+        })
+        const result = await fetchApi(
+          `/api/servers/${serverSlug}/apps/${appKey}/commands/${encodeURIComponent(
+            request.commandName,
+          )}`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ input: request.input ?? {}, channelId: request.channelId }),
+          },
+        )
+        postBridgeResponse(request.requestId, { ok: true, result })
+      } catch (error) {
+        postBridgeResponse(request.requestId, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    },
+    [appKey, postBridgeResponse, serverSlug],
+  )
+
+  const requestApproval = useCallback(
+    (request: BridgeRequest, approval: AppCommandApproval) => {
+      Alert.alert(
+        t('serverApps.commandApprovalTitle'),
+        t('serverApps.commandApprovalMessage', {
+          app: approval.appName,
+          command: approval.commandTitle || approval.commandName,
+          permission: approval.permission,
+        }),
+        [
+          {
+            text: t('common.cancel'),
+            style: 'cancel',
+            onPress: () =>
+              postBridgeResponse(request.requestId, {
+                ok: false,
+                error: t('serverApps.commandApprovalDenied'),
+              }),
+          },
+          {
+            text: t('serverApps.commandApprovalConfirm'),
+            onPress: () => {
+              void approveAndRetry(request, approval)
+            },
+          },
+        ],
+      )
+    },
+    [approveAndRetry, postBridgeResponse, t],
+  )
+
+  const callBridgeCommand = useCallback(
+    async (request: BridgeRequest) => {
+      if (!serverSlug || !appKey) return
+      try {
+        const result = await fetchApi(
+          `/api/servers/${serverSlug}/apps/${appKey}/commands/${encodeURIComponent(
+            request.commandName,
+          )}`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ input: request.input ?? {}, channelId: request.channelId }),
+          },
+        )
+        postBridgeResponse(request.requestId, { ok: true, result })
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'SERVER_APP_COMMAND_APPROVAL_REQUIRED') {
+          const approval = (error.params?.approval ?? null) as AppCommandApproval | null
+          if (approval) {
+            requestApproval(request, approval)
+            return
+          }
+        }
+        postBridgeResponse(request.requestId, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    },
+    [appKey, postBridgeResponse, requestApproval, serverSlug],
+  )
+
+  const handleWebViewMessage = useCallback(
+    (event: { nativeEvent: { data: string } }) => {
+      let data: unknown
+      try {
+        data = JSON.parse(event.nativeEvent.data)
+      } catch {
+        return
+      }
+      if (!data || typeof data !== 'object') return
+      const message = data as Record<string, unknown>
+      if (message.type !== 'shadow.app.command.request') return
+      if (message.appKey && message.appKey !== appKey) return
+      if (typeof message.requestId !== 'string' || typeof message.commandName !== 'string') return
+      void callBridgeCommand({
+        requestId: message.requestId,
+        commandName: message.commandName,
+        input: message.input,
+        channelId: typeof message.channelId === 'string' ? message.channelId : undefined,
+      })
+    },
+    [appKey, callBridgeCommand],
+  )
 
   const handleGoBack = useCallback(() => {
     webViewRef.current?.goBack()
@@ -120,6 +274,7 @@ export default function WebViewPreviewScreen() {
         style={styles.webview}
         onLoadStart={() => setLoading(true)}
         onLoadEnd={() => setLoading(false)}
+        onMessage={handleWebViewMessage}
         onNavigationStateChange={onNavigationStateChange}
         startInLoadingState
         renderLoading={() => (

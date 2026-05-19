@@ -1192,6 +1192,13 @@
     "employerSignature": "雇用者署名",
     "approved": "承認済"
   },
+  "serverApps": {
+    "noIframe": "このアプリには iframe エントリがありません。",
+    "commandApprovalTitle": "アプリコマンドを承認",
+    "commandApprovalMessage": "{{app}} が {{permission}} を使って {{command}} を実行しようとしています。",
+    "commandApprovalDenied": "コマンド承認をキャンセルしました。",
+    "commandApprovalConfirm": "承認して続行"
+  },
   "apps": {
     "noApps": "アプリなし"
   },

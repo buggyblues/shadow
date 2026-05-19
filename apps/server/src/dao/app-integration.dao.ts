@@ -4,6 +4,7 @@ import {
   type ServerAppManifest,
   serverAppBuddyGrants,
   serverAppCatalogEntries,
+  serverAppCommandConsents,
   serverAppCommandTokens,
   serverAppIntegrations,
 } from '../db/schema'
@@ -54,6 +55,8 @@ export class AppIntegrationDao {
     iframeEntry?: string | null
     allowedOrigins: string[]
     apiBaseUrl: string
+    defaultPermissions?: string[]
+    defaultApprovalMode?: string
     installedByUserId: string
   }) {
     const rows = await this.db
@@ -69,6 +72,8 @@ export class AppIntegrationDao {
         iframeEntry: data.iframeEntry ?? null,
         allowedOrigins: data.allowedOrigins,
         apiBaseUrl: data.apiBaseUrl,
+        defaultPermissions: data.defaultPermissions ?? [],
+        defaultApprovalMode: data.defaultApprovalMode ?? 'none',
         installedByUserId: data.installedByUserId,
         status: 'active',
       })
@@ -83,6 +88,8 @@ export class AppIntegrationDao {
           iframeEntry: data.iframeEntry ?? null,
           allowedOrigins: data.allowedOrigins,
           apiBaseUrl: data.apiBaseUrl,
+          defaultPermissions: data.defaultPermissions ?? [],
+          defaultApprovalMode: data.defaultApprovalMode ?? 'none',
           status: 'active',
           installedByUserId: data.installedByUserId,
           updatedAt: sql`NOW()`,
@@ -209,6 +216,25 @@ export class AppIntegrationDao {
     return rows[0]!
   }
 
+  async updateAccessPolicy(
+    serverAppId: string,
+    data: {
+      defaultPermissions: string[]
+      defaultApprovalMode?: string
+    },
+  ) {
+    const rows = await this.db
+      .update(serverAppIntegrations)
+      .set({
+        defaultPermissions: data.defaultPermissions,
+        defaultApprovalMode: data.defaultApprovalMode ?? 'none',
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(serverAppIntegrations.id, serverAppId))
+      .returning()
+    return rows[0] ?? null
+  }
+
   async findBuddyGrant(serverAppId: string, buddyAgentId: string) {
     const rows = await this.db
       .select()
@@ -229,6 +255,85 @@ export class AppIntegrationDao {
       .from(serverAppBuddyGrants)
       .where(eq(serverAppBuddyGrants.serverAppId, serverAppId))
       .orderBy(serverAppBuddyGrants.createdAt)
+  }
+
+  async upsertCommandConsent(data: {
+    serverAppId: string
+    serverId: string
+    appKey: string
+    command: string
+    permission: string
+    subjectKind: string
+    subjectKey: string
+    subjectUserId?: string | null
+    buddyAgentId?: string | null
+    grantedByUserId: string
+    approvalMode: string
+    expiresAt?: Date | null
+  }) {
+    const rows = await this.db
+      .insert(serverAppCommandConsents)
+      .values({
+        serverAppId: data.serverAppId,
+        serverId: data.serverId,
+        appKey: data.appKey,
+        command: data.command,
+        permission: data.permission,
+        subjectKind: data.subjectKind,
+        subjectKey: data.subjectKey,
+        subjectUserId: data.subjectUserId ?? null,
+        buddyAgentId: data.buddyAgentId ?? null,
+        grantedByUserId: data.grantedByUserId,
+        approvalMode: data.approvalMode,
+        expiresAt: data.expiresAt ?? null,
+        consumedAt: null,
+      })
+      .onConflictDoUpdate({
+        target: [
+          serverAppCommandConsents.serverAppId,
+          serverAppCommandConsents.command,
+          serverAppCommandConsents.subjectKind,
+          serverAppCommandConsents.subjectKey,
+        ],
+        set: {
+          permission: data.permission,
+          grantedByUserId: data.grantedByUserId,
+          approvalMode: data.approvalMode,
+          expiresAt: data.expiresAt ?? null,
+          consumedAt: null,
+          updatedAt: sql`NOW()`,
+        },
+      })
+      .returning()
+    return rows[0]!
+  }
+
+  async findCommandConsent(input: {
+    serverAppId: string
+    command: string
+    subjectKind: string
+    subjectKey: string
+  }) {
+    const rows = await this.db
+      .select()
+      .from(serverAppCommandConsents)
+      .where(
+        and(
+          eq(serverAppCommandConsents.serverAppId, input.serverAppId),
+          eq(serverAppCommandConsents.command, input.command),
+          eq(serverAppCommandConsents.subjectKind, input.subjectKind),
+          eq(serverAppCommandConsents.subjectKey, input.subjectKey),
+        ),
+      )
+      .limit(1)
+    return rows[0] ?? null
+  }
+
+  async markCommandConsentConsumed(id: string) {
+    await this.db
+      .update(serverAppCommandConsents)
+      .set({ consumedAt: sql`NOW()`, updatedAt: sql`NOW()` })
+      .where(eq(serverAppCommandConsents.id, id))
   }
 
   async createCommandToken(data: {

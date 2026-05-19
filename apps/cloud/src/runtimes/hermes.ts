@@ -14,6 +14,7 @@ import { type RuntimeAdapter, type RuntimeFiles, registerRuntime } from './index
 import { hermesMcpServers } from './mcp.js'
 import type { ShadowRuntimeBinding } from './package-common.js'
 import {
+  addShadowobCliAuth,
   addShadowobSkill,
   buildIdentityWorkspaceFiles,
   envPlaceholder,
@@ -92,6 +93,7 @@ const hermesAdapter: RuntimeAdapter = {
       [SHADOW_SLASH_COMMANDS_PATH]: json(hermesSlashCommands),
     }
     addShadowobSkill(files, 'hermes', 'hermes')
+    addShadowobCliAuth(files, context.runtimeExtensions)
 
     const pluginRoot = `${HOME_DIR}/.hermes/plugins/shadowob`
     files[`${pluginRoot}/plugin.yaml`] = readHermesPluginFile(

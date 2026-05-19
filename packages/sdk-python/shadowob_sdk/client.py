@@ -503,6 +503,42 @@ class ShadowClient:
             json=payload,
         )
 
+    def update_server_app_access_policy(
+        self,
+        server_id_or_slug: str,
+        app_key: str,
+        *,
+        default_permissions: list[str],
+        default_approval_mode: str = "none",
+    ) -> dict[str, Any]:
+        return self._patch(
+            f"/api/servers/{server_id_or_slug}/apps/{app_key}/access-policy",
+            json={
+                "defaultPermissions": default_permissions,
+                "defaultApprovalMode": default_approval_mode,
+            },
+        )
+
+    def approve_server_app_command(
+        self,
+        server_id_or_slug: str,
+        app_key: str,
+        *,
+        command_name: str,
+        buddy_agent_id: str | None = None,
+        remember: bool = True,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "commandName": command_name,
+            "remember": remember,
+        }
+        if buddy_agent_id is not None:
+            payload["buddyAgentId"] = buddy_agent_id
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/apps/{app_key}/approvals",
+            json=payload,
+        )
+
     def get_server_app_skills(
         self, server_id_or_slug: str, app_key: str
     ) -> dict[str, Any]:

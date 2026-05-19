@@ -101,7 +101,8 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
   return {
     target: 'openclaw',
     title: 'OpenClaw',
-    summary: 'Install the Shadow channel plugin and bind this Buddy token to OpenClaw.',
+    summary:
+      'Install the Shadow channel plugin, Shadow CLI bin/skills, and a Buddy CLI profile for OpenClaw.',
     connectCommand,
     quickCommand,
     commands,
@@ -111,6 +112,9 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
       '',
       `Shadow server URL: ${serverUrl}`,
       `Buddy token: ${token}`,
+      '',
+      `Preferred one-line setup: ${connectCommand}`,
+      'The connector installs/configures the Shadow CLI, official Shadow skill files, and the Buddy profile before applying the OpenClaw channel config.',
       '',
       'Run these steps in order:',
       ...commands.map((item, index) => `${index + 1}. ${item.command}`),
@@ -199,7 +203,8 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
   return {
     target: 'hermes',
     title: 'Hermes Agent',
-    summary: 'Install the ShadowOB Hermes platform plugin and run Hermes gateway for this Buddy.',
+    summary:
+      'Install the ShadowOB Hermes platform plugin, Shadow CLI bin/skills, and a Buddy CLI profile.',
     connectCommand,
     quickCommand: commands.map((item) => item.command).join(' && '),
     commands,
@@ -213,7 +218,8 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
       `Shadow server URL: ${serverUrl}`,
       `Buddy token: ${token}`,
       '',
-      'Install the bundled ShadowOB platform plugin, write the environment values above, enable the plugin, then run hermes gateway. The plugin resolves the Buddy agent id and channel policy from Shadow at runtime.',
+      `Preferred one-line setup: ${connectCommand}`,
+      'The connector installs/configures the Shadow CLI, official Shadow skill files, and the Buddy profile before writing Hermes config. The plugin resolves the Buddy agent id and channel policy from Shadow at runtime.',
     ].join('\n'),
     docsUrl: 'https://hermes-agent.nousresearch.com/docs/user-guide/messaging',
     capabilities: [
@@ -293,7 +299,7 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
   return {
     target: 'cc-connect',
     title: 'cc-connect',
-    summary: `Use ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF} with ShadowOB Socket.IO platform support for this Buddy token.`,
+    summary: `Use ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF} with ShadowOB Socket.IO support, Shadow CLI bin/skills, and a Buddy CLI profile.`,
     connectCommand: startCommand,
     quickCommand: startCommand,
     commands,
@@ -306,7 +312,8 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
       `Project work_dir: ${workDir}`,
       `Agent type: ${agentType}`,
       '',
-      `Install ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF}, add the TOML platform block, and start cc-connect.`,
+      `Preferred one-line setup: ${startCommand}`,
+      `Install ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF}, install/configure the Shadow CLI and official Shadow skill files, add the TOML platform block, and start cc-connect.`,
     ].join('\n'),
     docsUrl: CC_CONNECT_FORK_DOCS_URL,
     capabilities: [

@@ -238,6 +238,36 @@ class ShadowServerAppTokenIntrospection:
 
 
 @dataclass
+class ShadowServerAppCommandApproval:
+    app_key: str
+    app_name: str
+    command_name: str
+    command_title: str
+    permission: str
+    action: str
+    data_class: str
+    actor_kind: str
+    subject_kind: str
+    approval_mode: str
+    reason: str
+    command_description: str | None = None
+    buddy_agent_id: str | None = None
+
+
+@dataclass
+class ShadowServerAppCommandConsent:
+    id: str
+    server_app_id: str
+    app_key: str
+    command: str
+    permission: str
+    subject_kind: str
+    subject_user_id: str | None = None
+    buddy_agent_id: str | None = None
+    expires_at: str | None = None
+
+
+@dataclass
 class ShadowMessageMention:
     kind: str
     target_id: str

@@ -192,6 +192,7 @@ export type ShadowServerAppDataClass =
   | 'financial'
   | 'secret'
   | 'cloud-secret'
+export type ShadowServerAppApprovalMode = 'none' | 'first_time' | 'every_time' | 'policy'
 
 export interface ShadowServerAppCommand {
   name: string
@@ -204,7 +205,7 @@ export interface ShadowServerAppCommand {
   permission: string
   action: ShadowServerAppAction
   dataClass: ShadowServerAppDataClass
-  approvalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+  approvalMode?: ShadowServerAppApprovalMode
   binary?: {
     supported?: boolean
     field?: string
@@ -227,6 +228,10 @@ export interface ShadowServerAppManifest {
   api: {
     baseUrl: string
     auth?: { type: 'oauth2-bearer' }
+  }
+  access?: {
+    defaultPermissions?: string[]
+    defaultApprovalMode?: ShadowServerAppApprovalMode
   }
   commands: ShadowServerAppCommand[]
   skills?: Array<{
@@ -254,6 +259,8 @@ export interface ShadowServerAppIntegration {
   iframeEntry?: string | null
   allowedOrigins: string[]
   apiBaseUrl: string
+  defaultPermissions: string[]
+  defaultApprovalMode: ShadowServerAppApprovalMode
   status: string
   installedByUserId: string
   createdAt: string
@@ -270,8 +277,36 @@ export interface ShadowServerAppDiscovery {
     permission: string
     action: ShadowServerAppAction
     dataClass: ShadowServerAppDataClass
-    approvalMode: 'none' | 'first_time' | 'every_time' | 'policy'
+    approvalMode: ShadowServerAppApprovalMode
   }>
+}
+
+export interface ShadowServerAppCommandApproval {
+  appKey: string
+  appName: string
+  commandName: string
+  commandTitle: string
+  commandDescription?: string | null
+  permission: string
+  action: ShadowServerAppAction
+  dataClass: ShadowServerAppDataClass
+  actorKind: string
+  subjectKind: 'user' | 'buddy'
+  buddyAgentId?: string | null
+  approvalMode: ShadowServerAppApprovalMode
+  reason: 'not_default' | 'first_time' | 'every_time' | 'restricted' | 'policy'
+}
+
+export interface ShadowServerAppCommandConsent {
+  id: string
+  serverAppId: string
+  appKey: string
+  command: string
+  permission: string
+  subjectKind: 'user' | 'buddy'
+  subjectUserId?: string | null
+  buddyAgentId?: string | null
+  expiresAt?: string | null
 }
 
 export interface ShadowServerAppCatalogEntry {

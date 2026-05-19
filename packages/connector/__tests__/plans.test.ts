@@ -13,6 +13,8 @@ describe('connector plans', () => {
     expect(plan.connectCommand).toContain('@shadowob/connector@latest connect')
     expect(plan.quickCommand).toContain("channels.shadowob.token 'tok'")
     expect(plan.configBlocks[0]?.content).toContain('"serverUrl": "https://shadow.example.com"')
+    expect(plan.summary).toContain('Shadow CLI bin/skills')
+    expect(plan.aiPrompt).toContain('official Shadow skill files')
   })
 
   it('builds a Hermes plugin env and config plan', () => {
@@ -36,6 +38,7 @@ describe('connector plans', () => {
       'platforms:',
     )
     expect(plan.aiPrompt).toContain('resolves the Buddy agent id and channel policy')
+    expect(plan.aiPrompt).toContain('official Shadow skill files')
     expect(plan.capabilities).toContain('slashCommands')
     expect(plan.capabilities).toContain('activityStatus')
     expect(plan.capabilities).toContain('statusChecks')
@@ -56,6 +59,7 @@ describe('connector plans', () => {
     expect(plan.connectCommand).toContain('--install --start')
     expect(plan.quickCommand).not.toContain('npm install -g cc-connect')
     expect(plan.summary).toContain('buggyblues/cc-connect@63b5d59')
+    expect(plan.summary).toContain('Shadow CLI bin/skills')
     expect(plan.configBlocks[0]?.content).toContain('[projects.agent]')
     expect(plan.configBlocks[0]?.content).toContain('type = "codex"')
     expect(plan.configBlocks[0]?.content).toContain('server_url = "https://shadow.example.com"')

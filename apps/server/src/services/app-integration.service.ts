@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { Logger } from 'pino'
+import { ZodError } from 'zod'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AppIntegrationDao } from '../dao/app-integration.dao'
 import type { ServerDao } from '../dao/server.dao'
@@ -7,6 +8,7 @@ import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { validateJsonLimits } from '../lib/json-limits'
 import type { Actor } from '../security/actor'
 import {
+  type ApproveServerAppCommandInput,
   type CallServerAppCommandInput,
   type CreateServerAppCatalogEntryInput,
   type DiscoverServerAppInput,
@@ -14,6 +16,7 @@ import {
   type InstallServerAppFromCatalogInput,
   type InstallServerAppInput,
   serverAppManifestSchema,
+  type UpdateServerAppAccessPolicyInput,
 } from '../validators/app-integration.schema'
 import type { AppIntegrationEventBus } from './app-integration-event-bus'
 import type { PolicyService } from './policy.service'
@@ -75,6 +78,13 @@ function compactJson(value: unknown) {
   }
 }
 
+function formatZodError(error: ZodError) {
+  const first = error.issues[0]
+  if (!first) return 'Invalid app manifest'
+  const path = first.path.length ? first.path.join('.') : 'manifest'
+  return `Invalid app manifest: ${path}: ${first.message}`
+}
+
 function requireUserBoundActor(actor: Actor) {
   if (actor.kind === 'system') {
     throw Object.assign(new Error('System actor cannot manage server apps'), { status: 403 })
@@ -96,6 +106,8 @@ function redactApp(row: Awaited<ReturnType<AppIntegrationDao['findById']>>) {
     iframeEntry: row.iframeEntry,
     allowedOrigins: row.allowedOrigins,
     apiBaseUrl: row.apiBaseUrl,
+    defaultPermissions: row.defaultPermissions,
+    defaultApprovalMode: row.defaultApprovalMode,
     status: row.status,
     installedByUserId: row.installedByUserId,
     createdAt: row.createdAt,
@@ -128,6 +140,42 @@ interface LaunchTokenPayload {
 }
 
 type ServerAppAuthType = 'oauth2-bearer'
+type ApprovalMode = 'none' | 'first_time' | 'every_time' | 'policy'
+type CommandSubject = {
+  subjectKind: 'user' | 'buddy'
+  subjectKey: string
+  subjectUserId: string | null
+  buddyAgentId: string | null
+}
+
+const RESTRICTED_DATA_CLASSES = new Set(['financial', 'secret', 'cloud-secret'])
+
+function safeDefaultPermissions(manifest: {
+  commands: Array<{ permission: string; action: string; dataClass: string }>
+}) {
+  return Array.from(
+    new Set(
+      manifest.commands
+        .filter(
+          (command) => command.action === 'read' && !RESTRICTED_DATA_CLASSES.has(command.dataClass),
+        )
+        .map((command) => command.permission),
+    ),
+  )
+}
+
+function manifestDefaultPermissions(manifest: {
+  access?: { defaultPermissions?: string[] }
+  commands: Array<{ permission: string; action: string; dataClass: string }>
+}) {
+  return manifest.access?.defaultPermissions ?? safeDefaultPermissions(manifest)
+}
+
+function manifestDefaultApprovalMode(manifest: {
+  access?: { defaultApprovalMode?: ApprovalMode }
+}) {
+  return manifest.access?.defaultApprovalMode ?? 'none'
+}
 
 function serverAppAuthType(manifest: { api: { auth?: { type?: ServerAppAuthType } } }) {
   return manifest.api.auth?.type ?? 'oauth2-bearer'
@@ -181,7 +229,11 @@ export class AppIntegrationService {
   private validateManifest(input: unknown) {
     const limits = validateJsonLimits(input, MANIFEST_LIMITS)
     if (!limits.ok) throw Object.assign(new Error(limits.error), { status: 413 })
-    const manifest = serverAppManifestSchema.parse(input)
+    const parsed = serverAppManifestSchema.safeParse(input)
+    if (!parsed.success) {
+      throw Object.assign(new Error(formatZodError(parsed.error)), { status: 422 })
+    }
+    const manifest = parsed.data
     const commandNames = new Set<string>()
     if (manifest.iframe) {
       const entryOrigin = normalizeOrigin(manifest.iframe.entry)
@@ -197,6 +249,14 @@ export class AppIntegrationService {
         throw Object.assign(new Error(`Duplicate command: ${command.name}`), { status: 422 })
       }
       commandNames.add(command.name)
+    }
+    const allowedPermissions = new Set(manifest.commands.map((command) => command.permission))
+    for (const permission of manifest.access?.defaultPermissions ?? []) {
+      if (permission !== '*' && !allowedPermissions.has(permission)) {
+        throw Object.assign(new Error(`Unknown default app permission: ${permission}`), {
+          status: 422,
+        })
+      }
     }
     return manifest
   }
@@ -379,9 +439,11 @@ export class AppIntegrationService {
     if (!entry || entry.status !== 'active') {
       throw Object.assign(new Error('App catalog entry not found'), { status: 404 })
     }
+    if (entry.manifestUrl) {
+      return this.install(serverId, actor, { manifestUrl: entry.manifestUrl })
+    }
     return this.install(serverId, actor, {
-      manifestUrl: entry.manifestUrl ?? undefined,
-      manifest: serverAppManifestSchema.parse(entry.manifest),
+      manifest: this.validateManifest(entry.manifest),
     })
   }
 
@@ -405,6 +467,8 @@ export class AppIntegrationService {
       iframeEntry,
       allowedOrigins,
       apiBaseUrl: manifest.api.baseUrl.replace(/\/$/, ''),
+      defaultPermissions: manifestDefaultPermissions(manifest),
+      defaultApprovalMode: manifestDefaultApprovalMode(manifest),
       installedByUserId: requireUserBoundActor(actor),
     })
 
@@ -502,12 +566,7 @@ export class AppIntegrationService {
       serverId,
     )
 
-    const allowedPermissions = new Set(app.manifest.commands.map((command) => command.permission))
-    for (const permission of input.permissions) {
-      if (permission !== '*' && !allowedPermissions.has(permission)) {
-        throw Object.assign(new Error(`Unknown app permission: ${permission}`), { status: 422 })
-      }
-    }
+    this.validateKnownPermissions(app, input.permissions)
 
     return this.deps.appIntegrationDao.upsertBuddyGrant({
       serverAppId: app.id,
@@ -518,6 +577,130 @@ export class AppIntegrationService {
       createdByUserId: requireUserBoundActor(actor),
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
     })
+  }
+
+  private validateKnownPermissions(
+    app: { manifest: { commands: Array<{ permission: string }> } },
+    permissions: string[],
+  ) {
+    const allowedPermissions = new Set(app.manifest.commands.map((command) => command.permission))
+    for (const permission of permissions) {
+      if (permission !== '*' && !allowedPermissions.has(permission)) {
+        throw Object.assign(new Error(`Unknown app permission: ${permission}`), { status: 422 })
+      }
+    }
+  }
+
+  async updateAccessPolicy(
+    serverIdOrSlug: string,
+    appKey: string,
+    actor: Actor,
+    input: UpdateServerAppAccessPolicyInput,
+  ) {
+    const serverId = await this.resolveServerId(serverIdOrSlug)
+    await this.requireServerAdmin(actor, serverId)
+    const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
+    if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
+    this.validateKnownPermissions(app, input.defaultPermissions)
+
+    const updated = await this.deps.appIntegrationDao.updateAccessPolicy(app.id, {
+      defaultPermissions: input.defaultPermissions,
+      defaultApprovalMode: input.defaultApprovalMode ?? 'none',
+    })
+    if (!updated) throw Object.assign(new Error('App integration not found'), { status: 404 })
+    return {
+      ...redactApp(updated)!,
+      grants: await this.deps.appIntegrationDao.listBuddyGrants(updated.id),
+    }
+  }
+
+  async approveCommandAccess(
+    serverIdOrSlug: string,
+    appKey: string,
+    actor: Actor,
+    input: ApproveServerAppCommandInput,
+  ) {
+    const serverId = await this.resolveServerId(serverIdOrSlug)
+    await this.deps.policyService.requireServerMember(actor, serverId)
+    const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
+    if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
+    const command = app.manifest.commands.find((item) => item.name === input.commandName)
+    if (!command) throw Object.assign(new Error('App command not found'), { status: 404 })
+    const restricted = RESTRICTED_DATA_CLASSES.has(command.dataClass)
+    if (restricted) await this.requireServerAdmin(actor, serverId)
+
+    let subject: CommandSubject
+    if (input.buddyAgentId) {
+      const approverUserId = requireUserBoundActor(actor)
+      const agent = await this.deps.agentDao.findById(input.buddyAgentId)
+      if (!agent) throw Object.assign(new Error('Buddy not found'), { status: 404 })
+      await this.deps.policyService.requireServerMember(
+        {
+          kind: 'agent',
+          userId: agent.userId,
+          agentId: agent.id,
+          ownerId: agent.ownerId,
+          scopes: [],
+        },
+        serverId,
+      )
+      if (agent.ownerId !== approverUserId) {
+        await this.requireServerAdmin(actor, serverId)
+      }
+      subject = {
+        subjectKind: 'buddy',
+        subjectKey: agent.id,
+        subjectUserId: agent.userId,
+        buddyAgentId: agent.id,
+      }
+    } else {
+      if (actor.kind === 'agent') {
+        throw Object.assign(new Error('Buddy command approval must be confirmed by a person'), {
+          status: 403,
+        })
+      }
+      subject = {
+        subjectKind: 'user',
+        subjectKey: requireUserBoundActor(actor),
+        subjectUserId: requireUserBoundActor(actor),
+        buddyAgentId: null,
+      }
+    }
+
+    const approvalMode = command.approvalMode ?? (app.defaultApprovalMode as ApprovalMode) ?? 'none'
+    const expiresAt =
+      input.remember === false || approvalMode === 'every_time'
+        ? new Date(Date.now() + 10 * 60 * 1000)
+        : null
+    const consent = await this.deps.appIntegrationDao.upsertCommandConsent({
+      serverAppId: app.id,
+      serverId,
+      appKey: app.appKey,
+      command: command.name,
+      permission: command.permission,
+      subjectKind: subject.subjectKind,
+      subjectKey: subject.subjectKey,
+      subjectUserId: subject.subjectUserId,
+      buddyAgentId: subject.buddyAgentId,
+      grantedByUserId: requireUserBoundActor(actor),
+      approvalMode: approvalMode === 'none' ? 'first_time' : approvalMode,
+      expiresAt,
+    })
+
+    return {
+      ok: true,
+      consent: {
+        id: consent.id,
+        serverAppId: consent.serverAppId,
+        appKey: consent.appKey,
+        command: consent.command,
+        permission: consent.permission,
+        subjectKind: consent.subjectKind,
+        subjectUserId: consent.subjectUserId,
+        buddyAgentId: consent.buddyAgentId,
+        expiresAt: consent.expiresAt,
+      },
+    }
   }
 
   private async actorBuddyAgentId(actor: Actor) {
@@ -563,23 +746,185 @@ export class AppIntegrationService {
     return token
   }
 
-  private async requireCommandGrant(actor: Actor, serverAppId: string, permission: string) {
-    if (actor.kind !== 'agent') return
-    const buddyAgentId = await this.actorBuddyAgentId(actor)
-    if (!buddyAgentId) {
-      throw Object.assign(new Error('Buddy actor is missing agent identity'), { status: 403 })
+  private permissionsInclude(permissions: string[] | null | undefined, permission: string) {
+    return Boolean(permissions?.includes('*') || permissions?.includes(permission))
+  }
+
+  private async commandSubject(actor: Actor): Promise<CommandSubject> {
+    if (actor.kind === 'system') {
+      throw Object.assign(new Error('System actor cannot call server apps'), { status: 403 })
     }
-    const grant = await this.deps.appIntegrationDao.findBuddyGrant(serverAppId, buddyAgentId)
-    if (!grant) {
-      throw Object.assign(new Error('Buddy is not granted to use this app'), { status: 403 })
+    if (actor.kind === 'agent') {
+      const buddyAgentId = await this.actorBuddyAgentId(actor)
+      if (!buddyAgentId) {
+        throw Object.assign(new Error('Buddy actor is missing agent identity'), { status: 403 })
+      }
+      return {
+        subjectKind: 'buddy',
+        subjectKey: buddyAgentId,
+        subjectUserId: actor.userId,
+        buddyAgentId,
+      }
     }
-    if (grant.expiresAt && new Date() > grant.expiresAt) {
-      throw Object.assign(new Error('Buddy app grant expired'), { status: 403 })
+    return {
+      subjectKind: 'user',
+      subjectKey: actor.userId,
+      subjectUserId: actor.userId,
+      buddyAgentId: null,
     }
-    if (!grant.permissions.includes('*') && !grant.permissions.includes(permission)) {
-      throw Object.assign(new Error(`Buddy app grant lacks permission: ${permission}`), {
-        status: 403,
+  }
+
+  private commandApprovalRequired(input: {
+    app: {
+      serverId: string
+      id: string
+      appKey: string
+      name: string
+    }
+    command: {
+      name: string
+      title?: string
+      description?: string
+      permission: string
+      action: string
+      dataClass: string
+    }
+    actor: Actor
+    subject: CommandSubject
+    approvalMode: ApprovalMode
+    reason: 'not_default' | 'first_time' | 'every_time' | 'restricted' | 'policy'
+    channelId?: string | null
+  }) {
+    return Object.assign(new Error('Server App command approval required'), {
+      status: 428,
+      code: 'SERVER_APP_COMMAND_APPROVAL_REQUIRED',
+      params: {
+        approval: {
+          serverId: input.app.serverId,
+          serverAppId: input.app.id,
+          appKey: input.app.appKey,
+          appName: input.app.name,
+          commandName: input.command.name,
+          commandTitle: input.command.title ?? input.command.name,
+          commandDescription: input.command.description ?? null,
+          permission: input.command.permission,
+          action: input.command.action,
+          dataClass: input.command.dataClass,
+          actorKind: input.actor.kind,
+          subjectKind: input.subject.subjectKind,
+          buddyAgentId: input.subject.buddyAgentId,
+          approvalMode: input.approvalMode,
+          reason: input.reason,
+          channelId: input.channelId ?? null,
+        },
+      },
+    })
+  }
+
+  private async requireCommandAccess(input: {
+    actor: Actor
+    app: {
+      id: string
+      serverId: string
+      appKey: string
+      name: string
+      defaultPermissions: string[]
+      defaultApprovalMode: string
+    }
+    command: {
+      name: string
+      title?: string
+      description?: string
+      permission: string
+      action: string
+      dataClass: string
+      approvalMode?: ApprovalMode
+    }
+    channelId?: string | null
+  }) {
+    const subject = await this.commandSubject(input.actor)
+    const defaultAllowed = this.permissionsInclude(
+      input.app.defaultPermissions,
+      input.command.permission,
+    )
+    let explicitBuddyGrantAllows = false
+    let grantApprovalMode: ApprovalMode | null = null
+
+    if (subject.subjectKind === 'buddy') {
+      const grant = await this.deps.appIntegrationDao.findBuddyGrant(
+        input.app.id,
+        subject.buddyAgentId!,
+      )
+      if (grant?.expiresAt && new Date() > grant.expiresAt) {
+        throw Object.assign(new Error('Buddy app grant expired'), { status: 403 })
+      }
+      explicitBuddyGrantAllows = this.permissionsInclude(
+        grant?.permissions,
+        input.command.permission,
+      )
+      grantApprovalMode = explicitBuddyGrantAllows ? (grant!.approvalMode as ApprovalMode) : null
+    }
+
+    const baseAllowed =
+      subject.subjectKind === 'buddy' ? defaultAllowed || explicitBuddyGrantAllows : defaultAllowed
+
+    const restricted = RESTRICTED_DATA_CLASSES.has(input.command.dataClass)
+    let approvalMode = (
+      grantApprovalMode && grantApprovalMode !== 'none'
+        ? grantApprovalMode
+        : (input.command.approvalMode ?? (input.app.defaultApprovalMode as ApprovalMode))
+    ) as ApprovalMode
+
+    let reason: 'not_default' | 'first_time' | 'every_time' | 'restricted' | 'policy' = 'first_time'
+    if (restricted && approvalMode === 'none') {
+      approvalMode = 'first_time'
+      reason = 'restricted'
+    } else if (!baseAllowed && approvalMode === 'none') {
+      approvalMode = 'first_time'
+      reason = 'not_default'
+    } else if (approvalMode === 'every_time') {
+      reason = 'every_time'
+    } else if (approvalMode === 'policy') {
+      reason = 'policy'
+      approvalMode = 'first_time'
+    }
+
+    if (baseAllowed && approvalMode === 'none') {
+      return { subject, approvalMode, transientConsentId: null }
+    }
+
+    const consent = await this.deps.appIntegrationDao.findCommandConsent({
+      serverAppId: input.app.id,
+      command: input.command.name,
+      subjectKind: subject.subjectKind,
+      subjectKey: subject.subjectKey,
+    })
+    const consentValid =
+      consent &&
+      !consent.consumedAt &&
+      (!consent.expiresAt || consent.expiresAt.getTime() > Date.now())
+    if (!consentValid) {
+      throw this.commandApprovalRequired({
+        app: input.app,
+        command: input.command,
+        actor: input.actor,
+        subject,
+        approvalMode,
+        reason,
+        channelId: input.channelId ?? null,
       })
+    }
+
+    return {
+      subject,
+      approvalMode,
+      transientConsentId: approvalMode === 'every_time' ? consent.id : null,
+    }
+  }
+
+  private async consumeTransientCommandConsent(access: { transientConsentId: string | null }) {
+    if (access.transientConsentId) {
+      await this.deps.appIntegrationDao.markCommandConsentConsumed(access.transientConsentId)
     }
   }
 
@@ -639,16 +984,12 @@ export class AppIntegrationService {
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     const command = app.manifest.commands.find((item) => item.name === input.commandName)
     if (!command) throw Object.assign(new Error('App command not found'), { status: 404 })
-    if (
-      command.dataClass === 'financial' ||
-      command.dataClass === 'secret' ||
-      command.dataClass === 'cloud-secret'
-    ) {
-      throw Object.assign(new Error('Restricted app data class requires an approval workflow'), {
-        status: 403,
-      })
-    }
-    await this.requireCommandGrant(input.actor, app.id, command.permission)
+    const commandAccess = await this.requireCommandAccess({
+      actor: input.actor,
+      app,
+      command,
+      channelId: input.body.channelId ?? null,
+    })
 
     const jsonLimits = validateJsonLimits(safeJson(input.body.input), COMMAND_INPUT_LIMITS)
     if (!jsonLimits.ok) throw Object.assign(new Error(jsonLimits.error), { status: 413 })
@@ -742,6 +1083,7 @@ export class AppIntegrationService {
         action: command.action,
         dataClass: command.dataClass,
       })
+      await this.consumeTransientCommandConsent(commandAccess)
       return {
         type: 'binary',
         contentType: contentType || 'application/octet-stream',
@@ -762,6 +1104,7 @@ export class AppIntegrationService {
         action: command.action,
         dataClass: command.dataClass,
       })
+      await this.consumeTransientCommandConsent(commandAccess)
       return { ok: true, result }
     }
     this.publishCommandEvent({
@@ -773,6 +1116,7 @@ export class AppIntegrationService {
       action: command.action,
       dataClass: command.dataClass,
     })
+    await this.consumeTransientCommandConsent(commandAccess)
     return result
   }
 
@@ -836,12 +1180,13 @@ export class AppIntegrationService {
       'Always call through the Shadow CLI:',
       '',
       '```bash',
-      `shadowob app call ${manifest.appKey} <command> --server "${app.serverId}" --json-input '<raw-command-input-json>' --json`,
+      `shadowob app call ${manifest.appKey} <command> --server "${app.serverId}" --channel-id "<current-channel-id>" --json-input '<raw-command-input-json>' --json`,
       '```',
       '',
       'The `--json-input` value is the raw command input object, for example `{"title":"Example","priority":"high"}`. The CLI wraps the HTTP request for you.',
       '',
       'Do not call this App through curl, fetch, raw HTTP routes, or the JavaScript SDK. Use `shadowob app call` so Shadow can apply the server App identity, grant, and command policy path consistently.',
+      'If the CLI says command approval is required, do not send a chat form or approve it yourself. Shadow will show the approval popup to a person; wait for that person to confirm before retrying.',
       '',
       'Available commands:',
       ...manifest.commands.flatMap((command) => {

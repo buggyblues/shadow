@@ -1192,6 +1192,13 @@
     "employerSignature": "고용주 서명",
     "approved": "승인됨"
   },
+  "serverApps": {
+    "noIframe": "이 App은 iframe 진입점을 제공하지 않습니다.",
+    "commandApprovalTitle": "App 명령 승인",
+    "commandApprovalMessage": "{{app}}이(가) {{permission}} 권한으로 {{command}} 명령을 실행하려고 합니다.",
+    "commandApprovalDenied": "명령 승인이 취소되었습니다.",
+    "commandApprovalConfirm": "승인하고 계속"
+  },
   "apps": {
     "noApps": "앱 없음"
   },

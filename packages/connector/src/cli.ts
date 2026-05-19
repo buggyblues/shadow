@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ensureCcConnectFork } from './cc-connect-installer.js'
+import { parse as parseToml } from 'smol-toml'
+import { parse as parseYaml } from 'yaml'
+import { ensureCcConnectFork, getCcConnectBinaryStatus } from './cc-connect-installer.js'
 import {
   mergeCcConnectConfigContent,
   mergeEnvContent,
@@ -14,8 +16,8 @@ import {
 import { createConnectorPlan, type ShadowConnectorTarget } from './index.js'
 
 interface CliOptions {
-  command: 'plan' | 'connect'
-  target: ShadowConnectorTarget
+  command: 'plan' | 'connect' | 'update' | 'doctor' | 'fix' | 'status' | 'scan'
+  target?: ShadowConnectorTarget
   serverUrl: string
   token: string
   openclawConfig?: string
@@ -31,6 +33,10 @@ interface CliOptions {
 }
 
 const TARGETS = new Set(['openclaw', 'hermes', 'cc-connect'])
+const COMMANDS = new Set(['plan', 'connect', 'update', 'doctor', 'fix', 'status', 'scan'])
+const ALL_TARGETS = ['openclaw', 'hermes', 'cc-connect'] as const
+const SHADOW_CLI_PACKAGE = '@shadowob/cli@latest'
+const SHADOW_CONNECTOR_PACKAGE = '@shadowob/connector@latest'
 
 function readOption(args: string[], name: string): string | undefined {
   const prefix = `${name}=`
@@ -50,8 +56,14 @@ function usage(): string {
     'Usage:',
     '  shadowob-connector plan --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
     '  shadowob-connector connect --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
+    '  shadowob-connector update --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
+    '  shadowob-connector fix --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
+    '  shadowob-connector scan [--target <openclaw|hermes|cc-connect>] [--server-url <url>] [--token <token>]',
+    '  shadowob-connector doctor [--target <openclaw|hermes|cc-connect>]',
+    '  shadowob-connector status [--target <openclaw|hermes|cc-connect>]',
     '',
     'Options:',
+    '  --server-url <url>      Shadow server URL, default https://shadowob.com',
     '  --openclaw-config <path> OpenClaw JSON config, default $OPENCLAW_CONFIG or ~/.shadowob/openclaw.json',
     '  --hermes-home <path>    Hermes config directory, default $HERMES_HOME or ~/.hermes',
     '  --work-dir <path>       cc-connect project work directory',
@@ -59,11 +71,16 @@ function usage(): string {
     '  --agent-type <type>     cc-connect agent type, default codex',
     '  --json                  Print the full plan as JSON',
     '  --force                 Overwrite target config files when needed',
-    '  --install               Install the ShadowOB cc-connect fork when target is cc-connect',
-    '  --no-install            Skip Hermes dependency install and plugin enablement',
+    '  --install               Install connector runtime dependencies',
+    '  --no-install            Skip connector runtime dependency installation',
     '  --start                 Start Hermes gateway or cc-connect after setup',
     '  --dry-run               Show what would be applied without changing files',
   ].join('\n')
+}
+
+function requireTarget(options: CliOptions): ShadowConnectorTarget {
+  if (!options.target) throw new Error('Missing or invalid --target')
+  return options.target
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -73,17 +90,23 @@ function parseArgs(args: string[]): CliOptions {
   }
 
   const commandArg = args[0]
-  const command = commandArg === 'connect' || commandArg === 'plan' ? commandArg : 'plan'
-  const optionArgs = command === 'plan' ? args.filter((arg) => arg !== 'plan') : args.slice(1)
+  const hasCommand = commandArg ? COMMANDS.has(commandArg) : false
+  const command = hasCommand ? (commandArg as CliOptions['command']) : 'plan'
+  const optionArgs = hasCommand ? args.slice(1) : args
 
   const target = readOption(optionArgs, '--target') as ShadowConnectorTarget | undefined
-  if (!target || !TARGETS.has(target)) {
+  if (target && !TARGETS.has(target)) {
+    throw new Error('Missing or invalid --target')
+  }
+  if (!target && command !== 'doctor' && command !== 'status' && command !== 'scan') {
     throw new Error('Missing or invalid --target')
   }
   const install =
-    target === 'cc-connect'
-      ? hasFlag(optionArgs, '--install')
-      : !hasFlag(optionArgs, '--no-install')
+    command === 'fix' || command === 'update'
+      ? !hasFlag(optionArgs, '--no-install')
+      : target === 'cc-connect'
+        ? hasFlag(optionArgs, '--install')
+        : !hasFlag(optionArgs, '--no-install')
 
   return {
     command,
@@ -104,7 +127,8 @@ function parseArgs(args: string[]): CliOptions {
 }
 
 function printPlan(options: CliOptions): void {
-  const plan = createConnectorPlan(options)
+  const target = requireTarget(options)
+  const plan = createConnectorPlan({ ...options, target })
   if (options.json) {
     console.log(JSON.stringify(plan, null, 2))
     return
@@ -173,6 +197,689 @@ function normalizeServerUrl(value: string): string {
   return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed.replace(/\/$/, '')
 }
 
+function shellQuote(value: string): string {
+  if (!value) return "''"
+  if (/^[A-Za-z0-9_./:@=-]+$/.test(value)) return value
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function tokenForCommand(options: CliOptions): string {
+  return options.token.trim() || '<BUDDY_TOKEN>'
+}
+
+function connectorCommand(
+  command: 'connect' | 'update' | 'fix' | 'doctor' | 'status',
+  target: ShadowConnectorTarget,
+  options: CliOptions,
+  extras: string[] = [],
+): string {
+  const parts = ['shadowob-connector', command, '--target', target]
+  if (command !== 'doctor' && command !== 'status') {
+    parts.push(
+      '--server-url',
+      normalizeServerUrl(options.serverUrl),
+      '--token',
+      tokenForCommand(options),
+    )
+  }
+  parts.push(...extras)
+  return parts.map(shellQuote).join(' ')
+}
+
+function commandExists(command: string): boolean {
+  const result = spawnSync(command, ['--version'], { stdio: 'ignore' })
+  return result.status === 0
+}
+
+function writeExecutable(path: string, content: string, dryRun: boolean): void {
+  writeFile(path, content, dryRun)
+  if (dryRun) return
+  chmodSync(path, 0o755)
+}
+
+function ensureNpxShim(options: {
+  command: string
+  packageSpec: string
+  binaryName: string
+  dryRun: boolean
+}): void {
+  if (commandExists(options.command)) return
+  const localBin = resolve(homedir(), '.local/bin')
+  const target = resolve(localBin, options.command)
+  const content = [
+    '#!/usr/bin/env sh',
+    `exec npx -y ${options.packageSpec} ${options.binaryName === options.command ? '' : options.binaryName} "$@"`,
+    '',
+  ]
+    .join('\n')
+    .replace('  "$@"', ' "$@"')
+  console.log(`Applying: Install ${options.command} shim ${target}`)
+  writeExecutable(target, content, options.dryRun)
+  const pathEntries = (process.env.PATH ?? '').split(':')
+  if (!pathEntries.includes(localBin)) {
+    console.log(`Note: add ${localBin} to PATH so agents can run ${options.command}`)
+  }
+}
+
+function shadowCliProfileName(options: CliOptions): string {
+  return options.projectName?.trim() || 'shadow-buddy'
+}
+
+function writeShadowCliProfile(options: CliOptions): void {
+  const configPath = resolve(homedir(), '.shadowob/shadowob.config.json')
+  const current = (() => {
+    try {
+      return JSON.parse(readExisting(configPath)) as {
+        profiles?: Record<string, { serverUrl: string; token: string }>
+        currentProfile?: string
+      }
+    } catch {
+      return {}
+    }
+  })()
+  const profileName = shadowCliProfileName(options)
+  const next = {
+    ...current,
+    profiles: {
+      ...(current.profiles ?? {}),
+      [profileName]: {
+        serverUrl: normalizeServerUrl(options.serverUrl),
+        token: options.token,
+      },
+    },
+    currentProfile: profileName,
+  }
+  console.log(`Applying: Configure Shadow CLI profile ${profileName}`)
+  writeFile(configPath, JSON.stringify(next, null, 2), options.dryRun)
+}
+
+function shadowobSkillMarkdown(): string {
+  const candidates = [
+    resolve(packageRoot(), 'skills/shadowob/SKILL.md'),
+    resolve(process.cwd(), 'skills/shadowob-cli/SKILL.md'),
+    resolve(process.cwd(), 'packages/openclaw-shadowob/skills/shadowob/SKILL.md'),
+  ]
+  let currentDir = packageRoot()
+  while (true) {
+    candidates.push(resolve(currentDir, 'skills/shadowob-cli/SKILL.md'))
+    const parentDir = dirname(currentDir)
+    if (parentDir === currentDir) break
+    currentDir = parentDir
+  }
+  const found = candidates.find((candidate) => existsSync(candidate))
+  if (!found) throw new Error('Cannot find bundled Shadow CLI skill')
+  return readFileSync(found, 'utf8')
+}
+
+function shadowobSkillTargets(options: CliOptions): string[] {
+  const hermesDir = expandHome(options.hermesHome ?? process.env.HERMES_HOME ?? '~/.hermes')
+  return Array.from(
+    new Set([
+      resolve(homedir(), '.shadowob/skills/shadowob/SKILL.md'),
+      resolve(homedir(), '.agents/skills/shadowob/SKILL.md'),
+      resolve(homedir(), '.codex/skills/shadowob/SKILL.md'),
+      resolve(homedir(), '.claude/skills/shadowob/SKILL.md'),
+      resolve(homedir(), '.gemini/skills/shadowob/SKILL.md'),
+      resolve(homedir(), '.opencode/skills/shadowob/SKILL.md'),
+      resolve(homedir(), '.openclaw/skills/shadowob/SKILL.md'),
+      resolve(hermesDir, 'skills/shadowob/SKILL.md'),
+    ]),
+  )
+}
+
+function installShadowCliAndSkills(options: CliOptions): void {
+  ensureNpxShim({
+    command: 'shadowob',
+    packageSpec: SHADOW_CLI_PACKAGE,
+    binaryName: 'shadowob',
+    dryRun: options.dryRun,
+  })
+  ensureNpxShim({
+    command: 'shadowob-connector',
+    packageSpec: SHADOW_CONNECTOR_PACKAGE,
+    binaryName: 'shadowob-connector',
+    dryRun: options.dryRun,
+  })
+  const skill = shadowobSkillMarkdown()
+  for (const target of shadowobSkillTargets(options)) {
+    console.log(`Applying: Install Shadow skill ${target}`)
+    writeFile(target, skill, options.dryRun)
+  }
+  writeShadowCliProfile(options)
+}
+
+type DiagnosticTarget = 'common' | ShadowConnectorTarget
+type DiagnosticStatus = 'ok' | 'warn' | 'fail'
+
+interface DiagnosticCheck {
+  target: DiagnosticTarget
+  status: DiagnosticStatus
+  label: string
+  detail?: string
+  fix?: string
+}
+
+function check(
+  target: DiagnosticTarget,
+  status: DiagnosticStatus,
+  label: string,
+  detail?: string,
+  fix?: string,
+): DiagnosticCheck {
+  return { target, status, label, detail, fix }
+}
+
+function selectedTargets(options: CliOptions): ShadowConnectorTarget[] {
+  return options.target ? [options.target] : [...ALL_TARGETS]
+}
+
+function parseJsonFile(
+  path: string,
+  label: string,
+): { value?: Record<string, unknown>; error?: string } {
+  try {
+    const content = readExisting(path)
+    if (!content.trim()) return { error: `${label} config is empty` }
+    const parsed = JSON.parse(content) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { error: `${label} config must be an object` }
+    }
+    return { value: parsed as Record<string, unknown> }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function diagnoseCommon(options: CliOptions): DiagnosticCheck[] {
+  const checks: DiagnosticCheck[] = [
+    check(
+      'common',
+      commandExists('shadowob') ? 'ok' : 'warn',
+      'Shadow CLI command',
+      commandExists('shadowob') ? 'shadowob is on PATH' : 'shadowob is not on PATH',
+      'Run fix/update to install the ~/.local/bin/shadowob shim.',
+    ),
+    check(
+      'common',
+      commandExists('shadowob-connector') ? 'ok' : 'warn',
+      'Connector command',
+      commandExists('shadowob-connector')
+        ? 'shadowob-connector is on PATH'
+        : 'shadowob-connector is not on PATH',
+      'Run fix/update to install the ~/.local/bin/shadowob-connector shim.',
+    ),
+  ]
+
+  const profilePath = resolve(homedir(), '.shadowob/shadowob.config.json')
+  if (!existsSync(profilePath)) {
+    checks.push(
+      check(
+        'common',
+        'warn',
+        'Shadow CLI profile',
+        `${profilePath} does not exist`,
+        'Run fix/update with --token to write the Buddy profile.',
+      ),
+    )
+  } else {
+    const parsed = parseJsonFile(profilePath, 'Shadow CLI')
+    const profiles = asObject(parsed.value?.profiles)
+    const profileName = shadowCliProfileName(options)
+    checks.push(
+      check(
+        'common',
+        parsed.error ? 'fail' : profiles[profileName] ? 'ok' : 'warn',
+        'Shadow CLI profile',
+        parsed.error ??
+          (profiles[profileName]
+            ? `profile ${profileName} exists`
+            : `profile ${profileName} is missing`),
+        'Run fix/update with --token to write the Buddy profile.',
+      ),
+    )
+  }
+
+  const skillTargets = shadowobSkillTargets(options)
+  const installed = skillTargets.filter((target) => existsSync(target)).length
+  checks.push(
+    check(
+      'common',
+      installed > 0 ? 'ok' : 'warn',
+      'Shadow skill files',
+      `${installed}/${skillTargets.length} common skill locations contain shadowob/SKILL.md`,
+      'Run fix/update to install the official Shadow skill files.',
+    ),
+  )
+
+  return checks
+}
+
+function diagnoseOpenClaw(options: CliOptions): DiagnosticCheck[] {
+  const configPath = expandHome(
+    options.openclawConfig ?? process.env.OPENCLAW_CONFIG ?? '~/.shadowob/openclaw.json',
+  )
+  const checks: DiagnosticCheck[] = [
+    check(
+      'openclaw',
+      commandExists('openclaw') ? 'ok' : 'warn',
+      'OpenClaw command',
+      commandExists('openclaw') ? 'openclaw is on PATH' : 'openclaw is not on PATH',
+      'Install OpenClaw before starting the gateway.',
+    ),
+  ]
+
+  if (!existsSync(configPath)) {
+    checks.push(
+      check(
+        'openclaw',
+        'fail',
+        'OpenClaw config',
+        `${configPath} does not exist`,
+        'Run fix/update.',
+      ),
+    )
+    return checks
+  }
+
+  const parsed = parseJsonFile(configPath, 'OpenClaw')
+  if (parsed.error) {
+    checks.push(
+      check(
+        'openclaw',
+        'fail',
+        'OpenClaw config',
+        parsed.error,
+        'Fix the JSON or run fix/update with --force.',
+      ),
+    )
+    return checks
+  }
+
+  const root = parsed.value ?? {}
+  const channels = asObject(root.channels)
+  const shadow = asObject(channels.shadowob)
+  const plugins = asObject(root.plugins)
+  const pluginEntries = asObject(plugins.entries)
+  checks.push(
+    check(
+      'openclaw',
+      typeof shadow.token === 'string' && shadow.token.length > 0 ? 'ok' : 'fail',
+      'OpenClaw Shadow token',
+      typeof shadow.token === 'string' && shadow.token.length > 0
+        ? 'channels.shadowob.token is set'
+        : 'channels.shadowob.token is missing',
+      'Run fix/update with --token.',
+    ),
+    check(
+      'openclaw',
+      typeof shadow.serverUrl === 'string' && shadow.serverUrl.length > 0 ? 'ok' : 'fail',
+      'OpenClaw Shadow server URL',
+      typeof shadow.serverUrl === 'string' && shadow.serverUrl.length > 0
+        ? `channels.shadowob.serverUrl=${shadow.serverUrl}`
+        : 'channels.shadowob.serverUrl is missing',
+      'Run fix/update with --server-url.',
+    ),
+    check(
+      'openclaw',
+      asObject(pluginEntries['openclaw-shadowob']).enabled === true ? 'ok' : 'warn',
+      'OpenClaw Shadow plugin entry',
+      asObject(pluginEntries['openclaw-shadowob']).enabled === true
+        ? 'openclaw-shadowob plugin entry is enabled'
+        : 'openclaw-shadowob plugin entry is missing or disabled',
+      'Run fix/update.',
+    ),
+  )
+  return checks
+}
+
+function diagnoseHermes(options: CliOptions): DiagnosticCheck[] {
+  const hermesDir = expandHome(options.hermesHome ?? process.env.HERMES_HOME ?? '~/.hermes')
+  const pluginTarget = resolve(hermesDir, 'plugins/shadowob')
+  const envPath = resolve(hermesDir, '.env')
+  const configPath = resolve(hermesDir, 'config.yaml')
+  const checks: DiagnosticCheck[] = [
+    check(
+      'hermes',
+      commandExists('hermes') ? 'ok' : 'warn',
+      'Hermes command',
+      commandExists('hermes') ? 'hermes is on PATH' : 'hermes is not on PATH',
+      'Install Hermes before starting the gateway.',
+    ),
+    check(
+      'hermes',
+      existsSync(pluginTarget) ? 'ok' : 'fail',
+      'Hermes Shadow plugin',
+      existsSync(pluginTarget) ? `${pluginTarget} exists` : `${pluginTarget} is missing`,
+      'Run fix/update.',
+    ),
+  ]
+
+  const env = readExisting(envPath)
+  checks.push(
+    check(
+      'hermes',
+      env.includes('SHADOW_TOKEN=') && env.includes('SHADOW_BASE_URL=') ? 'ok' : 'fail',
+      'Hermes environment',
+      existsSync(envPath)
+        ? 'SHADOW_TOKEN and SHADOW_BASE_URL are present'
+        : `${envPath} does not exist`,
+      'Run fix/update with --token and --server-url.',
+    ),
+  )
+
+  if (!existsSync(configPath)) {
+    checks.push(
+      check('hermes', 'fail', 'Hermes config', `${configPath} does not exist`, 'Run fix/update.'),
+    )
+    return checks
+  }
+
+  try {
+    const parsed = parseYaml(readExisting(configPath)) as unknown
+    const root = asObject(parsed)
+    const shadow = asObject(asObject(root.platforms).shadowob)
+    checks.push(
+      check(
+        'hermes',
+        shadow.enabled === true && typeof shadow.token === 'string' ? 'ok' : 'fail',
+        'Hermes Shadow platform',
+        shadow.enabled === true && typeof shadow.token === 'string'
+          ? 'platforms.shadowob is enabled'
+          : 'platforms.shadowob is missing token or enabled=true',
+        'Run fix/update.',
+      ),
+    )
+  } catch (error) {
+    checks.push(
+      check(
+        'hermes',
+        'fail',
+        'Hermes config',
+        error instanceof Error ? error.message : String(error),
+        'Fix the YAML or run fix/update with --force.',
+      ),
+    )
+  }
+  return checks
+}
+
+function diagnoseCcConnect(options: CliOptions): DiagnosticCheck[] {
+  const configPath = resolve(homedir(), '.cc-connect/config.toml')
+  const binary = getCcConnectBinaryStatus()
+  const checks: DiagnosticCheck[] = [
+    check(
+      'cc-connect',
+      binary.usable ? 'ok' : 'warn',
+      'cc-connect Shadow fork',
+      binary.usable
+        ? `${binary.binaryPath} passes version check`
+        : `${binary.binaryPath} is missing or does not match the pinned Shadow fork`,
+      'Run fix/update with --install.',
+    ),
+  ]
+
+  if (!existsSync(configPath)) {
+    checks.push(
+      check(
+        'cc-connect',
+        'fail',
+        'cc-connect config',
+        `${configPath} does not exist`,
+        'Run fix/update.',
+      ),
+    )
+    return checks
+  }
+
+  try {
+    const root = parseToml(readExisting(configPath)) as Record<string, unknown>
+    const projects = Array.isArray(root.projects) ? root.projects : []
+    const projectName = options.projectName?.trim() || 'shadow-buddy'
+    const workDir = options.workDir?.trim() || '.'
+    const project =
+      projects.find((item) => asObject(item).name === projectName) ??
+      projects.find((item) => asObject(asObject(asObject(item).agent).options).work_dir === workDir)
+    const projectPlatforms = asObject(project).platforms
+    const platforms = Array.isArray(projectPlatforms) ? projectPlatforms : []
+    const shadow = platforms.find((item) => asObject(item).type === 'shadowob')
+    const shadowOptions = asObject(asObject(shadow).options)
+    checks.push(
+      check(
+        'cc-connect',
+        project ? 'ok' : 'fail',
+        'cc-connect project',
+        project ? `project ${projectName} is configured` : `project ${projectName} is missing`,
+        'Run fix/update with --project-name and --work-dir.',
+      ),
+      check(
+        'cc-connect',
+        typeof shadowOptions.token === 'string' && typeof shadowOptions.server_url === 'string'
+          ? 'ok'
+          : 'fail',
+        'cc-connect Shadow platform',
+        typeof shadowOptions.token === 'string' && typeof shadowOptions.server_url === 'string'
+          ? 'shadowob platform has token and server_url'
+          : 'shadowob platform is missing token or server_url',
+        'Run fix/update with --token and --server-url.',
+      ),
+    )
+  } catch (error) {
+    checks.push(
+      check(
+        'cc-connect',
+        'fail',
+        'cc-connect config',
+        error instanceof Error ? error.message : String(error),
+        'Fix the TOML or run fix/update with --force.',
+      ),
+    )
+  }
+  return checks
+}
+
+function diagnostics(options: CliOptions): DiagnosticCheck[] {
+  const checks = diagnoseCommon(options)
+  for (const target of selectedTargets(options)) {
+    if (target === 'openclaw') checks.push(...diagnoseOpenClaw(options))
+    if (target === 'hermes') checks.push(...diagnoseHermes(options))
+    if (target === 'cc-connect') checks.push(...diagnoseCcConnect(options))
+  }
+  return checks
+}
+
+function printDiagnostics(options: CliOptions, mode: 'doctor' | 'status'): boolean {
+  const checks = diagnostics(options)
+  if (options.json) {
+    console.log(
+      JSON.stringify({ ok: !checks.some((item) => item.status === 'fail'), checks }, null, 2),
+    )
+    return !checks.some((item) => item.status === 'fail')
+  }
+
+  console.log(`# Connector ${mode}`)
+  for (const item of checks) {
+    const marker = item.status === 'ok' ? 'OK' : item.status === 'warn' ? 'WARN' : 'FAIL'
+    console.log(
+      `[${marker}] ${item.target}: ${item.label}${item.detail ? ` - ${item.detail}` : ''}`,
+    )
+    if (mode === 'doctor' && item.status !== 'ok' && item.fix) {
+      console.log(`       fix: ${item.fix}`)
+    }
+  }
+  return !checks.some((item) => item.status === 'fail')
+}
+
+interface ScanResult {
+  target: ShadowConnectorTarget
+  detected: boolean
+  evidence: string[]
+  configPath?: string
+  connectCommand: string
+  updateCommand: string
+  doctorCommand: string
+  statusCommand: string
+}
+
+function firstExistingPath(paths: string[]): string | undefined {
+  return paths.find((path) => existsSync(path))
+}
+
+function openClawConfigCandidates(options: CliOptions): string[] {
+  return Array.from(
+    new Set(
+      [
+        options.openclawConfig,
+        process.env.OPENCLAW_CONFIG,
+        process.env.OPENCLAW_CONFIG_PATH,
+        '~/.shadowob/openclaw.json',
+        '~/.openclaw/openclaw.json',
+      ]
+        .filter((value): value is string => !!value?.trim())
+        .map(expandHome),
+    ),
+  )
+}
+
+function ccConnectScanExtras(options: CliOptions): string[] {
+  const configPath = resolve(homedir(), '.cc-connect/config.toml')
+  const fallback = [
+    '--work-dir',
+    options.workDir?.trim() || '.',
+    '--project-name',
+    options.projectName?.trim() || 'shadow-buddy',
+    '--agent-type',
+    options.agentType?.trim() || 'codex',
+  ]
+  if (!existsSync(configPath)) return fallback
+
+  try {
+    const root = parseToml(readExisting(configPath)) as Record<string, unknown>
+    const projects = Array.isArray(root.projects) ? root.projects : []
+    const configuredProject =
+      projects.find((project) => {
+        const platformsValue = asObject(project).platforms
+        const platforms = Array.isArray(platformsValue) ? platformsValue : []
+        return platforms.some((platform) => asObject(platform).type === 'shadowob')
+      }) ?? projects[0]
+    const project = asObject(configuredProject)
+    const agent = asObject(project.agent)
+    const agentOptions = asObject(agent.options)
+    return [
+      '--work-dir',
+      options.workDir?.trim() ||
+        (typeof agentOptions.work_dir === 'string' ? agentOptions.work_dir : '.'),
+      '--project-name',
+      options.projectName?.trim() ||
+        (typeof project.name === 'string' ? project.name : 'shadow-buddy'),
+      '--agent-type',
+      options.agentType?.trim() || (typeof agent.type === 'string' ? agent.type : 'codex'),
+    ]
+  } catch {
+    return fallback
+  }
+}
+
+function scanOpenClaw(options: CliOptions): ScanResult {
+  const configPath = firstExistingPath(openClawConfigCandidates(options))
+  const evidence: string[] = []
+  if (commandExists('openclaw')) evidence.push('openclaw command is on PATH')
+  if (configPath) evidence.push(`config found at ${configPath}`)
+  const detected = evidence.length > 0
+  return {
+    target: 'openclaw',
+    detected,
+    evidence,
+    configPath,
+    connectCommand: connectorCommand('connect', 'openclaw', options),
+    updateCommand: connectorCommand('update', 'openclaw', options),
+    doctorCommand: connectorCommand('doctor', 'openclaw', options),
+    statusCommand: connectorCommand('status', 'openclaw', options),
+  }
+}
+
+function scanHermes(options: CliOptions): ScanResult {
+  const hermesDir = expandHome(options.hermesHome ?? process.env.HERMES_HOME ?? '~/.hermes')
+  const configPath = resolve(hermesDir, 'config.yaml')
+  const evidence: string[] = []
+  if (commandExists('hermes')) evidence.push('hermes command is on PATH')
+  if (existsSync(configPath)) evidence.push(`config found at ${configPath}`)
+  if (existsSync(resolve(hermesDir, 'plugins/shadowob'))) {
+    evidence.push(`shadowob plugin found under ${resolve(hermesDir, 'plugins/shadowob')}`)
+  }
+  return {
+    target: 'hermes',
+    detected: evidence.length > 0,
+    evidence,
+    configPath: existsSync(configPath) ? configPath : undefined,
+    connectCommand: connectorCommand('connect', 'hermes', options),
+    updateCommand: connectorCommand('update', 'hermes', options),
+    doctorCommand: connectorCommand('doctor', 'hermes', options),
+    statusCommand: connectorCommand('status', 'hermes', options),
+  }
+}
+
+function scanCcConnect(options: CliOptions): ScanResult {
+  const configPath = resolve(homedir(), '.cc-connect/config.toml')
+  const binary = getCcConnectBinaryStatus()
+  const evidence: string[] = []
+  if (commandExists('cc-connect')) evidence.push('cc-connect command is on PATH')
+  if (binary.usable) evidence.push(`Shadow fork binary found at ${binary.binaryPath}`)
+  if (existsSync(configPath)) evidence.push(`config found at ${configPath}`)
+  const extras = ccConnectScanExtras(options)
+  return {
+    target: 'cc-connect',
+    detected: evidence.length > 0,
+    evidence,
+    configPath: existsSync(configPath) ? configPath : undefined,
+    connectCommand: connectorCommand('connect', 'cc-connect', options, extras),
+    updateCommand: connectorCommand('update', 'cc-connect', options, extras),
+    doctorCommand: connectorCommand('doctor', 'cc-connect', options),
+    statusCommand: connectorCommand('status', 'cc-connect', options),
+  }
+}
+
+function scanConnectors(options: CliOptions): ScanResult[] {
+  return selectedTargets(options).map((target) => {
+    if (target === 'openclaw') return scanOpenClaw(options)
+    if (target === 'hermes') return scanHermes(options)
+    return scanCcConnect(options)
+  })
+}
+
+function printScan(options: CliOptions): void {
+  const results = scanConnectors(options)
+  if (options.json) {
+    console.log(
+      JSON.stringify({ serverUrl: normalizeServerUrl(options.serverUrl), results }, null, 2),
+    )
+    return
+  }
+
+  console.log('# Connector scan')
+  console.log(`Shadow server URL: ${normalizeServerUrl(options.serverUrl)}`)
+  console.log(`Buddy token: ${options.token.trim() ? 'provided' : '<BUDDY_TOKEN>'}`)
+  for (const result of results) {
+    console.log('')
+    console.log(`## ${result.target}`)
+    console.log(`Detected: ${result.detected ? 'yes' : 'no'}`)
+    if (result.evidence.length > 0) {
+      console.log('Evidence:')
+      for (const item of result.evidence) console.log(`- ${item}`)
+    }
+    console.log('Connection instructions:')
+    console.log(`- connect: ${result.connectCommand}`)
+    console.log(`- update: ${result.updateCommand}`)
+    console.log(`- doctor: ${result.doctorCommand}`)
+    console.log(`- status: ${result.statusCommand}`)
+  }
+}
+
 function hermesPluginSource(): string {
   const candidates = [
     resolve(packageRoot(), 'hermes-shadowob-plugin'),
@@ -183,14 +890,17 @@ function hermesPluginSource(): string {
   return found
 }
 
-function applyOpenClaw(options: CliOptions): void {
-  const plan = createConnectorPlan(options)
+function applyOpenClaw(
+  options: CliOptions,
+  behavior: { restart: boolean } = { restart: true },
+): void {
+  const target = requireTarget(options)
+  const plan = createConnectorPlan({ ...options, target })
   const configPath = expandHome(
     options.openclawConfig ?? process.env.OPENCLAW_CONFIG ?? '~/.shadowob/openclaw.json',
   )
 
-  console.log('Applying: Install plugin')
-  runShell('openclaw plugins install @shadowob/openclaw-shadowob', options.dryRun)
+  installShadowCliAndSkills(options)
 
   console.log(`Applying: Merge OpenClaw config ${configPath}`)
   const next = mergeOpenClawConfigContent(readExisting(configPath), {
@@ -199,15 +909,21 @@ function applyOpenClaw(options: CliOptions): void {
   })
   writeFile(configPath, next, options.dryRun)
 
+  if (options.install) {
+    console.log('Applying: Install plugin')
+    runShell('openclaw plugins install @shadowob/openclaw-shadowob', options.dryRun)
+  }
+
   const restart = plan.commands.find((step) => step.label === 'Restart gateway')
-  if (restart) {
+  if (restart && behavior.restart) {
     console.log(`Applying: ${restart.label}`)
     runShell(restart.command, options.dryRun)
   }
 }
 
 function applyHermes(options: CliOptions): void {
-  const plan = createConnectorPlan(options)
+  const target = requireTarget(options)
+  const plan = createConnectorPlan({ ...options, target })
   const hermesDir = expandHome(options.hermesHome ?? process.env.HERMES_HOME ?? '~/.hermes')
   const pluginTarget = resolve(hermesDir, 'plugins/shadowob')
   const envPath = resolve(hermesDir, '.env')
@@ -215,6 +931,8 @@ function applyHermes(options: CliOptions): void {
   const envBlock = plan.configBlocks.find((block) => block.label === '~/.hermes/.env')
 
   if (!envBlock) throw new Error('Hermes plan is missing config blocks')
+
+  installShadowCliAndSkills(options)
 
   if (options.dryRun) {
     console.log(`[dry-run] copy ${hermesPluginSource()} -> ${pluginTarget}`)
@@ -250,9 +968,12 @@ function applyHermes(options: CliOptions): void {
 }
 
 async function applyCcConnect(options: CliOptions): Promise<void> {
-  const plan = createConnectorPlan(options)
+  const target = requireTarget(options)
+  const plan = createConnectorPlan({ ...options, target })
   const configBlock = plan.configBlocks.find((block) => block.label === '~/.cc-connect/config.toml')
   if (!configBlock) throw new Error('cc-connect plan is missing config block')
+
+  installShadowCliAndSkills(options)
 
   const configPath = resolve(homedir(), '.cc-connect/config.toml')
   const nextConfig = options.force
@@ -282,21 +1003,43 @@ async function applyCcConnect(options: CliOptions): Promise<void> {
 }
 
 async function connect(options: CliOptions): Promise<void> {
-  if (options.target === 'openclaw') {
+  const target = requireTarget(options)
+  if (target === 'openclaw') {
     applyOpenClaw(options)
     return
   }
-  if (options.target === 'hermes') {
+  if (target === 'hermes') {
     applyHermes(options)
     return
   }
   await applyCcConnect(options)
 }
 
+async function repair(options: CliOptions, mode: 'fix' | 'update'): Promise<void> {
+  const target = requireTarget(options)
+  console.log(`Applying: ${mode} ${target} connector`)
+  if (target === 'openclaw') {
+    applyOpenClaw(options, { restart: options.start })
+    return
+  }
+  if (target === 'hermes') {
+    applyHermes({ ...options, start: options.start })
+    return
+  }
+  await applyCcConnect({ ...options, start: options.start })
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2))
   if (options.command === 'connect') {
     await connect(options)
+  } else if (options.command === 'fix' || options.command === 'update') {
+    await repair(options, options.command)
+  } else if (options.command === 'doctor' || options.command === 'status') {
+    const ok = printDiagnostics(options, options.command)
+    if (options.command === 'doctor' && !ok) process.exitCode = 1
+  } else if (options.command === 'scan') {
+    printScan(options)
   } else {
     printPlan(options)
   }

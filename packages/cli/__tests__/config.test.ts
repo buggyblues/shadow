@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -14,6 +14,8 @@ describe('ConfigManager', () => {
   })
 
   afterEach(() => {
+    delete process.env.SHADOWOB_TEST_SERVER_URL
+    delete process.env.SHADOWOB_TEST_TOKEN
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -69,5 +71,28 @@ describe('ConfigManager', () => {
   it('should return null for non-existent profile', async () => {
     const profile = await configManager.getProfile('non-existent')
     expect(profile).toBeNull()
+  })
+
+  it('should expand environment placeholders when reading profiles', async () => {
+    process.env.SHADOWOB_TEST_SERVER_URL = 'https://env.shadowob.com'
+    process.env.SHADOWOB_TEST_TOKEN = 'env-token'
+    writeFileSync(
+      join(tempDir, 'shadowob.config.json'),
+      JSON.stringify({
+        profiles: {
+          env: {
+            serverUrl: '${SHADOWOB_TEST_SERVER_URL}',
+            token: '${env:SHADOWOB_TEST_TOKEN}',
+          },
+        },
+        currentProfile: 'env',
+      }),
+    )
+
+    const profile = await configManager.getProfile()
+    expect(profile).toEqual({
+      serverUrl: 'https://env.shadowob.com',
+      token: 'env-token',
+    })
   })
 })
