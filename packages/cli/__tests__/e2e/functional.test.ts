@@ -235,9 +235,9 @@ describe('CLI Functional Tests', () => {
       const { stdout } = await execa('node', [CLI_PATH, 'shop', 'products', '--help'])
       expect(stdout).toContain('list')
       expect(stdout).toContain('get')
-      expect(stdout).toContain('context')
       expect(stdout).toContain('purchase')
       expect(stdout).toContain('list-by-shop')
+      expect(stdout).toContain('create-by-shop')
     })
 
     it('should show shop offers help', async () => {
