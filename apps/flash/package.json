@@ -24,9 +24,9 @@
   "dependencies": {
     "@shadowob/flash-types": "workspace:*",
     "@shadowob/flash-cards": "workspace:*",
-    "katex": "^0.16.45",
+    "katex": "^0.16.47",
     "matter-js": "^0.20.0",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.6"
   }
 }
