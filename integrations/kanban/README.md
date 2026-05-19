@@ -12,7 +12,7 @@ Or run every standard integration together:
 
 ```bash
 cp integrations/.env.example integrations/.env
-docker compose -f integrations/compose.yaml --env-file integrations/.env up --build
+docker compose -f integrations/docker-compose.yaml --env-file integrations/.env up --build
 ```
 
 Install locally through Shadow with:

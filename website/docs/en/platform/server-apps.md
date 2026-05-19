@@ -17,11 +17,11 @@ Command calls use short-lived opaque Shadow-issued OAuth Bearer tokens. The App 
 
 ## Local Demos
 
-The repo ships three standard demo Apps: Kanban, Answers, and Quiz. Run them together with Docker Compose:
+The repo ships standard demo Apps for Kanban, Answers, Quiz, Animal Spin Wheel, Code Trainer, Super Resume, and Cloud Cat. Run them together with Docker Compose:
 
 ```bash
 cp integrations/.env.example integrations/.env
-docker compose -f integrations/compose.yaml --env-file integrations/.env up -d --build
+docker compose -f integrations/docker-compose.yaml --env-file integrations/.env up -d --build
 ```
 
 For the local Shadow Docker stack, keep iframe URLs browser-facing on `localhost`, and keep API/manifest URLs Shadow-facing on `host.lima.internal`:
@@ -30,9 +30,13 @@ For the local Shadow Docker stack, keep iframe URLs browser-facing on `localhost
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4201/.well-known/shadow-app.json
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4210/.well-known/shadow-app.json
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4211/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4212/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4213/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4214/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4215/.well-known/shadow-app.json
 ```
 
-Each demo persists app data in a named Compose volume. `docker compose -f integrations/compose.yaml restart` keeps the data; `down -v` removes it.
+Each demo persists app data in a named Compose volume. `docker compose -f integrations/docker-compose.yaml restart` keeps the data; `down -v` removes it.
 
 ## Buddy Access
 
@@ -84,4 +88,4 @@ The `shadowob` Cloud plugin supports `serverApps` in templates. Provisioning cre
 
 The Shadow Admin “App Integrations” tab manages the global App catalog and lists every installed server App, command count, Skill count, Buddy grant count, iframe entry, and API endpoint. Global admins can add catalog entries from manifest URLs and uninstall an integration during an incident or support workflow.
 
-See [Server App development guide](./server-apps-dev-guide), `docs/api/server-app-integrations.md`, and `integrations/kanban` for the full protocol and copyable demo project. Additional demos live in `integrations/qna` and `integrations/quiz`, and `integrations/compose.yaml` can run all standard demo Apps locally with dotenv overrides.
+See [Server App development guide](./server-apps-dev-guide), `docs/api/server-app-integrations.md`, and `integrations/kanban` for the full protocol and copyable demo project. Additional demos live in `integrations/qna`, `integrations/quiz`, `integrations/wheel`, `integrations/trainer`, `integrations/resume`, and `integrations/petcat`, and `integrations/docker-compose.yaml` can run all standard demo Apps locally with dotenv overrides.

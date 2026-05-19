@@ -139,11 +139,15 @@ shadowob app uninstall demo-desk --server <server-id-or-slug>
 
 ```bash
 cp integrations/.env.example integrations/.env
-docker compose -f integrations/compose.yaml --env-file integrations/.env up -d --build
+docker compose -f integrations/docker-compose.yaml --env-file integrations/.env up -d --build
 
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4201/.well-known/shadow-app.json
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4210/.well-known/shadow-app.json
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4211/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4212/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4213/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4214/.well-known/shadow-app.json
+shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4215/.well-known/shadow-app.json
 ```
 
 给 Buddy 授予它需要调用的全部命令权限，然后为 `first_time` 写命令做一次确认：

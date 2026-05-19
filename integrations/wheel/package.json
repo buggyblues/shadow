@@ -1,0 +1,33 @@
+{
+  "name": "@shadowob/wheel-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.1",
+    "@shadowob/sdk": "workspace:*",
+    "@tanstack/react-query": "^5.90.21",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.3.1",
+    "hono": "^4.12.17",
+    "lucide-react": "^0.513.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8"
+  }
+}
