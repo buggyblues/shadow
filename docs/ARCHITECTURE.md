@@ -52,7 +52,7 @@ Local Docker ports:
 | `apps/desktop` | Electron client plus desktop/web visual and E2E suites. |
 | `apps/admin` | Admin dashboard. |
 | `apps/cloud` | Shadow Cloud CLI, HTTP server, dashboard, templates, plugins, deployment/runtime services. |
-| `apps/flash` | Interactive card/runtime package and demo app. |
+| `integrations/flash` | Interactive card/runtime package and Server App integration. |
 | `apps/promo` | Remotion promotional media source. |
 | `apps/playground` | UI playground. |
 | `packages/shared` | Shared TypeScript types, constants, play catalog, and utilities. |

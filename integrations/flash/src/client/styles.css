@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0d0f14;
+  color: #e5e7eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: #0d0f14;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.flash-canvas-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px), #0d0f14;
+  background-size: 34px 34px;
+}
+
+.flash-center {
+  display: grid;
+  place-items: center;
+  color: #cbd5e1;
+}
+
+.flash-hidden-mount {
+  position: fixed;
+  top: 0;
+  left: -9999px;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.flash-auth-gate {
+  width: min(560px, calc(100vw - 40px));
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.82);
+  padding: 28px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+}
+
+.flash-auth-gate span {
+  color: #60a5fa;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.flash-auth-gate h1 {
+  margin: 10px 0 12px;
+  color: #f8fafc;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.05;
+}
+
+.flash-auth-gate p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.flash-auth-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 22px;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.flash-auth-note {
+  margin-top: 14px;
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.flash-server-desk {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.flash-arena-canvas,
+.flash-card-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.flash-arena-canvas {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.flash-card-canvas {
+  z-index: 2;
+}
+
+.flash-empty-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  width: min(420px, calc(100vw - 48px));
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #dbeafe;
+  padding: 14px 16px;
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px);
+}
+
+.flash-command {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 10;
+  display: grid;
+  width: min(760px, calc(100vw - 32px));
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(96, 165, 250, 0.34);
+  border-radius: 12px;
+  background: rgba(10, 16, 26, 0.94);
+  padding: 10px 12px;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.flash-command span {
+  color: #60a5fa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.flash-command input {
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+}
+
+.flash-command input::placeholder {
+  color: #64748b;
+}
+
+.flash-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 11;
+  max-width: min(420px, calc(100vw - 36px));
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.86);
+  color: #dbeafe;
+  padding: 10px 12px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+}
+
+.flash-retry {
+  border: 1px solid rgba(96, 165, 250, 0.36);
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.9);
+  color: white;
+  padding: 10px 16px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .flash-command {
+    bottom: 12px;
+    width: calc(100vw - 20px);
+  }
+}

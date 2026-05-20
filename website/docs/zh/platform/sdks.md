@@ -184,7 +184,31 @@ servers = client.list_servers()
 msg = client.send_message("channel-id", "Hello from Python!")
 ```
 
-### Server App 辅助方法
+### Server App Runtime
+
+TypeScript SDK 提供了建模后的 Server App 后端 runtime：
+
+```ts
+import { defineShadowServerApp } from '@shadowob/sdk'
+import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { shadowServerAppManifest } from './shadow-app.generated.js'
+
+const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
+  shadowBaseUrl: process.env.SHADOW_SERVER_URL,
+})
+
+const commands = shadowApp.defineCommands({
+  'tickets.create': (input, { actor }) => createTicket({ ...input, author: actor }),
+})
+```
+
+先从 JSON manifest 生成 `src/shadow-app.generated.ts`，命令 input 类型会从每个 command 的 JSON Schema 推导出来：
+
+```bash
+shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts
+```
+
+命令路由里使用 `shadowApp.executeCommand(...)` 来校验 Shadow Bearer command token、解析 envelope、校验 input，并从 `shadow.actor.profile` 取得 actor 名称和头像。简单 demo 持久化可以使用 `createShadowServerAppJsonStore(...)`。
 
 ```python
 apps = client.list_server_apps("server-id-or-slug")

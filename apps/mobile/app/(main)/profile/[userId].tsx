@@ -360,7 +360,10 @@ export default function UserProfileScreen() {
                       style={[styles.serviceCard, { backgroundColor: colors.inputBackground }]}
                     >
                       <View style={styles.serviceInfo}>
-                        <Text style={[styles.serviceName, { color: colors.text }]} numberOfLines={1}>
+                        <Text
+                          style={[styles.serviceName, { color: colors.text }]}
+                          numberOfLines={1}
+                        >
                           {product.name}
                         </Text>
                         <Text

@@ -1,0 +1,44 @@
+{
+  "name": "@shadowob/flash-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @shadowob/flash-types build && tsx watch src/server.ts",
+    "playground": "vite",
+    "build": "pnpm --filter @shadowob/flash-types build && vite build",
+    "start": "pnpm --filter @shadowob/flash-types build && tsx src/server.ts",
+    "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
+    "typecheck": "pnpm --filter @shadowob/flash-types typecheck && tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/matter-js": "^0.20.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@webgpu/types": "^0.1.69",
+    "tailwindcss": "^4.2.4",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.1",
+    "@shadowob/flash-cards": "workspace:*",
+    "@shadowob/flash-types": "workspace:*",
+    "@shadowob/sdk": "workspace:*",
+    "@tanstack/react-query": "^5.90.21",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.44.2",
+    "hono": "^4.12.17",
+    "katex": "^0.16.45",
+    "matter-js": "^0.20.0",
+    "postgres": "^3.4.9",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "redis": "^5.0.1",
+    "zod": "^3.25.67"
+  }
+}

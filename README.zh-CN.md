@@ -174,7 +174,7 @@ pnpm --filter @shadowob/website build
 | 🧑‍💻 产品应用 | `apps/server`、`apps/web`、`apps/mobile`、`apps/desktop`、`apps/admin` |
 | ☁️ Cloud | `apps/cloud`、`apps/cloud/packages/ui` |
 | 🔌 SDK 与集成 | `packages/sdk`、`packages/sdk-python`、`packages/cli`、`packages/oauth`、`packages/openclaw-shadowob` |
-| 🧱 共享基建 | `packages/shared`、`packages/ui`、`apps/flash` |
+| 🧱 共享基建 | `packages/shared`、`packages/ui`、`integrations/flash` |
 | 📚 文档与媒体 | `website/docs`、`docs`、`website/docs/public/readme` |
 
 ## 贡献者

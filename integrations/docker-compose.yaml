@@ -1,0 +1,158 @@
+name: shadow-integrations
+
+services:
+  kanban:
+    build:
+      context: ..
+      dockerfile: integrations/kanban/Dockerfile
+    environment:
+      PORT: '4201'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4201}
+      SHADOW_APP_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.lima.internal:4201}
+      KANBAN_DATA_FILE: /data/kanban-board.json
+    ports:
+      - ${KANBAN_PORT:-4201}:4201
+    volumes:
+      - kanban-data:/data
+
+  qna:
+    build:
+      context: ..
+      dockerfile: integrations/qna/Dockerfile
+    environment:
+      PORT: '4210'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4210}
+      SHADOW_APP_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.lima.internal:4210}
+      QNA_DATA_FILE: /data/qna.json
+    ports:
+      - ${QNA_PORT:-4210}:4210
+    volumes:
+      - qna-data:/data
+
+  quiz:
+    build:
+      context: ..
+      dockerfile: integrations/quiz/Dockerfile
+    environment:
+      PORT: '4211'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4211}
+      SHADOW_APP_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.lima.internal:4211}
+      QUIZ_DATA_FILE: /data/quiz.json
+    ports:
+      - ${QUIZ_PORT:-4211}:4211
+    volumes:
+      - quiz-data:/data
+
+  wheel:
+    build:
+      context: ..
+      dockerfile: integrations/wheel/Dockerfile
+    environment:
+      PORT: '4212'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${WHEEL_PUBLIC_BASE_URL:-http://localhost:4212}
+      SHADOW_APP_API_BASE_URL: ${WHEEL_API_BASE_URL:-http://host.lima.internal:4212}
+      WHEEL_DATA_FILE: /data/wheel.json
+    ports:
+      - ${WHEEL_PORT:-4212}:4212
+    volumes:
+      - wheel-data:/data
+
+  trainer:
+    build:
+      context: ..
+      dockerfile: integrations/trainer/Dockerfile
+    environment:
+      PORT: '4213'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4213}
+      SHADOW_APP_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.lima.internal:4213}
+      TRAINER_DATA_FILE: /data/trainer.json
+    ports:
+      - ${TRAINER_PORT:-4213}:4213
+    volumes:
+      - trainer-data:/data
+
+  resume:
+    build:
+      context: ..
+      dockerfile: integrations/resume/Dockerfile
+    environment:
+      PORT: '4214'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${RESUME_PUBLIC_BASE_URL:-http://localhost:4214}
+      SHADOW_APP_API_BASE_URL: ${RESUME_API_BASE_URL:-http://host.lima.internal:4214}
+      RESUME_DATA_FILE: /data/resume.json
+    ports:
+      - ${RESUME_PORT:-4214}:4214
+    volumes:
+      - resume-data:/data
+
+  petcat:
+    build:
+      context: ..
+      dockerfile: integrations/petcat/Dockerfile
+    environment:
+      PORT: '4215'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${PETCAT_PUBLIC_BASE_URL:-http://localhost:4215}
+      SHADOW_APP_API_BASE_URL: ${PETCAT_API_BASE_URL:-http://host.lima.internal:4215}
+      PETCAT_DATA_FILE: /data/petcat.json
+    ports:
+      - ${PETCAT_PORT:-4215}:4215
+    volumes:
+      - petcat-data:/data
+
+  flash-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: flash
+      POSTGRES_USER: flash
+      POSTGRES_PASSWORD: flash
+    ports:
+      - ${FLASH_POSTGRES_PORT:-5434}:5432
+    volumes:
+      - flash-postgres-data:/var/lib/postgresql/data
+
+  flash-redis:
+    image: redis:7-alpine
+    ports:
+      - ${FLASH_REDIS_PORT:-6381}:6379
+    volumes:
+      - flash-redis-data:/data
+
+  flash:
+    build:
+      context: ..
+      dockerfile: integrations/flash/Dockerfile
+    environment:
+      PORT: '4216'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_WEB_BASE_URL: ${SHADOW_WEB_BASE_URL:-http://localhost:3000}
+      SHADOW_APP_PUBLIC_BASE_URL: ${FLASH_PUBLIC_BASE_URL:-http://localhost:4216}
+      SHADOW_APP_API_BASE_URL: ${FLASH_API_BASE_URL:-http://host.lima.internal:4216}
+      FLASH_OAUTH_CLIENT_ID: ${FLASH_OAUTH_CLIENT_ID:-}
+      FLASH_OAUTH_CLIENT_SECRET: ${FLASH_OAUTH_CLIENT_SECRET:-}
+      FLASH_OAUTH_COOKIE_SECRET: ${FLASH_OAUTH_COOKIE_SECRET:-}
+      FLASH_OAUTH_SCOPE: ${FLASH_OAUTH_SCOPE:-user:read}
+      DATABASE_URL: postgres://flash:flash@flash-postgres:5432/flash
+      REDIS_URL: redis://flash-redis:6379
+    ports:
+      - ${FLASH_PORT:-4216}:4216
+    depends_on:
+      - flash-postgres
+      - flash-redis
+
+volumes:
+  kanban-data:
+  qna-data:
+  quiz-data:
+  wheel-data:
+  trainer-data:
+  resume-data:
+  petcat-data:
+  flash-postgres-data:
+  flash-redis-data:

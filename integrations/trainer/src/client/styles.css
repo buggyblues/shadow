@@ -1,0 +1,407 @@
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #152033;
+  background: #eef4ff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 42px;
+  padding: 0 14px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.appShell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  border-right: 1px solid #d9e4f5;
+  background: #0f1d36;
+  color: #fff;
+  padding: 22px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.brand svg {
+  color: #93c5fd;
+}
+
+.brand strong,
+.brand span {
+  display: block;
+}
+
+.brand span {
+  color: #b6c6df;
+  font-size: 13px;
+}
+
+.sidebar input,
+.modalPanel input,
+.modalPanel select,
+.modalPanel textarea {
+  width: 100%;
+  border: 1px solid #d6e1f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #172033;
+  outline: none;
+  padding: 12px;
+}
+
+.challengeList {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.challengeLink {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e5edfb;
+  text-align: left;
+}
+
+.challengeLink.isActive {
+  background: #2563eb;
+}
+
+.challengeLink small {
+  color: #bfdbfe;
+}
+
+.workspace {
+  min-width: 0;
+  padding: 24px;
+}
+
+.hero,
+.panel,
+.modalPanel {
+  border: 1px solid rgba(124, 143, 176, 0.26);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 42px rgba(46, 63, 99, 0.12);
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px;
+}
+
+.eyebrow {
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  margin-top: 8px;
+  font-size: clamp(34px, 5vw, 64px);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.hero p {
+  max-width: 720px;
+  margin-top: 14px;
+  color: #506179;
+  line-height: 1.55;
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 120px);
+  gap: 12px;
+}
+
+.statGrid div {
+  border-radius: 12px;
+  background: #eff6ff;
+  padding: 16px;
+  text-align: center;
+}
+
+.statGrid strong,
+.statGrid span {
+  display: block;
+}
+
+.statGrid strong {
+  color: #1d4ed8;
+  font-size: 32px;
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr) minmax(260px, 0.8fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.panel {
+  min-width: 0;
+  padding: 20px;
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.tagRow span {
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 10px;
+}
+
+.exampleBox {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e3ebf7;
+  border-radius: 10px;
+  margin-top: 10px;
+  padding: 12px;
+}
+
+.exampleBox span,
+.judgeNotes {
+  color: #506179;
+}
+
+.problemPanel h2 {
+  margin-top: 18px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panelHeader button {
+  background: #eaf2ff;
+  color: #1d4ed8;
+}
+
+.panelHeader svg {
+  color: #2563eb;
+}
+
+.editorPanel textarea {
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid #d6e1f0;
+  border-radius: 10px;
+  background: #0b1220;
+  color: #dbeafe;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  line-height: 1.5;
+  outline: none;
+  padding: 16px;
+  resize: vertical;
+}
+
+.primaryAction,
+.modalPanel > button:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.primaryAction svg,
+.modalPanel button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.queueList {
+  display: grid;
+  gap: 10px;
+}
+
+.queueItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e3ebf7;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.queueItem strong,
+.queueItem span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queueItem span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.emptyState,
+.errorText {
+  border-radius: 10px;
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.emptyState {
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+  text-align: center;
+}
+
+.errorText {
+  background: #fff1f2;
+  color: #be123c;
+  font-weight: 800;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.52);
+  padding: 20px;
+}
+
+.modalPanel {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 24px;
+}
+
+.iconButton {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.modalPanel label {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  color: #31425a;
+  font-weight: 800;
+}
+
+.modalPanel textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.codePreview {
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #0b1220;
+  color: #dbeafe;
+  padding: 14px;
+  white-space: pre-wrap;
+}
+
+.spinIcon {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1100px) {
+  .appShell,
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .workspace {
+    padding: 14px;
+  }
+
+  .hero {
+    flex-direction: column;
+  }
+
+  .statGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

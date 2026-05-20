@@ -9,6 +9,45 @@ export {
   threadRoom,
   userRoom,
 } from './constants'
+export type {
+  JsonSchemaToType,
+  ShadowServerAppActorRef,
+  ShadowServerAppCommandContext,
+  ShadowServerAppCommandEnvelope,
+  ShadowServerAppCommandHandler,
+  ShadowServerAppCommandHandlerContext,
+  ShadowServerAppCommandHandlers,
+  ShadowServerAppCommandInput,
+  ShadowServerAppCommandName,
+  ShadowServerAppCommandParseError,
+  ShadowServerAppCommandParseResult,
+  ShadowServerAppCommandParseSuccess,
+  ShadowServerAppCommandRequestInput,
+  ShadowServerAppExecutionFailure,
+  ShadowServerAppExecutionResult,
+  ShadowServerAppExecutionSuccess,
+  ShadowServerAppFetch,
+  ShadowServerAppIntrospectionInput,
+  ShadowServerAppManifestOptions,
+  ShadowServerAppRuntimeOptions,
+  ShadowServerAppValidationIssue,
+} from './server-app'
+// Server App helpers
+export {
+  createShadowServerAppManifest,
+  defineShadowServerApp,
+  extractShadowServerAppBearerToken,
+  introspectShadowServerAppToken,
+  normalizeShadowServerAppCommandInput,
+  parseShadowServerAppCommandRequest,
+  ShadowServerAppCommandError,
+  ShadowServerAppRuntime,
+  shadowServerAppActorAvatarUrl,
+  shadowServerAppActorDisplayName,
+  shadowServerAppActorRef,
+  shadowServerAppError,
+  validateShadowServerAppJsonSchema,
+} from './server-app'
 export type { ShadowSocketOptions } from './socket'
 // Socket
 export { ShadowSocket } from './socket'
@@ -100,6 +139,7 @@ export type {
   ShadowReview,
   ShadowServer,
   ShadowServerAccess,
+  ShadowServerAppActorProfile,
   ShadowServerAppApprovalMode,
   ShadowServerAppCatalogEntry,
   ShadowServerAppCommand,

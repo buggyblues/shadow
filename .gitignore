@@ -82,5 +82,7 @@ apps/cloud/src/application/*.generated.ts
 # Flash app runtime data and generated outputs
 apps/flash/data/
 apps/flash/output/
+integrations/flash/data/
+integrations/flash/output/
 
 .claude/

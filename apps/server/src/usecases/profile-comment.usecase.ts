@@ -1,7 +1,7 @@
-import type { AccessService } from '../security/access.service'
-import type { AuditLogService } from '../services/audit-log.service'
 import type { ProfileCommentDao } from '../dao/profile-comment.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { AccessService } from '../security/access.service'
+import type { AuditLogService } from '../services/audit-log.service'
 import type { SecureUseCaseInput } from './_security-usecase'
 import { auditUseCase } from './_security-usecase'
 
@@ -22,8 +22,7 @@ export class ProfileCommentUseCase {
       offset?: number
     },
   ) {
-    const currentUserId =
-      input.ctx.actor.kind === 'user' ? input.ctx.actor.userId : null
+    const currentUserId = input.ctx.actor.kind === 'user' ? input.ctx.actor.userId : null
     return this.deps.profileCommentDao.findByProfileUserId(
       input.profileUserId,
       currentUserId,
@@ -43,8 +42,7 @@ export class ProfileCommentUseCase {
       offset?: number
     },
   ) {
-    const currentUserId =
-      input.ctx.actor.kind === 'user' ? input.ctx.actor.userId : null
+    const currentUserId = input.ctx.actor.kind === 'user' ? input.ctx.actor.userId : null
     return this.deps.profileCommentDao.findReplies(
       input.parentId,
       currentUserId,

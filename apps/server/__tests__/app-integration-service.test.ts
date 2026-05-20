@@ -182,6 +182,17 @@ function createService(overrides: Record<string, unknown> = {}) {
       findById: vi.fn().mockResolvedValue({ id: 'agent-1', userId: 'bot-1', ownerId: 'user-1' }),
       findByUserId: vi.fn().mockResolvedValue({ id: 'agent-1', userId: 'bot-1' }),
     },
+    userDao: {
+      findById: vi.fn().mockResolvedValue({
+        id: 'bot-1',
+        username: 'demo-buddy',
+        displayName: 'Demo Buddy',
+        avatarUrl: '/shadow/uploads/buddy.png',
+      }),
+    },
+    mediaService: {
+      resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/avatar-token'),
+    },
     appIntegrationEventBus: {
       publish: vi.fn(),
       subscribe: vi.fn(),
@@ -410,6 +421,12 @@ describe('AppIntegrationService', () => {
           userId: 'bot-1',
           buddyAgentId: 'agent-1',
           ownerId: 'user-1',
+          profile: {
+            id: 'bot-1',
+            username: 'demo-buddy',
+            displayName: 'Demo Buddy',
+            avatarUrl: '/api/media/signed/avatar-token',
+          },
         },
         permission: 'demo.tickets:read',
       },

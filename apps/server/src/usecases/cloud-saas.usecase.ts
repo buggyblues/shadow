@@ -1,11 +1,11 @@
-import type { AccessService } from '../security/access.service'
-import type { AuditLogService } from '../services/audit-log.service'
 import type { CloudActivityDao } from '../dao/cloud-activity.dao'
 import type { CloudClusterDao } from '../dao/cloud-cluster.dao'
 import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { CloudDeploymentBackupDao } from '../dao/cloud-deployment-backup.dao'
 import type { CloudEnvVarDao } from '../dao/cloud-envvar.dao'
 import type { CloudTemplateDao } from '../dao/cloud-template.dao'
+import type { AccessService } from '../security/access.service'
+import type { AuditLogService } from '../services/audit-log.service'
 import type { CloudUsageService } from '../services/cloud-usage.service'
 import type { SecureUseCaseInput } from './_security-usecase'
 import { auditUseCase } from './_security-usecase'
@@ -51,19 +51,12 @@ export class CloudSaasUseCase {
     return this.deps.cloudTemplateDao.findBySlug(input.slug)
   }
 
-  async getTemplateBySlugForUser(
-    input: SecureUseCaseInput & { slug: string },
-  ) {
+  async getTemplateBySlugForUser(input: SecureUseCaseInput & { slug: string }) {
     const template = await this.deps.cloudTemplateDao.findBySlug(input.slug)
     if (!template) return null
     const userId = actorUserIdOrSystem(input)
-    const ownedByUser =
-      template.authorId === userId || template.submittedByUserId === userId
-    if (
-      template.reviewStatus === 'approved' ||
-      template.source === 'official' ||
-      ownedByUser
-    ) {
+    const ownedByUser = template.authorId === userId || template.submittedByUserId === userId
+    if (template.reviewStatus === 'approved' || template.source === 'official' || ownedByUser) {
       return template
     }
     return null
@@ -138,7 +131,11 @@ export class CloudSaasUseCase {
           return { ok: false as const, error: 'Forbidden', status: 403 }
         }
         if (template.reviewStatus === 'approved' || template.reviewStatus === 'pending') {
-          return { ok: false as const, error: 'Cannot edit an approved or pending template', status: 422 }
+          return {
+            ok: false as const,
+            error: 'Cannot edit an approved or pending template',
+            status: 422,
+          }
         }
         const updated = await this.deps.cloudTemplateDao.updateBySlug(input.slug, {
           name: input.payload.name,
@@ -158,9 +155,7 @@ export class CloudSaasUseCase {
     })
   }
 
-  async submitTemplateForReview(
-    input: SecureUseCaseInput & { slug: string },
-  ) {
+  async submitTemplateForReview(input: SecureUseCaseInput & { slug: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud-saas.template.submit-for-review',
       scope: { kind: 'user', id: actorUserIdOrSystem(input) },
@@ -177,7 +172,11 @@ export class CloudSaasUseCase {
         if (template.reviewStatus === 'approved') {
           return { ok: false as const, error: 'Template already approved', status: 422 }
         }
-        const updated = await this.deps.cloudTemplateDao.updateReviewStatus(template.id, 'pending', null)
+        const updated = await this.deps.cloudTemplateDao.updateReviewStatus(
+          template.id,
+          'pending',
+          null,
+        )
         await this.deps.cloudActivityDao.log({
           userId,
           type: 'template_submit',
@@ -188,9 +187,7 @@ export class CloudSaasUseCase {
     })
   }
 
-  async deleteTemplate(
-    input: SecureUseCaseInput & { slug: string },
-  ) {
+  async deleteTemplate(input: SecureUseCaseInput & { slug: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud-saas.template.delete',
       scope: { kind: 'user', id: actorUserIdOrSystem(input) },
@@ -214,9 +211,7 @@ export class CloudSaasUseCase {
 
   // ─── Deployment Operations ────────────────────────────────────────────────
 
-  async getDeployment(
-    input: SecureUseCaseInput & { deploymentId: string },
-  ) {
+  async getDeployment(input: SecureUseCaseInput & { deploymentId: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud-saas.deployment.get',
       resource: { kind: 'deployment', id: input.deploymentId },
@@ -229,9 +224,7 @@ export class CloudSaasUseCase {
     })
   }
 
-  async getDeploymentOwned(
-    input: SecureUseCaseInput & { deploymentId: string },
-  ) {
+  async getDeploymentOwned(input: SecureUseCaseInput & { deploymentId: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud-saas.deployment.get-owned',
       resource: { kind: 'deployment', id: input.deploymentId },
@@ -245,18 +238,14 @@ export class CloudSaasUseCase {
     })
   }
 
-  async listDeployments(
-    input: SecureUseCaseInput & { limit?: number; offset?: number },
-  ) {
+  async listDeployments(input: SecureUseCaseInput & { limit?: number; offset?: number }) {
     const userId = actorUserIdOrSystem(input)
     const limit = Math.min(input.limit ?? 50, 100)
     const offset = Math.max(input.offset ?? 0, 0)
     return this.deps.cloudDeploymentDao.listByUser(userId, limit, offset)
   }
 
-  async getDeploymentLogs(
-    input: SecureUseCaseInput & { deploymentId: string },
-  ) {
+  async getDeploymentLogs(input: SecureUseCaseInput & { deploymentId: string }) {
     const userId = actorUserIdOrSystem(input)
     const deployment = await this.deps.cloudDeploymentDao.findById(input.deploymentId, userId)
     if (!deployment) return null
@@ -264,9 +253,7 @@ export class CloudSaasUseCase {
     return { deployment, logs }
   }
 
-  async getDeploymentCosts(
-    input: SecureUseCaseInput & { deploymentId: string },
-  ) {
+  async getDeploymentCosts(input: SecureUseCaseInput & { deploymentId: string }) {
     const userId = actorUserIdOrSystem(input)
     const deployment = await this.deps.cloudDeploymentDao.findById(input.deploymentId, userId)
     if (!deployment) return null
@@ -293,25 +280,19 @@ export class CloudSaasUseCase {
     return { deployment, backups }
   }
 
-  async getBackupById(
-    input: SecureUseCaseInput & { backupId: string },
-  ) {
+  async getBackupById(input: SecureUseCaseInput & { backupId: string }) {
     const userId = actorUserIdOrSystem(input)
     return this.deps.cloudDeploymentBackupDao.findById(input.backupId, userId)
   }
 
   // ─── Env Var Operations ───────────────────────────────────────────────────
 
-  async listEnvVarsByUser(
-    input: SecureUseCaseInput & { scope?: string },
-  ) {
+  async listEnvVarsByUser(input: SecureUseCaseInput & { scope?: string }) {
     const userId = actorUserIdOrSystem(input)
     return this.deps.cloudEnvVarDao.listByUser(userId, input.scope)
   }
 
-  async listEnvVarsByDeployment(
-    input: SecureUseCaseInput & { deploymentId: string },
-  ) {
+  async listEnvVarsByDeployment(input: SecureUseCaseInput & { deploymentId: string }) {
     const userId = actorUserIdOrSystem(input)
     const deployment = await this.deps.cloudDeploymentDao.findById(input.deploymentId, userId)
     if (!deployment) return null
@@ -377,14 +358,17 @@ export class CloudSaasUseCase {
       resource: { kind: 'envvar', id: input.id },
       run: async () => {
         const userId = actorUserIdOrSystem(input)
-        return this.deps.cloudEnvVarDao.update(input.id, userId, input.encryptedValue, input.groupId)
+        return this.deps.cloudEnvVarDao.update(
+          input.id,
+          userId,
+          input.encryptedValue,
+          input.groupId,
+        )
       },
     })
   }
 
-  async deleteEnvVar(
-    input: SecureUseCaseInput & { envVarId: string },
-  ) {
+  async deleteEnvVar(input: SecureUseCaseInput & { envVarId: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud-saas.envvar.delete',
       resource: { kind: 'envvar', id: input.envVarId },
@@ -396,9 +380,7 @@ export class CloudSaasUseCase {
     })
   }
 
-  async deleteEnvVarByScope(
-    input: SecureUseCaseInput & { scope: string },
-  ) {
+  async deleteEnvVarByScope(input: SecureUseCaseInput & { scope: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud-saas.envvar.delete-scope',
       run: async () => {
@@ -414,16 +396,12 @@ export class CloudSaasUseCase {
     return this.deps.cloudEnvVarDao.listGroupsByUser(userId)
   }
 
-  async findEnvGroupByName(
-    input: SecureUseCaseInput & { name: string },
-  ) {
+  async findEnvGroupByName(input: SecureUseCaseInput & { name: string }) {
     const userId = actorUserIdOrSystem(input)
     return this.deps.cloudEnvVarDao.findGroupByName(userId, input.name)
   }
 
-  async createEnvGroup(
-    input: SecureUseCaseInput & { name: string },
-  ) {
+  async createEnvGroup(input: SecureUseCaseInput & { name: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud-saas.env-group.create',
       run: async () => {
@@ -433,9 +411,7 @@ export class CloudSaasUseCase {
     })
   }
 
-  async deleteEnvGroupByName(
-    input: SecureUseCaseInput & { name: string },
-  ) {
+  async deleteEnvGroupByName(input: SecureUseCaseInput & { name: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud-saas.env-group.delete',
       run: async () => {
@@ -459,9 +435,7 @@ export class CloudSaasUseCase {
 
   // ─── Activity Operations ─────────────────────────────────────────────────
 
-  async listActivity(
-    input: SecureUseCaseInput & { limit?: number; offset?: number },
-  ) {
+  async listActivity(input: SecureUseCaseInput & { limit?: number; offset?: number }) {
     const userId = actorUserIdOrSystem(input)
     const limit = Math.min(input.limit ?? 50, 100)
     const offset = Math.max(input.offset ?? 0, 0)
@@ -496,11 +470,7 @@ export class CloudSaasUseCase {
       since: Date
     },
   ) {
-    return this.deps.cloudActivityDao.countByUserTypeSince(
-      input.userId,
-      input.type,
-      input.since,
-    )
+    return this.deps.cloudActivityDao.countByUserTypeSince(input.userId, input.type, input.since)
   }
 
   // ─── Backup Record Operations ─────────────────────────────────────────────
@@ -534,7 +504,13 @@ export class CloudSaasUseCase {
           driver: input.driver,
           snapshotName: input.snapshotName,
           objectKey: input.objectKey,
-          status: input.status as 'pending' | 'running' | 'succeeded' | 'failed' | 'expired' | undefined,
+          status: input.status as
+            | 'pending'
+            | 'running'
+            | 'succeeded'
+            | 'failed'
+            | 'expired'
+            | undefined,
           phase: input.phase,
           expiresAt: input.expiresAt,
         })

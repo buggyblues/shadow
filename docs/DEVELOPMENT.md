@@ -17,7 +17,7 @@ pnpm install
 cp .env.example .env
 ```
 
-The root `prepare` script also repairs local pnpm symlinks used by `apps/flash`.
+The root `prepare` script also repairs local pnpm symlinks used by `integrations/flash`.
 
 ## Local Startup
 

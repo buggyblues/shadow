@@ -4,6 +4,7 @@ import { ZodError } from 'zod'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AppIntegrationDao } from '../dao/app-integration.dao'
 import type { ServerDao } from '../dao/server.dao'
+import type { UserDao } from '../dao/user.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { validateJsonLimits } from '../lib/json-limits'
 import type { Actor } from '../security/actor'
@@ -19,6 +20,7 @@ import {
   type UpdateServerAppAccessPolicyInput,
 } from '../validators/app-integration.schema'
 import type { AppIntegrationEventBus } from './app-integration-event-bus'
+import type { MediaService } from './media.service'
 import type { PolicyService } from './policy.service'
 
 const MANIFEST_LIMITS = {
@@ -190,9 +192,11 @@ export class AppIntegrationService {
     private deps: {
       appIntegrationDao: AppIntegrationDao
       agentDao: AgentDao
+      userDao: UserDao
       appIntegrationEventBus: AppIntegrationEventBus
       serverDao: ServerDao
       policyService: PolicyService
+      mediaService: MediaService
       safeHttpClient: SafeHttpClient
       logger: Logger
     },
@@ -710,6 +714,15 @@ export class AppIntegrationService {
     return agent?.id ?? null
   }
 
+  private async actorOwnerUserId(actor: Actor, buddyAgentId?: string | null) {
+    if (actor.kind !== 'agent') return null
+    if (actor.ownerId) return actor.ownerId
+    const agent =
+      (buddyAgentId ? await this.deps.agentDao.findById(buddyAgentId) : null) ??
+      (await this.deps.agentDao.findByUserId(actor.userId))
+    return agent?.ownerId ?? null
+  }
+
   private async createCommandBearerToken(input: {
     actor: Actor
     serverId: string
@@ -720,11 +733,16 @@ export class AppIntegrationService {
     action: string
     dataClass: string
     channelId: string | null
+    buddyAgentId?: string | null
+    ownerId?: string | null
   }) {
     if (input.actor.kind === 'system') {
       throw Object.assign(new Error('System actor cannot call server apps'), { status: 403 })
     }
-    const buddyAgentId = await this.actorBuddyAgentId(input.actor)
+    const buddyAgentId = input.buddyAgentId ?? (await this.actorBuddyAgentId(input.actor))
+    const ownerId =
+      input.ownerId ??
+      (input.actor.kind === 'agent' ? await this.actorOwnerUserId(input.actor, buddyAgentId) : null)
     const token = `sat_cmd_v1_${randomBytes(32).toString('base64url')}`
     await this.deps.appIntegrationDao.createCommandToken({
       tokenHash: hashOpaqueToken(token),
@@ -736,7 +754,7 @@ export class AppIntegrationService {
       command: input.command,
       actorKind: input.actor.kind,
       buddyAgentId,
-      ownerId: input.actor.kind === 'agent' ? input.actor.ownerId : null,
+      ownerId,
       channelId: input.channelId,
       permission: input.permission,
       action: input.action,
@@ -995,6 +1013,7 @@ export class AppIntegrationService {
     if (!jsonLimits.ok) throw Object.assign(new Error(jsonLimits.error), { status: 413 })
 
     const buddyAgentId = await this.actorBuddyAgentId(input.actor)
+    const ownerId = await this.actorOwnerUserId(input.actor, buddyAgentId)
     const context = {
       protocol: 'shadow.app/1',
       serverId,
@@ -1005,6 +1024,7 @@ export class AppIntegrationService {
         kind: input.actor.kind,
         userId: input.actor.kind === 'system' ? null : input.actor.userId,
         buddyAgentId,
+        ownerId,
       },
       channelId: input.body.channelId ?? null,
       permission: command.permission,
@@ -1035,6 +1055,8 @@ export class AppIntegrationService {
         action: command.action,
         dataClass: command.dataClass,
         channelId: input.body.channelId ?? null,
+        buddyAgentId,
+        ownerId,
       })}`
     }
 
@@ -1135,6 +1157,8 @@ export class AppIntegrationService {
       return { active: false }
     }
 
+    const actorProfile = payload.userId ? await this.commandActorProfile(payload.userId) : null
+
     return {
       active: true,
       token_type: 'Bearer',
@@ -1159,12 +1183,26 @@ export class AppIntegrationService {
           userId: payload.userId,
           buddyAgentId: payload.buddyAgentId ?? null,
           ownerId: payload.ownerId ?? null,
+          profile: actorProfile,
         },
         channelId: payload.channelId ?? null,
         permission: payload.permission,
         action: payload.action,
         dataClass: payload.dataClass,
       },
+    }
+  }
+
+  private async commandActorProfile(userId: string) {
+    const user = await this.deps.userDao.findById(userId)
+    if (!user) return null
+    return {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: this.deps.mediaService.resolveMediaUrl(user.avatarUrl, 'image/png', {
+        variant: 'avatar',
+      }),
     }
   }
 

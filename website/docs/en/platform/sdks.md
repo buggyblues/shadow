@@ -186,7 +186,31 @@ servers = client.list_servers()
 msg = client.send_message("channel-id", "Hello from Python!")
 ```
 
-### Server App Helpers
+### Server App Runtime
+
+The TypeScript SDK includes a modeled backend runtime for Server App implementations:
+
+```ts
+import { defineShadowServerApp } from '@shadowob/sdk'
+import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { shadowServerAppManifest } from './shadow-app.generated.js'
+
+const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
+  shadowBaseUrl: process.env.SHADOW_SERVER_URL,
+})
+
+const commands = shadowApp.defineCommands({
+  'tickets.create': (input, { actor }) => createTicket({ ...input, author: actor }),
+})
+```
+
+Generate `src/shadow-app.generated.ts` from the JSON manifest so command input types are inferred from each command's JSON Schema:
+
+```bash
+shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts
+```
+
+Use `shadowApp.executeCommand(...)` in the command route to validate Shadow Bearer command tokens, parse the envelope, validate input, and expose actor names/avatars from `shadow.actor.profile`. Use `createShadowServerAppJsonStore(...)` for simple file-backed demo persistence.
 
 ```python
 apps = client.list_server_apps("server-id-or-slug")

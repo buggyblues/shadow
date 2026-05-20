@@ -63,9 +63,7 @@ async function main() {
   })
 
   if (scan.conflicts.length > 0) {
-    console.warn(
-      `[runtime-deps] ${scan.conflicts.length} bundled dependency conflict(s) detected`,
-    )
+    console.warn(`[runtime-deps] ${scan.conflicts.length} bundled dependency conflict(s) detected`)
   }
 
   if (scan.missing.length === 0) {

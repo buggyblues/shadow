@@ -1,0 +1,259 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import type { ShadowServerAppCommandContext } from '../src/server-app'
+import {
+  createShadowServerAppManifest,
+  defineShadowServerApp,
+  extractShadowServerAppBearerToken,
+  normalizeShadowServerAppCommandInput,
+  parseShadowServerAppCommandRequest,
+  shadowServerAppActorDisplayName,
+  shadowServerAppActorRef,
+  validateShadowServerAppJsonSchema,
+} from '../src/server-app'
+import { createShadowServerAppJsonStore } from '../src/server-app-node'
+import type { ShadowServerAppManifest } from '../src/types'
+
+const manifest: ShadowServerAppManifest = {
+  schemaVersion: 'shadow.app/1',
+  appKey: 'demo',
+  name: 'Demo',
+  iconUrl: 'http://localhost:4201/assets/icon.svg',
+  iframe: {
+    entry: 'http://localhost:4201/shadow/server',
+    allowedOrigins: ['http://localhost:4201'],
+  },
+  api: {
+    baseUrl: 'http://localhost:4201',
+    auth: { type: 'oauth2-bearer' },
+  },
+  commands: [
+    {
+      name: 'items.list',
+      path: '/api/shadow/commands/items.list',
+      permission: 'demo.items:read',
+      action: 'read',
+      dataClass: 'server-private',
+    },
+  ],
+}
+
+const typedManifest = {
+  ...manifest,
+  commands: [
+    {
+      name: 'items.create',
+      path: '/api/shadow/commands/items.create',
+      permission: 'demo.items:write',
+      action: 'write',
+      dataClass: 'server-private',
+      inputSchema: {
+        type: 'object',
+        required: ['title'],
+        additionalProperties: false,
+        properties: {
+          title: { type: 'string', minLength: 1, maxLength: 80 },
+          priority: { enum: ['low', 'normal', 'high'] },
+        },
+      },
+    },
+  ],
+} as const satisfies ShadowServerAppManifest
+
+const commandContext: ShadowServerAppCommandContext = {
+  protocol: 'shadow.app/1',
+  serverId: 'server-1',
+  serverAppId: 'app-1',
+  appKey: 'demo',
+  command: 'items.create',
+  actor: {
+    kind: 'user',
+    userId: 'user-1',
+    profile: {
+      id: 'user-1',
+      displayName: 'Alice',
+      avatarUrl: null,
+    },
+  },
+  permission: 'demo.items:write',
+  action: 'write',
+  dataClass: 'server-private',
+}
+
+describe('server app helpers', () => {
+  it('extracts bearer tokens', () => {
+    expect(extractShadowServerAppBearerToken('Bearer sat_123')).toBe('sat_123')
+    expect(extractShadowServerAppBearerToken('basic nope')).toBeNull()
+  })
+
+  it('rewrites local manifest URLs from a public base URL', () => {
+    expect(
+      createShadowServerAppManifest(manifest, {
+        publicBaseUrl: 'https://app.example.com/',
+        apiBaseUrl: 'https://api.example.com/',
+        iframePath: '/server',
+      }),
+    ).toMatchObject({
+      iconUrl: 'https://app.example.com/assets/icon.svg',
+      iframe: {
+        entry: 'https://app.example.com/server',
+        allowedOrigins: ['https://app.example.com'],
+      },
+      api: {
+        baseUrl: 'https://api.example.com',
+      },
+    })
+  })
+
+  it('unwraps bridge command envelopes', () => {
+    expect(
+      normalizeShadowServerAppCommandInput({ input: { title: 'A' }, channelId: 'c1' }),
+    ).toEqual({
+      title: 'A',
+    })
+    expect(normalizeShadowServerAppCommandInput({ title: 'A' })).toEqual({ title: 'A' })
+  })
+
+  it('parses command requests through Shadow introspection', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          active: true,
+          shadow: {
+            protocol: 'shadow.app/1',
+            serverId: 'srv-1',
+            serverAppId: 'app-1',
+            appKey: 'demo',
+            command: 'items.list',
+            actor: {
+              kind: 'user',
+              userId: 'user-1',
+              profile: {
+                username: 'alice',
+                displayName: 'Alice',
+                avatarUrl: 'https://cdn.example.com/a.png',
+              },
+            },
+            permission: 'demo.items:read',
+            action: 'read',
+            dataClass: 'server-private',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    const result = await parseShadowServerAppCommandRequest({
+      authorizationHeader: 'Bearer sat_123',
+      serverIdHeader: 'srv-1',
+      appKeyHeader: 'demo',
+      expectedCommand: 'items.list',
+      requestBody: JSON.stringify({ input: { limit: 10 } }),
+      shadowBaseUrl: 'https://shadow.example.com',
+      fetchImpl,
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      envelope: {
+        input: { limit: 10 },
+        context: {
+          actor: {
+            profile: { displayName: 'Alice' },
+          },
+        },
+      },
+    })
+    if (result.ok) {
+      expect(shadowServerAppActorDisplayName(result.envelope)).toBe('Alice')
+      expect(shadowServerAppActorRef(result.envelope)).toMatchObject({
+        id: 'user-1',
+        displayName: 'Alice',
+        avatarUrl: 'https://cdn.example.com/a.png',
+      })
+    }
+  })
+
+  it('executes typed runtime commands with JSON Schema validation', async () => {
+    const runtime = defineShadowServerApp(typedManifest)
+    const handlers = runtime.defineCommands({
+      'items.create': (input, { actor }) => ({
+        title: input.title,
+        priority: input.priority ?? 'normal',
+        actor: actor.displayName,
+      }),
+    })
+
+    await expect(
+      runtime.executeLocal(
+        'items.create',
+        { title: 'Ship SDK', priority: 'high' },
+        commandContext,
+        handlers,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      body: {
+        result: {
+          title: 'Ship SDK',
+          priority: 'high',
+          actor: 'Alice',
+        },
+      },
+    })
+
+    await expect(
+      runtime.executeLocal('items.create', { title: '', extra: true }, commandContext, handlers),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 422,
+      body: {
+        error: 'invalid_input',
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: 'title' }),
+          expect.objectContaining({ path: 'extra', message: 'Unknown property' }),
+        ]),
+      },
+    })
+  })
+
+  it('validates standalone JSON Schema objects', () => {
+    expect(
+      validateShadowServerAppJsonSchema(
+        {
+          type: 'object',
+          required: ['value'],
+          properties: { value: { type: 'integer' } },
+          additionalProperties: false,
+        },
+        { value: 1 },
+      ),
+    ).toEqual({ ok: true })
+  })
+
+  it('persists JSON app data through the Node store', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shadow-sdk-'))
+    const filePath = join(dir, 'data.json')
+    try {
+      const store = createShadowServerAppJsonStore({
+        filePath,
+        defaultValue: () => ({ items: [] as string[] }),
+      })
+
+      expect(store.read()).toEqual({ items: [] })
+      expect(store.update((value) => ({ items: [...value.items, 'one'] }))).toEqual({
+        items: ['one'],
+      })
+      expect(
+        createShadowServerAppJsonStore({
+          filePath,
+          defaultValue: () => ({ items: [] as string[] }),
+        }).read(),
+      ).toEqual({ items: ['one'] })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})

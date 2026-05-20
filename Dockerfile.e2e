@@ -20,13 +20,21 @@ COPY apps/admin/package.json ./apps/admin/
 COPY apps/cloud/package.json ./apps/cloud/
 COPY apps/cloud/packages/ui/package.json ./apps/cloud/packages/ui/
 COPY apps/desktop/package.json ./apps/desktop/
-COPY apps/flash/package.json ./apps/flash/
-COPY apps/flash/packages/cards/package.json ./apps/flash/packages/cards/
-COPY apps/flash/packages/types/package.json ./apps/flash/packages/types/
 COPY apps/mobile/package.json ./apps/mobile/
 COPY apps/playground/package.json ./apps/playground/
+COPY apps/promo/package.json ./apps/promo/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
+COPY integrations/flash/package.json ./integrations/flash/
+COPY integrations/flash/packages/cards/package.json ./integrations/flash/packages/cards/
+COPY integrations/flash/packages/types/package.json ./integrations/flash/packages/types/
+COPY integrations/kanban/package.json ./integrations/kanban/
+COPY integrations/petcat/package.json ./integrations/petcat/
+COPY integrations/qna/package.json ./integrations/qna/
+COPY integrations/quiz/package.json ./integrations/quiz/
+COPY integrations/resume/package.json ./integrations/resume/
+COPY integrations/trainer/package.json ./integrations/trainer/
+COPY integrations/wheel/package.json ./integrations/wheel/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/connector/package.json ./packages/connector/
 COPY packages/oauth/package.json ./packages/oauth/
@@ -69,6 +77,7 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 # .dockerignore excludes these from the build context, so COPY . . won't overwrite them
 COPY --from=builder /workspace/node_modules ./node_modules
 COPY --from=builder /workspace/apps ./apps
+COPY --from=builder /workspace/integrations ./integrations
 COPY --from=builder /workspace/packages ./packages
 
 # Copy remaining source files (scripts, configs, docs, etc.)

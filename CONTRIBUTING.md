@@ -74,7 +74,7 @@ pnpm dev:frontend
 | `apps/desktop` | Electron client and Playwright visual/E2E suites. |
 | `apps/admin` | Admin dashboard. |
 | `apps/cloud` | Shadow Cloud CLI, HTTP server, dashboard, SaaS UI, templates, plugins, deployment services. |
-| `apps/flash` | Interactive Flash runtime and demo app. |
+| `integrations/flash` | Interactive Flash runtime and Server App integration. |
 | `apps/promo` | Remotion promotional media source. |
 | `apps/playground` | UI playground. |
 | `packages/shared` | Shared types, constants, play catalog, utilities. |

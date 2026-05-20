@@ -46,8 +46,8 @@ import {
   MessageAuthorLine,
   MessageEditBox,
   MessageReactions,
-  reactionsEqual,
   ReplyReference,
+  reactionsEqual,
   SelectionControl,
   SendFailureNotice,
 } from './message-bubble/pure'

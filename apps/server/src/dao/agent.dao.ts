@@ -114,9 +114,7 @@ export class AgentDao {
 
   /** Scoped delete by userId (owner) and agent id */
   async deleteByUserIdAndId(userId: string, id: string) {
-    await this.db
-      .delete(agents)
-      .where(and(eq(agents.id, id), eq(agents.ownerId, userId)))
+    await this.db.delete(agents).where(and(eq(agents.id, id), eq(agents.ownerId, userId)))
   }
 
   /** 创建 Agent 关联的 bot user，username冲突时自动加随机短缀 */

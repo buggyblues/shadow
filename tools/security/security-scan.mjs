@@ -13,10 +13,7 @@ const reportPath = reportPathArg ? reportPathArg.slice('--report='.length) : nul
 const SOURCE_ROOTS = ['apps/server/src']
 const EXCLUDED_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next'])
 const ALLOW = {
-  directFetch: [
-    'apps/server/src/gateways/safe-http-client.ts',
-    'apps/server/src/lib/ssrf.ts',
-  ],
+  directFetch: ['apps/server/src/gateways/safe-http-client.ts', 'apps/server/src/lib/ssrf.ts'],
   k8sRuntime: [
     'apps/server/src/gateways/kubernetes-ops.gateway.ts',
     'apps/server/src/lib/cloud-deployment-processor.ts',
@@ -112,7 +109,9 @@ function scanFile(file) {
     }
 
     if (
-      /\b(deleteNamespace|spawnPodLogStream|readPodLogsAsync|listPodsAsync|restorePvcFromVolumeSnapshot)\b/.test(line) &&
+      /\b(deleteNamespace|spawnPodLogStream|readPodLogsAsync|listPodsAsync|restorePvcFromVolumeSnapshot)\b/.test(
+        line,
+      ) &&
       !isAllowed(ALLOW.k8sRuntime, file)
     ) {
       findings.push(
@@ -157,7 +156,10 @@ function scanFile(file) {
       )
     }
 
-    if ((isService || isDao) && /async\s+(updateById|deleteById|update|delete)\s*\(\s*id\s*:/.test(line)) {
+    if (
+      (isService || isDao) &&
+      /async\s+(updateById|deleteById|update|delete)\s*\(\s*id\s*:/.test(line)
+    ) {
       findings.push(
         finding(
           'global-id-write-method-review',
@@ -179,7 +181,8 @@ function scanRouteScopeHeuristics(file, text) {
   const relative = rel(file)
   if (!relative.includes('/handlers/')) return []
   const findings = []
-  const routeRegex = /h\.(?:get|post|put|patch|delete|all)\(\s*['"]([^'"]+)['"][\s\S]*?\n\s*\}\s*,?\n\s*\)/g
+  const routeRegex =
+    /h\.(?:get|post|put|patch|delete|all)\(\s*['"]([^'"]+)['"][\s\S]*?\n\s*\}\s*,?\n\s*\)/g
   let match
   while ((match = routeRegex.exec(text))) {
     const route = match[1]
@@ -189,7 +192,9 @@ function scanRouteScopeHeuristics(file, text) {
     if (!hasParent || !childMatch) continue
 
     const child = childMatch[1]
-    const directChildOnlyCall = new RegExp(`\\.(update|delete|updateOrderStatus|deleteProduct|updateProduct|deleteCategory|updateCategory)\\s*\\(\\s*c\\.req\\.param\\(['"]${child}['"]\\)`).test(block)
+    const directChildOnlyCall = new RegExp(
+      `\\.(update|delete|updateOrderStatus|deleteProduct|updateProduct|deleteCategory|updateCategory)\\s*\\(\\s*c\\.req\\.param\\(['"]${child}['"]\\)`,
+    ).test(block)
     if (!directChildOnlyCall) continue
 
     const line = text.slice(0, match.index).split(/\r?\n/).length

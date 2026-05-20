@@ -203,7 +203,7 @@ Shadow is a monorepo because the product pieces are meant to work together.
 | Area | Paths |
 |---|---|
 | 🧑‍💻 Product apps | `apps/server`, `apps/web`, `apps/mobile`, `apps/desktop`, `apps/admin` |
-| ☁️ Cloud | `apps/cloud`, `apps/cloud/packages/ui`, `apps/flash` |
+| ☁️ Cloud | `apps/cloud`, `apps/cloud/packages/ui`, `integrations/flash` |
 | 🔌 SDKs and integrations | `packages/sdk`, `packages/sdk-python`, `packages/cli`, `packages/oauth`, `packages/openclaw-shadowob` |
 | 🧱 Shared systems | `packages/shared`, `packages/ui`, `packages/views` |
 | 📚 Docs and media | `website`, `docs`, `apps/promo`, `website/docs/public/readme` |

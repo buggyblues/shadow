@@ -16,7 +16,7 @@ Server
       commands exposed through shadowob app call
 ```
 
-Server Apps are independent services. Shadow must not package, launch, or depend on a Server App through `docker-compose` or any other server-side process manager. The only contract between Shadow and an App is the manifest, iframe URL, command URLs, event stream, and OAuth-style command token introspection protocol.
+Server Apps are independent services. Shadow must not package, launch, or depend on a Server App through `docker-compose` or any other server-side process manager. The only contract between Shadow and an App is the manifest, iframe URL, command URLs, event stream, and OAuth-style command token introspection protocol. The `integrations/compose.yaml` file is a local developer harness for running demo Apps together; it is not part of the Shadow server runtime.
 
 Shadow stores the manifest snapshot, validates origins, grants Buddies explicit permissions, and proxies command calls to the App backend. Buddies never receive App credentials; Shadow signs a short-lived OAuth-style Bearer token for each command call.
 
@@ -122,7 +122,7 @@ Install an App into a server:
 ```bash
 shadowob app install \
   --server <server-id-or-slug> \
-  --manifest-file skills/shadow-server-app/example-app/shadow-app.local.json
+  --manifest-file integrations/kanban/shadow-app.local.json
 ```
 
 Grant a Buddy permission:
@@ -214,6 +214,55 @@ TypeScript SDK methods:
 
 Python SDK mirrors these as snake_case, including `update_server_app_access_policy(...)`, `approve_server_app_command(...)`, and `introspect_server_app_token(...)`.
 
+Server App backends should use the modeled runtime instead of wiring raw parser helpers in every route:
+
+```ts
+import { defineShadowServerApp } from '@shadowob/sdk'
+import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { shadowServerAppManifest } from './shadow-app.generated.js'
+
+const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
+  shadowBaseUrl: process.env.SHADOW_SERVER_URL,
+})
+
+const commands = shadowApp.defineCommands({
+  'tickets.create': (input, { actor }) => {
+    return { ticket: createTicket({ ...input, author: actor }) }
+  },
+})
+```
+
+The command `input` type is inferred from the generated manifest's JSON Schema. Generate that typed manifest from the JSON source:
+
+```bash
+shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts
+```
+
+Then route command calls through the runtime:
+
+```ts
+const result = await shadowApp.executeCommand(
+  commandName,
+  {
+    authorizationHeader: c.req.header('authorization'),
+    serverIdHeader: c.req.header('X-Shadow-Server-Id'),
+    appKeyHeader: c.req.header('X-Shadow-App-Key'),
+    requestBody: await c.req.text(),
+  },
+  commands,
+)
+return c.json(result.body, result.status)
+```
+
+Use `@shadowob/sdk/server-app/node` for simple JSON persistence in Node demos:
+
+```ts
+const store = createShadowServerAppJsonStore({
+  filePath: process.env.KANBAN_DATA_FILE ?? './data/kanban-board.json',
+  defaultValue: defaultBoard,
+})
+```
+
 ## Security Model
 
 Each command declares:
@@ -272,7 +321,13 @@ Active responses include `active`, `token_type`, `sub`, `scope`, `exp`, `iat`, a
       "kind": "agent",
       "userId": "bot-user-1",
       "buddyAgentId": "agent-1",
-      "ownerId": "owner-user-1"
+      "ownerId": "owner-user-1",
+      "profile": {
+        "id": "bot-user-1",
+        "username": "guide-buddy",
+        "displayName": "Guide Buddy",
+        "avatarUrl": "/api/media/signed/..."
+      }
     },
     "permission": "demo.tickets:write",
     "action": "write",
@@ -281,7 +336,7 @@ Active responses include `active`, `token_type`, `sub`, `scope`, `exp`, `iat`, a
 }
 ```
 
-The bearer token is opaque (`sat_cmd_v1_...`) and short-lived. App backends use the introspection endpoint to resolve the user or Buddy identity, scopes, command, channel, action, and data class.
+The bearer token is opaque (`sat_cmd_v1_...`) and short-lived. App backends use the introspection endpoint to resolve the user or Buddy identity, display profile, scopes, command, channel, action, and data class.
 
 Binary is supported at the protocol layer through multipart commands. A command can set `input: "multipart"` and `binary.supported: true`; the CLI sends `input` as JSON plus a file field.
 
@@ -326,21 +381,25 @@ The provisioner installs/updates the App, grants the Buddy, and exports runtime 
 
 ## Demo
 
-See `skills/shadow-server-app/example-app`. It is a TypeScript Hono app with:
+See `integrations/kanban`. It is the canonical copyable TypeScript Hono demo app with:
 
 - `/.well-known/shadow-app.json`
 - `/shadow/server` iframe UI
 - `/assets/icon.svg` app icon
-- OAuth Bearer introspection for JSON and multipart command endpoints
-- in-memory ticket data
-- a multipart file command for binary protocol testing
-- SSE consumption so the iframe refreshes after CLI resource operations
-
-See `apps/kanban` for a Trello-style board App. It is intentionally a standalone App process, not part of Shadow's `docker-compose` graph. It ships with:
-
+- `@shadowob/sdk` modeled runtime through `defineShadowServerApp`, `defineCommands`, `executeCommand`, and actor profile display
+- `shadow-server-app typegen` generated `src/shadow-app.generated.ts` so command input types are inferred from JSON Schema
+- `@shadowob/sdk/server-app/node` JSON persistence through `KANBAN_DATA_FILE`
 - `.env`-driven public/API base URLs for local `host.lima.internal` installs or a later hosted domain
-- file-backed board persistence through `KANBAN_DATA_FILE`
 - decoupled Hono protocol/API routes and iframe UI module
-- iframe board UI with drag-and-drop cards, quick add, comments, and live refresh
-- commands for `boards.get`, `cards.create`, `cards.move`, `cards.assign`, and `cards.comment`
+- iframe board UI with drag-and-drop cards, quick add, assignee avatars, card details, comments, and live refresh
+- commands for `boards.get`, `cards.get`, `cards.create`, `cards.move`, `cards.assign`, and `cards.comment`
 - default read access plus first-use approval for card writes
+
+Run all standard demo Apps locally with dotenv overrides:
+
+```bash
+cp integrations/.env.example integrations/.env
+docker compose -f integrations/compose.yaml --env-file integrations/.env up --build
+```
+
+Additional demo apps live in `integrations/qna` and `integrations/quiz`. A smaller legacy protocol test app remains in `skills/shadow-server-app/example-app` for multipart upload coverage.

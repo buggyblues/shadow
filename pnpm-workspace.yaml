@@ -1,7 +1,8 @@
 packages:
   - "apps/*"
   - "apps/cloud/packages/*"
-  - "apps/flash/packages/*"
+  - "integrations/*"
+  - "integrations/flash/packages/*"
   - "packages/*"
   - "packages/views"
   - "website"

@@ -20,7 +20,14 @@ export type ResourceKind =
   | 'config'
   | 'profileComment'
 
-export type ScopeKind = 'platform' | 'server' | 'shop' | 'workspace' | 'user' | 'deployment' | 'channel'
+export type ScopeKind =
+  | 'platform'
+  | 'server'
+  | 'shop'
+  | 'workspace'
+  | 'user'
+  | 'deployment'
+  | 'channel'
 
 export type ResourceRef = {
   kind: ResourceKind

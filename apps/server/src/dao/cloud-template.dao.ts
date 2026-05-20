@@ -201,7 +201,11 @@ export class CloudTemplateDao {
       .select()
       .from(cloudTemplates)
       .where(
-        and(eq(cloudTemplates.slug, slug), eq(cloudTemplates.authorId, authorId), ne(cloudTemplates.source, 'official')),
+        and(
+          eq(cloudTemplates.slug, slug),
+          eq(cloudTemplates.authorId, authorId),
+          ne(cloudTemplates.source, 'official'),
+        ),
       )
       .limit(1)
     return result[0] ?? null
