@@ -49,7 +49,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/rbush": "^4.0.0",
     "@types/three": "^0.183.1",
-    "@webgpu/types": "^0.1.69",
+    "@webgpu/types": "^0.1.70",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3"
   },
