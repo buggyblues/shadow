@@ -1,5 +1,5 @@
-import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
+import { createServer } from 'node:http'
 
 const PORT = Number(process.env.PORT ?? 4178)
 const SHADOW_BASE_URL = (process.env.SHADOW_BASE_URL ?? 'https://shadowob.com').replace(/\/$/, '')

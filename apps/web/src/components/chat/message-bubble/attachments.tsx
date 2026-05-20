@@ -1,7 +1,7 @@
-import { memo, useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { type MouseEvent, memo, useCallback, useEffect, useState } from 'react'
 import { FileCard } from '../file-card'
-import { attachmentsEqual } from './pure'
 import { isImageType, resolveAttachmentMediaUrl } from './media'
+import { attachmentsEqual } from './pure'
 import type { Attachment } from './types'
 
 interface AttachmentViewProps {

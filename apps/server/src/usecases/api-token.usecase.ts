@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto'
+import type { ApiTokenDao } from '../dao/api-token.dao'
+import type { AccessService } from '../security/access.service'
 import type { Actor } from '../security/actor'
 import { actorUserId } from '../security/actor'
-import type { AccessService } from '../security/access.service'
-import type { ApiTokenDao } from '../dao/api-token.dao'
 
 function generatePatToken(): string {
   return `pat_${randomBytes(32).toString('hex')}`

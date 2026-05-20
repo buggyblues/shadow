@@ -2,10 +2,10 @@
 /**
  * Workaround for a pnpm symlink depth bug affecting scoped packages
  * (e.g. @types/*, @webgpu/*) installed in workspace packages located
- * at depth > 2 from the workspace root (apps/flash/packages/*).
+ * at depth > 2 from the workspace root (integrations/flash/packages/*).
  *
  * pnpm generates relative symlinks 4 levels deep when they should be
- * 6 levels deep for packages at apps/flash/packages/*\/node_modules/@scope/pkg.
+ * 6 levels deep for packages at integrations/flash/packages/*\/node_modules/@scope/pkg.
  *
  * This script detects and corrects those broken symlinks after `pnpm install`.
  */
@@ -16,7 +16,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..')
-const FLASH_PACKAGES = join(ROOT, 'apps/flash/packages')
+const FLASH_PACKAGES = join(ROOT, 'integrations/flash/packages')
 
 async function fixBrokenSymlinks(dir, depth = 0) {
   if (depth > 4) return
@@ -58,6 +58,6 @@ async function fixBrokenSymlinks(dir, depth = 0) {
   }
 }
 
-console.log('Fixing pnpm symlink depth issue in apps/flash/packages...')
+console.log('Fixing pnpm symlink depth issue in integrations/flash/packages...')
 await fixBrokenSymlinks(FLASH_PACKAGES)
 console.log('Done.')

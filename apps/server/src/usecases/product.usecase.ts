@@ -1,8 +1,7 @@
-import type { EntitlementConfigInput } from '../services/product.service'
 import type { AccessService } from '../security/access.service'
 import type { AuditLogService } from '../services/audit-log.service'
 import type { CommerceOfferService } from '../services/commerce-offer.service'
-import type { ProductService } from '../services/product.service'
+import type { EntitlementConfigInput, ProductService } from '../services/product.service'
 import type { ServerService } from '../services/server.service'
 import type { ShopService } from '../services/shop.service'
 import type { SecureUseCaseInput } from './_security-usecase'
@@ -136,11 +135,7 @@ export class ProductUseCase {
         const serverId = await this.resolveServerId(input.identifier)
         await this.deps.accessService.requireServerAdmin(input.ctx.actor, serverId)
         const shop = await this.getOrCreateServerShop(serverId)
-        return this.deps.productService.updateProductInShop(
-          shop.id,
-          input.productId,
-          input.data,
-        )
+        return this.deps.productService.updateProductInShop(shop.id, input.productId, input.data)
       },
     })
   }

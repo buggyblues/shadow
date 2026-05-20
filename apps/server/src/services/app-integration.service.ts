@@ -714,6 +714,15 @@ export class AppIntegrationService {
     return agent?.id ?? null
   }
 
+  private async actorOwnerUserId(actor: Actor, buddyAgentId?: string | null) {
+    if (actor.kind !== 'agent') return null
+    if (actor.ownerId) return actor.ownerId
+    const agent =
+      (buddyAgentId ? await this.deps.agentDao.findById(buddyAgentId) : null) ??
+      (await this.deps.agentDao.findByUserId(actor.userId))
+    return agent?.ownerId ?? null
+  }
+
   private async createCommandBearerToken(input: {
     actor: Actor
     serverId: string
@@ -724,11 +733,16 @@ export class AppIntegrationService {
     action: string
     dataClass: string
     channelId: string | null
+    buddyAgentId?: string | null
+    ownerId?: string | null
   }) {
     if (input.actor.kind === 'system') {
       throw Object.assign(new Error('System actor cannot call server apps'), { status: 403 })
     }
-    const buddyAgentId = await this.actorBuddyAgentId(input.actor)
+    const buddyAgentId = input.buddyAgentId ?? (await this.actorBuddyAgentId(input.actor))
+    const ownerId =
+      input.ownerId ??
+      (input.actor.kind === 'agent' ? await this.actorOwnerUserId(input.actor, buddyAgentId) : null)
     const token = `sat_cmd_v1_${randomBytes(32).toString('base64url')}`
     await this.deps.appIntegrationDao.createCommandToken({
       tokenHash: hashOpaqueToken(token),
@@ -740,7 +754,7 @@ export class AppIntegrationService {
       command: input.command,
       actorKind: input.actor.kind,
       buddyAgentId,
-      ownerId: input.actor.kind === 'agent' ? input.actor.ownerId : null,
+      ownerId,
       channelId: input.channelId,
       permission: input.permission,
       action: input.action,
@@ -999,6 +1013,7 @@ export class AppIntegrationService {
     if (!jsonLimits.ok) throw Object.assign(new Error(jsonLimits.error), { status: 413 })
 
     const buddyAgentId = await this.actorBuddyAgentId(input.actor)
+    const ownerId = await this.actorOwnerUserId(input.actor, buddyAgentId)
     const context = {
       protocol: 'shadow.app/1',
       serverId,
@@ -1009,6 +1024,7 @@ export class AppIntegrationService {
         kind: input.actor.kind,
         userId: input.actor.kind === 'system' ? null : input.actor.userId,
         buddyAgentId,
+        ownerId,
       },
       channelId: input.body.channelId ?? null,
       permission: command.permission,
@@ -1039,6 +1055,8 @@ export class AppIntegrationService {
         action: command.action,
         dataClass: command.dataClass,
         channelId: input.body.channelId ?? null,
+        buddyAgentId,
+        ownerId,
       })}`
     }
 

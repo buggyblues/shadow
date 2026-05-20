@@ -1,6 +1,6 @@
+import type { NotificationDao } from '../dao/notification.dao'
 import type { AccessService } from '../security/access.service'
 import type { AuditLogService } from '../services/audit-log.service'
-import type { NotificationDao } from '../dao/notification.dao'
 import type { SecureUseCaseInput } from './_security-usecase'
 import { auditUseCase } from './_security-usecase'
 

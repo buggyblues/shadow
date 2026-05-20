@@ -1,15 +1,15 @@
-import type { AccessService } from '../security/access.service'
-import type { AuditLogService } from '../services/audit-log.service'
-import type { CloudService } from '../services/cloud.service'
 import type { CloudActivityDao } from '../dao/cloud-activity.dao'
 import type { CloudClusterDao } from '../dao/cloud-cluster.dao'
 import type { CloudConfigDao } from '../dao/cloud-config.dao'
 import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { CloudEnvVarDao } from '../dao/cloud-envvar.dao'
 import type { CloudTemplateDao } from '../dao/cloud-template.dao'
+import { encrypt } from '../lib/kms'
+import type { AccessService } from '../security/access.service'
+import type { AuditLogService } from '../services/audit-log.service'
+import type { CloudService } from '../services/cloud.service'
 import type { SecureUseCaseInput } from './_security-usecase'
 import { auditUseCase } from './_security-usecase'
-import { encrypt } from '../lib/kms'
 
 export class CloudUseCase {
   constructor(
@@ -28,9 +28,7 @@ export class CloudUseCase {
 
   // ─── Templates ──────────────────────────────────────────────────────────────
 
-  async listTemplates(
-    input: SecureUseCaseInput & { locale?: string },
-  ) {
+  async listTemplates(input: SecureUseCaseInput & { locale?: string }) {
     const templates = await this.deps.cloudTemplateDao.listApproved()
     return templates.map((template) => {
       const content = template.content as Record<string, unknown>
@@ -39,7 +37,7 @@ export class CloudUseCase {
       const baseLocale = locale.split('-')[0] ?? locale
       const i18nDict = !i18n
         ? {}
-        : i18n[locale] ?? (baseLocale !== locale ? i18n[baseLocale] : undefined) ?? i18n.en ?? {}
+        : (i18n[locale] ?? (baseLocale !== locale ? i18n[baseLocale] : undefined) ?? i18n.en ?? {})
       const resolveI18nValue = (value: unknown): string | undefined => {
         if (typeof value !== 'string') return undefined
         const match = /^\$\{i18n:([^}]+)\}$/.exec(value)
@@ -48,14 +46,9 @@ export class CloudUseCase {
       return {
         ...template,
         name: template.slug,
-        title:
-          resolveI18nValue(content.title) ??
-          resolveI18nValue(template.name) ??
-          template.slug,
+        title: resolveI18nValue(content.title) ?? resolveI18nValue(template.name) ?? template.slug,
         description:
-          resolveI18nValue(template.description) ??
-          resolveI18nValue(content.description) ??
-          null,
+          resolveI18nValue(template.description) ?? resolveI18nValue(content.description) ?? null,
       }
     })
   }
@@ -73,7 +66,10 @@ export class CloudUseCase {
   ) {
     return auditUseCase(this.deps, input, {
       action: 'cloud.template.submit',
-      scope: { kind: 'user', id: input.ctx.actor.kind === 'user' ? input.ctx.actor.userId : 'system' },
+      scope: {
+        kind: 'user',
+        id: input.ctx.actor.kind === 'user' ? input.ctx.actor.userId : 'system',
+      },
       run: async () => {
         const userId =
           input.ctx.actor.kind === 'system'
@@ -95,9 +91,7 @@ export class CloudUseCase {
 
   // ─── Deployments ────────────────────────────────────────────────────────────
 
-  async listDeployments(
-    input: SecureUseCaseInput & { limit?: number; offset?: number },
-  ) {
+  async listDeployments(input: SecureUseCaseInput & { limit?: number; offset?: number }) {
     const userId =
       input.ctx.actor.kind === 'system'
         ? '00000000-0000-0000-0000-000000000000'
@@ -107,17 +101,12 @@ export class CloudUseCase {
     return this.deps.cloudDeploymentDao.listByUser(userId, limit, offset)
   }
 
-  async getDeploymentStream(
-    input: SecureUseCaseInput & { deploymentId: string },
-  ) {
+  async getDeploymentStream(input: SecureUseCaseInput & { deploymentId: string }) {
     const userId =
       input.ctx.actor.kind === 'system'
         ? '00000000-0000-0000-0000-000000000000'
         : input.ctx.actor.userId
-    const deployment = await this.deps.cloudDeploymentDao.findById(
-      input.deploymentId,
-      userId,
-    )
+    const deployment = await this.deps.cloudDeploymentDao.findById(input.deploymentId, userId)
     if (!deployment) {
       return { ok: false as const, error: 'Deployment not found' }
     }
@@ -178,11 +167,7 @@ export class CloudUseCase {
           input.ctx.actor.kind === 'system'
             ? '00000000-0000-0000-0000-000000000000'
             : input.ctx.actor.userId
-        const config = await this.deps.cloudConfigDao.update(
-          input.configId,
-          userId,
-          input.payload,
-        )
+        const config = await this.deps.cloudConfigDao.update(input.configId, userId, input.payload)
         if (!config) {
           return { ok: false as const, error: 'Config not found' }
         }
@@ -196,9 +181,7 @@ export class CloudUseCase {
     })
   }
 
-  async deleteConfig(
-    input: SecureUseCaseInput & { configId: string },
-  ) {
+  async deleteConfig(input: SecureUseCaseInput & { configId: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud.config.delete',
       resource: { kind: 'config', id: input.configId },
@@ -215,9 +198,7 @@ export class CloudUseCase {
 
   // ─── Env Vars ───────────────────────────────────────────────────────────────
 
-  async listEnvVars(
-    input: SecureUseCaseInput & { scope?: string },
-  ) {
+  async listEnvVars(input: SecureUseCaseInput & { scope?: string }) {
     const userId =
       input.ctx.actor.kind === 'system'
         ? '00000000-0000-0000-0000-000000000000'
@@ -264,9 +245,7 @@ export class CloudUseCase {
     })
   }
 
-  async deleteEnvVar(
-    input: SecureUseCaseInput & { envVarId: string },
-  ) {
+  async deleteEnvVar(input: SecureUseCaseInput & { envVarId: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud.envvar.delete',
       resource: { kind: 'envvar', id: input.envVarId },
@@ -295,9 +274,7 @@ export class CloudUseCase {
     })
   }
 
-  async deleteCluster(
-    input: SecureUseCaseInput & { clusterId: string },
-  ) {
+  async deleteCluster(input: SecureUseCaseInput & { clusterId: string }) {
     return auditUseCase(this.deps, input, {
       action: 'cloud.cluster.delete',
       resource: { kind: 'cluster', id: input.clusterId },
@@ -306,10 +283,7 @@ export class CloudUseCase {
           input.ctx.actor.kind === 'system'
             ? '00000000-0000-0000-0000-000000000000'
             : input.ctx.actor.userId
-        const cluster = await this.deps.cloudClusterDao.findById(
-          input.clusterId,
-          userId,
-        )
+        const cluster = await this.deps.cloudClusterDao.findById(input.clusterId, userId)
         if (!cluster) return { ok: false as const, error: 'Cluster not found' }
         await this.deps.cloudClusterDao.delete(input.clusterId, userId)
         await this.deps.cloudActivityDao.log({
@@ -324,9 +298,7 @@ export class CloudUseCase {
 
   // ─── Activity ───────────────────────────────────────────────────────────────
 
-  async listActivity(
-    input: SecureUseCaseInput & { limit?: number; offset?: number },
-  ) {
+  async listActivity(input: SecureUseCaseInput & { limit?: number; offset?: number }) {
     const userId =
       input.ctx.actor.kind === 'system'
         ? '00000000-0000-0000-0000-000000000000'

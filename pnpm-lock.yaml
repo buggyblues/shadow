@@ -462,126 +462,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  apps/flash:
-    dependencies:
-      '@shadowob/flash-cards':
-        specifier: workspace:*
-        version: link:packages/cards
-      '@shadowob/flash-types':
-        specifier: workspace:*
-        version: link:packages/types
-      katex:
-        specifier: ^0.16.45
-        version: 0.16.45
-      matter-js:
-        specifier: ^0.20.0
-        version: 0.20.0
-      react:
-        specifier: ^19.2.5
-        version: 19.2.5
-      react-dom:
-        specifier: ^19.2.5
-        version: 19.2.5(react@19.2.5)
-    devDependencies:
-      '@tailwindcss/vite':
-        specifier: ^4.2.2
-        version: 4.2.2(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4))
-      '@types/matter-js':
-        specifier: ^0.20.2
-        version: 0.20.2
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.14
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.14)
-      '@vitejs/plugin-react':
-        specifier: ^6.0.1
-        version: 6.0.1(babel-plugin-react-compiler@1.0.0)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4))
-      '@webgpu/types':
-        specifier: ^0.1.69
-        version: 0.1.69
-      tailwindcss:
-        specifier: ^4.2.4
-        version: 4.2.4
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^8.0.8
-        version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4)
-
-  apps/flash/packages/cards:
-    dependencies:
-      '@shadowob/flash-types':
-        specifier: workspace:*
-        version: link:../types
-      bitecs:
-        specifier: ^0.4.0
-        version: 0.4.0
-      katex:
-        specifier: ^0.16.45
-        version: 0.16.45
-      lottie-web:
-        specifier: ^5.13.0
-        version: 5.13.0
-      matter-js:
-        specifier: ^0.20.0
-        version: 0.20.0
-      pixi-live2d-display:
-        specifier: ^0.4.0
-        version: 0.4.0(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3))(@pixi/loaders@6.5.10(@pixi/constants@7.4.3)(@pixi/core@7.4.3)(@pixi/utils@7.4.3))(@pixi/math@7.4.3)(@pixi/sprite@7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3)))(@pixi/utils@7.4.3)
-      pixi.js:
-        specifier: ^7.4.2
-        version: 7.4.3
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
-      rbush:
-        specifier: ^4.0.1
-        version: 4.0.1
-      three:
-        specifier: ^0.183.2
-        version: 0.183.2
-    devDependencies:
-      '@types/katex':
-        specifier: ^0.16.8
-        version: 0.16.8
-      '@types/matter-js':
-        specifier: ^0.20.2
-        version: 0.20.2
-      '@types/qrcode':
-        specifier: ^1.5.6
-        version: 1.5.6
-      '@types/rbush':
-        specifier: ^4.0.0
-        version: 4.0.0
-      '@types/three':
-        specifier: ^0.183.1
-        version: 0.183.1
-      '@webgpu/types':
-        specifier: ^0.1.69
-        version: 0.1.69
-      tsup:
-        specifier: ^8.5.0
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.10)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.4)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  apps/flash/packages/types:
-    dependencies:
-      typia:
-        specifier: ^7.5.0
-        version: 7.6.4(@samchon/openapi@2.5.3)(@types/node@22.19.15)(typescript@5.9.3)
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.15
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   apps/mobile:
     dependencies:
       '@expo/metro-runtime':
@@ -1138,6 +1018,159 @@ importers:
       vitest:
         specifier: ^4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@25.6.0)(jsdom@28.1.0(@noble/hashes@2.0.1))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4))
+
+  integrations/flash:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.1
+        version: 1.19.13(hono@4.12.17)
+      '@shadowob/flash-cards':
+        specifier: workspace:*
+        version: link:packages/cards
+      '@shadowob/flash-types':
+        specifier: workspace:*
+        version: link:packages/types
+      '@shadowob/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@tanstack/react-query':
+        specifier: ^5.90.21
+        version: 5.90.21(react@19.2.5)
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.4.2
+      drizzle-orm:
+        specifier: '>=0.45.2'
+        version: 0.45.2(@cloudflare/workers-types@4.20260405.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.8.0)(bun-types@1.3.11)(postgres@3.4.9)
+      hono:
+        specifier: ^4.12.17
+        version: 4.12.17
+      katex:
+        specifier: ^0.16.45
+        version: 0.16.45
+      matter-js:
+        specifier: ^0.20.0
+        version: 0.20.0
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      react:
+        specifier: ^19.2.5
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.5(react@19.2.5)
+      redis:
+        specifier: ^5.0.1
+        version: 5.11.0
+      zod:
+        specifier: ^3.25.67
+        version: 3.25.76
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.2.2
+        version: 4.2.2(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4))
+      '@types/matter-js':
+        specifier: ^0.20.2
+        version: 0.20.2
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.1
+        version: 6.0.1(babel-plugin-react-compiler@1.0.0)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4))
+      '@webgpu/types':
+        specifier: ^0.1.69
+        version: 0.1.69
+      tailwindcss:
+        specifier: ^4.2.4
+        version: 4.2.4
+      tsx:
+        specifier: ^4.19.4
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.0.8
+        version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4)
+
+  integrations/flash/packages/cards:
+    dependencies:
+      '@shadowob/flash-types':
+        specifier: workspace:*
+        version: link:../types
+      bitecs:
+        specifier: ^0.4.0
+        version: 0.4.0
+      katex:
+        specifier: ^0.16.45
+        version: 0.16.45
+      lottie-web:
+        specifier: ^5.13.0
+        version: 5.13.0
+      matter-js:
+        specifier: ^0.20.0
+        version: 0.20.0
+      pixi-live2d-display:
+        specifier: ^0.4.0
+        version: 0.4.0(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3))(@pixi/loaders@6.5.10(@pixi/constants@7.4.3)(@pixi/core@7.4.3)(@pixi/utils@7.4.3))(@pixi/math@7.4.3)(@pixi/sprite@7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3)))(@pixi/utils@7.4.3)
+      pixi.js:
+        specifier: ^7.4.2
+        version: 7.4.3
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
+      rbush:
+        specifier: ^4.0.1
+        version: 4.0.1
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
+    devDependencies:
+      '@types/katex':
+        specifier: ^0.16.8
+        version: 0.16.8
+      '@types/matter-js':
+        specifier: ^0.20.2
+        version: 0.20.2
+      '@types/qrcode':
+        specifier: ^1.5.6
+        version: 1.5.6
+      '@types/rbush':
+        specifier: ^4.0.0
+        version: 4.0.0
+      '@types/three':
+        specifier: ^0.183.1
+        version: 0.183.1
+      '@webgpu/types':
+        specifier: ^0.1.69
+        version: 0.1.69
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.10)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.4)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  integrations/flash/packages/types:
+    dependencies:
+      typia:
+        specifier: ^7.5.0
+        version: 7.6.4(@samchon/openapi@2.5.3)(@types/node@22.19.17)(typescript@5.9.3)
+      zod:
+        specifier: ^3.25.67
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   integrations/kanban:
     dependencies:
@@ -19763,6 +19796,13 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.19.15
 
+  '@inquirer/external-editor@1.0.3(@types/node@22.19.17)':
+    dependencies:
+      chardet: 2.1.1
+      iconv-lite: 0.7.2
+    optionalDependencies:
+      '@types/node': 22.19.17
+
   '@inquirer/external-editor@1.0.3(@types/node@25.5.0)':
     dependencies:
       chardet: 2.1.1
@@ -22175,8 +22215,8 @@ snapshots:
       react-refresh: 0.18.0
       remotion: 4.0.454(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       source-map: 0.7.3
-      style-loader: 4.0.0(webpack@5.105.0(esbuild@0.25.0))
-      webpack: 5.105.0(esbuild@0.27.7)
+      style-loader: 4.0.0(webpack@5.105.0(esbuild@0.27.7))
+      webpack: 5.105.0(esbuild@0.25.0)
     transitivePeerDependencies:
       - '@swc/core'
       - '@swc/helpers'
@@ -24033,7 +24073,7 @@ snapshots:
 
   '@types/qrcode@1.5.6':
     dependencies:
-      '@types/node': 22.19.15
+      '@types/node': 22.19.17
 
   '@types/qs@6.15.0': {}
 
@@ -28317,6 +28357,26 @@ snapshots:
   inquirer@8.2.7(@types/node@22.19.15):
     dependencies:
       '@inquirer/external-editor': 1.0.3(@types/node@22.19.15)
+      ansi-escapes: 4.3.2
+      chalk: 4.1.2
+      cli-cursor: 3.1.0
+      cli-width: 3.0.0
+      figures: 3.2.0
+      lodash: 4.18.1
+      mute-stream: 0.0.8
+      ora: 5.4.1
+      run-async: 2.4.1
+      rxjs: 7.8.2
+      string-width: 4.2.3
+      strip-ansi: 6.0.1
+      through: 2.3.8
+      wrap-ansi: 6.2.0
+    transitivePeerDependencies:
+      - '@types/node'
+
+  inquirer@8.2.7(@types/node@22.19.17):
+    dependencies:
+      '@inquirer/external-editor': 1.0.3(@types/node@22.19.17)
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       cli-cursor: 3.1.0
@@ -33327,7 +33387,7 @@ snapshots:
 
   structured-headers@0.4.1: {}
 
-  style-loader@4.0.0(webpack@5.105.0(esbuild@0.25.0)):
+  style-loader@4.0.0(webpack@5.105.0(esbuild@0.27.7)):
     dependencies:
       webpack: 5.105.0(esbuild@0.27.7)
 
@@ -33475,7 +33535,17 @@ snapshots:
       ansi-escapes: 4.3.2
       supports-hyperlinks: 2.3.0
 
-  terser-webpack-plugin@5.4.0(esbuild@0.27.7)(webpack@5.105.0(esbuild@0.25.0)):
+  terser-webpack-plugin@5.4.0(esbuild@0.25.0)(webpack@5.105.0(esbuild@0.27.7)):
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      jest-worker: 27.5.1
+      schema-utils: 4.3.3
+      terser: 5.46.0
+      webpack: 5.105.0(esbuild@0.27.7)
+    optionalDependencies:
+      esbuild: 0.25.0
+
+  terser-webpack-plugin@5.4.0(esbuild@0.27.7)(webpack@5.105.0(esbuild@0.27.7)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
@@ -33865,12 +33935,12 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  typia@7.6.4(@samchon/openapi@2.5.3)(@types/node@22.19.15)(typescript@5.9.3):
+  typia@7.6.4(@samchon/openapi@2.5.3)(@types/node@22.19.17)(typescript@5.9.3):
     dependencies:
       '@samchon/openapi': 2.5.3
       commander: 10.0.1
       comment-json: 4.6.2
-      inquirer: 8.2.7(@types/node@22.19.15)
+      inquirer: 8.2.7(@types/node@22.19.17)
       package-manager-detector: 0.2.11
       randexp: 0.5.3
       typescript: 5.9.3
@@ -34641,6 +34711,38 @@ snapshots:
 
   webpack-virtual-modules@0.6.2: {}
 
+  webpack@5.105.0(esbuild@0.25.0):
+    dependencies:
+      '@types/eslint-scope': 3.7.7
+      '@types/estree': 1.0.8
+      '@types/json-schema': 7.0.15
+      '@webassemblyjs/ast': 1.14.1
+      '@webassemblyjs/wasm-edit': 1.14.1
+      '@webassemblyjs/wasm-parser': 1.14.1
+      acorn: 8.16.0
+      acorn-import-phases: 1.0.4(acorn@8.16.0)
+      browserslist: 4.28.1
+      chrome-trace-event: 1.0.4
+      enhanced-resolve: 5.20.1
+      es-module-lexer: 2.0.0
+      eslint-scope: 5.1.1
+      events: 3.3.0
+      glob-to-regexp: 0.4.1
+      graceful-fs: 4.2.11
+      json-parse-even-better-errors: 2.3.1
+      loader-runner: 4.3.1
+      mime-types: 2.1.35
+      neo-async: 2.6.2
+      schema-utils: 4.3.3
+      tapable: 2.3.2
+      terser-webpack-plugin: 5.4.0(esbuild@0.25.0)(webpack@5.105.0(esbuild@0.27.7))
+      watchpack: 2.5.1
+      webpack-sources: 3.3.4
+    transitivePeerDependencies:
+      - '@swc/core'
+      - esbuild
+      - uglify-js
+
   webpack@5.105.0(esbuild@0.27.7):
     dependencies:
       '@types/eslint-scope': 3.7.7
@@ -34665,7 +34767,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.2
-      terser-webpack-plugin: 5.4.0(esbuild@0.27.7)(webpack@5.105.0(esbuild@0.25.0))
+      terser-webpack-plugin: 5.4.0(esbuild@0.27.7)(webpack@5.105.0(esbuild@0.27.7))
       watchpack: 2.5.1
       webpack-sources: 3.3.4
     transitivePeerDependencies:

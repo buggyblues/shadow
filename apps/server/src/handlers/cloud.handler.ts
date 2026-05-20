@@ -88,7 +88,9 @@ export function createCloudHandler(container: AppContainer) {
     const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
     const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
     const useCase = container.resolve('cloudUseCase')
-    return c.json(await useCase.listDeployments({ ctx: createActorContext(c.get('actor')), limit, offset }))
+    return c.json(
+      await useCase.listDeployments({ ctx: createActorContext(c.get('actor')), limit, offset }),
+    )
   })
 
   h.post(
@@ -132,7 +134,10 @@ export function createCloudHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const deploymentId = c.req.param('deploymentId')
     const useCase = container.resolve('cloudUseCase')
-    const result = await useCase.getDeploymentStream({ ctx: createActorContext(c.get('actor')), deploymentId })
+    const result = await useCase.getDeploymentStream({
+      ctx: createActorContext(c.get('actor')),
+      deploymentId,
+    })
 
     if (!result.ok) {
       return c.json({ ok: false, error: result.error }, 404)
@@ -315,7 +320,9 @@ export function createCloudHandler(container: AppContainer) {
     const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
     const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
     const useCase = container.resolve('cloudUseCase')
-    return c.json(await useCase.listActivity({ ctx: createActorContext(c.get('actor')), limit, offset }))
+    return c.json(
+      await useCase.listActivity({ ctx: createActorContext(c.get('actor')), limit, offset }),
+    )
   })
 
   return h

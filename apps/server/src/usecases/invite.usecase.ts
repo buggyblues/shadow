@@ -1,6 +1,6 @@
+import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { AccessService } from '../security/access.service'
 import type { AuditLogService } from '../services/audit-log.service'
-import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { SecureUseCaseInput } from './_security-usecase'
 import { auditUseCase } from './_security-usecase'
 
@@ -13,9 +13,7 @@ export class InviteUseCase {
     },
   ) {}
 
-  async findMyCodes(
-    input: SecureUseCaseInput & { limit?: number; offset?: number },
-  ) {
+  async findMyCodes(input: SecureUseCaseInput & { limit?: number; offset?: number }) {
     const userId =
       input.ctx.actor.kind === 'user'
         ? input.ctx.actor.userId

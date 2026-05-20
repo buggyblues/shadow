@@ -22,7 +22,10 @@ export default {
         if (filename.includes('/handlers/') && value === '@shadowob/cloud') {
           context.report({ node, messageId: 'handlerGatewayImport' })
         }
-        if (filename.includes('/services/') && (value === 'node:child_process' || value === 'child_process')) {
+        if (
+          filename.includes('/services/') &&
+          (value === 'node:child_process' || value === 'child_process')
+        ) {
           context.report({ node, messageId: 'serviceChildProcess' })
         }
       },
