@@ -106,7 +106,7 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
     connectCommand,
     quickCommand,
     commands,
-    configBlocks: [{ label: 'openclaw.json', language: 'json', content: jsonConfig }],
+    configBlocks: [{ label: '~/.openclaw/openclaw.json', language: 'json', content: jsonConfig }],
     aiPrompt: [
       'Configure this Shadow Buddy in OpenClaw.',
       '',

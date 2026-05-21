@@ -314,6 +314,8 @@
     "publicStatus": "공개 상태",
     "publicServer": "공개 서버",
     "publicServerDesc": "누구나 검색하고 참여할 수 있습니다",
+    "publicServerGateDesc": "공개 서버입니다. 참가하면 채널에 들어가 멤버, Buddy, 앱과 함께 협업할 수 있습니다.",
+    "joinPublicServer": "서버 참가",
     "privateServerGateDesc": "비공개 서버입니다. 참가하려면 서버 관리자의 승인이 필요합니다.",
     "requestAccess": "참가 요청",
     "requestPending": "요청 대기 중",

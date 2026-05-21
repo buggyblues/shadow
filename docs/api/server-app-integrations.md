@@ -16,7 +16,7 @@ Server
       commands exposed through shadowob app call
 ```
 
-Server Apps are independent services. Shadow must not package, launch, or depend on a Server App through `docker-compose` or any other server-side process manager. The only contract between Shadow and an App is the manifest, iframe URL, command URLs, event stream, and OAuth-style command token introspection protocol. The `integrations/compose.yaml` file is a local developer harness for running demo Apps together; it is not part of the Shadow server runtime.
+Server Apps are independent services. Shadow must not package, launch, or depend on a Server App through `docker-compose` or any other server-side process manager. The only contract between Shadow and an App is the manifest, iframe URL, command URLs, event stream, and OAuth-style command token introspection protocol. The `integrations/docker-compose.yaml` file is a local developer harness for running demo Apps together; it is not part of the Shadow server runtime.
 
 Shadow stores the manifest snapshot, validates origins, grants Buddies explicit permissions, and proxies command calls to the App backend. Buddies never receive App credentials; Shadow signs a short-lived OAuth-style Bearer token for each command call.
 
@@ -399,7 +399,7 @@ Run all standard demo Apps locally with dotenv overrides:
 
 ```bash
 cp integrations/.env.example integrations/.env
-docker compose -f integrations/compose.yaml --env-file integrations/.env up --build
+docker compose -f integrations/docker-compose.yaml --env-file integrations/.env up --build
 ```
 
 Additional demo apps live in `integrations/qna` and `integrations/quiz`. A smaller legacy protocol test app remains in `skills/shadow-server-app/example-app` for multipart upload coverage.

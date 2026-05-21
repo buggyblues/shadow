@@ -22,6 +22,7 @@ import type { CloudTemplateDao } from '../dao/cloud-template.dao'
 import type { UserDao } from '../dao/user.dao'
 import type { Database } from '../db'
 import { cloudTemplates, configSchemas, configValues } from '../db/schema'
+import { applySafeDeploymentPreferences } from '../lib/cloud-saas-deployment-preferences'
 import {
   attachPlayLaunchRuntimeMetadata,
   extractPlayLaunchRuntimeMetadata,
@@ -31,10 +32,12 @@ import {
 import {
   assertOfficialModelProxyAvailable,
   officialModelProxyEnvVars,
+  resolveOfficialModelProxyRuntimeServerUrl,
   shouldCopyServerRuntimeEnvKey,
 } from '../lib/model-proxy-config'
 import type { AgentPolicyService } from './agent-policy.service'
 import type { ChannelService } from './channel.service'
+import { assertCloudTemplatePolicy } from './cloud-template-policy.service'
 import type { MembershipService } from './membership.service'
 import type { MessageService } from './message.service'
 import type { ServerService } from './server.service'
@@ -734,8 +737,13 @@ export class PlayLaunchService {
     let deploymentId: string | null = null
 
     try {
+      const serverTemplateSnapshot = applySafeDeploymentPreferences(
+        validateCloudSaasConfigSnapshot(template.content),
+        undefined,
+      )
+      assertCloudTemplatePolicy(serverTemplateSnapshot)
       const envVars = await this.resolveOneClickRuntimeEnvVars(
-        template.content,
+        serverTemplateSnapshot,
         context.authHeader,
         context.origin,
         {
@@ -747,7 +755,7 @@ export class PlayLaunchService {
       )
       const templateGreeting = templatePlayLaunchGreeting(template.content)
       const configSnapshot = attachPlayLaunchRuntimeMetadata(
-        prepareCloudSaasConfigSnapshot(template.content, envVars, {
+        prepareCloudSaasConfigSnapshot(serverTemplateSnapshot, envVars, {
           locale: input.locale,
         }),
         {
@@ -773,7 +781,7 @@ export class PlayLaunchService {
         namespace,
         name,
         status: 'pending',
-        agentCount: templateAgentCount(template.content),
+        agentCount: templateAgentCount(serverTemplateSnapshot),
         configSnapshot,
         templateSlug: action.templateSlug,
         resourceTier,
@@ -871,12 +879,19 @@ export class PlayLaunchService {
     if (shadowAgentServerUrl) envVars.SHADOW_AGENT_SERVER_URL = shadowAgentServerUrl
     if (shadowProvisionUrl) envVars.SHADOW_PROVISION_URL = shadowProvisionUrl
     if (launchContext) {
-      const runtimeServerUrl = shadowAgentServerUrl ?? shadowServerUrl
-      assertOfficialModelProxyAvailable(runtimeServerUrl)
+      const officialRuntimeServerUrl = resolveOfficialModelProxyRuntimeServerUrl({
+        shadowAgentServerUrl,
+        shadowServerUrl,
+      })
+      assertOfficialModelProxyAvailable(
+        officialRuntimeServerUrl.runtimeServerUrl,
+        officialRuntimeServerUrl.runtimeServerUrlRequirement,
+      )
       Object.assign(
         envVars,
         officialModelProxyEnvVars({
-          runtimeServerUrl,
+          runtimeServerUrl: officialRuntimeServerUrl.runtimeServerUrl,
+          runtimeServerUrlRequirement: officialRuntimeServerUrl.runtimeServerUrlRequirement,
           ...launchContext,
         }),
       )
@@ -963,7 +978,10 @@ export class PlayLaunchService {
   ) {
     if (deployment.status !== 'deployed') return
     const target = extractShadowProvisionTarget(deployment.configSnapshot)
-    if (!target.serverId || !target.channelId) return
+    if (!target.serverId) return
+
+    await this.deps.serverService.ensureMember(target.serverId, userId, { allowPrivatePlay: true })
+    if (!target.channelId) return
 
     const buddyUserIds = extractShadowProvisionBuddyUserIds(deployment.configSnapshot)
     const buddyUserId = buddyUserIds[0]
@@ -978,7 +996,6 @@ export class PlayLaunchService {
       return
     }
 
-    await this.deps.serverService.ensureMember(target.serverId, userId, { allowPrivatePlay: true })
     await this.deps.serverService.addBotMember(target.serverId, buddyUserId)
     await this.deps.channelService.addMember(target.channelId, buddyUserId).catch(() => null)
     const agent = await this.deps.agentDao.findByUserId(buddyUserId)
@@ -1031,7 +1048,7 @@ export class PlayLaunchService {
       ok: true as const,
       playId: playId ?? null,
       status: 'launched' as const,
-      redirectUrl: `/oauth/authorize?${params.toString()}`,
+      redirectUrl: `/app/oauth/authorize?${params.toString()}`,
     }
   }
 

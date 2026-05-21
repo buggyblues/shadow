@@ -74,6 +74,7 @@ interface Server {
   bannerUrl?: string | null
   ownerId: string
   description: string | null
+  isPublic?: boolean
   memberCount?: number
 }
 
@@ -147,18 +148,19 @@ export default function ServerHomeScreen() {
     queryFn: () =>
       fetchApi<{
         server: Server
+        isMember: boolean
         canAccess: boolean
         joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
       }>(`/api/servers/${serverSlug}/access`),
     enabled: !!serverSlug,
     retry: false,
   })
-  const canAccessServer = serverAccess?.canAccess === true
+  const isServerMember = serverAccess?.isMember === true
 
   const { data: server, isLoading: isServerLoading } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<Server>(`/api/servers/${serverSlug}`),
-    enabled: !!serverSlug && canAccessServer,
+    enabled: !!serverSlug && isServerMember,
   })
 
   const requestServerAccessMutation = useMutation({
@@ -204,7 +206,7 @@ export default function ServerHomeScreen() {
   const { data: serverApps = [], isLoading: isAppsLoading } = useQuery({
     queryKey: ['server-apps', serverSlug],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
-    enabled: !!serverSlug && canAccessServer,
+    enabled: !!serverSlug && isServerMember,
   })
 
   const launchAppMutation = useMutation({
@@ -342,13 +344,15 @@ export default function ServerHomeScreen() {
     }
   }
 
-  if (isServerAccessLoading || (canAccessServer && (isServerLoading || isLoading))) {
+  if (isServerAccessLoading || (isServerMember && (isServerLoading || isLoading))) {
     return <LoadingScreen />
   }
 
-  if (serverAccess && !serverAccess.canAccess) {
+  if (serverAccess && !serverAccess.isMember) {
+    const isPublic = serverAccess.server.isPublic === true
     const isPending =
-      serverAccess.joinRequestStatus === 'pending' || requestServerAccessMutation.isSuccess
+      !isPublic &&
+      (serverAccess.joinRequestStatus === 'pending' || requestServerAccessMutation.isSuccess)
     return (
       <BackgroundSurface>
         <View style={[styles.accessGateContainer, { paddingTop: insets.top }]}>
@@ -364,7 +368,7 @@ export default function ServerHomeScreen() {
               {serverAccess.server.name}
             </AppText>
             <AppText tone="secondary" style={styles.accessGateDesc}>
-              {t('server.privateServerGateDesc')}
+              {isPublic ? t('server.publicServerGateDesc') : t('server.privateServerGateDesc')}
             </AppText>
             <Button
               variant="primary"
@@ -375,7 +379,11 @@ export default function ServerHomeScreen() {
               onPress={() => requestServerAccessMutation.mutate()}
               style={styles.accessGateButton}
             >
-              {isPending ? t('server.requestPending') : t('server.requestAccess')}
+              {isPending
+                ? t('server.requestPending')
+                : isPublic
+                  ? t('server.joinPublicServer')
+                  : t('server.requestAccess')}
             </Button>
           </GlassPanel>
         </View>

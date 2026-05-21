@@ -3,7 +3,7 @@ import { fetchApi } from '../lib/api'
 import { useDeferredQueryEnabled } from './use-deferred-query-enabled'
 
 export function useUnreadCount() {
-  const enabled = useDeferredQueryEnabled({ delayMs: 4000 })
+  const enabled = useDeferredQueryEnabled({ stage: 'background', priority: 'low' })
 
   const { data } = useQuery({
     queryKey: ['notifications-unread-count'],

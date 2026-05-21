@@ -13,6 +13,8 @@ export interface SSHConnectOptions {
   port: number
   user: string
   sshKeyPath?: string
+  sshKeyPassphrase?: string
+  sshAgent?: string
   password?: string
 }
 
@@ -31,9 +33,11 @@ export class SSHClient {
       host: opts.host,
       port: opts.port,
       username: opts.user,
-      ...(opts.sshKeyPath
-        ? { privateKey: readFileSync(opts.sshKeyPath, 'utf8') }
-        : { password: opts.password }),
+      ...(opts.sshAgent
+        ? { agent: opts.sshAgent }
+        : opts.sshKeyPath
+          ? { privateKey: readFileSync(opts.sshKeyPath, 'utf8'), passphrase: opts.sshKeyPassphrase }
+          : { password: opts.password }),
       // Reasonable timeout for WAN SSH
       readyTimeout: 30_000,
     })

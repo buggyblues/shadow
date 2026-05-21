@@ -1,5 +1,5 @@
 import type * as k8s from '@pulumi/kubernetes'
-import type { AgentDeployment, CloudConfig } from '../config/schema.js'
+import type { AgentDeployment, AgentSchedulingConfig, CloudConfig } from '../config/schema.js'
 import '../runtimes/loader.js'
 import {
   RUNNER_AGENTS_VOLUME_NAME,
@@ -41,6 +41,11 @@ export interface BuiltAgentPodSpec {
   initContainers: k8s.types.input.core.v1.Container[]
   containers: k8s.types.input.core.v1.Container[]
   volumes: k8s.types.input.core.v1.Volume[]
+  scheduling: {
+    nodeSelector?: Record<string, string>
+    affinity?: k8s.types.input.core.v1.Affinity
+    tolerations?: k8s.types.input.core.v1.Toleration[]
+  }
   pluginArtifacts: CollectedK8sArtifacts
 }
 
@@ -85,6 +90,42 @@ function baseVolumes(configMapName: string): k8s.types.input.core.v1.Volume[] {
     { name: RUNNER_TMP_VOLUME_NAME, emptyDir: {} },
     { name: RUNNER_AGENTS_VOLUME_NAME, emptyDir: {} },
   ]
+}
+
+function isAgentSandboxBackend(config: CloudConfig): boolean {
+  return (config.deployments?.backend ?? 'agent-sandbox') === 'agent-sandbox'
+}
+
+function hasKeys(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && Object.keys(value).length > 0)
+}
+
+function resolveSchedulingConfig(
+  config: CloudConfig,
+  agent: AgentDeployment,
+): BuiltAgentPodSpec['scheduling'] {
+  const defaults: AgentSchedulingConfig = isAgentSandboxBackend(config)
+    ? { nodeSelector: { 'shadowob.com/sandbox-ready': 'true' } }
+    : {}
+  const globalScheduling = config.deployments?.scheduling ?? {}
+  const agentScheduling = agent.scheduling ?? {}
+  const nodeSelector = {
+    ...(defaults.nodeSelector ?? {}),
+    ...(globalScheduling.nodeSelector ?? {}),
+    ...(agentScheduling.nodeSelector ?? {}),
+  }
+  const affinity = agentScheduling.affinity ?? globalScheduling.affinity
+  const tolerations = agentScheduling.tolerations ?? globalScheduling.tolerations
+
+  return {
+    ...(Object.keys(nodeSelector).length > 0 ? { nodeSelector } : {}),
+    ...(hasKeys(affinity)
+      ? { affinity: affinity as unknown as k8s.types.input.core.v1.Affinity }
+      : {}),
+    ...(tolerations && tolerations.length > 0
+      ? { tolerations: tolerations as unknown as k8s.types.input.core.v1.Toleration[] }
+      : {}),
+  }
 }
 
 export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSpec {
@@ -194,6 +235,7 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
     initContainers,
     containers,
     volumes,
+    scheduling: resolveSchedulingConfig(options.config, options.agent),
     pluginArtifacts,
   }
 }

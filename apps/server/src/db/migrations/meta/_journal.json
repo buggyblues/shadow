@@ -292,21 +292,21 @@
     {
       "idx": 41,
       "version": "7",
-      "when": 1745150000000,
+      "when": 1776432000000,
       "tag": "0041_template_review_workflow",
       "breakpoints": true
     },
     {
       "idx": 42,
       "version": "7",
-      "when": 1745236400000,
+      "when": 1776518400000,
       "tag": "0042_cloud_deployment_cancelling",
       "breakpoints": true
     },
     {
       "idx": 43,
       "version": "7",
-      "when": 1745236500000,
+      "when": 1776604800000,
       "tag": "0043_cloud_activity_template_delete",
       "breakpoints": true
     },
@@ -546,6 +546,13 @@
       "version": "7",
       "when": 1780232400000,
       "tag": "0077_restore_server_app_command_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1780232400001,
+      "tag": "0078_ensure_cloud_template_review_workflow",
       "breakpoints": true
     }
   ]

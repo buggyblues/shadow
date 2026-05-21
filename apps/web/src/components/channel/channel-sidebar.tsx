@@ -22,6 +22,7 @@ import {
   Copy,
   Edit3,
   Hash,
+  HeadphoneOff,
   Headphones,
   Lock,
   Megaphone,
@@ -147,12 +148,17 @@ const channelIcons = {
   announcement: Megaphone,
 }
 
+const CHANNEL_NAVIGATION_STALE_MS = 5 * 60 * 1000
+const CHANNEL_NAVIGATION_GC_MS = 30 * 60 * 1000
+
 export function ChannelSidebar({
   serverSlug,
   deferInitialQueries = false,
+  onSelectChannel,
 }: {
   serverSlug: string
   deferInitialQueries?: boolean
+  onSelectChannel?: (channel: Channel) => void
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -212,30 +218,38 @@ export function ChannelSidebar({
   const localUnreadEventIdsRef = useRef<Set<string>>(new Set())
   const lastMarkedChannelRef = useRef<string | null>(null)
   const canLoadInitialQueries = Boolean(serverSlug) && !deferInitialQueries
-  const loadNonCritical = useDeferredQueryEnabled({
+  const loadApplications = useDeferredQueryEnabled({
     enabled: !deferInitialQueries,
-    delayMs: 4000,
+    stage: 'interactive',
+    priority: 'high',
+  })
+  const loadNotifications = useDeferredQueryEnabled({
+    enabled: !deferInitialQueries,
+    stage: 'background',
   })
 
   const { data: server } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<Server>(`/api/servers/${serverSlug}`),
     enabled: canLoadInitialQueries,
-    staleTime: 30_000,
+    staleTime: CHANNEL_NAVIGATION_STALE_MS,
+    gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
 
   const { data: rawChannels = [] } = useQuery<Channel[]>({
     queryKey: ['channels', serverSlug],
     queryFn: () => fetchApi<Channel[]>(`/api/servers/${serverSlug}/channels`),
     enabled: canLoadInitialQueries,
-    staleTime: 30_000,
+    staleTime: CHANNEL_NAVIGATION_STALE_MS,
+    gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
 
   const { data: serverApps = [] } = useQuery<ServerAppSummary[]>({
     queryKey: ['server-apps', serverSlug],
     queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps`),
-    enabled: !!serverSlug && loadNonCritical,
-    staleTime: 60_000,
+    enabled: !!serverSlug && loadApplications,
+    staleTime: CHANNEL_NAVIGATION_STALE_MS,
+    gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
 
   // Channel sorting and filter
@@ -303,7 +317,7 @@ export function ChannelSidebar({
   const { data: scopedUnread } = useQuery({
     queryKey: ['notification-scoped-unread'],
     queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
-    enabled: loadNonCritical,
+    enabled: loadNotifications,
     refetchInterval: 15_000,
   })
   const [localMessageUnread, setLocalMessageUnread] = useState<Record<string, number>>({})
@@ -311,7 +325,7 @@ export function ChannelSidebar({
   const { data: notificationPreference } = useQuery({
     queryKey: ['notification-preferences'],
     queryFn: () => fetchApi<NotificationPreference>('/api/notifications/preferences'),
-    enabled: loadNonCritical,
+    enabled: loadNotifications,
     staleTime: 60_000,
   })
 
@@ -341,7 +355,7 @@ export function ChannelSidebar({
       setNewName('')
       setNewIsPrivate(false)
       // Auto-navigate to the newly created channel
-      handleSelectChannel(data.id)
+      handleSelectChannel(data)
       // Show invite panel for the new channel
       setInviteTargetChannel(data)
       setInviteInitialTab('buddies')
@@ -401,7 +415,7 @@ export function ChannelSidebar({
       if (activeChannelId === deletedChannelId) {
         const remaining = channels.filter((ch) => ch.id !== deletedChannelId)
         if (remaining.length > 0) {
-          handleSelectChannel(remaining[0]!.id)
+          handleSelectChannel(remaining[0]!)
         } else {
           // No channels left; return to the server index.
           setActiveChannel(null)
@@ -464,23 +478,35 @@ export function ChannelSidebar({
   const { setMobileView, openMobileServerSidebar } = useUIStore()
 
   const handleSelectChannel = useCallback(
-    (channelId: string) => {
-      requestMarkScopeRead({ channelId })
+    (channel: Channel) => {
+      requestMarkScopeRead({ channelId: channel.id })
       setLocalMessageUnread((prev) => {
-        if (!prev[channelId]) return prev
+        if (!prev[channel.id]) return prev
         const next = { ...prev }
-        delete next[channelId]
+        delete next[channel.id]
         return next
       })
-      updateLastAccessed(channelId)
+      updateLastAccessed(channel.id)
       setMobileView('chat')
+      if (onSelectChannel) {
+        onSelectChannel(channel)
+        return
+      }
       // Navigate to channel URL using channel ID
       navigate({
         to: '/servers/$serverSlug/channels/$channelId',
-        params: { serverSlug: server?.slug ?? serverSlug, channelId },
+        params: { serverSlug: server?.slug ?? serverSlug, channelId: channel.id },
       })
     },
-    [setMobileView, server?.slug, serverSlug, navigate, requestMarkScopeRead, updateLastAccessed],
+    [
+      setMobileView,
+      onSelectChannel,
+      server?.slug,
+      serverSlug,
+      navigate,
+      requestMarkScopeRead,
+      updateLastAccessed,
+    ],
   )
 
   const handleJoinVoiceChannel = useCallback(
@@ -496,7 +522,7 @@ export function ChannelSidebar({
         queryClient.invalidateQueries({ queryKey: ['notifications'] })
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
         if (result.status !== 'approved') {
-          handleSelectChannel(channel.id)
+          handleSelectChannel(channel)
           return
         }
       }
@@ -505,12 +531,12 @@ export function ChannelSidebar({
         if (voice.status === 'idle' || voice.status === 'error') {
           void voice.join()
         }
-        handleSelectChannel(channel.id)
+        handleSelectChannel(channel)
         return
       }
 
       await joinVoiceChannel({ ...channel, serverSlug: server?.slug ?? serverSlug })
-      handleSelectChannel(channel.id)
+      handleSelectChannel(channel)
     },
     [
       connectedVoiceChannel?.id,
@@ -659,7 +685,8 @@ export function ChannelSidebar({
     const participants = state?.participants ?? []
     const isConnectedChannel = connectedVoiceChannel?.id === ch.id
     const isVoiceActive = isConnectedChannel && voice.status === 'connected'
-    const isVoiceConnecting = isConnectedChannel && voice.status === 'connecting'
+    const isVoiceConnecting =
+      isConnectedChannel && (voice.status === 'connecting' || voice.status === 'disconnecting')
     const isRouteActive = activeChannelId === ch.id
     const isEditing = editingChannel?.id === ch.id
 
@@ -839,11 +866,11 @@ export function ChannelSidebar({
                 queryClient.invalidateQueries({ queryKey: ['notifications'] })
                 queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
                 if (result.status !== 'approved') {
-                  handleSelectChannel(ch.id)
+                  handleSelectChannel(ch)
                   return
                 }
               }
-              handleSelectChannel(ch.id)
+              handleSelectChannel(ch)
             }}
             onContextMenu={(e) => handleContextMenu(e, ch)}
             className={cn(
@@ -1068,7 +1095,7 @@ export function ChannelSidebar({
                     voice.status === 'error' ? 'text-danger' : 'text-success',
                   )}
                 >
-                  {voice.status === 'connecting'
+                  {voice.status === 'connecting' || voice.status === 'disconnecting'
                     ? t('voice.connecting')
                     : voice.status === 'error'
                       ? t('voice.connectionError')
@@ -1081,8 +1108,9 @@ export function ChannelSidebar({
               <button
                 type="button"
                 onClick={() => void handleLeaveVoiceChannel()}
+                disabled={voice.status === 'disconnecting'}
                 title={t('voice.disconnect')}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-danger/15 hover:text-danger"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-danger/15 hover:text-danger disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <PhoneOff size={17} />
               </button>
@@ -1112,7 +1140,7 @@ export function ChannelSidebar({
                     voice.isDeafened && 'bg-danger/20 text-danger hover:text-danger',
                   )}
                 >
-                  <Headphones size={18} />
+                  {voice.isDeafened ? <HeadphoneOff size={18} /> : <Headphones size={18} />}
                 </button>
                 <button
                   type="button"
@@ -1158,7 +1186,7 @@ export function ChannelSidebar({
                     onChange={(event) => void voice.setMicrophoneDevice(event.target.value)}
                     className="h-9 w-full rounded-lg border border-border-subtle bg-bg-secondary px-2 text-xs font-bold text-text-primary outline-none"
                   >
-                    <option value="">{t('voice.defaultDevice')}</option>
+                    <option value="default">{t('voice.defaultDevice')}</option>
                     {voice.microphones.map((device) => (
                       <option key={device.deviceId} value={device.deviceId}>
                         {device.label || t('voice.unknownDevice')}
@@ -1175,7 +1203,7 @@ export function ChannelSidebar({
                     onChange={(event) => void voice.setSpeakerDevice(event.target.value)}
                     className="h-9 w-full rounded-lg border border-border-subtle bg-bg-secondary px-2 text-xs font-bold text-text-primary outline-none"
                   >
-                    <option value="">{t('voice.defaultDevice')}</option>
+                    <option value="default">{t('voice.defaultDevice')}</option>
                     {voice.speakers.map((device) => (
                       <option key={device.deviceId} value={device.deviceId}>
                         {device.label || t('voice.unknownDevice')}

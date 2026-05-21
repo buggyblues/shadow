@@ -170,6 +170,26 @@ export function MessageInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [useCompactPlaceholder, setUseCompactPlaceholder] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia('(max-width: 420px)').matches,
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const media = window.matchMedia('(max-width: 420px)')
+    const sync = () => setUseCompactPlaceholder(media.matches)
+    sync()
+    media.addEventListener('change', sync)
+    return () => media.removeEventListener('change', sync)
+  }, [])
+
+  const composerChannelName = channelName ?? t('chat.channelFallback')
+  const composerPlaceholder = t(
+    useCompactPlaceholder ? 'chat.inputPlaceholderCompact' : 'chat.inputPlaceholder',
+    {
+      channelName: composerChannelName,
+    },
+  )
 
   const focusComposer = useCallback(() => {
     const textarea = textareaRef.current
@@ -929,9 +949,7 @@ export function MessageInput({
   return (
     <section
       className="px-4 pb-4 mobile-safe-bottom relative"
-      aria-label={t('chat.inputPlaceholder', {
-        channelName: channelName ?? t('chat.channelFallback'),
-      })}
+      aria-label={composerPlaceholder}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
@@ -1137,22 +1155,22 @@ export function MessageInput({
 
       <InputValley
         className={cn(
-          'flex items-center gap-2 px-4 py-2',
+          'flex items-center gap-1.5 px-3 py-2 sm:gap-2 sm:px-4',
           replyToId || pendingFiles.length > 0 || selectedCommerceCards.length > 0
             ? 'rounded-b-[20px]'
             : 'rounded-[20px]',
         )}
       >
-        <div className="relative shrink-0 self-end mb-[3px]">
+        <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
           <Button
             variant="ghost"
             size="icon"
-            className={cn('h-9 w-9', showAttachMenu && 'bg-primary/10 text-primary')}
+            className={cn('h-8 w-8 sm:h-9 sm:w-9', showAttachMenu && 'bg-primary/10 text-primary')}
             onClick={() => setShowAttachMenu((open) => !open)}
             title={t('chat.addMenu')}
             aria-label={t('chat.addMenu')}
           >
-            <Plus size={20} />
+            <Plus size={18} />
           </Button>
           {showAttachMenu && (
             <>
@@ -1239,23 +1257,22 @@ export function MessageInput({
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={t('chat.inputPlaceholder', {
-            channelName: channelName ?? t('chat.channelFallback'),
-          })}
+          placeholder={composerPlaceholder}
           rows={1}
+          wrap={content ? 'soft' : 'off'}
           autoFocus
-          className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted outline-none resize-none text-[15px] leading-[24px] max-h-[50vh] min-h-[24px] py-[7px]"
+          className="min-w-0 flex-1 overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary placeholder:text-text-muted outline-none resize-none max-h-[50vh] min-h-[24px] sm:py-[7px]"
         />
 
-        <div className="relative shrink-0 self-end mb-[3px]">
+        <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9"
+            className="h-8 w-8 sm:h-9 sm:w-9"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             title={t('chat.addEmoji')}
           >
-            <Smile size={20} />
+            <Smile size={18} />
           </Button>
           {showEmojiPicker && (
             <EmojiPicker
@@ -1271,7 +1288,7 @@ export function MessageInput({
 
         <Button
           size="icon"
-          className="h-9 w-9 rounded-full shrink-0 self-end mb-0.5 disabled:opacity-30 transition-all duration-300 bg-primary hover:bg-primary-strong text-white border-none shadow-none flex items-center justify-center"
+          className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
           onClick={handleSend}
           disabled={
             (!content.trim() && pendingFiles.length === 0 && selectedCommerceCards.length === 0) ||

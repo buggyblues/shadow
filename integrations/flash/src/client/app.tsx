@@ -190,6 +190,7 @@ export function FlashApp() {
   const persistViewportRef = useRef<(viewport: FlashViewport) => void>(() => undefined)
   const pendingViewportRef = useRef<{ boardId: string; viewport: FlashViewport } | null>(null)
   const viewportSaveTimerRef = useRef<number | null>(null)
+  const oauthPopupPollRef = useRef<number | null>(null)
   const runCardCommandRef = useRef<
     (command: CardCommand, options?: { optimistic?: boolean }) => void
   >(() => undefined)
@@ -198,6 +199,7 @@ export function FlashApp() {
   const [commandOpen, setCommandOpen] = useState(false)
   const [commandText, setCommandText] = useState('')
   const [message, setMessage] = useState<string | null>(null)
+  const [oauthPopupOpen, setOauthPopupOpen] = useState(false)
 
   snapshotRef.current = snapshot
 
@@ -231,6 +233,58 @@ export function FlashApp() {
     },
     onError: (err) => setMessage(err instanceof Error ? err.message : 'Command failed'),
   })
+
+  const refreshOAuthSession = useCallback(() => {
+    setOauthPopupOpen(false)
+    if (oauthPopupPollRef.current !== null) {
+      window.clearInterval(oauthPopupPollRef.current)
+      oauthPopupPollRef.current = null
+    }
+    void queryClient.invalidateQueries({ queryKey: ['flash-oauth-session', accessMode] })
+  }, [accessMode, queryClient])
+
+  const startOAuth = useCallback(() => {
+    const authorizeUrl = oauthSession?.authorizeUrl
+    if (!authorizeUrl) return
+
+    const popup = window.open(
+      authorizeUrl,
+      'shadow-flash-oauth',
+      'popup,width=520,height=760,menubar=no,toolbar=no,location=yes,status=no',
+    )
+    if (!popup) {
+      try {
+        window.top?.location.assign(authorizeUrl)
+      } catch {
+        window.location.assign(authorizeUrl)
+      }
+      return
+    }
+
+    popup.focus()
+    setOauthPopupOpen(true)
+    if (oauthPopupPollRef.current !== null) window.clearInterval(oauthPopupPollRef.current)
+    oauthPopupPollRef.current = window.setInterval(() => {
+      if (popup.closed) refreshOAuthSession()
+    }, 1000)
+  }, [oauthSession?.authorizeUrl, refreshOAuthSession])
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
+      const data = event.data
+      if (!data || typeof data !== 'object' || data.type !== 'flash.oauth.completed') return
+      refreshOAuthSession()
+    }
+    window.addEventListener('message', handler)
+    return () => {
+      window.removeEventListener('message', handler)
+      if (oauthPopupPollRef.current !== null) {
+        window.clearInterval(oauthPopupPollRef.current)
+        oauthPopupPollRef.current = null
+      }
+    }
+  }, [refreshOAuthSession])
 
   const persistLayouts = useCallback(
     async (cardIds: string[]) => {
@@ -556,9 +610,14 @@ export function FlashApp() {
               : 'Flash stores cards per Shadow user and Buddy owner. Authorize first, then open it from the Shadow server App page.'}
           </p>
           {!alreadyAuthorized && oauthSession?.authorizeUrl ? (
-            <a className="flash-auth-button" href={oauthSession.authorizeUrl}>
-              Continue to Shadow OAuth
-            </a>
+            <button
+              className="flash-auth-button"
+              type="button"
+              onClick={startOAuth}
+              disabled={oauthPopupOpen}
+            >
+              {oauthPopupOpen ? 'Complete OAuth in the opened window' : 'Continue to Shadow OAuth'}
+            </button>
           ) : null}
           {!alreadyAuthorized && oauthSession?.configured === false ? (
             <p className="flash-auth-note">

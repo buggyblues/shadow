@@ -171,9 +171,15 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
         try {
           const resolvedClientId =
             clientId !== undefined ? clientId : socketVoiceParticipantClients(socket).get(channelId)
-          await container.resolve('voiceChannelService').heartbeat(socketActor(socket), channelId, {
-            clientId: resolvedClientId,
-          })
+          const result = await container
+            .resolve('voiceChannelService')
+            .heartbeat(socketActor(socket), channelId, {
+              clientId: resolvedClientId,
+            })
+          await socket.join(`voice:${channelId}`)
+          socketVoiceChannels(socket).add(channelId)
+          socketVoiceParticipantClients(socket).set(channelId, resolvedClientId ?? null)
+          socket.emit('voice:state', result.state)
         } catch {
           socketVoiceChannels(socket).delete(channelId)
           socketVoiceParticipantClients(socket).delete(channelId)

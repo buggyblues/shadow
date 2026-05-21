@@ -652,6 +652,7 @@ describe('buildManifests', () => {
     })
     expect(podSpec.automountServiceAccountToken).toBe(false)
     expect(podSpec.runtimeClassName).toBe('gvisor')
+    expect(podSpec.nodeSelector).toEqual({ 'shadowob.com/sandbox-ready': 'true' })
     expect(podSpec.volumes).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'shadow-runner-state' })]),
     )

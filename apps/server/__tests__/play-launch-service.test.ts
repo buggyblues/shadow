@@ -411,12 +411,14 @@ describe('play launch orchestration', () => {
     const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
     const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
     const previousModelProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
+    const previousWorkloadBackend = process.env.CLOUD_SAAS_WORKLOAD_BACKEND
     process.env.JWT_SECRET = 'test-secret'
     process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
     process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
     process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+    process.env.CLOUD_SAAS_WORKLOAD_BACKEND = 'deployment'
     delete process.env.SHADOW_SERVER_URL
-    delete process.env.SHADOW_AGENT_SERVER_URL
+    process.env.SHADOW_AGENT_SERVER_URL = 'http://host.lima.internal:3002'
 
     vi.spyOn(
       service as unknown as { findPublishedPlay(playId: string): Promise<unknown> },
@@ -455,10 +457,14 @@ describe('play launch orchestration', () => {
           hourlyCost: 1,
           saasMode: true,
           configSnapshot: expect.objectContaining({
+            deployments: expect.objectContaining({
+              backend: 'deployment',
+            }),
             __shadowobRuntime: expect.objectContaining({
               envVars: expect.objectContaining({
                 SHADOW_SERVER_URL: 'http://localhost:3002',
-                OPENAI_COMPATIBLE_BASE_URL: 'http://localhost:3002/api/ai/v1',
+                SHADOW_AGENT_SERVER_URL: 'http://host.lima.internal:3002',
+                OPENAI_COMPATIBLE_BASE_URL: 'http://host.lima.internal:3002/api/ai/v1',
                 OPENAI_COMPATIBLE_API_KEY: expect.stringMatching(/^smp_/),
               }),
             }),
@@ -502,6 +508,8 @@ describe('play launch orchestration', () => {
       else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
       if (previousModelProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
       else process.env.SHADOW_MODEL_PROXY_ENABLED = previousModelProxyEnabled
+      if (previousWorkloadBackend === undefined) delete process.env.CLOUD_SAAS_WORKLOAD_BACKEND
+      else process.env.CLOUD_SAAS_WORKLOAD_BACKEND = previousWorkloadBackend
     }
   })
 

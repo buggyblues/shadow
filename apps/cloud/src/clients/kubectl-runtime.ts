@@ -6,10 +6,15 @@
  * kubeconfig endpoints for containerized runtime access where needed.
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { rewriteLoopbackKubeconfig } from '../services/deployment-runtime.service.js'
+import {
+  defaultKubeconfigPath,
+  findReadableKubeconfigPath,
+  readKubeconfigFile,
+} from '../utils/kubeconfig-file.js'
 
 export interface K8sPodSummary {
   name: string
@@ -41,6 +46,14 @@ export interface VolumeSnapshotReadyStatus {
   error?: string
 }
 
+export interface AgentSandboxPreflightResult {
+  ok: boolean
+  missing: string[]
+  warnings: string[]
+  runtimeClassName?: string
+  runtimeClassNames?: string[]
+}
+
 function volumeSnapshotApiAvailableFromOutput(output: string): boolean {
   return output
     .split(/\s+/)
@@ -63,7 +76,7 @@ function getHostLocalKubeconfigPaths(): string[] {
       ...(process.env.KUBECONFIG?.split(delimiter)
         .map((candidate) => candidate.trim())
         .filter((candidate) => candidate.length > 0) ?? []),
-      join(homedir(), '.kube', 'config'),
+      defaultKubeconfigPath(),
     )
   }
 
@@ -90,20 +103,19 @@ function resolveAmbientKubeconfig():
       .map((candidate) => candidate.trim())
       .filter((candidate) => candidate.length > 0) ?? []
 
-  const kubeconfigPath = [
+  const candidates = [
     ...envCandidates,
     process.env.KUBECONFIG_HOST_PATH?.trim(),
-    join(homedir(), '.kube', 'config'),
-  ]
-    .filter((candidate): candidate is string => Boolean(candidate))
-    .find((candidate) => existsSync(candidate))
+    defaultKubeconfigPath(),
+  ].filter((candidate): candidate is string => Boolean(candidate))
 
+  const kubeconfigPath = findReadableKubeconfigPath(candidates, 'Kubernetes kubectl kubeconfig')
   if (!kubeconfigPath) {
     return undefined
   }
 
   return {
-    kubeconfig: readFileSync(kubeconfigPath, 'utf-8'),
+    kubeconfig: readKubeconfigFile(kubeconfigPath, 'Kubernetes kubectl kubeconfig'),
     shouldRewriteLoopback: !isHostLocalKubeconfigPath(kubeconfigPath),
   }
 }
@@ -195,6 +207,101 @@ function execKubectl(args: string[], kubeconfig?: string, timeout = 3_000): stri
       stdio: ['ignore', 'pipe', 'pipe'],
     }),
   )
+}
+
+function tryExecKubectl(args: string[], kubeconfig?: string, timeout = 5_000): string | null {
+  try {
+    return execKubectl(args, kubeconfig, timeout)
+  } catch {
+    return null
+  }
+}
+
+function resourceOutputHas(output: string | null, resourceName: string): boolean {
+  return Boolean(
+    output
+      ?.split(/\s+/)
+      .map((item) => item.trim())
+      .some((item) => item === resourceName),
+  )
+}
+
+export function checkAgentSandboxPreflight(options?: {
+  kubeconfig?: string
+  runtimeClassName?: string
+  runtimeClassNames?: string[]
+}): AgentSandboxPreflightResult {
+  const missing: string[] = []
+  const warnings: string[] = []
+  const kubeconfig = options?.kubeconfig
+
+  const extensionResources = tryExecKubectl(
+    ['api-resources', '--api-group', 'extensions.agents.x-k8s.io', '-o', 'name'],
+    kubeconfig,
+  )
+  if (!resourceOutputHas(extensionResources, 'sandboxtemplates')) {
+    missing.push('CRD sandboxtemplates.extensions.agents.x-k8s.io')
+  }
+  if (!resourceOutputHas(extensionResources, 'sandboxclaims')) {
+    missing.push('CRD sandboxclaims.extensions.agents.x-k8s.io')
+  }
+
+  const coreResources = tryExecKubectl(
+    ['api-resources', '--api-group', 'agents.x-k8s.io', '-o', 'name'],
+    kubeconfig,
+  )
+  if (!resourceOutputHas(coreResources, 'sandboxes')) {
+    missing.push('CRD sandboxes.agents.x-k8s.io')
+  }
+
+  const controllerOutput = tryExecKubectl(
+    ['-n', 'agent-sandbox-system', 'get', 'deployment', 'agent-sandbox-controller', '-o', 'json'],
+    kubeconfig,
+    10_000,
+  )
+  if (!controllerOutput) {
+    missing.push('deployment/agent-sandbox-controller in namespace agent-sandbox-system')
+  } else {
+    try {
+      const controller = JSON.parse(controllerOutput) as Record<string, unknown>
+      const status = (controller.status ?? {}) as Record<string, unknown>
+      if (((status.availableReplicas as number | undefined) ?? 0) < 1) {
+        missing.push('Ready agent-sandbox controller')
+      }
+    } catch {
+      missing.push('Readable agent-sandbox controller status')
+    }
+  }
+
+  const runtimeClassNames = [
+    ...new Set(
+      [options?.runtimeClassName, ...(options?.runtimeClassNames ?? [])]
+        .map((name) => name?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ]
+  for (const runtimeClassName of runtimeClassNames) {
+    const runtimeClass = tryExecKubectl(['get', 'runtimeclass', runtimeClassName], kubeconfig)
+    if (!runtimeClass) {
+      missing.push(`RuntimeClass ${runtimeClassName}`)
+    }
+  }
+
+  const sandboxNodes = tryExecKubectl(
+    ['get', 'nodes', '-l', 'shadowob.com/sandbox-ready=true', '-o', 'name'],
+    kubeconfig,
+  )
+  if (!sandboxNodes?.trim()) {
+    warnings.push('No nodes are labeled shadowob.com/sandbox-ready=true')
+  }
+
+  return {
+    ok: missing.length === 0,
+    missing,
+    warnings,
+    runtimeClassName: runtimeClassNames[0],
+    runtimeClassNames,
+  }
 }
 
 function execKubectlAsync(args: string[], kubeconfig?: string, timeout = 3_000): Promise<string> {

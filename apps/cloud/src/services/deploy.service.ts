@@ -5,10 +5,11 @@
  * This is the primary service for deploying agents to Kubernetes.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { loadKubeconfigPath } from '../cluster/kubeconfig.js'
-import type { CloudConfig } from '../config/schema.js'
+import { loadClusterMeta, loadKubeconfigPath } from '../cluster/kubeconfig.js'
+import type { CloudConfig, CloudWorkloadBackendPolicy } from '../config/schema.js'
+import { assertReadableKubeconfigFile, readKubeconfigFile } from '../utils/kubeconfig-file.js'
 import type { Logger } from '../utils/logger.js'
 import {
   type DeploymentRuntimeContext,
@@ -98,13 +99,26 @@ function isAgentSandboxBackend(config: CloudConfig): boolean {
   return (config.deployments?.backend ?? 'agent-sandbox') === 'agent-sandbox'
 }
 
+function workloadBackendPolicy(config: CloudConfig): CloudWorkloadBackendPolicy {
+  if (config.deployments?.backendPolicy) return config.deployments.backendPolicy
+  return isAgentSandboxBackend(config) ? 'sandbox-required' : 'deployment-only'
+}
+
+function sandboxRuntimeClassNames(config: CloudConfig): string[] {
+  const deployments = config.deployments
+  if (!deployments) return []
+
+  const defaultRuntimeClassName = deployments.sandbox?.runtimeClassName ?? 'gvisor'
+  const names = deployments.agents.map(
+    (agent) => agent.sandbox?.runtimeClassName ?? defaultRuntimeClassName,
+  )
+
+  return [...new Set(names)]
+}
+
 function readKubeconfigForRuntimeWait(kubeConfigPath?: string): string | undefined {
   if (!kubeConfigPath) return undefined
-  try {
-    return readFileSync(kubeConfigPath, 'utf8')
-  } catch {
-    return undefined
-  }
+  return readKubeconfigFile(kubeConfigPath)
 }
 
 function resolveStackName(namespace: string, stack?: string): string {
@@ -173,7 +187,7 @@ async function ensureBuiltInPluginsLoaded(): Promise<void> {
 function readKubeconfigCurrentContext(kubeConfigPath: string | undefined): string | undefined {
   if (!kubeConfigPath) return undefined
   try {
-    return readFileSync(kubeConfigPath, 'utf8').match(/current-context:\s*(\S+)/)?.[1]
+    return readKubeconfigFile(kubeConfigPath).match(/current-context:\s*(\S+)/)?.[1]
   } catch {
     return undefined
   }
@@ -192,6 +206,59 @@ function summarizeK8sTarget(options: DeployOptions, kubeConfigPath: string | und
     'rancher-desktop'
   const kubeconfig = kubeConfigPath ?? process.env.KUBECONFIG ?? '~/.kube/config'
   return `Kubernetes target: cluster=${cluster} context=${context} kubeconfig=${kubeconfig}`
+}
+
+function applyManagedClusterDefaults(config: CloudConfig, clusterName: string | undefined): void {
+  if (!clusterName || !config.deployments) return
+
+  const sandbox = loadClusterMeta(clusterName)?.features?.sandbox
+  if (!config.deployments.backendPolicy) {
+    config.deployments.backendPolicy = sandbox?.enabled
+      ? 'sandbox-preferred'
+      : config.deployments.backend === 'agent-sandbox'
+        ? 'sandbox-required'
+        : 'deployment-only'
+  }
+  if (!config.deployments.backend) {
+    config.deployments.backend =
+      config.deployments.backendPolicy === 'deployment-only'
+        ? 'deployment'
+        : sandbox?.enabled
+          ? 'agent-sandbox'
+          : 'deployment'
+  }
+
+  if (
+    config.deployments.backend === 'agent-sandbox' &&
+    sandbox?.enabled &&
+    sandbox.runtimeClassName
+  ) {
+    config.deployments.sandbox = {
+      ...(config.deployments.sandbox ?? {}),
+      runtimeClassName: config.deployments.sandbox?.runtimeClassName ?? sandbox.runtimeClassName,
+    }
+  }
+
+  if (config.deployments.backend === 'agent-sandbox' && sandbox?.enabled && sandbox.nodeSelector) {
+    config.deployments.scheduling = {
+      ...(config.deployments.scheduling ?? {}),
+      nodeSelector: {
+        ...sandbox.nodeSelector,
+        ...(config.deployments.scheduling?.nodeSelector ?? {}),
+      },
+    }
+  }
+}
+
+function describeSandboxPreflightFailure(missing: string[], warnings: string[]): string {
+  return [
+    'agent-sandbox preflight failed.',
+    missing.length > 0 ? `Missing: ${missing.join(', ')}.` : '',
+    warnings.length > 0 ? `Warnings: ${warnings.join(', ')}.` : '',
+    'Run "shadowob-cloud cluster apply --config cluster.json" to install/verify sandbox, or set deployments.backendPolicy="deployment-only" for fallback.',
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 // ─── Service ────────────────────────────────────────────────────────────────
@@ -223,6 +290,9 @@ export class DeployService {
     // Resolve kubeconfig path: explicit > cluster name > none (use kubeContext / default)
     const kubeConfigPath =
       options.kubeConfigPath ?? (options.cluster ? loadKubeconfigPath(options.cluster) : undefined)
+    if (kubeConfigPath) {
+      assertReadableKubeconfigFile(kubeConfigPath)
+    }
 
     const k8sTargetSummary = summarizeK8sTarget(options, kubeConfigPath)
     this.logger.info(k8sTargetSummary)
@@ -243,6 +313,7 @@ export class DeployService {
       await this.configService.parseFile(filePath),
       runtimeContext,
     )
+    applyManagedClusterDefaults(config, options.cluster)
 
     const namespace = options.namespace ?? config.deployments?.namespace ?? 'shadowob-cloud'
     const stackName = resolveStackName(namespace, options.stack)
@@ -300,6 +371,27 @@ export class DeployService {
     const usesPlugins = configUsesPlugins(config)
     if (usesPlugins) await ensureBuiltInPluginsLoaded()
     const resolved = await this.configService.resolve(config, configCwd, { env: effectiveEnv })
+
+    if (resolved.deployments && isAgentSandboxBackend(resolved)) {
+      const policy = workloadBackendPolicy(resolved)
+      const preflight = this.k8s.checkAgentSandboxPreflight({
+        kubeconfig: readKubeconfigForRuntimeWait(kubeConfigPath),
+        runtimeClassNames: sandboxRuntimeClassNames(resolved),
+      })
+      if (!preflight.ok) {
+        const message = describeSandboxPreflightFailure(preflight.missing, preflight.warnings)
+        if (policy === 'sandbox-preferred') {
+          this.logger.warn(`${message} Falling back to Kubernetes Deployment.`)
+          emit(`${message} Falling back to Kubernetes Deployment.\n`)
+          resolved.deployments.backend = 'deployment'
+          resolved.deployments.backendPolicy = 'deployment-only'
+        } else {
+          throw new Error(message)
+        }
+      } else if (preflight.warnings.length > 0) {
+        this.logger.warn(`agent-sandbox preflight warnings: ${preflight.warnings.join(', ')}`)
+      }
+    }
 
     // Always load plugins so the build pipeline (applyPluginPipeline) works regardless
     // of whether provisioning is skipped.
@@ -562,6 +654,9 @@ export class DeployService {
         `Cannot destroy namespace "${namespace}" without a Pulumi config snapshot. ` +
           'Destroy must run through the deployment stack state.',
       )
+    }
+    if (options.kubeConfigPath) {
+      assertReadableKubeconfigFile(options.kubeConfigPath)
     }
 
     const stack = await this.k8s.getOrCreateStack({

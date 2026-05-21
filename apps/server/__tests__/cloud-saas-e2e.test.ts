@@ -2369,6 +2369,113 @@ describe('Cloud SaaS — deployment + billing', () => {
     }
   })
 
+  it('POST /api/cloud-saas/deployments uses pod-reachable Shadow URL for official proxy config', async () => {
+    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
+    const previousShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
+    const previousModel = process.env.SHADOW_MODEL_PROXY_MODEL
+    const previousProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOW_SERVER_URL = 'http://host.lima.internal:3002'
+    process.env.SHADOW_AGENT_SERVER_URL = 'https://shadow.example.com'
+    process.env.SHADOW_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
+    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+
+    try {
+      const namespace = uniqueName('e2e-official-pod-url-ns')
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: uniqueName('e2e-official-pod-url-deploy'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: {
+          ...makeConfigSnapshot('official-pod-url-secret'),
+          use: [{ plugin: 'model-provider' }],
+          [CLOUD_SAAS_RUNTIME_KEY]: {
+            modelProviderMode: 'official',
+          },
+        },
+      })
+
+      expect(createRes.status).toBe(201)
+      const deployment = (await createRes.json()) as { id: string }
+      const [stored] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment.id))
+        .limit(1)
+
+      const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
+      expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBe('https://shadow.example.com/api/ai/v1')
+      expect(runtime.OPENAI_COMPATIBLE_API_KEY).toMatch(/^smp_/)
+    } finally {
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
+      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
+      if (previousShadowAgentServerUrl === undefined) delete process.env.SHADOW_AGENT_SERVER_URL
+      else process.env.SHADOW_AGENT_SERVER_URL = previousShadowAgentServerUrl
+      if (previousModel === undefined) delete process.env.SHADOW_MODEL_PROXY_MODEL
+      else process.env.SHADOW_MODEL_PROXY_MODEL = previousModel
+      if (previousProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
+      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousProxyEnabled
+      if (previousUpstreamBaseUrl === undefined)
+        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+      if (previousUpstreamApiKey === undefined)
+        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments rejects official model mode with only internal Shadow URL', async () => {
+    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
+    const previousShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
+    const previousProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOW_SERVER_URL = 'http://host.lima.internal:3002'
+    delete process.env.SHADOW_AGENT_SERVER_URL
+    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+
+    try {
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace: uniqueName('e2e-official-internal-url-ns'),
+        name: uniqueName('e2e-official-internal-url-deploy'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: {
+          ...makeConfigSnapshot('official-internal-url-secret'),
+          use: [{ plugin: 'model-provider' }],
+          [CLOUD_SAAS_RUNTIME_KEY]: {
+            modelProviderMode: 'official',
+          },
+        },
+      })
+
+      expect(createRes.status).toBe(503)
+      const body = (await createRes.json()) as { ok: boolean; error: string }
+      expect(body.ok).toBe(false)
+      expect(body.error).toContain('SHADOW_AGENT_SERVER_URL')
+      expect(body.error).toContain('SHADOW_SERVER_URL is internal-only')
+    } finally {
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
+      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
+      if (previousShadowAgentServerUrl === undefined) delete process.env.SHADOW_AGENT_SERVER_URL
+      else process.env.SHADOW_AGENT_SERVER_URL = previousShadowAgentServerUrl
+      if (previousProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
+      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousProxyEnabled
+      if (previousUpstreamBaseUrl === undefined)
+        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+      if (previousUpstreamApiKey === undefined)
+        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+    }
+  })
+
   it('POST /api/cloud-saas/deployments rejects official model mode when upstream provider env is missing', async () => {
     const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
     const previousModelProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED

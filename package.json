@@ -115,6 +115,7 @@
     "smoke:openclaw-shadowob:parallel": "node scripts/smoke/openclaw-shadowob-smoke-parallel.mjs",
     "smoke:openclaw-shadowob:all": "node scripts/smoke/openclaw-shadowob-smoke.mjs --suite all",
     "db:generate": "pnpm --filter @shadowob/server db:generate",
+    "db:migration:new": "node scripts/create-drizzle-migration.mjs",
     "db:migrate": "pnpm --filter @shadowob/server db:migrate",
     "db:studio": "pnpm --filter @shadowob/server db:studio",
     "publish:packages": "node scripts/publish-packages.mjs",

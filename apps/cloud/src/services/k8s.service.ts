@@ -35,6 +35,8 @@ import {
   streamLogs,
 } from '../clients/kubectl-client.js'
 import {
+  type AgentSandboxPreflightResult,
+  checkAgentSandboxPreflight,
   createVolumeSnapshotBackupAsync,
   restorePvcFromVolumeSnapshot,
   waitForAgentSandboxPaused,
@@ -193,6 +195,14 @@ export class K8sService {
     intervalMs?: number
   }) {
     return waitForAgentSandboxPaused(options)
+  }
+
+  checkAgentSandboxPreflight(options?: {
+    kubeconfig?: string
+    runtimeClassName?: string
+    runtimeClassNames?: string[]
+  }): AgentSandboxPreflightResult {
+    return checkAgentSandboxPreflight(options)
   }
 
   async restorePvcFromVolumeSnapshot(options: {

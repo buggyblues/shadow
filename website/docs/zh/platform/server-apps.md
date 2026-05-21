@@ -38,6 +38,16 @@ shadowob app install --server shadow-plays --manifest-url http://host.lima.inter
 
 每个 demo 都把 App 数据保存在独立的 Compose named volume 里。`docker compose -f integrations/docker-compose.yaml restart` 会保留数据；`down -v` 会删除数据。
 
+生产环境安装时，每个 App 都应通过 HTTPS 暴露，并安装公开 manifest URL：
+
+```bash
+shadowob app install --server shadow-plays --manifest-url https://flash-app.shadowob.com/.well-known/shadow-app.json
+```
+
+生产 manifest 不要使用公共 `http://<ip>:<port>` URL。Shadow 页面通过 HTTPS 加载，浏览器会拦截来自 IP 字面量 HTTP host 的 mixed-content iframe、icon 和 frame navigation。Caddy、Nginx 或其他代理可以和 App 目标主机分离，并通过 IP 转发到目标主机；manifest 里仍然只暴露 HTTPS 域名。
+
+协议路由要先于网站 fallback 命中：`/.well-known/shadow-app.json` 必须到达 App；legacy `/oauth/authorize` 应重定向到标准浏览器 OAuth 入口 `/app/oauth/authorize`。
+
 ## Buddy 授权
 
 ```bash
@@ -75,6 +85,8 @@ shadowob app call demo-desk tickets.list \
 Shadow 会先校验 Actor、服务器成员身份、Buddy 授权、命令权限和 JSON 限制，再代理到 App 后端。
 
 App iframe 启动时会收到 `shadow_event_stream`。App 可以用 `EventSource` 监听 `server_app.command.completed`，当 Buddy 通过 CLI 修改资源后自动刷新数据。
+
+用户在服务器路由之间切换时，Shadow 会保持 iframe 挂载。App launch context 会缓存到接近过期，全局导航数据在 refetch 时保持温热，launch query 不应在 window focus 时重新请求。Server App 的常规更新应通过事件流或本地 patch 完成，不要通过改变 iframe `src` 来刷新。
 
 ## Manifest
 

@@ -18,6 +18,10 @@ import { ApiError, fetchApi } from '../lib/api'
 import { leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 
+const SERVER_APP_LIST_STALE_MS = 5 * 60 * 1000
+const SERVER_APP_LAUNCH_STALE_MS = 9 * 60 * 1000
+const SERVER_APP_QUERY_GC_MS = 30 * 60 * 1000
+
 interface ServerAppIntegration {
   id: string
   serverId: string
@@ -76,41 +80,73 @@ function withLaunchParams(entry: string, launch: LaunchContext | undefined) {
   return url.toString()
 }
 
-export function ServerAppsPageRoute() {
+interface ServerAppsPageRouteProps {
+  active?: boolean
+  appKeyOverride?: string
+  preserveActiveChannel?: boolean
+}
+
+export function ServerAppsPageRoute({
+  active = true,
+  appKeyOverride,
+  preserveActiveChannel = false,
+}: ServerAppsPageRouteProps = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const [lastActiveApp, setLastActiveApp] = useState<{
+    serverSlug: string
+    appKey: string
+  } | null>(null)
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null)
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
   const { serverSlug, appKey } = useParams({ strict: false }) as {
     serverSlug: string
     appKey?: string
   }
+  const effectiveAppKey = appKeyOverride ?? appKey
 
   useLayoutEffect(() => {
+    if (!active || preserveActiveChannel) return
     const prev = useChatStore.getState().activeChannelId
     if (prev) {
       leaveChannel(prev)
       useChatStore.getState().setActiveChannel(null)
     }
-  }, [])
+  }, [active, preserveActiveChannel])
+
+  useEffect(() => {
+    if (active && serverSlug && effectiveAppKey) {
+      setLastActiveApp({ serverSlug, appKey: effectiveAppKey })
+    }
+  }, [active, effectiveAppKey, serverSlug])
+
+  const lastActiveAppKey =
+    lastActiveApp?.serverSlug === serverSlug ? lastActiveApp.appKey : undefined
+  const visibleAppKey = active ? effectiveAppKey : lastActiveAppKey
 
   const { data: apps = [], isLoading } = useQuery({
     queryKey: ['server-apps', serverSlug],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
-    enabled: !!serverSlug,
+    enabled: !!serverSlug && (active || !!lastActiveAppKey),
+    staleTime: SERVER_APP_LIST_STALE_MS,
+    gcTime: SERVER_APP_QUERY_GC_MS,
   })
 
-  const activeApp = useMemo(() => apps.find((app) => app.appKey === appKey) ?? null, [appKey, apps])
+  const activeApp = useMemo(
+    () => apps.find((app) => app.appKey === visibleAppKey) ?? null,
+    [apps, visibleAppKey],
+  )
 
   useEffect(() => {
-    if (!serverSlug || appKey || isLoading || !apps[0]?.appKey) return
+    if (!active) return
+    if (!serverSlug || effectiveAppKey || isLoading || !apps[0]?.appKey) return
     navigate({
       to: '/servers/$serverSlug/apps/$appKey',
       params: { serverSlug, appKey: apps[0].appKey },
       replace: true,
     })
-  }, [appKey, apps, isLoading, navigate, serverSlug])
+  }, [active, effectiveAppKey, apps, isLoading, navigate, serverSlug])
 
   const { data: launch, isLoading: isLaunchLoading } = useQuery({
     queryKey: ['server-app-launch', serverSlug, activeApp?.appKey],
@@ -119,6 +155,9 @@ export function ServerAppsPageRoute() {
         method: 'POST',
       }),
     enabled: !!serverSlug && !!activeApp?.appKey && !!activeApp.iframeEntry,
+    staleTime: SERVER_APP_LAUNCH_STALE_MS,
+    gcTime: SERVER_APP_QUERY_GC_MS,
+    refetchOnReconnect: false,
   })
 
   const iframeSrc =
@@ -235,7 +274,7 @@ export function ServerAppsPageRoute() {
     }
   }
 
-  if (isLoading || (!appKey && apps.length > 0)) {
+  if (active && (isLoading || (!appKey && apps.length > 0))) {
     return (
       <GlassPanel className="flex flex-1 items-center justify-center text-text-muted">
         <Spinner size="sm" />
@@ -270,7 +309,7 @@ export function ServerAppsPageRoute() {
           title={activeApp.name}
           src={iframeSrc}
           className="h-full w-full border-0"
-          sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
+          sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         />
       ) : (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-text-muted">

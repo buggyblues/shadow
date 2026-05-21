@@ -140,12 +140,19 @@ new_secret = result["clientSecret"]
 
 ## Authorization Flow
 
+Shadow has two authorize surfaces:
+
+- Browser entry: `GET /app/oauth/authorize?...`. Redirect users here, or open it in a top-level popup from an embedded app.
+- API validation/approval: `GET/POST /api/oauth/authorize`. This is used by Shadow's web UI and SDK helpers; do not iframe it or send end users directly to it.
+
+The Shadow web app sends `frame-ancestors 'none'`, so an OAuth consent page must never be loaded inside a third-party iframe. Server Apps should open OAuth in a popup with `allow-popups-to-escape-sandbox`, then refresh their local session after the callback completes.
+
 ### Step 1: Redirect to authorize
 
 Redirect the user's browser to the authorization page:
 
 ```
-GET /api/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=REDIRECT_URI&scope=SCOPE&state=STATE
+GET /app/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=REDIRECT_URI&scope=SCOPE&state=STATE
 ```
 
 | Param | Type | Required | Description |
@@ -159,23 +166,26 @@ GET /api/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=RED
 :::code-group
 
 ```ts [TypeScript]
-const authInfo = await client.getOAuthAuthorization({
-  responseType: 'code',
-  clientId: 'your-client-id',
-  redirectUri: 'https://example.com/callback',
-  scope: 'read:user read:servers',
-  state: 'random-state',
-})
+const authorizeUrl = new URL('/app/oauth/authorize', 'https://shadowob.com')
+authorizeUrl.searchParams.set('response_type', 'code')
+authorizeUrl.searchParams.set('client_id', 'your-client-id')
+authorizeUrl.searchParams.set('redirect_uri', 'https://example.com/callback')
+authorizeUrl.searchParams.set('scope', 'user:read servers:read')
+authorizeUrl.searchParams.set('state', crypto.randomUUID())
+window.location.assign(authorizeUrl.toString())
 ```
 
 ```python [Python]
-auth_info = client.get_oauth_authorization(
-    response_type="code",
-    client_id="your-client-id",
-    redirect_uri="https://example.com/callback",
-    scope="read:user read:servers",
-    state="random-state",
-)
+from urllib.parse import urlencode
+
+params = urlencode({
+    "response_type": "code",
+    "client_id": "your-client-id",
+    "redirect_uri": "https://example.com/callback",
+    "scope": "user:read servers:read",
+    "state": state,
+})
+authorize_url = f"https://shadowob.com/app/oauth/authorize?{params}"
 ```
 
 :::
@@ -195,7 +205,7 @@ POST /api/oauth/authorize
 | `scope` | string | No | Approved scope |
 | `state` | string | Yes | Must match the request state |
 
-**Response:** Returns a `redirectTo` URL containing the authorization code.
+**Response:** Returns a `redirectTo` URL containing the authorization code. Most third-party apps should not call this endpoint directly; the Shadow consent page calls it after the user approves.
 
 :::code-group
 

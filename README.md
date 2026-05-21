@@ -185,10 +185,11 @@ Cloud SaaS deployments run from the embedded processor in `apps/server`. For loc
 settings in `cluster.json`, including `install.k3sVersion` and `install.k3sMirror: "cn"` for servers
 that cannot reach GitHub releases or Docker Hub directly. With `k3sMirror: "cn"`, bootstrap also
 uses domestic defaults for k3s system images and the pause image unless
-`install.systemDefaultRegistry` or `install.pauseImage` is set explicitly. Docker Compose defaults
-`CLOUD_SAAS_WORKLOAD_BACKEND` to
-`deployment`, which works on plain k3s; use `agent-sandbox` only after installing the sandbox CRDs
-and controller.
+`install.systemDefaultRegistry` or `install.pauseImage` is set explicitly. Set
+`features.sandbox` in `cluster.json` to have `cluster init/apply` install and verify the
+agent-sandbox CRDs/controller and publish the sandbox RuntimeClass used by CLI and Web SaaS
+deployments. Docker Compose defaults `CLOUD_SAAS_WORKLOAD_BACKEND` to `auto`, so cluster JSON
+selects `agent-sandbox` when that feature is enabled and falls back to `deployment` otherwise.
 
 See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for the full local workflow,
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for system boundaries,

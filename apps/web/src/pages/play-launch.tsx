@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { markPlayLaunchRedirectEntry } from '../components/server/server-landing'
 import { ApiError, fetchApi } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
 
@@ -68,6 +69,12 @@ type ServerMeta = {
   slug?: string | null
 }
 
+type ChannelMeta = {
+  id: string
+  position?: number | null
+  isArchived?: boolean | null
+}
+
 type LaunchPhase = 'loading' | 'ready' | 'launching' | 'gate' | 'wallet' | 'error'
 
 type LaunchOptions = {
@@ -99,7 +106,19 @@ function formatCoins(value?: number) {
 async function resolveServerRedirectUrl(serverId: string, channelId?: string | null) {
   const server = await fetchApi<ServerMeta>(`/api/servers/${encodeURIComponent(serverId)}`)
   const serverPath = `/servers/${encodeURIComponent(server.slug ?? server.id)}`
-  return channelId ? `${serverPath}/channels/${encodeURIComponent(channelId)}` : serverPath
+  if (channelId) return `${serverPath}/channels/${encodeURIComponent(channelId)}`
+  try {
+    const channels = await fetchApi<ChannelMeta[]>(
+      `/api/servers/${encodeURIComponent(server.slug ?? server.id)}/channels`,
+    )
+    const firstChannel = channels
+      .filter((channel) => !channel.isArchived)
+      .sort((left, right) => (left.position ?? 0) - (right.position ?? 0))[0]
+    if (firstChannel) return `${serverPath}/channels/${encodeURIComponent(firstChannel.id)}`
+  } catch {
+    // Server root remains a valid fallback if channels are still provisioning.
+  }
+  return serverPath
 }
 
 function canLaunchPlay(play: PlayCatalogItem | null) {
@@ -267,12 +286,14 @@ export function PlayLaunchPage() {
       }
       if (result.redirectUrl) {
         await advanceLaunchSteps(3, 650)
+        markPlayLaunchRedirectEntry()
         window.location.replace(resolveAppUrl(result.redirectUrl))
         return
       }
       if (isCloud && result.deploymentId) {
         const redirectUrl = await waitForCloudServer(result.deploymentId)
         await wait(650)
+        markPlayLaunchRedirectEntry()
         window.location.replace(resolveAppUrl(redirectUrl))
         return
       }

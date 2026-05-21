@@ -140,12 +140,19 @@ new_secret = result["clientSecret"]
 
 ## 授权流程
 
+Shadow 有两个 authorize 入口：
+
+- 浏览器入口：`GET /app/oauth/authorize?...`。把用户重定向到这里；嵌入式 App 需要用顶层弹窗打开。
+- API 校验/批准：`GET/POST /api/oauth/authorize`。这是 Shadow Web UI 和 SDK helper 使用的接口，不要把最终用户直接送到这里，也不要放进 iframe。
+
+Shadow Web 会返回 `frame-ancestors 'none'`，OAuth 授权页不能被第三方 iframe 嵌入。Server App 需要用 popup 完成授权，并在 iframe sandbox 中允许 `allow-popups-to-escape-sandbox`，callback 成功后再刷新自己的本地 session。
+
 ### 第一步：重定向到授权页面
 
 将用户浏览器重定向到授权页面：
 
 ```
-GET /api/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=REDIRECT_URI&scope=SCOPE&state=STATE
+GET /app/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=REDIRECT_URI&scope=SCOPE&state=STATE
 ```
 
 | 参数 | 类型 | 必填 | 说明 |
@@ -159,23 +166,26 @@ GET /api/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=RED
 :::code-group
 
 ```ts [TypeScript]
-const authInfo = await client.getOAuthAuthorization({
-  responseType: 'code',
-  clientId: 'your-client-id',
-  redirectUri: 'https://example.com/callback',
-  scope: 'read:user read:servers',
-  state: 'random-state',
-})
+const authorizeUrl = new URL('/app/oauth/authorize', 'https://shadowob.com')
+authorizeUrl.searchParams.set('response_type', 'code')
+authorizeUrl.searchParams.set('client_id', 'your-client-id')
+authorizeUrl.searchParams.set('redirect_uri', 'https://example.com/callback')
+authorizeUrl.searchParams.set('scope', 'user:read servers:read')
+authorizeUrl.searchParams.set('state', crypto.randomUUID())
+window.location.assign(authorizeUrl.toString())
 ```
 
 ```python [Python]
-auth_info = client.get_oauth_authorization(
-    response_type="code",
-    client_id="your-client-id",
-    redirect_uri="https://example.com/callback",
-    scope="read:user read:servers",
-    state="random-state",
-)
+from urllib.parse import urlencode
+
+params = urlencode({
+    "response_type": "code",
+    "client_id": "your-client-id",
+    "redirect_uri": "https://example.com/callback",
+    "scope": "user:read servers:read",
+    "state": state,
+})
+authorize_url = f"https://shadowob.com/app/oauth/authorize?{params}"
 ```
 
 :::
@@ -195,7 +205,7 @@ POST /api/oauth/authorize
 | `scope` | string | 否 | 批准的权限范围 |
 | `state` | string | 是 | 必须匹配请求中的 state |
 
-**响应：** 返回包含授权码的 `redirectTo` URL。
+**响应：** 返回包含授权码的 `redirectTo` URL。多数第三方 App 不应该直接调用该接口；Shadow 授权页会在用户确认后调用它。
 
 :::code-group
 

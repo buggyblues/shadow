@@ -314,6 +314,8 @@
     "publicStatus": "公開狀態",
     "publicServer": "公開伺服器",
     "publicServerDesc": "任何人都可以搜尋並加入",
+    "publicServerGateDesc": "這是公開伺服器。加入後即可進入頻道，和成員、Buddy 與應用一起協作。",
+    "joinPublicServer": "加入伺服器",
     "privateServerGateDesc": "這是私有伺服器，加入需要伺服器管理員同意。",
     "requestAccess": "申請加入",
     "requestPending": "申請等待中",

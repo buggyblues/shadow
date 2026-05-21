@@ -1,8 +1,13 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import type { CloudConfig } from '../config/schema.js'
+import {
+  defaultKubeconfigPath,
+  findReadableKubeconfigPath,
+  readKubeconfigFile,
+} from '../utils/kubeconfig-file.js'
 import type { DeploymentRuntimeContext } from '../utils/runtime-context.js'
 import type { ProvisionState } from '../utils/state.js'
 import type { DeployOptions, DeployResult } from './deploy.service.js'
@@ -118,7 +123,7 @@ function getHostLocalRuntimeKubeconfigPaths(): string[] {
       ...(process.env.KUBECONFIG?.split(delimiter)
         .map((candidate) => candidate.trim())
         .filter((candidate) => candidate.length > 0) ?? []),
-      join(homedir(), '.kube', 'config'),
+      defaultKubeconfigPath(),
     )
   }
 
@@ -136,10 +141,10 @@ function resolveAmbientRuntimeKubeconfigPath(): string | undefined {
       .map((candidate) => candidate.trim())
       .filter((candidate) => candidate.length > 0) ?? []),
     process.env.KUBECONFIG_HOST_PATH?.trim(),
-    join(homedir(), '.kube', 'config'),
+    defaultKubeconfigPath(),
   ].filter((candidate): candidate is string => Boolean(candidate))
 
-  return candidates.find((candidate) => existsSync(candidate))
+  return findReadableKubeconfigPath(candidates, 'Cloud SaaS Kubernetes kubeconfig')
 }
 
 export class DeploymentRuntimeService {
@@ -213,7 +218,7 @@ export class DeploymentRuntimeService {
     const activeKubeconfig = cluster?.kubeconfig
       ? cluster.kubeconfig
       : activeKubeconfigPath
-        ? readFileSync(activeKubeconfigPath, 'utf8')
+        ? readKubeconfigFile(activeKubeconfigPath, 'Cloud SaaS Kubernetes kubeconfig')
         : undefined
 
     if (activeKubeconfig) {

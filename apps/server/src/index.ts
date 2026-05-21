@@ -11,7 +11,7 @@ import { createApp } from './app'
 import { type AppContainer, createAppContainer } from './container'
 import { db } from './db'
 import { users } from './db/schema'
-import { assertCloudDeploymentStatusEnumValues } from './db/schema-invariants'
+import { assertDatabaseSchemaInvariants } from './db/schema-invariants'
 import { startCloudDeploymentProcessor } from './lib/cloud-deployment-processor'
 import { configureCloudSaasClusterFromEnv } from './lib/cloud-saas-cluster-config'
 import { resolveCloudTemplatesDir } from './lib/cloud-templates'
@@ -68,7 +68,7 @@ async function main() {
     await migrate(db, { migrationsFolder: migrationsPath })
     logger.info('Database migrations completed')
   }
-  await assertCloudDeploymentStatusEnumValues(db)
+  await assertDatabaseSchemaInvariants(db)
 
   // Create DI container
   const container = createAppContainer(db)

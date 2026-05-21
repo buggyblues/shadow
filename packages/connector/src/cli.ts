@@ -37,6 +37,8 @@ const COMMANDS = new Set(['plan', 'connect', 'update', 'doctor', 'fix', 'status'
 const ALL_TARGETS = ['openclaw', 'hermes', 'cc-connect'] as const
 const SHADOW_CLI_PACKAGE = '@shadowob/cli@latest'
 const SHADOW_CONNECTOR_PACKAGE = '@shadowob/connector@latest'
+const DEFAULT_OPENCLAW_CONFIG = '~/.openclaw/openclaw.json'
+const LEGACY_OPENCLAW_CONFIG = '~/.shadowob/openclaw.json'
 
 function readOption(args: string[], name: string): string | undefined {
   const prefix = `${name}=`
@@ -64,7 +66,7 @@ function usage(): string {
     '',
     'Options:',
     '  --server-url <url>      Shadow server URL, default https://shadowob.com',
-    '  --openclaw-config <path> OpenClaw JSON config, default $OPENCLAW_CONFIG or ~/.shadowob/openclaw.json',
+    '  --openclaw-config <path> OpenClaw JSON config, default $OPENCLAW_CONFIG or ~/.openclaw/openclaw.json',
     '  --hermes-home <path>    Hermes config directory, default $HERMES_HOME or ~/.hermes',
     '  --work-dir <path>       cc-connect project work directory',
     '  --project-name <name>   cc-connect project name',
@@ -190,6 +192,15 @@ function expandHome(value: string): string {
 
 function readExisting(path: string): string {
   return existsSync(path) ? readFileSync(path, 'utf8') : ''
+}
+
+function resolveOpenClawConfigPath(options: CliOptions): string {
+  return expandHome(
+    options.openclawConfig ??
+      process.env.OPENCLAW_CONFIG ??
+      process.env.OPENCLAW_CONFIG_PATH ??
+      DEFAULT_OPENCLAW_CONFIG,
+  )
 }
 
 function normalizeServerUrl(value: string): string {
@@ -461,9 +472,7 @@ function diagnoseCommon(options: CliOptions): DiagnosticCheck[] {
 }
 
 function diagnoseOpenClaw(options: CliOptions): DiagnosticCheck[] {
-  const configPath = expandHome(
-    options.openclawConfig ?? process.env.OPENCLAW_CONFIG ?? '~/.shadowob/openclaw.json',
-  )
+  const configPath = resolveOpenClawConfigPath(options)
   const checks: DiagnosticCheck[] = [
     check(
       'openclaw',
@@ -737,8 +746,8 @@ function openClawConfigCandidates(options: CliOptions): string[] {
         options.openclawConfig,
         process.env.OPENCLAW_CONFIG,
         process.env.OPENCLAW_CONFIG_PATH,
-        '~/.shadowob/openclaw.json',
-        '~/.openclaw/openclaw.json',
+        DEFAULT_OPENCLAW_CONFIG,
+        LEGACY_OPENCLAW_CONFIG,
       ]
         .filter((value): value is string => !!value?.trim())
         .map(expandHome),
@@ -896,9 +905,7 @@ function applyOpenClaw(
 ): void {
   const target = requireTarget(options)
   const plan = createConnectorPlan({ ...options, target })
-  const configPath = expandHome(
-    options.openclawConfig ?? process.env.OPENCLAW_CONFIG ?? '~/.shadowob/openclaw.json',
-  )
+  const configPath = resolveOpenClawConfigPath(options)
 
   installShadowCliAndSkills(options)
 

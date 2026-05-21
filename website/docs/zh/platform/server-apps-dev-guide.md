@@ -40,6 +40,18 @@ App 需要暴露 `/.well-known/shadow-app.json`：
 
 `appKey` 是 Buddy CLI 调用时使用的稳定标识。生产环境的 iframe 和 API URL 应使用 HTTPS。
 
+生产环境应发布稳定的 HTTPS origin。不要在 manifest 里暴露公共 `http://<ip>:<port>` 地址：Shadow 页面本身通过 HTTPS 加载，浏览器会拦截来自 IP 字面量 HTTP host 的 iframe、图片和 frame navigation。
+
+如果反向代理和 App 目标主机不在同一台机器上，DNS 应指向 HTTPS 代理，代理再通过内网或公网 IP 转发到 App 主机。公开 manifest 里只保留域名，不要保留 IP：
+
+```dotenv
+SHADOW_SERVER_URL=https://shadowob.com
+SHADOW_WEB_BASE_URL=https://shadowob.com
+FLASH_PUBLIC_BASE_URL=https://flash-app.shadowob.com
+FLASH_API_BASE_URL=https://flash-app.shadowob.com
+FLASH_OAUTH_REDIRECT_URI=https://flash-app.shadowob.com/shadow/oauth/callback
+```
+
 每次修改 JSON manifest 后，先生成 typed manifest 模块：
 
 ```bash
@@ -124,6 +136,15 @@ if (stream) {
 
 Buddy 通过 CLI 修改资源后，Shadow 会发出 `server_app.command.completed`，App 可以立即刷新列表。
 
+保持 iframe 稳定：
+
+- launch context 要缓存到接近过期，不要在 window focus 或 tab 切换时重新请求 launch。
+- 全局导航数据在 refetch 时保持温热；已有缓存时不要用路由级 loading 把页面卸载。
+- 除非安装的 App 身份变化，不要改变 iframe 的 `src` query 参数或 React `key`。
+- 命令执行后的更新通过 `shadow_event_stream` 或 App 自己的事件流增量 patch，不要为了普通刷新 remount iframe。
+
+如果 Server App 需要 Shadow OAuth，用顶层 popup 或跳转打开 `/app/oauth/authorize`。Shadow OAuth 页面会返回 `frame-ancestors 'none'`，不能放进 Server App iframe。Shadow iframe sandbox 需要包含 `allow-popups-to-escape-sandbox` 才能完成 popup OAuth。
+
 ## 5. 安装、授权和调用
 
 管理员在服务器设置里的 Apps 页面选择名录 App 或输入自定义 manifest URL。CLI 等价流程：
@@ -149,6 +170,14 @@ shadowob app install --server shadow-plays --manifest-url http://host.lima.inter
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4214/.well-known/shadow-app.json
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4215/.well-known/shadow-app.json
 ```
+
+公开安装时，使用反向代理暴露出来的 HTTPS manifest URL：
+
+```bash
+shadowob app install --server shadow-plays --manifest-url https://flash-app.shadowob.com/.well-known/shadow-app.json
+```
+
+`/.well-known/shadow-app.json` 必须在网站 SPA fallback 之前命中。如果 Shadow Web 和官网共用一个 host，`/app/oauth/authorize` 是标准 OAuth 浏览器入口，legacy `/oauth/authorize` 应重定向到它，并且 `/.well-known/*` 协议文件要先于 docs 或 frontend fallback 代理。
 
 给 Buddy 授予它需要调用的全部命令权限，然后为 `first_time` 写命令做一次确认：
 

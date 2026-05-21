@@ -1,6 +1,9 @@
 import { cn } from '@shadowob/ui'
 import { useParams } from '@tanstack/react-router'
 import {
+  Check,
+  ChevronUp,
+  HeadphoneOff,
   Headphones,
   Maximize2,
   Mic,
@@ -19,7 +22,11 @@ import {
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { type RemoteScreen, type VoiceParticipant } from '../../hooks/use-voice-channel'
+import {
+  type RemoteScreen,
+  type VoiceDevice,
+  type VoiceParticipant,
+} from '../../hooks/use-voice-channel'
 import { UserAvatar } from '../common/avatar'
 import { NetworkQualityIcon } from './network-quality-icon'
 import { useVoiceSession } from './voice-session-context'
@@ -110,7 +117,7 @@ function ScreenShareStage({ items }: { items: ScreenStageItem[] }) {
       className={cn(
         'flex flex-col overflow-hidden rounded-lg bg-[#050607] ring-1 ring-primary/30',
         fullscreen
-          ? 'fixed inset-3 z-[90] min-h-0 shadow-[0_24px_80px_rgba(0,0,0,0.55)] md:inset-6'
+          ? 'fixed inset-0 z-[90] min-h-0 rounded-none shadow-[0_24px_80px_rgba(0,0,0,0.55)]'
           : 'min-h-[min(68vh,760px)]',
       )}
     >
@@ -290,7 +297,7 @@ function ParticipantTile({
       </div>
       <div className="absolute right-4 top-4 flex items-center gap-2 text-black/55">
         {participant.isScreenSharing && <MonitorUp size={18} />}
-        {participant.isDeafened && <Headphones size={18} />}
+        {participant.isDeafened && <HeadphoneOff size={18} />}
       </div>
     </div>
   )
@@ -384,13 +391,116 @@ function ControlButton({
       title={label}
       onClick={onClick}
       className={cn(
-        'grid h-12 w-14 place-items-center rounded-xl bg-white/8 text-white/80 transition hover:bg-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-45',
+        'grid h-11 w-12 place-items-center rounded-xl bg-white/8 text-white/80 transition hover:bg-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 sm:h-12 sm:w-14',
         active && 'bg-primary/25 text-primary hover:text-primary',
         danger && 'bg-danger text-white hover:bg-danger/90',
       )}
     >
       {children}
     </button>
+  )
+}
+
+function DeviceControlButton({
+  active,
+  danger,
+  disabled,
+  label,
+  dropdownLabel,
+  open,
+  devices,
+  selectedDeviceId,
+  onToggle,
+  onToggleMenu,
+  onSelectDevice,
+  children,
+}: {
+  active?: boolean
+  danger?: boolean
+  disabled?: boolean
+  label: string
+  dropdownLabel: string
+  open: boolean
+  devices: VoiceDevice[]
+  selectedDeviceId: string
+  onToggle: () => void
+  onToggleMenu: () => void
+  onSelectDevice: (deviceId: string) => void
+  children: ReactNode
+}) {
+  const { t } = useTranslation()
+  const items = [{ deviceId: 'default', label: t('voice.defaultDevice') }, ...devices]
+
+  return (
+    <div className="relative flex items-center">
+      <div
+        className={cn(
+          'flex h-11 w-12 overflow-hidden rounded-xl bg-white/8 text-white/80 transition sm:h-12 sm:w-14',
+          active && 'bg-primary/25 text-primary',
+          danger && 'bg-danger text-white',
+          disabled && 'opacity-45',
+        )}
+      >
+        <button
+          type="button"
+          disabled={disabled}
+          title={label}
+          onClick={onToggle}
+          className="grid h-full min-w-0 flex-1 place-items-center transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed"
+        >
+          {children}
+        </button>
+        <span
+          aria-hidden="true"
+          className={cn('h-7 w-px self-center bg-white/[0.06]', danger && 'bg-white/[0.1]')}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          title={dropdownLabel}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggleMenu()
+          }}
+          className={cn(
+            'grid h-full w-4 shrink-0 place-items-center text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed sm:w-5',
+            open && 'bg-white/10 text-white',
+            active && 'text-primary hover:text-primary',
+            danger && 'text-white hover:text-white',
+          )}
+        >
+          <ChevronUp size={14} />
+        </button>
+      </div>
+      {open && (
+        <div className="absolute bottom-full left-0 z-20 mb-2 w-72 overflow-hidden rounded-xl border border-white/10 bg-[#111216]/95 p-1.5 shadow-2xl backdrop-blur-xl">
+          <div className="px-2 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/45">
+            {dropdownLabel}
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {items.map((device) => {
+              const selected = selectedDeviceId === device.deviceId
+              return (
+                <button
+                  key={device.deviceId}
+                  type="button"
+                  onClick={() => onSelectDevice(device.deviceId)}
+                  className={cn(
+                    'flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-xs font-bold text-white/75 transition hover:bg-white/10 hover:text-white',
+                    selected && 'bg-primary/15 text-primary hover:text-primary',
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {device.label || t('voice.unknownDevice')}
+                  </span>
+                  {selected && <Check size={14} />}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -413,7 +523,9 @@ export function VoiceChannelPanel({
   } = useVoiceSession()
   const connectedToThisChannel = connectedVoiceChannel?.id === channelId
   const connected = connectedToThisChannel && voice.status === 'connected'
-  const connecting = connectedToThisChannel && voice.status === 'connecting'
+  const busy =
+    connectedToThisChannel && (voice.status === 'connecting' || voice.status === 'disconnecting')
+  const [deviceMenu, setDeviceMenu] = useState<'microphone' | 'speaker' | null>(null)
   const errorMessage = voice.errorKey ? t(`voice.errors.${voice.errorKey}`) : voice.error
   const participants = connectedToThisChannel ? voice.participants : []
   const screens = connectedToThisChannel ? voice.remoteScreens : []
@@ -491,7 +603,7 @@ export function VoiceChannelPanel({
           <VoiceErrorRecovery
             errorKey={voice.errorKey}
             errorMessage={errorMessage}
-            isRetrying={connecting}
+            isRetrying={busy}
             onLeave={() => void leaveVoiceChannel()}
             onRetry={() => void joinVoiceChannel({ id: channelId, name: channelName, serverSlug })}
           />
@@ -535,26 +647,48 @@ export function VoiceChannelPanel({
       </div>
 
       {connectedToThisChannel && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-5 flex justify-center px-4">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[#111216]/90 p-2 shadow-2xl backdrop-blur-xl">
-            <ControlButton
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-40 flex justify-center px-2 sm:bottom-5 sm:px-4">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-white/10 bg-[#111216]/90 p-1.5 shadow-2xl backdrop-blur-xl sm:gap-3 sm:p-2">
+            <DeviceControlButton
               active={voice.isMuted}
               danger={voice.isMuted}
               disabled={!connected}
               label={voice.isMuted ? t('voice.unmute') : t('voice.mute')}
-              onClick={() => void voice.toggleMute()}
+              dropdownLabel={t('voice.inputDevice')}
+              open={deviceMenu === 'microphone'}
+              devices={voice.microphones}
+              selectedDeviceId={voice.selectedMicrophoneId}
+              onToggle={() => void voice.toggleMute()}
+              onToggleMenu={() =>
+                setDeviceMenu((current) => (current === 'microphone' ? null : 'microphone'))
+              }
+              onSelectDevice={(deviceId) => {
+                setDeviceMenu(null)
+                void voice.setMicrophoneDevice(deviceId)
+              }}
             >
               {voice.isMuted ? <MicOff size={22} /> : <Mic size={22} />}
-            </ControlButton>
-            <ControlButton
+            </DeviceControlButton>
+            <DeviceControlButton
               active={voice.isDeafened}
               danger={voice.isDeafened}
               disabled={!connected}
               label={voice.isDeafened ? t('voice.undeafen') : t('voice.deafen')}
-              onClick={() => voice.toggleDeafen()}
+              dropdownLabel={t('voice.outputDevice')}
+              open={deviceMenu === 'speaker'}
+              devices={voice.speakers}
+              selectedDeviceId={voice.selectedSpeakerId}
+              onToggle={() => voice.toggleDeafen()}
+              onToggleMenu={() =>
+                setDeviceMenu((current) => (current === 'speaker' ? null : 'speaker'))
+              }
+              onSelectDevice={(deviceId) => {
+                setDeviceMenu(null)
+                void voice.setSpeakerDevice(deviceId)
+              }}
             >
-              <Headphones size={22} />
-            </ControlButton>
+              {voice.isDeafened ? <HeadphoneOff size={22} /> : <Headphones size={22} />}
+            </DeviceControlButton>
             <ControlButton
               active={voice.isScreenSharing}
               disabled={!connected}
@@ -577,7 +711,7 @@ export function VoiceChannelPanel({
             </ControlButton>
             <ControlButton
               danger
-              disabled={connecting}
+              disabled={busy}
               label={t('voice.disconnect')}
               onClick={() => void leaveVoiceChannel()}
             >
@@ -588,7 +722,7 @@ export function VoiceChannelPanel({
       )}
 
       {connectedToThisChannel && showVoiceSettings && (
-        <aside className="absolute bottom-24 left-1/2 w-[min(340px,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-white/10 bg-[#111216]/95 p-4 shadow-2xl backdrop-blur-xl">
+        <aside className="absolute bottom-24 left-1/2 z-30 w-[min(340px,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-white/10 bg-[#111216]/95 p-4 shadow-2xl backdrop-blur-xl">
           <div className="mb-3 text-sm font-black">{t('voice.settings')}</div>
           <div className="space-y-3">
             <label className="block">
@@ -600,7 +734,7 @@ export function VoiceChannelPanel({
                 onChange={(event) => void voice.setMicrophoneDevice(event.target.value)}
                 className="h-10 w-full rounded-lg border border-white/10 bg-black/35 px-3 text-sm font-bold text-white outline-none"
               >
-                <option value="">{t('voice.defaultDevice')}</option>
+                <option value="default">{t('voice.defaultDevice')}</option>
                 {voice.microphones.map((device) => (
                   <option key={device.deviceId} value={device.deviceId}>
                     {device.label || t('voice.unknownDevice')}
@@ -617,7 +751,7 @@ export function VoiceChannelPanel({
                 onChange={(event) => void voice.setSpeakerDevice(event.target.value)}
                 className="h-10 w-full rounded-lg border border-white/10 bg-black/35 px-3 text-sm font-bold text-white outline-none"
               >
-                <option value="">{t('voice.defaultDevice')}</option>
+                <option value="default">{t('voice.defaultDevice')}</option>
                 {voice.speakers.map((device) => (
                   <option key={device.deviceId} value={device.deviceId}>
                     {device.label || t('voice.unknownDevice')}

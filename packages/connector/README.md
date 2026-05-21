@@ -48,7 +48,7 @@ npx @shadowob/connector@latest update --target cc-connect --server-url https://s
   on `PATH`, the connector writes a `~/.local/bin/shadowob` shim; it installs
   the official Shadow skill files into common agent skill directories; and it
   writes a Buddy profile to `~/.shadowob/shadowob.config.json`.
-- OpenClaw JSON defaults to `~/.shadowob/openclaw.json` or `--openclaw-config`.
+- OpenClaw JSON defaults to `~/.openclaw/openclaw.json` or `--openclaw-config`.
 - Hermes updates `~/.hermes/.env` and merges `~/.hermes/config.yaml`.
 - cc-connect merges the ShadowOB platform into `~/.cc-connect/config.toml`.
 

@@ -75,14 +75,15 @@ export class ChannelService {
     return this.deps.channelDao.findByServerId(serverId)
   }
 
-  /** Get channels for a server, filtered to only those the user is a member of. */
-  async getByServerIdForUser(serverId: string, userId: string) {
+  /** Get channels for a server, filtered to only those the user can see. */
+  async getByServerIdForUser(serverId: string, actor: ActorInput) {
+    const userId = actorUserId(actor)
+    const serverMember = await this.deps.policyService.requireServerMember(actor, serverId)
     const allChannels = (await this.deps.channelDao.findByServerId(serverId)).filter(
       (ch) => !ch.name.startsWith('app:'),
     )
     if (allChannels.length === 0) return []
     try {
-      const serverMember = await this.deps.serverDao.getMember(serverId, userId)
       const canManage = serverMember?.role === 'owner' || serverMember?.role === 'admin'
       const channelIds = allChannels.map((ch) => ch.id)
       const memberChannelIds = await this.deps.channelMemberDao.getUserChannelIds(
@@ -219,7 +220,8 @@ export class ChannelService {
   }
 
   /** Get archived channels for a server */
-  async getArchivedChannels(serverId: string) {
+  async getArchivedChannels(serverId: string, actor: ActorInput) {
+    await this.deps.policyService.requireServerMember(actor, serverId)
     return this.deps.channelDao.findArchivedByServerId(serverId)
   }
 
