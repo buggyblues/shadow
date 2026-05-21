@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,7 +14,13 @@ function runConnector(args: string[], env: NodeJS.ProcessEnv = {}) {
   delete nextEnv.OPENCLAW_CONFIG_PATH
   Object.assign(nextEnv, env)
 
-  return spawnSync('pnpm', ['exec', 'tsx', 'src/cli.ts', ...args], {
+  const builtCli = join(packageDir, 'dist/cli.js')
+  const command = existsSync(builtCli) ? process.execPath : 'pnpm'
+  const commandArgs = existsSync(builtCli)
+    ? [builtCli, ...args]
+    : ['exec', 'tsx', 'src/cli.ts', ...args]
+
+  return spawnSync(command, commandArgs, {
     cwd: packageDir,
     env: nextEnv,
     encoding: 'utf8',

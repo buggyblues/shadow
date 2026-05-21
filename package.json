@@ -65,7 +65,7 @@
     "mobile:verify:ios": "pnpm -C apps/mobile verify:ios",
     "mobile:verify": "pnpm -C apps/mobile verify",
     "mobile:smoke:ios": "pnpm -C apps/mobile smoke:ios",
-    "build:packages": "pnpm --filter @shadowob/shared build && pnpm --filter @shadowob/sdk build && pnpm --parallel --filter @shadowob/oauth --filter @shadowob/openclaw-shadowob --filter @shadowob/cli --filter @shadowob/connector build",
+    "build:packages": "pnpm --filter @shadowob/shared build && pnpm --filter @shadowob/sdk build && pnpm --parallel --filter @shadowob/oauth --filter @shadowob/openclaw-shadowob --filter @shadowob/cli --filter @shadowob/connector build && pnpm --filter @shadowob/cloud build:cli",
     "build": "pnpm build:packages && pnpm -r build",
     "lint": "biome lint . --diagnostic-level=error",
     "lint:fix": "biome check --write . --diagnostic-level=error",
