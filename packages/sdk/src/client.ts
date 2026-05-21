@@ -152,6 +152,10 @@ export class ShadowClient {
     this.baseUrl = baseUrl.replace(/\/api\/?$/, '')
   }
 
+  serverAppEventStreamUrl(eventStreamPath: string): string {
+    return new URL(eventStreamPath, `${this.baseUrl}/`).toString()
+  }
+
   private isShadowPrivateMediaUrl(value: string): boolean {
     if (value.startsWith('/shadow/uploads/') || value.startsWith('/api/media/signed/')) {
       return true

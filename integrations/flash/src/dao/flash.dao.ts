@@ -1,7 +1,13 @@
 import type { FlashViewport } from '@shadowob/flash-types/server-app'
 import { and, asc, desc, eq, gt, inArray, sql } from 'drizzle-orm'
 import type { FlashDatabase } from '../db/client.js'
-import { flashArenas, flashBoards, flashCards, flashCommandEvents } from '../db/schema.js'
+import {
+  flashArenas,
+  flashBoards,
+  flashCards,
+  flashCommandEvents,
+  flashSelections,
+} from '../db/schema.js'
 
 function compact<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
@@ -187,6 +193,45 @@ export class FlashCommandEventDao {
 
   async create(data: typeof flashCommandEvents.$inferInsert) {
     const rows = await this.db.insert(flashCommandEvents).values(data).returning()
+    return rows[0]!
+  }
+}
+
+export class FlashSelectionDao {
+  constructor(private readonly db: FlashDatabase) {}
+
+  async listByBoard(boardId: string) {
+    return this.db
+      .select()
+      .from(flashSelections)
+      .where(eq(flashSelections.boardId, boardId))
+      .orderBy(desc(flashSelections.updatedAt))
+  }
+
+  async findByActor(boardId: string, actorId: string) {
+    const rows = await this.db
+      .select()
+      .from(flashSelections)
+      .where(and(eq(flashSelections.boardId, boardId), eq(flashSelections.actorId, actorId)))
+      .limit(1)
+    return rows[0] ?? null
+  }
+
+  async upsert(data: typeof flashSelections.$inferInsert) {
+    const rows = await this.db
+      .insert(flashSelections)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [flashSelections.boardId, flashSelections.actorId],
+        set: {
+          actor: data.actor,
+          selectedCardIds: data.selectedCardIds ?? [],
+          anchorCardId: data.anchorCardId,
+          revision: data.revision ?? 0,
+          updatedAt: sql`NOW()`,
+        },
+      })
+      .returning()
     return rows[0]!
   }
 }

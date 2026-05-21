@@ -338,6 +338,7 @@ function buildTemplateView(template: CloudTemplateRecord | null, userId: string)
     source: template.source,
     reviewStatus: template.reviewStatus,
     updatedAt: toIsoString(template.updatedAt),
+    githubSource: template.githubSource ?? null,
     ownedByUser,
     editable:
       ownedByUser &&
@@ -482,6 +483,24 @@ const deploymentRedeploySchema = z
   })
   .optional()
 
+const templateGithubSourceSchema = z
+  .object({
+    repository: z.string().min(1).max(512),
+    branch: z.string().min(1).max(255).optional(),
+    path: z.string().min(1).max(512).optional(),
+    installationId: z.string().min(1).max(255).optional(),
+    webhook: z
+      .object({
+        enabled: z.boolean().optional(),
+        autoUpdateTemplate: z.boolean().optional(),
+        autoDeploy: z.boolean().optional(),
+      })
+      .optional(),
+    protectedOverrides: z.array(z.string().min(1).max(255)).max(50).optional(),
+    lastCommitSha: z.string().min(7).max(64).optional(),
+  })
+  .optional()
+
 const deploymentTemplateSyncSchema = z
   .object({
     name: z.string().min(1).max(255).optional(),
@@ -490,6 +509,7 @@ const deploymentTemplateSyncSchema = z
     tags: z.array(z.string().max(64)).max(20).optional(),
     category: z.string().max(64).optional(),
     baseCost: z.number().int().min(0).optional(),
+    githubSource: templateGithubSourceSchema.nullable(),
   })
   .optional()
 
@@ -1388,6 +1408,11 @@ function statePvcNameForAgent(agentId: string): string {
 function expiresAtFromRetentionDays(retentionDays?: number): Date | null {
   if (!retentionDays) return null
   return new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000)
+}
+
+function expiresAtFromTtlMinutes(ttlMinutes?: number | null): Date | null {
+  if (!ttlMinutes) return null
+  return new Date(Date.now() + ttlMinutes * 60 * 1000)
 }
 
 async function resolveDeploymentKubeconfig(
@@ -2809,6 +2834,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         tags: z.array(z.string()).optional(),
         category: z.string().max(64).optional(),
         baseCost: z.number().int().min(0).optional(),
+        githubSource: templateGithubSourceSchema.nullable(),
       }),
     ),
     async (c) => {
@@ -2851,6 +2877,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         tags: z.array(z.string()).optional(),
         category: z.string().max(64).optional(),
         baseCost: z.number().int().min(0).optional(),
+        githubSource: templateGithubSourceSchema.nullable(),
       }),
     ),
     async (c) => {
@@ -3571,6 +3598,12 @@ export function createCloudSaasHandler(container: AppContainer) {
         agentCount: z.number().int().min(0).optional(),
         configSnapshot: z.record(z.unknown()),
         envVars: z.record(z.string()).optional(),
+        temporaryTtlMinutes: z
+          .number()
+          .int()
+          .min(5)
+          .max(7 * 24 * 60)
+          .optional(),
         runtimeContext: deploymentRuntimeContextSchema,
       }),
     ),
@@ -3651,6 +3684,7 @@ export function createCloudSaasHandler(container: AppContainer) {
 
       const hourlyCost = CLOUD_DEPLOYMENT_HOURLY_COST
       const monthlyCost = 0
+      const expiresAt = expiresAtFromTtlMinutes(input.temporaryTtlMinutes)
 
       // Get or use platform cluster, then reserve the namespace at the
       // deployment-instance level. A template can be deployed multiple times,
@@ -3697,6 +3731,7 @@ export function createCloudSaasHandler(container: AppContainer) {
             name: input.name,
             agentCount: input.agentCount,
             configSnapshot: storedConfigSnapshot,
+            expiresAt,
           })
 
           if (!deployment) {
@@ -3712,6 +3747,7 @@ export function createCloudSaasHandler(container: AppContainer) {
               resourceTier: input.resourceTier,
               monthlyCost,
               hourlyCost,
+              expiresAt,
               saasMode: true,
             })
             .where(eq(cloudDeployments.id, deployment.id))
@@ -3743,6 +3779,7 @@ export function createCloudSaasHandler(container: AppContainer) {
               resourceTier: input.resourceTier,
               monthlyCost,
               hourlyCost,
+              expiresAt: expiresAt?.toISOString() ?? null,
               billingPrecisionMinutes: CLOUD_DEPLOYMENT_BILLING_PRECISION_MINUTES,
             },
           })
@@ -3909,6 +3946,9 @@ export function createCloudSaasHandler(container: AppContainer) {
           ...(parsed.data?.tags !== undefined && { tags: parsed.data.tags }),
           ...(parsed.data?.category !== undefined && { category: parsed.data.category }),
           ...(parsed.data?.baseCost !== undefined && { baseCost: parsed.data.baseCost }),
+          ...(parsed.data?.githubSource !== undefined && {
+            githubSource: parsed.data.githubSource,
+          }),
           updatedAt: new Date(),
         })
         .where(eq(cloudTemplates.id, currentTemplate.id))
@@ -3941,6 +3981,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           authorId: user.userId,
           category: parsed.data?.category ?? currentTemplate?.category ?? null,
           baseCost: parsed.data?.baseCost ?? currentTemplate?.baseCost ?? null,
+          githubSource: parsed.data?.githubSource ?? currentTemplate?.githubSource ?? null,
         })
         .returning()
       template = created ?? null
@@ -4368,6 +4409,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         resourceTier: deployment.resourceTier,
         monthlyCost: deployment.monthlyCost,
         hourlyCost: deployment.hourlyCost,
+        expiresAt: deployment.expiresAt,
         saasMode: deployment.saasMode,
       })
       if (!next) {
@@ -4382,6 +4424,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           resourceTier: deployment.resourceTier,
           monthlyCost: deployment.monthlyCost,
           hourlyCost: deployment.hourlyCost,
+          expiresAt: deployment.expiresAt,
           saasMode: deployment.saasMode,
           updatedAt: new Date(),
         })

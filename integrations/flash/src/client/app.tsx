@@ -15,6 +15,7 @@ import {
   type FlashBoardSnapshot,
   type FlashCard,
   type FlashCommandEvent,
+  type FlashSelection,
   type FlashViewport,
 } from '@shadowob/flash-types/server-app'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -28,6 +29,7 @@ import {
   subscribeAppEvents,
   updateBoardViewport,
   updateCard,
+  updateSelection,
 } from './api.js'
 
 bootstrapCards()
@@ -112,27 +114,42 @@ function replaceById<T extends { id: string }>(items: T[], item: T) {
   return items.map((existing, current) => (current === index ? item : existing))
 }
 
-function applyFlashEvents(snapshot: FlashBoardSnapshot, events: FlashCommandEvent[]) {
+function replaceSelection(items: FlashSelection[], item: FlashSelection) {
+  const index = items.findIndex((existing) => existing.actorId === item.actorId)
+  if (index === -1) return [...items, item]
+  return items.map((existing, current) => (current === index ? item : existing))
+}
+
+function applyFlashEvents(
+  snapshot: FlashBoardSnapshot,
+  events: FlashCommandEvent[],
+  localMovingIds = new Set<string>(),
+) {
   let board = snapshot.board
   let cards = snapshot.cards
   let arenas = snapshot.arenas
+  let selections = snapshot.selections
   let cursor = snapshot.cursor
 
   for (const event of events) {
     cursor = Math.max(cursor, event.seq)
     for (const patch of event.patches) {
       if (patch.type === 'card.created' || patch.type === 'card.updated') {
-        cards = replaceById(cards, patch.card)
+        if (!localMovingIds.has(patch.card.id)) cards = replaceById(cards, patch.card)
       } else if (patch.type === 'card.deleted') {
         cards = cards.filter((card) => card.id !== patch.cardId)
       } else if (patch.type === 'cards.updated') {
-        for (const card of patch.cards) cards = replaceById(cards, card)
+        for (const card of patch.cards) {
+          if (!localMovingIds.has(card.id)) cards = replaceById(cards, card)
+        }
       } else if (patch.type === 'arena.created' || patch.type === 'arena.updated') {
         arenas = replaceById(arenas, patch.arena)
       } else if (patch.type === 'arena.deleted') {
         arenas = arenas.filter((arena) => arena.id !== patch.arenaId)
       } else if (patch.type === 'board.viewport.updated') {
         board = { ...board, viewport: patch.viewport, updatedAt: event.createdAt }
+      } else if (patch.type === 'selection.updated') {
+        selections = replaceSelection(selections, patch.selection)
       }
     }
   }
@@ -145,6 +162,7 @@ function applyFlashEvents(snapshot: FlashBoardSnapshot, events: FlashCommandEven
     board,
     cards,
     arenas,
+    selections,
     cursor,
     events: Array.from(eventLog.values())
       .sort((a, b) => b.seq - a.seq)
@@ -187,9 +205,14 @@ export function FlashApp() {
   const selectedIdsRef = useRef<Set<string>>(new Set())
   const dragCardIdRef = useRef<string | null>(null)
   const persistLayoutsRef = useRef<(cardIds: string[]) => void>(() => undefined)
+  const persistSelectionRef = useRef<(ids: Set<string>, anchorCardId?: string | null) => void>(
+    () => undefined,
+  )
   const persistViewportRef = useRef<(viewport: FlashViewport) => void>(() => undefined)
   const pendingViewportRef = useRef<{ boardId: string; viewport: FlashViewport } | null>(null)
   const viewportSaveTimerRef = useRef<number | null>(null)
+  const selectionSaveTimerRef = useRef<number | null>(null)
+  const selectionRevisionRef = useRef(0)
   const oauthPopupPollRef = useRef<number | null>(null)
   const runCardCommandRef = useRef<
     (command: CardCommand, options?: { optimistic?: boolean }) => void
@@ -218,7 +241,9 @@ export function FlashApp() {
     (events: FlashCommandEvent[]) => {
       const current = snapshotRef.current
       if (!current || events.length === 0) return
-      setSnapshot(applyFlashEvents(current, events))
+      const moving = new Set<string>()
+      if (dragCardIdRef.current) moving.add(dragCardIdRef.current)
+      setSnapshot(applyFlashEvents(current, events, moving))
     },
     [setSnapshot],
   )
@@ -286,6 +311,34 @@ export function FlashApp() {
     }
   }, [refreshOAuthSession])
 
+  const persistSelection = useCallback(
+    (ids: Set<string>, anchorCardId?: string | null) => {
+      const boardId = snapshotRef.current?.board.id
+      if (!boardId) return
+      if (selectionSaveTimerRef.current !== null) {
+        window.clearTimeout(selectionSaveTimerRef.current)
+      }
+      const selectedCardIds = Array.from(ids)
+      selectionRevisionRef.current += 1
+      const revision = selectionRevisionRef.current
+      selectionSaveTimerRef.current = window.setTimeout(async () => {
+        selectionSaveTimerRef.current = null
+        try {
+          const data = await updateSelection({
+            boardId,
+            selectedCardIds,
+            anchorCardId: anchorCardId ?? selectedCardIds[0] ?? null,
+            revision,
+          })
+          applyEvents(data.events)
+        } catch (err) {
+          setMessage(err instanceof Error ? err.message : 'Selection sync failed')
+        }
+      }, 120)
+    },
+    [applyEvents],
+  )
+
   const persistLayouts = useCallback(
     async (cardIds: string[]) => {
       const boardId = snapshotRef.current?.board.id
@@ -349,6 +402,9 @@ export function FlashApp() {
       if (viewportSaveTimerRef.current !== null) {
         window.clearTimeout(viewportSaveTimerRef.current)
       }
+      if (selectionSaveTimerRef.current !== null) {
+        window.clearTimeout(selectionSaveTimerRef.current)
+      }
     },
     [],
   )
@@ -369,6 +425,7 @@ export function FlashApp() {
   persistLayoutsRef.current = (ids) => {
     void persistLayouts(ids)
   }
+  persistSelectionRef.current = persistSelection
   persistViewportRef.current = persistViewport
   runCardCommandRef.current = runCardCommand
 
@@ -434,9 +491,11 @@ export function FlashApp() {
         const ids = new Set([cardId])
         selectedIdsRef.current = ids
         loop.updateSelectedCards(ids)
+        persistSelectionRef.current(ids, cardId)
       },
       onSelectionChange: (ids) => {
         selectedIdsRef.current = ids
+        persistSelectionRef.current(ids)
       },
       onDragChange: (cardId) => {
         if (cardId) {
@@ -515,6 +574,18 @@ export function FlashApp() {
   }, [cards, snapshot?.arenas, snapshot?.board.id, snapshot?.board.viewport])
 
   useEffect(() => {
+    const loop = loopRef.current
+    if (!loop || !snapshot) return
+    const ownSelection = snapshot.selections.find(
+      (selection) => selection.actorId === snapshot.actor.id,
+    )
+    if (!ownSelection) return
+    const ids = new Set(ownSelection.selectedCardIds)
+    selectedIdsRef.current = ids
+    loop.updateSelectedCards(ids)
+  }, [snapshot?.actor.id, snapshot?.selections])
+
+  useEffect(() => {
     const canvas = arenaCanvasRef.current
     if (!canvas) return
     let frame = 0
@@ -572,12 +643,14 @@ export function FlashApp() {
         }
         selectedIdsRef.current = new Set()
         loopRef.current?.updateSelectedCards(new Set())
+        persistSelectionRef.current(new Set())
         return
       }
 
       if (!isTyping && event.key === 'Escape') {
         selectedIdsRef.current = new Set()
         loopRef.current?.updateSelectedCards(new Set())
+        persistSelectionRef.current(new Set())
         return
       }
 
@@ -586,6 +659,7 @@ export function FlashApp() {
         const ids = new Set(cardsRef.current.map((card) => card.id))
         selectedIdsRef.current = ids
         loopRef.current?.updateSelectedCards(ids)
+        persistSelectionRef.current(ids)
       }
     }
     window.addEventListener('keydown', handler)

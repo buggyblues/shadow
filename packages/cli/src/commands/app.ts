@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
+import type { ShadowServerAppCommand, ShadowServerAppManifest } from '@shadowob/sdk'
 import { Command } from 'commander'
 import { getClient, resolveServerFlag } from '../utils/client.js'
 import { output, outputError, outputSuccess } from '../utils/output.js'
@@ -33,6 +34,151 @@ function parsePermissions(value: string) {
 function commandHandlerError(error: unknown, json?: boolean) {
   outputError(error instanceof Error ? error.message : String(error), { json })
   process.exit(1)
+}
+
+function prettyJson(value: unknown) {
+  return JSON.stringify(value, null, 2)
+}
+
+function commandSummary(command: ShadowServerAppCommand) {
+  return command.help?.summary ?? command.description ?? command.title ?? command.permission
+}
+
+function formatAppCommandHelp(input: {
+  appKey: string
+  serverId: string
+  manifest: ShadowServerAppManifest
+  commandName?: string
+}) {
+  const { appKey, serverId, manifest, commandName } = input
+  const command = commandName
+    ? manifest.commands.find((item) => item.name === commandName)
+    : undefined
+  if (commandName && !command) throw new Error(`App command not found: ${commandName}`)
+
+  if (!command) {
+    const lines = [
+      `${manifest.name} (${appKey})`,
+      manifest.description ?? '',
+      manifest.help?.overview ?? '',
+      '',
+      'Usage:',
+      `  shadowob app call ${appKey} <command> --server "${serverId}" --json-input '<input-json>' --json`,
+      `  shadowob app call ${appKey} <command> --server "${serverId}" --help`,
+      manifest.binary?.supported
+        ? `  shadowob app call ${appKey} <command> --server "${serverId}" --file ./asset.png --json-input '<input-json>' --json`
+        : '',
+      '',
+      'Commands:',
+      ...manifest.commands.map((item) => `  ${item.name.padEnd(24)} ${commandSummary(item)}`),
+      manifest.realtime
+        ? [
+            '',
+            'Realtime:',
+            `  shadowob app events ${appKey} --server "${serverId}" --json`,
+            manifest.realtime.subscribe?.help ?? '',
+            manifest.realtime.publish?.help ?? '',
+          ].join('\n')
+        : '',
+    ]
+    return lines.filter(Boolean).join('\n')
+  }
+
+  const help = command.help
+  const usage =
+    help?.usage ??
+    `shadowob app call ${appKey} ${command.name} --server "${serverId}" --json-input '<input-json>' --json`
+  const lines = [
+    `${manifest.name} ${command.name}`,
+    commandSummary(command),
+    '',
+    'Usage:',
+    `  ${usage}`,
+    command.binary?.supported || command.input === 'multipart'
+      ? `  shadowob app call ${appKey} ${command.name} --server "${serverId}" --file ./asset.png --json-input '<input-json>' --json`
+      : '',
+    help?.details ? ['', help.details].join('\n') : '',
+    help?.examples?.length
+      ? [
+          '',
+          'Examples:',
+          ...help.examples.flatMap((example) => {
+            const rendered = example.command
+              ? [`  ${example.command}`]
+              : example.input !== undefined
+                ? [`  ${prettyJson(example.input).replace(/\n/g, '\n  ')}`]
+                : []
+            return example.title ? [`  # ${example.title}`, ...rendered] : rendered
+          }),
+        ].join('\n')
+      : '',
+    command.inputSchema ? ['', 'Input schema:', prettyJson(command.inputSchema)].join('\n') : '',
+  ]
+  return lines.filter(Boolean).join('\n')
+}
+
+function parseSseEvents(chunk: string, carry: string) {
+  const frames = `${carry}${chunk}`.split(/\r?\n\r?\n/u)
+  return {
+    complete: frames.slice(0, -1),
+    carry: frames.at(-1) ?? '',
+  }
+}
+
+function decodeSseFrame(frame: string) {
+  let event = 'message'
+  const data: string[] = []
+  for (const line of frame.split(/\r?\n/u)) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    if (line.startsWith('data:')) data.push(line.slice(5).trimStart())
+  }
+  return { event, data: data.join('\n') }
+}
+
+async function streamServerAppEvents(input: {
+  url: string
+  event?: string
+  limit?: number
+  json?: boolean
+}) {
+  const response = await fetch(input.url, { headers: { Accept: 'text/event-stream' } })
+  if (!response.ok || !response.body) {
+    throw new Error(`Event stream failed (${response.status})`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let carry = ''
+  let count = 0
+  const stop = () => reader.cancel().catch(() => undefined)
+  process.once('SIGINT', stop)
+  try {
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      const parsed = parseSseEvents(decoder.decode(next.value, { stream: true }), carry)
+      carry = parsed.carry
+      for (const frame of parsed.complete) {
+        const decoded = decodeSseFrame(frame)
+        if (!decoded.data || (input.event && decoded.event !== input.event)) continue
+        let payload: unknown = decoded.data
+        try {
+          payload = JSON.parse(decoded.data)
+        } catch {
+          // Keep plain text event payloads readable.
+        }
+        if (input.json) console.log(JSON.stringify({ event: decoded.event, data: payload }))
+        else
+          console.log(
+            `[${decoded.event}] ${typeof payload === 'string' ? payload : prettyJson(payload)}`,
+          )
+        count += 1
+        if (input.limit && count >= input.limit) return
+      }
+    }
+  } finally {
+    process.off('SIGINT', stop)
+  }
 }
 
 export function createAppCommand(): Command {
@@ -315,11 +461,54 @@ export function createAppCommand(): Command {
     )
 
   app
+    .command('events')
+    .description('Subscribe to an installed server App event stream')
+    .argument('<app-key>', 'App key')
+    .requiredOption('--server <server>', 'Server ID or slug')
+    .option('--event <event>', 'Only print one event type')
+    .option('--limit <count>', 'Stop after this many matching events')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON lines')
+    .action(
+      async (
+        appKey: string,
+        options: {
+          server: string
+          event?: string
+          limit?: string
+          profile?: string
+          json?: boolean
+        },
+      ) => {
+        try {
+          const client = await getClient(options.profile)
+          const launch = await client.createServerAppLaunch(
+            resolveServerFlag(options.server),
+            appKey,
+          )
+          const limit = options.limit ? Number.parseInt(options.limit, 10) : undefined
+          if (limit !== undefined && (!Number.isFinite(limit) || limit < 1)) {
+            throw new Error('--limit must be a positive integer')
+          }
+          await streamServerAppEvents({
+            url: client.serverAppEventStreamUrl(launch.eventStreamPath),
+            event: options.event,
+            limit,
+            json: options.json,
+          })
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
     .command('call')
     .description('Call a server App command')
-    .argument('<app-key>', 'App key')
-    .argument('<command>', 'Command name')
-    .requiredOption('--server <server>', 'Server ID or slug')
+    .helpOption(false)
+    .argument('[app-key]', 'App key')
+    .argument('[command]', 'Command name')
+    .option('--server <server>', 'Server ID or slug')
     .option('--json-input <json>', 'JSON command input')
     .option('--input-file <path>', 'Read JSON command input from file')
     .option('--channel-id <id>', 'Current Shadow channel ID for approval prompts and app context')
@@ -328,12 +517,13 @@ export function createAppCommand(): Command {
     .option('--output <path>', 'Write binary dataBase64 response to this path')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
+    .option('-h, --help', 'Show app or command help from the installed manifest')
     .action(
       async (
-        appKey: string,
-        commandName: string,
+        appKey: string | undefined,
+        commandName: string | undefined,
         options: {
-          server: string
+          server?: string
           jsonInput?: string
           inputFile?: string
           channelId?: string
@@ -342,9 +532,36 @@ export function createAppCommand(): Command {
           output?: string
           profile?: string
           json?: boolean
+          help?: boolean
         },
       ) => {
         try {
+          if (options.help) {
+            if (!appKey) {
+              console.log(
+                [
+                  'Usage:',
+                  "  shadowob app call <app-key> <command> --server <server> --json-input '<input-json>' --json",
+                  '  shadowob app call <app-key> <command> --server <server> --help',
+                ].join('\n'),
+              )
+              return
+            }
+            const client = await getClient(options.profile)
+            const server = resolveServerFlag(options.server)
+            const app = await client.getServerApp(server, appKey)
+            console.log(
+              formatAppCommandHelp({
+                appKey,
+                serverId: app.serverId,
+                manifest: app.manifest,
+                commandName,
+              }),
+            )
+            return
+          }
+          if (!appKey) throw new Error('Missing app key')
+          if (!commandName) throw new Error('Missing command name')
           const client = await getClient(options.profile)
           const input = options.inputFile
             ? await readJsonFile(options.inputFile)

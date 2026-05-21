@@ -23,6 +23,7 @@ import {
   shadowPlatformOptions,
   WORKSPACE_DIR,
 } from './package-common.js'
+import { appendTemplateRoutineFiles } from './routines.js'
 
 export type CcConnectAgentType = 'claudecode' | 'codex' | 'opencode' | 'gemini'
 
@@ -37,6 +38,7 @@ function buildCcConnectConfig(options: {
   agent: AgentDeployment
   agentType: CcConnectAgentType
   shadows: ShadowRuntimeBinding[]
+  routineDeliveries?: RuntimePackageBuildContext['runtimeExtensions']['routineDeliveries']
   agentOptions?: TomlTable
 }): string {
   const { agent, agentType } = options
@@ -47,6 +49,15 @@ function buildCcConnectConfig(options: {
   const effort = reasoningEffort(agent)
   if (model) baseAgentOptions.model = model
   if (effort) baseAgentOptions.reasoning_effort = effort
+
+  const routineChannelEnvKeys = [
+    ...new Set(
+      (options.routineDeliveries ?? [])
+        .filter((delivery) => delivery.pluginId === 'shadowob' && delivery.kind === 'channel')
+        .map((delivery) => delivery.target.channelEnvKey)
+        .filter((key): key is string => typeof key === 'string' && key.trim().length > 0),
+    ),
+  ]
 
   const root: TomlTable = {
     data_dir: `${HOME_DIR}/.cc-connect`,
@@ -65,7 +76,7 @@ function buildCcConnectConfig(options: {
         },
         platforms: options.shadows.map((shadow) => ({
           type: 'shadowob',
-          options: shadowPlatformOptions(shadow),
+          options: shadowPlatformOptions(shadow, { channelEnvKeys: routineChannelEnvKeys }),
         })),
       },
     ],
@@ -76,6 +87,7 @@ function buildCcConnectConfig(options: {
 
 function buildCcConnectRuntimeFiles(options: {
   agent: AgentDeployment
+  config: RuntimePackageBuildContext['config']
   ccConnectConfig: string
   runtimeExtensions: RuntimePackageBuildContext['runtimeExtensions']
   nativeFiles?: RuntimeFiles
@@ -90,6 +102,7 @@ function buildCcConnectRuntimeFiles(options: {
   }
   addShadowobSkill(files, 'cc-connect', agent.runtime)
   addShadowobCliAuth(files, options.runtimeExtensions)
+  appendTemplateRoutineFiles(files, options.config, agent, 'cc-connect', options.runtimeExtensions)
   return files
 }
 
@@ -103,10 +116,12 @@ export function buildCcConnectPackage(
     agent: context.agent,
     agentType: options.agentType,
     shadows,
+    routineDeliveries: nativeRuntimeExtensions.routineDeliveries,
     agentOptions: options.agentOptions?.(context.agent),
   })
   const files = buildCcConnectRuntimeFiles({
     agent: context.agent,
+    config: context.config,
     ccConnectConfig,
     runtimeExtensions: context.runtimeExtensions,
     nativeFiles: options.nativeFiles?.(context),

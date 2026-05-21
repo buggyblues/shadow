@@ -18,6 +18,7 @@ export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'
 export { channelKindEnum, channels, channelTypeEnum } from './channels'
 export {
+  type CloudTemplateGithubSource,
   cloudActivities,
   cloudActivityTypeEnum,
   cloudAgentUsageSnapshots,

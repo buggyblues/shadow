@@ -78,7 +78,8 @@ export interface ShadowServerAppCommandRequestInput {
   serverIdHeader?: string | null
   appKeyHeader?: string | null
   expectedCommand: string
-  requestBody: string
+  requestBody?: string
+  requestInput?: unknown
   shadowBaseUrl?: string
   fetchImpl?: ShadowServerAppFetch
 }
@@ -87,7 +88,8 @@ export interface ShadowServerAppCommandRuntimeRequest {
   authorizationHeader?: string | null
   serverIdHeader?: string | null
   appKeyHeader?: string | null
-  requestBody: string
+  requestBody?: string
+  requestInput?: unknown
 }
 
 export interface ShadowServerAppRuntimeOptions {
@@ -426,17 +428,23 @@ export async function parseShadowServerAppCommandRequest<T = unknown>(
     return { ok: false, status: 403, error: 'wrong_command' }
   }
 
-  let body: { input?: T }
-  try {
-    body = JSON.parse(input.requestBody) as { input?: T }
-  } catch {
-    return { ok: false, status: 400, error: 'invalid_json' }
+  let commandInput: T
+  if (input.requestInput !== undefined) {
+    commandInput = input.requestInput as T
+  } else {
+    let body: { input?: T }
+    try {
+      body = JSON.parse(input.requestBody ?? '{}') as { input?: T }
+    } catch {
+      return { ok: false, status: 400, error: 'invalid_json' }
+    }
+    commandInput = (body.input ?? {}) as T
   }
 
   return {
     ok: true,
     envelope: {
-      input: (body.input ?? {}) as T,
+      input: commandInput,
       context: context as ShadowServerAppCommandContext,
     },
   }

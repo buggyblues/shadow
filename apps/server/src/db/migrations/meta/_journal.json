@@ -554,6 +554,20 @@
       "when": 1780232400001,
       "tag": "0078_ensure_cloud_template_review_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1780318800000,
+      "tag": "0079_cloud_deployment_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1780318800001,
+      "tag": "0080_cloud_template_github_source",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { basename, extname, join } from 'node:path'
 import type { CardMeta } from '@shadowob/flash-types'
 import type {
   FlashActorRef,
@@ -12,11 +14,15 @@ import type {
   FlashCommandName,
   FlashMutationResult,
   FlashPatchEvent,
+  FlashSelection,
+  FlashUploadedAsset,
+  FlashUploadInput,
   FlashViewport,
 } from '@shadowob/flash-types/server-app'
 import {
   type ArenasActivateInput,
   type ArenasCreateInput,
+  type AssetsUploadInput,
   type BoardEventsInput,
   type BoardGetInput,
   type BoardViewportUpdateInput,
@@ -26,6 +32,8 @@ import {
   type CardsGetInput,
   type CardsUpdateInput,
   type RoomsAttachInput,
+  type SelectionGetInput,
+  type SelectionUpdateInput,
 } from '@shadowob/flash-types/server-app'
 import type { ShadowServerAppActorRef, ShadowServerAppCommandContext } from '@shadowob/sdk'
 import {
@@ -33,14 +41,22 @@ import {
   FlashBoardDao,
   FlashCardDao,
   FlashCommandEventDao,
+  FlashSelectionDao,
 } from '../dao/flash.dao.js'
-import type { flashArenas, flashBoards, flashCards, flashCommandEvents } from '../db/schema.js'
+import type {
+  flashArenas,
+  flashBoards,
+  flashCards,
+  flashCommandEvents,
+  flashSelections,
+} from '../db/schema.js'
 import type { FlashRealtimeService } from './realtime.service.js'
 
 type BoardRow = typeof flashBoards.$inferSelect
 type CardRow = typeof flashCards.$inferSelect
 type ArenaRow = typeof flashArenas.$inferSelect
 type EventRow = typeof flashCommandEvents.$inferSelect
+type SelectionRow = typeof flashSelections.$inferSelect
 
 interface CommandDispatch {
   result: unknown
@@ -58,6 +74,24 @@ function nowMs(date: Date) {
 
 function id(prefix: string) {
   return `${prefix}_${randomUUID()}`
+}
+
+function uploadDir() {
+  return process.env.FLASH_UPLOAD_DIR ?? join(process.cwd(), 'data', 'uploads')
+}
+
+function uploadPublicPath(filename: string) {
+  return `/uploads/${filename}`
+}
+
+function safeUploadExtension(filename: string, contentType: string) {
+  const ext = extname(filename).toLowerCase()
+  if (/^\.[a-z0-9]{1,12}$/u.test(ext)) return ext
+  if (contentType === 'image/png') return '.png'
+  if (contentType === 'image/jpeg') return '.jpg'
+  if (contentType === 'image/webp') return '.webp'
+  if (contentType === 'image/gif') return '.gif'
+  return '.bin'
 }
 
 function asError(status: number, message: string) {
@@ -81,6 +115,10 @@ function actorRef(scope: FlashCommandScope): FlashActorRef {
 
 function actorResourceOwner(scope: FlashCommandScope) {
   return scope.context.actor.ownerId ?? scope.context.actor.userId ?? scope.actor.userId ?? 'local'
+}
+
+function selectionActorId(scope: FlashCommandScope) {
+  return scope.actor.id
 }
 
 function boardOwnerTitle(scope: FlashCommandScope) {
@@ -167,6 +205,18 @@ function mapEvent(row: EventRow): FlashCommandEvent {
   }
 }
 
+function mapSelection(row: SelectionRow): FlashSelection {
+  return {
+    boardId: row.boardId,
+    actorId: row.actorId,
+    actor: row.actor ?? null,
+    selectedCardIds: row.selectedCardIds ?? [],
+    anchorCardId: row.anchorCardId ?? null,
+    revision: row.revision,
+    updatedAt: nowMs(row.updatedAt),
+  }
+}
+
 function nearby(cards: CardRow[], target: CardRow, radius: number) {
   return cards
     .filter((card) => card.id !== target.id)
@@ -187,6 +237,12 @@ function updatedCardPatch(card: CardRow | null): FlashPatchEvent[] {
   return card ? [{ type: 'card.updated', card: mapCard(card) }] : []
 }
 
+function commandInputForEvent(input: unknown) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input
+  const { upload: _upload, ...rest } = input as Record<string, unknown>
+  return rest
+}
+
 export class FlashService {
   constructor(
     private readonly deps: {
@@ -194,6 +250,7 @@ export class FlashService {
       cards: FlashCardDao
       arenas: FlashArenaDao
       events: FlashCommandEventDao
+      selections: FlashSelectionDao
       realtime: FlashRealtimeService
     },
   ) {}
@@ -208,6 +265,50 @@ export class FlashService {
     const rows = await this.deps.events.listAfter(board.id, input.after ?? 0, input.limit ?? 200)
     const events = rows.map(mapEvent)
     return { events, cursor: this.cursorFromEvents(events, input.after ?? 0) }
+  }
+
+  private async storeUpload(upload: FlashUploadInput): Promise<FlashUploadedAsset> {
+    if (!upload.contentType.startsWith('image/')) throw asError(415, 'unsupported_upload_type')
+    const bytes = Buffer.from(upload.dataBase64, 'base64')
+    if (bytes.byteLength !== upload.size) throw asError(400, 'upload_size_mismatch')
+    const filename = `${id('asset')}${safeUploadExtension(upload.filename, upload.contentType)}`
+    await mkdir(uploadDir(), { recursive: true })
+    await writeFile(join(uploadDir(), filename), bytes)
+    return {
+      url: uploadPublicPath(filename),
+      path: uploadPublicPath(filename),
+      filename: basename(upload.filename),
+      contentType: upload.contentType,
+      size: bytes.byteLength,
+    }
+  }
+
+  private async applyUploadToCardInput<T extends CardsCreateInput | CardsUpdateInput>(
+    input: T,
+  ): Promise<T & { storedAsset?: FlashUploadedAsset }> {
+    if (!input.upload) return input
+    const asset = await this.storeUpload(input.upload)
+    const meta = {
+      ...(input.meta ?? {}),
+      image: {
+        ...((input.meta?.image as Record<string, unknown> | undefined) ?? {}),
+        src: asset.url,
+      },
+      upload: {
+        filename: asset.filename,
+        contentType: asset.contentType,
+        size: asset.size,
+      },
+    }
+    return {
+      ...input,
+      kind: input.kind ?? 'image',
+      thumbnail: input.thumbnail ?? asset.url,
+      filePath: input.filePath ?? asset.path,
+      fileMime: input.fileMime ?? asset.contentType,
+      meta,
+      storedAsset: asset,
+    }
   }
 
   async updateBoardViewport(input: BoardViewportUpdateInput, scope: FlashCommandScope) {
@@ -233,64 +334,79 @@ export class FlashService {
 
   async createCard(input: CardsCreateInput, scope: FlashCommandScope) {
     const board = await this.resolveBoard(input.boardId, scope)
+    const normalized = await this.applyUploadToCardInput(input)
     const card = await this.createCardRow(board, scope, {
-      title: input.title,
-      kind: (input.kind ?? 'inspiration') as FlashCardKind,
-      summary: input.summary,
-      content: input.content,
-      tags: input.tags ?? [],
-      x: input.x ?? 260,
-      y: input.y ?? 240,
-      angle: input.angle ?? 0,
-      thumbnail: input.thumbnail,
-      sourceId: input.sourceId ?? null,
-      linkedCardIds: input.linkedCardIds ?? [],
-      meta: input.meta,
-      priority: input.priority ?? 'medium',
-      autoGenerated: input.autoGenerated ?? false,
-      rating: input.rating ?? 0,
-      filePath: input.filePath,
-      fileMime: input.fileMime,
-      deckIds: input.deckIds ?? [],
-      flipped: input.flipped ?? false,
-      hidden: input.hidden ?? false,
-      locked: input.locked ?? false,
+      title: normalized.title,
+      kind: (normalized.kind ?? 'inspiration') as FlashCardKind,
+      summary: normalized.summary,
+      content: normalized.content,
+      tags: normalized.tags ?? [],
+      x: normalized.x ?? 260,
+      y: normalized.y ?? 240,
+      angle: normalized.angle ?? 0,
+      thumbnail: normalized.thumbnail,
+      sourceId: normalized.sourceId ?? null,
+      linkedCardIds: normalized.linkedCardIds ?? [],
+      meta: normalized.meta,
+      priority: normalized.priority ?? 'medium',
+      autoGenerated: normalized.autoGenerated ?? false,
+      rating: normalized.rating ?? 0,
+      filePath: normalized.filePath,
+      fileMime: normalized.fileMime,
+      deckIds: normalized.deckIds ?? [],
+      flipped: normalized.flipped ?? false,
+      hidden: normalized.hidden ?? false,
+      locked: normalized.locked ?? false,
     })
     const mapped = mapCard(card)
-    return this.recordMutation(board, scope, 'cards.create', card.id, input, { card: mapped }, [
-      { type: 'card.created', card: mapped },
-    ])
+    return this.recordMutation(
+      board,
+      scope,
+      'cards.create',
+      card.id,
+      commandInputForEvent(input),
+      { card: mapped, asset: normalized.storedAsset ?? null },
+      [{ type: 'card.created', card: mapped }],
+    )
   }
 
   async updateCard(input: CardsUpdateInput, scope: FlashCommandScope) {
     const board = await this.resolveBoard(input.boardId, scope)
+    const normalized = await this.applyUploadToCardInput(input)
     const card = await this.deps.cards.update(board.id, input.cardId, {
-      title: input.title,
-      summary: input.summary,
-      content: input.content,
-      thumbnail: input.thumbnail,
-      sourceId: input.sourceId,
-      linkedCardIds: input.linkedCardIds,
-      meta: input.meta,
-      tags: input.tags,
-      priority: input.priority,
-      autoGenerated: input.autoGenerated,
-      rating: input.rating,
-      filePath: input.filePath,
-      fileMime: input.fileMime,
-      deckIds: input.deckIds,
-      x: input.x,
-      y: input.y,
-      angle: input.angle,
-      flipped: input.flipped,
-      hidden: input.hidden,
-      locked: input.locked,
+      title: normalized.title,
+      kind: normalized.kind,
+      summary: normalized.summary,
+      content: normalized.content,
+      thumbnail: normalized.thumbnail,
+      sourceId: normalized.sourceId,
+      linkedCardIds: normalized.linkedCardIds,
+      meta: normalized.meta,
+      tags: normalized.tags,
+      priority: normalized.priority,
+      autoGenerated: normalized.autoGenerated,
+      rating: normalized.rating,
+      filePath: normalized.filePath,
+      fileMime: normalized.fileMime,
+      deckIds: normalized.deckIds,
+      x: normalized.x,
+      y: normalized.y,
+      angle: normalized.angle,
+      flipped: normalized.flipped,
+      hidden: normalized.hidden,
+      locked: normalized.locked,
     })
     if (!card) throw asError(404, 'card_not_found')
     const mapped = mapCard(card)
-    return this.recordMutation(board, scope, 'cards.update', card.id, input, { card: mapped }, [
-      { type: 'card.updated', card: mapped },
-    ])
+    return this.recordMutation(
+      board,
+      scope,
+      'cards.update',
+      card.id,
+      commandInputForEvent(input),
+      { card: mapped, asset: normalized.storedAsset ?? null },
+      [{ type: 'card.updated', card: mapped }],
+    )
   }
 
   async deleteCard(input: CardsDeleteInput, scope: FlashCommandScope) {
@@ -301,6 +417,57 @@ export class FlashService {
     return this.recordMutation(board, scope, 'cards.delete', card.id, input, { deleted: mapped }, [
       { type: 'card.deleted', cardId: card.id },
     ])
+  }
+
+  async uploadAsset(input: AssetsUploadInput, scope: FlashCommandScope) {
+    const board = await this.resolveBoard(input.boardId, scope)
+    const asset = await this.storeUpload(input.upload)
+    return this.recordMutation(
+      board,
+      scope,
+      'assets.upload',
+      null,
+      { upload: { filename: input.upload.filename, contentType: input.upload.contentType } },
+      { asset },
+      [],
+    )
+  }
+
+  async getSelection(input: SelectionGetInput, scope: FlashCommandScope) {
+    const board = await this.resolveBoard(input.boardId, scope)
+    const rows = input.actorId
+      ? [await this.deps.selections.findByActor(board.id, input.actorId)].filter(Boolean)
+      : await this.deps.selections.listByBoard(board.id)
+    return { selections: rows.map((row) => mapSelection(row!)) }
+  }
+
+  async updateSelection(input: SelectionUpdateInput, scope: FlashCommandScope) {
+    const board = await this.resolveBoard(input.boardId, scope)
+    const existingCardIds = new Set(
+      (await this.deps.cards.listByBoard(board.id)).map((card) => card.id),
+    )
+    const selectedCardIds = input.selectedCardIds.filter((cardId) => existingCardIds.has(cardId))
+    const selection = await this.deps.selections.upsert({
+      boardId: board.id,
+      actorId: selectionActorId(scope),
+      actor: actorRef(scope),
+      selectedCardIds,
+      anchorCardId:
+        input.anchorCardId && selectedCardIds.includes(input.anchorCardId)
+          ? input.anchorCardId
+          : null,
+      revision: input.revision ?? Date.now(),
+    })
+    const mapped = mapSelection(selection)
+    return this.recordMutation(
+      board,
+      scope,
+      'selection.update',
+      mapped.anchorCardId,
+      input,
+      { selection: mapped },
+      [{ type: 'selection.updated', selection: mapped }],
+    )
   }
 
   async attachRoom(input: RoomsAttachInput, scope: FlashCommandScope) {
@@ -457,18 +624,21 @@ export class FlashService {
   }
 
   private async snapshot(board: BoardRow, scope: FlashCommandScope): Promise<FlashBoardSnapshot> {
-    const [cards, arenas, events] = await Promise.all([
+    const [cards, arenas, selections, events] = await Promise.all([
       this.deps.cards.listByBoard(board.id),
       this.deps.arenas.listByBoard(board.id),
+      this.deps.selections.listByBoard(board.id),
       this.deps.events.listByBoard(board.id),
     ])
+    const mappedEvents = events.map(mapEvent)
     return {
       actor: actorRef(scope),
       board: mapBoard(board),
       cards: cards.map(mapCard),
       arenas: arenas.map(mapArena),
-      events: events.map(mapEvent),
-      cursor: this.cursorFromEvents(events.map(mapEvent), 0),
+      selections: selections.map(mapSelection),
+      events: mappedEvents,
+      cursor: this.cursorFromEvents(mappedEvents, 0),
     }
   }
 
@@ -506,6 +676,15 @@ export class FlashService {
         cursor: event.seq,
       },
     })
+    for (const patch of patches) {
+      if (patch.type !== 'selection.updated') continue
+      await this.deps.realtime.publish({
+        type: 'flash.selection.updated',
+        boardId: board.id,
+        at: Date.now(),
+        payload: patch.selection,
+      })
+    }
     return {
       result,
       events: [event],
@@ -527,11 +706,13 @@ export class FlashService {
         success: true,
         data: {
           commands: [
-            '/add title=Idea kind=inspiration',
+            '/add title=Idea kind=image',
             '/scan <card> radius=360',
             '/arena magic-circle x=520 y=360',
             '/move-to <card> <arenaId>',
             '/activate <arenaId>',
+            'shadowob app call shadow-flash cards.create --file ./image.png',
+            'shadowob app call shadow-flash selection.get',
           ],
         },
       })

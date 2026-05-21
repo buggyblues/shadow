@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, ne, not } from 'drizzle-orm'
 import type { Database } from '../db'
-import { cloudTemplates } from '../db/schema'
+import { type CloudTemplateGithubSource, cloudTemplates } from '../db/schema'
 
 export class CloudTemplateDao {
   constructor(private deps: { db: Database }) {}
@@ -136,6 +136,7 @@ export class CloudTemplateDao {
     authorId: string
     category?: string | null
     baseCost?: number | null
+    githubSource?: CloudTemplateGithubSource | null
   }) {
     const result = await this.db
       .insert(cloudTemplates)
@@ -151,6 +152,7 @@ export class CloudTemplateDao {
         authorId: data.authorId,
         category: data.category ?? null,
         baseCost: data.baseCost ?? null,
+        githubSource: data.githubSource ?? null,
       })
       .returning()
     return result[0] ?? null
@@ -165,6 +167,7 @@ export class CloudTemplateDao {
       tags?: string[]
       category?: string | null
       baseCost?: number | null
+      githubSource?: CloudTemplateGithubSource | null
     },
   ) {
     const result = await this.db
@@ -176,6 +179,7 @@ export class CloudTemplateDao {
         ...(data.tags !== undefined && { tags: data.tags }),
         ...(data.category !== undefined && { category: data.category }),
         ...(data.baseCost !== undefined && { baseCost: data.baseCost }),
+        ...(data.githubSource !== undefined && { githubSource: data.githubSource }),
         updatedAt: new Date(),
       })
       .where(eq(cloudTemplates.slug, slug))

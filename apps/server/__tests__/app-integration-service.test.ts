@@ -433,7 +433,7 @@ describe('AppIntegrationService', () => {
     })
   })
 
-  it('emits raw json-input guidance and command schemas for app skills', async () => {
+  it('emits raw json-input guidance and progressive help for app skills', async () => {
     const { service } = createService()
 
     const result = await service.skills('srv-1', 'demo-desk', {
@@ -445,9 +445,10 @@ describe('AppIntegrationService', () => {
 
     expect(result.markdown).toContain('raw command input object')
     expect(result.markdown).toContain('The CLI wraps the HTTP request for you')
+    expect(result.markdown).toContain('--help')
     expect(result.markdown).toContain('Do not call this App through curl')
     expect(result.markdown).toContain('demo-desk tickets.create')
-    expect(result.markdown).toContain('"required":["title"]')
+    expect(result.markdown).not.toContain('"required":["title"]')
   })
 
   it('creates a scoped launch token for iframe event streams', async () => {

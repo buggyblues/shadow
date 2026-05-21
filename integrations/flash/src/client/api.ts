@@ -11,6 +11,8 @@ import type {
   FlashMutationResult,
   FlashRealtimeEvent,
   RoomsAttachInput,
+  SelectionGetInput,
+  SelectionUpdateInput,
 } from '@shadowob/flash-types/server-app'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
@@ -152,6 +154,14 @@ export function executeCardCommand(input: CardsCommandInput) {
   return command<FlashMutationResult>('cards.command', input)
 }
 
+export function getSelection(input: SelectionGetInput) {
+  return command<{ selections: unknown[] }>('selection.get', input)
+}
+
+export function updateSelection(input: SelectionUpdateInput) {
+  return command<FlashMutationResult>('selection.update', input)
+}
+
 export function createArena(input: ArenasCreateInput) {
   return command<FlashMutationResult>('arenas.create', input)
 }
@@ -171,6 +181,9 @@ export function subscribeBoard(boardId: string, onEvent: (event: FlashRealtimeEv
     onEvent(JSON.parse((event as MessageEvent).data) as FlashRealtimeEvent)
   })
   source.addEventListener('flash.command.executed', (event) => {
+    onEvent(JSON.parse((event as MessageEvent).data) as FlashRealtimeEvent)
+  })
+  source.addEventListener('flash.selection.updated', (event) => {
     onEvent(JSON.parse((event as MessageEvent).data) as FlashRealtimeEvent)
   })
   return () => source.close()

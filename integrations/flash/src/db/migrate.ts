@@ -109,4 +109,20 @@ export async function migrate(db: FlashDatabase) {
   await db.execute(
     sql`CREATE INDEX IF NOT EXISTS flash_command_events_board_seq_idx ON flash_command_events (board_id, seq);`,
   )
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS flash_selections (
+      board_id text NOT NULL REFERENCES flash_boards(id) ON DELETE CASCADE,
+      actor_id text NOT NULL,
+      actor jsonb,
+      selected_card_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+      anchor_card_id text,
+      revision integer NOT NULL DEFAULT 0,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (board_id, actor_id)
+    );
+  `)
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS flash_selections_board_idx ON flash_selections (board_id);`,
+  )
 }

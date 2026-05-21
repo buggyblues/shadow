@@ -6,6 +6,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   chmodSync,
   cpSync,
@@ -24,6 +25,11 @@ const CONFIG_MOUNT = process.env.SHADOW_RUNNER_CONFIG_MOUNT ?? '/etc/openclaw'
 const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
 const RUNNER_HOME = process.env.HOME ?? '/home/shadow'
+const HERMES_HOME = process.env.HERMES_HOME ?? join(RUNNER_HOME, '.hermes')
+const TEMPLATE_ROUTINES_PATH =
+  process.env.SHADOW_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
+const HERMES_CRON_STORE_PATH =
+  process.env.HERMES_CRON_STORE_PATH ?? join(HERMES_HOME, 'cron', 'jobs.json')
 const HEALTH_PORT = Number.parseInt(
   process.env.SHADOW_RUNNER_HEALTH_PORT ?? process.env.OPENCLAW_GATEWAY_PORT ?? '3100',
   10,
@@ -74,6 +80,267 @@ function assertAllowedPath(path) {
 function modeForPath(path) {
   if (path.endsWith('/.env') || path.endsWith('.yaml') || path.endsWith('.json')) return 0o600
   return 0o644
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (!isPlainObject(value)) return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, stableValue(item)]),
+  )
+}
+
+function stableHash(value) {
+  return createHash('sha256')
+    .update(JSON.stringify(stableValue(value)))
+    .digest('hex')
+}
+
+function readJsonFile(path, fallback) {
+  if (!existsSync(path)) return fallback
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'))
+    return parsed && typeof parsed === 'object' ? parsed : fallback
+  } catch (err) {
+    console.warn(`[entrypoint] Failed to parse ${path}: ${err.message}`)
+    return fallback
+  }
+}
+
+function parseRoutineEveryMinutes(interval) {
+  if (typeof interval !== 'string') return null
+  const match = interval.trim().match(/^(\d+)\s*(m|h|d)$/i)
+  if (!match) return null
+  const amount = Number.parseInt(match[1], 10)
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const unit = match[2].toLowerCase()
+  return amount * (unit === 'm' ? 1 : unit === 'h' ? 60 : 1440)
+}
+
+function isoNow() {
+  return new Date().toISOString()
+}
+
+function addMinutesIso(minutes) {
+  return new Date(Date.now() + minutes * 60_000).toISOString()
+}
+
+function buildHermesRoutineSchedule(routine) {
+  const schedule = isPlainObject(routine.schedule) ? routine.schedule : {}
+  if (typeof schedule.cron === 'string' && schedule.cron.trim()) {
+    const expr = schedule.cron.trim()
+    return {
+      schedule: { kind: 'cron', expr, display: expr },
+      scheduleDisplay: expr,
+      nextRunAt: null,
+    }
+  }
+  const minutes = parseRoutineEveryMinutes(schedule.interval)
+  if (minutes) {
+    const display = `every ${minutes}m`
+    return {
+      schedule: { kind: 'interval', minutes, display },
+      scheduleDisplay: display,
+      nextRunAt: addMinutesIso(minutes),
+    }
+  }
+  return null
+}
+
+function resolveShadowobRoutineDelivery(routine) {
+  const deliveries = Array.isArray(routine.deliveries) ? routine.deliveries : []
+  for (const delivery of deliveries) {
+    if (
+      !isPlainObject(delivery) ||
+      delivery.pluginId !== 'shadowob' ||
+      delivery.kind !== 'channel'
+    ) {
+      continue
+    }
+    const target = isPlainObject(delivery.target) ? delivery.target : {}
+    const channelEnvKey =
+      typeof target.channelEnvKey === 'string' && target.channelEnvKey.trim()
+        ? target.channelEnvKey.trim()
+        : null
+    const channelId =
+      (channelEnvKey ? process.env[channelEnvKey] : undefined) ??
+      (typeof target.channelId === 'string' ? target.channelId : undefined)
+    if (!channelId) continue
+    return {
+      channelId,
+      threadId:
+        typeof target.threadId === 'string' && target.threadId.trim()
+          ? target.threadId.trim()
+          : null,
+    }
+  }
+  return null
+}
+
+function managedRoutineJobId(routine) {
+  const raw = `shadow-template-${routine.agentId ?? 'agent'}-${routine.id ?? 'routine'}`
+    .toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  if (raw.length >= 8 && raw.length <= 64) return raw
+  return `shadow-template-${stableHash({ agentId: routine.agentId, id: routine.id }).slice(0, 20)}`
+}
+
+function hermesManagedJobShape(job) {
+  return {
+    id: job.id,
+    name: job.name,
+    prompt: job.prompt,
+    skills: job.skills,
+    skill: job.skill,
+    model: job.model,
+    provider: job.provider,
+    base_url: job.base_url,
+    script: job.script,
+    no_agent: job.no_agent,
+    context_from: job.context_from,
+    schedule: job.schedule,
+    schedule_display: job.schedule_display,
+    repeat: job.repeat,
+    enabled: job.enabled,
+    state: job.state,
+    deliver: job.deliver,
+    origin: job.origin,
+    enabled_toolsets: job.enabled_toolsets,
+    workdir: job.workdir,
+    profile: job.profile,
+  }
+}
+
+function buildHermesRoutineJob(routine, now) {
+  if (
+    !isPlainObject(routine) ||
+    typeof routine.id !== 'string' ||
+    typeof routine.agentId !== 'string'
+  ) {
+    return null
+  }
+  const schedule = buildHermesRoutineSchedule(routine)
+  const delivery = resolveShadowobRoutineDelivery(routine)
+  if (!schedule || !delivery) return null
+
+  const origin = {
+    platform: 'shadowob',
+    chat_id: delivery.channelId,
+    ...(delivery.threadId ? { thread_id: delivery.threadId } : {}),
+  }
+  const job = {
+    id: managedRoutineJobId(routine),
+    name:
+      typeof routine.title === 'string' && routine.title.trim() ? routine.title.trim() : routine.id,
+    prompt: String(routine.prompt ?? ''),
+    skills: [],
+    skill: null,
+    model: null,
+    provider: null,
+    base_url: null,
+    script: null,
+    no_agent: false,
+    context_from: null,
+    schedule: schedule.schedule,
+    schedule_display: schedule.scheduleDisplay,
+    repeat: { times: null, completed: 0 },
+    enabled: routine.enabled !== false,
+    state: routine.enabled === false ? 'paused' : 'scheduled',
+    paused_at: null,
+    paused_reason: null,
+    created_at: now,
+    next_run_at: schedule.nextRunAt,
+    last_run_at: null,
+    last_status: null,
+    last_error: null,
+    last_delivery_error: null,
+    deliver: delivery.threadId ? 'origin' : `shadowob:${delivery.channelId}`,
+    origin,
+    enabled_toolsets: null,
+    workdir: '/workspace',
+    profile: null,
+  }
+  const managedSpecHash = stableHash(hermesManagedJobShape(job))
+  return {
+    ...job,
+    shadowTemplateRoutine: {
+      version: 1,
+      routineId: routine.id,
+      agentId: routine.agentId,
+      sourceHash: typeof routine.sourceHash === 'string' ? routine.sourceHash : null,
+      managedSpecHash,
+    },
+  }
+}
+
+function syncTemplateRoutinesToHermesCron() {
+  if (!existsSync(TEMPLATE_ROUTINES_PATH)) return
+  const seed = readJsonFile(TEMPLATE_ROUTINES_PATH, null)
+  const routines = Array.isArray(seed?.routines) ? seed.routines : []
+  if (routines.length === 0) return
+
+  const now = isoNow()
+  const store = readJsonFile(HERMES_CRON_STORE_PATH, { jobs: [] })
+  const jobs = Array.isArray(store.jobs) ? store.jobs.filter(Boolean) : []
+  let changed = false
+
+  for (const routine of routines) {
+    const desired = buildHermesRoutineJob(routine, now)
+    if (!desired) {
+      console.warn(
+        `[entrypoint] Skipping invalid template routine: ${JSON.stringify(routine?.id ?? null)}`,
+      )
+      continue
+    }
+    const existingIndex = jobs.findIndex((job) => {
+      const marker = isPlainObject(job?.shadowTemplateRoutine) ? job.shadowTemplateRoutine : null
+      return marker?.routineId === desired.shadowTemplateRoutine.routineId || job?.id === desired.id
+    })
+    if (existingIndex < 0) {
+      jobs.push(desired)
+      changed = true
+      console.log(`[entrypoint] Seeded Hermes cron routine: ${desired.id}`)
+      continue
+    }
+    const existing = jobs[existingIndex]
+    const marker = isPlainObject(existing.shadowTemplateRoutine)
+      ? existing.shadowTemplateRoutine
+      : null
+    const currentManagedSpecHash = stableHash(hermesManagedJobShape(existing))
+    if (!marker || marker.managedSpecHash !== currentManagedSpecHash) {
+      console.log(
+        `[entrypoint] Preserved user-edited Hermes cron routine: ${existing.id ?? desired.id}`,
+      )
+      continue
+    }
+    if (marker.managedSpecHash === desired.shadowTemplateRoutine.managedSpecHash) continue
+    jobs[existingIndex] = {
+      ...desired,
+      id: existing.id ?? desired.id,
+      created_at: existing.created_at ?? desired.created_at,
+      last_run_at: existing.last_run_at ?? null,
+      last_status: existing.last_status ?? null,
+      last_error: existing.last_error ?? null,
+      last_delivery_error: existing.last_delivery_error ?? null,
+    }
+    changed = true
+    console.log(`[entrypoint] Updated Hermes cron routine from template: ${jobs[existingIndex].id}`)
+  }
+
+  if (!changed) return
+  mkdirSync(dirname(HERMES_CRON_STORE_PATH), { recursive: true })
+  writeFileSync(HERMES_CRON_STORE_PATH, `${JSON.stringify({ jobs, updated_at: now }, null, 2)}\n`, {
+    encoding: 'utf-8',
+    mode: 0o600,
+  })
+  chmodSync(HERMES_CRON_STORE_PATH, 0o600)
 }
 
 function materializeRuntimeFiles() {
@@ -226,7 +493,7 @@ function startHermes() {
   const proc = spawn('hermes', ['gateway'], {
     env: {
       ...process.env,
-      HERMES_HOME: process.env.HERMES_HOME ?? join(RUNNER_HOME, '.hermes'),
+      HERMES_HOME,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     cwd: '/workspace',
@@ -262,6 +529,7 @@ async function main() {
   materializeRuntimeFiles()
   materializeCredentialFiles()
   materializePluginRuntimeAssets()
+  syncTemplateRoutinesToHermesCron()
 
   if (process.env.SHADOW_RUNNER_VALIDATE_ONLY === '1') {
     verifyBinary('hermes', ['--version'])

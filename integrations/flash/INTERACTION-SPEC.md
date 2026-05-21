@@ -219,6 +219,35 @@ Arena is the circular scene area, handled via independent **Pointer Events** (no
 | `Enter` | Command input (no autocomplete) | Send command |
 | `Escape` | Command input | Close autocomplete / clear input |
 
+---
+
+## 12. Realtime State Sync
+
+Flash uses a server-authoritative state model with client prediction for canvas interactions.
+This follows the same split used by multiplayer game clients:
+
+| State | Owner | Transport | Reconciliation |
+|---|---|---|---|
+| Card content and metadata | Server | Command response + ordered events | Replace by event cursor |
+| Card layout after drag | Server authoritative, client predicted during drag | Command response + ordered events | Ignore stale echoes for locally dragged cards, publish final transform on release |
+| Viewport | Actor-local server snapshot | Debounced command | Last-write wins per actor |
+| Selection | Actor-local server snapshot | `selection.update` + realtime event | Last revision wins per actor |
+| Command stream | Server | SSE now, WebSocket-compatible manifest contract | Cursor catch-up with `boards.events` |
+
+### Frame-Sync Contract
+
+- UI clients may simulate drag locally every animation frame.
+- The server is authoritative for persisted card transforms and emits ordered mutation events.
+- Dragging clients should not apply remote layout patches for the card currently under local control.
+- On pointer release, the client publishes the final card transform once; followers reconcile from the event cursor.
+- Future WebSocket transport can batch transient drag frames at a fixed tick rate (manifest default: 30 Hz) while keeping command events as the durable log.
+
+### Selection Contract
+
+- Selection is stored per `actorId`.
+- UI clients publish selection after click, marquee selection, select-all, clear-selection, and delete-selection flows.
+- Buddies read the user's current selection with `selection.get` before applying bulk commands.
+
 > **Common shortcuts not yet implemented (potential conflict risks):**
 > - `Delete` / `Backspace` to delete selected cards (currently only via UI button)
 > - `Escape` to cancel marquee selection (currently waits for mouseup)

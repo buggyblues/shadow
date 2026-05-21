@@ -102,7 +102,7 @@ Manage OAuth apps in the Shadow web app at `https://shadowob.com/settings/oauth-
 
 ## Sample
 
-The repo sample at `examples/shadow-oauth-card-app` demonstrates:
+The bundled reference app at `references/shadow-oauth-card-app` demonstrates:
 
 - Login with Shadow
 - Authorization-code callback
@@ -118,7 +118,7 @@ SHADOW_BASE_URL=https://shadowob.com \
 SHADOW_CLIENT_ID=<your-client-id> \
 SHADOW_CLIENT_SECRET=<your-client-secret> \
 SHADOW_REDIRECT_URI=https://myapp.com/callback \
-node examples/shadow-oauth-card-app/server.mjs
+node skills/shadow-oauth-app/references/shadow-oauth-card-app/server.mjs
 ```
 
 For local development, you can set `SHADOW_BASE_URL=http://localhost:3002` and register `http://localhost:4178` as the card origin and `http://localhost:4178/callback` as the redirect URI in your OAuth App settings.

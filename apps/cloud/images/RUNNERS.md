@@ -68,6 +68,21 @@ ShadowOB assets are installed in two explicit places:
   loaded afterward in runtime-extension order, and duplicate command names use
   first-wins semantics rather than overwriting an earlier command.
 
+Cloud template routines are installed as runner-neutral seed data at
+`/etc/shadowob/template-routines.json`. Each runner imports that seed into its
+native schedule store at container startup:
+
+| Runtime family | Native routine store | ShadowOB delivery target |
+| --- | --- | --- |
+| OpenClaw | `/home/shadow/.openclaw/cron/jobs.json` | `shadowob:channel:<channel_id>` |
+| cc-connect based | `/home/shadow/.cc-connect/crons/jobs.json` | `session_key = "shadowob:channel:<channel_id>"` |
+| Hermes | `/home/shadow/.hermes/cron/jobs.json` | `deliver = "shadowob:<channel_id>"` or native `origin` |
+
+Routine import uses deterministic managed job ids and a spec hash. If a user
+edits a managed routine in the runtime store after deployment, the next
+container start preserves the runtime edit instead of overwriting it from the
+template seed.
+
 ## Slash command catalogs
 
 Slash commands are runner-specific. Do not put runtime command lists in shared

@@ -47,11 +47,20 @@ interface ShadowServerApp {
   }>
 }
 
+interface ShadowRoutineDeliveryBinding {
+  routineId: string
+  serverId?: string
+  channelId: string
+  accountId?: string
+  threadId?: string
+}
+
 interface ShadowobPluginConfig {
   buddies?: ShadowBuddy[]
   bindings?: ShadowBinding[]
-  servers?: Array<{ id: string; name?: string }>
+  servers?: Array<{ id: string; name?: string; channels?: Array<{ id: string }> }>
   serverApps?: ShadowServerApp[]
+  routines?: ShadowRoutineDeliveryBinding[]
   commerce?: {
     paidFiles?: Array<{
       id: string
@@ -312,6 +321,11 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
   api.onBuildRuntime((context) => {
     const shadowConfig = context.agentConfig as unknown as ShadowobPluginConfig
     const bindings = shadowConfig.bindings?.filter((b) => b.agentId === context.agent.id) ?? []
+    const agentRoutineIds = new Set(
+      (context.config.routines ?? [])
+        .filter((routine) => routine.enabled !== false && routine.agentId === context.agent.id)
+        .map((routine) => routine.id),
+    )
     const accounts = bindings
       .map((binding) => {
         const buddy = shadowConfig.buddies?.find((b) => b.id === binding.targetId)
@@ -339,6 +353,26 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
         }
       })
       .filter((account): account is NonNullable<typeof account> => Boolean(account))
+    const routineDeliveries = (shadowConfig.routines ?? [])
+      .filter((binding) => agentRoutineIds.has(binding.routineId))
+      .map((binding) => ({
+        routineId: binding.routineId,
+        pluginId: 'shadowob',
+        kind: 'channel',
+        target: {
+          ...(binding.serverId ? { serverConfigId: binding.serverId } : {}),
+          channelConfigId: binding.channelId,
+          ...(binding.accountId ? { accountId: binding.accountId } : {}),
+          ...(binding.threadId ? { threadId: binding.threadId } : {}),
+          ...(binding.serverId
+            ? { serverEnvKey: shadowEnvKey('SHADOW_SERVER', binding.serverId) }
+            : {}),
+          channelEnvKey: shadowEnvKey('SHADOW_CHANNEL', binding.channelId),
+        },
+        env: {
+          SHADOW_HOME_CHANNEL: shadowEnvRef(shadowEnvKey('SHADOW_CHANNEL', binding.channelId)),
+        },
+      }))
 
     return {
       openclaw: {
@@ -361,6 +395,7 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
         defaultAccountEnvKey: accounts[0]?.tokenEnvKey,
         capabilities: shadowobChannelCapabilities(),
       },
+      ...(routineDeliveries.length > 0 ? { routineDeliveries } : {}),
     }
   })
 
@@ -380,6 +415,12 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
     const shadowConfig = context.agentConfig as unknown as ShadowobPluginConfig
     const buddyIds = new Set((shadowConfig.buddies ?? []).map((b) => b.id))
     const serverIds = new Set((shadowConfig.servers ?? []).map((s) => s.id))
+    const channelIds = new Set(
+      (shadowConfig.servers ?? []).flatMap(
+        (server) => server.channels?.map((channel) => channel.id) ?? [],
+      ),
+    )
+    const routineIds = new Set((context.config.routines ?? []).map((routine) => routine.id))
     for (const binding of shadowConfig.bindings ?? []) {
       if (!buddyIds.has(binding.targetId)) {
         errors.push({
@@ -412,6 +453,29 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
             severity: 'error',
           })
         }
+      }
+    }
+    for (const routine of shadowConfig.routines ?? []) {
+      if (!routineIds.has(routine.routineId)) {
+        errors.push({
+          path: `routines.${routine.routineId}`,
+          message: `Routine delivery references non-existent routine "${routine.routineId}"`,
+          severity: 'error',
+        })
+      }
+      if (routine.serverId && !serverIds.has(routine.serverId)) {
+        errors.push({
+          path: `routines.${routine.routineId}.serverId`,
+          message: `Routine delivery references non-existent server "${routine.serverId}"`,
+          severity: 'error',
+        })
+      }
+      if (!channelIds.has(routine.channelId)) {
+        errors.push({
+          path: `routines.${routine.routineId}.channelId`,
+          message: `Routine delivery references non-existent channel "${routine.channelId}"`,
+          severity: 'error',
+        })
       }
     }
 
@@ -467,6 +531,12 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
     // Expose token secrets so they become env vars in the agent container
     const secrets: Record<string, string> = {
       SHADOW_SERVER_URL: serverUrl,
+    }
+    for (const [serverId, realServerId] of result.servers) {
+      secrets[shadowEnvKey('SHADOW_SERVER', serverId)] = realServerId
+    }
+    for (const [channelId, realChannelId] of result.channels) {
+      secrets[shadowEnvKey('SHADOW_CHANNEL', channelId)] = realChannelId
     }
     for (const [buddyId, { token }] of result.buddies) {
       const key = shadowobRuntimeTokenEnvKey(buddyId)

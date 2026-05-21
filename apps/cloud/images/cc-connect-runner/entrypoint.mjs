@@ -9,6 +9,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   chmodSync,
   cpSync,
@@ -27,8 +28,13 @@ const CONFIG_MOUNT = process.env.SHADOW_RUNNER_CONFIG_MOUNT ?? '/etc/openclaw'
 const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
 const RUNNER_HOME = process.env.HOME ?? '/home/shadow'
+const TEMPLATE_ROUTINES_PATH =
+  process.env.SHADOW_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
 const CC_CONNECT_CONFIG_PATH =
   process.env.CC_CONNECT_CONFIG_PATH ?? join(RUNNER_HOME, '.cc-connect/config.toml')
+const CC_CONNECT_DATA_DIR = process.env.CC_CONNECT_DATA_DIR ?? join(RUNNER_HOME, '.cc-connect')
+const CC_CONNECT_CRON_STORE_PATH =
+  process.env.CC_CONNECT_CRON_STORE_PATH ?? join(CC_CONNECT_DATA_DIR, 'crons', 'jobs.json')
 const HEALTH_PORT = Number.parseInt(
   process.env.SHADOW_RUNNER_HEALTH_PORT ??
     process.env.OPENCLAW_GATEWAY_PORT ??
@@ -83,6 +89,227 @@ function assertAllowedPath(path) {
 function modeForPath(path) {
   if (path.endsWith('/.env') || path.endsWith('.toml') || path.endsWith('.json')) return 0o600
   return 0o644
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (!isPlainObject(value)) return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, stableValue(item)]),
+  )
+}
+
+function stableHash(value) {
+  return createHash('sha256')
+    .update(JSON.stringify(stableValue(value)))
+    .digest('hex')
+}
+
+function readJsonFile(path, fallback) {
+  if (!existsSync(path)) return fallback
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'))
+    return parsed && typeof parsed === 'object' ? parsed : fallback
+  } catch (err) {
+    console.warn(`[entrypoint] Failed to parse ${path}: ${err.message}`)
+    return fallback
+  }
+}
+
+function parseRoutineEveryCron(interval) {
+  if (typeof interval !== 'string') return null
+  const match = interval.trim().match(/^(\d+)\s*(m|h|d)$/i)
+  if (!match) return null
+  const amount = Number.parseInt(match[1], 10)
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const unit = match[2].toLowerCase()
+  if (unit === 'm') return amount < 60 ? `*/${amount} * * * *` : null
+  if (unit === 'h') return amount < 24 ? `0 */${amount} * * *` : null
+  return `0 0 */${amount} * *`
+}
+
+function buildCcConnectRoutineCronExpr(routine) {
+  const schedule = isPlainObject(routine.schedule) ? routine.schedule : {}
+  let expr = null
+  if (typeof schedule.cron === 'string' && schedule.cron.trim()) {
+    expr = schedule.cron.trim()
+  } else {
+    expr = parseRoutineEveryCron(schedule.interval)
+  }
+  if (!expr) return null
+  if (typeof schedule.timezone === 'string' && schedule.timezone.trim()) {
+    return `CRON_TZ=${schedule.timezone.trim()} ${expr}`
+  }
+  return expr
+}
+
+function resolveShadowobRoutineDelivery(routine) {
+  const deliveries = Array.isArray(routine.deliveries) ? routine.deliveries : []
+  for (const delivery of deliveries) {
+    if (
+      !isPlainObject(delivery) ||
+      delivery.pluginId !== 'shadowob' ||
+      delivery.kind !== 'channel'
+    ) {
+      continue
+    }
+    const target = isPlainObject(delivery.target) ? delivery.target : {}
+    const channelEnvKey =
+      typeof target.channelEnvKey === 'string' && target.channelEnvKey.trim()
+        ? target.channelEnvKey.trim()
+        : null
+    const channelId =
+      (channelEnvKey ? process.env[channelEnvKey] : undefined) ??
+      (typeof target.channelId === 'string' ? target.channelId : undefined)
+    if (!channelId) continue
+    return {
+      channelId,
+      threadId:
+        typeof target.threadId === 'string' && target.threadId.trim()
+          ? target.threadId.trim()
+          : null,
+    }
+  }
+  return null
+}
+
+function managedRoutineJobId(routine) {
+  const raw = `shadow-template-${routine.agentId ?? 'agent'}-${routine.id ?? 'routine'}`
+    .toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  if (raw.length >= 8 && raw.length <= 64) return raw
+  return `shadow-template-${stableHash({ agentId: routine.agentId, id: routine.id }).slice(0, 20)}`
+}
+
+function ccConnectRoutineSessionKey(delivery) {
+  if (delivery.threadId) return `shadowob:channel:${delivery.channelId}:thread:${delivery.threadId}`
+  return `shadowob:channel:${delivery.channelId}`
+}
+
+function ccConnectManagedJobShape(job) {
+  return {
+    id: job.id,
+    project: job.project,
+    session_key: job.session_key,
+    cron_expr: job.cron_expr,
+    prompt: job.prompt,
+    exec: job.exec,
+    work_dir: job.work_dir,
+    description: job.description,
+    enabled: job.enabled,
+    silent: job.silent,
+    mute: job.mute,
+    session_mode: job.session_mode,
+    mode: job.mode,
+    timeout_mins: job.timeout_mins,
+  }
+}
+
+function buildCcConnectRoutineJob(routine, now) {
+  if (
+    !isPlainObject(routine) ||
+    typeof routine.id !== 'string' ||
+    typeof routine.agentId !== 'string'
+  ) {
+    return null
+  }
+  const cronExpr = buildCcConnectRoutineCronExpr(routine)
+  const delivery = resolveShadowobRoutineDelivery(routine)
+  if (!cronExpr || !delivery) return null
+  const job = {
+    id: managedRoutineJobId(routine),
+    project: routine.agentId,
+    session_key: ccConnectRoutineSessionKey(delivery),
+    cron_expr: cronExpr,
+    prompt: String(routine.prompt ?? ''),
+    description:
+      typeof routine.title === 'string' && routine.title.trim() ? routine.title.trim() : routine.id,
+    enabled: routine.enabled !== false,
+    session_mode: 'new_per_run',
+    created_at: now,
+    last_run: '0001-01-01T00:00:00Z',
+  }
+  const managedSpecHash = stableHash(ccConnectManagedJobShape(job))
+  return {
+    ...job,
+    shadowTemplateRoutine: {
+      version: 1,
+      routineId: routine.id,
+      agentId: routine.agentId,
+      sourceHash: typeof routine.sourceHash === 'string' ? routine.sourceHash : null,
+      managedSpecHash,
+    },
+  }
+}
+
+function syncTemplateRoutinesToCcConnectCron() {
+  if (!existsSync(TEMPLATE_ROUTINES_PATH)) return
+  const seed = readJsonFile(TEMPLATE_ROUTINES_PATH, null)
+  const routines = Array.isArray(seed?.routines) ? seed.routines : []
+  if (routines.length === 0) return
+
+  const now = new Date().toISOString()
+  const existing = readJsonFile(CC_CONNECT_CRON_STORE_PATH, [])
+  const jobs = Array.isArray(existing) ? existing.filter(Boolean) : []
+  let changed = false
+
+  for (const routine of routines) {
+    const desired = buildCcConnectRoutineJob(routine, now)
+    if (!desired) {
+      console.warn(
+        `[entrypoint] Skipping invalid template routine: ${JSON.stringify(routine?.id ?? null)}`,
+      )
+      continue
+    }
+    const existingIndex = jobs.findIndex((job) => {
+      const marker = isPlainObject(job?.shadowTemplateRoutine) ? job.shadowTemplateRoutine : null
+      return marker?.routineId === desired.shadowTemplateRoutine.routineId || job?.id === desired.id
+    })
+    if (existingIndex < 0) {
+      jobs.push(desired)
+      changed = true
+      console.log(`[entrypoint] Seeded cc-connect cron routine: ${desired.id}`)
+      continue
+    }
+    const current = jobs[existingIndex]
+    const marker = isPlainObject(current.shadowTemplateRoutine)
+      ? current.shadowTemplateRoutine
+      : null
+    const currentManagedSpecHash = stableHash(ccConnectManagedJobShape(current))
+    if (!marker || marker.managedSpecHash !== currentManagedSpecHash) {
+      console.log(
+        `[entrypoint] Preserved user-edited cc-connect cron routine: ${current.id ?? desired.id}`,
+      )
+      continue
+    }
+    if (marker.managedSpecHash === desired.shadowTemplateRoutine.managedSpecHash) continue
+    jobs[existingIndex] = {
+      ...desired,
+      id: current.id ?? desired.id,
+      created_at: current.created_at ?? desired.created_at,
+      last_run: current.last_run ?? desired.last_run,
+      last_error: current.last_error,
+    }
+    changed = true
+    console.log(
+      `[entrypoint] Updated cc-connect cron routine from template: ${jobs[existingIndex].id}`,
+    )
+  }
+
+  if (!changed) return
+  mkdirSync(dirname(CC_CONNECT_CRON_STORE_PATH), { recursive: true })
+  writeFileSync(CC_CONNECT_CRON_STORE_PATH, `${JSON.stringify(jobs, null, 2)}\n`, {
+    encoding: 'utf-8',
+    mode: 0o600,
+  })
+  chmodSync(CC_CONNECT_CRON_STORE_PATH, 0o600)
 }
 
 function materializeRuntimeFiles() {
@@ -290,6 +517,7 @@ async function main() {
   materializeRuntimeFiles()
   materializeCredentialFiles()
   materializePluginRuntimeAssets()
+  syncTemplateRoutinesToCcConnectCron()
 
   if (process.env.SHADOW_RUNNER_VALIDATE_ONLY === '1') {
     verifyBinary('cc-connect', ['--help'])

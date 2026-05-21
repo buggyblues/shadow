@@ -149,6 +149,7 @@ export type {
   ShadowServerAppIntegration,
   ShadowServerAppLaunchContext,
   ShadowServerAppManifest,
+  ShadowServerAppRealtimeSpec,
   ShadowServerAppSkillDocument,
   ShadowServerAppTokenIntrospection,
   ShadowServerJoinRequestResult,

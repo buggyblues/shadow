@@ -575,6 +575,16 @@ function mergeRuntimeExtensions(
   for (const artifact of fragment.artifacts ?? []) {
     artifacts.set(artifact.kind, artifact)
   }
+  const routineDeliveries = new Map<
+    string,
+    NonNullable<PluginRuntimeExtension['routineDeliveries']>[number]
+  >()
+  for (const delivery of target.routineDeliveries ?? []) {
+    routineDeliveries.set(`${delivery.pluginId}:${delivery.kind}:${delivery.routineId}`, delivery)
+  }
+  for (const delivery of fragment.routineDeliveries ?? []) {
+    routineDeliveries.set(`${delivery.pluginId}:${delivery.kind}:${delivery.routineId}`, delivery)
+  }
   const runtimeDependencies = new Map<
     string,
     NonNullable<PluginRuntimeExtension['runtimeDependencies']>[number]
@@ -640,6 +650,7 @@ function mergeRuntimeExtensions(
     ...(manifestPatches.length > 0 ? { openclaw: { manifestPatches } } : {}),
     ...(shadowob ? { shadowob } : {}),
     ...(artifacts.size > 0 ? { artifacts: [...artifacts.values()] } : {}),
+    ...(routineDeliveries.size > 0 ? { routineDeliveries: [...routineDeliveries.values()] } : {}),
     ...(runtimeDependencies.size > 0
       ? { runtimeDependencies: [...runtimeDependencies.values()] }
       : {}),

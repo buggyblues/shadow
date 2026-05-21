@@ -165,9 +165,11 @@ type = "shadowob"
 - Skills: materialize `.agents/skills` for repo-scoped workflows and
   `$CODEX_HOME/skills` only if the runner owns the whole home directory.
 - MCP: generate `[mcp_servers.*]` TOML tables.
-- Cron/routine: Codex app automations are not the same as CLI-local cron; Cloud
-  should own phase-1 schedules unless later integrating the Codex app
-  automation APIs.
+- Cron/routine: Cloud template routines are materialized by the shared
+  cc-connect runner from `/etc/shadowob/template-routines.json` into
+  `~/.cc-connect/crons/jobs.json`. Managed jobs use deterministic ids and a
+  spec hash so user-edited schedules are preserved. ShadowOB delivery uses
+  `session_key = "shadowob:channel:<channel_id>"` or a thread-qualified variant.
 - Hooks: write Codex hook config in trusted project or user config.
 - Subagents: generate Codex agent roles and instruction files under `.codex`
   only when `features.multi_agent` or equivalent config is enabled.

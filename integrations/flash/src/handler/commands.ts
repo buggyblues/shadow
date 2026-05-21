@@ -1,6 +1,7 @@
 import {
   ArenasActivateInputSchema,
   ArenasCreateInputSchema,
+  AssetsUploadInputSchema,
   BoardEventsInputSchema,
   BoardGetInputSchema,
   BoardViewportUpdateInputSchema,
@@ -10,6 +11,8 @@ import {
   CardsGetInputSchema,
   CardsUpdateInputSchema,
   RoomsAttachInputSchema,
+  SelectionGetInputSchema,
+  SelectionUpdateInputSchema,
 } from '@shadowob/flash-types/server-app'
 import type { ShadowServerAppCommandContext, ShadowServerAppCommandName } from '@shadowob/sdk'
 import { shadowApp } from '../manifest.js'
@@ -65,6 +68,8 @@ export function defineCommandHandlers(service: FlashService) {
       service.updateCard(parseInput(CardsUpdateInputSchema, input), runtime),
     'cards.delete': (input, runtime) =>
       service.deleteCard(parseInput(CardsDeleteInputSchema, input), runtime),
+    'assets.upload': (input, runtime) =>
+      service.uploadAsset(parseInput(AssetsUploadInputSchema, input), runtime),
     'cards.command': (input, runtime) =>
       service.executeCommand(parseInput(CardsCommandInputSchema, input), runtime),
     'rooms.attach': (input, runtime) =>
@@ -73,5 +78,9 @@ export function defineCommandHandlers(service: FlashService) {
       service.createArena(parseInput(ArenasCreateInputSchema, input), runtime),
     'arenas.activate': (input, runtime) =>
       service.activateArena(parseInput(ArenasActivateInputSchema, input), runtime),
+    'selection.get': (input, runtime) =>
+      service.getSelection(parseInput(SelectionGetInputSchema, input), runtime),
+    'selection.update': (input, runtime) =>
+      service.updateSelection(parseInput(SelectionUpdateInputSchema, input), runtime),
   })
 }

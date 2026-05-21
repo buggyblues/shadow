@@ -29,6 +29,53 @@ export type FlashCommandName = (typeof COMMAND_NAMES)[number]
 export type FlashCardKind = CardKind
 export type FlashCardPriority = CardPriority
 
+export const CARD_KIND_VALUES = [
+  'quote',
+  'summary',
+  'argument',
+  'data',
+  'table',
+  'image',
+  'code',
+  'chart',
+  'idea',
+  'text',
+  'audio',
+  'video',
+  'keypoint',
+  'definition',
+  'example',
+  'reference',
+  'inspiration',
+  'timeline',
+  'comparison',
+  'process',
+  'gif',
+  'qrcode',
+  'person',
+  'terminal',
+  'lottie',
+  'webpage',
+  'countdown',
+  'threed',
+  'live2d',
+  'link',
+  'file',
+  'math',
+  'todo',
+  'position',
+  'timestamp',
+  'color',
+  'event',
+  'voice',
+  'comment',
+  'story',
+  'social',
+  'poker',
+  'tarot',
+  'flash',
+] as const satisfies readonly CardKind[]
+
 export interface FlashActorProfile {
   id: string
   username?: string | null
@@ -111,6 +158,7 @@ export interface FlashBoardSnapshot {
   board: FlashBoard
   cards: FlashCard[]
   arenas: FlashArena[]
+  selections: FlashSelection[]
   events: FlashCommandEvent[]
   cursor: number
 }
@@ -124,9 +172,14 @@ export type FlashPatchEvent =
   | { type: 'arena.updated'; arena: FlashArena }
   | { type: 'arena.deleted'; arenaId: string }
   | { type: 'board.viewport.updated'; viewport: FlashViewport }
+  | { type: 'selection.updated'; selection: FlashSelection }
 
 export interface FlashRealtimeEvent {
-  type: 'flash.events.appended' | 'flash.board.updated' | 'flash.command.executed'
+  type:
+    | 'flash.events.appended'
+    | 'flash.board.updated'
+    | 'flash.command.executed'
+    | 'flash.selection.updated'
   boardId: string
   at: number
   payload?: unknown
@@ -139,6 +192,32 @@ export interface FlashBoardEventsResult {
 
 export interface FlashMutationResult extends FlashBoardEventsResult {
   result: unknown
+}
+
+export interface FlashSelection {
+  boardId: string
+  actorId: string
+  actor: FlashActorRef | null
+  selectedCardIds: string[]
+  anchorCardId: string | null
+  revision: number
+  updatedAt: number
+}
+
+export interface FlashUploadInput {
+  field?: string
+  filename: string
+  contentType: string
+  size: number
+  dataBase64: string
+}
+
+export interface FlashUploadedAsset {
+  url: string
+  path: string
+  filename: string
+  contentType: string
+  size: number
 }
 
 export const ActorProfileSchema = z.object({
@@ -162,6 +241,20 @@ export const ActorRefSchema = z.object({
 const TagsSchema = z.array(z.string().min(1).max(40)).max(12)
 const StringArraySchema = z.array(z.string().min(1).max(120)).max(80)
 const MetaSchema = z.record(z.unknown())
+const CardKindSchema = z.enum(CARD_KIND_VALUES)
+const UploadSchema = z
+  .object({
+    field: z.string().min(1).max(80).optional(),
+    filename: z.string().min(1).max(240),
+    contentType: z.string().min(1).max(160),
+    size: z
+      .number()
+      .int()
+      .positive()
+      .max(10 * 1024 * 1024),
+    dataBase64: z.string().min(1),
+  })
+  .strict()
 
 export const BoardGetInputSchema = z
   .object({
@@ -203,7 +296,7 @@ export const CardsCreateInputSchema = z
   .object({
     boardId: z.string().min(1).optional(),
     title: z.string().min(1).max(160),
-    kind: z.string().min(1).max(40).optional(),
+    kind: CardKindSchema.optional(),
     summary: z.string().max(1000).optional(),
     content: z.string().max(12000).optional(),
     thumbnail: z.string().max(2000).optional(),
@@ -223,6 +316,7 @@ export const CardsCreateInputSchema = z
     flipped: z.boolean().optional(),
     hidden: z.boolean().optional(),
     locked: z.boolean().optional(),
+    upload: UploadSchema.optional(),
   })
   .strict()
 
@@ -230,6 +324,7 @@ export const CardsUpdateInputSchema = z
   .object({
     boardId: z.string().min(1).optional(),
     cardId: z.string().min(1),
+    kind: CardKindSchema.optional(),
     title: z.string().min(1).max(160).optional(),
     summary: z.string().max(1000).optional(),
     content: z.string().max(12000).optional(),
@@ -250,6 +345,7 @@ export const CardsUpdateInputSchema = z
     flipped: z.boolean().optional(),
     hidden: z.boolean().optional(),
     locked: z.boolean().optional(),
+    upload: UploadSchema.optional(),
   })
   .strict()
 
@@ -303,6 +399,29 @@ export const ArenasActivateInputSchema = z
   })
   .strict()
 
+export const AssetsUploadInputSchema = z
+  .object({
+    boardId: z.string().min(1).optional(),
+    upload: UploadSchema,
+  })
+  .strict()
+
+export const SelectionGetInputSchema = z
+  .object({
+    boardId: z.string().min(1).optional(),
+    actorId: z.string().min(1).max(160).optional(),
+  })
+  .strict()
+
+export const SelectionUpdateInputSchema = z
+  .object({
+    boardId: z.string().min(1).optional(),
+    selectedCardIds: StringArraySchema,
+    anchorCardId: z.string().min(1).max(120).nullable().optional(),
+    revision: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+
 export type BoardGetInput = z.infer<typeof BoardGetInputSchema>
 export type BoardEventsInput = z.infer<typeof BoardEventsInputSchema>
 export type BoardViewportUpdateInput = z.infer<typeof BoardViewportUpdateInputSchema>
@@ -314,6 +433,9 @@ export type CardsCommandInput = z.infer<typeof CardsCommandInputSchema>
 export type RoomsAttachInput = z.infer<typeof RoomsAttachInputSchema>
 export type ArenasCreateInput = z.infer<typeof ArenasCreateInputSchema>
 export type ArenasActivateInput = z.infer<typeof ArenasActivateInputSchema>
+export type AssetsUploadInput = z.infer<typeof AssetsUploadInputSchema>
+export type SelectionGetInput = z.infer<typeof SelectionGetInputSchema>
+export type SelectionUpdateInput = z.infer<typeof SelectionUpdateInputSchema>
 
 export function cardMetaWithLayout(card: FlashCard): CardMeta {
   return {

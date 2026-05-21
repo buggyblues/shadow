@@ -176,8 +176,10 @@ SHADOW_TOKEN=...
   runner profile.
 - MCP: write Hermes MCP config rather than OpenClaw or Codex MCP formats.
 - Cron/routine: Hermes has the strongest native cron surface among the target
-  runners; keep cron jobs in Hermes native storage when the agent runtime is
-  Hermes.
+  runners. Cloud template routines are seeded from
+  `/etc/shadowob/template-routines.json` into `~/.hermes/cron/jobs.json`, using
+  Hermes native `deliver`/`origin` ShadowOB delivery. Managed jobs use
+  deterministic ids and a spec hash so user-edited schedules are preserved.
 - Hooks: expose plugin hooks through `plugins.enabled` and plugin files, not a
   central OpenClaw hook adapter.
 - Subagents: support Hermes delegation later as native Hermes multi-agent

@@ -140,6 +140,19 @@ export class CloudDeploymentDao {
     return this.db.select().from(cloudDeployments).where(eq(cloudDeployments.status, 'paused'))
   }
 
+  async listExpiredTemporary(now: Date) {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(
+        and(
+          inArray(cloudDeployments.status, ['deployed', 'paused'] as CloudDeploymentStatus[]),
+          lt(cloudDeployments.expiresAt, now),
+        ),
+      )
+      .orderBy(asc(cloudDeployments.expiresAt))
+  }
+
   async listHourlyBillable() {
     return this.db
       .select()
@@ -305,6 +318,7 @@ export class CloudDeploymentDao {
     monthlyCost?: number | null
     hourlyCost?: number | null
     lastHourlyBilledAt?: Date | null
+    expiresAt?: Date | null
     saasMode?: boolean
   }) {
     const result = await this.db
@@ -322,6 +336,7 @@ export class CloudDeploymentDao {
         monthlyCost: data.monthlyCost ?? null,
         hourlyCost: data.hourlyCost ?? 1,
         lastHourlyBilledAt: data.lastHourlyBilledAt ?? null,
+        expiresAt: data.expiresAt ?? null,
         saasMode: data.saasMode ?? false,
       })
       .returning()

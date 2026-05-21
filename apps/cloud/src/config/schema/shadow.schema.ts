@@ -192,6 +192,19 @@ export interface ShadowServerApp {
   grants?: ShadowServerAppGrant[]
 }
 
+export interface ShadowRoutineDelivery {
+  /** Cloud routine id to deliver through Shadow. */
+  routineId: string
+  /** Shadow server config id from this plugin's servers list. */
+  serverId?: string
+  /** Shadow channel config id from this plugin's servers[].channels list. */
+  channelId: string
+  /** Optional Shadow Buddy account/config id for multi-account runtimes. */
+  accountId?: string
+  /** Optional Shadow thread id for threaded delivery. */
+  threadId?: string
+}
+
 export interface ShadowobPluginConfig {
   /** Shadow servers to provision */
   servers?: ShadowServer[]
@@ -208,4 +221,6 @@ export interface ShadowobPluginConfig {
   commerce?: ShadowCommerceConfig
   /** Server App integrations to install and grant to buddies. */
   serverApps?: ShadowServerApp[]
+  /** Routine delivery bindings owned by the Shadow plugin. */
+  routines?: ShadowRoutineDelivery[]
 }

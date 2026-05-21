@@ -4,6 +4,7 @@ import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { CloudDeploymentBackupDao } from '../dao/cloud-deployment-backup.dao'
 import type { CloudEnvVarDao } from '../dao/cloud-envvar.dao'
 import type { CloudTemplateDao } from '../dao/cloud-template.dao'
+import type { CloudTemplateGithubSource } from '../db/schema'
 import type { AccessService } from '../security/access.service'
 import type { AuditLogService } from '../services/audit-log.service'
 import type { CloudUsageService } from '../services/cloud-usage.service'
@@ -72,6 +73,7 @@ export class CloudSaasUseCase {
         tags?: string[]
         category?: string
         baseCost?: number
+        githubSource?: CloudTemplateGithubSource | null
       }
     },
   ) {
@@ -96,6 +98,7 @@ export class CloudSaasUseCase {
           authorId: userId,
           category: input.payload.category,
           baseCost: input.payload.baseCost,
+          githubSource: input.payload.githubSource,
         })
         await this.deps.cloudActivityDao.log({
           userId,
@@ -117,6 +120,7 @@ export class CloudSaasUseCase {
         tags?: string[]
         category?: string
         baseCost?: number
+        githubSource?: CloudTemplateGithubSource | null
       }
     },
   ) {
@@ -144,6 +148,7 @@ export class CloudSaasUseCase {
           tags: input.payload.tags,
           category: input.payload.category,
           baseCost: input.payload.baseCost,
+          githubSource: input.payload.githubSource,
         })
         await this.deps.cloudActivityDao.log({
           userId,

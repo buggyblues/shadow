@@ -7,7 +7,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { stringify as stringifyYaml } from 'yaml'
-import type { AgentDeployment } from '../config/schema.js'
+import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import type { PluginRuntimeExtension } from '../plugins/types.js'
 import { hermesContainerSpec } from './container.js'
 import { type RuntimeAdapter, type RuntimeFiles, registerRuntime } from './index.js'
@@ -26,6 +26,7 @@ import {
   SHADOW_SLASH_COMMANDS_PATH,
   shadowBinding,
 } from './package-common.js'
+import { appendTemplateRoutineFiles, firstRoutineDeliveryTargetValue } from './routines.js'
 import { hermesSlashCommands } from './slash-commands/hermes.js'
 
 function readHermesPluginFile(cwd: string | undefined, file: string, fallback: string): string {
@@ -36,11 +37,19 @@ function readHermesPluginFile(cwd: string | undefined, file: string, fallback: s
 
 function buildHermesConfig(options: {
   agent: AgentDeployment
+  config: CloudConfig
   shadow: ShadowRuntimeBinding
   runtimeExtensions: PluginRuntimeExtension
 }): string {
   const { agent, shadow } = options
   const mcpServers = hermesMcpServers(options.runtimeExtensions)
+  const homeChannelEnvKey = firstRoutineDeliveryTargetValue(
+    options.config,
+    agent,
+    options.runtimeExtensions,
+    'shadowob',
+    'channelEnvKey',
+  )
   return stringifyYaml({
     approvals: {
       mode: nativePermissionMode(agent) === 'allow' ? 'manual' : 'manual',
@@ -59,6 +68,9 @@ function buildHermesConfig(options: {
           rest_only: false,
           catchup_minutes: 0,
           download_media: true,
+          ...(typeof homeChannelEnvKey === 'string'
+            ? { home_channel: envPlaceholder(homeChannelEnvKey) }
+            : {}),
           slash_commands: hermesSlashCommands,
         },
       },
@@ -80,6 +92,7 @@ const hermesAdapter: RuntimeAdapter = {
       ...buildIdentityWorkspaceFiles(context.agent),
       [`${HOME_DIR}/.hermes/config.yaml`]: buildHermesConfig({
         agent: context.agent,
+        config: context.config,
         shadow,
         runtimeExtensions: nativeRuntimeExtensions,
       }),
@@ -94,6 +107,13 @@ const hermesAdapter: RuntimeAdapter = {
     }
     addShadowobSkill(files, 'hermes', 'hermes')
     addShadowobCliAuth(files, context.runtimeExtensions)
+    appendTemplateRoutineFiles(
+      files,
+      context.config,
+      context.agent,
+      'hermes',
+      nativeRuntimeExtensions,
+    )
 
     const pluginRoot = `${HOME_DIR}/.hermes/plugins/shadowob`
     files[`${pluginRoot}/plugin.yaml`] = readHermesPluginFile(

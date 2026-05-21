@@ -32,6 +32,64 @@ const originSchema = z.string().refine((value) => {
 
 const approvalModeSchema = z.enum(['none', 'first_time', 'every_time', 'policy'])
 
+const commandHelpSchema = z
+  .object({
+    summary: z.string().max(1200).optional(),
+    usage: z.string().max(2000).optional(),
+    details: z.string().max(6000).optional(),
+    examples: z
+      .array(
+        z.object({
+          title: z.string().max(160).optional(),
+          command: z.string().max(1000).optional(),
+          input: z.unknown().optional(),
+        }),
+      )
+      .max(20)
+      .optional(),
+    schemaRef: z.string().max(200).optional(),
+  })
+  .optional()
+
+const manifestHelpSchema = z
+  .object({
+    overview: z.string().max(4000).optional(),
+    usage: z.string().max(4000).optional(),
+    details: z.string().max(10000).optional(),
+    commandIndex: z.string().max(4000).optional(),
+  })
+  .optional()
+
+const realtimeSpecSchema = z
+  .object({
+    transports: z
+      .array(z.enum(['sse', 'websocket']))
+      .max(4)
+      .optional(),
+    subscribe: z
+      .object({
+        events: z.array(z.string().min(1).max(160)).max(100).optional(),
+        help: z.string().max(4000).optional(),
+      })
+      .optional(),
+    publish: z
+      .object({
+        command: z.string().min(1).max(120).optional(),
+        events: z.array(z.string().min(1).max(160)).max(100).optional(),
+        help: z.string().max(4000).optional(),
+      })
+      .optional(),
+    stateSync: z
+      .object({
+        model: z.enum(['snapshot-patch', 'frame-sync', 'lockstep']).optional(),
+        authority: z.enum(['server', 'client']).optional(),
+        tickRate: z.number().int().positive().max(120).optional(),
+        help: z.string().max(4000).optional(),
+      })
+      .optional(),
+  })
+  .optional()
+
 export const serverAppCommandSchema = z.object({
   name: z
     .string()
@@ -40,6 +98,7 @@ export const serverAppCommandSchema = z.object({
     .regex(/^[a-zA-Z0-9_.:-]+$/),
   title: z.string().max(160).optional(),
   description: z.string().max(1000).optional(),
+  help: commandHelpSchema,
   path: z.string().min(1).max(300).startsWith('/'),
   method: z.literal('POST').default('POST').optional(),
   input: z.enum(['json', 'multipart']).default('json').optional(),
@@ -109,6 +168,8 @@ export const serverAppManifestSchema = z.object({
     .max(20)
     .optional(),
   events: z.array(z.string().min(1).max(160)).max(100).optional(),
+  help: manifestHelpSchema,
+  realtime: realtimeSpecSchema,
   binary: z
     .object({
       supported: z.boolean(),
