@@ -25,6 +25,7 @@ export function hasRuntimeExtensions(extension: PluginRuntimeExtension): boolean
   return Boolean(
     extension.shadowob ||
       extension.openclaw?.manifestPatches?.length ||
+      extension.routineDeliveries?.length ||
       extension.artifacts?.length ||
       extension.runtimeDependencies?.length ||
       extension.skillSources?.length ||
@@ -96,7 +97,11 @@ export function shadowBindings(runtimeExtensions: PluginRuntimeExtension): Shado
   }))
 }
 
-export function shadowPlatformOptions(shadow: ShadowRuntimeBinding): TomlTable {
+export function shadowPlatformOptions(
+  shadow: ShadowRuntimeBinding,
+  options?: { channelEnvKeys?: string[] },
+): TomlTable {
+  const channelEnvKeys = [...new Set(options?.channelEnvKeys ?? [])].filter(Boolean)
   return {
     token: envPlaceholder(shadow.tokenEnvKey),
     server_url: envPlaceholder(shadow.serverUrlEnvKey),
@@ -105,6 +110,9 @@ export function shadowPlatformOptions(shadow: ShadowRuntimeBinding): TomlTable {
     share_session_in_channel: false,
     progress_style: 'compact',
     slash_commands_path: envPlaceholder('SHADOW_SLASH_COMMANDS_PATH'),
+    ...(channelEnvKeys.length > 0
+      ? { channel_ids: channelEnvKeys.map((key) => envPlaceholder(key)) }
+      : {}),
   }
 }
 

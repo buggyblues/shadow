@@ -145,9 +145,11 @@ type = "shadowob"
 - Skills: materialize `.opencode/skills` first; optionally also emit
   `.agents/skills` if a workflow must be shared with Codex.
 - MCP: write the OpenCode `mcp` object, not OpenClaw `mcp`.
-- Cron/routine: OpenCode does not provide the same native cron surface as
-  OpenClaw or Hermes in the researched docs; Cloud should own scheduling for
-  phase 1.
+- Cron/routine: Cloud template routines are materialized by the shared
+  cc-connect runner from `/etc/shadowob/template-routines.json` into
+  `~/.cc-connect/crons/jobs.json`. Managed jobs use deterministic ids and a
+  spec hash so user-edited schedules are preserved. ShadowOB delivery uses
+  `session_key = "shadowob:channel:<channel_id>"` or a thread-qualified variant.
 - Hooks: prefer OpenCode plugins for deterministic lifecycle behavior.
 - Subagents: use OpenCode `agent` and command `subtask` config instead of
   OpenClaw multi-agent routing.

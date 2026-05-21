@@ -98,6 +98,7 @@ export type CloudDeploymentProcessorTickResult = {
   pending: number
   destroying: number
   cancelling: number
+  expired: number
   reconciled: boolean
 }
 
@@ -822,6 +823,31 @@ async function processCloudDeploymentQueueTick(
     )
   }
 
+  const expired = (await deploymentDao.listExpiredTemporary(new Date())).filter(includeDeployment)
+  for (const deployment of expired) {
+    await withLockedDeployment(
+      deployment.id,
+      ['deployed', 'paused'],
+      deploymentDao,
+      async (latestDeployment) => {
+        const expiresAt = latestDeployment.expiresAt?.toISOString?.() ?? 'unknown time'
+        await deploymentDao.appendLog(
+          latestDeployment.id,
+          `[expiry] Temporary deployment expired at ${expiresAt}; queuing destroy`,
+          'warn',
+        )
+        const destroying = await deploymentDao.updateStatusIfStatus(
+          latestDeployment.id,
+          latestDeployment.status,
+          'destroying',
+          'temporary deployment expired',
+        )
+        if (!destroying) return
+        await processDestroy(destroying, deploymentDao, clusterDao, container, database)
+      },
+    )
+  }
+
   const billable = (await deploymentDao.listHourlyBillable()).filter(includeDeployment)
   for (const deployment of billable) {
     await withWorkerLockedDeployment(
@@ -874,6 +900,7 @@ async function processCloudDeploymentQueueTick(
     pending: pending.length,
     destroying: destroying.length,
     cancelling: cancelling.length,
+    expired: expired.length,
     reconciled,
   }
 }

@@ -10,6 +10,7 @@ import type {
   SharedWorkspaceConfig,
   TeamConfig,
 } from './agent.schema.js'
+import type { CloudRoutineConfig } from './routine.schema.js'
 import type { UseEntry } from './shadow.schema.js'
 
 /**
@@ -63,6 +64,12 @@ export interface CloudConfig {
    * }
    */
   i18n?: Record<string, Record<string, string>>
+  /**
+   * Scheduled routines owned by template agents.
+   * Delivery surfaces are contributed by plugins, so this section remains
+   * independent from Shadow, Slack, webhooks, or other channel providers.
+   */
+  routines?: CloudRoutineConfig[]
   /**
    * Team / agent pack definition.
    * Groups agents with shared defaults.

@@ -18,6 +18,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 | --- | --- | --- |
 | [Agent Browser](./agent-browser/README.md) | `AGENT_BROWSER_PROVIDER`, provider API keys | Agent Browser, Browserbase, Browserless, Browser Use, Kernel |
 | [Agent Pack](./agent-pack/README.md) | `GITHUB_TOKEN`, pack repository options | Agent Skills, Claude Code, Codex, MCP |
+| [AgentMemory](./agentmemory/README.md) | `AGENTMEMORY_URL`, `AGENTMEMORY_API_KEY`, `AGENTMEMORY_PROJECT_ID` | AgentMemory MCP and CLI |
 | [Airtable](./airtable/README.md) | `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID` | Airtable MCP, PATs, Web API |
 | [Alipay](./alipay/README.md) | `ALIPAY_APP_ID`, `ALIPAY_PRIVATE_KEY`, `ALIPAY_PUBLIC_KEY` | Alipay Payment MCP and Open Platform |
 | [AMap / Gaode Maps](./amap/README.md) | `AMAP_MAPS_API_KEY` | AMap MCP and Web Service API |

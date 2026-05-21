@@ -82,7 +82,7 @@ Use `integrations/kanban` as the canonical copyable demo. It includes:
 - `src/ui.ts` iframe UI using the Shadow bridge and event stream refresh.
 - `Dockerfile`, `.env.example`, and package scripts for standalone local hosting.
 
-Other demos live in `integrations/qna` and `integrations/quiz`. A smaller legacy protocol test app remains at `./example-app` for multipart upload coverage.
+Other demos live in `integrations/qna` and `integrations/quiz`. A smaller bundled reference app remains at `references/example-app` for multipart upload coverage.
 
 Run all standard demos together from the repo root with:
 

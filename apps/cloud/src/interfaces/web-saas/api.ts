@@ -78,6 +78,20 @@ async function del<T>(path: string): Promise<T> {
 
 export type ResourceTier = 'lightweight' | 'standard' | 'pro'
 
+export interface SaasTemplateGithubSource {
+  repository: string
+  branch?: string
+  path?: string
+  installationId?: string
+  webhook?: {
+    enabled?: boolean
+    autoUpdateTemplate?: boolean
+    autoDeploy?: boolean
+  }
+  protectedOverrides?: string[]
+  lastCommitSha?: string
+}
+
 export interface SaasTemplate {
   id: string
   slug: string
@@ -92,6 +106,7 @@ export interface SaasTemplate {
   rating: number | null
   baseCost: number | null
   authorId: string | null
+  githubSource: SaasTemplateGithubSource | null
   content: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -122,6 +137,7 @@ export interface SaasDeployment {
   hourlyCost: number
   lastHourlyBilledAt: string | null
   lastActiveAt: string
+  expiresAt: string | null
   saasMode: boolean
   shadowServerId?: string | null
   createdAt: string
@@ -150,6 +166,7 @@ export interface SaasDeploymentManifest {
     updatedAt: string | null
     ownedByUser: boolean
     editable: boolean
+    githubSource: SaasTemplateGithubSource | null
     contentHash: string | null
   } | null
   manifest: {
@@ -384,6 +401,7 @@ export const saasApi = {
       tags?: string[]
       category?: string
       baseCost?: number
+      githubSource?: SaasTemplateGithubSource | null
     }) => post<SaasTemplate>('/templates', data),
     update: (
       slug: string,
@@ -394,6 +412,7 @@ export const saasApi = {
         tags?: string[]
         category?: string
         baseCost?: number
+        githubSource?: SaasTemplateGithubSource | null
       },
     ) => put<SaasTemplate>(`/templates/${encodeURIComponent(slug)}`, data),
     submit: (slug: string) => post<SaasTemplate>(`/templates/${encodeURIComponent(slug)}/submit`),
@@ -419,6 +438,7 @@ export const saasApi = {
       agentCount?: number
       configSnapshot: Record<string, unknown>
       envVars?: Record<string, string>
+      temporaryTtlMinutes?: number
       runtimeContext?: { locale?: string; timezone?: string }
     }) => post<SaasDeployment>('/deployments', data),
     delete: (id: string) =>
@@ -469,6 +489,7 @@ export const saasApi = {
         tags?: string[]
         category?: string
         baseCost?: number
+        githubSource?: SaasTemplateGithubSource | null
       },
     ) =>
       post<SaasDeploymentTemplateSyncResult>(

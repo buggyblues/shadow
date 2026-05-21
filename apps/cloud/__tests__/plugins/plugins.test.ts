@@ -185,6 +185,7 @@ describe('loadAllPlugins', () => {
     ).toEqual([
       'agent-browser',
       'agent-pack',
+      'agentmemory',
       'airtable',
       'alipay',
       'amap',
@@ -471,6 +472,29 @@ describe('loadAllPlugins', () => {
       expect.objectContaining({
         id: 'wonda-cli-skill',
         url: 'https://github.com/degausai/wonda.git',
+      }),
+    )
+  }, 30_000)
+
+  it('should load AgentMemory as an MCP-backed memory plugin', async () => {
+    const registry = createPluginRegistry()
+    await loadAllPlugins(registry)
+
+    const agentmemory = registry.get('agentmemory')
+
+    expect(agentmemory?.manifest.capabilities).toEqual(
+      expect.arrayContaining(['tool', 'data-source', 'cli', 'mcp']),
+    )
+    expect(agentmemory?.runtime?.runtimeDependencies).toContainEqual(
+      expect.objectContaining({
+        packages: ['@agentmemory/agentmemory@latest', '@agentmemory/mcp@latest'],
+      }),
+    )
+    expect(agentmemory?.runtime?.mcpServers).toContainEqual(
+      expect.objectContaining({
+        id: 'agentmemory',
+        command: 'npx',
+        args: ['-y', '@agentmemory/mcp@latest'],
       }),
     )
   }, 30_000)

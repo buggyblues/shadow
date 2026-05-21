@@ -1,13 +1,6 @@
----
-name: shadow-commerce-ux
-description: Use when planning, implementing, reviewing, or validating Shadow commerce UX: discovery, personal/server shops, product pages, wallet purchases, asset homepages, Buddy service orders, external app entitlements, fulfillment, and Business Hub flows.
-metadata:
-  short-description: Build and validate Shadow commerce user-story flows
----
-
 # Shadow Commerce UX
 
-Use this skill for commerce work that affects buyers, sellers, Buddies, servers, external apps, or
+Internal guidance for commerce work that affects buyers, sellers, Buddies, servers, external apps, or
 wallet purchase/delivery flows.
 
 ## Required Context

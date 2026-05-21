@@ -37,6 +37,17 @@ export type ServerAppManifest = {
     name: string
     title?: string
     description?: string
+    help?: {
+      summary?: string
+      usage?: string
+      details?: string
+      examples?: Array<{
+        title?: string
+        command?: string
+        input?: unknown
+      }>
+      schemaRef?: string
+    }
     path: string
     method?: 'POST'
     input?: 'json' | 'multipart'
@@ -64,6 +75,30 @@ export type ServerAppManifest = {
     commandHints?: string[]
   }>
   events?: string[]
+  help?: {
+    overview?: string
+    usage?: string
+    details?: string
+    commandIndex?: string
+  }
+  realtime?: {
+    transports?: Array<'sse' | 'websocket'>
+    subscribe?: {
+      events?: string[]
+      help?: string
+    }
+    publish?: {
+      command?: string
+      events?: string[]
+      help?: string
+    }
+    stateSync?: {
+      model?: 'snapshot-patch' | 'frame-sync' | 'lockstep'
+      authority?: 'server' | 'client'
+      tickRate?: number
+      help?: string
+    }
+  }
   binary?: {
     supported: boolean
     maxBytes?: number

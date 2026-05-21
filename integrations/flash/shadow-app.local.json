@@ -2,7 +2,7 @@
   "schemaVersion": "shadow.app/1",
   "appKey": "shadow-flash",
   "name": "Flash",
-  "description": "Persistent inspiration-card board with realtime rooms, server-side command execution, and Buddy-assisted card operations.",
+  "description": "Persistent multi-card canvas with realtime rooms, server-side command execution, file-backed image cards, and Buddy-assisted board operations.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4216/assets/icon.svg",
   "iframe": {
@@ -18,6 +18,11 @@
   "access": {
     "defaultPermissions": ["flash.boards:read", "flash.boards:write", "flash.cards:read"],
     "defaultApprovalMode": "none"
+  },
+  "help": {
+    "overview": "Flash is a server-backed canvas for many card kinds, including image, quote, summary, argument, data, table, code, chart, timeline, comparison, process, math, todo, link, file, poker, tarot, Live2D, Three.js, and inspiration cards. Start from the command list, then request per-command help only when the input schema or examples are needed.",
+    "usage": "Use shadowob app call shadow-flash <command> --server <server> --channel-id <channel> --json-input '<input-json>' --json. Use --help on a specific command for detailed schema and examples.",
+    "commandIndex": "Use boards.get for snapshots, cards.create/cards.update for typed cards, assets.upload or cards.create --file for local images, selection.get for the current stored selection, and shadowob app events shadow-flash for realtime updates."
   },
   "commands": [
     {
@@ -133,12 +138,42 @@
     {
       "name": "cards.create",
       "title": "Create card",
-      "description": "Create a card on the caller-owned board.",
+      "description": "Create any supported Flash card kind on the caller-owned board.",
+      "help": {
+        "summary": "Create text, image, code, chart, timeline, poker, tarot, Live2D, Three.js, inspiration, and other Flash card kinds.",
+        "usage": "shadowob app call shadow-flash cards.create --server \"<server>\" --channel-id \"<channel>\" --json-input '{\"kind\":\"image\",\"title\":\"Sketch\"}' --file ./sketch.png --json",
+        "details": "The kind field selects the renderer. Image cards can be created in one command by passing --file; the app uploads the image, stores a file-backed URL, and links it to the created card. For non-image cards, put kind-specific structured data in meta.",
+        "examples": [
+          {
+            "title": "Create an image card from a local file",
+            "command": "shadowob app call shadow-flash cards.create --server \"<server>\" --channel-id \"<channel>\" --json-input '{\"kind\":\"image\",\"title\":\"Moodboard\"}' --file ./moodboard.png --json"
+          },
+          {
+            "title": "Create a chart card",
+            "input": {
+              "kind": "chart",
+              "title": "Weekly usage",
+              "meta": {
+                "chartType": "bar",
+                "labels": ["Mon", "Tue"],
+                "series": [{ "name": "Runs", "data": [12, 18] }]
+              }
+            }
+          }
+        ]
+      },
       "path": "/api/shadow/commands/cards.create",
       "permission": "flash.cards:write",
       "action": "write",
       "dataClass": "server-private",
       "approvalMode": "first_time",
+      "input": "multipart",
+      "binary": {
+        "supported": true,
+        "field": "file",
+        "maxBytes": 10485760,
+        "contentTypes": ["image/png", "image/jpeg", "image/webp", "image/gif"]
+      },
       "inputSchema": {
         "type": "object",
         "required": ["title"],
@@ -153,8 +188,52 @@
             "maxLength": 160
           },
           "kind": {
-            "type": "string",
-            "maxLength": 40
+            "enum": [
+              "quote",
+              "summary",
+              "argument",
+              "data",
+              "table",
+              "image",
+              "code",
+              "chart",
+              "idea",
+              "text",
+              "audio",
+              "video",
+              "keypoint",
+              "definition",
+              "example",
+              "reference",
+              "inspiration",
+              "timeline",
+              "comparison",
+              "process",
+              "gif",
+              "qrcode",
+              "person",
+              "terminal",
+              "lottie",
+              "webpage",
+              "countdown",
+              "threed",
+              "live2d",
+              "link",
+              "file",
+              "math",
+              "todo",
+              "position",
+              "timestamp",
+              "color",
+              "event",
+              "voice",
+              "comment",
+              "story",
+              "social",
+              "poker",
+              "tarot",
+              "flash"
+            ]
           },
           "summary": {
             "type": "string",
@@ -235,6 +314,36 @@
           },
           "locked": {
             "type": "boolean"
+          },
+          "upload": {
+            "type": "object",
+            "required": ["filename", "contentType", "size", "dataBase64"],
+            "properties": {
+              "field": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "filename": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "contentType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10485760
+              },
+              "dataBase64": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -243,12 +352,24 @@
     {
       "name": "cards.update",
       "title": "Update card",
-      "description": "Update card text, tags, layout, or metadata.",
+      "description": "Update card kind, text, tags, layout, metadata, or attached file-backed image.",
+      "help": {
+        "summary": "Patch an existing card, including layout, metadata, renderer kind, and optional uploaded image.",
+        "usage": "shadowob app call shadow-flash cards.update --server \"<server>\" --json-input '{\"cardId\":\"<card>\",\"x\":320,\"y\":240}' --json",
+        "details": "Layout fields are server-authoritative snapshots. For active drag interactions, clients should publish the final layout after pointer release and ignore stale remote echoes for locally dragged cards."
+      },
       "path": "/api/shadow/commands/cards.update",
       "permission": "flash.cards:write",
       "action": "write",
       "dataClass": "server-private",
       "approvalMode": "first_time",
+      "input": "multipart",
+      "binary": {
+        "supported": true,
+        "field": "file",
+        "maxBytes": 10485760,
+        "contentTypes": ["image/png", "image/jpeg", "image/webp", "image/gif"]
+      },
       "inputSchema": {
         "type": "object",
         "required": ["cardId"],
@@ -260,6 +381,54 @@
           "cardId": {
             "type": "string",
             "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "quote",
+              "summary",
+              "argument",
+              "data",
+              "table",
+              "image",
+              "code",
+              "chart",
+              "idea",
+              "text",
+              "audio",
+              "video",
+              "keypoint",
+              "definition",
+              "example",
+              "reference",
+              "inspiration",
+              "timeline",
+              "comparison",
+              "process",
+              "gif",
+              "qrcode",
+              "person",
+              "terminal",
+              "lottie",
+              "webpage",
+              "countdown",
+              "threed",
+              "live2d",
+              "link",
+              "file",
+              "math",
+              "todo",
+              "position",
+              "timestamp",
+              "color",
+              "event",
+              "voice",
+              "comment",
+              "story",
+              "social",
+              "poker",
+              "tarot",
+              "flash"
+            ]
           },
           "title": {
             "type": "string",
@@ -345,6 +514,36 @@
           },
           "locked": {
             "type": "boolean"
+          },
+          "upload": {
+            "type": "object",
+            "required": ["filename", "contentType", "size", "dataBase64"],
+            "properties": {
+              "field": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "filename": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "contentType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10485760
+              },
+              "dataBase64": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -370,6 +569,69 @@
           "cardId": {
             "type": "string",
             "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "assets.upload",
+      "title": "Upload asset",
+      "description": "Upload a local binary image into Flash storage and return a file-backed asset URL.",
+      "help": {
+        "summary": "Upload a local image for later use by image/file cards.",
+        "usage": "shadowob app call shadow-flash assets.upload --server \"<server>\" --file ./image.png --json-input '{}' --json",
+        "details": "Use cards.create with --file when the asset should immediately become a card. Use assets.upload when you only need the uploaded URL first."
+      },
+      "path": "/api/shadow/commands/assets.upload",
+      "permission": "flash.cards:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "input": "multipart",
+      "binary": {
+        "supported": true,
+        "field": "file",
+        "maxBytes": 10485760,
+        "contentTypes": ["image/png", "image/jpeg", "image/webp", "image/gif"]
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": ["upload"],
+        "properties": {
+          "boardId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "upload": {
+            "type": "object",
+            "required": ["filename", "contentType", "size", "dataBase64"],
+            "properties": {
+              "field": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "filename": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "contentType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10485760
+              },
+              "dataBase64": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -527,22 +789,128 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "name": "selection.get",
+      "title": "Read selection",
+      "description": "Read stored realtime selection state for the board or one actor.",
+      "help": {
+        "summary": "Return current selected card ids so a Buddy can act on what the user selected.",
+        "usage": "shadowob app call shadow-flash selection.get --server \"<server>\" --channel-id \"<channel>\" --json-input '{}' --json"
+      },
+      "path": "/api/shadow/commands/selection.get",
+      "permission": "flash.cards:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "boardId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "actorId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "selection.update",
+      "title": "Publish selection",
+      "description": "Store and broadcast the caller's selected card ids.",
+      "help": {
+        "summary": "Publish the current selection as durable realtime state.",
+        "usage": "shadowob app call shadow-flash selection.update --server \"<server>\" --json-input '{\"selectedCardIds\":[\"<card>\"]}' --json",
+        "details": "The app stores selection by actor id. UI clients call this after click, marquee selection, select-all, and clear-selection operations; Buddies can read it with selection.get."
+      },
+      "path": "/api/shadow/commands/selection.update",
+      "permission": "flash.cards:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "none",
+      "inputSchema": {
+        "type": "object",
+        "required": ["selectedCardIds"],
+        "properties": {
+          "boardId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "selectedCardIds": {
+            "type": "array",
+            "maxItems": 80,
+            "items": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          "anchorCardId": {
+            "type": ["string", "null"],
+            "maxLength": 120
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ],
   "skills": [
     {
       "name": "shadow-flash-card-workspace",
-      "description": "Use when a Buddy reads user-provided material itself, creates inspiration cards, attaches to a card perspective, inspects nearby cards, or executes Flash board commands.",
+      "description": "Use when a Buddy reads user-provided material, creates or edits any Flash card kind, uploads local images, reads the user's current selection, subscribes to board events, attaches to a card perspective, inspects nearby cards, or executes Flash board commands.",
       "commandHints": [
         "shadow-flash boards.get",
+        "shadow-flash selection.get",
         "shadow-flash cards.create",
+        "shadow-flash cards.create --file ./image.png",
+        "shadow-flash assets.upload --file ./image.png",
         "shadow-flash cards.update",
         "shadow-flash rooms.attach",
         "shadow-flash cards.command",
         "shadow-flash arenas.create",
-        "shadow-flash arenas.activate"
+        "shadow-flash arenas.activate",
+        "shadowob app events shadow-flash"
       ]
     }
   ],
-  "events": ["flash.board.updated", "flash.command.executed"]
+  "events": [
+    "flash.events.appended",
+    "flash.board.updated",
+    "flash.command.executed",
+    "flash.selection.updated"
+  ],
+  "realtime": {
+    "transports": ["sse", "websocket"],
+    "subscribe": {
+      "events": [
+        "flash.events.appended",
+        "flash.selection.updated",
+        "server_app.command.completed"
+      ],
+      "help": "Use shadowob app events shadow-flash --server \"<server>\" --json for the Shadow SSE stream. Browser clients may use the launch event stream; local dev may use the Flash board SSE endpoint."
+    },
+    "publish": {
+      "command": "selection.update",
+      "events": ["flash.selection.updated"],
+      "help": "Publish user intent and durable presence-like state through commands such as selection.update; command execution appends ordered board events that subscribers consume."
+    },
+    "stateSync": {
+      "model": "frame-sync",
+      "authority": "server",
+      "tickRate": 30,
+      "help": "Treat card layout as server-authoritative snapshots with client-side prediction during drag. Clients publish final transforms after pointer release, ignore stale remote echoes for locally dragged cards, and reconcile from ordered event cursors."
+    }
+  },
+  "binary": {
+    "supported": true,
+    "maxBytes": 10485760,
+    "contentTypes": ["image/png", "image/jpeg", "image/webp", "image/gif"]
+  }
 }

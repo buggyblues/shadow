@@ -165,8 +165,11 @@ type = "shadowob"
 - Skills: no native `SKILL.md` surface was found; use `GEMINI.md`, custom
   commands, and extensions for phase 1.
 - MCP: write `mcpServers` in `.gemini/settings.json`.
-- Cron/routine: no native CLI cron surface found in the researched config docs;
-  Cloud should own scheduling for phase 1.
+- Cron/routine: Cloud template routines are materialized by the shared
+  cc-connect runner from `/etc/shadowob/template-routines.json` into
+  `~/.cc-connect/crons/jobs.json`. Managed jobs use deterministic ids and a
+  spec hash so user-edited schedules are preserved. ShadowOB delivery uses
+  `session_key = "shadowob:channel:<channel_id>"` or a thread-qualified variant.
 - Hooks: write `hooksConfig` and `hooks.*` in Gemini settings.
 - Subagents: Gemini settings expose agent override and hook points around agent
   execution, but cc-connect currently drives the main Gemini CLI agent only.

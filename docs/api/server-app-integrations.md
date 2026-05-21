@@ -100,7 +100,7 @@ When a member or Buddy first invokes a command that is not default-allowed, has 
 
 Installed Apps are server-scoped and dynamic: Shadow Plays can have a different App list than another server. The Buddy runtime must therefore inject the current server's installed App metadata into every server-channel turn, not only when a user explicitly mentions an App. The injected context includes app key, name, description, default permissions, approval mode, command summaries, and the generated `GET /skills` markdown for the installed Apps.
 
-Cloud-deployed Buddies must have the Shadow CLI available in the runtime as `shadowob`, the official Shadow skill mounted for the target agent runtime, and `~/.shadowob/shadowob.config.json` configured with the Buddy token/server URL. Runtime packages may write environment placeholders such as `${SHADOW_TOKEN_BUDDY_1}` in that config, and the CLI resolves them at read time inside the container. Connector-based local installs must perform the same setup: CLI bin/shim, skill files, and a Buddy CLI profile before starting OpenClaw, Hermes, or cc-connect.
+Cloud-deployed Buddies must have the Shadow CLI available in the runtime as `shadowob`, the corresponding Shadow [Skills](https://github.com/buggyblues/shadow/tree/main/skills) mounted for the target agent runtime, and `~/.shadowob/shadowob.config.json` configured with the Buddy token/server URL. Runtime packages may write environment placeholders such as `${SHADOW_TOKEN_BUDDY_1}` in that config, and the CLI resolves them at read time inside the container. Connector-based local installs must perform the same setup: CLI bin/shim, Shadow [Skills](https://github.com/buggyblues/shadow/tree/main/skills), and a Buddy CLI profile before starting OpenClaw, Hermes, or cc-connect.
 
 ## Channel @App Mentions
 
@@ -402,4 +402,4 @@ cp integrations/.env.example integrations/.env
 docker compose -f integrations/docker-compose.yaml --env-file integrations/.env up --build
 ```
 
-Additional demo apps live in `integrations/qna` and `integrations/quiz`. A smaller legacy protocol test app remains in `skills/shadow-server-app/example-app` for multipart upload coverage.
+Additional demo apps live in `integrations/qna` and `integrations/quiz`. A smaller legacy protocol test app remains in the [`shadow-server-app`](https://github.com/buggyblues/shadow/tree/main/skills/shadow-server-app) Skill at `references/example-app` for multipart upload coverage.

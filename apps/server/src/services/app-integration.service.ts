@@ -72,14 +72,6 @@ function safeJson(value: unknown) {
   return value
 }
 
-function compactJson(value: unknown) {
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return null
-  }
-}
-
 function formatZodError(error: ZodError) {
   const first = error.issues[0]
   if (!first) return 'Invalid app manifest'
@@ -1002,6 +994,25 @@ export class AppIntegrationService {
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     const command = app.manifest.commands.find((item) => item.name === input.commandName)
     if (!command) throw Object.assign(new Error('App command not found'), { status: 404 })
+    if (input.multipart) {
+      if (command.input !== 'multipart' && command.binary?.supported !== true) {
+        throw Object.assign(new Error('App command does not accept multipart input'), {
+          status: 415,
+        })
+      }
+      const maxBytes = command.binary?.maxBytes ?? app.manifest.binary?.maxBytes
+      const contentTypes = command.binary?.contentTypes ?? app.manifest.binary?.contentTypes
+      for (const file of input.multipart.files) {
+        if (maxBytes && file.value.size > maxBytes) {
+          throw Object.assign(new Error('Uploaded file exceeds app command limit'), { status: 413 })
+        }
+        if (contentTypes?.length && !contentTypes.includes(file.type)) {
+          throw Object.assign(new Error('Uploaded file type is not accepted by this app command'), {
+            status: 415,
+          })
+        }
+      }
+    }
     const commandAccess = await this.requireCommandAccess({
       actor: input.actor,
       app,
@@ -1209,11 +1220,33 @@ export class AppIntegrationService {
   async skills(serverIdOrSlug: string, appKey: string, actor: Actor) {
     const app = await this.get(serverIdOrSlug, appKey, actor)
     const manifest = app.manifest
+    const realtimeHelp = manifest.realtime
+      ? [
+          '',
+          'Realtime:',
+          manifest.realtime.subscribe?.help
+            ? `- Subscribe: ${manifest.realtime.subscribe.help}`
+            : '- Subscribe with `shadowob app events <appKey> --server "<server>" --json`.',
+          manifest.realtime.publish?.help ? `- Publish: ${manifest.realtime.publish.help}` : '',
+          manifest.realtime.stateSync?.help
+            ? `- State sync: ${manifest.realtime.stateSync.help}`
+            : '',
+        ].filter(Boolean)
+      : []
+    const binaryHelp = manifest.binary?.supported
+      ? [
+          '',
+          'Binary uploads:',
+          `- This app accepts binary uploads up to ${manifest.binary.maxBytes ?? 'the app limit'} bytes.`,
+          '- Use `shadowob app call <appKey> <command> --server "<server>" --file "<path>" --json-input \'<input-json>\' --json` for commands whose help says they accept files.',
+        ]
+      : []
     const lines = [
       `# ${manifest.name} App Skill`,
       '',
       `Use when working with ${manifest.name} resources inside this Shadow server.`,
       `Installed server id: ${app.serverId}`,
+      ...(manifest.help?.overview ? ['', manifest.help.overview] : []),
       '',
       'Always call through the Shadow CLI:',
       '',
@@ -1222,19 +1255,18 @@ export class AppIntegrationService {
       '```',
       '',
       'The `--json-input` value is the raw command input object, for example `{"title":"Example","priority":"high"}`. The CLI wraps the HTTP request for you.',
+      'Use `shadowob app call <appKey> <command> --server "<server>" --help` only when the command list is not enough; command schemas and examples are disclosed there.',
       '',
       'Do not call this App through curl, fetch, raw HTTP routes, or the JavaScript SDK. Use `shadowob app call` so Shadow can apply the server App identity, grant, and command policy path consistently.',
       'If the CLI says command approval is required, do not send a chat form or approve it yourself. Shadow will show the approval popup to a person; wait for that person to confirm before retrying.',
+      ...binaryHelp,
+      ...realtimeHelp,
       '',
       'Available commands:',
-      ...manifest.commands.flatMap((command) => {
-        const lines = [
-          `- ${manifest.appKey} ${command.name}: ${command.description ?? command.title ?? command.permission}`,
-        ]
-        const schema = compactJson(command.inputSchema)
-        if (schema) lines.push(`  input schema: \`${schema}\``)
-        return lines
-      }),
+      ...manifest.commands.map(
+        (command) =>
+          `- ${manifest.appKey} ${command.name}: ${command.help?.summary ?? command.description ?? command.title ?? command.permission}`,
+      ),
     ]
     return {
       appKey: manifest.appKey,

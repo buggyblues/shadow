@@ -21,11 +21,7 @@
     },
     "environment": {
       "description": "Deployment environment",
-      "enum": [
-        "development",
-        "production",
-        "staging"
-      ],
+      "enum": ["development", "production", "staging"],
       "type": "string"
     },
     "locale": {
@@ -35,6 +31,13 @@
     "i18n": {
       "description": "Internationalization dictionary.\nKeyed by locale → key → translated string.\n\nTemplate strings can reference translations via `${i18n:key}`.\nThe active locale is determined by `config.locale`.",
       "$ref": "#/definitions/Record%3Cstring%2CRecord%3Cstring%2Cstring%3E%3E"
+    },
+    "routines": {
+      "description": "Scheduled routines owned by template agents.\nDelivery surfaces are contributed by plugins, so this section remains\nindependent from Shadow, Slack, webhooks, or other channel providers.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/CloudRoutineConfig"
+      }
     },
     "team": {
       "description": "Team / agent pack definition.\nGroups agents with shared defaults.",
@@ -68,11 +71,122 @@
       "$ref": "#/definitions/CloudSkillsConfig"
     }
   },
-  "required": [
-    "version"
-  ],
+  "required": ["version"],
   "definitions": {
     "Record<string,Record<string,string>>": {
+      "type": "object"
+    },
+    "CloudRoutineConfig": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Stable routine id. Used as the sync key in runtime cron stores.",
+          "type": "string"
+        },
+        "agentId": {
+          "description": "Agent deployment id that owns the routine.",
+          "type": "string"
+        },
+        "title": {
+          "description": "Human-readable label for dashboards/runtime UIs.",
+          "type": "string"
+        },
+        "description": {
+          "description": "Optional operator-facing description.",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Disable without removing the template definition.",
+          "type": "boolean"
+        },
+        "schedule": {
+          "$ref": "#/definitions/CloudRoutineSchedule",
+          "description": "Schedule definition. At least one of cron or interval should be set."
+        },
+        "prompt": {
+          "description": "Prompt/task sent to the agent when the routine fires.",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+        }
+      },
+      "required": ["agentId", "id", "prompt", "schedule"]
+    },
+    "CloudRoutineSchedule": {
+      "type": "object",
+      "properties": {
+        "cron": {
+          "description": "Cron expression in the deployment timezone, e.g. \"0 9 * * *\".",
+          "type": "string"
+        },
+        "interval": {
+          "description": "Human interval supported by runtime syncers, e.g. \"15m\", \"1h\", \"1d\".",
+          "type": "string"
+        },
+        "timezone": {
+          "description": "IANA timezone for cron evaluation. Defaults to deployment runtime context.",
+          "type": "string"
+        },
+        "maxConcurrentRuns": {
+          "description": "Maximum overlapping runs for this routine. Defaults to the runtime's behavior.",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    "Record<string,unknown>": {
       "type": "object"
     },
     "TeamConfig": {
@@ -96,9 +210,7 @@
           "$ref": "#/definitions/AgentCompliance"
         }
       },
-      "required": [
-        "name"
-      ]
+      "required": ["name"]
     },
     "AgentModel": {
       "description": "Agent model configuration — mirrors gitagent's model section.\nSpecifies primary model with ordered fallbacks and inference constraints.",
@@ -171,19 +283,10 @@
                               "const": 0
                             }
                           },
-                          "required": [
-                            "minimum"
-                          ]
+                          "required": ["minimum"]
                         }
                       },
-                      "required": [
-                        "exclusive",
-                        "kind",
-                        "schema",
-                        "target",
-                        "validate",
-                        "value"
-                      ]
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                     }
                   }
                 },
@@ -236,19 +339,10 @@
                               "const": 2
                             }
                           },
-                          "required": [
-                            "maximum"
-                          ]
+                          "required": ["maximum"]
                         }
                       },
-                      "required": [
-                        "exclusive",
-                        "kind",
-                        "schema",
-                        "target",
-                        "validate",
-                        "value"
-                      ]
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                     }
                   }
                 },
@@ -301,20 +395,10 @@
                               "const": 0
                             }
                           },
-                          "required": [
-                            "minimum",
-                            "type"
-                          ]
+                          "required": ["minimum", "type"]
                         }
                       },
-                      "required": [
-                        "exclusive",
-                        "kind",
-                        "schema",
-                        "target",
-                        "validate",
-                        "value"
-                      ]
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                     }
                   }
                 },
@@ -375,19 +459,10 @@
                               "const": 0
                             }
                           },
-                          "required": [
-                            "minimum"
-                          ]
+                          "required": ["minimum"]
                         }
                       },
-                      "required": [
-                        "exclusive",
-                        "kind",
-                        "schema",
-                        "target",
-                        "validate",
-                        "value"
-                      ]
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                     }
                   }
                 },
@@ -440,19 +515,10 @@
                               "const": 1
                             }
                           },
-                          "required": [
-                            "maximum"
-                          ]
+                          "required": ["maximum"]
                         }
                       },
-                      "required": [
-                        "exclusive",
-                        "kind",
-                        "schema",
-                        "target",
-                        "validate",
-                        "value"
-                      ]
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                     }
                   }
                 },
@@ -463,23 +529,13 @@
             },
             "thinkingLevel": {
               "description": "Thinking depth level",
-              "enum": [
-                "adaptive",
-                "high",
-                "low",
-                "medium",
-                "minimal",
-                "off",
-                "xhigh"
-              ],
+              "enum": ["adaptive", "high", "low", "medium", "minimal", "off", "xhigh"],
               "type": "string"
             }
           }
         }
       },
-      "required": [
-        "preferred"
-      ]
+      "required": ["preferred"]
     },
     "AgentCompliance": {
       "description": "Agent compliance/risk policy.\nMirrors gitagent compliance fields in camelCase for internal usage.",
@@ -487,12 +543,7 @@
       "properties": {
         "riskTier": {
           "description": "Risk tier for this agent's tasks",
-          "enum": [
-            "critical",
-            "high",
-            "low",
-            "standard"
-          ],
+          "enum": ["critical", "high", "low", "standard"],
           "type": "string"
         },
         "frameworks": {
@@ -504,12 +555,7 @@
         },
         "humanInTheLoop": {
           "description": "Human supervision level",
-          "enum": [
-            "advisory",
-            "always",
-            "conditional",
-            "none"
-          ],
+          "enum": ["advisory", "always", "conditional", "none"],
           "type": "string"
         },
         "auditLogging": {
@@ -535,12 +581,7 @@
           "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
         }
       },
-      "required": [
-        "plugin"
-      ]
-    },
-    "Record<string,unknown>": {
-      "type": "object"
+      "required": ["plugin"]
     },
     "Record<string,CloudPluginInstanceConfig>": {
       "type": "object"
@@ -651,9 +692,7 @@
                 }
               }
             },
-            "required": [
-              "id"
-            ]
+            "required": ["id"]
           }
         }
       }
@@ -683,9 +722,7 @@
           "$ref": "#/definitions/Partial%3COpenClawConfig%3E"
         }
       },
-      "required": [
-        "id"
-      ]
+      "required": ["id"]
     },
     "Partial<OpenClawConfig>": {
       "type": "object",
@@ -824,20 +861,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -890,20 +917,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -962,34 +979,17 @@
         },
         "thinkingDefault": {
           "description": "Default thinking level",
-          "enum": [
-            "adaptive",
-            "high",
-            "low",
-            "medium",
-            "minimal",
-            "off",
-            "xhigh"
-          ],
+          "enum": ["adaptive", "high", "low", "medium", "minimal", "off", "xhigh"],
           "type": "string"
         },
         "verboseDefault": {
           "description": "Default verbose level",
-          "enum": [
-            "full",
-            "off",
-            "on"
-          ],
+          "enum": ["full", "off", "on"],
           "type": "string"
         },
         "elevatedDefault": {
           "description": "Default elevated-output level",
-          "enum": [
-            "ask",
-            "full",
-            "off",
-            "on"
-          ],
+          "enum": ["ask", "full", "off", "on"],
           "type": "string"
         },
         "timeoutSeconds": {
@@ -1036,20 +1036,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -1102,20 +1092,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -1168,20 +1148,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -1234,20 +1204,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -1266,27 +1226,17 @@
         },
         "envelopeTimestamp": {
           "description": "Whether to include absolute timestamps in inbound message envelopes",
-          "enum": [
-            "off",
-            "on"
-          ],
+          "enum": ["off", "on"],
           "type": "string"
         },
         "envelopeElapsed": {
           "description": "Whether to include elapsed time suffixes in inbound message envelopes",
-          "enum": [
-            "off",
-            "on"
-          ],
+          "enum": ["off", "on"],
           "type": "string"
         },
         "timeFormat": {
           "description": "Time format",
-          "enum": [
-            "12",
-            "24",
-            "auto"
-          ],
+          "enum": ["12", "24", "auto"],
           "type": "string"
         },
         "heartbeat": {
@@ -1323,9 +1273,7 @@
           }
         }
       },
-      "required": [
-        "primary"
-      ]
+      "required": ["primary"]
     },
     "Record<string,OpenClawModelEntry>": {
       "type": "object"
@@ -1364,10 +1312,7 @@
       "properties": {
         "mode": {
           "description": "Compaction mode",
-          "enum": [
-            "default",
-            "safeguard"
-          ],
+          "enum": ["default", "safeguard"],
           "type": "string"
         },
         "timeoutSeconds": {
@@ -1414,20 +1359,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -1438,11 +1373,7 @@
         },
         "identifierPolicy": {
           "description": "Identifier policy",
-          "enum": [
-            "custom",
-            "off",
-            "strict"
-          ],
+          "enum": ["custom", "off", "strict"],
           "type": "string"
         },
         "identifierInstructions": {
@@ -1506,20 +1437,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -1572,20 +1493,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -1633,15 +1544,7 @@
         },
         "thinkingDefault": {
           "description": "Per-agent thinking level",
-          "enum": [
-            "adaptive",
-            "high",
-            "low",
-            "medium",
-            "minimal",
-            "off",
-            "xhigh"
-          ],
+          "enum": ["adaptive", "high", "low", "medium", "minimal", "off", "xhigh"],
           "type": "string"
         },
         "params": {
@@ -1669,10 +1572,7 @@
           "type": "object",
           "properties": {
             "type": {
-              "enum": [
-                "acp",
-                "subagent"
-              ],
+              "enum": ["acp", "subagent"],
               "type": "string"
             },
             "acp": {
@@ -1680,9 +1580,7 @@
               "$ref": "#/definitions/OpenClawAcpRuntime"
             }
           },
-          "required": [
-            "type"
-          ]
+          "required": ["type"]
         },
         "subagents": {
           "description": "Subagent allow rules",
@@ -1748,9 +1646,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "id"
-      ]
+      "required": ["id"]
     },
     "OpenClawAgentIdentity": {
       "description": "OpenClaw agent identity config.",
@@ -1788,10 +1684,7 @@
         },
         "mode": {
           "description": "Session mode",
-          "enum": [
-            "ephemeral",
-            "persistent"
-          ],
+          "enum": ["ephemeral", "persistent"],
           "type": "string"
         },
         "cwd": {
@@ -1799,9 +1692,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "agent"
-      ]
+      "required": ["agent"]
     },
     "OpenClawBinding": {
       "description": "OpenClaw binding entry for multi-agent routing.",
@@ -1813,10 +1704,7 @@
         },
         "type": {
           "description": "Binding type",
-          "enum": [
-            "acp",
-            "route"
-          ],
+          "enum": ["acp", "route"],
           "type": "string"
         },
         "match": {
@@ -1836,11 +1724,7 @@
               "type": "object",
               "properties": {
                 "kind": {
-                  "enum": [
-                    "channel",
-                    "direct",
-                    "group"
-                  ],
+                  "enum": ["channel", "direct", "group"],
                   "type": "string"
                 },
                 "id": {
@@ -1857,9 +1741,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "channel"
-          ]
+          "required": ["channel"]
         },
         "acp": {
           "description": "ACP binding config (only for type: \"acp\")",
@@ -1880,10 +1762,7 @@
           }
         }
       },
-      "required": [
-        "agentId",
-        "match"
-      ]
+      "required": ["agentId", "match"]
     },
     "OpenClawChannelsConfig": {
       "description": "OpenClaw channels section — each channel key matches official docs.",
@@ -1895,11 +1774,7 @@
           "type": "object",
           "properties": {
             "groupPolicy": {
-              "enum": [
-                "allowlist",
-                "disabled",
-                "open"
-              ],
+              "enum": ["allowlist", "disabled", "open"],
               "type": "string"
             },
             "heartbeat": {
@@ -1949,18 +1824,11 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "command",
-                      "description"
-                    ]
+                    "required": ["command", "description"]
                   }
                 },
                 "replyToMode": {
-                  "enum": [
-                    "all",
-                    "first",
-                    "off"
-                  ],
+                  "enum": ["all", "first", "off"],
                   "type": "string"
                 },
                 "linkPreview": {
@@ -1983,31 +1851,20 @@
                   "type": "string"
                 },
                 "allowBots": {
-                  "enum": [
-                    false,
-                    "mentions",
-                    true
-                  ]
+                  "enum": [false, "mentions", true]
                 },
                 "guilds": {
                   "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
                 },
                 "replyToMode": {
-                  "enum": [
-                    "all",
-                    "first",
-                    "off"
-                  ],
+                  "enum": ["all", "first", "off"],
                   "type": "string"
                 },
                 "textChunkLimit": {
                   "type": "number"
                 },
                 "chunkMode": {
-                  "enum": [
-                    "length",
-                    "newline"
-                  ],
+                  "enum": ["length", "newline"],
                   "type": "string"
                 }
               }
@@ -2052,10 +1909,7 @@
                   "type": "number"
                 },
                 "chunkMode": {
-                  "enum": [
-                    "length",
-                    "newline"
-                  ],
+                  "enum": ["length", "newline"],
                   "type": "string"
                 },
                 "sendReadReceipts": {
@@ -2106,12 +1960,7 @@
         },
         "dmPolicy": {
           "description": "DM policy",
-          "enum": [
-            "allowlist",
-            "disabled",
-            "open",
-            "pairing"
-          ],
+          "enum": ["allowlist", "disabled", "open", "pairing"],
           "type": "string"
         },
         "allowFrom": {
@@ -2123,11 +1972,7 @@
         },
         "groupPolicy": {
           "description": "Group policy",
-          "enum": [
-            "allowlist",
-            "disabled",
-            "open"
-          ],
+          "enum": ["allowlist", "disabled", "open"],
           "type": "string"
         },
         "historyLimit": {
@@ -2174,20 +2019,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -2240,20 +2075,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -2264,12 +2089,7 @@
         },
         "streaming": {
           "description": "Streaming mode",
-          "enum": [
-            "block",
-            "off",
-            "partial",
-            "progress"
-          ],
+          "enum": ["block", "off", "partial", "progress"],
           "type": "string"
         },
         "configWrites": {
@@ -2284,15 +2104,7 @@
       "properties": {
         "inlineButtons": {
           "description": "Inline button scope: off, DM-only, group-only, all, or allowlist",
-          "enum": [
-            "all",
-            "allowlist",
-            "dm",
-            false,
-            "group",
-            "off",
-            true
-          ]
+          "enum": ["all", "allowlist", "dm", false, "group", "off", true]
         },
         "interactive": {
           "description": "Native interactive message support",
@@ -2383,20 +2195,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -2419,10 +2221,7 @@
               "type": "boolean"
             },
             "deliveryMode": {
-              "enum": [
-                "final_only",
-                "live"
-              ],
+              "enum": ["final_only", "live"],
               "type": "string"
             },
             "maxOutputChars": {
@@ -2454,12 +2253,7 @@
         },
         "dmScope": {
           "description": "DM session scope",
-          "enum": [
-            "main",
-            "per-account-channel-peer",
-            "per-channel-peer",
-            "per-peer"
-          ],
+          "enum": ["main", "per-account-channel-peer", "per-channel-peer", "per-peer"],
           "type": "string"
         },
         "reset": {
@@ -2467,10 +2261,7 @@
           "type": "object",
           "properties": {
             "mode": {
-              "enum": [
-                "daily",
-                "idle"
-              ],
+              "enum": ["daily", "idle"],
               "type": "string"
             },
             "atHour": {
@@ -2530,12 +2321,7 @@
         },
         "ackReactionScope": {
           "description": "Ack reaction scope",
-          "enum": [
-            "all",
-            "direct",
-            "group-all",
-            "group-mentions"
-          ],
+          "enum": ["all", "direct", "group-all", "group-mentions"],
           "type": "string"
         },
         "removeAckAfterReply": {
@@ -2547,13 +2333,7 @@
           "type": "object",
           "properties": {
             "mode": {
-              "enum": [
-                "collect",
-                "followup",
-                "interrupt",
-                "queue",
-                "steer"
-              ],
+              "enum": ["collect", "followup", "interrupt", "queue", "steer"],
               "type": "string"
             },
             "debounceMs": {
@@ -2616,10 +2396,7 @@
         },
         "nonInteractive": {
           "description": "Behavior when approval is needed but no human is present",
-          "enum": [
-            "deny",
-            "fail"
-          ],
+          "enum": ["deny", "fail"],
           "type": "string"
         },
         "elevated": {
@@ -2692,10 +2469,7 @@
       "properties": {
         "mode": {
           "description": "Merge mode",
-          "enum": [
-            "merge",
-            "replace"
-          ],
+          "enum": ["merge", "replace"],
           "type": "string"
         },
         "providers": {
@@ -2781,11 +2555,7 @@
               "type": "boolean"
             },
             "nodeManager": {
-              "enum": [
-                "npm",
-                "pnpm",
-                "yarn"
-              ],
+              "enum": ["npm", "pnpm", "yarn"],
               "type": "string"
             }
           }
@@ -2805,10 +2575,7 @@
       "properties": {
         "mode": {
           "description": "Gateway mode",
-          "enum": [
-            "local",
-            "remote"
-          ],
+          "enum": ["local", "remote"],
           "type": "string"
         },
         "port": {
@@ -2855,20 +2622,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -2886,12 +2643,7 @@
           "type": "object",
           "properties": {
             "mode": {
-              "enum": [
-                "none",
-                "password",
-                "token",
-                "trusted-proxy"
-              ],
+              "enum": ["none", "password", "token", "trusted-proxy"],
               "type": "string"
             },
             "token": {
@@ -2925,12 +2677,7 @@
           "type": "object",
           "properties": {
             "mode": {
-              "enum": [
-                "hot",
-                "hybrid",
-                "off",
-                "restart"
-              ],
+              "enum": ["hot", "hybrid", "off", "restart"],
               "type": "string"
             },
             "debounceMs": {
@@ -2958,19 +2705,12 @@
         },
         "consoleStyle": {
           "description": "Console output style",
-          "enum": [
-            "compact",
-            "json",
-            "pretty"
-          ],
+          "enum": ["compact", "json", "pretty"],
           "type": "string"
         },
         "redactSensitive": {
           "description": "Redact sensitive data from tool output",
-          "enum": [
-            "off",
-            "tools"
-          ],
+          "enum": ["off", "tools"],
           "type": "string"
         }
       }
@@ -2988,19 +2728,12 @@
         },
         "backend": {
           "description": "Kubernetes workload backend. Defaults to agent-sandbox for new deployments.",
-          "enum": [
-            "agent-sandbox",
-            "deployment"
-          ],
+          "enum": ["agent-sandbox", "deployment"],
           "type": "string"
         },
         "backendPolicy": {
           "description": "Backend selection policy.\n- sandbox-required: fail fast if agent-sandbox is unavailable.\n- sandbox-preferred: use agent-sandbox when preflight passes, otherwise fall back to Deployment.\n- deployment-only: always use Kubernetes Deployment.",
-          "enum": [
-            "deployment-only",
-            "sandbox-preferred",
-            "sandbox-required"
-          ],
+          "enum": ["deployment-only", "sandbox-preferred", "sandbox-required"],
           "type": "string"
         },
         "sandbox": {
@@ -3019,9 +2752,7 @@
           }
         }
       },
-      "required": [
-        "agents"
-      ]
+      "required": ["agents"]
     },
     "AgentSandboxConfig": {
       "type": "object",
@@ -3065,11 +2796,7 @@
         },
         "accessMode": {
           "description": "Access mode for the state PVC.",
-          "enum": [
-            "ReadOnlyMany",
-            "ReadWriteMany",
-            "ReadWriteOnce"
-          ],
+          "enum": ["ReadOnlyMany", "ReadWriteMany", "ReadWriteOnce"],
           "type": "string"
         }
       }
@@ -3125,20 +2852,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -3153,10 +2870,7 @@
         },
         "shutdownPolicy": {
           "description": "agent-sandbox shutdown policy.",
-          "enum": [
-            "Delete",
-            "Retain"
-          ],
+          "enum": ["Delete", "Retain"],
           "type": "string"
         }
       }
@@ -3170,10 +2884,7 @@
         },
         "driver": {
           "description": "Preferred backup driver.",
-          "enum": [
-            "restic",
-            "volumeSnapshot"
-          ],
+          "enum": ["restic", "volumeSnapshot"],
           "type": "string"
         },
         "schedule": {
@@ -3224,20 +2935,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -3299,20 +3000,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -3323,10 +3014,7 @@
         },
         "updateStrategy": {
           "description": "Warm-pool update strategy.",
-          "enum": [
-            "OnReplenish",
-            "Recreate"
-          ],
+          "enum": ["OnReplenish", "Recreate"],
           "type": "string"
         }
       }
@@ -3419,19 +3107,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum"
-                      ]
+                      "required": ["minimum"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -3476,20 +3155,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -3583,22 +3252,11 @@
           "type": "string"
         }
       },
-      "required": [
-        "configuration",
-        "id",
-        "runtime"
-      ]
+      "required": ["configuration", "id", "runtime"]
     },
     "AgentRuntime": {
       "description": "Agent runtime types.",
-      "enum": [
-        "claude-code",
-        "codex",
-        "gemini",
-        "hermes",
-        "openclaw",
-        "opencode"
-      ],
+      "enum": ["claude-code", "codex", "gemini", "hermes", "openclaw", "opencode"],
       "type": "string"
     },
     "AgentConfiguration": {
@@ -3686,11 +3344,7 @@
           "type": "object",
           "properties": {
             "onFailure": {
-              "enum": [
-                "abort",
-                "notify",
-                "retry"
-              ],
+              "enum": ["abort", "notify", "retry"],
               "type": "string"
             },
             "notifyChannel": {
@@ -3739,20 +3393,10 @@
                               "const": 0
                             }
                           },
-                          "required": [
-                            "minimum",
-                            "type"
-                          ]
+                          "required": ["minimum", "type"]
                         }
                       },
-                      "required": [
-                        "exclusive",
-                        "kind",
-                        "schema",
-                        "target",
-                        "validate",
-                        "value"
-                      ]
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                     }
                   }
                 },
@@ -3764,10 +3408,7 @@
           }
         }
       },
-      "required": [
-        "name",
-        "steps"
-      ]
+      "required": ["name", "steps"]
     },
     "Record<string,AgentWorkflowStep>": {
       "type": "object"
@@ -3786,10 +3427,7 @@
         },
         "strategy": {
           "description": "Strategy for delivering source files into the container.\nDefault: \"init-container\"",
-          "enum": [
-            "build-image",
-            "init-container"
-          ],
+          "enum": ["build-image", "init-container"],
           "type": "string"
         },
         "mountPath": {
@@ -3873,20 +3511,10 @@
                           "const": 0
                         }
                       },
-                      "required": [
-                        "minimum",
-                        "type"
-                      ]
+                      "required": ["minimum", "type"]
                     }
                   },
-                  "required": [
-                    "exclusive",
-                    "kind",
-                    "schema",
-                    "target",
-                    "validate",
-                    "value"
-                  ]
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
                 }
               }
             },
@@ -3904,9 +3532,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "url"
-      ]
+      "required": ["url"]
     },
     "AgentPermissions": {
       "description": "Per-tool permission policy for an agent.\nInspired by Claude Managed Agents' toolset-level permission control.",
@@ -3922,25 +3548,15 @@
         },
         "nonInteractive": {
           "description": "Behaviour when the agent runs non-interactively (no human in the loop)",
-          "enum": [
-            "deny",
-            "fail"
-          ],
+          "enum": ["deny", "fail"],
           "type": "string"
         }
       },
-      "required": [
-        "default"
-      ]
+      "required": ["default"]
     },
     "PermissionLevel": {
       "description": "Permission level for agent tools — maps to ACPX permission modes.",
-      "enum": [
-        "always-allow",
-        "always-ask",
-        "approve-reads",
-        "deny-all"
-      ],
+      "enum": ["always-allow", "always-ask", "approve-reads", "deny-all"],
       "type": "string"
     },
     "Record<string,PermissionLevel>": {
@@ -3952,11 +3568,7 @@
       "properties": {
         "type": {
           "description": "Network policy type",
-          "enum": [
-            "deny-all",
-            "limited",
-            "unrestricted"
-          ],
+          "enum": ["deny-all", "limited", "unrestricted"],
           "type": "string"
         },
         "allowedHosts": {
@@ -3975,9 +3587,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "type"
-      ]
+      "required": ["type"]
     },
     "SharedWorkspaceConfig": {
       "description": "Shared workspace configuration — creates a PersistentVolumeClaim\nthat is mounted into every agent container, so agents share a\ndistributed filesystem that OpenClaw can discover.",
@@ -4001,17 +3611,11 @@
         },
         "accessMode": {
           "description": "Access mode",
-          "enum": [
-            "ReadOnlyMany",
-            "ReadWriteMany",
-            "ReadWriteOnce"
-          ],
+          "enum": ["ReadOnlyMany", "ReadWriteMany", "ReadWriteOnce"],
           "type": "string"
         }
       },
-      "required": [
-        "enabled"
-      ]
+      "required": ["enabled"]
     },
     "CloudSkillsConfig": {
       "description": "Cloud-level skills configuration — manages skill installation\nand distribution across agent containers.",
@@ -4040,11 +3644,7 @@
         },
         "source": {
           "description": "Skill source: \"bundled\" (built-in), \"npm\" (install from registry), or \"path\" (local directory)",
-          "enum": [
-            "bundled",
-            "npm",
-            "path"
-          ],
+          "enum": ["bundled", "npm", "path"],
           "type": "string"
         },
         "version": {
@@ -4068,9 +3668,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "name"
-      ]
+      "required": ["name"]
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#"

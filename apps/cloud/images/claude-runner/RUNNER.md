@@ -167,9 +167,11 @@ not through OpenClaw `models.providers`.
   `.claude/commands` only for compatibility.
 - MCP: write `.mcp.json` for project-scoped MCP and avoid relying on
   `~/.claude.json` in immutable images.
-- Cron/routine: Claude Code has scheduled prompt support in its automation
-  docs, but Cloud phase 1 should treat scheduling as a Cloud/Shadow concern
-  unless explicitly mounting a Claude-native schedule store.
+- Cron/routine: Cloud template routines are materialized by the shared
+  cc-connect runner from `/etc/shadowob/template-routines.json` into
+  `~/.cc-connect/crons/jobs.json`. Managed jobs use deterministic ids and a
+  spec hash so user-edited schedules are preserved. ShadowOB delivery uses
+  `session_key = "shadowob:channel:<channel_id>"` or a thread-qualified variant.
 - Hooks: write Claude settings `hooks`, not OpenClaw `hooks`.
 - Subagents: materialize `.claude/agents` and any preloaded skill references.
 - Logs: collect both cc-connect daemon logs and Claude Code native telemetry or

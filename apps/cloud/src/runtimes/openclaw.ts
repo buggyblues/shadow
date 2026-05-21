@@ -17,6 +17,7 @@ import {
   OPENCLAW_SKILLS_DIR,
   SHADOW_SLASH_COMMANDS_PATH,
 } from './package-common.js'
+import { appendTemplateRoutineFiles } from './routines.js'
 import { openClawSlashCommands } from './slash-commands/openclaw.js'
 
 export const DEFAULT_OPENCLAW_RUNNER_IMAGE =
@@ -67,6 +68,13 @@ const openclawAdapter: RuntimeAdapter = {
     }
     addShadowobSkill(runtimeFiles, 'openclaw', context.agent.runtime)
     addShadowobCliAuth(runtimeFiles, context.runtimeExtensions)
+    appendTemplateRoutineFiles(
+      runtimeFiles,
+      context.config,
+      context.agent,
+      'openclaw',
+      context.runtimeExtensions,
+    )
 
     const configData: Record<string, string> = {
       'config.json': JSON.stringify(openclawConfig, null, 2),

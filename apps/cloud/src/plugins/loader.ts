@@ -50,6 +50,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
     import('./stripe/index.js'),
     import('./shopify/index.js'),
     import('./paypal/index.js'),
+    import('./agentmemory/index.js'),
     import('./agent-browser/index.js'),
     import('./skill-discovery/index.js'),
     import('./opencli/index.js'),

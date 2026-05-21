@@ -17,6 +17,9 @@ The current image already follows this model more closely than the ACP runners:
   ShadowOB connector CLI.
 - `entrypoint.mjs` reads `/etc/openclaw/config.json`.
 - Runtime extensions are read from `/etc/openclaw/runtime-extensions.json`.
+- Template routines are read from `/etc/shadowob/template-routines.json` and
+  synced into the OpenClaw cron store before the gateway starts. The sync keeps a
+  managed spec hash so runtime-edited jobs are preserved on redeploy.
 - The generated OpenClaw config is written outside mutable state by default.
 - File logging goes to `/var/log/openclaw/entrypoint.log`.
 - Shadow slash command artifacts are surfaced through

@@ -425,11 +425,25 @@ export interface PluginShadowobRuntime {
   capabilities?: Record<string, unknown>
 }
 
+export interface PluginRoutineDelivery {
+  /** Cloud routine id this plugin wires to an external delivery surface. */
+  routineId: string
+  /** Plugin that owns the delivery semantics, e.g. "shadowob". */
+  pluginId: string
+  /** Plugin-defined delivery kind, e.g. "channel". */
+  kind: string
+  /** Runtime-readable target metadata. Keep secrets as env keys/placeholders. */
+  target: Record<string, unknown>
+  /** Optional env placeholders needed by a runtime bridge for this delivery. */
+  env?: Record<string, string>
+}
+
 export interface PluginRuntimeExtension {
   openclaw?: {
     manifestPatches?: PluginOpenClawManifestPatch[]
   }
   shadowob?: PluginShadowobRuntime
+  routineDeliveries?: PluginRoutineDelivery[]
   artifacts?: PluginRuntimeArtifact[]
   runtimeDependencies?: PluginRuntimeDependency[]
   skillSources?: PluginRuntimeSource[]

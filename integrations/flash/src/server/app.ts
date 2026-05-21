@@ -1,6 +1,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
 import {
@@ -8,6 +10,7 @@ import {
   FlashBoardDao,
   FlashCardDao,
   FlashCommandEventDao,
+  FlashSelectionDao,
 } from '../dao/flash.dao.js'
 import { createDatabase } from '../db/client.js'
 import { migrate } from '../db/migrate.js'
@@ -50,6 +53,19 @@ function trimTrailingSlash(value: string) {
 
 function publicBaseUrl() {
   return trimTrailingSlash(process.env.SHADOW_APP_PUBLIC_BASE_URL ?? 'http://localhost:4216')
+}
+
+function uploadDir() {
+  return process.env.FLASH_UPLOAD_DIR ?? join(process.cwd(), 'data', 'uploads')
+}
+
+function uploadContentType(filename: string) {
+  const lower = filename.toLowerCase()
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+  if (lower.endsWith('.webp')) return 'image/webp'
+  if (lower.endsWith('.gif')) return 'image/gif'
+  return 'application/octet-stream'
 }
 
 function shadowApiBaseUrl() {
@@ -151,6 +167,39 @@ function readOauthSession(cookie: string | undefined) {
   return session
 }
 
+function parseJsonField(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return {}
+  return JSON.parse(value)
+}
+
+async function uploadedFileInput(file: File, field: string) {
+  const buffer = Buffer.from(await file.arrayBuffer())
+  return {
+    field,
+    filename: file.name,
+    contentType: file.type || 'application/octet-stream',
+    size: buffer.byteLength,
+    dataBase64: buffer.toString('base64'),
+  }
+}
+
+async function parseMultipartCommandInput(c: Context) {
+  const body = await c.req.parseBody({ all: true })
+  let input = parseJsonField(
+    Array.isArray(body.input) ? body.input[0] : (body.input ?? body.payload),
+  ) as Record<string, unknown>
+  const uploads = []
+  for (const [key, raw] of Object.entries(body)) {
+    const values = Array.isArray(raw) ? raw : [raw]
+    for (const value of values) {
+      if (value instanceof File) uploads.push(await uploadedFileInput(value, key))
+    }
+  }
+  if (uploads.length === 1 && !input.upload) input = { ...input, upload: uploads[0] }
+  if (uploads.length > 1 && !input.uploads) input = { ...input, uploads }
+  return input
+}
+
 function compactOauthProfile(profile: FlashOAuthSession['profile']): FlashOAuthSession['profile'] {
   const avatarUrl =
     typeof profile.avatarUrl === 'string' && profile.avatarUrl.length <= 500
@@ -217,6 +266,7 @@ export async function createFlashApp() {
     cards: new FlashCardDao(db),
     arenas: new FlashArenaDao(db),
     events: new FlashCommandEventDao(db),
+    selections: new FlashSelectionDao(db),
     realtime,
   })
   const commands = defineCommandHandlers(service)
@@ -227,6 +277,13 @@ export async function createFlashApp() {
   app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
   app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
   app.get('/assets/*', serveStatic({ root: './dist/client' }))
+  app.get('/uploads/:name', async (c) => {
+    const name = basename(c.req.param('name'))
+    if (!/^[a-zA-Z0-9_.-]+$/u.test(name)) return c.text('Not found', 404)
+    const file = await readFile(join(uploadDir(), name)).catch(() => null)
+    if (!file) return c.text('Not found', 404)
+    return c.body(file, 200, { 'Content-Type': uploadContentType(name) })
+  })
   app.get('/shadow/server', (c) => c.html(shellPage()))
   app.get('/shadow/server/*', (c) => c.html(shellPage()))
 
@@ -341,13 +398,18 @@ export async function createFlashApp() {
   app.post('/api/shadow/commands/:commandName', async (c) => {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
+    const contentType = c.req.header('content-type') ?? ''
+    const requestInput = contentType.includes('multipart/form-data')
+      ? await parseMultipartCommandInput(c)
+      : undefined
     const result = await shadowApp.executeCommand(
       name,
       {
         authorizationHeader: c.req.header('authorization'),
         serverIdHeader: c.req.header('X-Shadow-Server-Id'),
         appKeyHeader: c.req.header('X-Shadow-App-Key'),
-        requestBody: await c.req.text(),
+        requestBody: requestInput === undefined ? await c.req.text() : undefined,
+        requestInput,
       },
       commands,
     )

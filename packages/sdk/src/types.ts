@@ -198,6 +198,17 @@ export interface ShadowServerAppCommand {
   name: string
   title?: string
   description?: string
+  help?: {
+    summary?: string
+    usage?: string
+    details?: string
+    examples?: readonly {
+      title?: string
+      command?: string
+      input?: unknown
+    }[]
+    schemaRef?: string
+  }
   path: string
   method?: 'POST'
   input?: 'json' | 'multipart'
@@ -211,6 +222,25 @@ export interface ShadowServerAppCommand {
     field?: string
     maxBytes?: number
     contentTypes?: readonly string[]
+  }
+}
+
+export interface ShadowServerAppRealtimeSpec {
+  transports?: readonly ('sse' | 'websocket')[]
+  subscribe?: {
+    events?: readonly string[]
+    help?: string
+  }
+  publish?: {
+    command?: string
+    events?: readonly string[]
+    help?: string
+  }
+  stateSync?: {
+    model?: 'snapshot-patch' | 'frame-sync' | 'lockstep'
+    authority?: 'server' | 'client'
+    tickRate?: number
+    help?: string
   }
 }
 
@@ -240,6 +270,13 @@ export interface ShadowServerAppManifest {
     commandHints?: readonly string[]
   }[]
   events?: readonly string[]
+  help?: {
+    overview?: string
+    usage?: string
+    details?: string
+    commandIndex?: string
+  }
+  realtime?: ShadowServerAppRealtimeSpec
   binary?: {
     supported: boolean
     maxBytes?: number

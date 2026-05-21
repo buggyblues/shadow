@@ -39,6 +39,20 @@ export const cloudTemplateReviewStatusEnum = pgEnum('cloud_template_review_statu
   'rejected',
 ])
 
+export type CloudTemplateGithubSource = {
+  repository: string
+  branch?: string
+  path?: string
+  installationId?: string
+  webhook?: {
+    enabled?: boolean
+    autoUpdateTemplate?: boolean
+    autoDeploy?: boolean
+  }
+  protectedOverrides?: string[]
+  lastCommitSha?: string
+}
+
 export const cloudActivityTypeEnum = pgEnum('cloud_activity_type', [
   'deploy',
   'destroy',
@@ -82,6 +96,7 @@ export const cloudTemplates = pgTable(
     rating: integer('rating'),
     baseCost: integer('base_cost'),
     authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
+    githubSource: jsonb('github_source').$type<CloudTemplateGithubSource | null>(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -142,6 +157,7 @@ export const cloudDeployments = pgTable(
     hourlyCost: integer('hourly_cost').default(1).notNull(),
     lastHourlyBilledAt: timestamp('last_hourly_billed_at', { withTimezone: true }),
     lastActiveAt: timestamp('last_active_at', { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
     saasMode: boolean('saas_mode').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -150,6 +166,7 @@ export const cloudDeployments = pgTable(
     cloudDeploymentsUserIdIdx: index('cloud_deployments_user_id_idx').on(t.userId),
     cloudDeploymentsStatusIdx: index('cloud_deployments_status_idx').on(t.status),
     cloudDeploymentsSaasModeIdx: index('cloud_deployments_saas_mode_idx').on(t.saasMode),
+    cloudDeploymentsExpiresAtIdx: index('cloud_deployments_expires_at_idx').on(t.expiresAt),
     cloudDeploymentsPlatformNamespaceUnique: uniqueIndex(
       'cloud_deployments_platform_namespace_unique',
     )

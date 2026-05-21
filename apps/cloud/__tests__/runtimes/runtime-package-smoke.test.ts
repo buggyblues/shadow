@@ -196,4 +196,81 @@ describe('runner runtime package smoke checks', () => {
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
   })
+
+  it.each([
+    ['openclaw', 'openclaw'],
+    ['hermes', 'hermes'],
+    ['codex', 'cc-connect'],
+  ] as const)('emits non-destructive template routine seeds for %s', (runtime, runtimeKind) => {
+    const subject = agent(runtime)
+    const config = configFor(subject)
+    config.routines = [
+      {
+        id: 'daily-brief',
+        agentId: subject.id,
+        title: 'Daily brief',
+        schedule: { cron: '0 9 * * *', timezone: 'Asia/Shanghai' },
+        prompt: 'Summarize overnight activity and post it to the team channel.',
+      },
+    ]
+    const shadowobUse = config.use?.find((entry) => entry.plugin === 'shadowob')
+    shadowobUse!.options = {
+      ...(shadowobUse!.options ?? {}),
+      servers: [
+        {
+          id: 'office',
+          name: 'Office',
+          channels: [{ id: 'daily', title: 'daily' }],
+        },
+      ],
+      routines: [{ routineId: 'daily-brief', serverId: 'office', channelId: 'daily' }],
+    }
+
+    const pkg = buildAgentRuntimePackage({
+      agent: subject,
+      config,
+      extraEnv: {
+        SHADOW_SERVER_URL,
+        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+      },
+    })
+    const files = runtimeFiles(pkg.configData)
+    const seed = JSON.parse(files['/etc/shadowob/template-routines.json'] ?? '{}')
+
+    expect(seed.runtime).toBe(runtimeKind)
+    expect(seed.syncPolicy).toBe('preserve-runtime-edits')
+    expect(seed.routines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'daily-brief',
+          agentId: subject.id,
+          deliveries: [
+            expect.objectContaining({
+              pluginId: 'shadowob',
+              kind: 'channel',
+              target: expect.objectContaining({
+                serverEnvKey: 'SHADOW_SERVER_OFFICE',
+                channelEnvKey: 'SHADOW_CHANNEL_DAILY',
+              }),
+            }),
+          ],
+          sourceHash: expect.any(String),
+        }),
+      ]),
+    )
+    if (runtime === 'hermes') {
+      const hermesConfig = parseYaml(files['/home/shadow/.hermes/config.yaml'] ?? '') as {
+        platforms?: { shadowob?: { extra?: { home_channel?: string } } }
+      }
+      expect(hermesConfig.platforms?.shadowob?.extra?.home_channel).toBe('${SHADOW_CHANNEL_DAILY}')
+    }
+    if (runtimeKind === 'cc-connect') {
+      const ccConnectConfig = parseToml(files['/home/shadow/.cc-connect/config.toml'] ?? '') as {
+        projects?: Array<{ platforms?: Array<{ options?: { channel_ids?: string[] } }> }>
+      }
+      expect(ccConnectConfig.projects?.[0]?.platforms?.[0]?.options?.channel_ids).toEqual([
+        '${SHADOW_CHANNEL_DAILY}',
+      ])
+    }
+  })
 })

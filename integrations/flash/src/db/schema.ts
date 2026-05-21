@@ -118,3 +118,25 @@ export const flashCommandEvents = pgTable(
     flashCommandEventsBoardSeqIdx: index('flash_command_events_board_seq_idx').on(t.boardId, t.seq),
   }),
 )
+
+export const flashSelections = pgTable(
+  'flash_selections',
+  {
+    boardId: text('board_id')
+      .notNull()
+      .references(() => flashBoards.id, { onDelete: 'cascade' }),
+    actorId: text('actor_id').notNull(),
+    actor: jsonb('actor').$type<FlashActorRef | null>(),
+    selectedCardIds: jsonb('selected_card_ids').$type<string[]>().default([]).notNull(),
+    anchorCardId: text('anchor_card_id'),
+    revision: integer('revision').default(0).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    flashSelectionsBoardActorUnique: uniqueIndex('flash_selections_board_actor_unique').on(
+      t.boardId,
+      t.actorId,
+    ),
+    flashSelectionsBoardIdx: index('flash_selections_board_idx').on(t.boardId),
+  }),
+)

@@ -40,7 +40,7 @@ The host should:
 - exchange only app-scoped launch credentials, not the user's full Shadow token
 - show an open-external fallback if the site blocks embedding
 
-See `examples/shadow-oauth-card-app` and `skills/shadow-oauth-app/SKILL.md` for a minimal developer sample.
+See the [`shadow-oauth-app`](https://github.com/buggyblues/shadow/tree/main/skills/shadow-oauth-app) Skill and its `references/shadow-oauth-card-app` sample for a minimal developer implementation.
 
 ## Channel Link Card Messages
 

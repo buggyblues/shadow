@@ -168,6 +168,14 @@ function mergeCollectedRuntime(
           ),
         }
       : {}),
+    ...(current.routineDeliveries?.length || fragment.routineDeliveries?.length
+      ? {
+          routineDeliveries: mergeByKey(
+            [...(current.routineDeliveries ?? []), ...(fragment.routineDeliveries ?? [])],
+            (delivery) => `${delivery.pluginId}:${delivery.kind}:${delivery.routineId}`,
+          ),
+        }
+      : {}),
     ...(current.runtimeDependencies?.length || fragment.runtimeDependencies?.length
       ? {
           runtimeDependencies: mergeByKey(

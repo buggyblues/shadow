@@ -282,12 +282,19 @@ shadowob app discover --server <server-id-or-slug> --json
 shadowob app inspect <app-key> --server <server-id-or-slug> --json
 shadowob app skills <app-key> --server <server-id-or-slug>
 shadowob app call <app-key> <command> --server <server-id-or-slug> --channel-id <channel-id> --json-input '<raw-command-input-json>' --json
+shadowob app call <app-key> <command> --server <server-id-or-slug> --help
+shadowob app call <app-key> <command> --server <server-id-or-slug> --file <path> --json-input '<raw-command-input-json>' --json
+shadowob app events <app-key> --server <server-id-or-slug> --json
 ```
 
 For server App commands, use the `shadowob app` CLI path only. Do not use curl, fetch, raw HTTP
 routes, or the JavaScript SDK to call server App commands. Pass the command input object directly
 to `--json-input`, for example `{"title":"Example","priority":"high"}`; the CLI wraps the HTTP
 request for you and binds Shadow OAuth identity, server membership, App grants, and command policy.
+Use progressive disclosure: start with `shadowob app skills` or `shadowob app discover`, then call
+`shadowob app call <app-key> <command> --server <server> --help` only when you need that command's
+full schema, file-upload support, or examples. For realtime app updates, subscribe with
+`shadowob app events <app-key> --server <server> --json` instead of polling.
 When a channel message mentions a server App, use the mentioned app key/server id directly and pass
 the current channel id with `--channel-id` when available. If a server App command requires
 approval, do not send a chat form or call the approval endpoint yourself as a Buddy. Wait for a

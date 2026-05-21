@@ -10,7 +10,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import {
   chmodSync,
   cpSync,
@@ -33,6 +33,8 @@ const EXTENSIONS_DIR = '/app/extensions'
 const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
 const DEFAULT_SHADOW_SLASH_COMMANDS_PATH = '/etc/shadowob/slash-commands.json'
+const TEMPLATE_ROUTINES_PATH =
+  process.env.SHADOW_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
 const RUNTIME_CONFIG_DIR = process.env.OPENCLAW_RUNTIME_CONFIG_DIR || '/tmp/openclaw/config'
 const RUNTIME_CONFIG_PATH = join(RUNTIME_CONFIG_DIR, 'openclaw.json')
 const OPENCLAW_PACKAGE_DIR = '/app/node_modules/openclaw'
@@ -243,6 +245,251 @@ function materializeCredentialFiles(runtimeExtensions) {
       )
     }
   }
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (!isPlainObject(value)) return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, stableValue(item)]),
+  )
+}
+
+function stableHash(value) {
+  return createHash('sha256')
+    .update(JSON.stringify(stableValue(value)))
+    .digest('hex')
+}
+
+function readJsonFile(path, fallback) {
+  if (!existsSync(path)) return fallback
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : fallback
+  } catch (err) {
+    console.warn(`[entrypoint] Failed to parse ${path}: ${err.message}`)
+    return fallback
+  }
+}
+
+function resolveRunnerHomePath(rawPath) {
+  if (typeof rawPath !== 'string' || !rawPath.trim()) return null
+  const trimmed = rawPath.trim()
+  if (trimmed === '~') return RUNNER_HOME
+  if (trimmed.startsWith('~/')) return join(RUNNER_HOME, trimmed.slice(2))
+  return resolve(trimmed)
+}
+
+function resolveOpenClawCronStorePath(openclawConfig) {
+  const configured = isPlainObject(openclawConfig.cron) ? openclawConfig.cron.store : undefined
+  const candidate =
+    resolveRunnerHomePath(configured) ?? join(OPENCLAW_STATE_DIR, 'cron', 'jobs.json')
+  const allowedRoots = [RUNNER_HOME, '/home/openclaw']
+  if (!allowedRoots.some((root) => candidate === root || candidate.startsWith(`${root}/`))) {
+    console.warn(
+      `[entrypoint] Skipping template routine sync; cron store outside runner home: ${candidate}`,
+    )
+    return null
+  }
+  return candidate
+}
+
+function parseRoutineEveryMs(interval) {
+  if (typeof interval !== 'string') return null
+  const match = interval.trim().match(/^(\d+)\s*(s|m|h|d)$/i)
+  if (!match) return null
+  const amount = Number.parseInt(match[1], 10)
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const unit = match[2].toLowerCase()
+  const multiplier =
+    unit === 's' ? 1000 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 86_400_000
+  return amount * multiplier
+}
+
+function buildOpenClawRoutineSchedule(routine) {
+  const schedule = isPlainObject(routine.schedule) ? routine.schedule : {}
+  if (typeof schedule.cron === 'string' && schedule.cron.trim()) {
+    return {
+      kind: 'cron',
+      expr: schedule.cron.trim(),
+      ...(typeof schedule.timezone === 'string' && schedule.timezone.trim()
+        ? { tz: schedule.timezone.trim() }
+        : {}),
+    }
+  }
+  const everyMs = parseRoutineEveryMs(schedule.interval)
+  if (everyMs) return { kind: 'every', everyMs }
+  return null
+}
+
+function resolveRoutineDeliveryTarget(delivery) {
+  if (!isPlainObject(delivery) || delivery.pluginId !== 'shadowob' || delivery.kind !== 'channel') {
+    return null
+  }
+  const target = isPlainObject(delivery.target) ? delivery.target : {}
+  const channelEnvKey =
+    typeof target.channelEnvKey === 'string' && target.channelEnvKey.trim()
+      ? target.channelEnvKey.trim()
+      : null
+  const channelId =
+    (channelEnvKey ? process.env[channelEnvKey] : undefined) ??
+    (typeof target.channelId === 'string' ? target.channelId : undefined)
+  if (!channelId) return null
+  return {
+    mode: 'announce',
+    channel: 'shadowob',
+    to: `shadowob:channel:${channelId}`,
+    ...(typeof target.threadId === 'string' && target.threadId.trim()
+      ? { threadId: target.threadId.trim() }
+      : {}),
+    ...(typeof target.accountId === 'string' && target.accountId.trim()
+      ? { accountId: target.accountId.trim() }
+      : {}),
+    bestEffort: true,
+  }
+}
+
+function managedRoutineJobId(routine) {
+  const raw = `shadow-template-${routine.agentId ?? 'agent'}-${routine.id ?? 'routine'}`
+    .toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  if (raw.length >= 12 && raw.length <= 96) return raw
+  return `shadow-template-${stableHash({ agentId: routine.agentId, id: routine.id }).slice(0, 24)}`
+}
+
+function openClawManagedJobShape(job) {
+  return {
+    agentId: job.agentId,
+    sessionKey: job.sessionKey,
+    name: job.name,
+    description: job.description,
+    enabled: job.enabled,
+    deleteAfterRun: job.deleteAfterRun,
+    schedule: job.schedule,
+    sessionTarget: job.sessionTarget,
+    wakeMode: job.wakeMode,
+    payload: job.payload,
+    delivery: job.delivery,
+  }
+}
+
+function buildOpenClawRoutineJob(routine, now) {
+  if (
+    !isPlainObject(routine) ||
+    typeof routine.id !== 'string' ||
+    typeof routine.agentId !== 'string'
+  ) {
+    return null
+  }
+  const schedule = buildOpenClawRoutineSchedule(routine)
+  if (!schedule) return null
+  const delivery = Array.isArray(routine.deliveries)
+    ? routine.deliveries.map(resolveRoutineDeliveryTarget).find(Boolean)
+    : null
+  if (!delivery) return null
+  const job = {
+    id: managedRoutineJobId(routine),
+    agentId: routine.agentId,
+    name:
+      typeof routine.title === 'string' && routine.title.trim() ? routine.title.trim() : routine.id,
+    description:
+      typeof routine.description === 'string' && routine.description.trim()
+        ? routine.description.trim()
+        : `Shadow Cloud template routine ${routine.id}`,
+    enabled: routine.enabled !== false,
+    createdAtMs: now,
+    updatedAtMs: now,
+    schedule,
+    sessionTarget: 'isolated',
+    wakeMode: 'now',
+    payload: { kind: 'agentTurn', message: String(routine.prompt ?? '') },
+    delivery,
+    state: {},
+  }
+  const managedSpecHash = stableHash(openClawManagedJobShape(job))
+  return {
+    ...job,
+    shadowTemplateRoutine: {
+      version: 1,
+      routineId: routine.id,
+      agentId: routine.agentId,
+      sourceHash: typeof routine.sourceHash === 'string' ? routine.sourceHash : null,
+      managedSpecHash,
+    },
+  }
+}
+
+function syncTemplateRoutinesToOpenClawCron(openclawConfig) {
+  if (!existsSync(TEMPLATE_ROUTINES_PATH)) return
+  const seed = readJsonFile(TEMPLATE_ROUTINES_PATH, null)
+  const routines = Array.isArray(seed?.routines) ? seed.routines : []
+  if (routines.length === 0) return
+
+  const storePath = resolveOpenClawCronStorePath(openclawConfig)
+  if (!storePath) return
+
+  const now = Date.now()
+  const store = readJsonFile(storePath, { version: 1, jobs: [] })
+  const jobs = Array.isArray(store.jobs) ? store.jobs.filter(Boolean) : []
+  let changed = false
+
+  for (const routine of routines) {
+    const desired = buildOpenClawRoutineJob(routine, now)
+    if (!desired) {
+      console.warn(
+        `[entrypoint] Skipping invalid template routine: ${JSON.stringify(routine?.id ?? null)}`,
+      )
+      continue
+    }
+
+    const existingIndex = jobs.findIndex((job) => {
+      const marker = isPlainObject(job?.shadowTemplateRoutine) ? job.shadowTemplateRoutine : null
+      return marker?.routineId === desired.shadowTemplateRoutine.routineId || job?.id === desired.id
+    })
+
+    if (existingIndex < 0) {
+      jobs.push(desired)
+      changed = true
+      console.log(`[entrypoint] Seeded OpenClaw cron routine: ${desired.id}`)
+      continue
+    }
+
+    const existing = jobs[existingIndex]
+    const marker = isPlainObject(existing.shadowTemplateRoutine)
+      ? existing.shadowTemplateRoutine
+      : null
+    const currentManagedSpecHash = stableHash(openClawManagedJobShape(existing))
+    if (!marker || marker.managedSpecHash !== currentManagedSpecHash) {
+      console.log(
+        `[entrypoint] Preserved user-edited OpenClaw cron routine: ${existing.id ?? desired.id}`,
+      )
+      continue
+    }
+
+    if (marker.managedSpecHash === desired.shadowTemplateRoutine.managedSpecHash) continue
+    jobs[existingIndex] = {
+      ...desired,
+      id: existing.id ?? desired.id,
+      createdAtMs: existing.createdAtMs ?? desired.createdAtMs,
+      updatedAtMs: now,
+      state: isPlainObject(existing.state) ? existing.state : {},
+    }
+    changed = true
+    console.log(
+      `[entrypoint] Updated OpenClaw cron routine from template: ${jobs[existingIndex].id}`,
+    )
+  }
+
+  if (!changed) return
+  mkdirSync(dirname(storePath), { recursive: true })
+  writeFileSync(storePath, `${JSON.stringify({ version: 1, jobs }, null, 2)}\n`, {
+    encoding: 'utf-8',
+    mode: 0o600,
+  })
+  chmodSync(storePath, 0o600)
 }
 
 function resolveEnvVars(obj) {
@@ -1061,6 +1308,7 @@ async function main() {
   }
   writeFileSync(configPath, JSON.stringify(openclawConfig, null, 2), 'utf-8')
   console.log('[entrypoint] Runtime config restored after setup')
+  syncTemplateRoutinesToOpenClawCron(openclawConfig)
 
   // 2e. Overlay workspace files from ConfigMap (SOUL.md, AGENTS.md, etc.)
   // These are agent-specific files generated by the cloud config builder that
