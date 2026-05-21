@@ -83,7 +83,7 @@ function AppLayoutInner() {
     useState<ServerAppApprovalRequest | null>(null)
   const [serverAppApprovalSubmitting, setServerAppApprovalSubmitting] = useState(false)
   const isCloudRoute = /^\/app\/cloud(?:\/|$)/.test(pathname)
-  const isPlayLaunchRoute = /^\/app\/play\/launch(?:\/|$)/u.test(pathname)
+  const isServerHomeRoute = /^\/app\/servers\/[^/]+\/?$/u.test(pathname)
   const isServerAppsRoute = /(?:^|\/)servers\/[^/]+\/apps(?:\/|$)/u.test(pathname)
   const isCopilotMode = Boolean(copilotChannel && isServerAppsRoute)
   const showAtmosphereOrbs = !backgroundImage
@@ -257,7 +257,7 @@ function AppLayoutInner() {
       )}
 
       <ConfirmDialog />
-      <NewcomerLandingModal enabled={!isPlayLaunchRoute} userId={me?.id ?? user?.id ?? null} />
+      <NewcomerLandingModal enabled={isServerHomeRoute} userId={me?.id ?? user?.id ?? null} />
       <Modal open={!!pendingServerAppApproval} onClose={closeServerAppApproval}>
         <ModalContent maxWidth="max-w-[460px]">
           <ModalHeader
