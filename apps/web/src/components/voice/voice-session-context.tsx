@@ -30,7 +30,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const [voiceAutoJoinRequest, setVoiceAutoJoinRequest] = useState(0)
   const [showVoiceSettings, setShowVoiceSettings] = useState(false)
   const lastVoiceAutoJoinRef = useRef(0)
-  const voice = useVoiceChannel(connectedVoiceChannel?.id ?? null)
+  const voice = useVoiceChannel(connectedVoiceChannel?.id ?? null, {
+    deviceDiscoveryEnabled: Boolean(connectedVoiceChannel),
+  })
 
   const clearVoiceStateCache = useCallback(
     (channelId: string) => {
@@ -62,7 +64,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
       if (
         connectedVoiceChannel &&
-        (voice.status === 'connected' || voice.status === 'connecting')
+        (voice.status === 'connected' ||
+          voice.status === 'connecting' ||
+          voice.status === 'disconnecting')
       ) {
         const previousChannelId = connectedVoiceChannel.id
         await voice.leave()

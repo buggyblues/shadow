@@ -170,6 +170,11 @@ export interface SharedWorkspaceConfig {
 
 export type CloudWorkloadBackend = 'agent-sandbox' | 'deployment'
 
+export type CloudWorkloadBackendPolicy =
+  | 'sandbox-required'
+  | 'sandbox-preferred'
+  | 'deployment-only'
+
 export type SandboxBackupDriver = 'volumeSnapshot' | 'restic'
 
 export type SandboxWarmPoolUpdateStrategy = 'OnReplenish' | 'Recreate'
@@ -220,7 +225,7 @@ export interface AgentSandboxWarmPoolConfig {
 }
 
 export interface AgentSandboxConfig {
-  /** RuntimeClass used by sandbox pods. Defaults to gvisor. */
+  /** RuntimeClass used by sandbox pods. Defaults to gvisor unless a managed cluster injects one. */
   runtimeClassName?: string
   /** Per-agent OpenClaw state volume config. */
   state?: AgentSandboxStateConfig
@@ -230,6 +235,15 @@ export interface AgentSandboxConfig {
   backup?: AgentSandboxBackupConfig
   /** Warm pool config. */
   warmPool?: AgentSandboxWarmPoolConfig
+}
+
+export interface AgentSchedulingConfig {
+  /** Kubernetes nodeSelector applied to agent pods. */
+  nodeSelector?: Record<string, string>
+  /** Kubernetes affinity applied to agent pods. */
+  affinity?: Record<string, unknown>
+  /** Kubernetes tolerations applied to agent pods. */
+  tolerations?: Array<Record<string, unknown>>
 }
 
 /**
@@ -350,6 +364,8 @@ export interface AgentDeployment {
 
   /** agent-sandbox backend options. */
   sandbox?: AgentSandboxConfig
+  /** Per-agent scheduling overrides. */
+  scheduling?: AgentSchedulingConfig
 
   /**
    * Agent configuration version (semver).
@@ -369,8 +385,17 @@ export interface DeploymentsConfig {
   namespace?: string
   /** Kubernetes workload backend. Defaults to agent-sandbox for new deployments. */
   backend?: CloudWorkloadBackend
+  /**
+   * Backend selection policy.
+   * - sandbox-required: fail fast if agent-sandbox is unavailable.
+   * - sandbox-preferred: use agent-sandbox when preflight passes, otherwise fall back to Deployment.
+   * - deployment-only: always use Kubernetes Deployment.
+   */
+  backendPolicy?: CloudWorkloadBackendPolicy
   /** Default agent-sandbox options inherited by agents. */
   sandbox?: AgentSandboxConfig
+  /** Default scheduling applied to all agent pods. */
+  scheduling?: AgentSchedulingConfig
   /** Agent deployments */
   agents: AgentDeployment[]
 }

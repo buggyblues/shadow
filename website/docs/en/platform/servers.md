@@ -356,7 +356,7 @@ result = client.add_agents_to_server("server-id", ["agent-1", "agent-2"])
 GET /api/servers/:id/access
 ```
 
-Returns the current user's access level for the server (e.g., member, pending, blocked, public).
+Returns the current user's access level for the server. `canAccess` is true for members and for public servers that can be viewed before joining. `isMember` is true only after the user has joined or been approved, and clients should use it before loading member-only server resources such as channel lists, apps, and workspace-backed panels.
 
 :::code-group
 
@@ -378,7 +378,7 @@ access = client.get_server_access("server-id")
 POST /api/servers/:id/join-requests
 ```
 
-Request access to a private server. The server owner can approve or reject.
+Request access to a server. Public servers approve immediately and add the user as a member. Private servers create a join request that the server owner can approve or reject.
 
 :::code-group
 

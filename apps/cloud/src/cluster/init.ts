@@ -6,12 +6,20 @@
  *   2. SSH → master: wait for k3s ready
  *   3. SSH → master: read node-token
  *   4. SSH → workers (parallel): install k3s agent and join
- *   5. SSH → master: read kubeconfig
- *   6. Store kubeconfig locally
+ *   5. SSH → master: install/verify optional sandbox capabilities
+ *   6. Store kubeconfig and capability metadata locally
  */
 
+import { createHash } from 'node:crypto'
 import { storeKubeconfig } from './kubeconfig.js'
-import { getMasterNode, getWorkerNodes, resolveNodeCredentials } from './parser.js'
+import {
+  getMasterNode,
+  getWorkerNodes,
+  resolveClusterSandboxConfig,
+  resolveNodeCredentials,
+  resolveNodeInstallConfig,
+} from './parser.js'
+import { installClusterSandbox } from './sandbox.js'
 import type { ClusterConfig, ClusterInstallConfig, ClusterMeta, NodeConfig } from './schema.js'
 import { SSHClient } from './ssh.js'
 
@@ -37,6 +45,62 @@ function shellQuote(value: string): string {
 function asRoot(shellCommand: string): string {
   const quoted = shellQuote(shellCommand)
   return `if [ "$(id -u)" -eq 0 ]; then sh -c ${quoted}; else sudo -n sh -c ${quoted}; fi`
+}
+
+function resolveEnvTemplates(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.replace(/\$\{env:([^}]+)\}/g, (_match, envKey: string) => {
+      const envVal = process.env[envKey]
+      if (envVal === undefined) {
+        throw new Error(`Environment variable "${envKey}" is not set (required by cluster.json)`)
+      }
+      return envVal
+    })
+  }
+  if (Array.isArray(value)) return value.map(resolveEnvTemplates)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, resolveEnvTemplates(child)]),
+    )
+  }
+  return value
+}
+
+function clusterConfigHash(config: ClusterConfig): string {
+  return createHash('sha256').update(stableStringify(config)).digest('hex')
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => `${JSON.stringify(key)}:${stableStringify(child)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+async function ensureK3sRegistriesConfig(
+  client: SSHClient,
+  install: ClusterInstallConfig | undefined,
+  serviceName: 'k3s' | 'k3s-agent',
+  onLog?: (m: string) => void,
+): Promise<void> {
+  if (!install?.registries) return
+
+  const registries = JSON.stringify(resolveEnvTemplates(install.registries), null, 2)
+  log(onLog, `[${serviceName}] Writing k3s containerd registries.yaml`)
+  await client.execOrThrow(
+    asRoot(
+      [
+        'mkdir -p /etc/rancher/k3s',
+        `cat > /etc/rancher/k3s/registries.yaml <<'EOF'\n${registries}\nEOF`,
+        `if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet ${serviceName}; then systemctl restart ${serviceName}; fi`,
+      ].join('\n'),
+    ),
+    { errorMessage: `Failed to write k3s registries.yaml for ${serviceName}` },
+  )
 }
 
 function resolveK3sMirror(install?: ClusterInstallConfig): string | undefined {
@@ -145,6 +209,7 @@ async function installMaster(
   await client.connect(creds)
 
   try {
+    await ensureK3sRegistriesConfig(client, install, 'k3s', onLog)
     const alreadyInstalled = await isK3sInstalled(client)
     if (alreadyInstalled && !force) {
       log(
@@ -223,6 +288,7 @@ async function installWorker(
   await client.connect(creds)
 
   try {
+    await ensureK3sRegistriesConfig(client, install, 'k3s-agent', onLog)
     const alreadyInstalled = await isK3sInstalled(client)
     if (alreadyInstalled && !force) {
       log(
@@ -273,18 +339,44 @@ export async function initCluster(options: InitClusterOptions): Promise<ClusterM
   log(onLog, `Initializing cluster "${config.name}" with ${config.nodes.length} nodes...`)
 
   // Step 1–3: install master and get token
-  const { token, kubeconfig } = await installMaster(master, config.install, force, onLog)
+  const masterInstall = resolveNodeInstallConfig(config.install, master)
+  const { token, kubeconfig } = await installMaster(master, masterInstall, force, onLog)
 
   // Step 4: install workers in parallel
   if (workers.length > 0) {
     log(onLog, `Installing ${workers.length} worker(s) in parallel...`)
     await Promise.all(
-      workers.map((w) => installWorker(w, master.host, token, config.install, force, onLog)),
+      workers.map((worker) =>
+        installWorker(
+          worker,
+          master.host,
+          token,
+          resolveNodeInstallConfig(config.install, worker),
+          force,
+          onLog,
+        ),
+      ),
     )
   }
 
-  // Step 5: store kubeconfig
-  const meta = storeKubeconfig(config.name, kubeconfig, master.host, config.nodes.length)
+  // Step 5: install/verify optional cluster capabilities
+  const sandboxConfig = resolveClusterSandboxConfig(config)
+  const sandboxEnabled = await installClusterSandbox({ config, onLog })
+
+  // Step 6: store kubeconfig and capability metadata
+  const meta = storeKubeconfig(config.name, kubeconfig, master.host, config.nodes.length, {
+    configHash: clusterConfigHash(config),
+    features: {
+      sandbox: sandboxConfig
+        ? {
+            enabled: sandboxEnabled,
+            version: sandboxConfig.version,
+            runtimeClassName: sandboxConfig.runtimeClassName,
+            nodeSelector: sandboxConfig.nodeSelector,
+          }
+        : { enabled: false },
+    },
+  })
   log(onLog, `Kubeconfig stored at ${meta.kubeconfigPath}`)
   log(onLog, `Cluster "${config.name}" is ready. Use: shadowob-cloud up --cluster ${config.name}`)
 

@@ -66,7 +66,7 @@ export class ShadowOAuth {
     if (options?.state) {
       params.set('state', options.state)
     }
-    return `${this.baseUrl}/oauth/authorize?${params.toString()}`
+    return `${this.baseUrl}/app/oauth/authorize?${params.toString()}`
   }
 
   /**

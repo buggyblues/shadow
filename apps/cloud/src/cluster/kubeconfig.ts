@@ -42,6 +42,7 @@ export function storeKubeconfig(
   rawKubeconfig: string,
   masterPublicIp: string,
   nodeCount: number,
+  options?: { features?: ClusterMeta['features']; configHash?: string },
 ): ClusterMeta {
   const dir = getClustersDir()
   mkdirSync(dir, { recursive: true })
@@ -58,6 +59,8 @@ export function storeKubeconfig(
     nodeCount,
     createdAt: new Date().toISOString(),
     kubeconfigPath,
+    ...(options?.configHash ? { configHash: options.configHash } : {}),
+    ...(options?.features ? { features: options.features } : {}),
   }
   writeFileSync(getMetaPath(clusterName), JSON.stringify(meta, null, 2), { mode: 0o600 })
 

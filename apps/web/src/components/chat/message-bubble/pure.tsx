@@ -68,21 +68,24 @@ interface MessageAuthorLineProps {
 
 function MessageAuthorLineBase({ author, editedTitle, isEdited, t, time }: MessageAuthorLineProps) {
   return (
-    <div className="flex items-baseline gap-2 leading-none mb-1">
+    <div className="mb-1 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 leading-none">
       <span
-        className={`font-bold text-[15px] hover:underline cursor-pointer ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
+        className={`min-w-0 max-w-[min(16rem,50vw)] truncate whitespace-nowrap text-[15px] font-bold hover:underline cursor-pointer ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
       >
         {author?.displayName ?? author?.username ?? t('common.unknownUser')}
       </span>
       {author?.isBot && (
-        <span className="text-[11px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-black uppercase tracking-widest flex items-center gap-1">
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-primary">
           <Check size={8} />
           {t('common.bot')}
         </span>
       )}
-      <span className="text-xs text-text-muted ml-0.5">{time}</span>
+      <span className="ml-0.5 shrink-0 whitespace-nowrap text-xs text-text-muted">{time}</span>
       {isEdited && (
-        <span className="text-[11px] text-text-muted cursor-help" title={editedTitle}>
+        <span
+          className="shrink-0 whitespace-nowrap text-[11px] text-text-muted cursor-help"
+          title={editedTitle}
+        >
           {t('chat.edited')}
         </span>
       )}

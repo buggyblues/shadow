@@ -6,9 +6,9 @@
  * so Pulumi always targets the correct cluster context.
  */
 
-import { readFileSync } from 'node:fs'
 import * as k8s from '@pulumi/kubernetes'
 import type { SharedWorkspaceConfig } from '../config/schema.js'
+import { readKubeconfigFile } from '../utils/kubeconfig-file.js'
 import { PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
 
 export interface SharedResourcesOptions {
@@ -26,7 +26,7 @@ export function createSharedResources(options: SharedResourcesOptions) {
   // kubeconfig's own current-context take effect (do NOT override context).
   // When no path is given, fall back to named context in the default kubeconfig.
   const providerConfig: ConstructorParameters<typeof k8s.Provider>[1] = options.kubeConfigPath
-    ? { kubeconfig: readFileSync(options.kubeConfigPath, 'utf8') }
+    ? { kubeconfig: readKubeconfigFile(options.kubeConfigPath) }
     : {
         context:
           options.kubeContext ??

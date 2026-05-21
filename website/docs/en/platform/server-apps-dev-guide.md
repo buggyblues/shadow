@@ -40,6 +40,18 @@ Expose `/.well-known/shadow-app.json` from your App:
 
 `appKey` is the stable identifier Buddies use with the CLI. Production iframe and API URLs should use HTTPS.
 
+For production, publish a stable HTTPS origin. Do not publish manifests that point to public `http://<ip>:<port>` origins: Shadow pages are loaded over HTTPS, and browsers block mixed-content iframes, images, and frame navigations from IP-literal HTTP hosts.
+
+If the reverse proxy is separate from the App host, DNS should point to the proxy while the proxy forwards to the App host by private or public IP. Keep the IP out of the manifest:
+
+```dotenv
+SHADOW_SERVER_URL=https://shadowob.com
+SHADOW_WEB_BASE_URL=https://shadowob.com
+FLASH_PUBLIC_BASE_URL=https://flash-app.shadowob.com
+FLASH_API_BASE_URL=https://flash-app.shadowob.com
+FLASH_OAUTH_REDIRECT_URI=https://flash-app.shadowob.com/shadow/oauth/callback
+```
+
 Generate a typed manifest module whenever the JSON manifest changes:
 
 ```bash
@@ -124,6 +136,15 @@ if (stream) {
 
 After a Buddy changes resources through the CLI, Shadow emits `server_app.command.completed` so the App can reload immediately.
 
+Keep the iframe stable:
+
+- Cache launch context until near expiry; do not refetch launch queries on window focus or tab switches.
+- Keep global navigation data warm while refetching, and avoid route-level spinners when cached data already exists.
+- Do not change iframe `src` query params or React `key` unless the installed App identity changes.
+- Use `shadow_event_stream` or app-local event streams to patch data after command results; do not remount the iframe for routine refreshes.
+
+If a Server App needs Shadow OAuth, open `/app/oauth/authorize` in a top-level popup or navigation. Shadow's OAuth page sends `frame-ancestors 'none'`, so it must not be loaded inside the Server App iframe. The Shadow iframe sandbox must include `allow-popups-to-escape-sandbox` for popup OAuth.
+
 ## 5. Install, Grant, and Call
 
 Admins use the Apps page in server settings to choose a catalog App or review a custom manifest URL. The equivalent CLI flow is:
@@ -149,6 +170,14 @@ shadowob app install --server shadow-plays --manifest-url http://host.lima.inter
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4214/.well-known/shadow-app.json
 shadowob app install --server shadow-plays --manifest-url http://host.lima.internal:4215/.well-known/shadow-app.json
 ```
+
+For public installs, use the HTTPS manifest URL exposed by your reverse proxy:
+
+```bash
+shadowob app install --server shadow-plays --manifest-url https://flash-app.shadowob.com/.well-known/shadow-app.json
+```
+
+Route `/.well-known/shadow-app.json` before any website SPA fallback. If Shadow Web and the public website share one host, keep `/app/oauth/authorize` as the canonical OAuth browser entry, redirect legacy `/oauth/authorize` to it, and proxy `/.well-known/*` protocol files before docs or frontend fallback routes.
 
 Grant all commands a Buddy should use, then approve `first_time` write commands once for that Buddy:
 

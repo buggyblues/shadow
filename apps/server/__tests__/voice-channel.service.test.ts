@@ -63,7 +63,7 @@ describe('VoiceChannelService', () => {
     expect(result.state.participantCount).toBe(1)
   })
 
-  it('keeps separate participants for the same user on different clients', async () => {
+  it('issues distinct Agora UIDs while keeping one live participant per user', async () => {
     const service = createService()
     const actor = {
       kind: 'user',
@@ -80,18 +80,18 @@ describe('VoiceChannelService', () => {
       channelId,
       { isMuted: true },
       {
-        clientId: 'web',
+        clientId: 'cli',
       },
     )
-    const left = await service.leave(actor, channelId, { clientId: 'web' })
+    const left = await service.leave(actor, channelId, { clientId: 'cli' })
 
     expect(first.participant.id).not.toBe(second.participant.id)
     expect(first.credentials.uid).not.toBe(second.credentials.uid)
-    expect(second.state.participantCount).toBe(2)
-    expect(updated.participant.id).toBe(first.participant.id)
+    expect(second.state.participantCount).toBe(1)
+    expect(second.state.participants[0]?.id).toBe(second.participant.id)
+    expect(updated.participant.id).toBe(second.participant.id)
     expect(left.left).toBe(true)
-    expect(left.state.participantCount).toBe(1)
-    expect(left.state.participants[0]?.id).toBe(second.participant.id)
+    expect(left.state.participantCount).toBe(0)
   })
 
   it('renews credentials without changing voice presence', async () => {

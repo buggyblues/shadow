@@ -138,7 +138,7 @@ function getNotificationServerId(n: Notification) {
   )
 }
 
-export function NotificationBell() {
+export function NotificationBell({ className }: { className?: string } = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -310,7 +310,7 @@ export function NotificationBell() {
   )
 
   // Fetch unread count
-  const unreadEnabled = useDeferredQueryEnabled({ delayMs: 4000 })
+  const unreadEnabled = useDeferredQueryEnabled({ stage: 'background', priority: 'low' })
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
     queryFn: () => fetchApi<{ count: number }>('/api/notifications/unread-count'),
@@ -388,7 +388,10 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => setShowPanel(!showPanel)}
-        className="relative w-10 h-10 rounded-full bg-bg-primary hover:bg-bg-secondary flex items-center justify-center text-text-muted hover:text-text-primary transition"
+        className={cn(
+          'relative flex h-10 w-10 items-center justify-center rounded-full bg-bg-primary text-text-muted transition hover:bg-bg-secondary hover:text-text-primary',
+          className,
+        )}
         title={t('notification.title')}
       >
         <Bell size={18} />

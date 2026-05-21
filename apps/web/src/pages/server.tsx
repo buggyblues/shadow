@@ -1,16 +1,19 @@
 import { GlassPanel } from '@shadowob/ui'
 import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useLocation, useNavigate, useParams } from '@tanstack/react-router'
-import { Clock, Loader2, Lock, Send } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
+import { ServerLandingPanel } from '../components/server/server-landing'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
 import { clearLastChannelId } from '../lib/last-channel'
 import { useChatStore } from '../stores/chat.store'
 import { useUIStore } from '../stores/ui.store'
+import { ChannelView } from './channel-view'
+import { ServerAppsPageRoute } from './server-apps'
 
 interface ServerMeta {
   id: string
@@ -27,6 +30,8 @@ interface ChannelMeta {
   id: string
   name: string
   serverId: string
+  type?: string
+  isArchived?: boolean
 }
 
 interface ChannelAccessMeta {
@@ -56,10 +61,23 @@ interface ChannelBootstrap {
   access: ChannelAccessMeta
   channel?: ChannelMeta
   server: ServerMeta | null
-  channels: unknown[]
+  channels: ChannelMeta[]
   members: unknown[]
   messages: MessagePage
   slashCommands: { commands: unknown[] }
+}
+
+const SERVER_ROUTE_STALE_MS = 5 * 60 * 1000
+const SERVER_ROUTE_GC_MS = 30 * 60 * 1000
+
+function getServerAppKeyFromPath(pathname: string) {
+  const match = pathname.match(/\/servers\/[^/]+\/apps\/([^/?#]+)/u)
+  if (!match?.[1]) return undefined
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return match[1]
+  }
 }
 
 /**
@@ -79,7 +97,7 @@ export function ServerLayout() {
   }
   const location = useLocation()
   const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
-  const { mobileView } = useUIStore()
+  const { mobileView, copilotChannel, openCopilotChannel, closeCopilotChannel } = useUIStore()
   const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
   const [stableServerMeta, setStableServerMeta] = useState<ServerMeta | null>(null)
 
@@ -90,8 +108,10 @@ export function ServerLayout() {
   } = useQuery({
     queryKey: ['server-access', serverSlug],
     queryFn: () => fetchApi<ServerAccessMeta>(`/api/servers/${serverSlug}/access`),
-    enabled: !!serverSlug && !channelId,
+    enabled: !!serverSlug,
     retry: false,
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
   })
 
   const {
@@ -104,7 +124,8 @@ export function ServerLayout() {
       fetchApi<ChannelBootstrap>(`/api/channels/${channelId}/bootstrap?messagesLimit=50`),
     enabled: !!channelId,
     retry: false,
-    staleTime: 30_000,
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
     refetchOnWindowFocus: false,
   })
 
@@ -116,14 +137,20 @@ export function ServerLayout() {
       ? stableServerMeta
       : undefined
   const canAccessServer = channelId
-    ? Boolean(channelBootstrap?.server ?? cachedServerMeta ?? stableServerMetaForRoute)
+    ? Boolean(
+        channelBootstrap?.server ??
+          cachedServerMeta ??
+          stableServerMetaForRoute ??
+          (serverAccess?.canAccess ? serverAccess.server : null),
+      )
     : serverAccess?.canAccess === true
 
   const { data: server, isLoading: isServerLoading } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<ServerMeta>(`/api/servers/${serverSlug}`),
     enabled: !!serverSlug && !channelId && canAccessServer,
-    staleTime: 30_000,
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
   })
   const freshServerMeta =
     channelBootstrap?.server ?? server ?? serverAccess?.server ?? cachedServerMeta
@@ -162,13 +189,27 @@ export function ServerLayout() {
 
   const requestServerAccess = useMutation({
     mutationFn: () =>
-      fetchApi(`/api/servers/${serverSlug}/join-requests`, {
-        method: 'POST',
-      }),
-    onSuccess: () => {
+      fetchApi<{ ok: boolean; status: 'approved' | 'pending'; requestId?: string }>(
+        `/api/servers/${serverSlug}/join-requests`,
+        {
+          method: 'POST',
+        },
+      ),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['server-access', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['server-index-channels', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      if (result.status === 'approved') {
+        navigate({
+          to: '/servers/$serverSlug',
+          params: { serverSlug: serverAccess?.server.slug ?? serverSlug },
+          replace: true,
+        })
+      }
     },
   })
 
@@ -179,6 +220,7 @@ export function ServerLayout() {
     !!channelId && (isChannelBootstrapLoading || isChannelBootstrapSeedPending)
   const isRouteChannelError = isChannelBootstrapError
   const routeChannel = routeChannelAccess?.channel
+  const routeAppKey = appKey ?? getServerAppKeyFromPath(location.pathname)
 
   // Redirect UUID URL → slug URL
   useEffect(() => {
@@ -196,7 +238,7 @@ export function ServerLayout() {
             ? '/servers/$serverSlug/shop'
             : childPath.startsWith('/workspace') || childPath.startsWith('/workspace/')
               ? '/servers/$serverSlug/workspace'
-              : appKey
+              : routeAppKey
                 ? '/servers/$serverSlug/apps/$appKey'
                 : childPath.startsWith('/apps') || childPath.startsWith('/apps/')
                   ? '/servers/$serverSlug/apps'
@@ -205,15 +247,15 @@ export function ServerLayout() {
                     : '/servers/$serverSlug'
       navigate({
         to: target,
-        params: appKey
-          ? { serverSlug: serverMeta.slug, appKey }
+        params: routeAppKey
+          ? { serverSlug: serverMeta.slug, appKey: routeAppKey }
           : channelId
             ? { serverSlug: serverMeta.slug, channelId }
             : { serverSlug: serverMeta.slug },
         replace: true,
       })
     }
-  }, [appKey, channelId, location.pathname, navigate, serverMeta?.slug, serverSlug])
+  }, [channelId, location.pathname, navigate, routeAppKey, serverMeta?.slug, serverSlug])
 
   // Sync server to store
   useEffect(() => {
@@ -225,7 +267,7 @@ export function ServerLayout() {
   useEffect(() => {
     if (!channelId || !serverMeta?.id) return
 
-    if (isRouteChannelError || (routeChannel && routeChannel.serverId !== serverMeta.id)) {
+    if (routeChannel && routeChannel.serverId !== serverMeta.id) {
       clearLastChannelId(serverMeta.id)
       const prev = useChatStore.getState().activeChannelId
       if (prev === channelId) {
@@ -237,15 +279,7 @@ export function ServerLayout() {
         replace: true,
       })
     }
-  }, [
-    channelId,
-    isRouteChannelError,
-    navigate,
-    routeChannel,
-    serverMeta?.id,
-    serverMeta?.slug,
-    serverSlug,
-  ])
+  }, [channelId, navigate, routeChannel, serverMeta?.id, serverMeta?.slug, serverSlug])
 
   // Channel name for title bar
   const { data: channel } = useQuery({
@@ -263,6 +297,37 @@ export function ServerLayout() {
     (channel?.name ?? routeChannel?.name)
       ? `#${channel?.name ?? routeChannel?.name} · ${serverMeta?.name ?? t('server.home')}`
       : (serverMeta?.name ?? t('common.selectServerToChat'))
+  const isServerAppsRoute = /\/servers\/[^/]+\/apps(?:\/|$)/u.test(location.pathname)
+  const isCopilotMode =
+    isServerAppsRoute &&
+    !!copilotChannel?.channelId &&
+    (copilotChannel.serverSlug === serverSlug || copilotChannel.serverSlug === serverMeta?.slug)
+  const isServerMember = serverAccess?.isMember === true
+  const shouldRenderChannelSidebar = !isCopilotMode && isServerMember
+
+  const { data: copilotChannels = [] } = useQuery<ChannelMeta[]>({
+    queryKey: ['channels', serverSlug],
+    queryFn: () => fetchApi<ChannelMeta[]>(`/api/servers/${serverSlug}/channels`),
+    enabled: !!serverSlug && isCopilotMode && isServerMember,
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
+  })
+
+  useEffect(() => {
+    if (copilotChannel && !isServerAppsRoute) {
+      closeCopilotChannel()
+    }
+  }, [closeCopilotChannel, copilotChannel, isServerAppsRoute])
+
+  useEffect(() => {
+    if (!copilotChannel) return
+    if (
+      copilotChannel.serverSlug !== serverSlug &&
+      copilotChannel.serverSlug !== serverMeta?.slug
+    ) {
+      closeCopilotChannel()
+    }
+  }, [closeCopilotChannel, copilotChannel, serverMeta?.slug, serverSlug])
 
   useAppStatus({
     title,
@@ -273,7 +338,7 @@ export function ServerLayout() {
 
   if (!serverSlug) return null
 
-  if (channelId && isRouteChannelLoading && !serverMeta) {
+  if (channelId && (isRouteChannelLoading || isServerAccessLoading) && !serverMeta) {
     return <ServerRouteLoadingShell mobileView={mobileView} />
   }
 
@@ -285,65 +350,53 @@ export function ServerLayout() {
     )
   }
 
-  if (!channelId && serverAccess && !serverAccess.canAccess) {
+  if (!channelId && serverAccess && !serverAccess.isMember) {
     const isPending = serverAccess.joinRequestStatus === 'pending' || requestServerAccess.isSuccess
     return (
-      <div className="flex flex-1 items-center justify-center bg-bg-primary/70 px-6 backdrop-blur-xl">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-bg-primary/80 p-6 text-center shadow-[0_18px_64px_rgba(0,0,0,0.32)]">
-          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-primary/15 text-primary">
-            {isPending ? <Clock size={28} /> : <Lock size={28} />}
-          </div>
-          <h2 className="text-xl font-black text-text-primary">{serverAccess.server.name}</h2>
-          <p className="mt-2 text-sm leading-6 text-text-muted">
-            {t('server.privateServerGateDesc')}
-          </p>
-          <button
-            type="button"
-            className="mt-5 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-black text-black shadow-[0_0_24px_rgba(0,243,255,0.35)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isPending || requestServerAccess.isPending}
-            onClick={() => requestServerAccess.mutate()}
-          >
-            {requestServerAccess.isPending ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : isPending ? (
-              <Clock size={16} />
-            ) : (
-              <Send size={16} />
-            )}
-            <span>{isPending ? t('server.requestPending') : t('server.requestAccess')}</span>
-          </button>
-        </div>
-      </div>
+      <>
+        <ServerLandingPanel
+          server={serverAccess.server}
+          mode={serverAccess.server.isPublic ? 'public' : 'private'}
+          pending={!serverAccess.server.isPublic && isPending}
+          loading={requestServerAccess.isPending}
+          onJoin={() => requestServerAccess.mutate()}
+        />
+      </>
     )
   }
 
-  if ((!channelId && isServerAccessError) || isRouteChannelError || !serverMeta) {
+  if ((!channelId && isServerAccessError) || !serverMeta) {
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
+      <GlassPanel className="flex flex-1 items-center justify-center px-6 text-center text-sm font-bold text-text-muted">
         {t('server.accessUnavailable')}
-      </div>
+      </GlassPanel>
     )
   }
 
   const routeChannelBlocked =
     !!channelId &&
     (isRouteChannelLoading ||
-      isRouteChannelError ||
       (!!serverMeta?.id && !!routeChannel && routeChannel.serverId !== serverMeta.id))
+  const openChannelInCopilot = (channel: { id: string }) => {
+    openCopilotChannel(serverSlug, channel.id)
+  }
 
   return (
     <div className="flex flex-1 min-w-0 overflow-hidden h-full gap-3 bg-transparent">
       {/* Channel sidebar */}
-      <div
-        className={`${
-          mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
-        } md:flex flex-col w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
-      >
-        <ChannelSidebar
-          serverSlug={serverSlug}
-          deferInitialQueries={Boolean(channelId && bootstrapSeededChannelId !== channelId)}
-        />
-      </div>
+      {shouldRenderChannelSidebar && (
+        <div
+          className={`${
+            mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
+          } md:flex flex-col w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
+        >
+          <ChannelSidebar
+            serverSlug={serverSlug}
+            deferInitialQueries={Boolean(channelId && bootstrapSeededChannelId !== channelId)}
+            onSelectChannel={isServerAppsRoute ? openChannelInCopilot : undefined}
+          />
+        </div>
+      )}
 
       {/* Content: child routes render here via Outlet */}
       <div
@@ -351,7 +404,47 @@ export function ServerLayout() {
           mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
         } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
       >
-        {routeChannelBlocked ? <RouteChannelContentLoading /> : <Outlet />}
+        {isServerAppsRoute ? (
+          <div
+            className={isCopilotMode ? 'flex h-full min-w-0 flex-1 gap-3 md:flex-row' : 'contents'}
+          >
+            {isCopilotMode && copilotChannel?.channelId && (
+              <div className="flex h-full min-w-0 flex-1 md:w-[360px] md:max-w-[420px] md:flex-none">
+                <ChannelView
+                  channelId={copilotChannel.channelId}
+                  serverSlug={serverSlug}
+                  copilot={{
+                    channels: copilotChannels,
+                    onSelectChannel: (nextChannelId) =>
+                      openCopilotChannel(serverSlug, nextChannelId),
+                    onEnter: () => {
+                      closeCopilotChannel()
+                      navigate({
+                        to: '/servers/$serverSlug/channels/$channelId',
+                        params: {
+                          serverSlug: serverMeta.slug ?? serverSlug,
+                          channelId: copilotChannel.channelId,
+                        },
+                      })
+                    },
+                    onExit: closeCopilotChannel,
+                  }}
+                />
+              </div>
+            )}
+            <div className={isCopilotMode ? 'hidden min-w-0 flex-1 md:flex' : 'contents'}>
+              <ServerAppsPageRoute
+                active={isServerAppsRoute}
+                appKeyOverride={routeAppKey}
+                preserveActiveChannel={isCopilotMode}
+              />
+            </div>
+          </div>
+        ) : routeChannelBlocked ? (
+          <RouteChannelContentLoading />
+        ) : (
+          <Outlet />
+        )}
       </div>
     </div>
   )

@@ -132,27 +132,51 @@ Deploy to cloud servers (Ubuntu/Debian) over SSH with a single command — no ex
     "systemDefaultRegistry": "registry.cn-hangzhou.aliyuncs.com",
     "pauseImage": "registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.6"
   },
+  "features": {
+    "sandbox": {
+      "enabled": true,
+      "version": "v0.4.5",
+      // Optional: use your mirrored image when registry.k8s.io is unreachable.
+      "controllerImage": "registry.example.cn/agent-sandbox/agent-sandbox-controller:v0.4.5",
+      "runtimeClassName": "shadow-runc",
+      "createRuntimeClass": true,
+      "runtimeClassHandler": "runc",
+      "nodeSelector": { "shadowob.com/sandbox-ready": "true" },
+      "smokeTest": false
+    }
+  },
   "nodes": [
     {
       "role": "master",
       "host": "1.2.3.4",
       "user": "root",
-      "sshKeyPath": "~/.ssh/id_rsa"
+      "sshKeyPath": "~/.ssh/id_rsa",
+      "sshKeyPassphrase": "${env:SSH_KEY_PASSPHRASE}"
     },
     {
       "role": "worker",
       "host": "1.2.3.5",
       "user": "root",
-      "password": "${env:SERVER_PASSWORD}"
+      "sshAgent": true,
+      "install": {
+        "k3sMirror": "cn",
+        "systemDefaultRegistry": "registry.cn-hangzhou.aliyuncs.com"
+      },
+      "region": "cn",
+      "features": { "sandbox": true },
+      "labels": { "shadowob.com/region": "cn" }
     }
   ]
 }
 ```
 
-Credentials never stored on disk — use `${env:VAR}` for passwords.
+Credentials never stored on disk. Use `${env:VAR}` for passwords and key passphrases. For encrypted
+keys already loaded into `ssh-agent`, set `"sshAgent": true`; if the agent socket is mounted at a
+custom path, set `"sshAgent": "/path/to/agent.sock"` or `"${env:SSH_AUTH_SOCK}"`.
 
-`install` is optional. Use it when a server cannot reliably reach GitHub releases, or when you need
-repeatable cluster builds:
+`install` is optional. Set it at the cluster level for shared defaults, or on an individual node to
+override those defaults. Node-level overrides are useful for mixed-region clusters where, for
+example, China nodes need domestic mirrors while overseas nodes can use the upstream defaults.
 
 | Field | Meaning |
 | --- | --- |
@@ -162,6 +186,45 @@ repeatable cluster builds:
 | `k3sChannel` / `k3sChannelUrl` | Channel lookup settings for the official installer when not pinning a version. |
 | `systemDefaultRegistry` | Registry prefix passed as `--system-default-registry` for bundled k3s system images. If omitted with `k3sMirror: "cn"`, Shadow uses `registry.cn-hangzhou.aliyuncs.com`. |
 | `pauseImage` | k3s sandbox pause image passed as `--pause-image`. If omitted with `k3sMirror: "cn"`, Shadow uses `registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.6` so Pod sandbox creation does not depend on Docker Hub. |
+
+`features.sandbox` makes agent-sandbox a managed cluster capability. `true` is shorthand for the
+default pinned install. During `cluster init` and `cluster apply`, Shadow applies the upstream
+agent-sandbox core and extensions manifests, optionally rewrites the controller image to a private
+or domestic registry, creates/verifies the configured RuntimeClass, waits for the CRDs/controller,
+labels Kubernetes nodes with `shadowob.com/sandbox-ready`, optionally runs a real
+SandboxTemplate/SandboxClaim smoke test, and stores the capability plus a cluster config hash in
+`~/.shadow-cloud/clusters/<name>.json`.
+
+By default the managed RuntimeClass is `shadow-runc` with handler `runc`, so a vanilla k3s node can
+run sandbox workloads immediately. For stronger isolation, install gVisor/runsc on the nodes and set
+`runtimeClassName: "gvisor"`, `createRuntimeClass: false` if the class already exists, or
+`runtimeClassHandler: "runsc"` if Shadow should create it. For restricted networks, mirror
+`https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v0.4.5/manifest.yaml` and
+`extensions.yaml`, then set `manifestUrls` to the mirrored URLs.
+
+For workload registry mirrors, add `install.registries`; Shadow writes it to k3s
+`/etc/rancher/k3s/registries.yaml` on every configured node before install/apply:
+
+```jsonc
+{
+  "install": {
+    "registries": {
+      "mirrors": {
+        "docker.io": { "endpoint": ["https://docker.mirror.example.cn"] },
+        "registry.k8s.io": { "endpoint": ["https://registry-k8s.mirror.example.cn"] }
+      },
+      "configs": {
+        "registry.example.cn": {
+          "auth": {
+            "username": "${env:REGISTRY_USER}",
+            "password": "${env:REGISTRY_PASSWORD}"
+          }
+        }
+      }
+    }
+  }
+}
+```
 
 Environment variables override the same installer settings:
 `INSTALL_K3S_VERSION`, `INSTALL_K3S_ARTIFACT_URL`, `INSTALL_K3S_CHANNEL`, and
@@ -175,10 +238,15 @@ registry.
 ```bash
 shadowob-cloud cluster init                        # default: reads cluster.json
 shadowob-cloud cluster init --config my-cluster.json
+shadowob-cloud cluster apply --config cluster.json # same idempotent apply path
 shadowob-cloud cluster init --force                # reinstall k3s even if already present
 ```
 
-**Re-initializing safely:** If k3s is already installed on a node, `init` skips that node by default. Pass `--force` to fully reinstall (uninstalls first, then reinstalls).
+**Re-initializing safely:** If k3s is already installed on a node, `init`/`apply` skips that node by
+default. To expand a cluster, add the new worker to `nodes`, keep the existing master in the file,
+and run `shadowob-cloud cluster apply --config cluster.json`. Shadow reads the existing master token,
+installs k3s only on newly listed workers, joins them to the cluster, and refreshes the registered
+kubeconfig metadata. Pass `--force` only when you intentionally want to reinstall listed nodes.
 
 ### 3. Deploy agents
 
@@ -235,12 +303,16 @@ shadowob-cloud cluster import --name prod --file ./prod.yaml
 2. Configure the server environment:
 
 ```env
+KUBECONFIG_HOST_PATH=/absolute/host/path/to/prod.yaml
+KUBECONFIG_CONTAINER_PATH=/home/node/.shadow-cloud/clusters/prod.yaml
+KUBECONFIG_CONTEXT=
 CLOUD_SAAS_CLUSTER_CONFIG_HOST_PATH=/absolute/host/path/to/cluster.json
 CLOUD_SAAS_CLUSTER_CONFIG=/app/cluster.json
 CLOUD_SAAS_CLUSTER_KUBECONFIG_HOST_PATH=/absolute/host/path/to/prod.yaml
 CLOUD_SAAS_CLUSTER_KUBECONFIG=/home/node/.shadow-cloud/clusters/prod.yaml
-CLOUD_SAAS_WORKLOAD_BACKEND=deployment
+CLOUD_SAAS_WORKLOAD_BACKEND=auto
 SHADOW_AGENT_SERVER_URL=https://shadow.example.com
+SHADOWOB_OPENCLAW_RUNNER_IMAGE=ghcr.io/buggyblues/openclaw-runner:latest
 PULUMI_CONFIG_PASSPHRASE=change-me
 ```
 
@@ -248,12 +320,59 @@ On startup, `apps/server` reads `CLOUD_SAAS_CLUSTER_CONFIG`, resolves the cluste
 kubeconfig, sets `KUBECONFIG` for the embedded Cloud deployment processor, and fails fast if the
 kubeconfig is missing.
 
+When running the production compose stack as the non-root `node` user, the mounted files must be
+readable by UID 1000 inside the container. For root-owned host files, use either `chown 1000:1000`
+with `chmod 600`, or `chmod 644` for non-secret cluster metadata. Do not mount a missing host file:
+Docker will create a directory at the target path, which later fails as `EISDIR: illegal operation on
+a directory, read`.
+
+The server container must be able to reach the Kubernetes API in the kubeconfig. For a remote k3s
+node, open TCP `6443` from the Shadow server host, or use an SSH tunnel and set the kubeconfig
+`server` to the tunnel endpoint with `tls-server-name` pointing at the original API hostname/IP.
+
+`SHADOW_AGENT_SERVER_URL` is the URL injected into pods. It must be reachable from the k3s nodes and
+from the workload pods. `http://host.lima.internal:3002` is only valid for local Lima/Rancher
+Desktop style development; remote clusters should use the public Shadow origin, for example
+`https://shadowob.com`. Keep `SHADOW_SERVER_URL=http://server:3002` for server-side provisioning in
+Docker Compose if the server container can reach itself through the compose network.
+
+Official Cloud SaaS model-provider deployments use `SHADOW_AGENT_SERVER_URL` as the base URL for the
+Shadow model proxy (`/api/ai/v1`). If only an internal Docker/Lima address is configured, deployment
+creation fails fast with a `SHADOW_AGENT_SERVER_URL` configuration error instead of writing an
+unreachable proxy URL into the workload ConfigMap.
+
+For China-based worker nodes, k3s system images and workload images are separate concerns:
+
+- Use `install.k3sMirror: "cn"`, `systemDefaultRegistry`, and `pauseImage` for k3s system images.
+- Ensure `SHADOWOB_OPENCLAW_RUNNER_IMAGE` points to an image reachable by the worker nodes, or
+  pre-load the image into containerd and use a local tag such as `shadowob/openclaw-runner:local`.
+- Prefer a real private registry mirror for production. Pre-loading is useful for a single-node
+  emergency fix, but it must be repeated whenever the runner image changes.
+
+With the production compose file, the effective update flow is:
+
+```bash
+docker-compose -f docker-compose.prod.yml pull server web admin
+docker-compose -f docker-compose.prod.yml up -d --remove-orphans
+```
+
+After changing `.env`, run at least `docker-compose -f docker-compose.prod.yml up -d server` so the
+server process picks up the new Kubernetes and pod-facing URL settings.
+
 This config controls where the server deploys workloads. If a template's agent needs Kubernetes
 access at runtime, still provide `KUBECONFIG_B64` through the Cloud SaaS env var flow.
 
-`CLOUD_SAAS_WORKLOAD_BACKEND=deployment` is the safe default for vanilla k3s clusters created from
-`cluster.json`. Use `agent-sandbox` only on clusters where the `SandboxTemplate`/`SandboxClaim` CRDs
-and controller are already installed.
+`CLOUD_SAAS_WORKLOAD_BACKEND=auto` lets `cluster.json` decide the default backend: if
+`features.sandbox` is enabled, Web SaaS injects `deployments.backend=agent-sandbox` plus the
+configured sandbox RuntimeClass and node selector; otherwise it injects `deployment` as the fallback.
+Deployments then run a real preflight before Pulumi applies resources. Set
+`CLOUD_SAAS_WORKLOAD_BACKEND=deployment` only as an emergency override.
+
+Cloud configs can make fallback behavior explicit with `deployments.backendPolicy`:
+
+- `sandbox-required`: fail fast if CRDs/controller/RuntimeClass are not ready.
+- `sandbox-preferred`: use sandbox when preflight passes, otherwise fall back to Deployment.
+- `deployment-only`: always use Deployment.
 
 For Docker Compose, mount both files into the server container:
 
@@ -261,15 +380,44 @@ For Docker Compose, mount both files into the server container:
 services:
   server:
     environment:
+      KUBECONFIG: /home/node/.shadow-cloud/clusters/prod.yaml
       CLOUD_SAAS_CLUSTER_CONFIG: /app/cluster.json
       CLOUD_SAAS_CLUSTER_KUBECONFIG: /home/node/.shadow-cloud/clusters/prod.yaml
-      CLOUD_SAAS_WORKLOAD_BACKEND: deployment
+      CLOUD_SAAS_WORKLOAD_BACKEND: auto
+      SHADOWOB_OPENCLAW_RUNNER_IMAGE: ghcr.io/buggyblues/openclaw-runner:latest
     volumes:
       - ./cluster.json:/app/cluster.json:ro
       - ~/.shadow-cloud/clusters/prod.yaml:/home/node/.shadow-cloud/clusters/prod.yaml:ro
 ```
 
 Then start the product stack and deploy from Web at `/app/cloud`.
+
+### Expanding a Web SaaS Cluster
+
+To add a new node, edit the same `cluster.json` mounted into the server and add a new `worker` entry
+under `nodes`. Keep the existing master entry in the file, then apply it from a machine/container
+that can SSH to every node:
+
+```bash
+shadowob-cloud cluster apply --config /workspace/shadow/ops/prod-cn-cluster.json
+```
+
+`apply` skips nodes where k3s is already installed, reads the master token, installs k3s only on new
+workers, joins them to the cluster, and refreshes the stored kubeconfig metadata.
+
+If you run the CLI from a Docker image and your SSH key is encrypted, either pass
+`sshKeyPassphrase: "${env:SSH_KEY_PASSPHRASE}"` in the node config, or use `sshAgent: true` and mount
+the agent socket:
+
+```bash
+docker run --rm --user root --network host \
+  -e SSH_AUTH_SOCK=/ssh-agent \
+  -v "$SSH_AUTH_SOCK:/ssh-agent" \
+  -v /root/.shadow-cloud:/root/.shadow-cloud \
+  -v /workspace/shadow/ops/prod-cn-cluster.json:/cluster.json:ro \
+  ghcr.io/buggyblues/shadow-server:latest \
+  node /app/apps/cloud/dist/cli.js cluster apply --config /cluster.json
+```
 
 ## Dashboard
 

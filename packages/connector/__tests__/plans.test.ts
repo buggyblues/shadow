@@ -12,6 +12,7 @@ describe('connector plans', () => {
     expect(plan.quickCommand).toContain('openclaw plugins install @shadowob/openclaw-shadowob')
     expect(plan.connectCommand).toContain('@shadowob/connector@latest connect')
     expect(plan.quickCommand).toContain("channels.shadowob.token 'tok'")
+    expect(plan.configBlocks[0]?.label).toBe('~/.openclaw/openclaw.json')
     expect(plan.configBlocks[0]?.content).toContain('"serverUrl": "https://shadow.example.com"')
     expect(plan.summary).toContain('Shadow CLI bin/skills')
     expect(plan.aiPrompt).toContain('official Shadow skill files')

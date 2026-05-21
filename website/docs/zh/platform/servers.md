@@ -37,6 +37,50 @@ server = client.create_server(
 
 ---
 
+## 获取服务器访问状态
+
+```
+GET /api/servers/:id/access
+```
+
+返回当前用户对服务器的访问状态。`canAccess` 对已经加入的成员以及可先浏览的公开服务器为 `true`；`isMember` 只在用户已经加入或审批通过后为 `true`。客户端在加载频道列表、应用和工作区面板等成员资源前应检查 `isMember`。
+
+:::code-group
+
+```ts [TypeScript]
+const access = await client.getServerAccess('server-id')
+```
+
+```python [Python]
+access = client.get_server_access("server-id")
+```
+
+:::
+
+---
+
+## 请求加入服务器
+
+```
+POST /api/servers/:id/join-requests
+```
+
+请求加入服务器。公开服务器会立即批准并添加成员；私有服务器会创建加入请求，由服务器所有者审批。
+
+:::code-group
+
+```ts [TypeScript]
+const result = await client.requestServerAccess('server-id')
+```
+
+```python [Python]
+result = client.request_server_access("server-id")
+```
+
+:::
+
+---
+
 ## 列出用户的服务器
 
 ```

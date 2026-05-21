@@ -54,7 +54,8 @@ export function flashAccessMode() {
 
 export async function getOAuthSession(): Promise<FlashOAuthSession> {
   const returnTo = `${location.pathname}${location.search}${location.hash}`
-  const res = await fetch(`/api/oauth/session?return_to=${encodeURIComponent(returnTo)}`)
+  const params = new URLSearchParams({ return_to: returnTo, popup: '1' })
+  const res = await fetch(`/api/oauth/session?${params.toString()}`)
   if (!res.ok) throw new Error('OAuth session check failed')
   return (await res.json()) as FlashOAuthSession
 }

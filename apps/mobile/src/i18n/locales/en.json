@@ -314,6 +314,8 @@
     "publicStatus": "Public visibility",
     "publicServer": "Public server",
     "publicServerDesc": "Anyone can search and join",
+    "publicServerGateDesc": "This is a public server. Join to enter its channels and collaborate with members, Buddies, and apps.",
+    "joinPublicServer": "Join Server",
     "privateServerGateDesc": "This is a private server. Joining requires approval from a server admin.",
     "requestAccess": "Request Access",
     "requestPending": "Request Pending",

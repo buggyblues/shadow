@@ -46,7 +46,7 @@ OAuth/PAT scope alone is not sufficient. The actor must also have access to the 
 8. Client sends `voice:heartbeat` over Socket.IO while connected.
 9. Client calls `leave`; the frontend/CLI also clears local UI/process state immediately.
 
-Each active connection should send a stable `clientId`. Presence is keyed by `userId:clientId`, so the same user can have web, mobile, SDK, and CLI sessions in the same voice channel without overwriting each other. If Redis is configured, presence is shared across server instances; otherwise the service falls back to in-memory presence for local development.
+Each active connection should send a stable `clientId`. A new join receives distinct Agora `uid` and `screenUid` values, but live presence is collapsed to one participant per user in a channel. When the same user joins again from another client, the newer client becomes the live participant and the previous participant is removed from the voice state. If Redis is configured, presence is shared across server instances; otherwise the service falls back to in-memory presence for local development.
 
 Participants that do not heartbeat for 90 seconds are removed. Empty sessions are retained for a 5 minute grace period before cleanup.
 
@@ -112,7 +112,7 @@ Response includes:
 
 ### `POST /api/channels/:channelId/voice/leave`
 
-Marks the actor disconnected and broadcasts `voice:participant-left` when a live participant was removed. Passing `clientId` leaves only that client session; omitting it leaves all active sessions for the actor in the channel.
+Marks the actor disconnected and broadcasts `voice:participant-left` when the live participant was removed. Passing `clientId` leaves that client session when it is still the actor's live participant; omitting it leaves the actor's live participant in the channel.
 
 ```json
 {

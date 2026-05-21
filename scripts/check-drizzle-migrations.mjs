@@ -127,10 +127,12 @@ function validateJournal(migrationFiles) {
   const tags = new Map()
   const idxs = new Map()
   const errors = []
+  let previousEntry = null
 
   for (const entry of entries) {
     const tag = entry?.tag
     const idx = entry?.idx
+    const when = entry?.when
 
     if (typeof tag !== 'string' || !/^\d{4}_.+/.test(tag)) {
       errors.push(`invalid journal tag: ${JSON.stringify(tag)}`)
@@ -142,9 +144,33 @@ function validateJournal(migrationFiles) {
       continue
     }
 
+    if (!Number.isInteger(when)) {
+      errors.push(`${tag}: missing integer when timestamp`)
+      continue
+    }
+
     const prefix = Number(tag.slice(0, 4))
     if (idx !== prefix) {
       errors.push(`${tag}: journal idx ${idx} does not match migration prefix ${prefix}`)
+    }
+
+    if (previousEntry) {
+      if (idx <= previousEntry.idx) {
+        errors.push(
+          `${tag}: journal idx ${idx} must be greater than ${previousEntry.tag} idx ${previousEntry.idx}`,
+        )
+      }
+      if (prefix <= previousEntry.prefix) {
+        errors.push(
+          `${tag}: migration prefix ${prefix} must be greater than ${previousEntry.tag} prefix ${previousEntry.prefix}`,
+        )
+      }
+      if (when <= previousEntry.when) {
+        errors.push(
+          `${tag}: journal when ${when} (${new Date(when).toISOString()}) must be greater than ` +
+            `${previousEntry.tag} when ${previousEntry.when} (${new Date(previousEntry.when).toISOString()})`,
+        )
+      }
     }
 
     const prevTag = tags.get(tag)
@@ -154,9 +180,24 @@ function validateJournal(migrationFiles) {
     const prevIdx = idxs.get(idx)
     if (prevIdx) errors.push(`${tag}: duplicate journal idx ${idx} also used by ${prevIdx}`)
     idxs.set(idx, tag)
+
+    previousEntry = { idx, prefix, tag, when }
   }
 
   const migrationTags = new Set(migrationFiles.map((f) => f.replace(/\.sql$/, '')))
+  const migrationTagsInOrder = migrationFiles.map((f) => f.replace(/\.sql$/, ''))
+  const journalTagsInOrder = entries.map((e) => e?.tag).filter((tag) => typeof tag === 'string')
+
+  for (let i = 0; i < Math.max(migrationTagsInOrder.length, journalTagsInOrder.length); i += 1) {
+    const expected = migrationTagsInOrder[i]
+    const actual = journalTagsInOrder[i]
+    if (expected !== actual) {
+      errors.push(
+        `journal entry ${i} is ${actual ?? '<missing>'}, expected ${expected ?? '<none>'} from sorted migration files`,
+      )
+      break
+    }
+  }
 
   const missingInJournal = migrationFiles
     .map((f) => f.replace(/\.sql$/, ''))

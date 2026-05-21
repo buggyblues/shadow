@@ -4,8 +4,9 @@ import { useParams } from '@tanstack/react-router'
 import { Clock, Lock, Send } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChatArea } from '../components/chat/chat-area'
+import { type ChannelSwitcherOption, ChatArea } from '../components/chat/chat-area'
 import { MemberList } from '../components/member/member-list'
+import { ServerLandingPanel } from '../components/server/server-landing'
 import { VoiceChannelPanel } from '../components/voice/voice-channel-panel'
 import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
@@ -36,9 +37,29 @@ function getNotificationChannelId(event: NotificationEvent) {
   )
 }
 
-export function ChannelView() {
+interface ChannelViewProps {
+  channelId?: string
+  serverSlug?: string
+  copilot?: {
+    channels: ChannelSwitcherOption[]
+    onSelectChannel: (channelId: string) => void
+    onEnter: () => void
+    onExit: () => void
+  }
+}
+
+export function ChannelView({
+  channelId: channelIdProp,
+  serverSlug: serverSlugProp,
+  copilot,
+}: ChannelViewProps = {}) {
   const { t } = useTranslation()
-  const { channelId } = useParams({ strict: false }) as { channelId: string }
+  const routeParams = useParams({ strict: false }) as {
+    channelId?: string
+    serverSlug?: string
+  }
+  const channelId = channelIdProp ?? routeParams.channelId ?? ''
+  const serverSlug = serverSlugProp ?? routeParams.serverSlug
   const activeServerId = useChatStore((s) => s.activeServerId)
   const setMobileView = useUIStore((s) => s.setMobileView)
   const queryClient = useQueryClient()
@@ -55,6 +76,8 @@ export function ChannelView() {
         canAccess: boolean
         requiresApproval: boolean
         joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
+        isServerMember?: boolean
+        isChannelMember?: boolean
         channel: { id: string; name: string; type: string; serverId: string; isPrivate: boolean }
       }>(`/api/channels/${channelId}/access`),
     enabled: !!channelId,
@@ -81,6 +104,46 @@ export function ChannelView() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['channel-access', channelId] })
       queryClient.invalidateQueries({ queryKey: ['channels'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    },
+  })
+
+  const { data: serverAccess } = useQuery({
+    queryKey: ['server-access', serverSlug],
+    queryFn: () =>
+      fetchApi<{
+        server: {
+          id: string
+          name: string
+          slug: string | null
+          iconUrl?: string | null
+          bannerUrl?: string | null
+          description?: string | null
+          isPublic?: boolean
+        }
+        isMember: boolean
+        canAccess: boolean
+        requiresApproval: boolean
+        joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
+      }>(`/api/servers/${serverSlug}/access`),
+    enabled: !!serverSlug && access?.canAccess === false && access?.isServerMember === false,
+    retry: false,
+    staleTime: 30_000,
+  })
+
+  const requestServerAccess = useMutation({
+    mutationFn: () =>
+      fetchApi<{ ok: boolean; status: 'approved' | 'pending'; requestId?: string }>(
+        `/api/servers/${serverSlug}/join-requests`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['server-access', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['channel-access', channelId] })
+      queryClient.invalidateQueries({ queryKey: ['channel-bootstrap', channelId] })
+      queryClient.invalidateQueries({ queryKey: ['channels'] })
+      queryClient.invalidateQueries({ queryKey: ['server-index-channels', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
     },
@@ -156,6 +219,23 @@ export function ChannelView() {
   }
 
   if (!access.canAccess) {
+    if (access.isServerMember === false && serverSlug) {
+      const isPublic = serverAccess?.server.isPublic === true
+      const isPending =
+        serverAccess?.joinRequestStatus === 'pending' || requestServerAccess.isSuccess
+      return (
+        <>
+          <ServerLandingPanel
+            server={serverAccess?.server}
+            mode={isPublic ? 'public' : 'private'}
+            pending={!isPublic && isPending}
+            loading={requestServerAccess.isPending}
+            onJoin={() => requestServerAccess.mutate()}
+          />
+        </>
+      )
+    }
+
     const isPending = access.joinRequestStatus === 'pending' || requestAccess.isSuccess
     const wallChannel = access.channel ?? channel
 
@@ -188,6 +268,22 @@ export function ChannelView() {
 
   if (channel?.type === 'voice') {
     return <VoiceChannelPanel key={channelId} channelId={channelId} channelName={channel.name} />
+  }
+
+  if (copilot) {
+    return (
+      <ChatArea
+        key={channelId}
+        showMemberToggle={false}
+        channelSwitcher={{
+          channels: copilot.channels,
+          activeChannelId: channelId,
+          onSelectChannel: copilot.onSelectChannel,
+        }}
+        onEnterChannel={copilot.onEnter}
+        onExitCopilot={copilot.onExit}
+      />
+    )
   }
 
   return (

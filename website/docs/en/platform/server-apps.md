@@ -38,6 +38,16 @@ shadowob app install --server shadow-plays --manifest-url http://host.lima.inter
 
 Each demo persists app data in a named Compose volume. `docker compose -f integrations/docker-compose.yaml restart` keeps the data; `down -v` removes it.
 
+For production installs, publish each App behind HTTPS and install the public manifest URL:
+
+```bash
+shadowob app install --server shadow-plays --manifest-url https://flash-app.shadowob.com/.well-known/shadow-app.json
+```
+
+Do not use public `http://<ip>:<port>` URLs in production manifests. HTTPS Shadow pages will block mixed-content iframes, icons, and frame navigations from IP-literal HTTP hosts. It is fine for Caddy, Nginx, or another proxy to live on a separate machine and forward to the App host by IP; the manifest should still expose only the HTTPS domain.
+
+Reserve protocol routes before website fallback routes: `/.well-known/shadow-app.json` must reach the App, and legacy `/oauth/authorize` should redirect to the canonical browser OAuth entry `/app/oauth/authorize`.
+
 ## Buddy Access
 
 ```bash
@@ -75,6 +85,8 @@ shadowob app call demo-desk tickets.list \
 Shadow validates the Actor, server membership, Buddy grant, command permission, and JSON limits before proxying the call to the App backend.
 
 The iframe launch includes `shadow_event_stream`. Apps can listen with `EventSource` and refresh when Shadow emits `server_app.command.completed` after a Buddy changes App resources through the CLI.
+
+Shadow keeps the iframe mounted while users switch between server routes. App launch context is cached until near expiry, global navigation data stays warm while refetching, and launch queries should not refetch on window focus. Server Apps should use event streams or local patching for routine updates instead of changing iframe `src`.
 
 ## Manifest
 

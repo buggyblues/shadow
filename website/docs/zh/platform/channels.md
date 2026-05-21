@@ -65,6 +65,8 @@ client.leave_voice_channel(channel["id"])
 
 :::
 
+每次加入都会获得独立的 Agora 凭证。语音在线状态在同一频道内每个用户只保留一个实时参与者；如果同一用户从另一个客户端再次加入，新客户端会替换频道状态里的旧实时参与者。
+
 外部 AI 系统可以使用 CLI 媒体桥接：
 
 ```bash
@@ -329,6 +331,8 @@ POST /api/channels/:channelId/voice/leave
 
 `join` 会返回 Agora `appId`、`agoraChannelName`、音频 `uid`、屏幕共享 `screenUid` 和 token。客户端用 `uid` 发布麦克风音频，用 `screenUid` 发布屏幕共享。
 
+每次加入都会获得独立的 Agora 凭证。语音在线状态在同一频道内每个用户只保留一个实时参与者；如果同一用户从另一个客户端再次加入，新客户端会替换频道状态里的旧实时参与者。
+
 :::code-group
 
 ```ts [TypeScript]
@@ -346,3 +350,13 @@ client.leave_voice_channel("channel-id")
 :::
 
 Socket.IO 客户端也可以使用 `voice:join`、`voice:leave`、`voice:state:update` 和 `voice:heartbeat`。服务端会广播 `voice:participant-joined`、`voice:participant-left` 和 `voice:participant-updated`。
+
+---
+
+## 列出归档频道
+
+```
+GET /api/servers/:serverId/channels/archived
+```
+
+返回服务器的归档频道。调用者必须是服务器成员；仅具备公开服务器的浏览可见性不足以读取归档频道。

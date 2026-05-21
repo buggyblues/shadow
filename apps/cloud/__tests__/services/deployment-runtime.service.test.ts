@@ -376,6 +376,36 @@ users:
     expect(up).toHaveBeenCalledOnce()
   })
 
+  it('fails with setup guidance when an ambient kubeconfig path is a directory', async () => {
+    const tempHome = mkdtempSync(join(tmpdir(), 'shadow-container-home-'))
+    tempDirs.push(tempHome)
+
+    const kubeconfigDir = join(tempHome, '.kube', 'config')
+    mkdirSync(kubeconfigDir, { recursive: true })
+
+    process.env.HOME = tempHome
+    process.env.KUBECONFIG = kubeconfigDir
+    delete process.env.KUBECONFIG_HOST_PATH
+    process.env.SHADOW_CONTAINERIZED = '1'
+
+    const up = vi.fn()
+    const runtime = new DeploymentRuntimeService({ up } as unknown as never)
+
+    await expect(
+      runtime.deployFromSnapshot({
+        namespace: 'qa-invalid-kubeconfig',
+        stack: 'deployment-invalid-kubeconfig',
+        configSnapshot: {
+          version: '1',
+          deployments: {
+            agents: [{ id: 'agent-1', runtime: 'openclaw' }],
+          },
+        },
+      }),
+    ).rejects.toThrow('is a directory, not a file')
+    expect(up).not.toHaveBeenCalled()
+  })
+
   it('passes runtime env overrides without mutating process.env', async () => {
     delete process.env.SHADOW_RUNTIME_TEST_TOKEN
     const provisionState = {

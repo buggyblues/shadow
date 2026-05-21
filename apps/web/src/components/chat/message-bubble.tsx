@@ -86,6 +86,9 @@ function lowerText(value: unknown) {
   return typeof value === 'string' ? value.toLocaleLowerCase() : ''
 }
 
+const MESSAGE_ACTIONS_ACTIVE_EVENT = 'shadow:message-actions-active'
+type MessageActionsActiveEvent = CustomEvent<{ messageId: string }>
+
 function MessageBubbleInner({
   message,
   currentUserId,
@@ -141,6 +144,17 @@ function MessageBubbleInner({
 
   const showActions = isHovered && !selectionMode
 
+  const closeFloatingActions = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    setIsHovered(false)
+    setShowEmojiPicker(false)
+    setShowFullPicker(false)
+    setShowMoreMenu(false)
+  }, [])
+
   // Close all menus on scroll (find nearest scrollable ancestor)
   useEffect(() => {
     if (!showActions && !showEmojiPicker && !showFullPicker && !showMoreMenu) return
@@ -148,29 +162,50 @@ function MessageBubbleInner({
       '[class*="overflow-y-auto"]',
     ) as HTMLElement | null
     if (!scrollParent) return
-    const handleScroll = () => {
-      setIsHovered(false)
-      setShowEmojiPicker(false)
-      setShowFullPicker(false)
-      setShowMoreMenu(false)
-    }
+    const handleScroll = () => closeFloatingActions()
     scrollParent.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollParent.removeEventListener('scroll', handleScroll)
-  }, [showActions, showEmojiPicker, showFullPicker, showMoreMenu])
+  }, [closeFloatingActions, showActions, showEmojiPicker, showFullPicker, showMoreMenu])
+
+  useEffect(() => {
+    const handleActiveMessageActions = (event: Event) => {
+      const activeMessageId = (event as MessageActionsActiveEvent).detail?.messageId
+      if (!activeMessageId || activeMessageId === message.id) return
+      closeFloatingActions()
+    }
+    window.addEventListener(MESSAGE_ACTIONS_ACTIVE_EVENT, handleActiveMessageActions)
+    return () => {
+      window.removeEventListener(MESSAGE_ACTIONS_ACTIVE_EVENT, handleActiveMessageActions)
+    }
+  }, [closeFloatingActions, message.id])
+
+  useEffect(() => {
+    if (!showActions && !showEmojiPicker && !showFullPicker && !showMoreMenu) return
+    const handleDocumentMouseLeave = (event: MouseEvent) => {
+      if (!event.relatedTarget) closeFloatingActions()
+    }
+    window.addEventListener('blur', closeFloatingActions)
+    document.addEventListener('mouseleave', handleDocumentMouseLeave)
+    return () => {
+      window.removeEventListener('blur', closeFloatingActions)
+      document.removeEventListener('mouseleave', handleDocumentMouseLeave)
+    }
+  }, [closeFloatingActions, showActions, showEmojiPicker, showFullPicker, showMoreMenu])
 
   const activateHover = useCallback(() => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+    window.dispatchEvent(
+      new CustomEvent(MESSAGE_ACTIONS_ACTIVE_EVENT, { detail: { messageId: message.id } }),
+    )
     setIsHovered(true)
-  }, [])
+  }, [message.id])
 
   const deactivateHover = useCallback(() => {
-    if (showMoreMenu || showEmojiPicker || showFullPicker) return
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
     hoverTimeoutRef.current = setTimeout(() => {
-      setIsHovered(false)
-      setShowEmojiPicker(false)
-      setShowFullPicker(false)
+      closeFloatingActions()
     }, 150)
-  }, [showMoreMenu, showEmojiPicker, showFullPicker])
+  }, [closeFloatingActions])
 
   const isOwn = message.authorId === currentUserId
   const getFloatingControlsStyle = useCallback(
@@ -179,13 +214,24 @@ function MessageBubbleInner({
       const rect = messageRef.current?.getBoundingClientRect()
       if (!rect) return null
 
-      const maxTop = Math.max(8, window.innerHeight - 56)
-      const maxLeft = Math.max(8, window.innerWidth - estimatedWidth - 8)
+      const floatingBounds = messageRef.current
+        ?.closest('.chat-scroll-surface, .chat-panel')
+        ?.getBoundingClientRect()
+      const bounds = floatingBounds ?? {
+        top: 0,
+        right: window.innerWidth,
+        bottom: window.innerHeight,
+        left: 0,
+      }
+      const minTop = bounds.top + 8
+      const maxTop = Math.max(minTop, bounds.bottom - 56)
+      const minLeft = bounds.left + 8
+      const maxLeft = Math.max(minLeft, bounds.right - estimatedWidth - 8)
       const desiredLeft = rect.right - estimatedWidth - 16
 
       return {
-        top: Math.min(Math.max(8, rect.top - offsetTop), maxTop),
-        left: Math.min(Math.max(8, desiredLeft), maxLeft),
+        top: Math.min(Math.max(minTop, rect.top - offsetTop), maxTop),
+        left: Math.min(Math.max(minLeft, desiredLeft), maxLeft),
       }
     },
     [],
@@ -576,13 +622,13 @@ function MessageBubbleInner({
     <div
       ref={messageRef}
       id={`msg-${message.id}`}
-      className={`group relative flex gap-4 px-4 ${isGrouped ? 'py-0.5 pl-[72px]' : 'py-2'} mx-1 message-row hover:bg-bg-tertiary/20 ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
+      className={`group relative mx-1 flex gap-3 px-3 sm:gap-4 sm:px-4 ${isGrouped ? 'py-0.5 pl-[64px] sm:pl-[72px]' : 'py-2'} message-row hover:bg-bg-tertiary/20 ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
       onMouseEnter={activateHover}
       onMouseLeave={deactivateHover}
       onClick={selectionMode ? () => onToggleSelect?.(message.id) : undefined}
       onTouchStart={() => {
         longPressTimerRef.current = setTimeout(() => {
-          setIsHovered(true)
+          activateHover()
         }, 500)
       }}
       onTouchEnd={() => {
@@ -905,12 +951,7 @@ function MessageBubbleInner({
               className="fixed flex items-center bg-white/90 dark:bg-[#1A1D24]/90 backdrop-blur-xl rounded-[14px] border border-black/5 dark:border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-0.5 z-[66] transition-all"
               style={floatingStyle}
               onMouseEnter={activateHover}
-              onMouseLeave={() => {
-                hoverTimeoutRef.current = setTimeout(() => {
-                  setIsHovered(false)
-                  setShowEmojiPicker(false)
-                }, 150)
-              }}
+              onMouseLeave={deactivateHover}
             >
               {quickEmojis.map((emoji) => (
                 <Button
@@ -949,19 +990,14 @@ function MessageBubbleInner({
         messageRef.current &&
         createPortal(
           (() => {
-            const rect = messageRef.current.getBoundingClientRect()
-            const top = Math.max(8, rect.top - 440)
-            const fullPickerPosStyle = { top, right: window.innerWidth - rect.right + 16 }
+            const fullPickerPosStyle = getFloatingControlsStyle(440, 352)
+            if (!fullPickerPosStyle) return null
             return (
               <div
                 className="fixed z-[70]"
                 style={fullPickerPosStyle}
-                onMouseLeave={() => {
-                  setShowFullPicker(false)
-                  hoverTimeoutRef.current = setTimeout(() => {
-                    setIsHovered(false)
-                  }, 150)
-                }}
+                onMouseEnter={activateHover}
+                onMouseLeave={deactivateHover}
               >
                 <EmojiPicker
                   onSelect={(emoji) => {

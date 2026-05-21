@@ -22,6 +22,9 @@ import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { useConfirmStore } from '../common/confirm-dialog'
 
+const SERVER_APP_SETTINGS_STALE_MS = 5 * 60 * 1000
+const SERVER_APP_SETTINGS_GC_MS = 30 * 60 * 1000
+
 interface ServerAccess {
   canManage: boolean
 }
@@ -187,18 +190,24 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
     queryKey: ['server-access', serverSlug],
     queryFn: () => fetchApi<ServerAccess>(`/api/servers/${serverSlug}/access`),
     enabled: !!serverSlug,
+    staleTime: SERVER_APP_SETTINGS_STALE_MS,
+    gcTime: SERVER_APP_SETTINGS_GC_MS,
   })
 
   const { data: apps = [], isLoading } = useQuery({
     queryKey: ['server-apps', serverSlug],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
     enabled: !!serverSlug,
+    staleTime: SERVER_APP_SETTINGS_STALE_MS,
+    gcTime: SERVER_APP_SETTINGS_GC_MS,
   })
 
   const { data: catalog = [] } = useQuery({
     queryKey: ['server-app-catalog', serverSlug],
     queryFn: () => fetchApi<ServerAppCatalogEntry[]>(`/api/servers/${serverSlug}/apps/catalog`),
     enabled: !!serverSlug && !!access?.canManage,
+    staleTime: SERVER_APP_SETTINGS_STALE_MS,
+    gcTime: SERVER_APP_SETTINGS_GC_MS,
   })
 
   const activeApp = useMemo(
@@ -211,6 +220,8 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
     queryFn: () =>
       fetchApi<ServerAppIntegration>(`/api/servers/${serverSlug}/apps/${activeApp!.appKey}`),
     enabled: !!serverSlug && !!activeApp?.appKey && mode === 'detail',
+    staleTime: SERVER_APP_SETTINGS_STALE_MS,
+    gcTime: SERVER_APP_SETTINGS_GC_MS,
   })
 
   const selectedApp = activeAppDetail ?? activeApp
@@ -219,6 +230,8 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
     queryKey: ['server-members', serverSlug],
     queryFn: () => fetchApi<ServerMember[]>(`/api/servers/${serverSlug}/members`),
     enabled: !!serverSlug && !!access?.canManage,
+    staleTime: SERVER_APP_SETTINGS_STALE_MS,
+    gcTime: SERVER_APP_SETTINGS_GC_MS,
   })
 
   const buddies = useMemo(

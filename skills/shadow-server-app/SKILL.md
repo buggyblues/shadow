@@ -19,7 +19,11 @@ Use this skill when integrating a third-party App with a Shadow server or when t
 - Provide a real `iconUrl`; Shadow shows it during OAuth-style install review and in the App list.
 - Every command must declare `permission`, `action`, and `dataClass`.
 - Use `server-private` or `channel-private` for ordinary server data. Do not use `financial`, `secret`, or `cloud-secret` unless the Shadow server policy explicitly supports that use case.
-- For local development, install with `--manifest-file`; production manifests should be hosted on HTTPS.
+- For local development, install with `--manifest-file`; production manifests, iframe URLs, API URLs, icon URLs, and OAuth redirect URIs must be hosted on stable HTTPS origins.
+- Do not publish manifest URLs that point to public `http://<ip>:<port>` origins. Shadow is served over HTTPS, and browsers block mixed-content iframes, images, and frame navigations from IP-literal HTTP hosts.
+- If the reverse proxy and App host are different machines, DNS should point to the HTTPS proxy and the proxy can forward to the App host by IP. Keep the IP out of the public manifest.
+- Never load Shadow OAuth inside the Server App iframe. Open `/app/oauth/authorize` in a top-level popup or navigation, and include `allow-popups-to-escape-sandbox` on the iframe sandbox.
+- Keep iframe launch URLs stable. Cache launch context until near expiry, disable refetch-on-focus for launch queries, keep global navigation data warm while refetching, and use event streams or app-local patches instead of remounting the iframe.
 - If the App sells paid value, route discovery, purchase, entitlement ownership, renewal, refund,
   and buyer support through Shadow commerce instead of inventing an App-local checkout.
 - Commerce behavior must be manually validated in the browser from server/shop/Buddy entry through
@@ -84,8 +88,20 @@ Run all standard demos together from the repo root with:
 
 ```bash
 cp integrations/.env.example integrations/.env
-docker compose -f integrations/compose.yaml --env-file integrations/.env up --build
+docker compose -f integrations/docker-compose.yaml --env-file integrations/.env up --build
 ```
+
+Production HTTPS example:
+
+```dotenv
+SHADOW_SERVER_URL=https://shadowob.com
+SHADOW_WEB_BASE_URL=https://shadowob.com
+FLASH_PUBLIC_BASE_URL=https://flash-app.shadowob.com
+FLASH_API_BASE_URL=https://flash-app.shadowob.com
+FLASH_OAUTH_REDIRECT_URI=https://flash-app.shadowob.com/shadow/oauth/callback
+```
+
+The public origin must route `/.well-known/shadow-app.json` before any website SPA fallback. If Shadow Web and the marketing/docs website share a host, keep `/app/oauth/authorize` as the canonical OAuth browser entry and redirect legacy `/oauth/authorize` to it.
 
 ## Batch-Copy Workflow
 
@@ -96,7 +112,7 @@ docker compose -f integrations/compose.yaml --env-file integrations/.env up --bu
 5. Keep the Hono command route loop and SDK runtime calls unless the app uses another HTTP framework.
 6. Add narrow commands first: list/get/read commands, then write commands with `approvalMode: "first_time"` where appropriate.
 7. Update `skills` in the manifest with concise Buddy behavior and CLI command hints.
-8. Add the service to `integrations/compose.yaml` with a named data volume and dotenv-configurable port/base URLs.
+8. Add the service to `integrations/docker-compose.yaml` with a named data volume and dotenv-configurable port/base URLs.
 9. Run Biome formatting and typecheck for the integration plus `@shadowob/sdk`.
 
 ## Recommended Buddy Behavior
@@ -107,6 +123,7 @@ docker compose -f integrations/compose.yaml --env-file integrations/.env up --bu
 4. Use the narrowest command that satisfies the user request.
 5. For writes, echo the intended target/resource in the channel unless the App Skill says the operation is safe and routine.
 6. Expect the App iframe to refresh from Shadow's event stream after successful CLI commands; do not invent separate refresh webhooks unless the App needs external events.
+7. When the App itself needs Shadow OAuth, open the authorize URL in a popup and refresh the App session after the callback notifies the opener. Do not replace the iframe `src` just to refresh auth state.
 
 ## App Backend Auth
 

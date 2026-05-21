@@ -136,10 +136,11 @@ function safeReturnTo(value: string | undefined) {
   }
 }
 
-function createOauthState(returnTo: string) {
+function createOauthState(returnTo: string, options: { popup?: boolean } = {}) {
   return encodeSignedJson({
     nonce: randomBytes(16).toString('base64url'),
     returnTo,
+    popup: options.popup === true,
     expiresAt: Date.now() + 10 * 60 * 1000,
   })
 }
@@ -163,16 +164,42 @@ function compactOauthProfile(profile: FlashOAuthSession['profile']): FlashOAuthS
   }
 }
 
-function oauthAuthorizeUrl(returnTo: string) {
+function oauthAuthorizeUrl(returnTo: string, options: { popup?: boolean } = {}) {
   const config = oauthConfig()
   if (!config.configured) return null
-  const url = new URL('/oauth/authorize', shadowWebBaseUrl())
+  const url = new URL('/app/oauth/authorize', shadowWebBaseUrl())
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('client_id', config.clientId)
   url.searchParams.set('redirect_uri', config.redirectUri)
   url.searchParams.set('scope', config.scope)
-  url.searchParams.set('state', createOauthState(returnTo))
+  url.searchParams.set('state', createOauthState(returnTo, options))
   return url.toString()
+}
+
+function oauthPopupCompletePage(returnTo: string) {
+  const fallback = JSON.stringify(returnTo)
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flash OAuth Complete</title>
+  </head>
+  <body>
+    <p>Authorization complete. You can close this window.</p>
+    <script>
+      try {
+        if (window.opener) {
+          window.opener.postMessage({ type: 'flash.oauth.completed' }, '*');
+        }
+      } catch (_) {}
+      window.close();
+      setTimeout(function () {
+        window.location.replace(${fallback});
+      }, 800);
+    </script>
+  </body>
+</html>`
 }
 
 export async function createFlashApp() {
@@ -205,19 +232,20 @@ export async function createFlashApp() {
 
   app.get('/api/oauth/session', (c) => {
     const returnTo = safeReturnTo(c.req.query('return_to'))
+    const popup = c.req.query('popup') === '1'
     const session = readOauthSession(getCookie(c, FLASH_OAUTH_SESSION_COOKIE))
     if (!session) deleteCookie(c, FLASH_OAUTH_SESSION_COOKIE, { path: '/' })
     return c.json({
       configured: oauthConfig().configured,
       authenticated: Boolean(session),
       profile: session?.profile ?? null,
-      authorizeUrl: session ? null : oauthAuthorizeUrl(returnTo),
+      authorizeUrl: session ? null : oauthAuthorizeUrl(returnTo, { popup }),
     })
   })
 
   app.get('/shadow/oauth/start', (c) => {
     const returnTo = safeReturnTo(c.req.query('return_to'))
-    const authorizeUrl = oauthAuthorizeUrl(returnTo)
+    const authorizeUrl = oauthAuthorizeUrl(returnTo, { popup: c.req.query('popup') === '1' })
     if (!authorizeUrl) return c.text('Flash OAuth is not configured.', 503)
     return c.redirect(authorizeUrl, 302)
   })
@@ -225,7 +253,9 @@ export async function createFlashApp() {
   app.get('/shadow/oauth/callback', async (c) => {
     const code = c.req.query('code')
     const error = c.req.query('error')
-    const state = decodeSignedJson<{ returnTo?: string; expiresAt?: number }>(c.req.query('state'))
+    const state = decodeSignedJson<{ returnTo?: string; expiresAt?: number; popup?: boolean }>(
+      c.req.query('state'),
+    )
     if (error) return c.text(`Authorization denied: ${error}`, 401)
     if (!state?.returnTo || !state.expiresAt || state.expiresAt <= Date.now()) {
       return c.text('Invalid OAuth state.', 400)
@@ -271,6 +301,7 @@ export async function createFlashApp() {
       path: '/',
       maxAge: Math.max(60, token.expires_in),
     })
+    if (state.popup === true) return c.html(oauthPopupCompletePage(safeReturnTo(state.returnTo)))
     return c.redirect(safeReturnTo(state.returnTo), 302)
   })
 

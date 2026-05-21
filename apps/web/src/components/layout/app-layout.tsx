@@ -22,6 +22,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useUIStore } from '../../stores/ui.store'
 import { ConfirmDialog } from '../common/confirm-dialog'
 import { RechargeModal } from '../recharge/recharge-modal'
+import { NewcomerLandingModal } from '../server/server-landing'
 import { ServerSidebar } from '../server/server-sidebar'
 import { useVoiceSession, VoiceSessionProvider } from '../voice/voice-session-context'
 import { DynamicBackground } from './dynamic-background'
@@ -75,13 +76,16 @@ function AppLayoutInner() {
   const location = useLocation()
   const pathname = location?.pathname ?? ''
   const { user, setUser } = useAuthStore()
-  const { backgroundImage } = useUIStore()
+  const { backgroundImage, copilotChannel } = useUIStore()
   const { mobileServerSidebarOpen, closeMobileServerSidebar, openMobileServerSidebar } =
     useUIStore()
   const [pendingServerAppApproval, setPendingServerAppApproval] =
     useState<ServerAppApprovalRequest | null>(null)
   const [serverAppApprovalSubmitting, setServerAppApprovalSubmitting] = useState(false)
   const isCloudRoute = /^\/app\/cloud(?:\/|$)/.test(pathname)
+  const isPlayLaunchRoute = /^\/app\/play\/launch(?:\/|$)/u.test(pathname)
+  const isServerAppsRoute = /(?:^|\/)servers\/[^/]+\/apps(?:\/|$)/u.test(pathname)
+  const isCopilotMode = Boolean(copilotChannel && isServerAppsRoute)
   const showAtmosphereOrbs = !backgroundImage
 
   // Fetch current user on mount
@@ -194,12 +198,14 @@ function AppLayoutInner() {
       )}
 
       {/* ── Server sidebar — always visible on md+, overlay on mobile ── */}
-      <div className="relative z-10 hidden md:flex">
-        <ServerSidebar />
-      </div>
+      {!isCopilotMode && (
+        <div className="relative z-10 hidden md:flex">
+          <ServerSidebar />
+        </div>
+      )}
 
       {/* ── Mobile server sidebar overlay (glassmorphic) ── */}
-      {mobileServerSidebarOpen && (
+      {mobileServerSidebarOpen && !isCopilotMode && (
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div
             className="absolute inset-0 bg-bg-deep/80 backdrop-blur-md"
@@ -232,7 +238,7 @@ function AppLayoutInner() {
       </div>
 
       {/* ── Mobile FAB to open server sidebar ── */}
-      {!mobileServerSidebarOpen && (
+      {!mobileServerSidebarOpen && !isCopilotMode && (
         <Button
           size="icon"
           onClick={openMobileServerSidebar}
@@ -251,6 +257,7 @@ function AppLayoutInner() {
       )}
 
       <ConfirmDialog />
+      <NewcomerLandingModal enabled={!isPlayLaunchRoute} userId={me?.id ?? user?.id ?? null} />
       <Modal open={!!pendingServerAppApproval} onClose={closeServerAppApproval}>
         <ModalContent maxWidth="max-w-[460px]">
           <ModalHeader
@@ -405,7 +412,10 @@ function FloatingVoiceCall() {
 
   if (
     !connectedVoiceChannel ||
-    (voice.status !== 'connected' && voice.status !== 'connecting' && voice.status !== 'error')
+    (voice.status !== 'connected' &&
+      voice.status !== 'connecting' &&
+      voice.status !== 'disconnecting' &&
+      voice.status !== 'error')
   ) {
     return null
   }
@@ -490,7 +500,9 @@ function FloatingVoiceCall() {
         <span className="min-w-0">
           <span className="block truncate text-sm font-black">{connectedVoiceChannel.name}</span>
           <span className="block text-xs font-bold text-text-muted">
-            {voice.status === 'connecting' ? t('voice.connecting') : t('voice.connected')}
+            {voice.status === 'connecting' || voice.status === 'disconnecting'
+              ? t('voice.connecting')
+              : t('voice.connected')}
           </span>
         </span>
       </button>
@@ -512,6 +524,7 @@ function FloatingVoiceCall() {
         className="h-9 w-9 rounded-xl text-danger hover:text-danger"
         title={t('voice.disconnect')}
         onClick={() => void leaveVoiceChannel()}
+        disabled={voice.status === 'disconnecting'}
       >
         <PhoneOff size={16} />
       </Button>

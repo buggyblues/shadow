@@ -3,6 +3,7 @@
  *
  * Sub-commands:
  *   cluster init     — bootstrap k3s on servers defined in cluster.json
+ *   cluster apply    — apply cluster.json idempotently, adding newly listed nodes
  *   cluster status   — check SSH + k3s health on all nodes
  *   cluster list     — list all registered clusters
  *   cluster kubeconfig — print kubeconfig path for a cluster
@@ -17,30 +18,52 @@ import type { ServiceContainer } from '../../services/container.js'
 
 export function createClusterCommand(container: ServiceContainer) {
   const cluster = new Command('cluster').description(
-    'Manage bare-server k3s clusters (init, status, list, destroy)',
+    'Manage bare-server k3s clusters (init, apply, status, list, destroy)',
   )
+
+  async function applyClusterConfig(options: { config: string; force?: boolean }) {
+    const config = readClusterConfig(options.config)
+    container.logger.info(`Applying cluster "${config.name}" from ${options.config}...`)
+
+    const meta = await container.cluster.init(
+      config,
+      (msg) => {
+        container.logger.dim(msg)
+      },
+      options.force,
+    )
+
+    container.logger.success(`Cluster "${meta.name}" ready! Kubeconfig: ${meta.kubeconfigPath}`)
+    container.logger.info(
+      `Edit ${options.config} and run this command again to add newly listed nodes.`,
+    )
+    container.logger.info(`Deploy agents: shadowob-cloud up --cluster ${meta.name}`)
+  }
 
   // ─── init ─────────────────────────────────────────────────────────────────
   cluster
     .command('init')
-    .description('Bootstrap a k3s cluster on bare servers')
+    .description('Bootstrap or update a k3s cluster on bare servers')
     .option('-c, --config <path>', 'Path to cluster.json', 'cluster.json')
     .option('--force', 'Reinstall k3s even if already installed on nodes')
     .action(async (options: { config: string; force?: boolean }) => {
       try {
-        const config = readClusterConfig(options.config)
-        container.logger.info(`Initializing cluster "${config.name}"...`)
+        await applyClusterConfig(options)
+      } catch (err) {
+        container.logger.error((err as Error).message)
+        process.exit(1)
+      }
+    })
 
-        const meta = await container.cluster.init(
-          config,
-          (msg) => {
-            container.logger.dim(msg)
-          },
-          options.force,
-        )
-
-        container.logger.success(`Cluster "${meta.name}" ready! Kubeconfig: ${meta.kubeconfigPath}`)
-        container.logger.info(`Deploy agents: shadowob-cloud up --cluster ${meta.name}`)
+  // ─── apply ────────────────────────────────────────────────────────────────
+  cluster
+    .command('apply')
+    .description('Apply cluster.json idempotently and add newly listed nodes')
+    .option('-c, --config <path>', 'Path to cluster.json', 'cluster.json')
+    .option('--force', 'Reinstall k3s even if already installed on nodes')
+    .action(async (options: { config: string; force?: boolean }) => {
+      try {
+        await applyClusterConfig(options)
       } catch (err) {
         container.logger.error((err as Error).message)
         process.exit(1)

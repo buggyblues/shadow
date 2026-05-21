@@ -77,7 +77,7 @@ export interface RemoteScreen {
   }
 }
 
-type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'error'
+type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnecting' | 'error'
 type VoiceErrorKey =
   | 'rtcNotConfigured'
   | 'microphonePermission'
@@ -91,70 +91,121 @@ export type NetworkQuality = 'unknown' | 'excellent' | 'good' | 'fair' | 'poor'
 type VoiceCue = 'join' | 'leave'
 type CaptureFeature = 'microphone' | 'display-capture'
 
+interface UseVoiceChannelOptions {
+  deviceDiscoveryEnabled?: boolean
+}
+
 const VOICE_MICROPHONE_POLICY_BLOCKED = 'VOICE_MICROPHONE_POLICY_BLOCKED'
 const VOICE_MICROPHONE_PERMISSION_DENIED = 'VOICE_MICROPHONE_PERMISSION_DENIED'
 const VOICE_SCREEN_POLICY_BLOCKED = 'VOICE_SCREEN_POLICY_BLOCKED'
 const VOICE_MICROPHONE_DEVICE_KEY = 'shadow.voice.microphoneDevice:v1'
 const VOICE_SPEAKER_DEVICE_KEY = 'shadow.voice.speakerDevice:v1'
+const SYSTEM_DEFAULT_DEVICE_ID = 'default'
+
+class VoiceOperationCancelledError extends Error {
+  constructor() {
+    super('Voice operation cancelled')
+    this.name = 'VoiceOperationCancelledError'
+  }
+}
+
+function isVoiceOperationCancelled(error: unknown) {
+  return error instanceof VoiceOperationCancelledError
+}
+
+function closeLocalMediaTrack(track: any) {
+  try {
+    track?.getMediaStreamTrack?.()?.stop?.()
+  } catch {
+    // Ignore release failures; Agora cleanup below is still best effort.
+  }
+  try {
+    track?.stop?.()
+  } catch {
+    // Ignore release failures; close may still release the capture device.
+  }
+  try {
+    track?.close?.()
+  } catch {
+    // Browser capture indicators should not survive a failed close attempt.
+  }
+}
 
 function loadStoredVoiceDevice(key: string) {
-  if (typeof window === 'undefined') return ''
+  if (typeof window === 'undefined') return SYSTEM_DEFAULT_DEVICE_ID
   try {
-    return localStorage.getItem(key) ?? ''
+    const stored = localStorage.getItem(key)?.trim()
+    return stored || SYSTEM_DEFAULT_DEVICE_ID
   } catch {
-    return ''
+    return SYSTEM_DEFAULT_DEVICE_ID
   }
 }
 
 function storeVoiceDevice(key: string, deviceId: string) {
   if (typeof window === 'undefined') return
   try {
-    if (deviceId) localStorage.setItem(key, deviceId)
+    if (deviceId && deviceId !== SYSTEM_DEFAULT_DEVICE_ID) localStorage.setItem(key, deviceId)
     else localStorage.removeItem(key)
   } catch {
     // Device persistence is a convenience only.
   }
 }
 
-function deviceLabel(device: VoiceDevice | { label?: string | null }) {
-  return (device.label ?? '').toLowerCase()
+function agoraDeviceId(deviceId: string) {
+  return deviceId === SYSTEM_DEFAULT_DEVICE_ID ? SYSTEM_DEFAULT_DEVICE_ID : deviceId || undefined
 }
 
-function scoreVoiceDevice(device: VoiceDevice, kind: 'input' | 'output') {
-  const label = deviceLabel(device)
-  let score = 0
-
-  if (device.deviceId === 'default') score += 8
-  if (/airpods|headphone|headset|earbud|buds|usb|bluetooth|wireless|耳机|耳麥|耳麦/.test(label)) {
-    score += 70
-  }
-  if (/external|interface|scarlett|yeti|rode|shure|anker|jabra|sony|bose|beats/.test(label)) {
-    score += 35
-  }
-  if (/built.?in|macbook|display audio|speakers?/.test(label)) score += kind === 'output' ? 12 : 4
-  if (/iphone|ipad|continuity|phone/.test(label)) score -= 90
-  if (/camera/.test(label) && kind === 'input') score -= 20
-
-  return score
+function normalizeDeviceList(devices: VoiceDevice[]) {
+  const seen = new Set<string>()
+  return devices.filter((device) => {
+    if (!device.deviceId || seen.has(device.deviceId)) return false
+    seen.add(device.deviceId)
+    return device.deviceId !== SYSTEM_DEFAULT_DEVICE_ID
+  })
 }
 
-function choosePreferredVoiceDevice(
-  devices: VoiceDevice[],
-  currentDeviceId: string,
-  kind: 'input' | 'output',
-) {
-  if (devices.length === 0) return ''
-  const current = devices.find((device) => device.deviceId === currentDeviceId)
-  const ranked = [...devices].sort((a, b) => scoreVoiceDevice(b, kind) - scoreVoiceDevice(a, kind))
-  const best = ranked[0]
-  if (!best) return currentDeviceId
-  if (!current) return best.deviceId
-  if (scoreVoiceDevice(best, kind) - scoreVoiceDevice(current, kind) >= 35) return best.deviceId
-  return current.deviceId
+function selectedDeviceStillAvailable(devices: VoiceDevice[], deviceId: string) {
+  return (
+    !deviceId ||
+    deviceId === SYSTEM_DEFAULT_DEVICE_ID ||
+    devices.some((device) => device.deviceId === deviceId)
+  )
+}
+
+function reconcileVoiceParticipants(participants: VoiceParticipant[], onlineUids: Set<number>) {
+  if (onlineUids.size === 0) return participants
+  const byUserId = new Map<string, VoiceParticipant>()
+  for (const participant of participants) {
+    if (!onlineUids.has(participant.uid)) continue
+    const current = byUserId.get(participant.userId)
+    if (
+      !current ||
+      participant.isSpeaking ||
+      new Date(participant.updatedAt).getTime() > new Date(current.updatedAt).getTime()
+    ) {
+      byUserId.set(participant.userId, participant)
+    }
+  }
+  return participants.filter(
+    (participant) => byUserId.get(participant.userId)?.id === participant.id,
+  )
 }
 
 interface BrowserPermissionsPolicy {
   allowsFeature?: (feature: string, origin?: string) => boolean
+}
+
+type WakeLockSentinelLike = {
+  released?: boolean
+  release: () => Promise<void>
+  addEventListener?: (type: 'release', listener: () => void) => void
+  removeEventListener?: (type: 'release', listener: () => void) => void
+}
+
+type NavigatorWithWakeLock = Navigator & {
+  wakeLock?: {
+    request: (type: 'screen') => Promise<WakeLockSentinelLike>
+  }
 }
 
 let voiceCueContext: AudioContext | null = null
@@ -337,8 +388,14 @@ function screenShareErrorKey(err: unknown): VoiceErrorKey {
   return voiceErrorKey(err)
 }
 
-export function useVoiceChannel(channelId: string | null) {
-  const clientId = useMemo(() => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, [])
+export function useVoiceChannel(channelId: string | null, options: UseVoiceChannelOptions = {}) {
+  const deviceDiscoveryEnabled = options.deviceDiscoveryEnabled ?? Boolean(channelId)
+  const baseClientId = useMemo<string>(
+    () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+    [],
+  )
+  const activeClientIdRef = useRef<string>(baseClientId)
+  const operationRef = useRef<Promise<void>>(Promise.resolve())
   const clientRef = useRef<ReturnType<typeof AgoraRTC.createClient> | null>(null)
   const screenClientRef = useRef<ReturnType<typeof AgoraRTC.createClient> | null>(null)
   const localAudioTrackRef = useRef<any>(null)
@@ -350,6 +407,9 @@ export function useVoiceChannel(channelId: string | null) {
   const renewTokensRef = useRef<() => Promise<void>>(async () => undefined)
   const micTestTrackRef = useRef<any>(null)
   const micTestTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const wakeLockRef = useRef<WakeLockSentinelLike | null>(null)
+  const joinOperationRef = useRef(0)
+  const screenShareOperationRef = useRef(0)
 
   const [status, setStatus] = useState<ConnectionStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -373,8 +433,20 @@ export function useVoiceChannel(channelId: string | null) {
   const [isTestingMic, setIsTestingMic] = useState(false)
   const [remoteScreens, setRemoteScreens] = useState<RemoteScreen[]>([])
   const [localScreenTrack, setLocalScreenTrack] = useState<any>(null)
+  const [onlineVoiceUids, setOnlineVoiceUids] = useState<Set<number>>(new Set())
   const leaveRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => undefined)
   const participantsRef = useRef<VoiceParticipant[]>([])
+  const statusRef = useRef<ConnectionStatus>('idle')
+
+  const setConnectionStatus = useCallback((next: ConnectionStatus) => {
+    statusRef.current = next
+    setStatus(next)
+  }, [])
+
+  const nextClientId = useCallback(() => {
+    const suffix = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    return `${baseClientId}:${suffix}`
+  }, [baseClientId])
 
   const emitVoiceState = useCallback(
     (patch: {
@@ -384,9 +456,13 @@ export function useVoiceChannel(channelId: string | null) {
       screenSharing?: boolean
     }) => {
       if (!channelId) return
-      getSocket().emit('voice:state:update', { channelId, clientId, ...patch })
+      getSocket().emit('voice:state:update', {
+        channelId,
+        clientId: activeClientIdRef.current,
+        ...patch,
+      })
     },
-    [channelId, clientId],
+    [channelId],
   )
 
   const applyState = useCallback(
@@ -398,11 +474,17 @@ export function useVoiceChannel(channelId: string | null) {
     [channelId],
   )
 
+  const displayedParticipants = useMemo(
+    () => reconcileVoiceParticipants(participants, onlineVoiceUids),
+    [onlineVoiceUids, participants],
+  )
+
   const applySpeakerDevice = useCallback(
     async (deviceId: string) => {
+      const playbackDeviceId = agoraDeviceId(deviceId)
       for (const track of remoteAudioTracksRef.current.values()) {
-        if (deviceId && typeof track.setPlaybackDevice === 'function') {
-          await track.setPlaybackDevice(deviceId).catch(() => undefined)
+        if (playbackDeviceId && typeof track.setPlaybackDevice === 'function') {
+          await track.setPlaybackDevice(playbackDeviceId).catch(() => undefined)
         }
         if (typeof track.setVolume === 'function') {
           track.setVolume(outputVolume)
@@ -431,7 +513,8 @@ export function useVoiceChannel(channelId: string | null) {
       let changed = false
       const nextParticipants = participantsRef.current.map((participant) => {
         const isLocal =
-          participant.clientId === clientId || (credentials && participant.uid === credentials.uid)
+          participant.clientId === activeClientIdRef.current ||
+          (credentials && participant.uid === credentials.uid)
         if (!isLocal) return participant
         changed = true
         return {
@@ -444,17 +527,19 @@ export function useVoiceChannel(channelId: string | null) {
       participantsRef.current = nextParticipants
       setParticipants(nextParticipants)
     },
-    [clientId],
+    [],
   )
 
   const replacePublishedMicrophone = useCallback(
     async (deviceId: string) => {
+      if (statusRef.current !== 'connected') return
       const currentTrack = localAudioTrackRef.current
       const client = clientRef.current
+      const microphoneId = agoraDeviceId(deviceId)
 
-      if (currentTrack?.setDevice && deviceId) {
+      if (currentTrack?.setDevice && microphoneId) {
         try {
-          await currentTrack.setDevice(deviceId)
+          await currentTrack.setDevice(microphoneId)
           await currentTrack.setEnabled?.(!isMuted)
           emitVoiceState({ muted: isMuted, speaking: false })
           return
@@ -467,15 +552,14 @@ export function useVoiceChannel(channelId: string | null) {
       if (!client || (connectionState && connectionState !== 'CONNECTED')) return
 
       const nextTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        microphoneId: deviceId || undefined,
+        microphoneId,
         encoderConfig: 'music_standard',
       })
       await nextTrack.setEnabled(!isMuted)
 
       if (currentTrack) {
         await client.unpublish([currentTrack]).catch(() => undefined)
-        currentTrack.stop?.()
-        currentTrack.close?.()
+        closeLocalMediaTrack(currentTrack)
       }
       localAudioTrackRef.current = nextTrack
       await client.publish([nextTrack])
@@ -489,26 +573,33 @@ export function useVoiceChannel(channelId: string | null) {
       AgoraRTC.getMicrophones().catch(() => []),
       AgoraRTC.getPlaybackDevices().catch(() => []),
     ])
-    const nextMicrophones = micList.map((device) => ({
-      deviceId: device.deviceId,
-      label: device.label,
-    }))
-    const nextSpeakers = speakerList.map((device) => ({
-      deviceId: device.deviceId,
-      label: device.label,
-    }))
+    const nextMicrophones = normalizeDeviceList(
+      micList.map((device) => ({
+        deviceId: device.deviceId,
+        label: device.label,
+      })),
+    )
+    const nextSpeakers = normalizeDeviceList(
+      speakerList.map((device) => ({
+        deviceId: device.deviceId,
+        label: device.label,
+      })),
+    )
 
     setMicrophones(nextMicrophones)
     setSpeakers(nextSpeakers)
 
-    const nextMicrophoneId = choosePreferredVoiceDevice(
-      nextMicrophones,
-      selectedMicrophoneId,
-      'input',
-    )
-    if (nextMicrophoneId && nextMicrophoneId !== selectedMicrophoneId) {
+    const nextMicrophoneId = selectedDeviceStillAvailable(nextMicrophones, selectedMicrophoneId)
+      ? selectedMicrophoneId || SYSTEM_DEFAULT_DEVICE_ID
+      : SYSTEM_DEFAULT_DEVICE_ID
+    if (nextMicrophoneId !== selectedMicrophoneId) {
       setSelectedMicrophoneId(nextMicrophoneId)
       storeVoiceDevice(VOICE_MICROPHONE_DEVICE_KEY, nextMicrophoneId)
+    }
+    if (
+      nextMicrophoneId === SYSTEM_DEFAULT_DEVICE_ID ||
+      nextMicrophoneId !== selectedMicrophoneId
+    ) {
       await replacePublishedMicrophone(nextMicrophoneId).catch((err) => {
         const message = err instanceof Error ? err.message : 'Failed to switch microphone'
         setError(message)
@@ -516,10 +607,14 @@ export function useVoiceChannel(channelId: string | null) {
       })
     }
 
-    const nextSpeakerId = choosePreferredVoiceDevice(nextSpeakers, selectedSpeakerId, 'output')
-    if (nextSpeakerId && nextSpeakerId !== selectedSpeakerId) {
+    const nextSpeakerId = selectedDeviceStillAvailable(nextSpeakers, selectedSpeakerId)
+      ? selectedSpeakerId || SYSTEM_DEFAULT_DEVICE_ID
+      : SYSTEM_DEFAULT_DEVICE_ID
+    if (nextSpeakerId !== selectedSpeakerId) {
       setSelectedSpeakerId(nextSpeakerId)
       storeVoiceDevice(VOICE_SPEAKER_DEVICE_KEY, nextSpeakerId)
+    }
+    if (nextSpeakerId === SYSTEM_DEFAULT_DEVICE_ID || nextSpeakerId !== selectedSpeakerId) {
       await applySpeakerDevice(nextSpeakerId)
     }
   }, [applySpeakerDevice, replacePublishedMicrophone, selectedMicrophoneId, selectedSpeakerId])
@@ -529,12 +624,22 @@ export function useVoiceChannel(channelId: string | null) {
       clearInterval(micTestTimerRef.current)
       micTestTimerRef.current = null
     }
-    micTestTrackRef.current?.stop?.()
-    micTestTrackRef.current?.close?.()
+    closeLocalMediaTrack(micTestTrackRef.current)
     micTestTrackRef.current = null
     setMicTestLevel(0)
     setIsTestingMic(false)
   }, [])
+
+  const releaseLocalCapture = useCallback(() => {
+    closeLocalMediaTrack(localAudioTrackRef.current)
+    closeLocalMediaTrack(localScreenTrackRef.current)
+    localAudioTrackRef.current = null
+    localScreenTrackRef.current = null
+    setLocalScreenTrack(null)
+    setIsScreenSharing(false)
+    setInputVolume(0)
+    stopMicTest()
+  }, [stopMicTest])
 
   const startMicTest = useCallback(async () => {
     stopMicTest()
@@ -543,7 +648,7 @@ export function useVoiceChannel(channelId: string | null) {
     try {
       await assertMicrophoneCaptureAllowed()
       const track = await AgoraRTC.createMicrophoneAudioTrack({
-        microphoneId: selectedMicrophoneId || undefined,
+        microphoneId: agoraDeviceId(selectedMicrophoneId),
       })
       micTestTrackRef.current = track
       setIsTestingMic(true)
@@ -584,7 +689,7 @@ export function useVoiceChannel(channelId: string | null) {
     if (!activeChannelId) return
     const result = await socketCall<VoiceRenewResult>('voice:token:renew', {
       channelId: activeChannelId,
-      clientId,
+      clientId: activeClientIdRef.current,
     })
     credentialsRef.current = result.credentials
     applyState(result.state)
@@ -595,23 +700,27 @@ export function useVoiceChannel(channelId: string | null) {
       await screenClientRef.current?.renewToken?.(result.credentials.screenToken)
     }
     scheduleTokenRenewal(result.credentials)
-  }, [applyState, clientId, scheduleTokenRenewal])
+  }, [applyState, scheduleTokenRenewal])
 
   useEffect(() => {
     renewTokensRef.current = renewTokens
   }, [renewTokens])
 
-  const leave = useCallback(
+  const performLeave = useCallback(
     async (options: { silent?: boolean } = {}) => {
+      joinOperationRef.current += 1
+      screenShareOperationRef.current += 1
       const activeChannelId = credentialsRef.current?.channelId ?? null
+      const activeClientId = activeClientIdRef.current
       const client = clientRef.current
       const screenClient = screenClientRef.current
-      const localAudioTrack = localAudioTrackRef.current
-      const localScreenTrack = localScreenTrackRef.current
       if (activeChannelId && !options.silent) {
         playVoiceCue('leave')
       }
-      stopMicTest()
+      if (activeChannelId || client || screenClient) {
+        setConnectionStatus('disconnecting')
+      }
+      releaseLocalCapture()
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current)
         heartbeatRef.current = null
@@ -625,7 +734,6 @@ export function useVoiceChannel(channelId: string | null) {
       screenClientRef.current = null
       localAudioTrackRef.current = null
       localScreenTrackRef.current = null
-      setStatus('idle')
       setErrorKey(null)
       setError(null)
       participantsRef.current = []
@@ -633,35 +741,56 @@ export function useVoiceChannel(channelId: string | null) {
       setIsScreenSharing(false)
       setInputVolume(0)
       setNetworkQuality('unknown')
-
-      localAudioTrack?.stop?.()
-      localAudioTrack?.close?.()
-      localScreenTrack?.stop?.()
-      localScreenTrack?.close?.()
+      setOnlineVoiceUids(new Set())
 
       await Promise.all([
         screenClient?.leave().catch(() => undefined),
         client?.leave().catch(() => undefined),
         activeChannelId
-          ? socketCall('voice:leave', { channelId: activeChannelId, clientId }).catch(
-              () => undefined,
-            )
+          ? socketCall('voice:leave', {
+              channelId: activeChannelId,
+              clientId: activeClientId,
+            }).catch(() => undefined)
           : Promise.resolve(),
       ])
+      setConnectionStatus('idle')
     },
-    [clearTokenRenewal, clientId, stopMicTest],
+    [clearTokenRenewal, releaseLocalCapture, setConnectionStatus],
+  )
+
+  const leave = useCallback(
+    async (options: { silent?: boolean } = {}) => {
+      joinOperationRef.current += 1
+      screenShareOperationRef.current += 1
+      if (statusRef.current === 'connected' || statusRef.current === 'connecting') {
+        setConnectionStatus('disconnecting')
+      }
+      releaseLocalCapture()
+      const nextOperation = operationRef.current
+        .catch(() => undefined)
+        .then(() => performLeave(options))
+      operationRef.current = nextOperation.catch(() => undefined)
+      return nextOperation
+    },
+    [performLeave, releaseLocalCapture, setConnectionStatus],
   )
 
   const subscribeRemoteUser = useCallback(
     async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
       const client = clientRef.current
       if (!client) return
+      setOnlineVoiceUids((prev) => {
+        const next = new Set(prev)
+        next.add(Number(user.uid))
+        return next
+      })
       await client.subscribe(user, mediaType)
       if (mediaType === 'audio' && user.audioTrack) {
         remoteAudioTracksRef.current.set(user.uid, user.audioTrack)
         if (!isDeafened) {
-          if (selectedSpeakerId && typeof user.audioTrack.setPlaybackDevice === 'function') {
-            await user.audioTrack.setPlaybackDevice(selectedSpeakerId).catch(() => undefined)
+          const playbackDeviceId = agoraDeviceId(selectedSpeakerId)
+          if (playbackDeviceId && typeof user.audioTrack.setPlaybackDevice === 'function') {
+            await user.audioTrack.setPlaybackDevice(playbackDeviceId).catch(() => undefined)
           }
           if (typeof user.audioTrack.setVolume === 'function') {
             user.audioTrack.setVolume(outputVolume)
@@ -697,109 +826,169 @@ export function useVoiceChannel(channelId: string | null) {
     [isDeafened, outputVolume, selectedSpeakerId],
   )
 
+  const markRemoteUserOffline = useCallback((uid: string | number) => {
+    remoteAudioTracksRef.current.delete(uid)
+    setRemoteScreens((prev) => prev.filter((screen) => screen.uid !== uid))
+    setOnlineVoiceUids((prev) => {
+      const next = new Set(prev)
+      next.delete(Number(uid))
+      return next
+    })
+  }, [])
+
   const join = useCallback(async () => {
-    if (!channelId) return
-    if (status === 'connected' || status === 'connecting') return
-    setStatus('connecting')
-    setError(null)
-    setErrorKey(null)
-    let localAudioTrack: Awaited<ReturnType<typeof AgoraRTC.createMicrophoneAudioTrack>> | null =
-      null
-    try {
-      await assertMicrophoneCaptureAllowed()
-      localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        microphoneId: selectedMicrophoneId || undefined,
-        encoderConfig: 'music_standard',
-      })
-      localAudioTrackRef.current = localAudioTrack
-      await localAudioTrack.setEnabled(!isMuted)
+    const nextOperation = operationRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (!channelId) return
+        if (
+          statusRef.current === 'connected' ||
+          statusRef.current === 'connecting' ||
+          statusRef.current === 'disconnecting'
+        ) {
+          return
+        }
+        const joinOperationId = ++joinOperationRef.current
+        const assertJoinActive = () => {
+          if (joinOperationRef.current !== joinOperationId) {
+            throw new VoiceOperationCancelledError()
+          }
+        }
+        const joinClientId = nextClientId()
+        activeClientIdRef.current = joinClientId
+        setConnectionStatus('connecting')
+        setError(null)
+        setErrorKey(null)
+        let localAudioTrack: Awaited<
+          ReturnType<typeof AgoraRTC.createMicrophoneAudioTrack>
+        > | null = null
+        try {
+          assertJoinActive()
+          await assertMicrophoneCaptureAllowed()
+          assertJoinActive()
+          localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+            microphoneId: agoraDeviceId(selectedMicrophoneId),
+            encoderConfig: 'music_standard',
+          })
+          assertJoinActive()
+          localAudioTrackRef.current = localAudioTrack
+          await localAudioTrack.setEnabled(!isMuted)
+          assertJoinActive()
 
-      const result = await socketCall<VoiceJoinResult>('voice:join', {
-        channelId,
-        clientId,
-        muted: isMuted,
-        deafened: isDeafened,
-      })
-      credentialsRef.current = result.credentials
-      scheduleTokenRenewal(result.credentials)
-      applyState(result.state)
+          const result = await socketCall<VoiceJoinResult>('voice:join', {
+            channelId,
+            clientId: joinClientId,
+            muted: isMuted,
+            deafened: isDeafened,
+          })
+          credentialsRef.current = result.credentials
+          scheduleTokenRenewal(result.credentials)
+          applyState(result.state)
+          assertJoinActive()
 
-      const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
-      clientRef.current = client
-      client.on('user-published', subscribeRemoteUser)
-      client.on('user-unpublished', (user, mediaType) => {
-        if (mediaType === 'audio') remoteAudioTracksRef.current.delete(user.uid)
-        if (mediaType === 'video') {
-          setRemoteScreens((prev) => prev.filter((screen) => screen.uid !== user.uid))
+          const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
+          clientRef.current = client
+          client.on('user-joined', (user) => {
+            setOnlineVoiceUids((prev) => {
+              const next = new Set(prev)
+              next.add(Number(user.uid))
+              return next
+            })
+          })
+          client.on('user-published', subscribeRemoteUser)
+          client.on('user-unpublished', (user, mediaType) => {
+            if (mediaType === 'audio') remoteAudioTracksRef.current.delete(user.uid)
+            if (mediaType === 'video') {
+              setRemoteScreens((prev) => prev.filter((screen) => screen.uid !== user.uid))
+            }
+          })
+          client.on('user-left', (user) => {
+            markRemoteUserOffline(user.uid)
+          })
+          client.enableAudioVolumeIndicator()
+          client.on('volume-indicator', (volumes) => {
+            const local = volumes.find((volume) => Number(volume.uid) === result.credentials.uid)
+            const level = local?.level ?? 0
+            setInputVolume(level)
+            emitVoiceState({ speaking: level > 35 })
+          })
+          client.on('network-quality', (quality) => {
+            const score = Math.max(
+              quality.uplinkNetworkQuality ?? 0,
+              quality.downlinkNetworkQuality ?? 0,
+            )
+            setNetworkQuality(
+              score <= 0
+                ? 'unknown'
+                : score <= 2
+                  ? 'excellent'
+                  : score === 3
+                    ? 'good'
+                    : score === 4
+                      ? 'fair'
+                      : 'poor',
+            )
+          })
+          client.on('token-privilege-will-expire', () => {
+            void renewTokensRef.current()
+          })
+          client.on('token-privilege-did-expire', () => {
+            void renewTokensRef.current()
+          })
+          await client.join(
+            result.credentials.appId,
+            result.credentials.agoraChannelName,
+            result.credentials.token,
+            result.credentials.uid,
+          )
+          assertJoinActive()
+          setOnlineVoiceUids(
+            new Set([
+              result.credentials.uid,
+              ...client.remoteUsers.map((user) => Number(user.uid)),
+            ]),
+          )
+          await client.publish([localAudioTrack])
+          assertJoinActive()
+          setConnectionStatus('connected')
+          playVoiceCue('join')
+          await refreshDevices()
+          assertJoinActive()
+          heartbeatRef.current = setInterval(() => {
+            getSocket().emit('voice:heartbeat', { channelId, clientId: joinClientId })
+          }, 30_000)
+        } catch (err) {
+          const cancelled = isVoiceOperationCancelled(err)
+          const message = err instanceof Error ? err.message : 'Failed to join voice channel'
+          await performLeave({ silent: true })
+          if (localAudioTrackRef.current === localAudioTrack) {
+            localAudioTrackRef.current = null
+          }
+          closeLocalMediaTrack(localAudioTrack)
+          if (cancelled) {
+            setConnectionStatus('idle')
+            return
+          }
+          setError(message)
+          setErrorKey(voiceErrorKey(err))
+          setConnectionStatus('error')
         }
       })
-      client.enableAudioVolumeIndicator()
-      client.on('volume-indicator', (volumes) => {
-        const local = volumes.find((volume) => Number(volume.uid) === result.credentials.uid)
-        const level = local?.level ?? 0
-        setInputVolume(level)
-        emitVoiceState({ speaking: level > 35 })
-      })
-      client.on('network-quality', (quality) => {
-        const score = Math.max(
-          quality.uplinkNetworkQuality ?? 0,
-          quality.downlinkNetworkQuality ?? 0,
-        )
-        setNetworkQuality(
-          score <= 0
-            ? 'unknown'
-            : score <= 2
-              ? 'excellent'
-              : score === 3
-                ? 'good'
-                : score === 4
-                  ? 'fair'
-                  : 'poor',
-        )
-      })
-      client.on('token-privilege-will-expire', () => {
-        void renewTokensRef.current()
-      })
-      client.on('token-privilege-did-expire', () => {
-        void renewTokensRef.current()
-      })
-      await client.join(
-        result.credentials.appId,
-        result.credentials.agoraChannelName,
-        result.credentials.token,
-        result.credentials.uid,
-      )
-      await client.publish([localAudioTrack])
-      setStatus('connected')
-      playVoiceCue('join')
-      await refreshDevices()
-      heartbeatRef.current = setInterval(() => {
-        getSocket().emit('voice:heartbeat', { channelId, clientId })
-      }, 30_000)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to join voice channel'
-      await leave({ silent: true })
-      if (localAudioTrackRef.current === localAudioTrack) {
-        localAudioTrackRef.current = null
-      }
-      localAudioTrack?.stop?.()
-      localAudioTrack?.close?.()
-      setError(message)
-      setErrorKey(voiceErrorKey(err))
-      setStatus('error')
-    }
+    operationRef.current = nextOperation.catch(() => undefined)
+    return nextOperation
   }, [
     applyState,
     channelId,
-    clientId,
     emitVoiceState,
+    nextClientId,
     isDeafened,
     isMuted,
-    leave,
+    markRemoteUserOffline,
+    performLeave,
     refreshDevices,
     scheduleTokenRenewal,
     selectedMicrophoneId,
-    status,
+    setConnectionStatus,
     subscribeRemoteUser,
   ])
 
@@ -818,8 +1007,9 @@ export function useVoiceChannel(channelId: string | null) {
     for (const track of remoteAudioTracksRef.current.values()) {
       if (next) track.stop?.()
       else {
-        if (selectedSpeakerId && typeof track.setPlaybackDevice === 'function') {
-          void track.setPlaybackDevice(selectedSpeakerId).catch(() => undefined)
+        const playbackDeviceId = agoraDeviceId(selectedSpeakerId)
+        if (playbackDeviceId && typeof track.setPlaybackDevice === 'function') {
+          void track.setPlaybackDevice(playbackDeviceId).catch(() => undefined)
         }
         track.play?.()
       }
@@ -856,8 +1046,8 @@ export function useVoiceChannel(channelId: string | null) {
   }, [])
 
   const stopScreenShare = useCallback(async () => {
-    localScreenTrackRef.current?.stop?.()
-    localScreenTrackRef.current?.close?.()
+    screenShareOperationRef.current += 1
+    closeLocalMediaTrack(localScreenTrackRef.current)
     localScreenTrackRef.current = null
     setLocalScreenTrack(null)
     await screenClientRef.current?.leave().catch(() => undefined)
@@ -870,20 +1060,32 @@ export function useVoiceChannel(channelId: string | null) {
   const startScreenShare = useCallback(async () => {
     const credentials = credentialsRef.current
     if (!credentials || isScreenSharing) return
+    const screenShareOperationId = ++screenShareOperationRef.current
+    const assertScreenShareActive = () => {
+      if (
+        screenShareOperationRef.current !== screenShareOperationId ||
+        statusRef.current !== 'connected'
+      ) {
+        throw new VoiceOperationCancelledError()
+      }
+    }
     setError(null)
     setErrorKey(null)
     let screenTrack: any = null
+    let screenClient: ReturnType<typeof AgoraRTC.createClient> | null = null
     try {
+      assertScreenShareActive()
       assertScreenCaptureAllowed()
       const trackResult = await AgoraRTC.createScreenVideoTrack(
         { encoderConfig: '1080p_1' },
         'disable',
       )
       screenTrack = Array.isArray(trackResult) ? trackResult[0] : trackResult
+      assertScreenShareActive()
       localScreenTrackRef.current = screenTrack
       screenTrack.on?.('track-ended', () => void stopScreenShare())
 
-      const screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
+      screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
       screenClientRef.current = screenClient
       screenClient.on('token-privilege-will-expire', () => {
         void renewTokensRef.current()
@@ -897,7 +1099,9 @@ export function useVoiceChannel(channelId: string | null) {
         credentials.screenToken,
         credentials.screenUid,
       )
+      assertScreenShareActive()
       await screenClient.publish([screenTrack])
+      assertScreenShareActive()
       setLocalScreenTrack(screenTrack)
       setRemoteScreens((prev) =>
         prev.filter((screen) => Number(screen.uid) !== credentials.screenUid),
@@ -906,20 +1110,34 @@ export function useVoiceChannel(channelId: string | null) {
       updateLocalParticipant({ isScreenSharing: true })
       emitVoiceState({ screenSharing: true })
     } catch (err) {
+      const cancelled = isVoiceOperationCancelled(err)
       const message = err instanceof Error ? err.message : 'Failed to share screen'
-      localScreenTrackRef.current?.stop?.()
-      localScreenTrackRef.current?.close?.()
-      localScreenTrackRef.current = null
-      setLocalScreenTrack(null)
-      await screenClientRef.current?.leave().catch(() => undefined)
-      screenClientRef.current = null
-      setIsScreenSharing(false)
-      updateLocalParticipant({ isScreenSharing: false })
-      setError(message)
-      setErrorKey(screenShareErrorKey(err))
-      emitVoiceState({ screenSharing: false })
-      screenTrack?.stop?.()
-      screenTrack?.close?.()
+      const ownsCurrentScreenTrack = localScreenTrackRef.current === screenTrack
+      const shouldClearShareState =
+        ownsCurrentScreenTrack ||
+        screenShareOperationRef.current === screenShareOperationId ||
+        statusRef.current !== 'connected'
+      if (ownsCurrentScreenTrack) {
+        closeLocalMediaTrack(localScreenTrackRef.current)
+        localScreenTrackRef.current = null
+        setLocalScreenTrack(null)
+      }
+      if (screenClient) {
+        await screenClient.leave().catch(() => undefined)
+      }
+      if (screenClient && screenClientRef.current === screenClient) {
+        screenClientRef.current = null
+      }
+      if (shouldClearShareState) {
+        setIsScreenSharing(false)
+        updateLocalParticipant({ isScreenSharing: false })
+        if (!cancelled) {
+          setError(message)
+          setErrorKey(screenShareErrorKey(err))
+        }
+        emitVoiceState({ screenSharing: false })
+      }
+      closeLocalMediaTrack(screenTrack)
     }
   }, [emitVoiceState, isScreenSharing, stopScreenShare, updateLocalParticipant])
 
@@ -939,18 +1157,83 @@ export function useVoiceChannel(channelId: string | null) {
   }, [applyState])
 
   useEffect(() => {
+    if (!deviceDiscoveryEnabled) return undefined
     void refreshDevices()
-    if (typeof navigator === 'undefined') return undefined
+    const agoraDeviceEvents = AgoraRTC as typeof AgoraRTC & {
+      onMicrophoneChanged?: (info: unknown) => void
+      onPlaybackDeviceChanged?: (info: unknown) => void
+    }
+    const previousMicrophoneChanged = agoraDeviceEvents.onMicrophoneChanged
+    const previousPlaybackDeviceChanged = agoraDeviceEvents.onPlaybackDeviceChanged
+    agoraDeviceEvents.onMicrophoneChanged = () => {
+      void refreshDevices()
+    }
+    agoraDeviceEvents.onPlaybackDeviceChanged = () => {
+      void refreshDevices()
+    }
+    if (typeof navigator === 'undefined') {
+      return () => {
+        agoraDeviceEvents.onMicrophoneChanged = previousMicrophoneChanged
+        agoraDeviceEvents.onPlaybackDeviceChanged = previousPlaybackDeviceChanged
+      }
+    }
     const mediaDevices = navigator.mediaDevices
-    if (!mediaDevices?.addEventListener) return undefined
+    if (!mediaDevices?.addEventListener) {
+      return () => {
+        agoraDeviceEvents.onMicrophoneChanged = previousMicrophoneChanged
+        agoraDeviceEvents.onPlaybackDeviceChanged = previousPlaybackDeviceChanged
+      }
+    }
     const onDeviceChange = () => {
       void refreshDevices()
     }
     mediaDevices.addEventListener('devicechange', onDeviceChange)
     return () => {
+      agoraDeviceEvents.onMicrophoneChanged = previousMicrophoneChanged
+      agoraDeviceEvents.onPlaybackDeviceChanged = previousPlaybackDeviceChanged
       mediaDevices.removeEventListener('devicechange', onDeviceChange)
     }
-  }, [refreshDevices])
+  }, [deviceDiscoveryEnabled, refreshDevices])
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || typeof document === 'undefined') return undefined
+    if (status !== 'connected') {
+      void wakeLockRef.current?.release().catch(() => undefined)
+      wakeLockRef.current = null
+      return undefined
+    }
+
+    let disposed = false
+    const requestWakeLock = async () => {
+      const wakeLock = (navigator as NavigatorWithWakeLock).wakeLock
+      if (!wakeLock || document.visibilityState !== 'visible') return
+      try {
+        const sentinel = await wakeLock.request('screen')
+        if (disposed) {
+          await sentinel.release().catch(() => undefined)
+          return
+        }
+        wakeLockRef.current = sentinel
+      } catch {
+        // Screen Wake Lock is unavailable on some browsers; voice still works while visible.
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !wakeLockRef.current) {
+        void requestWakeLock()
+      }
+    }
+
+    void requestWakeLock()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      disposed = true
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      void wakeLockRef.current?.release().catch(() => undefined)
+      wakeLockRef.current = null
+    }
+  }, [status])
 
   useEffect(() => {
     leaveRef.current = leave
@@ -966,7 +1249,7 @@ export function useVoiceChannel(channelId: string | null) {
     status,
     error,
     errorKey,
-    participants,
+    participants: displayedParticipants,
     isMuted,
     isDeafened,
     isScreenSharing,

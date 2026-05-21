@@ -37,7 +37,6 @@ import { OAuthCallbackPage } from './pages/oauth-callback'
 import { PlayLaunchPage } from './pages/play-launch'
 import { RegisterPage } from './pages/register'
 import { ServerLayout } from './pages/server'
-import { ServerAppsPageRoute } from './pages/server-apps'
 import { ServerIndexView } from './pages/server-index-view'
 import { SettingsPage } from './pages/settings'
 import { ShopPageRoute } from './pages/shop'
@@ -96,6 +95,8 @@ function marketplaceDetailSearch(search: Record<string, unknown>) {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const SERVER_ROUTE_STALE_MS = 5 * 60 * 1000
+const SERVER_ROUTE_GC_MS = 30 * 60 * 1000
 
 type ServerRouteSummary = {
   id: string
@@ -169,13 +170,18 @@ function canonicalServerChildRoute(childPath: string, serverSlug: string) {
   }
 }
 
+function EmptyRoute() {
+  return null
+}
+
 async function canonicalizeServerRoute({ params, location }: ServerRouteBeforeLoadContext) {
   const serverSlug = params.serverSlug
   if (!serverSlug || !UUID_RE.test(serverSlug)) return
   const server = await queryClient.fetchQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<ServerRouteSummary>(`/api/servers/${encodeURIComponent(serverSlug)}`),
-    staleTime: 30_000,
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
   })
   if (!server.slug || server.slug === serverSlug) return
 
@@ -287,13 +293,13 @@ const serverWorkspaceRoute = createRoute({
 const serverAppsRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/apps',
-  component: ServerAppsPageRoute,
+  component: EmptyRoute,
 })
 
 const serverAppDetailRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/apps/$appKey',
-  component: ServerAppsPageRoute,
+  component: EmptyRoute,
 })
 
 const settingsRoute = createRoute({

@@ -37,6 +37,11 @@ import {
   requestCloudDeploymentCancellation,
   requestCloudDeploymentDestroyInterruption,
 } from '../lib/cloud-deployment-processor'
+import {
+  applySafeDeploymentPreferences,
+  type CloudStoreModelProviderMode,
+  readCloudStoreModelProviderMode,
+} from '../lib/cloud-saas-deployment-preferences'
 import { extractShadowProvisionTarget } from '../lib/cloud-shadow-target'
 import { validateJsonLimits } from '../lib/json-limits'
 import { decrypt, encrypt } from '../lib/kms'
@@ -44,6 +49,7 @@ import {
   assertOfficialModelProxyAvailable,
   officialModelProxyEnvVars,
   officialModelProxyMissingConfig,
+  resolveOfficialModelProxyRuntimeServerUrl,
   shouldCopyServerRuntimeEnvKey,
 } from '../lib/model-proxy-config'
 import { assertSafeHttpUrl } from '../lib/ssrf'
@@ -93,8 +99,6 @@ const RESERVED_RUNTIME_ENV_KEYS = new Set([
 
 const DEFAULT_DIY_CLOUD_DAILY_LIMIT = 24
 const DEPLOYMENT_MANIFEST_SCHEMA_VERSION = 1
-const CLOUD_SAAS_WORKLOAD_BACKEND_ENV = 'CLOUD_SAAS_WORKLOAD_BACKEND'
-const CLOUD_SAAS_WORKLOAD_BACKENDS = new Set(['agent-sandbox', 'deployment'])
 
 function isReservedRuntimeEnvKey(name: string): boolean {
   return RESERVED_RUNTIME_ENV_KEYS.has(name)
@@ -121,8 +125,6 @@ function validateTemplateContentForWrite(content: Record<string, unknown>) {
   assertCloudTemplatePolicy(snapshot)
   return snapshot
 }
-
-type CloudStoreModelProviderMode = 'official' | 'custom'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -424,20 +426,6 @@ function sanitizeLegacyProvisionState(value: unknown): unknown {
     sanitized[key] = sanitizeLegacyProvisionState(child)
   }
   return sanitized
-}
-
-function readCloudStoreModelProviderMode(
-  configSnapshot: unknown,
-): CloudStoreModelProviderMode | null {
-  if (!isRecord(configSnapshot)) return null
-  const runtime = configSnapshot[CLOUD_SAAS_RUNTIME_KEY]
-  if (!isRecord(runtime)) return null
-
-  if (runtime.modelProviderMode === 'official' || runtime.modelProviderMode === 'custom') {
-    return runtime.modelProviderMode
-  }
-  if (runtime.officialModelProxy === true) return 'official'
-  return null
 }
 
 function resolveModelProviderMode(input: {
@@ -1267,131 +1255,6 @@ function collectModelProviderSelectors(
 
   for (const child of Object.values(record)) collectModelProviderSelectors(child, out, depth + 1)
   return out
-}
-
-function firstModelProviderOptions(value: unknown, depth = 0): Record<string, unknown> | null {
-  if (depth > 32 || !value || typeof value !== 'object') return null
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = firstModelProviderOptions(item, depth + 1)
-      if (found) return found
-    }
-    return null
-  }
-
-  const record = value as Record<string, unknown>
-  if (record.plugin === 'model-provider' && isRecord(record.options)) {
-    return record.options
-  }
-  for (const child of Object.values(record)) {
-    const found = firstModelProviderOptions(child, depth + 1)
-    if (found) return found
-  }
-  return null
-}
-
-function sanitizeModelProviderPreferences(options: Record<string, unknown>) {
-  const sanitized: Record<string, unknown> = {}
-  const profileId = options.profileId
-  if (typeof profileId === 'string') {
-    const normalized = normalizeProviderProfileId(profileId)
-    if (normalized) sanitized.profileId = normalized
-  }
-  const profileIds = options.profileIds
-  if (Array.isArray(profileIds)) {
-    const normalized = profileIds
-      .filter((id): id is string => typeof id === 'string')
-      .map(normalizeProviderProfileId)
-      .filter(Boolean)
-      .slice(0, 8)
-    if (normalized.length > 0) sanitized.profileIds = normalized
-  }
-  for (const key of ['selector', 'tag', 'model']) {
-    const value = options[key]
-    if (typeof value === 'string' && value.trim()) {
-      sanitized[key] = value.trim().slice(0, 120)
-    }
-  }
-  return sanitized
-}
-
-function applyModelProviderPreferences(value: unknown, preferences: Record<string, unknown>) {
-  if (!value || typeof value !== 'object') return
-  if (Array.isArray(value)) {
-    for (const item of value) applyModelProviderPreferences(item, preferences)
-    return
-  }
-
-  const record = value as Record<string, unknown>
-  if (record.plugin === 'model-provider') {
-    record.options = {
-      ...(isRecord(record.options) ? record.options : {}),
-      ...preferences,
-    }
-  }
-  for (const child of Object.values(record)) applyModelProviderPreferences(child, preferences)
-}
-
-function applySafeDeploymentPreferences(
-  serverTemplateSnapshot: Record<string, unknown>,
-  clientConfigSnapshot: unknown,
-) {
-  const snapshot = structuredClone(serverTemplateSnapshot) as Record<string, unknown>
-  applyWorkloadBackendPreference(snapshot, clientConfigSnapshot)
-  if (!configUsesPlugin(snapshot, 'model-provider') || !isRecord(clientConfigSnapshot)) {
-    return snapshot
-  }
-
-  const clientOptions = firstModelProviderOptions(clientConfigSnapshot)
-  if (clientOptions) {
-    const preferences = sanitizeModelProviderPreferences(clientOptions)
-    if (Object.keys(preferences).length > 0) {
-      applyModelProviderPreferences(snapshot, preferences)
-    }
-  }
-
-  const modelProviderMode = readCloudStoreModelProviderMode(clientConfigSnapshot)
-  if (modelProviderMode) {
-    snapshot[CLOUD_SAAS_RUNTIME_KEY] = {
-      ...(isRecord(snapshot[CLOUD_SAAS_RUNTIME_KEY])
-        ? (snapshot[CLOUD_SAAS_RUNTIME_KEY] as Record<string, unknown>)
-        : {}),
-      modelProviderMode,
-    }
-  }
-
-  return snapshot
-}
-
-function readWorkloadBackendPreference(value: unknown): 'agent-sandbox' | 'deployment' | null {
-  if (!isRecord(value)) return null
-  const deployments = value.deployments
-  if (!isRecord(deployments)) return null
-  const backend = deployments.backend
-  return typeof backend === 'string' && CLOUD_SAAS_WORKLOAD_BACKENDS.has(backend)
-    ? (backend as 'agent-sandbox' | 'deployment')
-    : null
-}
-
-function configuredWorkloadBackendPreference(): 'agent-sandbox' | 'deployment' | null {
-  const backend = process.env[CLOUD_SAAS_WORKLOAD_BACKEND_ENV]?.trim()
-  return backend && CLOUD_SAAS_WORKLOAD_BACKENDS.has(backend)
-    ? (backend as 'agent-sandbox' | 'deployment')
-    : null
-}
-
-function applyWorkloadBackendPreference(
-  snapshot: Record<string, unknown>,
-  clientConfigSnapshot: unknown,
-) {
-  const backend =
-    readWorkloadBackendPreference(clientConfigSnapshot) ?? configuredWorkloadBackendPreference()
-  if (!backend) return
-
-  snapshot.deployments = {
-    ...(isRecord(snapshot.deployments) ? snapshot.deployments : {}),
-    backend,
-  }
 }
 
 function providerModelMatchesSelector(
@@ -2351,19 +2214,26 @@ export function createCloudSaasHandler(container: AppContainer) {
     const explicitProviderProfileIds = [...collectProviderProfileIds(configSnapshot)]
       .map(normalizeProviderProfileId)
       .filter(Boolean)
-    const runtimeServerUrl = shadowAgentServerUrl ?? shadowServerUrl
+    const officialRuntimeServerUrl = resolveOfficialModelProxyRuntimeServerUrl({
+      shadowAgentServerUrl,
+      shadowServerUrl,
+    })
     const modelProviderMode = resolveModelProviderMode({
       configSnapshot,
       explicitProviderProfileIds,
       modelProviderMode: options.modelProviderMode,
-      runtimeServerUrl,
+      runtimeServerUrl: officialRuntimeServerUrl.runtimeServerUrl,
       usesModelProvider,
     })
     const usesOfficialModelProxy = usesModelProvider && modelProviderMode === 'official'
     if (usesOfficialModelProxy) {
-      assertOfficialModelProxyAvailable(runtimeServerUrl)
+      assertOfficialModelProxyAvailable(
+        officialRuntimeServerUrl.runtimeServerUrl,
+        officialRuntimeServerUrl.runtimeServerUrlRequirement,
+      )
       const proxyEnvVars = officialModelProxyEnvVars({
-        runtimeServerUrl,
+        runtimeServerUrl: officialRuntimeServerUrl.runtimeServerUrl,
+        runtimeServerUrlRequirement: officialRuntimeServerUrl.runtimeServerUrlRequirement,
         userId,
         templateSlug: options.templateSlug ?? undefined,
         namespace: options.namespace ?? undefined,

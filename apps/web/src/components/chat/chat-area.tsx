@@ -19,6 +19,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Archive,
   ArrowLeft,
+  ChevronDown,
   ClipboardCopy,
   Copy,
   Hash,
@@ -27,11 +28,13 @@ import {
   LogIn,
   LogOut,
   type LucideProps,
+  Megaphone,
   PawPrint,
   ShoppingBag,
   Smartphone,
   UserPlus,
   Users,
+  Volume2,
   X,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -118,6 +121,13 @@ interface Channel {
     status?: string | null
     isBot?: boolean
   } | null
+}
+
+export interface ChannelSwitcherOption {
+  id: string
+  name: string
+  type?: string
+  isArchived?: boolean
 }
 
 interface MemberEvent {
@@ -211,9 +221,19 @@ const WORK_STATUS_TIMEOUT_MS = {
 export function ChatArea({
   onBack,
   showMemberToggle = true,
+  channelSwitcher,
+  onEnterChannel,
+  onExitCopilot,
 }: {
   onBack?: () => void
   showMemberToggle?: boolean
+  channelSwitcher?: {
+    channels: ChannelSwitcherOption[]
+    activeChannelId: string
+    onSelectChannel: (channelId: string) => void
+  }
+  onEnterChannel?: () => void
+  onExitCopilot?: () => void
 } = {}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -374,6 +394,8 @@ export function ChatArea({
     }
     return next
   }, [getWorkStatusDisplayLabel, workStatuses])
+  const hasVisibleWorkStatuses = visibleWorkStatuses.length > 0
+  const timelineBottomPadding = 12
 
   // Save-to-workspace state
   const [saveToWorkspaceFile, setSaveToWorkspaceFile] = useState<{
@@ -776,8 +798,8 @@ export function ChatArea({
     getItemKey: (index) => getChatTimelineItemKey(timeline[index], index),
     overscan: CHAT_VIRTUAL_OVERSCAN,
     paddingStart: 8,
-    paddingEnd: 16,
-    scrollPaddingEnd: 16,
+    paddingEnd: timelineBottomPadding,
+    scrollPaddingEnd: timelineBottomPadding,
     isScrollingResetDelay: CHAT_SCROLLING_RESET_DELAY,
     useFlushSync: true,
   })
@@ -1129,6 +1151,10 @@ export function ChatArea({
   }
 
   const virtualItems = shouldVirtualize ? virtualizer.getVirtualItems() : []
+  const renderChannelSwitcherIcon = (type?: string) => {
+    const Icon = type === 'voice' ? Volume2 : type === 'announcement' ? Megaphone : Hash
+    return <Icon size={14} className="shrink-0 text-text-muted" />
+  }
 
   return (
     <div className="flex-1 flex min-w-0 h-full">
@@ -1152,7 +1178,7 @@ export function ChatArea({
           </div>
         )}
         {/* Channel header */}
-        <div className="desktop-drag-titlebar app-header px-6 flex items-center gap-3">
+        <div className="desktop-drag-titlebar app-header flex items-center gap-2.5 px-6">
           {/* Mobile back button */}
           <Button
             variant="ghost"
@@ -1161,7 +1187,7 @@ export function ChatArea({
               if (onBack) onBack()
               else setMobileView('channels')
             }}
-            className="md:hidden shrink-0 -ml-1 mr-1 h-8 w-8 rounded-full"
+            className="md:hidden -ml-1 h-8 w-8 shrink-0 rounded-full"
           >
             <ArrowLeft size={20} />
           </Button>
@@ -1173,97 +1199,171 @@ export function ChatArea({
               size="sm"
             />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-bg-tertiary/50 flex items-center justify-center text-primary shrink-0 shadow-inner">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-tertiary/50 text-primary shadow-inner">
               <Hash size={16} strokeWidth={2.5} />
             </div>
           )}
-          <div className="flex min-w-0 items-center gap-1.5">
-            <h3 className="font-black text-text-primary text-[15px] truncate uppercase tracking-tight">
-              {channelDisplayName}
-            </h3>
-            {directPeerIsPrivateBuddy && (
-              <LockKeyhole
-                size={14}
-                className="shrink-0 text-warning"
-                aria-label={t('agentMgmt.modePrivate')}
-              />
-            )}
-          </div>
-          {channel?.topic && (
+          {channelSwitcher ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition hover:bg-bg-modifier-hover"
+                  title={t('channel.switchChannel')}
+                >
+                  <span className="truncate text-[15px] font-black uppercase tracking-tight text-text-primary">
+                    {channelDisplayName}
+                  </span>
+                  <ChevronDown size={14} className="shrink-0 text-text-muted" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-64 p-1.5">
+                <div className="max-h-72 overflow-y-auto pr-1">
+                  {channelSwitcher.channels.map((item) => {
+                    const isActive = item.id === channelSwitcher.activeChannelId
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => channelSwitcher.onSelectChannel(item.id)}
+                        className={cn(
+                          'flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-bold transition',
+                          isActive
+                            ? 'bg-primary/15 text-primary'
+                            : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
+                        )}
+                      >
+                        {renderChannelSwitcherIcon(item.type)}
+                        <span
+                          className={cn('min-w-0 flex-1 truncate', item.isArchived && 'italic')}
+                        >
+                          {item.name}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h3 className="truncate text-[15px] font-black uppercase tracking-tight text-text-primary">
+                {channelDisplayName}
+              </h3>
+              {directPeerIsPrivateBuddy && (
+                <LockKeyhole
+                  size={14}
+                  className="shrink-0 text-warning"
+                  aria-label={t('agentMgmt.modePrivate')}
+                />
+              )}
+            </div>
+          )}
+          {channelSwitcher?.channels.length === 0 && (
+            <span className="sr-only">{t('channel.noChannels')}</span>
+          )}
+          {channel?.topic && !channelSwitcher && (
             <>
-              <div className="w-[1px] h-6 bg-bg-modifier-hover mx-2 hidden sm:block shrink-0" />
-              <p className="text-sm text-text-secondary truncate hidden sm:block font-bold opacity-60">
+              <div className="mx-2 hidden h-6 w-px shrink-0 bg-bg-modifier-hover sm:block" />
+              <p className="hidden truncate text-sm font-bold text-text-secondary opacity-60 sm:block">
                 {channel.topic}
               </p>
             </>
           )}
           {/* Right side: mobile QR + members toggle + notification bell */}
-          <div className="flex items-center gap-2 ml-auto shrink-0">
-            <Popover open={showPageQr} onOpenChange={setShowPageQr}>
-              <PopoverTrigger asChild>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {onExitCopilot ? (
+              <>
+                {onEnterChannel && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onEnterChannel}
+                    className="h-8 w-8 rounded-full"
+                    title={t('channel.enterChannel')}
+                  >
+                    <LogIn size={18} />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
+                  onClick={onExitCopilot}
                   className="h-8 w-8 rounded-full"
-                  title={t('chat.openPageQr')}
+                  title={t('channel.exitCopilot')}
                 >
-                  <Smartphone size={18} />
+                  <X size={18} />
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                align="end"
-                className="w-72 p-4 rounded-[20px] border border-border-subtle bg-bg-primary/95 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.32)]"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-full rounded-xl border border-bg-modifier-hover bg-bg-secondary/45 px-3 py-2 flex items-start gap-2 text-text-primary/90">
-                    <Smartphone size={16} className="text-primary" />
-                    <span className="text-xs font-semibold">{t('chat.openPageQrTitle')}</span>
-                  </div>
-                  <div className="relative rounded-[18px] p-[1px] bg-gradient-to-br from-primary/45 via-sky-300/25 to-primary/45 shadow-[0_0_28px_rgba(14,165,233,0.45)]">
-                    <div className="bg-white p-3 rounded-[17px] border border-primary/30">
-                      <QRCodeSVG
-                        value={pageShareUrl}
-                        size={178}
-                        bgColor="#ffffff"
-                        fgColor="#0f0f1a"
-                        level="H"
-                      />
+              </>
+            ) : (
+              <>
+                <Popover open={showPageQr} onOpenChange={setShowPageQr}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-full"
+                      title={t('chat.openPageQr')}
+                    >
+                      <Smartphone size={18} />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="w-72 rounded-[20px] border border-border-subtle bg-bg-primary/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex w-full items-start gap-2 rounded-xl border border-bg-modifier-hover bg-bg-secondary/45 px-3 py-2 text-text-primary/90">
+                        <Smartphone size={16} className="text-primary" />
+                        <span className="text-xs font-semibold">{t('chat.openPageQrTitle')}</span>
+                      </div>
+                      <div className="relative rounded-[18px] bg-gradient-to-br from-primary/45 via-sky-300/25 to-primary/45 p-px shadow-[0_0_28px_rgba(14,165,233,0.45)]">
+                        <div className="rounded-[17px] border border-primary/30 bg-white p-3">
+                          <QRCodeSVG
+                            value={pageShareUrl}
+                            size={178}
+                            bgColor="#ffffff"
+                            fgColor="#0f0f1a"
+                            level="H"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCopyPageShareLink}
+                        icon={CopyQrIcon}
+                        className="h-8 w-full"
+                      >
+                        {t('common.copy')}
+                      </Button>
                     </div>
-                  </div>
+                  </PopoverContent>
+                </Popover>
+                {hasServerShopProducts && (
+                  <Link
+                    to="/servers/$serverSlug/shop"
+                    params={{ serverSlug: serverShopRouteKey! }}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition hover:bg-bg-modifier-hover hover:text-primary"
+                    title={t('shop.openShop')}
+                    aria-label={t('shop.openShop')}
+                  >
+                    <ShoppingBag size={18} />
+                  </Link>
+                )}
+                <NotificationBell className="h-8 w-8" />
+                {showMemberToggle && activeServerId && (
                   <Button
                     variant="ghost"
-                    size="sm"
-                    onClick={handleCopyPageShareLink}
-                    icon={CopyQrIcon}
-                    className="h-8 w-full"
+                    size="icon"
+                    onClick={() => useUIStore.getState().toggleMobileMemberList()}
+                    className="h-8 w-8 rounded-full lg:hidden"
+                    title={t('member.toggleList')}
                   >
-                    {t('common.copy')}
+                    <Users size={18} />
                   </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            {hasServerShopProducts && (
-              <Link
-                to="/servers/$serverSlug/shop"
-                params={{ serverSlug: serverShopRouteKey! }}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition hover:bg-bg-modifier-hover hover:text-primary"
-                title={t('shop.openShop')}
-                aria-label={t('shop.openShop')}
-              >
-                <ShoppingBag size={18} />
-              </Link>
-            )}
-            <NotificationBell />
-            {showMemberToggle && activeServerId && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => useUIStore.getState().toggleMobileMemberList()}
-                className="lg:hidden h-8 w-8 rounded-full"
-                title={t('member.toggleList')}
-              >
-                <Users size={20} />
-              </Button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1333,7 +1433,10 @@ export function ChatArea({
               })}
             </div>
           ) : (
-            <div className="flex flex-col py-2">
+            <div
+              className="flex min-h-full flex-col pt-2"
+              style={{ paddingBottom: timelineBottomPadding }}
+            >
               {/* Loading older messages indicator */}
               {isFetchingNextPage && (
                 <div className="flex justify-center py-2">
@@ -1344,51 +1447,57 @@ export function ChatArea({
               )}
 
               {timeline.map((item, index) => (
-                <div key={item.data.id}>{renderTimelineItem(item, index)}</div>
+                <div key={item.data.id} className={index === 0 ? 'mt-auto' : undefined}>
+                  {renderTimelineItem(item, index)}
+                </div>
               ))}
             </div>
           )}
         </div>
 
         {/* Buddy work indicator */}
-        {visibleWorkStatuses.length > 0 && (
-          <div className="px-5 pb-2 pt-1">
-            <div className="inline-flex max-w-[min(100%,42rem)] items-center gap-2.5 rounded-2xl border border-primary/35 bg-bg-secondary/85 px-4 py-2 text-xs text-primary shadow-[0_0_28px_rgba(0,229,255,0.2)] backdrop-blur-xl">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_14px_rgba(0,229,255,0.9)]" />
-              </span>
-              <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                {visibleWorkStatuses.map((u, index) => (
-                  <span
-                    key={u.userId}
-                    className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden"
-                  >
-                    {index > 0 && <span className="shrink-0 text-text-muted">,</span>}
-                    <span className="max-w-44 truncate font-semibold text-text-primary">
-                      {u.name}
-                    </span>
-                    <span className="shrink-0 text-primary/90">{u.label}</span>
+        <div
+          className={cn(
+            'flex h-9 items-end overflow-hidden px-4 pb-1 pt-0 transition-opacity duration-150',
+            hasVisibleWorkStatuses ? 'opacity-100' : 'pointer-events-none opacity-0',
+          )}
+          aria-hidden={!hasVisibleWorkStatuses}
+        >
+          <div className="inline-flex h-8 max-w-[min(100%,42rem)] items-center gap-2.5 overflow-hidden rounded-2xl border border-primary/35 bg-bg-secondary/85 px-3.5 text-xs text-primary shadow-[0_0_28px_rgba(0,229,255,0.2)] backdrop-blur-xl">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_14px_rgba(0,229,255,0.9)]" />
+            </span>
+            <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+              {visibleWorkStatuses.map((u, index) => (
+                <span
+                  key={u.userId}
+                  className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden"
+                >
+                  {index > 0 && <span className="shrink-0 text-text-muted">,</span>}
+                  <span className="max-w-44 truncate font-semibold text-text-primary">
+                    {u.name}
                   </span>
-                ))}
-              </span>
-              <span className="inline-flex shrink-0 gap-0.5">
-                <span
-                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary"
-                  style={{ animationDelay: '0ms' }}
-                />
-                <span
-                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary"
-                  style={{ animationDelay: '150ms' }}
-                />
-                <span
-                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary"
-                  style={{ animationDelay: '300ms' }}
-                />
-              </span>
-            </div>
+                  <span className="shrink-0 text-primary/90">{u.label}</span>
+                </span>
+              ))}
+            </span>
+            <span className="inline-flex shrink-0 gap-0.5">
+              <span
+                className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary"
+                style={{ animationDelay: '0ms' }}
+              />
+              <span
+                className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary"
+                style={{ animationDelay: '150ms' }}
+              />
+              <span
+                className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary"
+                style={{ animationDelay: '300ms' }}
+              />
+            </span>
           </div>
-        )}
+        </div>
 
         {/* Message input or selection toolbar */}
         {selectionMode ? (

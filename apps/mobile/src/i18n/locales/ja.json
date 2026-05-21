@@ -314,6 +314,8 @@
     "publicStatus": "公開状態",
     "publicServer": "公開サーバー",
     "publicServerDesc": "誰でも検索して参加できます",
+    "publicServerGateDesc": "これは公開サーバーです。参加するとチャンネルに入り、メンバー、Buddy、アプリと一緒に協力できます。",
+    "joinPublicServer": "サーバーに参加",
     "privateServerGateDesc": "これは非公開サーバーです。参加にはサーバー管理者の承認が必要です。",
     "requestAccess": "参加を申請",
     "requestPending": "申請中",

@@ -35,6 +35,11 @@ interface UIState {
   enableBackgroundMovement: boolean
   /** Pending action for cross-component task triggers (e.g. 'create-server', 'create-buddy') */
   pendingAction: string | null
+  /** Channel shown beside a server app in Copilot mode */
+  copilotChannel: {
+    serverSlug: string
+    channelId: string
+  } | null
 
   setMobileView: (view: MobileView) => void
   openMobileServerSidebar: () => void
@@ -46,6 +51,8 @@ interface UIState {
   setBackgroundImage: (url: string | null) => void
   setEnableBackgroundMovement: (enabled: boolean) => void
   setPendingAction: (action: string | null) => void
+  openCopilotChannel: (serverSlug: string, channelId: string) => void
+  closeCopilotChannel: () => void
 }
 
 /** Apply theme class to document root and persist to localStorage */
@@ -81,6 +88,7 @@ export const useUIStore = create<UIState>((set) => ({
   backgroundImage: savedBgImage,
   enableBackgroundMovement: savedBgMovement,
   pendingAction: null,
+  copilotChannel: null,
 
   setMobileView: (view) => set({ mobileView: view, mobileMemberListOpen: false }),
   openMobileServerSidebar: () => set({ mobileServerSidebarOpen: true }),
@@ -102,6 +110,18 @@ export const useUIStore = create<UIState>((set) => ({
     set({ enableBackgroundMovement: enabled })
   },
   setPendingAction: (action) => set({ pendingAction: action }),
+  openCopilotChannel: (serverSlug, channelId) =>
+    set({
+      copilotChannel: { serverSlug, channelId },
+      mobileView: 'chat',
+      mobileMemberListOpen: false,
+      mobileServerSidebarOpen: false,
+    }),
+  closeCopilotChannel: () =>
+    set({
+      copilotChannel: null,
+      mobileMemberListOpen: false,
+    }),
 }))
 
 // Apply theme on load

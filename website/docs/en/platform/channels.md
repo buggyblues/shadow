@@ -65,6 +65,8 @@ client.leave_voice_channel(channel["id"])
 
 :::
 
+Each join receives distinct Agora credentials. Voice presence keeps one live participant per user in a channel; if the same user joins again from another client, the newer client replaces the previous live participant in the channel state.
+
 For external AI systems, use the CLI media bridge:
 
 ```bash
@@ -437,7 +439,7 @@ channel = client.unarchive_channel("channel-id")
 GET /api/servers/:serverId/channels/archived
 ```
 
-Returns archived channels for a server.
+Returns archived channels for a server. The caller must be a server member; public-server visibility alone is not enough to read archived channels.
 
 :::code-group
 

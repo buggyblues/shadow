@@ -332,7 +332,17 @@ export class VoiceChannelService {
     const now = new Date().toISOString()
     const redis = await this.redis()
     if (redis) {
-      const previousRaw = await redis.hGet(voiceParticipantsKey(channelId), id)
+      const rawParticipants = await redis.hGetAll(voiceParticipantsKey(channelId))
+      const duplicateIds = Object.entries(rawParticipants)
+        .map(([candidateId, raw]) => [candidateId, parseParticipant(raw)] as const)
+        .filter(
+          ([candidateId, participant]) => candidateId !== id && participant?.userId === userId,
+        )
+        .map(([candidateId]) => candidateId)
+      if (duplicateIds.length > 0) {
+        await redis.hDel(voiceParticipantsKey(channelId), duplicateIds)
+      }
+      const previousRaw = rawParticipants[id]
       const previous = previousRaw ? parseParticipant(previousRaw) : null
       const participant = this.buildParticipant(
         channelId,
@@ -355,6 +365,11 @@ export class VoiceChannelService {
     }
 
     const session = this.getOrCreateSession(channelId)
+    for (const [candidateId, participant] of session.participants.entries()) {
+      if (candidateId !== id && participant.userId === userId) {
+        session.participants.delete(candidateId)
+      }
+    }
     const previous = session.participants.get(id) ?? null
     const participant = this.buildParticipant(
       channelId,

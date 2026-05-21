@@ -313,6 +313,8 @@
     "publicStatus": "公开状态",
     "publicServer": "公开服务器",
     "publicServerDesc": "任何人都可以搜索并加入",
+    "publicServerGateDesc": "这是一个公开服务器。加入后即可进入频道，和成员、Buddy 与应用一起协作。",
+    "joinPublicServer": "加入服务器",
     "privateServerGateDesc": "这是一个私有服务器，加入需要服务器管理员同意。",
     "requestAccess": "申请加入",
     "requestPending": "申请等待中",

@@ -295,8 +295,7 @@ export function createChannelHandler(container: AppContainer) {
   channelHandler.get('/servers/:serverId/channels', async (c) => {
     const channelService = container.resolve('channelService')
     const serverId = await resolveServerId(c.req.param('serverId'))
-    const user = c.get('user')
-    const channels = await channelService.getByServerIdForUser(serverId, user.userId)
+    const channels = await channelService.getByServerIdForUser(serverId, c.get('actor'))
     return c.json(channels)
   })
 
@@ -360,7 +359,10 @@ export function createChannelHandler(container: AppContainer) {
     if (!access.canAccess) {
       if (access.channel.kind === 'server' && access.channel.serverId && access.isServerMember) {
         const server = await serverService.getById(access.channel.serverId)
-        const channels = await channelService.getByServerIdForUser(access.channel.serverId, userId)
+        const channels = await channelService.getByServerIdForUser(
+          access.channel.serverId,
+          c.get('actor'),
+        )
         return c.json({
           access,
           channel: access.channel,
@@ -415,7 +417,7 @@ export function createChannelHandler(container: AppContainer) {
     const serverId = access.channel.serverId
     const [server, channels, members] = await Promise.all([
       serverService.getById(serverId),
-      channelService.getByServerIdForUser(serverId, userId),
+      channelService.getByServerIdForUser(serverId, c.get('actor')),
       channelService.getChannelMembers(id, serverId),
     ])
     const signedMembers = await Promise.all(
@@ -1156,7 +1158,7 @@ export function createChannelHandler(container: AppContainer) {
   channelHandler.get('/servers/:serverId/channels/archived', async (c) => {
     const channelService = container.resolve('channelService')
     const serverId = await resolveServerId(c.req.param('serverId'))
-    const channels = await channelService.getArchivedChannels(serverId)
+    const channels = await channelService.getArchivedChannels(serverId, c.get('actor'))
     return c.json(channels)
   })
 

@@ -57,6 +57,9 @@ import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 
+const SERVER_NAVIGATION_STALE_MS = 5 * 60 * 1000
+const SERVER_NAVIGATION_GC_MS = 30 * 60 * 1000
+
 interface ServerEntry {
   server: {
     id: string
@@ -260,11 +263,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const { user } = useAuthStore()
   const createServerNameInputRef = useRef<HTMLInputElement>(null)
-  const deferForChannelRoute = Boolean(channelId)
   const loadServerNavigation = useDeferredQueryEnabled({
-    delayMs: deferForChannelRoute ? 500 : 0,
+    stage: 'navigation',
+    priority: 'high',
   })
-  const loadNotifications = useDeferredQueryEnabled({ delayMs: 4000 })
+  const loadNotifications = useDeferredQueryEnabled({
+    stage: 'background',
+    priority: 'normal',
+  })
 
   // Listen for 'create-server' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
@@ -286,7 +292,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     queryKey: ['servers'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
     enabled: loadServerNavigation,
-    staleTime: 30_000,
+    staleTime: SERVER_NAVIGATION_STALE_MS,
+    gcTime: SERVER_NAVIGATION_GC_MS,
+    placeholderData: (previous) => previous,
   })
   const showServerSkeleton = servers.length === 0 && (!loadServerNavigation || isServersLoading)
 
@@ -294,7 +302,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     queryKey: ['direct-channels'],
     queryFn: () => fetchApi<DirectChannelEntry[]>('/api/channels/dm'),
     enabled: loadServerNavigation,
-    staleTime: 30_000,
+    staleTime: SERVER_NAVIGATION_STALE_MS,
+    gcTime: SERVER_NAVIGATION_GC_MS,
+    placeholderData: (previous) => previous,
   })
 
   const { data: scopedUnread } = useQuery({
