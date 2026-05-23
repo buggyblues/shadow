@@ -14,6 +14,7 @@ import { glAnimationLayerSystem } from './glAnimationLayerSystem'
 import { glArtLayerSystem } from './glArtLayerSystem'
 import { type GLDrawContext, glDrawSystem } from './glDrawSystem'
 import { glTextureSystem } from './glTextureSystem'
+import { glSelectionOverlaySystem, type SelectionRect } from './selectionOverlaySystem'
 
 export type { RenderConfig }
 
@@ -22,6 +23,7 @@ export function glRenderSystem(
   glCtx: GLContext,
   viewport: ViewportData,
   hiddenCardIds: Set<string>,
+  marqueeRect: SelectionRect | null,
   time: number,
   config: RenderConfig,
 ): void {
@@ -35,7 +37,10 @@ export function glRenderSystem(
   const eids = [...scene.all()]
   eids.sort((a, b) => (RenderOrder.z[a] ?? 0) - (RenderOrder.z[b] ?? 0))
 
-  if (eids.length === 0) return
+  if (eids.length === 0) {
+    glSelectionOverlaySystem(glCtx, viewport, marqueeRect, time)
+    return
+  }
 
   gl.useProgram(program)
   const proj = orthoMatrix(viewport.screenW * dpr, viewport.screenH * dpr)
@@ -86,4 +91,6 @@ export function glRenderSystem(
       config.tiltStrength,
     )
   }
+
+  glSelectionOverlaySystem(glCtx, viewport, marqueeRect, time)
 }

@@ -18,6 +18,7 @@ export type ServerAppManifest = {
   name: string
   description?: string
   version?: string
+  updatedAt?: string
   iconUrl?: string
   iframe?: {
     entry: string
@@ -119,6 +120,12 @@ export const serverAppIntegrations = pgTable(
     iconUrl: text('icon_url'),
     manifestUrl: text('manifest_url'),
     manifest: jsonb('manifest').$type<ServerAppManifest>().notNull(),
+    manifestVersion: varchar('manifest_version', { length: 64 }),
+    manifestUpdatedAt: timestamp('manifest_updated_at', { withTimezone: true }),
+    manifestFetchedAt: timestamp('manifest_fetched_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    manifestHash: text('manifest_hash'),
     iframeEntry: text('iframe_entry'),
     allowedOrigins: jsonb('allowed_origins').$type<string[]>().notNull().default([]),
     apiBaseUrl: text('api_base_url').notNull(),

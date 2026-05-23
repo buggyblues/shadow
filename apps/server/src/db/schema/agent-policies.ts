@@ -11,34 +11,36 @@ import { servers } from './servers'
  *
  * The `config` jsonb column is extensible for future strategy fields.
  */
-export const agentPolicies = pgTable('agent_policies', {
-  id: uuid('id').primaryKey().defaultRandom(),
+export const agentPolicies = pgTable(
+  'agent_policies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
 
-  agentId: uuid('agent_id')
-    .notNull()
-    .references(() => agents.id, { onDelete: 'cascade' }),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
 
-  serverId: uuid('server_id')
-    .notNull()
-    .references(() => servers.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
 
-  /** null = server-wide default policy */
-  channelId: uuid('channel_id').references(() => channels.id, { onDelete: 'cascade' }),
+    /** null = server-wide default policy */
+    channelId: uuid('channel_id').references(() => channels.id, { onDelete: 'cascade' }),
 
-  /** Whether the agent listens on this server/channel */
-  listen: boolean('listen').default(true).notNull(),
+    /** Whether the agent listens on this server/channel */
+    listen: boolean('listen').default(true).notNull(),
 
-  /** Whether the agent replies on this server/channel */
-  reply: boolean('reply').default(true).notNull(),
+    /** Whether the agent replies on this server/channel */
+    reply: boolean('reply').default(true).notNull(),
 
-  /** Only reply when the agent is @mentioned */
-  mentionOnly: boolean('mention_only').default(false).notNull(),
+    /** Only reply when the agent is @mentioned */
+    mentionOnly: boolean('mention_only').default(false).notNull(),
 
-  /** Extensible config for future strategy fields */
-  config: jsonb('config').$type<Record<string, unknown>>().default({}).notNull(),
+    /** Extensible config for future strategy fields */
+    config: jsonb('config').$type<Record<string, unknown>>().default({}).notNull(),
 
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     agentPoliciesAgentIdIdx: index('agent_policies_agent_id_idx').on(t.agentId),

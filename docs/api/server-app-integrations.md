@@ -31,6 +31,7 @@ Apps expose a `shadow.app/1` manifest:
   "name": "Demo Desk",
   "description": "A small ticket desk for Shadow server App integration demos.",
   "version": "1.0.0",
+  "updatedAt": "2026-05-21T00:00:00.000Z",
   "iconUrl": "https://demo.example.com/assets/icon.svg",
   "iframe": {
     "entry": "http://localhost:4199/shadow/server",
@@ -63,6 +64,8 @@ Apps expose a `shadow.app/1` manifest:
   ]
 }
 ```
+
+Installed apps keep the manifest snapshot plus `manifestVersion`, `manifestUpdatedAt`, `manifestFetchedAt`, and a manifest hash. If the app was installed from `manifestUrl`, Shadow refreshes that manifest before command lookup, grant validation, approval, launch, and Skill generation. New deployments should bump `version` and `updatedAt`; the hash is a fallback for local/dev manifests that forgot to bump either field.
 
 `iconUrl` is required and should be a square app icon. Production manifest and command URLs should be public `https` URLs. Local loopback command URLs are accepted only outside production to support demo development. Private App hosts must be explicitly allowlisted with `SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS`.
 
@@ -184,6 +187,7 @@ Server-scoped endpoints:
 - `POST /api/servers/:serverId/apps/:appKey/approvals`: approve a first-use or every-time command for a person or Buddy subject.
 - `POST /api/servers/:serverId/apps/:appKey/launch`: mint iframe launch metadata.
 - `GET /api/servers/:serverId/apps/:appKey/events?token=<launchToken>`: SSE stream for iframe refresh and runtime events.
+- `POST /api/servers/:serverId/apps/:appKey/launch/introspect`: validate a short-lived iframe launch token for app-owned realtime streams.
 - `GET /api/servers/:serverId/apps/:appKey/skills`: generate Skill text for Buddies.
 - `POST /api/servers/:serverId/apps/:appKey/oauth/introspect`: validate a command Bearer token and return actor/server/app context; this route is called by the App backend and does not require a user session.
 - `POST /api/servers/:serverId/apps/:appKey/commands/:commandName`: proxy JSON or multipart command calls.

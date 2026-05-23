@@ -1,4 +1,4 @@
-import { integer, jsonb, pgTable, timestamp, uuid, date, varchar } from 'drizzle-orm/pg-core'
+import { date, integer, jsonb, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { agents } from './agents'
 
 /**

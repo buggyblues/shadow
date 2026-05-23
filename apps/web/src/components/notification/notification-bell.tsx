@@ -1,7 +1,7 @@
 import { cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Bell, Check, CheckCheck, X } from 'lucide-react'
+import { Bell, Check, CheckCheck, ShieldCheck, X } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
@@ -38,6 +38,8 @@ function getNotificationDisplay(
   const actorName = text(metadata.actorName, 'Someone')
   const channelName = text(metadata.channelName, 'channel')
   const serverName = text(metadata.serverName, 'server')
+  const appName = text(metadata.appName, 'App')
+  const commandTitle = text(metadata.commandTitle, text(metadata.commandName, 'command'))
   const preview = text(metadata.preview, n.body ?? '')
 
   switch (n.kind) {
@@ -110,6 +112,22 @@ function getNotificationDisplay(
           amount: metadata.shrimpCoins ?? '',
         }),
       }
+    case 'server_app.command_approval_requested':
+      return {
+        title: t('notification.serverAppCommandApprovalRequested', { appName }),
+        body: t('notification.serverAppCommandApprovalRequestedBody', {
+          commandTitle,
+          serverName,
+        }),
+      }
+    case 'server_app.command_approval_granted':
+      return {
+        title: t('notification.serverAppCommandApprovalGranted', { appName }),
+        body: t('notification.serverAppCommandApprovalGrantedBody', {
+          commandTitle,
+          serverName,
+        }),
+      }
     default:
       return { title: n.title, body: n.body ?? '' }
   }
@@ -136,6 +154,22 @@ function getNotificationServerId(n: Notification) {
       ? n.referenceId
       : null)
   )
+}
+
+function getServerAppApprovalAction(n: Notification) {
+  if (n.referenceType !== 'server_app_command_approval') return null
+  const serverId = getNotificationServerId(n)
+  const appKey = metaString(n, 'appKey')
+  const commandName = metaString(n, 'commandName')
+  if (!serverId || !appKey || !commandName) return null
+  return {
+    notificationId: n.id,
+    serverId,
+    appKey,
+    commandName,
+    buddyAgentId: metaString(n, 'buddyAgentId') ?? undefined,
+    remember: metaString(n, 'approvalMode') !== 'every_time',
+  }
 }
 
 export function NotificationBell({ className }: { className?: string } = {}) {
@@ -184,6 +218,16 @@ export function NotificationBell({ className }: { className?: string } = {}) {
         navigate({
           to: '/servers/$serverSlug',
           params: { serverSlug: server.slug ?? server.id },
+        })
+      }
+
+      const navigateToServerApp = async (serverId: string, appKey: string) => {
+        const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
+        setShowPanel(false)
+        navigate({
+          to: '/servers/$serverSlug/apps/$appKey',
+          params: { serverSlug: server.slug ?? server.id, appKey },
+          search: metaString(n, 'channelId') ? { copilot: metaString(n, 'channelId') } : {},
         })
       }
 
@@ -272,6 +316,19 @@ export function NotificationBell({ className }: { className?: string } = {}) {
       if (n.referenceType === 'payment_order') {
         setShowPanel(false)
         navigate({ to: '/settings/wallet' })
+        return
+      }
+
+      if (
+        (n.referenceType === 'server_app' || n.referenceType === 'server_app_command_approval') &&
+        getNotificationServerId(n) &&
+        metaString(n, 'appKey')
+      ) {
+        try {
+          await navigateToServerApp(getNotificationServerId(n)!, metaString(n, 'appKey')!)
+        } catch {
+          // App may have been removed.
+        }
         return
       }
 
@@ -381,6 +438,25 @@ export function NotificationBell({ className }: { className?: string } = {}) {
     },
   })
 
+  const approveServerAppCommand = useMutation({
+    mutationFn: (input: NonNullable<ReturnType<typeof getServerAppApprovalAction>>) =>
+      fetchApi(`/api/servers/${input.serverId}/apps/${input.appKey}/approvals`, {
+        method: 'POST',
+        body: JSON.stringify({
+          commandName: input.commandName,
+          buddyAgentId: input.buddyAgentId,
+          remember: input.remember,
+        }),
+      }).then(() =>
+        fetchApi(`/api/notifications/${input.notificationId}/read`, { method: 'PATCH' }),
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    },
+  })
+
   const unreadCount = unreadData?.count ?? 0
 
   return (
@@ -442,6 +518,7 @@ export function NotificationBell({ className }: { className?: string } = {}) {
               ) : (
                 notifications.map((n) => {
                   const display = getNotificationDisplay(n, t)
+                  const serverAppApprovalAction = getServerAppApprovalAction(n)
                   return (
                     <div
                       key={n.id}
@@ -530,6 +607,22 @@ export function NotificationBell({ className }: { className?: string } = {}) {
                               >
                                 <X size={13} />
                                 <span>{t('server.rejectAccess')}</span>
+                              </button>
+                            </div>
+                          )}
+                          {serverAppApprovalAction && (
+                            <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
+                              <button
+                                type="button"
+                                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-60"
+                                disabled={approveServerAppCommand.isPending}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  approveServerAppCommand.mutate(serverAppApprovalAction)
+                                }}
+                              >
+                                <ShieldCheck size={13} />
+                                <span>{t('serverApps.commandApprovalConfirm')}</span>
                               </button>
                             </div>
                           )}

@@ -34,6 +34,20 @@ interface FlashOAuthSession {
   expiresAt: number
 }
 
+interface ShadowLaunchIntrospection {
+  active: boolean
+  shadow?: {
+    serverId: string
+    appKey: string
+    actor: {
+      kind: string
+      userId: string | null
+      buddyAgentId?: string | null
+      ownerId?: string | null
+    }
+  }
+}
+
 function iconSvg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
   <defs>
@@ -138,6 +152,38 @@ function decodeSignedJson<T>(value: string | undefined): T | null {
   } catch {
     return null
   }
+}
+
+function decodeLaunchTokenHint(token: string) {
+  const parts = token.split('.')
+  if (parts.length !== 3 || parts[0] !== 'sat_v1') return null
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as {
+      serverId?: unknown
+      appKey?: unknown
+    }
+    if (typeof payload.serverId !== 'string' || typeof payload.appKey !== 'string') return null
+    return { serverId: payload.serverId, appKey: payload.appKey }
+  } catch {
+    return null
+  }
+}
+
+async function introspectShadowLaunchToken(token: string) {
+  const hint = decodeLaunchTokenHint(token)
+  if (!hint) return null
+  const response = await fetch(
+    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
+      hint.appKey,
+    )}/launch/introspect`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  ).catch(() => null)
+  if (!response?.ok) return null
+  const payload = (await response.json().catch(() => null)) as ShadowLaunchIntrospection | null
+  return payload?.active ? payload : null
 }
 
 function safeReturnTo(value: string | undefined) {
@@ -261,12 +307,17 @@ export async function createFlashApp() {
     console.warn('Flash realtime disabled', error)
   })
 
+  const boards = new FlashBoardDao(db)
+  const cards = new FlashCardDao(db)
+  const arenas = new FlashArenaDao(db)
+  const events = new FlashCommandEventDao(db)
+  const selections = new FlashSelectionDao(db)
   const service = new FlashService({
-    boards: new FlashBoardDao(db),
-    cards: new FlashCardDao(db),
-    arenas: new FlashArenaDao(db),
-    events: new FlashCommandEventDao(db),
-    selections: new FlashSelectionDao(db),
+    boards,
+    cards,
+    arenas,
+    events,
+    selections,
     realtime,
   })
   const commands = defineCommandHandlers(service)
@@ -362,24 +413,34 @@ export async function createFlashApp() {
     return c.redirect(safeReturnTo(state.returnTo), 302)
   })
 
-  if (localCommandsEnabled) {
-    app.get('/api/boards/:boardId/events', async (c) =>
-      streamSSE(c, async (stream) => {
-        const unsubscribe = await realtime.subscribe(c.req.param('boardId'), async (event) => {
-          await stream.writeSSE({
-            event: event.type,
-            data: JSON.stringify(event),
-          })
+  app.get('/api/boards/:boardId/events', async (c) => {
+    const boardId = c.req.param('boardId')
+    if (!localCommandsEnabled) {
+      const launchToken = c.req.query('shadow_launch') ?? ''
+      const launch = launchToken ? await introspectShadowLaunchToken(launchToken) : null
+      const actorOwner = launch?.shadow?.actor.ownerId ?? launch?.shadow?.actor.userId ?? null
+      const board = await boards.findById(boardId)
+      if (!launch || !board || !actorOwner) return c.json({ ok: false, error: 'unauthorized' }, 401)
+      if (board.serverId !== launch.shadow!.serverId || board.ownerUserId !== actorOwner) {
+        return c.json({ ok: false, error: 'forbidden' }, 403)
+      }
+    }
+
+    return streamSSE(c, async (stream) => {
+      const unsubscribe = await realtime.subscribe(boardId, async (event) => {
+        await stream.writeSSE({
+          event: event.type,
+          data: JSON.stringify(event),
         })
-        await stream.writeSSE({ event: 'ready', data: '{}' })
-        while (!stream.aborted) {
-          await stream.sleep(15000)
-          await stream.writeSSE({ event: 'ping', data: '{}' })
-        }
-        await unsubscribe()
-      }),
-    )
-  }
+      })
+      await stream.writeSSE({ event: 'ready', data: '{}' })
+      while (!stream.aborted) {
+        await stream.sleep(15000)
+        await stream.writeSSE({ event: 'ping', data: '{}' })
+      }
+      await unsubscribe()
+    })
+  })
 
   app.post('/api/local/commands/:commandName', async (c) => {
     if (!localCommandsEnabled) return c.json({ ok: false, error: 'local_commands_disabled' }, 403)

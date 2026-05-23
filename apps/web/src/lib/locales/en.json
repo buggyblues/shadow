@@ -903,6 +903,7 @@
     "switchChannel": "Switch channel",
     "enterChannel": "Enter channel",
     "exitCopilot": "Exit Copilot",
+    "resizeCopilot": "Resize Copilot panels",
     "unarchive": "Unarchive"
   },
   "chat": {
@@ -1729,7 +1730,11 @@
     "serverInvite": "{{actorName}} invited you to join {{serverName}}",
     "friendshipRequest": "{{actorName}} sent you a friend request",
     "rechargeSucceeded": "Recharge succeeded",
-    "rechargeSucceededBody": "{{amount}} Shrimp Coins have arrived"
+    "rechargeSucceededBody": "{{amount}} Shrimp Coins have arrived",
+    "serverAppCommandApprovalRequested": "{{appName}} command needs approval",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}} is waiting for approval in {{serverName}}",
+    "serverAppCommandApprovalGranted": "{{appName}} command approved",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}} can now run in {{serverName}}"
   },
   "agentMgmt": {
     "title": "Buddy Management",

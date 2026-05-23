@@ -7,6 +7,8 @@ const manifest: ServerAppManifestInput = {
   appKey: 'demo-desk',
   name: 'Demo Desk',
   iconUrl: 'http://localhost:4199/assets/icon.svg',
+  version: '1.0.0',
+  updatedAt: '2026-05-20T00:00:00.000Z',
   api: {
     baseUrl: 'http://localhost:4199',
     auth: { type: 'oauth2-bearer' },
@@ -59,6 +61,10 @@ function createService(overrides: Record<string, unknown> = {}) {
     iconUrl: manifest.iconUrl,
     manifestUrl: null,
     manifest,
+    manifestVersion: manifest.version,
+    manifestUpdatedAt: new Date(manifest.updatedAt!),
+    manifestFetchedAt: new Date(),
+    manifestHash: null,
     iframeEntry: manifest.iframe!.entry,
     allowedOrigins: manifest.iframe!.allowedOrigins,
     apiBaseUrl: manifest.api.baseUrl,
@@ -87,6 +93,14 @@ function createService(overrides: Record<string, unknown> = {}) {
         ...appRow,
         defaultPermissions: data.defaultPermissions,
         defaultApprovalMode: data.defaultApprovalMode ?? 'none',
+      })),
+      updateManifest: vi.fn().mockImplementation(async (_serverAppId, data) => ({
+        ...appRow,
+        ...data,
+        manifestUrl: appRow.manifestUrl,
+        defaultPermissions: appRow.defaultPermissions,
+        defaultApprovalMode: appRow.defaultApprovalMode,
+        updatedAt: new Date(),
       })),
       upsertCommandConsent: vi.fn().mockImplementation(async (data) => {
         const existingIndex = commandConsents.findIndex(
@@ -294,6 +308,77 @@ describe('AppIntegrationService', () => {
 
     expect(result).toEqual({ ok: true, result: { tickets: [] } })
     expect(deps.appIntegrationDao.findBuddyGrant).not.toHaveBeenCalled()
+  })
+
+  it('refreshes an installed manifest URL before command lookup', async () => {
+    const freshManifest: ServerAppManifestInput = {
+      ...manifest,
+      version: '1.1.0',
+      updatedAt: '2026-05-21T00:00:00.000Z',
+      commands: [
+        ...manifest.commands,
+        {
+          name: 'tickets.stats',
+          path: '/api/shadow/commands/tickets.stats',
+          permission: 'demo.tickets:read',
+          action: 'read',
+          dataClass: 'server-private',
+        },
+      ],
+    }
+    const fetchMock = vi.fn().mockImplementation(async (url: URL | string) => {
+      const value = url.toString()
+      if (value === 'http://localhost:4199/.well-known/shadow-app.json') {
+        return new Response(JSON.stringify(freshManifest), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ ok: true, result: { open: 2, closed: 1 } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const staleApp = {
+      ...createService().appRow,
+      manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+      manifest,
+      manifestVersion: '1.0.0',
+      manifestUpdatedAt: new Date('2026-05-20T00:00:00.000Z'),
+      manifestFetchedAt: new Date('2026-05-20T00:00:00.000Z'),
+      manifestHash: 'stale',
+    }
+    const appIntegrationDao = {
+      ...createService().deps.appIntegrationDao,
+      findByServerAndKey: vi.fn().mockResolvedValue(staleApp),
+      updateManifest: vi.fn().mockImplementation(async (_serverAppId, data) => ({
+        ...staleApp,
+        ...data,
+        manifestUrl: staleApp.manifestUrl,
+        defaultPermissions: staleApp.defaultPermissions,
+        defaultApprovalMode: staleApp.defaultApprovalMode,
+      })),
+    }
+    const { service } = createService({ appIntegrationDao })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.stats',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+    })
+
+    expect(result).toEqual({ ok: true, result: { open: 2, closed: 1 } })
+    expect(appIntegrationDao.updateManifest).toHaveBeenCalledWith(
+      'app-1',
+      expect.objectContaining({
+        manifest: expect.objectContaining({ version: '1.1.0' }),
+        manifestVersion: '1.1.0',
+        manifestUpdatedAt: new Date('2026-05-21T00:00:00.000Z'),
+      }),
+    )
   })
 
   it('requires approval for a non-default command and allows the confirmed command', async () => {

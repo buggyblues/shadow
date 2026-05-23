@@ -903,6 +903,7 @@
     "switchChannel": "切换频道",
     "enterChannel": "进入频道",
     "exitCopilot": "退出 Copilot",
+    "resizeCopilot": "调整 Copilot 面板大小",
     "unarchive": "取消归档"
   },
   "chat": {
@@ -1729,7 +1730,11 @@
     "serverInvite": "{{actorName}} 邀请你加入 {{serverName}}",
     "friendshipRequest": "{{actorName}} 发送了好友申请",
     "rechargeSucceeded": "充值成功",
-    "rechargeSucceededBody": "{{amount}} 虾币已到账"
+    "rechargeSucceededBody": "{{amount}} 虾币已到账",
+    "serverAppCommandApprovalRequested": "{{appName}} 命令需要审批",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}} 正在 {{serverName}} 等待审批",
+    "serverAppCommandApprovalGranted": "{{appName}} 命令已通过审批",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}} 现在可以在 {{serverName}} 运行"
   },
   "agentMgmt": {
     "title": "Buddy 管理",

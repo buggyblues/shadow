@@ -324,6 +324,7 @@ export const CardsUpdateInputSchema = z
   .object({
     boardId: z.string().min(1).optional(),
     cardId: z.string().min(1),
+    clientRevision: z.number().int().nonnegative().optional(),
     kind: CardKindSchema.optional(),
     title: z.string().min(1).max(160).optional(),
     summary: z.string().max(1000).optional(),

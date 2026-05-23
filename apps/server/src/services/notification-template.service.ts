@@ -19,6 +19,8 @@ export type NotificationKind =
   | 'commerce.subscription_cancelled'
   | 'commerce.refund_issued'
   | 'commerce.force_majeure_decided'
+  | 'server_app.command_approval_requested'
+  | 'server_app.command_approval_granted'
   | 'system.generic'
 
 type TemplateMetadata = Record<string, unknown>
@@ -47,6 +49,8 @@ export class NotificationTemplateService {
     const channelName = text(metadata.channelName, 'channel')
     const serverName = text(metadata.serverName, 'server')
     const productName = text(metadata.productName, 'service')
+    const appName = text(metadata.appName, 'App')
+    const commandTitle = text(metadata.commandTitle, text(metadata.commandName, 'command'))
 
     switch (input.kind) {
       case 'message.mention':
@@ -132,6 +136,17 @@ export class NotificationTemplateService {
         return {
           title: 'Entitlement review decided',
           body: input.fallbackBody ?? preview(metadata.preview) ?? undefined,
+        }
+      case 'server_app.command_approval_requested':
+        return {
+          title: `${appName} command needs approval`,
+          body:
+            input.fallbackBody ?? `${commandTitle} is waiting for your approval in ${serverName}.`,
+        }
+      case 'server_app.command_approval_granted':
+        return {
+          title: `${appName} command approved`,
+          body: input.fallbackBody ?? `${commandTitle} can now run in ${serverName}.`,
         }
       default:
         return {

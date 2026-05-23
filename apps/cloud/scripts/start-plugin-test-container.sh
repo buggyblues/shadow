@@ -742,15 +742,31 @@ if [ -n "$RUNNER_DIR" ]; then
   RUNTIME_CONFIG_MOUNT_ARGS=(-v "$RUNTIME_CONFIG_DIR:/tmp/shadow-runtime-config:ro")
 fi
 
+DOCKER_RUN_ARGS=(--name "$CONTAINER_NAME")
+if [ "${#DOCKER_USER_ARGS[@]}" -gt 0 ]; then
+  DOCKER_RUN_ARGS+=("${DOCKER_USER_ARGS[@]}")
+fi
+DOCKER_RUN_ARGS+=(
+  --env-file "$ENV_FILE"
+  -v "$INSTALL_SCRIPT:/tmp/install-plugins.sh:ro"
+)
+if [ "${#RUNTIME_CONFIG_MOUNT_ARGS[@]}" -gt 0 ]; then
+  DOCKER_RUN_ARGS+=("${RUNTIME_CONFIG_MOUNT_ARGS[@]}")
+fi
+DOCKER_RUN_ARGS+=(-w /workspace)
+
+docker_exec_args() {
+  if [ "${#DOCKER_EXEC_USER_ARGS[@]}" -gt 0 ]; then
+    docker exec "${DOCKER_EXEC_USER_ARGS[@]}" "$@"
+  else
+    docker exec "$@"
+  fi
+}
+
 echo "Starting container: ${CONTAINER_NAME}"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 docker run -d \
-  --name "$CONTAINER_NAME" \
-  "${DOCKER_USER_ARGS[@]}" \
-  --env-file "$ENV_FILE" \
-  -v "$INSTALL_SCRIPT:/tmp/install-plugins.sh:ro" \
-  "${RUNTIME_CONFIG_MOUNT_ARGS[@]}" \
-  -w /workspace \
+  "${DOCKER_RUN_ARGS[@]}" \
   "$IMAGE_NAME" \
   "$SHELL_BIN" -c "sh /tmp/install-plugins.sh && tail -f /dev/null" \
   >/dev/null
@@ -778,7 +794,7 @@ echo "Plugin setup completed."
 
 if [ -n "$RUN_COMMAND" ]; then
   echo "Running test command: ${RUN_COMMAND}"
-  docker exec "${DOCKER_EXEC_USER_ARGS[@]}" "$CONTAINER_NAME" "$SHELL_BIN" -c "$RUN_COMMAND"
+  docker_exec_args "$CONTAINER_NAME" "$SHELL_BIN" -c "$RUN_COMMAND"
 fi
 
 echo ""
@@ -797,5 +813,9 @@ if [ -n "$RUNNER_DIR" ]; then
 fi
 
 if [ "$ENTER_SHELL" = "1" ] && [ -t 0 ] && [ -t 1 ]; then
-  docker exec -it "${DOCKER_EXEC_USER_ARGS[@]}" "$CONTAINER_NAME" "$SHELL_BIN"
+  if [ "${#DOCKER_EXEC_USER_ARGS[@]}" -gt 0 ]; then
+    docker exec -it "${DOCKER_EXEC_USER_ARGS[@]}" "$CONTAINER_NAME" "$SHELL_BIN"
+  else
+    docker exec -it "$CONTAINER_NAME" "$SHELL_BIN"
+  fi
 fi

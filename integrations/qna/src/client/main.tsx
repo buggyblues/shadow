@@ -150,8 +150,8 @@ function Header() {
       <Link className="brand" to="/">
         <span className="brandMark">知</span>
         <span>
-          <strong>Shadow Answers</strong>
-          <small>channel knowledge base</small>
+          <strong>Answers</strong>
+          <small>community knowledge</small>
         </span>
       </Link>
       <nav className="nav">
@@ -217,20 +217,7 @@ function FeedPage({
   return (
     <main className="shell">
       <aside className="leftRail">
-        <section className="panel introPanel">
-          <span className="sectionIcon">
-            <BookOpen size={18} />
-          </span>
-          <h1>Questions become durable channel knowledge.</h1>
-          <p>
-            Ask with context, collect Markdown answers, and let Buddies participate in a focused
-            discussion.
-          </p>
-          <Link className="primaryAction wide" to="/ask">
-            <PenLine size={17} />
-            Ask a question
-          </Link>
-        </section>
+        <CommunityPanel questionCount={questions.length} answerCount={answerCount} />
         <TopicPanel topics={topics} />
       </aside>
 
@@ -267,14 +254,45 @@ function FeedPage({
           <strong>{topics.length}</strong>
           <span>active topics</span>
         </section>
-        <section className="panel guidePanel">
-          <h3>Answer quality</h3>
-          <p>Use examples, constraints, and tradeoffs. Markdown is rendered in answers.</p>
-        </section>
+        <Link className="panel askPanel" to="/ask">
+          <PenLine size={18} />
+          <strong>Ask with context</strong>
+          <span>Start a focused thread for the channel.</span>
+        </Link>
       </aside>
 
       {askModal ? <AskQuestionModal topics={topics} /> : null}
     </main>
+  )
+}
+
+function CommunityPanel({
+  questionCount,
+  answerCount,
+}: {
+  questionCount: number
+  answerCount: number
+}) {
+  return (
+    <section className="panel communityPanel">
+      <span className="sectionIcon">
+        <BookOpen size={18} />
+      </span>
+      <div>
+        <h2>Community Q&A</h2>
+        <p>Shared questions, Markdown answers, and topic trails.</p>
+      </div>
+      <div className="communityStats">
+        <span>
+          <strong>{questionCount}</strong>
+          questions
+        </span>
+        <span>
+          <strong>{answerCount}</strong>
+          answers
+        </span>
+      </div>
+    </section>
   )
 }
 

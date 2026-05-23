@@ -57,7 +57,15 @@ export function seedBodies(world: PhysicsWorld, cards: Card[]): void {
 }
 
 /** Sync bodies to the current card list: add missing, remove stale. */
-export function syncBodies(world: PhysicsWorld, cards: Card[]): void {
+export interface SyncBodiesOptions {
+  preserveLayoutIds?: Set<string>
+}
+
+export function syncBodies(
+  world: PhysicsWorld,
+  cards: Card[],
+  options: SyncBodiesOptions = {},
+): void {
   const { engine, bodiesMap } = world
   const currentIds = new Set(cards.map((c) => c.id))
 
@@ -76,10 +84,12 @@ export function syncBodies(world: PhysicsWorld, cards: Card[]): void {
     const existing = bodiesMap.get(card.id)
     const layout = persistedLayout(card)
     if (existing) {
-      if (layout?.x !== undefined && layout?.y !== undefined) {
+      const preserveLayout = options.preserveLayoutIds?.has(card.id) === true
+      if (!preserveLayout && layout?.x !== undefined && layout?.y !== undefined) {
         Matter.Body.setPosition(existing, { x: layout.x, y: layout.y })
       }
-      if (layout?.angle !== undefined) Matter.Body.setAngle(existing, layout.angle)
+      if (!preserveLayout && layout?.angle !== undefined)
+        Matter.Body.setAngle(existing, layout.angle)
       if (layout?.locked !== undefined) Matter.Body.setStatic(existing, layout.locked)
       continue
     }

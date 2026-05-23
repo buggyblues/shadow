@@ -62,6 +62,7 @@ shadowob app call <app-key> <command> \
 
 - `schemaVersion`: `shadow.app/1`
 - `appKey`: lowercase stable key
+- `version` and `updatedAt`: bump both on every deploy that changes commands, help, iframe, API, permissions, or realtime behavior
 - `iconUrl`: square app icon URL
 - `iframe.entry`: user-facing server App UI
 - `iframe.allowedOrigins`: exact iframe origins

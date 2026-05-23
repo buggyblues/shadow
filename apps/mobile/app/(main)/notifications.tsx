@@ -69,6 +69,8 @@ function getNotificationDisplay(
   const actorName = text(metadata.actorName, 'Someone')
   const channelName = text(metadata.channelName, 'channel')
   const serverName = text(metadata.serverName, 'server')
+  const appName = text(metadata.appName, 'App')
+  const commandTitle = text(metadata.commandTitle, text(metadata.commandName, 'command'))
   const preview = text(metadata.preview, n.body ?? '')
 
   switch (n.kind) {
@@ -141,8 +143,40 @@ function getNotificationDisplay(
           amount: metadata.shrimpCoins ?? '',
         }),
       }
+    case 'server_app.command_approval_requested':
+      return {
+        title: t('notification.serverAppCommandApprovalRequested', { appName }),
+        body: t('notification.serverAppCommandApprovalRequestedBody', {
+          commandTitle,
+          serverName,
+        }),
+      }
+    case 'server_app.command_approval_granted':
+      return {
+        title: t('notification.serverAppCommandApprovalGranted', { appName }),
+        body: t('notification.serverAppCommandApprovalGrantedBody', {
+          commandTitle,
+          serverName,
+        }),
+      }
     default:
       return { title: n.title, body: n.body ?? '' }
+  }
+}
+
+function getServerAppApprovalAction(n: Notification) {
+  if (n.referenceType !== 'server_app_command_approval') return null
+  const serverId = getNotificationServerId(n)
+  const appKey = metaString(n, 'appKey')
+  const commandName = metaString(n, 'commandName')
+  if (!serverId || !appKey || !commandName) return null
+  return {
+    notificationId: n.id,
+    serverId,
+    appKey,
+    commandName,
+    buddyAgentId: metaString(n, 'buddyAgentId') ?? undefined,
+    remember: metaString(n, 'approvalMode') !== 'every_time',
   }
 }
 
@@ -208,6 +242,32 @@ export default function NotificationsScreen() {
     },
   })
 
+  const approveServerAppCommand = useMutation({
+    mutationFn: (input: NonNullable<ReturnType<typeof getServerAppApprovalAction>>) =>
+      fetchApi(`/api/servers/${input.serverId}/apps/${input.appKey}/approvals`, {
+        method: 'POST',
+        body: JSON.stringify({
+          commandName: input.commandName,
+          buddyAgentId: input.buddyAgentId,
+          remember: input.remember,
+        }),
+      }).then(() =>
+        fetchApi(`/api/notifications/${input.notificationId}/read`, { method: 'PATCH' }),
+      ),
+    onSuccess: () => {
+      showToast(t('serverApps.commandApprovalSuccess'), 'success')
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error ? error.message : t('serverApps.commandApprovalFailed'),
+        'error',
+      )
+    },
+  })
+
   const handlePress = useCallback(
     async (n: Notification) => {
       if (!n.isRead) markRead.mutate(n.id)
@@ -242,6 +302,16 @@ export default function NotificationsScreen() {
           )
           await navigateToChannel(message.channelId, message.id)
         } catch {}
+        return
+      }
+
+      if (n.referenceType === 'server_app' || n.referenceType === 'server_app_command_approval') {
+        const serverId = getNotificationServerId(n)
+        if (serverId) {
+          try {
+            await navigateToServer(serverId)
+          } catch {}
+        }
         return
       }
 
@@ -311,6 +381,7 @@ export default function NotificationsScreen() {
           }
           renderItem={({ item, index }) => {
             const display = getNotificationDisplay(item, t)
+            const serverAppApprovalAction = getServerAppApprovalAction(item)
             return (
               <Reanimated.View entering={FadeInUp.delay(index * 40).springify()}>
                 <CardPressable
@@ -433,6 +504,23 @@ export default function NotificationsScreen() {
                             }
                           >
                             {t('server.rejectAccess', '拒绝')}
+                          </Button>
+                        </ButtonGroup>
+                      )}
+                      {serverAppApprovalAction && !item.isRead && (
+                        <ButtonGroup style={styles.requestActions}>
+                          <Button
+                            disabled={approveServerAppCommand.isPending}
+                            variant="glass"
+                            size="xs"
+                            icon={Check}
+                            iconColor={colors.success}
+                            textStyle={[styles.requestActionText, { color: colors.success }]}
+                            containerStyle={styles.requestActionCell}
+                            style={styles.requestAction}
+                            onPress={() => approveServerAppCommand.mutate(serverAppApprovalAction)}
+                          >
+                            {t('serverApps.commandApprovalConfirm')}
                           </Button>
                         </ButtonGroup>
                       )}

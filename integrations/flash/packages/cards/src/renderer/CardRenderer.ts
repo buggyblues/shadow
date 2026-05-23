@@ -64,6 +64,7 @@ import {
 import { clearArtLayerTextures, removeArtLayerTexture } from '../systems/render/glArtLayerSystem'
 import { glRenderSystem, type RenderConfig } from '../systems/render/glRenderSystem'
 import { gpuRenderSystem } from '../systems/render/gpuRenderSystem'
+import type { SelectionRect } from '../systems/render/selectionOverlaySystem'
 import type { InputState } from '../systems/scene/inputSystem'
 import { sceneUpdateSystem } from '../systems/scene/sceneUpdateSystem'
 
@@ -107,6 +108,7 @@ export class CardRenderer {
     mouseScreenX: 0,
     mouseScreenY: 0,
   }
+  private marqueeRect: SelectionRect | null = null
   private hiddenCardIds = new Set<string>()
   private startTime = performance.now()
   private lastTime = 0
@@ -191,10 +193,13 @@ export class CardRenderer {
     this.input.activeId = id
   }
   setSelectedCards(ids: Set<string>) {
-    this.input.selectedIds = ids
+    this.input.selectedIds = new Set(ids)
   }
   getSelectedCards() {
     return this.input.selectedIds
+  }
+  setMarqueeRect(rect: SelectionRect | null) {
+    this.marqueeRect = rect
   }
   setHiddenCards(ids: Set<string>) {
     this.hiddenCardIds = ids
@@ -293,8 +298,6 @@ export class CardRenderer {
   // ═══════════════════════════════════════
 
   render(cards: Card[], bodiesMap: Map<string, Matter.Body>, width: number, height: number) {
-    if (cards.length === 0) return
-
     const now = performance.now()
     const time = (now - this.startTime) / 1000
     const dt = Math.min(1 / 20, time - this.lastTime)
@@ -332,6 +335,7 @@ export class CardRenderer {
         this.gpuCtx,
         this.viewport,
         this.hiddenCardIds,
+        this.marqueeRect,
         time,
         RENDER_CONFIG,
       )
@@ -363,7 +367,15 @@ export class CardRenderer {
       this.spatialIndex.rebuild(this.scene, cards, CARD_W, CARD_H, this.hiddenCardIds)
       this.runtimePrewarmIds = this.computeRuntimePrewarmIds(cards)
       animationManager.setRenderableCards(this.visibleCardIds(cards))
-      glRenderSystem(this.scene, glCtx, this.viewport, this.hiddenCardIds, time, RENDER_CONFIG)
+      glRenderSystem(
+        this.scene,
+        glCtx,
+        this.viewport,
+        this.hiddenCardIds,
+        this.marqueeRect,
+        time,
+        RENDER_CONFIG,
+      )
       this.pruneAssetResidency(cards)
     }
   }

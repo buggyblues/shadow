@@ -16,7 +16,12 @@
 
 import { CARD_H, CARD_PADDING, CARD_W } from '../constants'
 import { createCardTextureArray, createGPUBuffer } from '../utils/gpuUtils'
-import { GLOBAL_FLOATS, INSTANCE_STRIDE_BYTES, WGSL_SHADER } from '../utils/wgslShaders'
+import {
+  GLOBAL_FLOATS,
+  INSTANCE_STRIDE_BYTES,
+  SELECTION_RECT_WGSL_SHADER,
+  WGSL_SHADER,
+} from '../utils/wgslShaders'
 
 // ─────────────────────────────────────
 // Constants
@@ -42,10 +47,12 @@ export interface GPUContext {
 
   // Shader + pipeline
   pipeline: GPURenderPipeline
+  selectionPipeline: GPURenderPipeline
 
   // Buffers
   globalBuf: GPUBuffer // uniform  — 8 × f32 = 32 bytes
   instanceBuf: GPUBuffer // storage  — INSTANCE_STRIDE × MAX_CARDS
+  selectionBuf: GPUBuffer // uniform  — 8 × f32 = 32 bytes
 
   // Texture array for card content
   texArray: GPUTexture
@@ -56,10 +63,12 @@ export interface GPUContext {
   bgl1: GPUBindGroupLayout // group 1: textures + sampler
   bg0: GPUBindGroup
   bg1: GPUBindGroup
+  selectionBg: GPUBindGroup
 
   // Per-frame scratch (CPU-side)
   globalData: Float32Array // 8 floats
   instanceData: Float32Array // MAX_CARDS × INSTANCE_STRIDE_FLOATS
+  selectionData: Float32Array // 8 floats
 
   // Texture layer slot manager
   _freeSlots: number[]
@@ -114,9 +123,20 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
 
   // ── Pipeline layout ──
   const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bgl0, bgl1] })
+  const selectionBgl = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+        buffer: { type: 'uniform' },
+      },
+    ],
+  })
+  const selectionPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [selectionBgl] })
 
   // ── Shader module ──
   const shaderModule = device.createShaderModule({ code: WGSL_SHADER })
+  const selectionShaderModule = device.createShaderModule({ code: SELECTION_RECT_WGSL_SHADER })
 
   // ── Render pipeline ──
   const pipeline = device.createRenderPipeline({
@@ -127,6 +147,28 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
     },
     fragment: {
       module: shaderModule,
+      entryPoint: 'fs_main',
+      targets: [
+        {
+          format,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          },
+        },
+      ],
+    },
+    primitive: { topology: 'triangle-list' },
+  })
+
+  const selectionPipeline = device.createRenderPipeline({
+    layout: selectionPipelineLayout,
+    vertex: {
+      module: selectionShaderModule,
+      entryPoint: 'vs_main',
+    },
+    fragment: {
+      module: selectionShaderModule,
       entryPoint: 'fs_main',
       targets: [
         {
@@ -152,6 +194,12 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
     device,
     INSTANCE_STRIDE_BYTES * GPU_MAX_CARDS,
     GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  )
+
+  const selectionBuf = createGPUBuffer(
+    device,
+    8 * 4,
+    GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   )
 
   // ── Texture array ──
@@ -181,6 +229,11 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
     ],
   })
 
+  const selectionBg = device.createBindGroup({
+    layout: selectionBgl,
+    entries: [{ binding: 0, resource: { buffer: selectionBuf } }],
+  })
+
   // ── Slot manager ──
   const _freeSlots = Array.from({ length: GPU_MAX_CARDS }, (_, i) => GPU_MAX_CARDS - 1 - i)
   const _cardSlots = new Map<string, number>()
@@ -193,16 +246,20 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
     format,
     dpr,
     pipeline,
+    selectionPipeline,
     globalBuf,
     instanceBuf,
+    selectionBuf,
     texArray,
     sampler,
     bgl0,
     bgl1,
     bg0,
     bg1,
+    selectionBg,
     globalData: new Float32Array(GLOBAL_FLOATS),
     instanceData: new Float32Array(GPU_MAX_CARDS * (INSTANCE_STRIDE_BYTES / 4)),
+    selectionData: new Float32Array(8),
     _freeSlots,
     _cardSlots,
   }
@@ -250,5 +307,6 @@ export function destroyGPUContext(ctx: GPUContext): void {
   ctx.texArray.destroy()
   ctx.globalBuf.destroy()
   ctx.instanceBuf.destroy()
+  ctx.selectionBuf.destroy()
   ctx.device.destroy()
 }

@@ -60,6 +60,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 | [Meta Ads](./meta-ads/README.md) | `META_ACCESS_TOKEN`, `META_AD_ACCOUNT_ID` | Meta Marketing APIs |
 | [Xiaomi MiClaw](./miclaw/README.md) | `MICLAW_ACCESS_TOKEN` | Xiaomi MiClaw ecosystem |
 | [Model Provider](./model-provider/README.md) | Auto-detected provider env vars, optional OpenAI-compatible keys | Provider profile and secret detection |
+| [Nature Skills](./nature-skills/README.md) | Optional `PUBMED_EMAIL`, `NCBI_API_KEY`, `SEMANTIC_SCHOLAR_API_KEY` | Nature-style academic skills and academic-search MCP |
 | [Notion](./notion/README.md) | `NOTION_TOKEN` | Notion MCP and integrations |
 | [OceanEngine](./oceanengine/README.md) | `OCEANENGINE_ACCESS_TOKEN`, `OCEANENGINE_ADVERTISER_ID` | OceanEngine MCP |
 | [PayPal](./paypal/README.md) | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENVIRONMENT` | PayPal MCP and REST apps |
@@ -77,6 +78,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 | [Tencent Ads](./tencent-ads/README.md) | `TENCENT_ADS_ACCESS_TOKEN`, `TENCENT_ADS_ACCOUNT_ID` | Tencent Ads Marketing API |
 | [Tencent Docs](./tencent-docs/README.md) | `TENCENT_DOCS_ACCESS_TOKEN`, optional client credentials | Tencent Docs MCP |
 | [Tencent Maps](./tencent-maps/README.md) | `TENCENT_MAPS_KEY` | Tencent Location Service MCP |
+| [CAD Skills](./text-to-cad/README.md) | None | text-to-cad CAD, robotics, rendering, and fabrication skills |
 | [Vercel](./vercel/README.md) | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Vercel MCP and CLI |
 | [Webflow](./webflow/README.md) | `WEBFLOW_TOKEN`, `WEBFLOW_SITE_ID` | Webflow MCP, CLI, skills |
 | [WeChat Mini Program Skyline](./wechat-miniprogram-skyline/README.md) | `WECHAT_MINIPROGRAM_APPID`, `WECHAT_MINIPROGRAM_PRIVATE_KEY` | WeChat Skyline skills |

@@ -3,6 +3,13 @@
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #172033;
   background: #f4f7fb;
+  --panel: #ffffff;
+  --ink: #172033;
+  --muted: #617087;
+  --line: #dce4ef;
+  --orange: #e86f1d;
+  --blue: #2563eb;
+  --green: #0d9862;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -27,7 +34,7 @@ button {
   gap: 10px;
   border: 0;
   border-radius: 8px;
-  background: #f97316;
+  background: var(--orange);
   color: #fff;
   font-weight: 800;
   cursor: pointer;
@@ -47,23 +54,23 @@ button svg {
 
 .appShell {
   min-height: 100vh;
-  padding: 26px;
+  padding: 18px;
 }
 
 .heroPanel,
 .panel {
-  border: 1px solid rgba(117, 135, 162, 0.26);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 18px 50px rgba(44, 54, 78, 0.12);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 34px rgba(44, 54, 78, 0.1);
 }
 
 .heroPanel {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  grid-template-columns: minmax(300px, 0.82fr) minmax(300px, 1fr);
   align-items: center;
-  gap: 24px;
-  border-radius: 18px;
-  padding: 34px;
+  gap: 18px;
+  border-radius: 8px;
+  padding: 22px;
   overflow: hidden;
 }
 
@@ -72,7 +79,7 @@ button svg {
 }
 
 .eyebrow {
-  color: #ea580c;
+  color: var(--orange);
   font-size: 13px;
   font-weight: 900;
   letter-spacing: 0;
@@ -89,16 +96,16 @@ h1 {
   margin-top: 10px;
   max-width: 720px;
   color: #111827;
-  font-size: clamp(36px, 7vw, 72px);
-  line-height: 0.96;
+  font-size: clamp(34px, 4vw, 52px);
+  line-height: 1.02;
   letter-spacing: 0;
 }
 
 .heroCopy p {
   max-width: 650px;
-  margin-top: 20px;
-  color: #526179;
-  font-size: 18px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 16px;
   line-height: 1.55;
 }
 
@@ -106,7 +113,7 @@ h1 {
   display: flex;
   gap: 12px;
   max-width: 580px;
-  margin-top: 28px;
+  margin-top: 20px;
 }
 
 .nameRow input {
@@ -124,7 +131,10 @@ h1 {
 .wheelStage {
   display: grid;
   place-items: center;
-  min-height: 360px;
+  min-height: 320px;
+  border: 1px solid #f1decf;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fff, #fff8f1);
 }
 
 .wheelImage {
@@ -140,14 +150,14 @@ h1 {
 
 .contentGrid {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.1fr) minmax(300px, 0.85fr);
-  gap: 18px;
-  margin-top: 18px;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(300px, 1.15fr) minmax(280px, 0.9fr);
+  gap: 14px;
+  margin-top: 14px;
 }
 
 .panel {
-  border-radius: 14px;
-  padding: 20px;
+  border-radius: 8px;
+  padding: 16px;
   min-width: 0;
 }
 
@@ -161,7 +171,7 @@ h1 {
 .panelTitle svg {
   width: 19px;
   height: 19px;
-  color: #f97316;
+  color: var(--orange);
 }
 
 h2 {
@@ -172,7 +182,7 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   background: linear-gradient(135deg, #fff7ed, #ffedd5);
   padding: 18px;
 }
@@ -284,7 +294,7 @@ h2 {
   }
 
   .appShell {
-    padding: 16px;
+    padding: 12px;
   }
 
   .heroPanel {

@@ -30,6 +30,54 @@ export interface CollectedK8sArtifacts {
   annotations: Record<string, string>
 }
 
+const COLON_SEPARATED_ENV_KEYS = new Set(['PATH', 'PYTHONPATH', 'NODE_PATH'])
+const DEFAULT_CONTAINER_PATH_PARTS = [
+  '/usr/local/sbin',
+  '/usr/local/bin',
+  '/usr/sbin',
+  '/usr/bin',
+  '/sbin',
+  '/bin',
+]
+
+function uniquePathParts(parts: string[]): string[] {
+  const out: string[] = []
+  for (const part of parts) {
+    if (!part || out.includes(part)) continue
+    out.push(part)
+  }
+  return out
+}
+
+function mergeColonSeparatedEnvValue(key: string, current: string, next: string): string {
+  const parts = [...current.split(':'), ...next.split(':')]
+  if (key !== 'PATH') return uniquePathParts(parts).join(':')
+
+  const defaults = new Set(DEFAULT_CONTAINER_PATH_PARTS)
+  const pluginParts = parts.filter((part) => part && !defaults.has(part))
+  const defaultParts = parts.filter((part) => defaults.has(part))
+  return uniquePathParts([...pluginParts, ...defaultParts]).join(':')
+}
+
+function mergePluginEnvVars(target: PluginK8sEnvVar[], incoming: PluginK8sEnvVar[]): void {
+  for (const envVar of incoming) {
+    if (
+      typeof envVar.name === 'string' &&
+      typeof envVar.value === 'string' &&
+      COLON_SEPARATED_ENV_KEYS.has(envVar.name)
+    ) {
+      const existing = target.find(
+        (candidate) => candidate.name === envVar.name && typeof candidate.value === 'string',
+      )
+      if (existing && typeof existing.value === 'string') {
+        existing.value = mergeColonSeparatedEnvValue(envVar.name, existing.value, envVar.value)
+        continue
+      }
+    }
+    target.push(envVar)
+  }
+}
+
 /**
  * Iterate all registered plugins that implement `k8s.buildK8s` and merge
  * their results for a given agent. Returns a flat collection ready for
@@ -81,9 +129,7 @@ export function collectPluginK8sArtifacts(
     if (artifacts.volumeMounts?.length) {
       result.volumeMounts.push(...artifacts.volumeMounts)
     }
-    if (artifacts.envVars?.length) {
-      result.envVars.push(...artifacts.envVars)
-    }
+    if (artifacts.envVars?.length) mergePluginEnvVars(result.envVars, artifacts.envVars)
     if (artifacts.labels) {
       Object.assign(result.labels, artifacts.labels)
     }

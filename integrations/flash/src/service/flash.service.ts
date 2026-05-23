@@ -14,6 +14,7 @@ import type {
   FlashCommandName,
   FlashMutationResult,
   FlashPatchEvent,
+  FlashRealtimeEvent,
   FlashSelection,
   FlashUploadedAsset,
   FlashUploadInput,
@@ -667,7 +668,7 @@ export class FlashService {
     })
     const event = mapEvent(row)
     await this.deps.boards.touch(board.id)
-    await this.deps.realtime.publish({
+    await this.publishRealtime({
       type: 'flash.events.appended',
       boardId: board.id,
       at: Date.now(),
@@ -678,7 +679,7 @@ export class FlashService {
     })
     for (const patch of patches) {
       if (patch.type !== 'selection.updated') continue
-      await this.deps.realtime.publish({
+      await this.publishRealtime({
         type: 'flash.selection.updated',
         boardId: board.id,
         at: Date.now(),
@@ -689,6 +690,14 @@ export class FlashService {
       result,
       events: [event],
       cursor: event.seq,
+    }
+  }
+
+  private async publishRealtime(event: FlashRealtimeEvent) {
+    try {
+      await this.deps.realtime.publish(event)
+    } catch (err) {
+      console.warn('Flash realtime publish failed', err)
     }
   }
 

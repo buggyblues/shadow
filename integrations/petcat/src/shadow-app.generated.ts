@@ -5,10 +5,10 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
   appKey: 'shadow-cat',
-  name: 'Cloud Cat',
+  name: 'StarPet Inn',
   description:
-    'A virtual pet Server App with generated cat assets, persistent cat state, care mechanics, automation, and leaderboard.',
-  version: '1.0.0',
+    'A playable virtual pet Server App with StarPet care, training, minigames, adventure maps, furniture upgrades, evolution, and leaderboard.',
+  version: '1.1.0',
   iconUrl: 'http://localhost:4215/assets/icon.svg',
   iframe: {
     entry: 'http://localhost:4215/shadow/server',
@@ -27,8 +27,8 @@ export const shadowServerAppManifest = {
   commands: [
     {
       name: 'cats.assets.list',
-      title: 'List cat assets',
-      description: 'List the ten generated transparent cat assets.',
+      title: 'List pet assets',
+      description: 'List generated transparent pet assets.',
       path: '/api/shadow/commands/cats.assets.list',
       permission: 'cat.assets:read',
       action: 'read',
@@ -36,8 +36,8 @@ export const shadowServerAppManifest = {
     },
     {
       name: 'cats.adopt',
-      title: 'Adopt cat',
-      description: 'Create a persistent pet cat for the actor.',
+      title: 'Adopt StarPet',
+      description: 'Create a persistent StarPet for the actor.',
       path: '/api/shadow/commands/cats.adopt',
       permission: 'cat.cats:write',
       action: 'write',
@@ -60,8 +60,8 @@ export const shadowServerAppManifest = {
     },
     {
       name: 'cats.list',
-      title: 'List cats',
-      description: 'List current cats after applying time-based attribute decay.',
+      title: 'List StarPets',
+      description: 'List current StarPets after applying time-based attribute decay.',
       path: '/api/shadow/commands/cats.list',
       permission: 'cat.cats:read',
       action: 'read',
@@ -69,8 +69,8 @@ export const shadowServerAppManifest = {
     },
     {
       name: 'cats.get',
-      title: 'Read cat',
-      description: 'Read one cat with asset and recent care logs.',
+      title: 'Read StarPet',
+      description: 'Read one StarPet with asset and recent game logs.',
       path: '/api/shadow/commands/cats.get',
       permission: 'cat.cats:read',
       action: 'read',
@@ -89,8 +89,8 @@ export const shadowServerAppManifest = {
     },
     {
       name: 'cats.feed',
-      title: 'Feed cat',
-      description: 'Feed a cat and update hunger, health, and mood.',
+      title: 'Feed StarPet',
+      description: 'Spend coins to feed a StarPet and reduce hunger.',
       path: '/api/shadow/commands/cats.feed',
       permission: 'cat.care:write',
       action: 'write',
@@ -109,9 +109,30 @@ export const shadowServerAppManifest = {
       },
     },
     {
+      name: 'cats.pet',
+      title: 'Pet StarPet',
+      description: 'Pet a StarPet to raise mood and bond.',
+      path: '/api/shadow/commands/cats.pet',
+      permission: 'cat.care:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['catId'],
+        properties: {
+          catId: {
+            type: 'string',
+            minLength: 1,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'cats.play',
-      title: 'Play with cat',
-      description: 'Play with a cat and update happiness, energy, hunger, health, and mood.',
+      title: 'Play with StarPet',
+      description: 'Play with a StarPet and gain bond and experience.',
       path: '/api/shadow/commands/cats.play',
       permission: 'cat.care:write',
       action: 'write',
@@ -131,8 +152,8 @@ export const shadowServerAppManifest = {
     },
     {
       name: 'cats.clean',
-      title: 'Clean cat',
-      description: 'Clean a cat and update cleanliness, happiness, health, and mood.',
+      title: 'Clean StarPet',
+      description: 'Spend coins to clean a StarPet and improve health.',
       path: '/api/shadow/commands/cats.clean',
       permission: 'cat.care:write',
       action: 'write',
@@ -152,8 +173,8 @@ export const shadowServerAppManifest = {
     },
     {
       name: 'cats.rest',
-      title: 'Rest cat',
-      description: 'Let a cat rest and recover energy.',
+      title: 'Rest StarPet',
+      description: 'Let a StarPet rest and recover energy.',
       path: '/api/shadow/commands/cats.rest',
       permission: 'cat.care:write',
       action: 'write',
@@ -172,16 +193,90 @@ export const shadowServerAppManifest = {
       },
     },
     {
-      name: 'cats.auto_feed',
-      title: 'Auto feed cats',
-      description: 'Let a Buddy automatically feed one hungry cat or all hungry cats.',
-      path: '/api/shadow/commands/cats.auto_feed',
-      permission: 'cat.automation:write',
-      action: 'manage',
+      name: 'cats.train',
+      title: 'Train StarPet',
+      description: 'Spend coins and energy to train a route and gain stats, bond, and experience.',
+      path: '/api/shadow/commands/cats.train',
+      permission: 'cat.care:write',
+      action: 'write',
       dataClass: 'server-private',
       approvalMode: 'first_time',
       inputSchema: {
         type: 'object',
+        required: ['catId', 'route'],
+        properties: {
+          catId: {
+            type: 'string',
+            minLength: 1,
+          },
+          route: {
+            type: 'string',
+            enum: ['str', 'agi', 'int', 'cha', 'luk', 'balanced'],
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'cats.minigame',
+      title: 'Play StarPet minigame',
+      description: 'Spend energy to play a short minigame and gain ranked rewards.',
+      path: '/api/shadow/commands/cats.minigame',
+      permission: 'cat.care:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['catId'],
+        properties: {
+          catId: {
+            type: 'string',
+            minLength: 1,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'cats.adventure',
+      title: 'Send StarPet adventure',
+      description:
+        'Spend energy to run an adventure map with stat-based success and rare route core drops.',
+      path: '/api/shadow/commands/cats.adventure',
+      permission: 'cat.care:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['catId', 'mapId'],
+        properties: {
+          catId: {
+            type: 'string',
+            minLength: 1,
+          },
+          mapId: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 5,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'cats.furniture.upgrade',
+      title: 'Upgrade StarPet furniture',
+      description: 'Spend coins to upgrade inn furniture and improve future adventure stability.',
+      path: '/api/shadow/commands/cats.furniture.upgrade',
+      permission: 'cat.care:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['catId'],
         properties: {
           catId: {
             type: 'string',
@@ -193,8 +288,9 @@ export const shadowServerAppManifest = {
     },
     {
       name: 'cats.leaderboard',
-      title: 'Cat leaderboard',
-      description: 'Rank cats by current care score.',
+      title: 'StarPet leaderboard',
+      description:
+        'Rank StarPets by care, growth, route stats, economy, furniture, and evolution score.',
       path: '/api/shadow/commands/cats.leaderboard',
       permission: 'cat.cats:read',
       action: 'read',
@@ -214,16 +310,20 @@ export const shadowServerAppManifest = {
   ],
   skills: [
     {
-      name: 'shadow-cat-ops',
+      name: 'starpet-ops',
       description:
-        'Use when a Buddy needs to adopt cats, inspect pet state, care for cats, run auto feeding, or read the cat leaderboard.',
+        'Use when a Buddy needs to adopt StarPets, inspect pet state, care for pets, train routes, run minigames or adventures, upgrade furniture, or read the leaderboard.',
       commandHints: [
         'shadow-cat cats.assets.list',
         'shadow-cat cats.adopt',
         'shadow-cat cats.list',
         'shadow-cat cats.get',
         'shadow-cat cats.feed',
-        'shadow-cat cats.auto_feed',
+        'shadow-cat cats.pet',
+        'shadow-cat cats.train',
+        'shadow-cat cats.minigame',
+        'shadow-cat cats.adventure',
+        'shadow-cat cats.furniture.upgrade',
         'shadow-cat cats.leaderboard',
       ],
     },

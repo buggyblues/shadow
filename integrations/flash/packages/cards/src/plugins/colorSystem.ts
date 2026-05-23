@@ -19,47 +19,56 @@ function isLight(hex: string): boolean {
   return (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000 > 128
 }
 
+function normalizeHex(value: unknown, fallback: string): string {
+  const raw = safeStr(value).trim()
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw
+  if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw}`
+  return fallback
+}
+
 export function colorSystem(eid: number): boolean {
   const meta = colorMetaStore[eid]
   if (!meta) return false
 
   const { ctx } = canvasStore[eid]!
   const layout = layoutStore[eid]!
+  const { accentColor } = styleStore[eid]!
   const { padX, contentW } = layout
+  const hex = normalizeHex(meta.hex, accentColor)
 
   // ── Main swatch ────────────────────────────────────────
   const swatchH = Math.min(55, remainingH(layout) * 0.45)
   if (swatchH > 16) {
-    ctx.fillStyle = meta.hex
+    ctx.fillStyle = hex
     ctx.beginPath()
     ctx.roundRect(padX, layout.cursorY, contentW, swatchH, 6)
     ctx.fill()
     // Hex label on swatch
-    const textColor = isLight(meta.hex) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)'
+    const textColor = isLight(hex) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)'
     ctx.font = fontStr(11, 'bold', '', 'monospace')
     ctx.fillStyle = textColor
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(meta.hex.toUpperCase(), padX + contentW / 2, layout.cursorY + swatchH / 2)
+    ctx.fillText(hex.toUpperCase(), padX + contentW / 2, layout.cursorY + swatchH / 2)
     advance(layout, swatchH + 5)
   }
 
   // ── Color name ─────────────────────────────────────────
   if (meta.name && remainingH(layout) > 11) {
     ctx.font = fontStr(9.5, 'bold', '', '"Noto Sans SC", sans-serif')
-    ctx.fillStyle = meta.hex
+    ctx.fillStyle = hex
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
-    ctx.fillText(meta.name, padX, layout.cursorY)
+    ctx.fillText(safeStr(meta.name), padX, layout.cursorY)
     advance(layout, 13)
   }
 
   // ── RGB / HSL values ───────────────────────────────────
-  const rgb = meta.rgb || hexToRgb(meta.hex)
+  const rgb = meta.rgb || hexToRgb(hex)
   if (rgb && remainingH(layout) > 9) {
     const rgbStr = `R${rgb.r} G${rgb.g} B${rgb.b}`
     ctx.font = fontStr(7, '', '', 'monospace')
-    ctx.fillStyle = hexAlpha(meta.hex, 0.7)
+    ctx.fillStyle = hexAlpha(hex, 0.7)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     ctx.fillText(rgbStr, padX, layout.cursorY)
@@ -70,7 +79,7 @@ export function colorSystem(eid: number): boolean {
     const { h, s, l } = meta.hsl
     const hslStr = `H${h}° S${s}% L${l}%`
     ctx.font = fontStr(7, '', '', 'monospace')
-    ctx.fillStyle = hexAlpha(meta.hex, 0.55)
+    ctx.fillStyle = hexAlpha(hex, 0.55)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     ctx.fillText(hslStr, padX, layout.cursorY)
@@ -82,7 +91,7 @@ export function colorSystem(eid: number): boolean {
     const chipW = Math.min(16, (contentW - 2) / meta.palette.length - 2)
     const chipH = 12
     meta.palette.slice(0, 8).forEach((chip, i) => {
-      ctx.fillStyle = chip.hex
+      ctx.fillStyle = normalizeHex(chip.hex, hex)
       ctx.beginPath()
       ctx.roundRect(padX + i * (chipW + 2), layout.cursorY, chipW, chipH, 2)
       ctx.fill()
@@ -94,7 +103,7 @@ export function colorSystem(eid: number): boolean {
   const usage = safeStr(meta.usage || meta.system)
   if (usage && remainingH(layout) > 9) {
     ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
-    ctx.fillStyle = hexAlpha(meta.hex, 0.5)
+    ctx.fillStyle = hexAlpha(hex, 0.5)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     ctx.fillText(usage.slice(0, 32), padX, layout.cursorY)

@@ -1,4 +1,11 @@
-import type { CatActionLog, CatAsset, CatLeaderboardEntry, PetCat } from '../types.js'
+import type {
+  CatActionLog,
+  CatAsset,
+  CatCareAction,
+  CatLeaderboardEntry,
+  CatRoute,
+  PetCat,
+} from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
 export type CatWithAsset = PetCat & { asset: CatAsset }
@@ -111,15 +118,26 @@ export function getCat(catId: string) {
   return command<{ cat: PetCat; asset: CatAsset; logs: CatActionLog[] }>('cats.get', { catId })
 }
 
-export function care(
-  commandName: 'cats.feed' | 'cats.play' | 'cats.clean' | 'cats.rest',
-  catId: string,
-) {
+export type CareCommand = `cats.${CatCareAction}`
+
+export function care(commandName: CareCommand, catId: string) {
   return command<{ cat: PetCat; log: CatActionLog }>(commandName, { catId })
 }
 
-export function autoFeed(input: { catId?: string }) {
-  return command<{ cats: PetCat[]; logs: CatActionLog[] }>('cats.auto_feed', input)
+export function trainCat(catId: string, route: CatRoute) {
+  return command<{ cat: PetCat; log: CatActionLog }>('cats.train', { catId, route })
+}
+
+export function playMinigame(catId: string) {
+  return command<{ cat: PetCat; log: CatActionLog }>('cats.minigame', { catId })
+}
+
+export function runAdventure(catId: string, mapId: number) {
+  return command<{ cat: PetCat; log: CatActionLog }>('cats.adventure', { catId, mapId })
+}
+
+export function upgradeFurniture(catId: string) {
+  return command<{ cat: PetCat; log: CatActionLog }>('cats.furniture.upgrade', { catId })
 }
 
 export function leaderboard(input: { limit?: number }) {

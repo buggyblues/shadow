@@ -1056,6 +1056,10 @@
     "friendshipRequest": "{{actorName}} 发送了好友申请",
     "rechargeSucceeded": "充值成功",
     "rechargeSucceededBody": "{{amount}} 虾币已到账",
+    "serverAppCommandApprovalRequested": "{{appName}} 命令需要审批",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}} 正在 {{serverName}} 等待审批",
+    "serverAppCommandApprovalGranted": "{{appName}} 命令已通过审批",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}} 现在可以在 {{serverName}} 运行",
     "emptyDesc": "还没有收到任何新消息"
   },
   "agentMgmt": {
@@ -1198,6 +1202,8 @@
     "commandApprovalTitle": "授权 App 命令",
     "commandApprovalMessage": "{{app}} 想运行 {{command}}，需要使用 {{permission}}。",
     "commandApprovalDenied": "已取消命令授权。",
+    "commandApprovalSuccess": "App 命令已授权。",
+    "commandApprovalFailed": "App 命令授权失败。",
     "commandApprovalConfirm": "授权并继续"
   },
   "apps": {

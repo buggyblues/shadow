@@ -250,6 +250,7 @@ export interface ShadowServerAppManifest {
   name: string
   description?: string
   version?: string
+  updatedAt?: string
   iconUrl: string
   iframe?: {
     entry: string
@@ -293,6 +294,9 @@ export interface ShadowServerAppIntegration {
   iconUrl?: string | null
   manifestUrl?: string | null
   manifest: ShadowServerAppManifest
+  manifestVersion?: string | null
+  manifestUpdatedAt?: string | null
+  manifestFetchedAt?: string | null
   iframeEntry?: string | null
   allowedOrigins: string[]
   apiBaseUrl: string

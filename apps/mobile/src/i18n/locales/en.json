@@ -1057,6 +1057,10 @@
     "friendshipRequest": "{{actorName}} sent you a friend request",
     "rechargeSucceeded": "Recharge succeeded",
     "rechargeSucceededBody": "{{amount}} Shrimp Coins have arrived",
+    "serverAppCommandApprovalRequested": "{{appName}} command needs approval",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}} is waiting for approval in {{serverName}}",
+    "serverAppCommandApprovalGranted": "{{appName}} command approved",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}} can now run in {{serverName}}",
     "emptyDesc": "No new messages yet"
   },
   "agentMgmt": {
@@ -1199,6 +1203,8 @@
     "commandApprovalTitle": "Authorize App Command",
     "commandApprovalMessage": "{{app}} wants to run {{command}} using {{permission}}.",
     "commandApprovalDenied": "Command authorization was cancelled.",
+    "commandApprovalSuccess": "App command authorized.",
+    "commandApprovalFailed": "App command authorization failed.",
     "commandApprovalConfirm": "Authorize"
   },
   "apps": {

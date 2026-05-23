@@ -568,6 +568,13 @@
       "when": 1780318800001,
       "tag": "0080_cloud_template_github_source",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1780318800002,
+      "tag": "0081_server_app_manifest_versions",
+      "breakpoints": true
     }
   ]
 }

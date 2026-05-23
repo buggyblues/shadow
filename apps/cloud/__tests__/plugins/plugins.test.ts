@@ -9,6 +9,8 @@ import {
   collectRuntimeEnvRequirements,
 } from '../../src/application/runtime-env-requirements.js'
 import { extractRequiredEnvVars } from '../../src/application/template-env-refs.js'
+import { collectPluginBuildEnvVars } from '../../src/config/openclaw-builder.js'
+import { collectPluginK8sArtifacts } from '../../src/infra/plugin-k8s.js'
 import {
   mergePluginFragments,
   resolveAgentPluginConfig,
@@ -225,6 +227,7 @@ describe('loadAllPlugins', () => {
       'meta-ads',
       'miclaw',
       'model-provider',
+      'nature-skills',
       'notion',
       'oceanengine',
       'opencli',
@@ -245,6 +248,7 @@ describe('loadAllPlugins', () => {
       'tencent-ads',
       'tencent-docs',
       'tencent-maps',
+      'text-to-cad',
       'vercel',
       'webflow',
       'wechat-miniprogram-skyline',
@@ -405,6 +409,8 @@ describe('loadAllPlugins', () => {
 
     const agentBrowser = registry.get('agent-browser')
     const skillDiscovery = registry.get('skill-discovery')
+    const textToCad = registry.get('text-to-cad')
+    const natureSkills = registry.get('nature-skills')
     const opencli = registry.get('opencli')
     const inferenceSh = registry.get('inference-sh')
     const aiImage = registry.get('inference-ai-image-generation')
@@ -428,6 +434,80 @@ describe('loadAllPlugins', () => {
       expect.objectContaining({
         id: 'find-skills-skill',
         url: 'https://github.com/vercel-labs/skills.git',
+      }),
+    )
+    expect(textToCad?.manifest.capabilities).toEqual(
+      expect.arrayContaining(['skill', 'cli', 'tool']),
+    )
+    expect(textToCad?.runtime?.skillSources).toContainEqual(
+      expect.objectContaining({
+        id: 'text-to-cad-skills',
+        url: 'https://github.com/earthtojake/text-to-cad.git',
+        from: 'skills',
+      }),
+    )
+    expect(textToCad?.runtime?.runtimeDependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'text-to-cad-python-prereqs',
+          packages: expect.arrayContaining(['libgl1', 'libxrender1', 'libxext6', 'libsm6']),
+        }),
+        expect.objectContaining({ id: 'text-to-cad-python-packages', kind: 'shell' }),
+        expect.objectContaining({ id: 'text-to-cad-python-compat', kind: 'shell' }),
+        expect.objectContaining({
+          id: 'text-to-cad-viewer-deps',
+          kind: 'shell',
+          phase: 'post-source',
+        }),
+        expect.objectContaining({
+          id: 'text-to-cad-skill-compat',
+          kind: 'shell',
+          phase: 'post-source',
+        }),
+      ]),
+    )
+    expect(textToCad?.runtime?.verificationChecks).toContainEqual(
+      expect.objectContaining({
+        id: 'text-to-cad-skills-mounted',
+        command: ['test', '-f', '/workspace/.agents/plugin-skills/text-to-cad/cad/SKILL.md'],
+      }),
+    )
+    expect(
+      textToCad?.k8s?.buildK8s(
+        {
+          id: 'agent-1',
+          runtime: 'openclaw',
+          use: [{ plugin: 'text-to-cad' }],
+          configuration: {},
+        },
+        {
+          agent: {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            configuration: {},
+          },
+          config: { version: '1' },
+          namespace: 'default',
+        },
+      )?.initContainers?.[0]?.image,
+    ).toBe('node:22-bookworm-slim')
+    expect(natureSkills?.manifest.capabilities).toEqual(
+      expect.arrayContaining(['skill', 'mcp', 'tool']),
+    )
+    expect(natureSkills?.runtime?.skillSources).toContainEqual(
+      expect.objectContaining({
+        id: 'nature-skills',
+        url: 'https://github.com/Yuan1z0825/nature-skills.git',
+        includePattern: 'nature-*',
+      }),
+    )
+    expect(natureSkills?.runtime?.mcpServers).toContainEqual(
+      expect.objectContaining({
+        id: 'nature-academic-search',
+        command: 'python3',
+        args: [
+          '/workspace/.agents/plugin-skills/nature-skills/nature-academic-search/mcp-server/academic_search_server.py',
+        ],
       }),
     )
 
@@ -726,6 +806,76 @@ describe('defineSkillPlugin', () => {
       transport: 'stdio',
       command: 'demo-mcp',
     })
+  })
+
+  it('should merge path-like build env vars from multiple enabled plugins', () => {
+    resetPluginRegistry()
+    const registry = getPluginRegistry()
+    registry.register(
+      defineSkillPlugin(makeManifest({ id: 'python-plugin-1' }), {}, (api) => {
+        api.onBuildEnv(() => ({ PYTHONPATH: '/opt/plugin-1/python' }))
+      }),
+    )
+    registry.register(
+      defineSkillPlugin(makeManifest({ id: 'python-plugin-2' }), {}, (api) => {
+        api.onBuildEnv(() => ({ PYTHONPATH: '/opt/plugin-2/python' }))
+      }),
+    )
+
+    const env = collectPluginBuildEnvVars(
+      {
+        id: 'agent-1',
+        name: 'Test Agent',
+        runtime: 'openclaw',
+        use: [{ plugin: 'python-plugin-1' }, { plugin: 'python-plugin-2' }],
+      } as PluginBuildContext['agent'],
+      {
+        namespace: 'test-ns',
+        agents: [],
+        use: [],
+      } as unknown as PluginBuildContext['config'],
+    )
+
+    expect(env.PYTHONPATH).toBe('/opt/plugin-1/python:/opt/plugin-2/python')
+  })
+
+  it('should merge plugin PATH env vars without hiding earlier plugin binaries', () => {
+    resetPluginRegistry()
+    const registry = getPluginRegistry()
+    const defaultPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+    const plugin1 = makePlugin(makeManifest({ id: 'runtime-plugin-1' }))
+    const plugin2 = makePlugin(makeManifest({ id: 'runtime-plugin-2' }))
+    plugin1.k8s = {
+      buildK8s: () => ({
+        envVars: [{ name: 'PATH', value: `/opt/plugin-1/bin:${defaultPath}` }],
+      }),
+    }
+    plugin2.k8s = {
+      buildK8s: () => ({
+        envVars: [{ name: 'PATH', value: `/opt/plugin-2/bin:${defaultPath}` }],
+      }),
+    }
+    registry.register(plugin1)
+    registry.register(plugin2)
+
+    const artifacts = collectPluginK8sArtifacts(
+      {
+        id: 'agent-1',
+        name: 'Test Agent',
+        runtime: 'openclaw',
+        use: [{ plugin: 'runtime-plugin-1' }, { plugin: 'runtime-plugin-2' }],
+      } as PluginBuildContext['agent'],
+      {
+        namespace: 'test-ns',
+        agents: [],
+        use: [],
+      } as unknown as PluginBuildContext['config'],
+      'test-ns',
+    )
+
+    expect(artifacts.envVars.find((env) => env.name === 'PATH')?.value).toBe(
+      `/opt/plugin-1/bin:/opt/plugin-2/bin:${defaultPath}`,
+    )
   })
 })
 

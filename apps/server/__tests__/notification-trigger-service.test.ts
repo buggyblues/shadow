@@ -130,4 +130,91 @@ describe('NotificationTriggerService', () => {
     )
     expect(notificationPlatformService.deliver).toHaveBeenCalledTimes(1)
   })
+
+  it('dispatches server app approval requests with actionable metadata', async () => {
+    await service.triggerServerAppCommandApprovalRequest({
+      ownerId: 'owner-1',
+      requesterId: 'bot-1',
+      requesterName: 'Strategy Buddy',
+      serverId: 'server-1',
+      serverName: 'Shadow Plays',
+      serverAppId: 'app-1',
+      appKey: 'shadow-cat',
+      appName: 'Cloud Cat',
+      commandName: 'feed',
+      commandTitle: 'Feed cats',
+      permission: 'cat.feed',
+      action: 'write',
+      dataClass: 'server-private',
+      subjectKind: 'buddy',
+      buddyAgentId: 'agent-1',
+      approvalMode: 'first_time',
+      channelId: 'channel-1',
+    })
+
+    expect(notificationService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'owner-1',
+        type: 'system',
+        kind: 'server_app.command_approval_requested',
+        referenceId: 'app-1',
+        referenceType: 'server_app_command_approval',
+        senderId: 'bot-1',
+        scopeServerId: 'server-1',
+        scopeChannelId: 'channel-1',
+        aggregationKey: 'server-app-command-approval:owner-1:server-1:shadow-cat:feed:agent-1',
+        delivery: expect.objectContaining({
+          aggregate: true,
+          bypassPreferences: true,
+        }),
+        metadata: expect.objectContaining({
+          appKey: 'shadow-cat',
+          commandName: 'feed',
+          buddyAgentId: 'agent-1',
+          approvalMode: 'first_time',
+        }),
+      }),
+    )
+  })
+
+  it('dispatches server app approval grants to the approved subject', async () => {
+    await service.triggerServerAppCommandApprovalGranted({
+      userId: 'bot-1',
+      reviewerId: 'owner-1',
+      serverId: 'server-1',
+      serverName: 'Shadow Plays',
+      serverAppId: 'app-1',
+      appKey: 'shadow-cat',
+      appName: 'Cloud Cat',
+      commandName: 'feed',
+      commandTitle: 'Feed cats',
+      permission: 'cat.feed',
+      action: 'write',
+      dataClass: 'server-private',
+      subjectKind: 'buddy',
+      buddyAgentId: 'agent-1',
+    })
+
+    expect(notificationService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'bot-1',
+        type: 'system',
+        kind: 'server_app.command_approval_granted',
+        referenceId: 'app-1',
+        referenceType: 'server_app',
+        senderId: 'owner-1',
+        scopeServerId: 'server-1',
+        delivery: expect.objectContaining({
+          aggregate: false,
+          bypassPreferences: true,
+        }),
+        metadata: expect.objectContaining({
+          appKey: 'shadow-cat',
+          commandName: 'feed',
+          subjectKind: 'buddy',
+          buddyAgentId: 'agent-1',
+        }),
+      }),
+    )
+  })
 })

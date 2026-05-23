@@ -552,11 +552,32 @@ export function collectPluginBuildEnvVars(
   forEachEnabledPlugin(agent, config, cwd, env, ({ pluginDef, context }) => {
     for (const fn of pluginDef._hooks.buildEnv) {
       const vars = fn(context)
-      if (vars) Object.assign(envVars, vars)
+      if (vars) mergeBuildEnvVars(envVars, vars)
     }
   })
 
   return envVars
+}
+
+const COLON_SEPARATED_ENV_KEYS = new Set(['PATH', 'PYTHONPATH', 'NODE_PATH'])
+
+function mergeColonSeparatedEnvValue(current: string | undefined, next: string): string {
+  const out: string[] = []
+  for (const part of [...(current?.split(':') ?? []), ...next.split(':')]) {
+    if (!part || out.includes(part)) continue
+    out.push(part)
+  }
+  return out.join(':')
+}
+
+function mergeBuildEnvVars(target: Record<string, string>, vars: Record<string, string>): void {
+  for (const [key, value] of Object.entries(vars)) {
+    if (COLON_SEPARATED_ENV_KEYS.has(key) && target[key]) {
+      target[key] = mergeColonSeparatedEnvValue(target[key], value)
+    } else {
+      target[key] = value
+    }
+  }
 }
 
 function mergeRuntimeExtensions(

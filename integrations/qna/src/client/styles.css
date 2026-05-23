@@ -26,9 +26,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 12% 10%, rgba(17, 103, 238, 0.1), transparent 30%),
-    radial-gradient(circle at 88% 18%, rgba(22, 183, 212, 0.1), transparent 28%), var(--bg);
+  background: linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
 }
 
 button,
@@ -205,7 +203,7 @@ textarea:focus {
 
 .shell {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 300px;
+  grid-template-columns: 250px minmax(0, 1fr) 260px;
   gap: 18px;
   width: min(1500px, 100%);
   margin: 0 auto;
@@ -235,25 +233,56 @@ textarea:focus {
   box-shadow: var(--soft-shadow);
 }
 
-.introPanel {
+.communityPanel {
   display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
   gap: 12px;
-  padding: 18px;
+  padding: 16px;
   overflow: hidden;
 }
 
-.introPanel h1 {
+.communityPanel h2 {
   margin: 0;
-  font-size: 26px;
-  line-height: 1.08;
+  font-size: 18px;
+  line-height: 1.18;
   letter-spacing: 0;
 }
 
-.introPanel p,
-.guidePanel p,
+.communityPanel p,
 .muted {
   color: var(--muted);
   line-height: 1.58;
+}
+
+.communityPanel p {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.communityStats {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.communityStats span {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fbff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.communityStats strong {
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
 }
 
 .sectionIcon {
@@ -267,7 +296,7 @@ textarea:focus {
 }
 
 .topicPanel,
-.guidePanel {
+.askPanel {
   padding: 16px;
 }
 
@@ -487,6 +516,23 @@ textarea:focus {
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
+}
+
+.askPanel {
+  display: grid;
+  gap: 7px;
+  color: var(--blue);
+}
+
+.askPanel strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.askPanel span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .backLink {

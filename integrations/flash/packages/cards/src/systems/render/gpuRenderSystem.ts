@@ -50,6 +50,7 @@ import {
   INSTANCE_STRIDE_FLOATS,
 } from '../../utils/wgslShaders'
 import { gpuTextureSystem } from './gpuTextureSystem'
+import { gpuSelectionOverlaySystem, type SelectionRect } from './selectionOverlaySystem'
 
 export type { RenderConfig as GPURenderConfig }
 
@@ -58,6 +59,7 @@ export function gpuRenderSystem(
   gpuCtx: GPUContext,
   viewport: ViewportData,
   hiddenCardIds: Set<string>,
+  marqueeRect: SelectionRect | null,
   time: number,
   config: RenderConfig,
 ): void {
@@ -67,8 +69,6 @@ export function gpuRenderSystem(
 
   const eids = [...scene.all()]
   eids.sort((a, b) => (RenderOrder.z[a] ?? 0) - (RenderOrder.z[b] ?? 0))
-
-  if (eids.length === 0) return
 
   const instData = gpuCtx.instanceData
   let numInstances = 0
@@ -141,8 +141,6 @@ export function gpuRenderSystem(
     numInstances++
   }
 
-  if (numInstances === 0) return
-
   const gd = gpuCtx.globalData
   gd[G_VIEW_OFFSET_X] = viewport.offsetX * dpr
   gd[G_VIEW_OFFSET_Y] = viewport.offsetY * dpr
@@ -152,13 +150,15 @@ export function gpuRenderSystem(
   gd[G_VIEW_H] = viewport.screenH * dpr
   queue.writeBuffer(globalBuf, 0, gd as Float32Array<ArrayBuffer>)
 
-  queue.writeBuffer(
-    instanceBuf,
-    0,
-    instData as Float32Array<ArrayBuffer>,
-    0,
-    numInstances * INSTANCE_STRIDE_FLOATS,
-  )
+  if (numInstances > 0) {
+    queue.writeBuffer(
+      instanceBuf,
+      0,
+      instData as Float32Array<ArrayBuffer>,
+      0,
+      numInstances * INSTANCE_STRIDE_FLOATS,
+    )
+  }
 
   const currentTexture = canvasCtx.getCurrentTexture()
   const encoder = device.createCommandEncoder()
@@ -174,10 +174,13 @@ export function gpuRenderSystem(
     ],
   })
 
-  renderPass.setPipeline(pipeline)
-  renderPass.setBindGroup(0, bg0)
-  renderPass.setBindGroup(1, bg1)
-  renderPass.draw(6, numInstances, 0, 0)
+  if (numInstances > 0) {
+    renderPass.setPipeline(pipeline)
+    renderPass.setBindGroup(0, bg0)
+    renderPass.setBindGroup(1, bg1)
+    renderPass.draw(6, numInstances, 0, 0)
+  }
+  gpuSelectionOverlaySystem(gpuCtx, viewport, marqueeRect, time, renderPass)
   renderPass.end()
 
   queue.submit([encoder.finish()])

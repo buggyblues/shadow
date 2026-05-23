@@ -153,6 +153,17 @@ export function setupNotificationResponseListener(): () => void {
         return
       }
 
+      if (
+        data.referenceType === 'server_app' ||
+        data.referenceType === 'server_app_command_approval'
+      ) {
+        const serverId = getServerId(data)
+        if (serverId) {
+          await navigateToServer(serverId)
+        }
+        return
+      }
+
       const channelId = getChannelId(data)
       if (channelId) {
         await navigateToChannel(channelId)

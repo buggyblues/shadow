@@ -16,6 +16,7 @@ import {
   type GrantServerAppBuddyInput,
   type InstallServerAppFromCatalogInput,
   type InstallServerAppInput,
+  type ServerAppManifestInput,
   serverAppManifestSchema,
   type UpdateServerAppAccessPolicyInput,
 } from '../validators/app-integration.schema'
@@ -97,6 +98,9 @@ function redactApp(row: Awaited<ReturnType<AppIntegrationDao['findById']>>) {
     iconUrl: row.iconUrl,
     manifestUrl: row.manifestUrl,
     manifest: row.manifest,
+    manifestVersion: row.manifestVersion ?? row.manifest.version ?? null,
+    manifestUpdatedAt: row.manifestUpdatedAt,
+    manifestFetchedAt: row.manifestFetchedAt,
     iframeEntry: row.iframeEntry,
     allowedOrigins: row.allowedOrigins,
     apiBaseUrl: row.apiBaseUrl,
@@ -130,6 +134,10 @@ interface LaunchTokenPayload {
   serverId: string
   serverAppId: string
   appKey: string
+  actorKind?: string
+  userId?: string | null
+  buddyAgentId?: string | null
+  ownerId?: string | null
   exp: number
 }
 
@@ -177,6 +185,14 @@ function serverAppAuthType(manifest: { api: { auth?: { type?: ServerAppAuthType 
 
 function hashOpaqueToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
+}
+
+function hashManifest(manifest: unknown) {
+  return createHash('sha256').update(JSON.stringify(manifest)).digest('hex')
+}
+
+function manifestTimestamp(manifest: { updatedAt?: string }) {
+  return manifest.updatedAt ? new Date(manifest.updatedAt) : null
 }
 
 export class AppIntegrationService {
@@ -255,6 +271,67 @@ export class AppIntegrationService {
       }
     }
     return manifest
+  }
+
+  private appFieldsFromManifest(manifest: ServerAppManifestInput) {
+    const iframeEntry = manifest.iframe?.entry ?? null
+    const allowedOrigins =
+      manifest.iframe?.allowedOrigins ?? (iframeEntry ? [normalizeOrigin(iframeEntry)] : [])
+    return {
+      name: manifest.name,
+      description: manifest.description ?? null,
+      iconUrl: manifest.iconUrl,
+      manifest,
+      manifestVersion: manifest.version ?? null,
+      manifestUpdatedAt: manifestTimestamp(manifest),
+      manifestFetchedAt: new Date(),
+      manifestHash: hashManifest(manifest),
+      iframeEntry,
+      allowedOrigins,
+      apiBaseUrl: manifest.api.baseUrl.replace(/\/$/, ''),
+    }
+  }
+
+  private async refreshInstalledManifest<
+    TApp extends NonNullable<Awaited<ReturnType<AppIntegrationDao['findById']>>>,
+  >(app: TApp, options: { throwOnError?: boolean } = {}) {
+    if (!app.manifestUrl) return app
+    let manifest: ServerAppManifestInput
+    try {
+      const rawManifest = await this.fetchManifest(app.manifestUrl)
+      manifest = this.validateManifest(rawManifest)
+    } catch (error) {
+      if (options.throwOnError) throw error
+      this.deps.logger.warn(
+        { appKey: app.appKey, serverAppId: app.id, error },
+        'Server App manifest refresh failed',
+      )
+      return app
+    }
+    if (manifest.appKey !== app.appKey) {
+      const error = Object.assign(new Error('Manifest appKey cannot change during app refresh'), {
+        status: 422,
+      })
+      if (options.throwOnError) throw error
+      this.deps.logger.warn({ appKey: app.appKey, serverAppId: app.id }, error.message)
+      return app
+    }
+
+    const nextFields = this.appFieldsFromManifest(manifest)
+    if (app.manifestHash && app.manifestHash === nextFields.manifestHash) return app
+
+    const updated = await this.deps.appIntegrationDao.updateManifest(app.id, nextFields)
+    return (updated ?? app) as TApp
+  }
+
+  private async findFreshApp(
+    serverId: string,
+    appKey: string,
+    options: { throwOnRefreshError?: boolean } = {},
+  ) {
+    const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
+    if (!app) return null
+    return this.refreshInstalledManifest(app, { throwOnError: options.throwOnRefreshError })
   }
 
   private launchSecret() {
@@ -449,20 +526,12 @@ export class AppIntegrationService {
 
     const rawManifest = input.manifest ?? (await this.fetchManifest(input.manifestUrl!))
     const manifest = this.validateManifest(rawManifest)
-    const iframeEntry = manifest.iframe?.entry ?? null
-    const allowedOrigins =
-      manifest.iframe?.allowedOrigins ?? (iframeEntry ? [normalizeOrigin(iframeEntry)] : [])
+    const manifestFields = this.appFieldsFromManifest(manifest)
     const app = await this.deps.appIntegrationDao.upsert({
       serverId,
       appKey: manifest.appKey,
-      name: manifest.name,
-      description: manifest.description ?? null,
-      iconUrl: manifest.iconUrl,
       manifestUrl: input.manifestUrl ?? null,
-      manifest,
-      iframeEntry,
-      allowedOrigins,
-      apiBaseUrl: manifest.api.baseUrl.replace(/\/$/, ''),
+      ...manifestFields,
       defaultPermissions: manifestDefaultPermissions(manifest),
       defaultApprovalMode: manifestDefaultApprovalMode(manifest),
       installedByUserId: requireUserBoundActor(actor),
@@ -473,11 +542,17 @@ export class AppIntegrationService {
 
   async createLaunch(serverIdOrSlug: string, appKey: string, actor: Actor) {
     const app = await this.get(serverIdOrSlug, appKey, actor)
+    const buddyAgentId = await this.actorBuddyAgentId(actor)
+    const ownerId = await this.actorOwnerUserId(actor, buddyAgentId)
     const exp = Math.floor(Date.now() / 1000) + 600
     const launchToken = this.createLaunchToken({
       serverId: app.serverId,
       serverAppId: app.id,
       appKey: app.appKey,
+      actorKind: actor.kind,
+      userId: actor.kind === 'system' ? null : actor.userId,
+      buddyAgentId,
+      ownerId,
       exp,
     })
     const eventStreamPath = `/api/servers/${encodeURIComponent(app.serverId)}/apps/${encodeURIComponent(
@@ -512,6 +587,32 @@ export class AppIntegrationService {
     }
   }
 
+  async introspectLaunchToken(serverIdOrSlug: string, appKey: string, token: string) {
+    try {
+      const { app, payload } = await this.getEventStreamContext(serverIdOrSlug, appKey, token)
+      return {
+        active: true,
+        token_type: 'Bearer',
+        client_id: app.appKey,
+        exp: payload.exp,
+        shadow: {
+          protocol: 'shadow.app/1',
+          serverId: payload.serverId,
+          serverAppId: payload.serverAppId,
+          appKey: payload.appKey,
+          actor: {
+            kind: payload.actorKind ?? 'unknown',
+            userId: payload.userId ?? null,
+            buddyAgentId: payload.buddyAgentId ?? null,
+            ownerId: payload.ownerId ?? null,
+          },
+        },
+      }
+    } catch {
+      return { active: false }
+    }
+  }
+
   async list(serverIdOrSlug: string, actor: Actor) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)
@@ -522,7 +623,7 @@ export class AppIntegrationService {
   async get(serverIdOrSlug: string, appKey: string, actor: Actor) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)
-    const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
+    const app = await this.findFreshApp(serverId, appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     const grants = await this.deps.appIntegrationDao.listBuddyGrants(app.id)
     return {
@@ -546,7 +647,7 @@ export class AppIntegrationService {
   ) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.requireServerAdmin(actor, serverId)
-    const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
+    const app = await this.findFreshApp(serverId, appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
 
     const agent = await this.deps.agentDao.findById(input.buddyAgentId)
@@ -595,7 +696,7 @@ export class AppIntegrationService {
   ) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.requireServerAdmin(actor, serverId)
-    const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
+    const app = await this.findFreshApp(serverId, appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     this.validateKnownPermissions(app, input.defaultPermissions)
 
@@ -618,7 +719,7 @@ export class AppIntegrationService {
   ) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)
-    const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
+    const app = await this.findFreshApp(serverId, appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     const command = app.manifest.commands.find((item) => item.name === input.commandName)
     if (!command) throw Object.assign(new Error('App command not found'), { status: 404 })
@@ -990,9 +1091,13 @@ export class AppIntegrationService {
   }) {
     const serverId = await this.resolveServerId(input.serverIdOrSlug)
     await this.deps.policyService.requireServerMember(input.actor, serverId)
-    const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, input.appKey)
+    let app = await this.findFreshApp(serverId, input.appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
-    const command = app.manifest.commands.find((item) => item.name === input.commandName)
+    let command = app.manifest.commands.find((item) => item.name === input.commandName)
+    if (!command && app.manifestUrl) {
+      app = await this.refreshInstalledManifest(app, { throwOnError: true })
+      command = app.manifest.commands.find((item) => item.name === input.commandName)
+    }
     if (!command) throw Object.assign(new Error('App command not found'), { status: 404 })
     if (input.multipart) {
       if (command.input !== 'multipart' && command.binary?.supported !== true) {

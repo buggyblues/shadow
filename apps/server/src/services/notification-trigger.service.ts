@@ -355,6 +355,106 @@ export class NotificationTriggerService {
     })
   }
 
+  async triggerServerAppCommandApprovalRequest(input: {
+    ownerId: string
+    requesterId: string
+    requesterName: string
+    serverId: string
+    serverName?: string | null
+    serverAppId?: string | null
+    appKey: string
+    appName: string
+    commandName: string
+    commandTitle: string
+    commandDescription?: string | null
+    permission: string
+    action: string
+    dataClass: string
+    subjectKind: 'user' | 'buddy'
+    buddyAgentId?: string | null
+    approvalMode: string
+    channelId?: string | null
+  }) {
+    return this.dispatch({
+      userId: input.ownerId,
+      type: 'system',
+      kind: 'server_app.command_approval_requested',
+      fallbackBody: `${input.requesterName} requested approval for ${input.commandTitle}.`,
+      referenceId: input.serverAppId ?? input.appKey,
+      referenceType: 'server_app_command_approval',
+      senderId: input.requesterId,
+      scopeServerId: input.serverId,
+      scopeChannelId: input.channelId,
+      aggregationKey: `server-app-command-approval:${input.ownerId}:${input.serverId}:${input.appKey}:${input.commandName}:${input.buddyAgentId ?? input.requesterId}`,
+      aggregate: true,
+      bypassPreferences: true,
+      metadata: {
+        actorName: input.requesterName,
+        serverId: input.serverId,
+        serverName: input.serverName,
+        serverAppId: input.serverAppId,
+        appKey: input.appKey,
+        appName: input.appName,
+        commandName: input.commandName,
+        commandTitle: input.commandTitle,
+        commandDescription: input.commandDescription,
+        permission: input.permission,
+        action: input.action,
+        dataClass: input.dataClass,
+        subjectKind: input.subjectKind,
+        buddyAgentId: input.buddyAgentId,
+        approvalMode: input.approvalMode,
+        channelId: input.channelId,
+      },
+    })
+  }
+
+  async triggerServerAppCommandApprovalGranted(input: {
+    userId: string
+    reviewerId: string
+    serverId: string
+    serverName?: string | null
+    serverAppId?: string | null
+    appKey: string
+    appName: string
+    commandName: string
+    commandTitle: string
+    commandDescription?: string | null
+    permission: string
+    action?: string | null
+    dataClass?: string | null
+    subjectKind: 'user' | 'buddy'
+    buddyAgentId?: string | null
+  }) {
+    return this.dispatch({
+      userId: input.userId,
+      type: 'system',
+      kind: 'server_app.command_approval_granted',
+      fallbackBody: `${input.commandTitle} is approved.`,
+      referenceId: input.serverAppId ?? input.appKey,
+      referenceType: 'server_app',
+      senderId: input.reviewerId,
+      scopeServerId: input.serverId,
+      aggregate: false,
+      bypassPreferences: true,
+      metadata: {
+        serverId: input.serverId,
+        serverName: input.serverName,
+        serverAppId: input.serverAppId,
+        appKey: input.appKey,
+        appName: input.appName,
+        commandName: input.commandName,
+        commandTitle: input.commandTitle,
+        commandDescription: input.commandDescription,
+        permission: input.permission,
+        action: input.action,
+        dataClass: input.dataClass,
+        subjectKind: input.subjectKind,
+        buddyAgentId: input.buddyAgentId,
+      },
+    })
+  }
+
   async triggerChannelMemberAdded(input: {
     userId: string
     actorId: string

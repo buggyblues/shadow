@@ -48,6 +48,10 @@ function isLocalDevMode() {
   return new URLSearchParams(location.search).get('flash_dev') === '1' || import.meta.env.DEV
 }
 
+function shadowLaunchToken() {
+  return new URLSearchParams(location.search).get('shadow_launch')
+}
+
 export function flashAccessMode() {
   if (canUseBridge()) return 'shadow'
   if (isLocalDevMode()) return 'local-dev'
@@ -175,8 +179,16 @@ export function attachRoom(input: RoomsAttachInput) {
 }
 
 export function subscribeBoard(boardId: string, onEvent: (event: FlashRealtimeEvent) => void) {
-  if (!isLocalDevMode()) return () => undefined
-  const source = new EventSource(`/api/boards/${encodeURIComponent(boardId)}/events`)
+  const params = new URLSearchParams()
+  const launchToken = shadowLaunchToken()
+  if (launchToken) params.set('shadow_launch', launchToken)
+  if (!isLocalDevMode() && !launchToken) return () => undefined
+  const queryString = params.toString()
+  const query = queryString ? `?${queryString}` : ''
+  const source = new EventSource(`/api/boards/${encodeURIComponent(boardId)}/events${query}`)
+  source.addEventListener('flash.events.appended', (event) => {
+    onEvent(JSON.parse((event as MessageEvent).data) as FlashRealtimeEvent)
+  })
   source.addEventListener('flash.board.updated', (event) => {
     onEvent(JSON.parse((event as MessageEvent).data) as FlashRealtimeEvent)
   })
@@ -199,6 +211,19 @@ export function subscribeAppEvents(
 ) {
   const params = new URLSearchParams(location.search)
   const eventStream = params.get('shadow_event_stream')
+  const unsubscribers: Array<() => void> = []
+
+  if (boardId) {
+    unsubscribers.push(
+      subscribeBoard(boardId, (event) => {
+        const payload = event.payload as Partial<FlashBoardEventsResult> | undefined
+        if (event.type === 'flash.events.appended' && payload?.events) {
+          onEvent({ type: 'flash.events', events: payload.events, cursor: payload.cursor ?? 0 })
+        }
+      }),
+    )
+  }
+
   if (eventStream) {
     const source = new EventSource(eventStream)
     source.addEventListener('server_app.command.completed', (event) => {
@@ -209,16 +234,13 @@ export function subscribeAppEvents(
         onEvent({ type: 'shadow.command.completed', command: null })
       }
     })
-    return () => source.close()
+    unsubscribers.push(() => source.close())
   }
 
-  if (!boardId || !isLocalDevMode()) return () => undefined
-  return subscribeBoard(boardId, (event) => {
-    const payload = event.payload as Partial<FlashBoardEventsResult> | undefined
-    if (event.type === 'flash.events.appended' && payload?.events) {
-      onEvent({ type: 'flash.events', events: payload.events, cursor: payload.cursor ?? 0 })
-    }
-  })
+  if (unsubscribers.length === 0) return () => undefined
+  return () => {
+    for (const unsubscribe of unsubscribers) unsubscribe()
+  }
 }
 
 declare global {

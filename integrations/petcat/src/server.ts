@@ -5,12 +5,15 @@ import type { ShadowServerAppCommandContext, ShadowServerAppCommandName } from '
 import { Hono } from 'hono'
 import {
   adoptCat,
-  autoFeed,
   careForCat,
   getCat,
   leaderboard,
   listAssets,
   listCats,
+  playMinigame,
+  runAdventure,
+  trainCat,
+  upgradeFurniture,
 } from './data.js'
 import { manifest, shadowApp } from './manifest.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
@@ -40,6 +43,11 @@ const commands = shadowApp.defineCommands({
     if (!result) throw shadowApp.error(404, 'cat_not_found')
     return result
   },
+  'cats.pet': (input, context) => {
+    const result = careForCat({ catId: input.catId, action: 'pet', actor: context.actor })
+    if (!result) throw shadowApp.error(404, 'cat_not_found')
+    return result
+  },
   'cats.play': (input, context) => {
     const result = careForCat({ catId: input.catId, action: 'play', actor: context.actor })
     if (!result) throw shadowApp.error(404, 'cat_not_found')
@@ -55,9 +63,26 @@ const commands = shadowApp.defineCommands({
     if (!result) throw shadowApp.error(404, 'cat_not_found')
     return result
   },
-  'cats.auto_feed': (input, context) => ({
-    ...autoFeed({ ...input, actor: context.actor }),
-  }),
+  'cats.train': (input, context) => {
+    const result = trainCat({ catId: input.catId, route: input.route, actor: context.actor })
+    if (!result) throw shadowApp.error(404, 'cat_not_found')
+    return result
+  },
+  'cats.minigame': (input, context) => {
+    const result = playMinigame({ catId: input.catId, actor: context.actor })
+    if (!result) throw shadowApp.error(404, 'cat_not_found')
+    return result
+  },
+  'cats.adventure': (input, context) => {
+    const result = runAdventure({ catId: input.catId, mapId: input.mapId, actor: context.actor })
+    if (!result) throw shadowApp.error(404, 'cat_not_found')
+    return result
+  },
+  'cats.furniture.upgrade': (input, context) => {
+    const result = upgradeFurniture({ catId: input.catId, actor: context.actor })
+    if (!result) throw shadowApp.error(404, 'cat_not_found')
+    return result
+  },
   'cats.leaderboard': (input) => ({ leaderboard: leaderboard(input) }),
 })
 
@@ -102,6 +127,7 @@ app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
 app.get('/assets/*', serveStatic({ root: './dist/client' }))
 app.get('/cats/*', serveStatic({ root: './public' }))
+app.get('/game/*', serveStatic({ root: './public' }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 
@@ -131,4 +157,4 @@ app.post('/api/shadow/commands/:commandName', async (c) => {
 
 serve({ fetch: app.fetch, port })
 
-console.log(`Cloud Cat listening on http://localhost:${port}`)
+console.log(`StarPet Inn listening on http://localhost:${port}`)

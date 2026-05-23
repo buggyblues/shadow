@@ -46,6 +46,7 @@ export function linkSystem(eid: number): boolean {
   const { padX, contentW } = layout
   const { accentColor } = styleStore[eid]!
   const { card } = cardDataStore[eid]!
+  const url = safeStr(meta.url)
 
   // ── Title row ─────────────────────────────────────────
   if (remainingH(layout) > 12 && !isDuplicateTitle(meta.title, card.title)) {
@@ -55,7 +56,7 @@ export function linkSystem(eid: number): boolean {
     const iconY = layout.cursorY + iconR + 2
     drawLinkIcon(ctx, iconX, iconY, iconR, hexAlpha(accentColor, 0.8))
 
-    const title = safeStr(meta.title || meta.url)
+    const title = safeStr(meta.title || url || card.title)
     ctx.font = fontStr(9.5, 'bold', '', '"Noto Sans SC", sans-serif')
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
@@ -69,12 +70,13 @@ export function linkSystem(eid: number): boolean {
   }
 
   // ── Source badge ───────────────────────────────────────
-  if (meta.source && remainingH(layout) > 10) {
+  const source = safeStr(meta.source)
+  if (source && remainingH(layout) > 10) {
     ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
     ctx.fillStyle = hexAlpha(accentColor, 0.55)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
-    ctx.fillText(meta.source.slice(0, 24), padX, layout.cursorY + 1)
+    ctx.fillText(source.slice(0, 24), padX, layout.cursorY + 1)
     advance(layout, 10)
   }
 
@@ -98,8 +100,8 @@ export function linkSystem(eid: number): boolean {
   }
 
   // ── URL truncated ─────────────────────────────────────
-  if (remainingH(layout) > 9) {
-    const urlDisplay = meta.url.replace(/^https?:\/\//, '').slice(0, 44)
+  if (url && remainingH(layout) > 9) {
+    const urlDisplay = url.replace(/^https?:\/\//, '').slice(0, 44)
     ctx.font = fontStr(6.5, '', '', '"Courier New", monospace')
     ctx.fillStyle = hexAlpha(accentColor, 0.4)
     ctx.textAlign = 'left'

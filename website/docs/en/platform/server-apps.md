@@ -39,11 +39,12 @@ Let's walk through a real manifest — a support desk called Demo Desk — and e
   "name": "Demo Desk",
   "description": "A support desk inside a Shadow server.",
   "version": "1.0.0",
+  "updatedAt": "2026-05-21T00:00:00.000Z",
   "iconUrl": "https://desk.example.com/assets/icon.png"
 }
 ```
 
-The top of the manifest is metadata. `appKey` is the stable name Buddies and the CLI will use — pick something short and descriptive. Everything else is what server members see when they browse available apps.
+The top of the manifest is metadata. `appKey` is the stable name Buddies and the CLI will use — pick something short and descriptive. `version` and `updatedAt` let Shadow detect a deployed update and refresh the installed manifest automatically before command lookup, which prevents old installs from failing with "App command not found" after you ship a new command.
 
 ```json
 "iframe": {
