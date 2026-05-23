@@ -10,11 +10,12 @@ import {
   Spinner,
 } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams } from '@tanstack/react-router'
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { AppWindow, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiError, fetchApi } from '../lib/api'
+import type { RouteSearch } from '../lib/copilot-route'
 import { leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 
@@ -93,6 +94,7 @@ export function ServerAppsPageRoute({
 }: ServerAppsPageRouteProps = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const routeSearch = useSearch({ strict: false }) as RouteSearch
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [lastActiveApp, setLastActiveApp] = useState<{
     serverSlug: string
@@ -144,9 +146,10 @@ export function ServerAppsPageRoute({
     navigate({
       to: '/servers/$serverSlug/apps/$appKey',
       params: { serverSlug, appKey: apps[0].appKey },
+      search: routeSearch,
       replace: true,
     })
-  }, [active, effectiveAppKey, apps, isLoading, navigate, serverSlug])
+  }, [active, effectiveAppKey, apps, isLoading, navigate, routeSearch, serverSlug])
 
   const { data: launch, isLoading: isLaunchLoading } = useQuery({
     queryKey: ['server-app-launch', serverSlug, activeApp?.appKey],

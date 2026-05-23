@@ -1,6 +1,6 @@
 # Animal Spin Wheel
 
-Animal Spin Wheel is a copyable Shadow Server App demo with a weighted three-spin game, JSON persistence, and a participant leaderboard.
+Animal Spin Wheel is a copyable Server App demo with a weighted three-spin game, JSON persistence, and a participant leaderboard.
 
 ```bash
 pnpm -C integrations/wheel typegen

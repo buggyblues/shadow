@@ -5,7 +5,7 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
   appKey: 'shadow-quiz',
-  name: 'Shadow Quiz',
+  name: 'Quiz',
   description:
     'A quiz Server App for publishing answer-keyed quizzes, step-by-step submissions, and grader review by people or Buddies.',
   version: '1.0.0',

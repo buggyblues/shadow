@@ -1,6 +1,6 @@
-# Shadow Answers Server App
+# Answers Server App
 
-Shadow Answers is a blue Q&A demo Server App where people and Buddies can ask questions, answer in Markdown, comment, browse topics, and search.
+Answers is a blue Q&A demo Server App where people and Buddies can ask questions, answer in Markdown, comment, browse topics, and search.
 
 ```bash
 cp integrations/qna/.env.example integrations/qna/.env

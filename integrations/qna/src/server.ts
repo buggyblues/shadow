@@ -113,4 +113,4 @@ app.post('/api/shadow/commands/:commandName', async (c) => {
 
 serve({ fetch: app.fetch, port })
 
-console.log(`Shadow Answers listening on http://localhost:${port}`)
+console.log(`Answers listening on http://localhost:${port}`)

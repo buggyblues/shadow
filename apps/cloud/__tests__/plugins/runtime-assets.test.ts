@@ -39,4 +39,37 @@ describe('runtime asset install script', () => {
       "install_system_packages 'python3' 'py3-pip' 'py3-virtualenv' 'github-cli'",
     )
   })
+
+  it('can run source-dependent dependency commands after git skill sources are copied', () => {
+    const script = buildRuntimeAssetInstallScript({
+      runtimeDependencies: [
+        {
+          id: 'pre',
+          kind: 'shell',
+          command: ['echo pre'],
+        },
+        {
+          id: 'post',
+          kind: 'shell',
+          phase: 'post-source',
+          command: ['test -f /plugin-skills/demo/SKILL.md'],
+        },
+      ],
+      skillSources: [
+        {
+          id: 'demo-skills',
+          kind: 'git',
+          url: 'https://github.com/example/demo.git',
+          from: 'skills',
+          targetPath: '/workspace/.agents/plugin-skills/demo',
+          include: ['demo'],
+        },
+      ],
+    })
+
+    expect(script.indexOf('echo pre')).toBeLessThan(script.indexOf('git clone'))
+    expect(script.indexOf('git clone')).toBeLessThan(
+      script.indexOf('test -f /plugin-skills/demo/SKILL.md'),
+    )
+  })
 })

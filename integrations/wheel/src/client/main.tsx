@@ -33,8 +33,8 @@ function App() {
       <section className="heroPanel">
         <div className="heroCopy">
           <span className="eyebrow">Animal Spin Wheel</span>
-          <h1>Spin three times and climb the leaderboard.</h1>
-          <p>Each animal has a weighted probability and score. Every completed round is saved.</p>
+          <h1>Spin room</h1>
+          <p>Enter a participant, run a three-spin round, then compare scores with the channel.</p>
           <div className="nameRow">
             <input
               value={participantName}

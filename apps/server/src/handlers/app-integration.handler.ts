@@ -27,6 +27,15 @@ function approvalPayload(error: unknown): Record<string, unknown> | null {
   return approval as Record<string, unknown>
 }
 
+function approvalString(approval: Record<string, unknown>, key: string) {
+  const value = approval[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
 async function serverAppApprovalTargetUserId(
   container: AppContainer,
   actor: Actor,
@@ -43,6 +52,30 @@ async function serverAppApprovalTargetUserId(
   return actor.userId
 }
 
+function hasRealtimeUserRoom(container: AppContainer, userId: string) {
+  try {
+    const io = container.resolve('io')
+    return (io.sockets.adapter.rooms.get(`user:${userId}`)?.size ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
+async function findServerForNotification(container: AppContainer, serverIdOrSlug: string) {
+  const serverDao = container.resolve('serverDao')
+  return isUuid(serverIdOrSlug)
+    ? await serverDao.findById(serverIdOrSlug)
+    : await serverDao.findBySlug(serverIdOrSlug)
+}
+
+async function userDisplayName(container: AppContainer, userId: string) {
+  const user = await container
+    .resolve('userDao')
+    .findById(userId)
+    .catch(() => null)
+  return user?.displayName ?? user?.username ?? 'Someone'
+}
+
 async function emitServerAppApprovalRequired(
   container: AppContainer,
   actor: Actor,
@@ -54,13 +87,113 @@ async function emitServerAppApprovalRequired(
   const targetUserId = await serverAppApprovalTargetUserId(container, actor)
   if (!targetUserId) return
 
-  container
-    .resolve('io')
-    .to(`user:${targetUserId}`)
-    .emit('server-app:approval-required', {
-      ...approval,
-      requestedAt: new Date().toISOString(),
-    })
+  const requestedAt = new Date().toISOString()
+  const payload = { ...approval, requestedAt }
+  if (hasRealtimeUserRoom(container, targetUserId)) {
+    container.resolve('io').to(`user:${targetUserId}`).emit('server-app:approval-required', payload)
+    return
+  }
+
+  const serverId = approvalString(approval, 'serverId')
+  const appKey = approvalString(approval, 'appKey')
+  const appName = approvalString(approval, 'appName')
+  const commandName = approvalString(approval, 'commandName')
+  const commandTitle = approvalString(approval, 'commandTitle') ?? commandName
+  const permission = approvalString(approval, 'permission')
+  const action = approvalString(approval, 'action')
+  const dataClass = approvalString(approval, 'dataClass')
+  const subjectKind = approvalString(approval, 'subjectKind')
+  const approvalMode = approvalString(approval, 'approvalMode')
+  if (
+    !serverId ||
+    !appKey ||
+    !appName ||
+    !commandName ||
+    !commandTitle ||
+    !permission ||
+    !action ||
+    !dataClass ||
+    (subjectKind !== 'user' && subjectKind !== 'buddy') ||
+    !approvalMode
+  ) {
+    return
+  }
+
+  const [server, requesterName] = await Promise.all([
+    findServerForNotification(container, serverId),
+    userDisplayName(container, actor.userId),
+  ])
+  await container.resolve('notificationTriggerService').triggerServerAppCommandApprovalRequest({
+    ownerId: targetUserId,
+    requesterId: actor.userId,
+    requesterName,
+    serverId,
+    serverName: server?.name,
+    serverAppId: approvalString(approval, 'serverAppId'),
+    appKey,
+    appName,
+    commandName,
+    commandTitle,
+    commandDescription: approvalString(approval, 'commandDescription'),
+    permission,
+    action,
+    dataClass,
+    subjectKind,
+    buddyAgentId: approvalString(approval, 'buddyAgentId'),
+    approvalMode,
+    channelId: approvalString(approval, 'channelId'),
+  })
+}
+
+async function notifyServerAppApprovalGranted(
+  container: AppContainer,
+  actor: Actor,
+  input: {
+    serverIdOrSlug: string
+    appKey: string
+    commandName: string
+    result: {
+      consent?: {
+        serverAppId?: string | null
+        permission?: string | null
+        subjectKind?: string | null
+        subjectUserId?: string | null
+        buddyAgentId?: string | null
+      }
+    }
+  },
+) {
+  if (actor.kind === 'system') return
+  const subjectUserId = input.result.consent?.subjectUserId
+  if (!subjectUserId || subjectUserId === actor.userId) return
+
+  const server = await findServerForNotification(container, input.serverIdOrSlug)
+  if (!server?.id) return
+  const app = await container
+    .resolve('appIntegrationDao')
+    .findByServerAndKey(server.id, input.appKey)
+    .catch(() => null)
+  const command = app?.manifest.commands.find((item) => item.name === input.commandName)
+  const subjectKind = input.result.consent?.subjectKind
+  if (subjectKind !== 'user' && subjectKind !== 'buddy') return
+
+  await container.resolve('notificationTriggerService').triggerServerAppCommandApprovalGranted({
+    userId: subjectUserId,
+    reviewerId: actor.userId,
+    serverId: server.id,
+    serverName: server.name,
+    serverAppId: input.result.consent?.serverAppId ?? app?.id,
+    appKey: input.appKey,
+    appName: app?.name ?? input.appKey,
+    commandName: input.commandName,
+    commandTitle: command?.title ?? input.commandName,
+    commandDescription: command?.description ?? null,
+    permission: input.result.consent?.permission ?? command?.permission ?? '',
+    action: command?.action,
+    dataClass: command?.dataClass,
+    subjectKind,
+    buddyAgentId: input.result.consent?.buddyAgentId,
+  })
 }
 
 async function parseIntrospectionToken(c: Context) {
@@ -164,6 +297,18 @@ export function createAppIntegrationHandler(container: AppContainer) {
     const token = await parseIntrospectionToken(c)
     if (!token) return c.json({ active: false })
     const result = await appIntegrationService.introspectCommandToken(
+      c.req.param('serverId'),
+      c.req.param('appKey'),
+      token,
+    )
+    return c.json(result)
+  })
+
+  handler.post('/servers/:serverId/apps/:appKey/launch/introspect', async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const token = await parseIntrospectionToken(c)
+    if (!token) return c.json({ active: false })
+    const result = await appIntegrationService.introspectLaunchToken(
       c.req.param('serverId'),
       c.req.param('appKey'),
       token,
@@ -280,12 +425,19 @@ export function createAppIntegrationHandler(container: AppContainer) {
     zValidator('json', approveServerAppCommandSchema),
     async (c) => {
       const appIntegrationService = container.resolve('appIntegrationService')
+      const input = c.req.valid('json')
       const result = await appIntegrationService.approveCommandAccess(
         c.req.param('serverId'),
         c.req.param('appKey'),
         c.get('actor'),
-        c.req.valid('json'),
+        input,
       )
+      await notifyServerAppApprovalGranted(container, c.get('actor'), {
+        serverIdOrSlug: c.req.param('serverId'),
+        appKey: c.req.param('appKey'),
+        commandName: input.commandName,
+        result,
+      })
       return c.json(result, 201)
     },
   )

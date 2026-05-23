@@ -1,14 +1,19 @@
 import { GlassPanel } from '@shadowob/ui'
 import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Outlet, useLocation, useNavigate, useParams } from '@tanstack/react-router'
+import { Outlet, useLocation, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { type PointerEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
 import { ServerLandingPanel } from '../components/server/server-landing'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
+import {
+  getCopilotChannelIdFromSearch,
+  type RouteSearch,
+  withCopilotChannelSearch,
+} from '../lib/copilot-route'
 import { clearLastChannelId } from '../lib/last-channel'
 import { useChatStore } from '../stores/chat.store'
 import { useUIStore } from '../stores/ui.store'
@@ -69,6 +74,30 @@ interface ChannelBootstrap {
 
 const SERVER_ROUTE_STALE_MS = 5 * 60 * 1000
 const SERVER_ROUTE_GC_MS = 30 * 60 * 1000
+const COPILOT_PANEL_WIDTH_KEY = 'shadow.copilot.channelPanelWidth'
+const COPILOT_DEFAULT_CHANNEL_WIDTH = 360
+const COPILOT_MIN_CHANNEL_WIDTH = 280
+const COPILOT_MIN_APP_WIDTH = 420
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function readSavedCopilotPanelWidth() {
+  if (typeof window === 'undefined') return COPILOT_DEFAULT_CHANNEL_WIDTH
+  const value = Number(window.localStorage.getItem(COPILOT_PANEL_WIDTH_KEY))
+  return Number.isFinite(value)
+    ? clamp(value, COPILOT_MIN_CHANNEL_WIDTH, 720)
+    : COPILOT_DEFAULT_CHANNEL_WIDTH
+}
+
+function persistCopilotPanelWidth(width: number) {
+  try {
+    window.localStorage.setItem(COPILOT_PANEL_WIDTH_KEY, String(Math.round(width)))
+  } catch {
+    // Panel width persistence is non-critical.
+  }
+}
 
 function getServerAppKeyFromPath(pathname: string) {
   const match = pathname.match(/\/servers\/[^/]+\/apps\/([^/?#]+)/u)
@@ -77,6 +106,86 @@ function getServerAppKeyFromPath(pathname: string) {
     return decodeURIComponent(match[1])
   } catch {
     return match[1]
+  }
+}
+
+function useCopilotPanelResize() {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    startX: number
+    startWidth: number
+    maxWidth: number
+  } | null>(null)
+  const [channelWidth, setChannelWidth] = useState(readSavedCopilotPanelWidth)
+  const [isResizing, setIsResizing] = useState(false)
+
+  useEffect(() => {
+    if (!isResizing || typeof document === 'undefined') return
+    const previousCursor = document.body.style.cursor
+    const previousUserSelect = document.body.style.userSelect
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousUserSelect
+    }
+  }, [isResizing])
+
+  const handlePointerDown = useCallback(
+    (event: PointerEvent<HTMLButtonElement>) => {
+      const bounds = containerRef.current?.getBoundingClientRect()
+      if (!bounds) return
+      const maxWidth = Math.max(COPILOT_MIN_CHANNEL_WIDTH, bounds.width - COPILOT_MIN_APP_WIDTH)
+      const startWidth = clamp(channelWidth, COPILOT_MIN_CHANNEL_WIDTH, maxWidth)
+      dragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startWidth,
+        maxWidth,
+      }
+      event.currentTarget.setPointerCapture(event.pointerId)
+      event.preventDefault()
+      setIsResizing(true)
+    },
+    [channelWidth],
+  )
+
+  const handlePointerMove = useCallback((event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const nextWidth = clamp(
+      drag.startWidth + event.clientX - drag.startX,
+      COPILOT_MIN_CHANNEL_WIDTH,
+      drag.maxWidth,
+    )
+    setChannelWidth(nextWidth)
+  }, [])
+
+  const finishResize = useCallback((event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    dragRef.current = null
+    setIsResizing(false)
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+    setChannelWidth((current) => {
+      const nextWidth = clamp(current, COPILOT_MIN_CHANNEL_WIDTH, drag.maxWidth)
+      persistCopilotPanelWidth(nextWidth)
+      return nextWidth
+    })
+  }, [])
+
+  return {
+    channelWidth,
+    containerRef,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp: finishResize,
+    isResizing,
   }
 }
 
@@ -96,10 +205,12 @@ export function ServerLayout() {
     appKey?: string
   }
   const location = useLocation()
+  const routeSearch = useSearch({ strict: false }) as RouteSearch
   const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
   const { mobileView, copilotChannel, openCopilotChannel, closeCopilotChannel } = useUIStore()
   const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
   const [stableServerMeta, setStableServerMeta] = useState<ServerMeta | null>(null)
+  const copilotResize = useCopilotPanelResize()
 
   const {
     data: serverAccess,
@@ -252,10 +363,19 @@ export function ServerLayout() {
           : channelId
             ? { serverSlug: serverMeta.slug, channelId }
             : { serverSlug: serverMeta.slug },
+        search: routeSearch,
         replace: true,
       })
     }
-  }, [channelId, location.pathname, navigate, routeAppKey, serverMeta?.slug, serverSlug])
+  }, [
+    channelId,
+    location.pathname,
+    navigate,
+    routeAppKey,
+    routeSearch,
+    serverMeta?.slug,
+    serverSlug,
+  ])
 
   // Sync server to store
   useEffect(() => {
@@ -298,10 +418,18 @@ export function ServerLayout() {
       ? `#${channel?.name ?? routeChannel?.name} · ${serverMeta?.name ?? t('server.home')}`
       : (serverMeta?.name ?? t('common.selectServerToChat'))
   const isServerAppsRoute = /\/servers\/[^/]+\/apps(?:\/|$)/u.test(location.pathname)
-  const isCopilotMode =
-    isServerAppsRoute &&
-    !!copilotChannel?.channelId &&
+  const routeCopilotChannelId = getCopilotChannelIdFromSearch(routeSearch)
+  const routeServerSlug = serverMeta?.slug ?? serverSlug
+  const copilotMatchesServer =
+    !!copilotChannel &&
     (copilotChannel.serverSlug === serverSlug || copilotChannel.serverSlug === serverMeta?.slug)
+  const activeCopilotChannelId =
+    isServerAppsRoute && copilotMatchesServer
+      ? copilotChannel.channelId
+      : isServerAppsRoute
+        ? routeCopilotChannelId
+        : null
+  const isCopilotMode = isServerAppsRoute && Boolean(activeCopilotChannelId)
   const isServerMember = serverAccess?.isMember === true
   const shouldRenderChannelSidebar = !isCopilotMode && isServerMember
 
@@ -312,6 +440,25 @@ export function ServerLayout() {
     staleTime: SERVER_ROUTE_STALE_MS,
     gcTime: SERVER_ROUTE_GC_MS,
   })
+
+  useEffect(() => {
+    if (!isServerAppsRoute || !routeCopilotChannelId) return
+    if (
+      copilotChannel?.channelId === routeCopilotChannelId &&
+      (copilotChannel.serverSlug === serverSlug || copilotChannel.serverSlug === serverMeta?.slug)
+    ) {
+      return
+    }
+    openCopilotChannel(serverSlug, routeCopilotChannelId)
+  }, [
+    copilotChannel?.channelId,
+    copilotChannel?.serverSlug,
+    isServerAppsRoute,
+    openCopilotChannel,
+    routeCopilotChannelId,
+    serverMeta?.slug,
+    serverSlug,
+  ])
 
   useEffect(() => {
     if (copilotChannel && !isServerAppsRoute) {
@@ -377,8 +524,26 @@ export function ServerLayout() {
     !!channelId &&
     (isRouteChannelLoading ||
       (!!serverMeta?.id && !!routeChannel && routeChannel.serverId !== serverMeta.id))
+
+  const navigateServerAppCopilot = (nextChannelId: string | null) => {
+    navigate({
+      to: routeAppKey ? '/servers/$serverSlug/apps/$appKey' : '/servers/$serverSlug/apps',
+      params: routeAppKey
+        ? { serverSlug: routeServerSlug, appKey: routeAppKey }
+        : { serverSlug: routeServerSlug },
+      search: withCopilotChannelSearch(routeSearch, nextChannelId),
+      replace: true,
+    })
+  }
+
   const openChannelInCopilot = (channel: { id: string }) => {
     openCopilotChannel(serverSlug, channel.id)
+    navigateServerAppCopilot(channel.id)
+  }
+
+  const closeCopilot = () => {
+    closeCopilotChannel()
+    navigateServerAppCopilot(null)
   }
 
   return (
@@ -406,33 +571,64 @@ export function ServerLayout() {
       >
         {isServerAppsRoute ? (
           <div
-            className={isCopilotMode ? 'flex h-full min-w-0 flex-1 gap-3 md:flex-row' : 'contents'}
+            ref={copilotResize.containerRef}
+            className={
+              isCopilotMode
+                ? `flex h-full min-w-0 flex-1 md:flex-row ${
+                    copilotResize.isResizing ? 'select-none' : ''
+                  }`
+                : 'contents'
+            }
           >
-            {isCopilotMode && copilotChannel?.channelId && (
-              <div className="flex h-full min-w-0 flex-1 md:w-[360px] md:max-w-[420px] md:flex-none">
+            {isCopilotMode && activeCopilotChannelId && (
+              <div
+                className="flex h-full min-w-0 flex-1 md:flex-none"
+                style={{ width: copilotResize.channelWidth, minWidth: COPILOT_MIN_CHANNEL_WIDTH }}
+              >
                 <ChannelView
-                  channelId={copilotChannel.channelId}
+                  channelId={activeCopilotChannelId}
                   serverSlug={serverSlug}
                   copilot={{
                     channels: copilotChannels,
-                    onSelectChannel: (nextChannelId) =>
-                      openCopilotChannel(serverSlug, nextChannelId),
+                    onSelectChannel: (nextChannelId) => {
+                      openCopilotChannel(serverSlug, nextChannelId)
+                      navigateServerAppCopilot(nextChannelId)
+                    },
                     onEnter: () => {
                       closeCopilotChannel()
                       navigate({
                         to: '/servers/$serverSlug/channels/$channelId',
                         params: {
-                          serverSlug: serverMeta.slug ?? serverSlug,
-                          channelId: copilotChannel.channelId,
+                          serverSlug: routeServerSlug,
+                          channelId: activeCopilotChannelId,
                         },
                       })
                     },
-                    onExit: closeCopilotChannel,
+                    onExit: closeCopilot,
                   }}
                 />
               </div>
             )}
-            <div className={isCopilotMode ? 'hidden min-w-0 flex-1 md:flex' : 'contents'}>
+            {isCopilotMode && activeCopilotChannelId && (
+              <button
+                type="button"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t('channel.resizeCopilot')}
+                title={t('channel.resizeCopilot')}
+                className="group hidden w-3 shrink-0 cursor-col-resize items-center justify-center outline-none md:flex"
+                onPointerDown={copilotResize.handlePointerDown}
+                onPointerMove={copilotResize.handlePointerMove}
+                onPointerUp={copilotResize.handlePointerUp}
+                onPointerCancel={copilotResize.handlePointerUp}
+              >
+                <span className="h-16 w-1.5 rounded-full bg-white/35 shadow-[0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur transition group-hover:bg-white/55 group-focus-visible:bg-primary/70" />
+              </button>
+            )}
+            <div
+              className={isCopilotMode ? 'hidden min-w-0 flex-1 md:flex' : 'contents'}
+              style={isCopilotMode ? { minWidth: COPILOT_MIN_APP_WIDTH } : undefined}
+            >
               <ServerAppsPageRoute
                 active={isServerAppsRoute}
                 appKeyOverride={routeAppKey}

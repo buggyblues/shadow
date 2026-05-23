@@ -705,6 +705,7 @@
     "switchChannel": "チャンネルを切り替え",
     "enterChannel": "チャンネルへ移動",
     "exitCopilot": "Copilot を終了",
+    "resizeCopilot": "Copilot パネルのサイズを変更",
     "unarchive": "アーカイブ解除"
   },
   "sort": {
@@ -1540,7 +1541,11 @@
     "serverInvite": "{{actorName}} さんが {{serverName}} に招待しました",
     "friendshipRequest": "{{actorName}} さんからフレンド申請が届きました",
     "rechargeSucceeded": "チャージが完了しました",
-    "rechargeSucceededBody": "{{amount}} シュリンプコインが反映されました"
+    "rechargeSucceededBody": "{{amount}} シュリンプコインが反映されました",
+    "serverAppCommandApprovalRequested": "{{appName}} コマンドに承認が必要です",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}} は {{serverName}} で承認待ちです",
+    "serverAppCommandApprovalGranted": "{{appName}} コマンドが承認されました",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}} は {{serverName}} で実行できるようになりました"
   },
   "agentMgmt": {
     "title": "Buddy 管理",

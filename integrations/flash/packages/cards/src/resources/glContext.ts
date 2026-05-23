@@ -14,6 +14,8 @@ import {
   ANIMATION_LAYER_VERTEX_SHADER,
   CARD_FRAGMENT_SHADER,
   CARD_VERTEX_SHADER,
+  SELECTION_RECT_FRAGMENT_SHADER,
+  SELECTION_RECT_VERTEX_SHADER,
 } from '../utils/shaders'
 
 // ─────────────────────────────────────
@@ -25,13 +27,16 @@ export interface GLContext {
   gl: WebGLRenderingContext
   program: WebGLProgram
   layerProgram: WebGLProgram
+  selectionProgram: WebGLProgram
   quadVBO: WebGLBuffer
   uniforms: Record<string, WebGLUniformLocation | null>
   layerUniforms: Record<string, WebGLUniformLocation | null>
+  selectionUniforms: Record<string, WebGLUniformLocation | null>
   aPosition: number
   aTexCoord: number
   layerAPosition: number
   layerATexCoord: number
+  selectionAPosition: number
   dpr: number
 }
 
@@ -56,6 +61,11 @@ export function createGLContext(canvas: HTMLCanvasElement): GLContext {
     gl,
     ANIMATION_LAYER_VERTEX_SHADER,
     ANIMATION_LAYER_FRAGMENT_SHADER,
+  )
+  const selectionProgram = createProgram(
+    gl,
+    SELECTION_RECT_VERTEX_SHADER,
+    SELECTION_RECT_FRAGMENT_SHADER,
   )
 
   const uniforms = getUniforms(gl, program, [
@@ -105,6 +115,13 @@ export function createGLContext(canvas: HTMLCanvasElement): GLContext {
   ])
   const layerAPosition = getAttrib(gl, layerProgram, 'a_position')
   const layerATexCoord = getAttrib(gl, layerProgram, 'a_texCoord')
+  const selectionUniforms = getUniforms(gl, selectionProgram, [
+    'u_projection',
+    'u_rect',
+    'u_time',
+    'u_dpr',
+  ])
+  const selectionAPosition = getAttrib(gl, selectionProgram, 'a_position')
   const quadVBO = createQuadVBO(gl)
 
   gl.enable(gl.BLEND)
@@ -117,13 +134,16 @@ export function createGLContext(canvas: HTMLCanvasElement): GLContext {
     gl,
     program,
     layerProgram,
+    selectionProgram,
     quadVBO,
     uniforms,
     layerUniforms,
+    selectionUniforms,
     aPosition,
     aTexCoord,
     layerAPosition,
     layerATexCoord,
+    selectionAPosition,
     dpr,
   }
 }
@@ -149,6 +169,7 @@ export function destroyGLContext(ctx: GLContext): void {
   ctx.gl.deleteBuffer(ctx.quadVBO)
   ctx.gl.deleteProgram(ctx.program)
   ctx.gl.deleteProgram(ctx.layerProgram)
+  ctx.gl.deleteProgram(ctx.selectionProgram)
 }
 
 /** Convenience: build the orthographic projection matrix for the current canvas size. */

@@ -16,6 +16,7 @@ import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { clearAuthenticatedSession } from '../../lib/auth-session'
+import { getCopilotChannelIdFromSearch } from '../../lib/copilot-route'
 import { connectSocket, disconnectSocket, getSocket } from '../../lib/socket'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
@@ -85,7 +86,10 @@ function AppLayoutInner() {
   const isCloudRoute = /^\/app\/cloud(?:\/|$)/.test(pathname)
   const isServerHomeRoute = /^\/app\/servers\/[^/]+\/?$/u.test(pathname)
   const isServerAppsRoute = /(?:^|\/)servers\/[^/]+\/apps(?:\/|$)/u.test(pathname)
-  const isCopilotMode = Boolean(copilotChannel && isServerAppsRoute)
+  const routeCopilotChannelId = getCopilotChannelIdFromSearch(
+    (location.search ?? {}) as Record<string, unknown>,
+  )
+  const isCopilotMode = Boolean(isServerAppsRoute && (copilotChannel || routeCopilotChannelId))
   const showAtmosphereOrbs = !backgroundImage
 
   // Fetch current user on mount

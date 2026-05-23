@@ -87,6 +87,7 @@ function App() {
           <div>
             <span className="eyebrow">Resume Builder</span>
             <h1>{resume?.title ?? 'No resume selected'}</h1>
+            {resume ? <p>{resume.profile.fullName || 'Untitled candidate'}</p> : null}
           </div>
           <div className="toolbarActions">
             <button type="button" disabled={!resume} onClick={() => setModal('edit')}>

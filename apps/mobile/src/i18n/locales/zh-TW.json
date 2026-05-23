@@ -1054,6 +1054,10 @@
     "friendshipRequest": "{{actorName}} 發送了好友申請",
     "rechargeSucceeded": "儲值成功",
     "rechargeSucceededBody": "{{amount}} 蝦幣已入帳",
+    "serverAppCommandApprovalRequested": "{{appName}} 命令需要審批",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}} 正在 {{serverName}} 等待審批",
+    "serverAppCommandApprovalGranted": "{{appName}} 命令已通過審批",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}} 現在可以在 {{serverName}} 執行",
     "emptyDesc": "還沒有收到任何新訊息"
   },
   "agentMgmt": {
@@ -1196,6 +1200,8 @@
     "commandApprovalTitle": "授權 App 命令",
     "commandApprovalMessage": "{{app}} 想執行 {{command}}，需要使用 {{permission}}。",
     "commandApprovalDenied": "已取消命令授權。",
+    "commandApprovalSuccess": "App 命令已授權。",
+    "commandApprovalFailed": "App 命令授權失敗。",
     "commandApprovalConfirm": "授權並繼續"
   },
   "apps": {

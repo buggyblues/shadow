@@ -1,4 +1,13 @@
-import { index, pgTable, text, timestamp, unique, uuid, varchar, type AnyPgColumn } from 'drizzle-orm/pg-core'
+import {
+  type AnyPgColumn,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 export const profileComments = pgTable(

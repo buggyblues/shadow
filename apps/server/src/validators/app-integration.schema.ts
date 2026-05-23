@@ -135,6 +135,7 @@ export const serverAppManifestSchema = z.object({
   name: z.string().min(1).max(128),
   description: z.string().max(2000).optional(),
   version: z.string().max(64).optional(),
+  updatedAt: z.string().datetime().optional(),
   iconUrl: httpUrlSchema,
   iframe: z
     .object({

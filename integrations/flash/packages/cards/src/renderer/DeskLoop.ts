@@ -198,11 +198,11 @@ export class DeskLoop {
 
   // ── Card sync ───────────────────────────────────────────────
 
-  syncCards(cards: Card[]): void {
+  syncCards(cards: Card[], options: { preserveLayoutIds?: Set<string> } = {}): void {
     this.cards = cards
     this.inputHandler?.updateCards(cards)
     this.renderer?.setHiddenCards(hiddenCardIds(cards))
-    syncBodies(this.physicsWorld, cards)
+    syncBodies(this.physicsWorld, cards, { preserveLayoutIds: options.preserveLayoutIds })
     // Eagerly start loading animation assets so they are ready when visible
     for (const card of cards) {
       animationManager.preregisterCard(card as any)
@@ -308,6 +308,7 @@ export class DeskLoop {
   }
 
   updateSelectedCards(ids: Set<string>): void {
+    this.renderer?.setSelectedCards(ids)
     this.inputHandler?.updateSelectedCards(ids)
   }
 

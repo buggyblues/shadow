@@ -137,6 +137,7 @@ export function attachConnectorRuntimeAssets(
     runtimeDependencies?: PluginRuntimeDependency[]
     skillSources?: PluginRuntimeSource[]
     subagentSources?: PluginRuntimeSource[]
+    runtimeImage?: string
     sanityCommands?: string[]
     runtimeMountPath?: string
     initRuntimeMountPath?: string
@@ -157,6 +158,7 @@ export function attachConnectorRuntimeAssets(
     },
     runtimeMountPath: options.runtimeMountPath,
     initRuntimeMountPath: options.initRuntimeMountPath,
+    runtimeImage: options.runtimeImage,
     skillsMountPath: options.skillsMountPath,
     subagentsMountPath: options.subagentsMountPath,
     runtimeDependencies: options.runtimeDependencies,

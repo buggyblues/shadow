@@ -1,6 +1,6 @@
-# Shadow Quiz Server App
+# Quiz Server App
 
-Shadow Quiz is a Server App for publishing quizzes with standard answers, step-by-step answering, submissions, and human or Buddy grading.
+Quiz is a Server App for publishing quizzes with standard answers, step-by-step answering, submissions, and human or Buddy grading.
 
 ```bash
 cp integrations/quiz/.env.example integrations/quiz/.env

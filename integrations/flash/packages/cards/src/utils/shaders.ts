@@ -305,10 +305,15 @@ export const CARD_FRAGMENT_SHADER = `
 
     // Anti-aliased card edge
     float cardAlpha = 1.0 - smoothstep(-1.0, 1.0, dist);
+    vec3 selectionColor = vec3(0.12, 0.58, 1.0);
+    float selectionPulse = 0.68 + 0.32 * sin(u_time * 6.5);
+    float selectedGlow = u_selected * selectionPulse * (1.0 - smoothstep(0.0, 26.0, max(dist, 0.0))) * (1.0 - cardAlpha);
 
     if (cardAlpha < 0.01) {
-      if (shadow < 0.01) discard;
-      gl_FragColor = vec4(0.0, 0.0, 0.0, shadow);  // shadow is already black×alpha (premultiplied)
+      float glowAlpha = selectedGlow * 0.72;
+      if (shadow < 0.01 && glowAlpha < 0.01) discard;
+      float a = max(shadow, glowAlpha);
+      gl_FragColor = vec4(selectionColor * glowAlpha, a);
       return;
     }
 
@@ -488,6 +493,15 @@ export const CARD_FRAGMENT_SHADER = `
       color += flipColor * flipGlow * edgeMask;
     }
 
+    // ── Selected state: shader-native ring and inner edge glow ──
+    if (u_selected > 0.01) {
+      float edgeBand = smoothstep(-18.0, -1.0, dist);
+      float ring = 1.0 - smoothstep(0.0, 3.4, abs(dist));
+      float shimmer = 0.55 + 0.45 * sin(u_time * 6.5 + contentUV.x * 18.0 + contentUV.y * 10.0);
+      color = mix(color, selectionColor, edgeBand * 0.34 * u_selected);
+      color += selectionColor * (ring * 1.15 + edgeBand * 0.34) * shimmer * u_selected;
+    }
+
     // ── semi-hidden state (filter non-matching cards) — desaturate + reduce opacity ──
     if (u_hidden > 0.5) {
       float grayVal = dot(color, vec3(0.299, 0.587, 0.114));
@@ -497,6 +511,56 @@ export const CARD_FRAGMENT_SHADER = `
     } else {
       gl_FragColor = vec4(color * cardAlpha, cardAlpha);  // premultiplied
     }
+  }
+`
+
+export const SELECTION_RECT_VERTEX_SHADER = `
+  precision highp float;
+
+  attribute vec2 a_position;
+
+  uniform mat3 u_projection;
+  uniform vec4 u_rect;
+
+  varying vec2 v_localPos;
+
+  void main() {
+    vec2 pos = u_rect.xy + a_position * u_rect.zw;
+    vec3 projected = u_projection * vec3(pos, 1.0);
+    gl_Position = vec4(projected.xy, 0.0, 1.0);
+    v_localPos = a_position * u_rect.zw;
+  }
+`
+
+export const SELECTION_RECT_FRAGMENT_SHADER = `
+  precision highp float;
+
+  uniform vec4 u_rect;
+  uniform float u_time;
+  uniform float u_dpr;
+
+  varying vec2 v_localPos;
+
+  float roundedBoxSDF(vec2 p, vec2 b, float r) {
+    vec2 q = abs(p) - b + vec2(r);
+    return length(max(q, 0.0)) - r;
+  }
+
+  void main() {
+    vec2 size = max(u_rect.zw, vec2(1.0));
+    vec2 halfSize = size * 0.5;
+    float radius = 7.0 * u_dpr;
+    float dist = roundedBoxSDF(v_localPos - halfSize, halfSize, radius);
+    float shape = 1.0 - smoothstep(-1.0, 1.0, dist);
+    if (shape < 0.01) discard;
+
+    float border = 1.0 - smoothstep(1.0 * u_dpr, 3.0 * u_dpr, abs(dist));
+    float fill = shape * 0.1;
+    float dashAxis = mix(v_localPos.x, v_localPos.y, step(size.x, size.y));
+    float dash = step(0.34, fract(dashAxis / max(9.0 * u_dpr, 1.0) - u_time * 1.15));
+    vec3 color = vec3(0.12, 0.58, 1.0);
+    float alpha = max(fill, border * (0.46 + 0.28 * dash));
+    gl_FragColor = vec4(color * alpha, alpha);
   }
 `
 

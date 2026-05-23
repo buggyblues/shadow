@@ -1,6 +1,6 @@
 # Code Trainer
 
-Code Trainer is a Shadow Server App for LeetCode-style practice. Learners submit code, and a Buddy or human grader can fetch pending submissions, execute them externally, and write back verdicts with learning advice.
+Code Trainer is a Server App for LeetCode-style practice. Learners submit code, and a Buddy or human grader can fetch pending submissions, execute them externally, and write back verdicts with learning advice.
 
 ```bash
 pnpm -C integrations/trainer typegen

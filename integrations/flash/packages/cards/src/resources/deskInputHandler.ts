@@ -136,7 +136,8 @@ export class DeskInputHandler {
   }
 
   updateSelectedCards(ids: Set<string>): void {
-    this.selectedCardIds = ids
+    this.selectedCardIds = new Set(ids)
+    this.renderer.setSelectedCards(this.selectedCardIds)
   }
 
   getStateName(): string {
@@ -715,10 +716,12 @@ export class DeskInputHandler {
           break
 
         case 'MARQUEE_START':
+          this.renderer.setMarqueeRect({ x1: a.x, y1: a.y, x2: a.x, y2: a.y })
           this.callbacks.onMarqueeChange?.({ x1: a.x, y1: a.y, x2: a.x, y2: a.y })
           break
 
         case 'MARQUEE_UPDATE': {
+          this.renderer.setMarqueeRect({ x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2 })
           this.callbacks.onMarqueeChange?.({ x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2 })
           const ids = this.renderer.hitTestRect(
             a.x1,
@@ -735,11 +738,13 @@ export class DeskInputHandler {
         }
 
         case 'MARQUEE_END':
+          this.renderer.setMarqueeRect(null)
           this.callbacks.onMarqueeChange?.(null)
           this.callbacks.onMarqueeSelect?.(this.selectedCardIds)
           break
 
         case 'CANCEL_MARQUEE':
+          this.renderer.setMarqueeRect(null)
           this.callbacks.onMarqueeChange?.(null)
           break
 

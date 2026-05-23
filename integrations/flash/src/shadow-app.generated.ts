@@ -8,7 +8,8 @@ export const shadowServerAppManifest = {
   name: 'Flash',
   description:
     'Persistent multi-card canvas with realtime rooms, server-side command execution, file-backed image cards, and Buddy-assisted board operations.',
-  version: '1.0.0',
+  version: '1.1.0',
+  updatedAt: '2026-05-21T00:00:00.000Z',
   iconUrl: 'http://localhost:4216/assets/icon.svg',
   iframe: {
     entry: 'http://localhost:4216/shadow/server',
@@ -378,7 +379,7 @@ export const shadowServerAppManifest = {
         usage:
           'shadowob app call shadow-flash cards.update --server "<server>" --json-input \'{"cardId":"<card>","x":320,"y":240}\' --json',
         details:
-          'Layout fields are server-authoritative snapshots. For active drag interactions, clients should publish the final layout after pointer release and ignore stale remote echoes for locally dragged cards.',
+          'Layout fields are server-authoritative snapshots. Realtime physics clients should debounce layout writes, attach a monotonic clientRevision, and ignore lower-revision remote echoes while a newer local layout is pending.',
       },
       path: '/api/shadow/commands/cards.update',
       permission: 'flash.cards:write',
@@ -403,6 +404,12 @@ export const shadowServerAppManifest = {
           cardId: {
             type: 'string',
             minLength: 1,
+          },
+          clientRevision: {
+            type: 'integer',
+            minimum: 0,
+            description:
+              'Client-local monotonic layout revision. Realtime clients use it to ignore stale card layout echoes.',
           },
           kind: {
             enum: [
@@ -858,7 +865,7 @@ export const shadowServerAppManifest = {
           'The app stores selection by actor id. UI clients call this after click, marquee selection, select-all, and clear-selection operations; Buddies can read it with selection.get.',
       },
       path: '/api/shadow/commands/selection.update',
-      permission: 'flash.cards:write',
+      permission: 'flash.boards:write',
       action: 'write',
       dataClass: 'server-private',
       approvalMode: 'none',
@@ -921,7 +928,7 @@ export const shadowServerAppManifest = {
     transports: ['sse', 'websocket'],
     subscribe: {
       events: ['flash.events.appended', 'flash.selection.updated', 'server_app.command.completed'],
-      help: 'Use shadowob app events shadow-flash --server "<server>" --json for the Shadow SSE stream. Browser clients may use the launch event stream; local dev may use the Flash board SSE endpoint.',
+      help: 'Use shadowob app events shadow-flash --server "<server>" --json for Shadow command lifecycle events. Browser clients subscribe directly to the Flash board event stream with the Shadow launch token; local dev uses the same board SSE endpoint.',
     },
     publish: {
       command: 'selection.update',
@@ -932,7 +939,7 @@ export const shadowServerAppManifest = {
       model: 'frame-sync',
       authority: 'server',
       tickRate: 30,
-      help: 'Treat card layout as server-authoritative snapshots with client-side prediction during drag. Clients publish final transforms after pointer release, ignore stale remote echoes for locally dragged cards, and reconcile from ordered event cursors.',
+      help: 'Treat card layout as server-authoritative frames with client-side prediction during drag. Clients publish final transforms after pointer release, subscribe to ordered board events, discard frames at or below the local cursor, and reconcile from the server cursor.',
     },
   },
   binary: {

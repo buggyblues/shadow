@@ -26,6 +26,7 @@ export const PLUGIN_SUBAGENTS_STAGING_ROOT = '/plugin-subagents'
 interface RuntimeAssetK8sOptions {
   pluginId: string
   isEnabled(agent: AgentDeployment, config: CloudConfig): boolean
+  runtimeImage?: string
   runtimeMountPath?: string
   initRuntimeMountPath?: string
   skillsMountPath?: string
@@ -101,6 +102,12 @@ function runtimeDependencySnippet(dep: PluginRuntimeDependency, runtimeRoot: str
   }
 }
 
+function dependencyPhase(
+  dep: PluginRuntimeDependency,
+): NonNullable<PluginRuntimeDependency['phase']> {
+  return dep.phase ?? 'pre-source'
+}
+
 function systemPackageInstallerSnippet(): string {
   return [
     'install_system_packages() {',
@@ -147,9 +154,16 @@ export function buildRuntimeAssetInstallScript(options: {
   const runtimeRoot = options.runtimeRoot ?? '/runtime-deps'
   const skillsRoot = options.skillsRoot ?? '/plugin-skills'
   const subagentsRoot = options.subagentsRoot ?? '/plugin-subagents'
+  const runtimeDependencies = options.runtimeDependencies ?? []
+  const preSourceDependencies = runtimeDependencies.filter(
+    (dep) => dependencyPhase(dep) === 'pre-source',
+  )
+  const postSourceDependencies = runtimeDependencies.filter(
+    (dep) => dependencyPhase(dep) === 'post-source',
+  )
   const hasGitSources = Boolean(options.skillSources?.length || options.subagentSources?.length)
   const needsSystemInstaller = Boolean(
-    hasGitSources || options.runtimeDependencies?.some((dep) => dep.kind === 'system-package'),
+    hasGitSources || runtimeDependencies.some((dep) => dep.kind === 'system-package'),
   )
   const lines = [
     'set -eu',
@@ -163,7 +177,7 @@ export function buildRuntimeAssetInstallScript(options: {
     lines.push('command -v git >/dev/null 2>&1 || install_system_packages git >/dev/null')
   }
 
-  for (const dep of options.runtimeDependencies ?? []) {
+  for (const dep of preSourceDependencies) {
     const snippet = runtimeDependencySnippet(dep, runtimeRoot)
     if (snippet) lines.push(snippet)
   }
@@ -172,6 +186,10 @@ export function buildRuntimeAssetInstallScript(options: {
   }
   for (const source of options.subagentSources ?? []) {
     if (source.kind === 'git' && source.url) lines.push(copyGitSourceSnippet(source, subagentsRoot))
+  }
+  for (const dep of postSourceDependencies) {
+    const snippet = runtimeDependencySnippet(dep, runtimeRoot)
+    if (snippet) lines.push(snippet)
   }
   lines.push(...(options.sanityCommands ?? []))
   lines.push('echo "[runtime-assets] ready"')
@@ -223,7 +241,7 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
         initContainers: [
           {
             name: `${options.pluginId}-assets`,
-            image: RUNTIME_ASSET_IMAGE,
+            image: options.runtimeImage ?? RUNTIME_ASSET_IMAGE,
             imagePullPolicy: 'IfNotPresent',
             command: [
               'sh',

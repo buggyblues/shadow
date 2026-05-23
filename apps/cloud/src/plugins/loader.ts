@@ -53,6 +53,8 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
     import('./agentmemory/index.js'),
     import('./agent-browser/index.js'),
     import('./skill-discovery/index.js'),
+    import('./text-to-cad/index.js'),
+    import('./nature-skills/index.js'),
     import('./opencli/index.js'),
     import('./inference-sh/index.js'),
     import('./inference-ai-image-generation/index.js'),

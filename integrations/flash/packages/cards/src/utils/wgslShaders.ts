@@ -383,6 +383,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   let dist       = roundedBoxSDF(cardLocal, cardHalf, inst.radius);
   let contentUV  = (in.localPos - pad) / cardSize;
   let cp         = in.localPos - pad;
+  let selectionColor = vec3f(0.12, 0.58, 1.0);
 
   // ── Shadow ──
   let lift       = 1.0 + inst.hover * 2.5 + inst.active * 2.0;
@@ -397,10 +398,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   let shadow  = max(shadow1, shadow2);
 
   let cardAlpha = 1.0 - smoothstep(-1.0, 1.0, dist);
+  let selectionPulse = 0.68 + 0.32 * sin(time * 6.5);
+  let selectedGlow = inst.selected * selectionPulse * (1.0 - smoothstep(0.0, 26.0, max(dist, 0.0))) * (1.0 - cardAlpha);
 
   if (cardAlpha < 0.01) {
-    if (shadow < 0.01) { discard; }
-    return vec4f(0.0, 0.0, 0.0, shadow);
+    let glowAlpha = selectedGlow * 0.72;
+    if (shadow < 0.01 && glowAlpha < 0.01) { discard; }
+    let a = max(shadow, glowAlpha);
+    return vec4f(selectionColor * (glowAlpha / max(a, 0.001)), a);
   }
 
   // ── Front / Back ──
@@ -566,6 +571,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     color += flipColor * flipGlow * edgeMask;
   }
 
+  // ── Selected state: shader-native ring and inner edge glow ──
+  if (inst.selected > 0.01) {
+    let edgeBand = smoothstep(-18.0, -1.0, dist);
+    let ring = 1.0 - smoothstep(0.0, 3.4, abs(dist));
+    let shimmer = 0.55 + 0.45 * sin(time * 6.5 + contentUV.x * 18.0 + contentUV.y * 10.0);
+    color = mix(color, selectionColor, edgeBand * 0.34 * inst.selected);
+    color += selectionColor * (ring * 1.15 + edgeBand * 0.34) * shimmer * inst.selected;
+  }
+
   // ── Hidden state (filter mismatch) ──
   if (inst.hidden > 0.5) {
     let grayVal = dot(color, vec3f(0.299, 0.587, 0.114));
@@ -574,5 +588,70 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   }
 
   return vec4f(color, cardAlpha);
+}
+`
+
+export const SELECTION_RECT_WGSL_SHADER = /* wgsl */ `
+struct OverlayData {
+  rect   : vec4f,
+  params : vec4f,
+}
+
+struct VertexOutput {
+  @builtin(position) position : vec4f,
+  @location(0)       localPos : vec2f,
+  @location(1)       texCoord : vec2f,
+}
+
+@group(0) @binding(0) var<uniform> overlay : OverlayData;
+
+const QUAD_POS = array<vec2f, 6>(
+  vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(0.0, 1.0),
+  vec2f(1.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 1.0),
+);
+
+fn roundedBoxSDF(p: vec2f, b: vec2f, r: f32) -> f32 {
+  let q = abs(p) - b + vec2f(r);
+  return length(max(q, vec2f(0.0))) - r;
+}
+
+@vertex
+fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
+  let a_pos = QUAD_POS[vi];
+  let pos = overlay.rect.xy + a_pos * overlay.rect.zw;
+  let viewW = overlay.params.z;
+  let viewH = overlay.params.w;
+  let ndc = vec2f(
+     2.0 * pos.x / viewW - 1.0,
+    -2.0 * pos.y / viewH + 1.0,
+  );
+
+  var out: VertexOutput;
+  out.position = vec4f(ndc, 0.0, 1.0);
+  out.localPos = a_pos * overlay.rect.zw;
+  out.texCoord = a_pos;
+  return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+  let time = overlay.params.x;
+  let dpr = overlay.params.y;
+  let size = max(overlay.rect.zw, vec2f(1.0));
+  let halfSize = size * 0.5;
+  let dist = roundedBoxSDF(in.localPos - halfSize, halfSize, 7.0 * dpr);
+  let shape = 1.0 - smoothstep(-1.0, 1.0, dist);
+  if (shape < 0.01) { discard; }
+
+  let border = 1.0 - smoothstep(1.0 * dpr, 3.0 * dpr, abs(dist));
+  let fill = shape * 0.1;
+  var dashAxis = in.localPos.x;
+  if (size.y > size.x) {
+    dashAxis = in.localPos.y;
+  }
+  let dash = select(0.0, 1.0, fract(dashAxis / max(9.0 * dpr, 1.0) - time * 1.15) >= 0.34);
+  let color = vec3f(0.12, 0.58, 1.0);
+  let alpha = max(fill, border * (0.46 + 0.28 * dash));
+  return vec4f(color, alpha);
 }
 `

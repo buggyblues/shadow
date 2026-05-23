@@ -1,6 +1,6 @@
-# Cloud Cat
+# StarPet Inn
 
-Cloud Cat is a Shadow Server App pet game with generated transparent cat assets, persistent pet state, attribute decay, care actions, automation commands, and a cat leaderboard.
+StarPet Inn is a playable Server App pet game with persistent pet state, care, route training, ranked minigames, adventure maps, furniture upgrades, evolution progress, generated game art, procedural sound effects, and a leaderboard.
 
 ```bash
 pnpm -C integrations/petcat typegen
@@ -16,10 +16,14 @@ Commands:
 - `cats.list`
 - `cats.get`
 - `cats.feed`
+- `cats.pet`
 - `cats.play`
 - `cats.clean`
 - `cats.rest`
-- `cats.auto_feed`
+- `cats.train`
+- `cats.minigame`
+- `cats.adventure`
+- `cats.furniture.upgrade`
 - `cats.leaderboard`
 
 State persists through `PETCAT_DATA_FILE`.

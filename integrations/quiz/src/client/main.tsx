@@ -131,7 +131,7 @@ function Header() {
       <Link className="brand" to="/">
         <span className="brandMark">Q</span>
         <span>
-          <strong>Shadow Quiz</strong>
+          <strong>Quiz</strong>
           <small>assessment studio</small>
         </span>
       </Link>
@@ -165,11 +165,11 @@ function DashboardPage({ createModal = false }: { createModal?: boolean }) {
     <main className="shell">
       <section className="hero panel">
         <div>
-          <p className="eyebrow">Quiz platform</p>
-          <h1>Create structured quizzes, run step-by-step attempts, and grade written answers.</h1>
+          <p className="eyebrow">Quiz workspace</p>
+          <h1>Quizzes and review queue</h1>
           <p>
-            Objective questions are checked immediately. Written answers stay in the review queue
-            for a human or Buddy grader.
+            Publish assessments, take them step by step, and keep written answers in one review
+            flow.
           </p>
           <div className="heroActions">
             <Link className="primaryAction" to="/create">
@@ -182,7 +182,6 @@ function DashboardPage({ createModal = false }: { createModal?: boolean }) {
             </Link>
           </div>
         </div>
-        <div className="heroArt" aria-hidden="true" />
       </section>
 
       <section className="metrics">

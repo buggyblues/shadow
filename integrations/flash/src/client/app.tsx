@@ -120,10 +120,92 @@ function replaceSelection(items: FlashSelection[], item: FlashSelection) {
   return items.map((existing, current) => (current === index ? item : existing))
 }
 
+const LAYOUT_SYNC_DEBOUNCE_MS = 220
+const LAYOUT_SYNC_RETRY_MS = 80
+const LAYOUT_SETTLE_RETRY_MS = 120
+const LAYOUT_SETTLE_MAX_MS = 900
+const LAYOUT_SETTLE_SPEED = 0.05
+const LAYOUT_SETTLE_ANGULAR_SPEED = 0.003
+
+type LayoutDraft = Pick<FlashCard['layout'], 'x' | 'y' | 'angle'> & { revision: number }
+type LayoutBody = {
+  position: { x: number; y: number }
+  angle: number
+  velocity?: { x: number; y: number }
+  speed?: number
+  angularVelocity?: number
+  angularSpeed?: number
+}
+
+interface ApplyFlashEventsOptions {
+  localMovingIds?: Set<string>
+  layoutGuards?: Map<string, LayoutDraft>
+  onLayoutRevisionSettled?: (cardId: string, revision: number) => void
+}
+
+function cardWithLayout(card: FlashCard, layout: Pick<LayoutDraft, 'x' | 'y' | 'angle'>) {
+  return {
+    ...card,
+    layout: {
+      ...card.layout,
+      x: layout.x,
+      y: layout.y,
+      angle: layout.angle,
+    },
+  }
+}
+
+function cardPatchClientRevision(event: FlashCommandEvent, cardId: string) {
+  if (!event.command || typeof event.command !== 'object' || Array.isArray(event.command)) {
+    return undefined
+  }
+  const command = event.command as Record<string, unknown>
+  if (typeof command.cardId === 'string' && command.cardId !== cardId) return undefined
+  const revision = command.clientRevision
+  return typeof revision === 'number' && Number.isInteger(revision) && revision >= 0
+    ? revision
+    : undefined
+}
+
+function applyCardPatch(
+  cards: FlashCard[],
+  card: FlashCard,
+  event: FlashCommandEvent,
+  options: ApplyFlashEventsOptions,
+) {
+  const guard = options.layoutGuards?.get(card.id)
+  const isMoving = options.localMovingIds?.has(card.id) === true
+  if (guard) {
+    const revision = cardPatchClientRevision(event, card.id)
+    if (isMoving || revision === undefined || revision < guard.revision) {
+      return replaceById(cards, cardWithLayout(card, guard))
+    }
+    options.onLayoutRevisionSettled?.(card.id, revision)
+  } else if (isMoving) {
+    return cards
+  }
+  return replaceById(cards, card)
+}
+
+function layoutFromBody(body: LayoutBody, revision: number): LayoutDraft {
+  return {
+    x: body.position.x,
+    y: body.position.y,
+    angle: body.angle,
+    revision,
+  }
+}
+
+function bodyIsSettling(body: LayoutBody) {
+  const speed = body.speed ?? Math.hypot(body.velocity?.x ?? 0, body.velocity?.y ?? 0)
+  const angularSpeed = body.angularSpeed ?? Math.abs(body.angularVelocity ?? 0)
+  return speed > LAYOUT_SETTLE_SPEED || angularSpeed > LAYOUT_SETTLE_ANGULAR_SPEED
+}
+
 function applyFlashEvents(
   snapshot: FlashBoardSnapshot,
   events: FlashCommandEvent[],
-  localMovingIds = new Set<string>(),
+  options: ApplyFlashEventsOptions = {},
 ) {
   let board = snapshot.board
   let cards = snapshot.cards
@@ -131,16 +213,18 @@ function applyFlashEvents(
   let selections = snapshot.selections
   let cursor = snapshot.cursor
 
-  for (const event of events) {
+  const orderedEvents = [...events].sort((a, b) => a.seq - b.seq)
+  for (const event of orderedEvents) {
+    if (event.seq <= cursor) continue
     cursor = Math.max(cursor, event.seq)
     for (const patch of event.patches) {
       if (patch.type === 'card.created' || patch.type === 'card.updated') {
-        if (!localMovingIds.has(patch.card.id)) cards = replaceById(cards, patch.card)
+        cards = applyCardPatch(cards, patch.card, event, options)
       } else if (patch.type === 'card.deleted') {
         cards = cards.filter((card) => card.id !== patch.cardId)
       } else if (patch.type === 'cards.updated') {
         for (const card of patch.cards) {
-          if (!localMovingIds.has(card.id)) cards = replaceById(cards, card)
+          cards = applyCardPatch(cards, card, event, options)
         }
       } else if (patch.type === 'arena.created' || patch.type === 'arena.updated') {
         arenas = replaceById(arenas, patch.arena)
@@ -155,7 +239,7 @@ function applyFlashEvents(
   }
 
   const eventLog = new Map<string, FlashCommandEvent>()
-  for (const event of [...events, ...snapshot.events]) eventLog.set(event.id, event)
+  for (const event of [...orderedEvents, ...snapshot.events]) eventLog.set(event.id, event)
 
   return {
     ...snapshot,
@@ -204,6 +288,13 @@ export function FlashApp() {
   const loopRef = useRef<DeskLoop | null>(null)
   const selectedIdsRef = useRef<Set<string>>(new Set())
   const dragCardIdRef = useRef<string | null>(null)
+  const layoutRevisionRef = useRef(0)
+  const layoutGuardsRef = useRef<Map<string, LayoutDraft>>(new Map())
+  const pendingLayoutCardIdsRef = useRef<Set<string>>(new Set())
+  const layoutSettleStartedAtRef = useRef<number | null>(null)
+  const layoutSaveTimerRef = useRef<number | null>(null)
+  const layoutFlushInFlightRef = useRef(false)
+  const flushLayoutsRef = useRef<() => Promise<void>>(async () => undefined)
   const persistLayoutsRef = useRef<(cardIds: string[]) => void>(() => undefined)
   const persistSelectionRef = useRef<(ids: Set<string>, anchorCardId?: string | null) => void>(
     () => undefined,
@@ -237,15 +328,40 @@ export function FlashApp() {
     [queryClient],
   )
 
+  const scheduleLayoutFlush = useCallback((delay = LAYOUT_SYNC_DEBOUNCE_MS) => {
+    if (layoutSaveTimerRef.current !== null) {
+      window.clearTimeout(layoutSaveTimerRef.current)
+    }
+    layoutSaveTimerRef.current = window.setTimeout(() => {
+      layoutSaveTimerRef.current = null
+      void flushLayoutsRef.current()
+    }, delay)
+  }, [])
+
+  const settleLayoutRevision = useCallback((cardId: string, revision: number) => {
+    const guard = layoutGuardsRef.current.get(cardId)
+    if (guard && revision >= guard.revision) {
+      layoutGuardsRef.current.delete(cardId)
+    }
+  }, [])
+
   const applyEvents = useCallback(
     (events: FlashCommandEvent[]) => {
       const current = snapshotRef.current
       if (!current || events.length === 0) return
+      const scopedEvents = events.filter((event) => event.boardId === current.board.id)
+      if (scopedEvents.length === 0) return
       const moving = new Set<string>()
       if (dragCardIdRef.current) moving.add(dragCardIdRef.current)
-      setSnapshot(applyFlashEvents(current, events, moving))
+      setSnapshot(
+        applyFlashEvents(current, scopedEvents, {
+          localMovingIds: moving,
+          layoutGuards: layoutGuardsRef.current,
+          onLayoutRevisionSettled: settleLayoutRevision,
+        }),
+      )
     },
-    [setSnapshot],
+    [setSnapshot, settleLayoutRevision],
   )
 
   const commandMutation = useMutation({
@@ -340,36 +456,97 @@ export function FlashApp() {
   )
 
   const persistLayouts = useCallback(
-    async (cardIds: string[]) => {
-      const boardId = snapshotRef.current?.board.id
+    (cardIds: string[]) => {
       const bodies = loopRef.current?.getBodiesMap()
-      if (!boardId || !bodies || cardIds.length === 0) return
+      if (!snapshotRef.current?.board.id || !bodies || cardIds.length === 0) return
 
-      try {
-        const results = await Promise.all(
-          cardIds.map((cardId) => {
-            const body = bodies.get(cardId)
-            if (!body) return null
-            return updateCard({
-              boardId,
-              cardId,
-              x: body.position.x,
-              y: body.position.y,
-              angle: body.angle,
-            })
-          }),
-        )
-        const events: FlashCommandEvent[] = []
-        for (const result of results) {
-          if (result) events.push(...result.events)
-        }
-        applyEvents(events)
-      } catch (err) {
-        setMessage(err instanceof Error ? err.message : 'Layout sync failed')
+      layoutRevisionRef.current += 1
+      const revision = layoutRevisionRef.current
+      for (const cardId of new Set(cardIds)) {
+        const body = bodies.get(cardId)
+        if (!body) continue
+        const layout = layoutFromBody(body, revision)
+        pendingLayoutCardIdsRef.current.add(cardId)
+        layoutGuardsRef.current.set(cardId, layout)
       }
+      if (pendingLayoutCardIdsRef.current.size === 0) return
+      layoutSettleStartedAtRef.current ??= performance.now()
+      scheduleLayoutFlush()
     },
-    [applyEvents],
+    [scheduleLayoutFlush],
   )
+
+  const flushPendingLayouts = useCallback(async () => {
+    const boardId = snapshotRef.current?.board.id
+    const bodies = loopRef.current?.getBodiesMap()
+    if (!boardId || !bodies || pendingLayoutCardIdsRef.current.size === 0) return
+    if (layoutFlushInFlightRef.current) {
+      scheduleLayoutFlush(LAYOUT_SYNC_RETRY_MS)
+      return
+    }
+
+    const now = performance.now()
+    const settleStartedAt = layoutSettleStartedAtRef.current ?? now
+    const layouts: Array<[string, LayoutDraft]> = []
+    let stillSettling = false
+    for (const cardId of pendingLayoutCardIdsRef.current) {
+      const body = bodies.get(cardId)
+      if (!body) continue
+      const revision = layoutGuardsRef.current.get(cardId)?.revision ?? layoutRevisionRef.current
+      const layout = layoutFromBody(body, revision)
+      layouts.push([cardId, layout])
+      layoutGuardsRef.current.set(cardId, layout)
+      stillSettling ||= bodyIsSettling(body)
+    }
+    if (layouts.length === 0) {
+      pendingLayoutCardIdsRef.current.clear()
+      layoutSettleStartedAtRef.current = null
+      return
+    }
+    if (stillSettling && now - settleStartedAt < LAYOUT_SETTLE_MAX_MS) {
+      scheduleLayoutFlush(LAYOUT_SETTLE_RETRY_MS)
+      return
+    }
+
+    pendingLayoutCardIdsRef.current.clear()
+    layoutSettleStartedAtRef.current = null
+    layoutFlushInFlightRef.current = true
+    try {
+      const results = await Promise.all(
+        layouts.map(([cardId, layout]) =>
+          updateCard({
+            boardId,
+            cardId,
+            clientRevision: layout.revision,
+            x: layout.x,
+            y: layout.y,
+            angle: layout.angle,
+          }),
+        ),
+      )
+      const events: FlashCommandEvent[] = []
+      for (const result of results) events.push(...result.events)
+      applyEvents(events)
+    } catch (err) {
+      for (const [cardId, layout] of layouts) {
+        const guard = layoutGuardsRef.current.get(cardId)
+        if (
+          guard &&
+          guard.revision <= layout.revision &&
+          !pendingLayoutCardIdsRef.current.has(cardId)
+        ) {
+          layoutGuardsRef.current.delete(cardId)
+        }
+      }
+      if (pendingLayoutCardIdsRef.current.size === 0) void refetch()
+      setMessage(err instanceof Error ? err.message : 'Layout sync failed')
+    } finally {
+      layoutFlushInFlightRef.current = false
+      if (pendingLayoutCardIdsRef.current.size > 0) {
+        scheduleLayoutFlush(LAYOUT_SYNC_RETRY_MS)
+      }
+    }
+  }, [applyEvents, refetch, scheduleLayoutFlush])
 
   const persistViewport = useCallback(
     (viewport: FlashViewport) => {
@@ -399,6 +576,9 @@ export function FlashApp() {
 
   useEffect(
     () => () => {
+      if (layoutSaveTimerRef.current !== null) {
+        window.clearTimeout(layoutSaveTimerRef.current)
+      }
       if (viewportSaveTimerRef.current !== null) {
         window.clearTimeout(viewportSaveTimerRef.current)
       }
@@ -425,6 +605,7 @@ export function FlashApp() {
   persistLayoutsRef.current = (ids) => {
     void persistLayouts(ids)
   }
+  flushLayoutsRef.current = flushPendingLayouts
   persistSelectionRef.current = persistSelection
   persistViewportRef.current = persistViewport
   runCardCommandRef.current = runCardCommand
@@ -549,12 +730,22 @@ export function FlashApp() {
     hasFocusedInitialCardsRef.current = false
     restoredViewportBoardRef.current = null
     pendingViewportRef.current = null
+    pendingLayoutCardIdsRef.current.clear()
+    layoutSettleStartedAtRef.current = null
+    layoutGuardsRef.current.clear()
+    layoutFlushInFlightRef.current = false
+    if (layoutSaveTimerRef.current !== null) {
+      window.clearTimeout(layoutSaveTimerRef.current)
+      layoutSaveTimerRef.current = null
+    }
   }, [snapshot?.board.id])
 
   useEffect(() => {
     const loop = loopRef.current
     if (!loop) return
-    loop.syncCards(cards)
+    const preserveLayoutIds = new Set(layoutGuardsRef.current.keys())
+    if (dragCardIdRef.current) preserveLayoutIds.add(dragCardIdRef.current)
+    loop.syncCards(cards, { preserveLayoutIds })
     if (snapshot?.arenas) syncArenas(loop, snapshot.arenas)
     if (snapshot?.board.id && restoredViewportBoardRef.current !== snapshot.board.id) {
       restoredViewportBoardRef.current = snapshot.board.id

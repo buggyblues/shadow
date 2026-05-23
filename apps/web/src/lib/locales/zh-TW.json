@@ -705,6 +705,7 @@
     "switchChannel": "切換頻道",
     "enterChannel": "進入頻道",
     "exitCopilot": "退出 Copilot",
+    "resizeCopilot": "調整 Copilot 面板大小",
     "unarchive": "取消歸檔"
   },
   "sort": {
@@ -1540,7 +1541,11 @@
     "serverInvite": "{{actorName}} 邀請你加入 {{serverName}}",
     "friendshipRequest": "{{actorName}} 發送了好友申請",
     "rechargeSucceeded": "儲值成功",
-    "rechargeSucceededBody": "{{amount}} 蝦幣已入帳"
+    "rechargeSucceededBody": "{{amount}} 蝦幣已入帳",
+    "serverAppCommandApprovalRequested": "{{appName}} 命令需要審批",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}} 正在 {{serverName}} 等待審批",
+    "serverAppCommandApprovalGranted": "{{appName}} 命令已通過審批",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}} 現在可以在 {{serverName}} 執行"
   },
   "agentMgmt": {
     "title": "Buddy 管理",

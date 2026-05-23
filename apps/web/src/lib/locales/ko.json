@@ -705,6 +705,7 @@
     "switchChannel": "채널 전환",
     "enterChannel": "채널로 이동",
     "exitCopilot": "Copilot 종료",
+    "resizeCopilot": "Copilot 패널 크기 조정",
     "unarchive": "보관 해제"
   },
   "sort": {
@@ -1540,7 +1541,11 @@
     "serverInvite": "{{actorName}}님이 {{serverName}}에 초대했습니다",
     "friendshipRequest": "{{actorName}}님이 친구 요청을 보냈습니다",
     "rechargeSucceeded": "충전 완료",
-    "rechargeSucceededBody": "새우 코인 {{amount}}개가 입금되었습니다"
+    "rechargeSucceededBody": "새우 코인 {{amount}}개가 입금되었습니다",
+    "serverAppCommandApprovalRequested": "{{appName}} 명령에 승인이 필요합니다",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}}이(가) {{serverName}}에서 승인을 기다리고 있습니다",
+    "serverAppCommandApprovalGranted": "{{appName}} 명령이 승인되었습니다",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}}을(를) 이제 {{serverName}}에서 실행할 수 있습니다"
   },
   "agentMgmt": {
     "title": "Buddy 관리",

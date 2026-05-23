@@ -233,6 +233,15 @@ export interface PluginMCPServer {
 export interface PluginRuntimeDependency {
   id: string
   kind: 'npm-global' | 'system-package' | 'binary' | 'shell'
+  /**
+   * Install order within the runtime asset init container.
+   *
+   * Defaults to `pre-source`, which preserves the historical behavior where
+   * dependencies are installed before external skill/subagent sources are
+   * copied. Use `post-source` for commands that need files from mounted
+   * skill sources, such as package installs inside a checked-out skill bundle.
+   */
+  phase?: 'pre-source' | 'post-source'
   packages?: string[]
   command?: string[]
   targetPath?: string

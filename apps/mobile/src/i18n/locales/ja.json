@@ -1057,6 +1057,10 @@
     "friendshipRequest": "{{actorName}} さんからフレンド申請が届きました",
     "rechargeSucceeded": "チャージが完了しました",
     "rechargeSucceededBody": "{{amount}} シュリンプコインが反映されました",
+    "serverAppCommandApprovalRequested": "{{appName}} コマンドに承認が必要です",
+    "serverAppCommandApprovalRequestedBody": "{{commandTitle}} は {{serverName}} で承認待ちです",
+    "serverAppCommandApprovalGranted": "{{appName}} コマンドが承認されました",
+    "serverAppCommandApprovalGrantedBody": "{{commandTitle}} は {{serverName}} で実行できるようになりました",
     "emptyDesc": "新しい通知はまだありません"
   },
   "agentMgmt": {
@@ -1199,6 +1203,8 @@
     "commandApprovalTitle": "アプリコマンドを承認",
     "commandApprovalMessage": "{{app}} が {{permission}} を使って {{command}} を実行しようとしています。",
     "commandApprovalDenied": "コマンド承認をキャンセルしました。",
+    "commandApprovalSuccess": "アプリコマンドを承認しました。",
+    "commandApprovalFailed": "アプリコマンドの承認に失敗しました。",
     "commandApprovalConfirm": "承認して続行"
   },
   "apps": {

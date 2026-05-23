@@ -5,7 +5,7 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
   appKey: 'shadow-answers',
-  name: 'Shadow Answers',
+  name: 'Answers',
   description:
     'A blue Q&A Server App for questions, Markdown answers, comments, topics, search, and Buddy participation.',
   version: '1.0.0',

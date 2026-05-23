@@ -52,6 +52,10 @@ export class AppIntegrationDao {
     iconUrl?: string | null
     manifestUrl?: string | null
     manifest: ServerAppManifest
+    manifestVersion?: string | null
+    manifestUpdatedAt?: Date | null
+    manifestFetchedAt?: Date
+    manifestHash?: string | null
     iframeEntry?: string | null
     allowedOrigins: string[]
     apiBaseUrl: string
@@ -69,6 +73,10 @@ export class AppIntegrationDao {
         iconUrl: data.iconUrl ?? null,
         manifestUrl: data.manifestUrl ?? null,
         manifest: data.manifest,
+        manifestVersion: data.manifestVersion ?? data.manifest.version ?? null,
+        manifestUpdatedAt: data.manifestUpdatedAt ?? null,
+        manifestFetchedAt: data.manifestFetchedAt ?? new Date(),
+        manifestHash: data.manifestHash ?? null,
         iframeEntry: data.iframeEntry ?? null,
         allowedOrigins: data.allowedOrigins,
         apiBaseUrl: data.apiBaseUrl,
@@ -85,6 +93,10 @@ export class AppIntegrationDao {
           iconUrl: data.iconUrl ?? null,
           manifestUrl: data.manifestUrl ?? null,
           manifest: data.manifest,
+          manifestVersion: data.manifestVersion ?? data.manifest.version ?? null,
+          manifestUpdatedAt: data.manifestUpdatedAt ?? null,
+          manifestFetchedAt: data.manifestFetchedAt ?? new Date(),
+          manifestHash: data.manifestHash ?? null,
           iframeEntry: data.iframeEntry ?? null,
           allowedOrigins: data.allowedOrigins,
           apiBaseUrl: data.apiBaseUrl,
@@ -97,6 +109,43 @@ export class AppIntegrationDao {
       })
       .returning()
     return rows[0]!
+  }
+
+  async updateManifest(
+    serverAppId: string,
+    data: {
+      name: string
+      description?: string | null
+      iconUrl?: string | null
+      manifest: ServerAppManifest
+      manifestVersion?: string | null
+      manifestUpdatedAt?: Date | null
+      manifestFetchedAt?: Date
+      manifestHash?: string | null
+      iframeEntry?: string | null
+      allowedOrigins: string[]
+      apiBaseUrl: string
+    },
+  ) {
+    const rows = await this.db
+      .update(serverAppIntegrations)
+      .set({
+        name: data.name,
+        description: data.description ?? null,
+        iconUrl: data.iconUrl ?? null,
+        manifest: data.manifest,
+        manifestVersion: data.manifestVersion ?? data.manifest.version ?? null,
+        manifestUpdatedAt: data.manifestUpdatedAt ?? null,
+        manifestFetchedAt: data.manifestFetchedAt ?? new Date(),
+        manifestHash: data.manifestHash ?? null,
+        iframeEntry: data.iframeEntry ?? null,
+        allowedOrigins: data.allowedOrigins,
+        apiBaseUrl: data.apiBaseUrl,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(serverAppIntegrations.id, serverAppId))
+      .returning()
+    return rows[0] ?? null
   }
 
   async deleteByServerAndKey(serverId: string, appKey: string) {
