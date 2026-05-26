@@ -29,7 +29,8 @@ COPY packages/sdk ./packages/sdk
 COPY integrations/kanban ./integrations/kanban
 
 RUN pnpm --filter @shadowob/shared build \
-  && pnpm --filter @shadowob/sdk build
+  && pnpm --filter @shadowob/sdk build \
+  && pnpm --filter @shadowob/kanban-app build
 
 WORKDIR /repo/integrations/kanban
 

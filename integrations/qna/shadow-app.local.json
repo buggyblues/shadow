@@ -1,8 +1,8 @@
 {
   "schemaVersion": "shadow.app/1",
   "appKey": "shadow-answers",
-  "name": "Answers",
-  "description": "A blue Q&A Server App for questions, Markdown answers, comments, topics, search, and Buddy participation.",
+  "name": "问问",
+  "description": "A Q&A Server App for tagged questions, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4210/assets/icon.svg",
   "iframe": {
@@ -16,14 +16,14 @@
     }
   },
   "access": {
-    "defaultPermissions": ["qna.questions:read"],
+    "defaultPermissions": ["qna.questions:read", "qna.lists:read"],
     "defaultApprovalMode": "none"
   },
   "commands": [
     {
       "name": "questions.list",
       "title": "List questions",
-      "description": "Search and list questions with topics, answer counts, and latest activity.",
+      "description": "Search and list questions by query, tag, list membership, answer counts, and latest activity.",
       "path": "/api/shadow/commands/questions.list",
       "permission": "qna.questions:read",
       "action": "read",
@@ -31,17 +31,10 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "query": {
-            "type": "string",
-            "maxLength": 120
-          },
-          "topic": {
-            "type": "string",
-            "maxLength": 80
-          },
-          "limit": {
-            "type": "integer"
-          }
+          "query": { "type": "string", "maxLength": 120 },
+          "tag": { "type": "string", "maxLength": 80 },
+          "listId": { "type": "string", "maxLength": 120 },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
         },
         "additionalProperties": false
       }
@@ -49,7 +42,7 @@
     {
       "name": "questions.get",
       "title": "Open question",
-      "description": "Read one question with Markdown answers and comments.",
+      "description": "Read one question with full Markdown answers, uploaded image references, and collapsed comments.",
       "path": "/api/shadow/commands/questions.get",
       "permission": "qna.questions:read",
       "action": "read",
@@ -58,10 +51,7 @@
         "type": "object",
         "required": ["questionId"],
         "properties": {
-          "questionId": {
-            "type": "string",
-            "minLength": 1
-          }
+          "questionId": { "type": "string", "minLength": 1 }
         },
         "additionalProperties": false
       }
@@ -69,7 +59,7 @@
     {
       "name": "questions.ask",
       "title": "Ask question",
-      "description": "Create a new question with optional body and topics.",
+      "description": "Create a new question with optional Markdown context, tags, and list placement.",
       "path": "/api/shadow/commands/questions.ask",
       "permission": "qna.questions:write",
       "action": "write",
@@ -79,24 +69,14 @@
         "type": "object",
         "required": ["title"],
         "properties": {
-          "title": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 220
-          },
-          "body": {
-            "type": "string",
-            "maxLength": 4000
-          },
-          "topics": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 220 },
+          "body": { "type": "string", "maxLength": 12000 },
+          "tags": {
             "type": "array",
-            "maxItems": 8,
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 40
-            }
-          }
+            "maxItems": 10,
+            "items": { "type": "string", "minLength": 1, "maxLength": 40 }
+          },
+          "listId": { "type": "string", "maxLength": 120 }
         },
         "additionalProperties": false
       }
@@ -104,7 +84,7 @@
     {
       "name": "answers.create",
       "title": "Answer question",
-      "description": "Add a Markdown answer to a question.",
+      "description": "Add a full Markdown answer to a question. Answers can reference images uploaded through images.upload.",
       "path": "/api/shadow/commands/answers.create",
       "permission": "qna.answers:write",
       "action": "write",
@@ -114,15 +94,44 @@
         "type": "object",
         "required": ["questionId", "body"],
         "properties": {
-          "questionId": {
-            "type": "string",
-            "minLength": 1
-          },
-          "body": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 12000
-          }
+          "questionId": { "type": "string", "minLength": 1 },
+          "body": { "type": "string", "minLength": 1, "maxLength": 20000 }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "questions.delete",
+      "title": "Delete question",
+      "description": "Delete one question and remove it from all Q&A lists.",
+      "path": "/api/shadow/commands/questions.delete",
+      "permission": "qna.questions:delete",
+      "action": "delete",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["questionId"],
+        "properties": {
+          "questionId": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "answers.delete",
+      "title": "Delete answer",
+      "description": "Delete one answer from a question.",
+      "path": "/api/shadow/commands/answers.delete",
+      "permission": "qna.answers:delete",
+      "action": "delete",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["answerId"],
+        "properties": {
+          "answerId": { "type": "string", "minLength": 1 }
         },
         "additionalProperties": false
       }
@@ -140,43 +149,148 @@
         "type": "object",
         "required": ["targetType", "targetId", "body"],
         "properties": {
-          "targetType": {
-            "enum": ["question", "answer"]
-          },
-          "targetId": {
-            "type": "string",
-            "minLength": 1
-          },
-          "body": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 1200
-          }
+          "targetType": { "enum": ["question", "answer"] },
+          "targetId": { "type": "string", "minLength": 1 },
+          "body": { "type": "string", "minLength": 1, "maxLength": 1200 }
         },
         "additionalProperties": false
       }
     },
     {
-      "name": "topics.list",
-      "title": "List topics",
-      "description": "List Q&A topics with question counts.",
-      "path": "/api/shadow/commands/topics.list",
+      "name": "tags.list",
+      "title": "List tags",
+      "description": "List Q&A tags with question counts.",
+      "path": "/api/shadow/commands/tags.list",
       "permission": "qna.questions:read",
       "action": "read",
       "dataClass": "server-private"
+    },
+    {
+      "name": "lists.list",
+      "title": "List collections",
+      "description": "List the current actor's Q&A lists and shared system lists.",
+      "path": "/api/shadow/commands/lists.list",
+      "permission": "qna.lists:read",
+      "action": "read",
+      "dataClass": "server-private"
+    },
+    {
+      "name": "lists.create",
+      "title": "Create collection",
+      "description": "Create a personal Q&A list for the current actor.",
+      "path": "/api/shadow/commands/lists.create",
+      "permission": "qna.lists:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "description": { "type": "string", "maxLength": 500 }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "lists.add_question",
+      "title": "Add question to collection",
+      "description": "Add one question to a Q&A list owned by the current actor or shared by the system.",
+      "path": "/api/shadow/commands/lists.add_question",
+      "permission": "qna.lists:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["listId", "questionId"],
+        "properties": {
+          "listId": { "type": "string", "minLength": 1 },
+          "questionId": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "lists.remove_question",
+      "title": "Remove question from collection",
+      "description": "Remove one question from a Q&A list owned by the current actor or shared by the system.",
+      "path": "/api/shadow/commands/lists.remove_question",
+      "permission": "qna.lists:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["listId", "questionId"],
+        "properties": {
+          "listId": { "type": "string", "minLength": 1 },
+          "questionId": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "images.upload",
+      "title": "Upload answer image",
+      "description": "Upload an image that can be embedded in Markdown question context or answers.",
+      "help": {
+        "summary": "Upload an image and use the returned URL in Markdown.",
+        "usage": "shadowob app call shadow-answers images.upload --server \"<server>\" --file ./diagram.png --json",
+        "details": "Use the returned image.url as `![description](url)` inside a question or answer."
+      },
+      "path": "/api/shadow/commands/images.upload",
+      "permission": "qna.images:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "input": "multipart",
+      "binary": {
+        "supported": true,
+        "field": "file",
+        "maxBytes": 5242880,
+        "contentTypes": ["image/png", "image/jpeg", "image/webp", "image/gif"]
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": ["upload"],
+        "properties": {
+          "upload": {
+            "type": "object",
+            "required": ["filename", "contentType", "size", "dataBase64"],
+            "properties": {
+              "field": { "type": "string", "maxLength": 80 },
+              "filename": { "type": "string", "minLength": 1, "maxLength": 240 },
+              "contentType": { "type": "string", "minLength": 1, "maxLength": 160 },
+              "size": { "type": "integer", "minimum": 1, "maximum": 5242880 },
+              "dataBase64": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ],
   "skills": [
     {
       "name": "shadow-answers-qna-ops",
-      "description": "Use when a Buddy needs to search questions, ask a question, answer with Markdown, comment, or inspect topics.",
+      "description": "Use when a Buddy needs to search tagged questions, manage personal Q&A lists, ask a question, upload images, answer with Markdown, or comment.",
       "commandHints": [
         "shadow-answers questions.list",
         "shadow-answers questions.get",
         "shadow-answers questions.ask",
         "shadow-answers answers.create",
+        "shadow-answers questions.delete",
+        "shadow-answers answers.delete",
         "shadow-answers comments.create",
-        "shadow-answers topics.list"
+        "shadow-answers tags.list",
+        "shadow-answers lists.list",
+        "shadow-answers lists.create",
+        "shadow-answers lists.add_question",
+        "shadow-answers lists.remove_question",
+        "shadow-answers images.upload"
       ]
     }
   ],

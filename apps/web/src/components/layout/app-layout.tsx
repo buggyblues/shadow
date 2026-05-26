@@ -77,7 +77,7 @@ function AppLayoutInner() {
   const location = useLocation()
   const pathname = location?.pathname ?? ''
   const { user, setUser } = useAuthStore()
-  const { backgroundImage, copilotChannel } = useUIStore()
+  const { backgroundImage } = useUIStore()
   const { mobileServerSidebarOpen, closeMobileServerSidebar, openMobileServerSidebar } =
     useUIStore()
   const [pendingServerAppApproval, setPendingServerAppApproval] =
@@ -89,7 +89,7 @@ function AppLayoutInner() {
   const routeCopilotChannelId = getCopilotChannelIdFromSearch(
     (location.search ?? {}) as Record<string, unknown>,
   )
-  const isCopilotMode = Boolean(isServerAppsRoute && (copilotChannel || routeCopilotChannelId))
+  const isCopilotMode = Boolean(isServerAppsRoute && routeCopilotChannelId)
   const showAtmosphereOrbs = !backgroundImage
 
   // Fetch current user on mount

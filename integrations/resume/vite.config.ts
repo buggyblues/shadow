@@ -4,6 +4,13 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    cors: true,
+    watch: {
+      usePolling: true,
+      interval: 250,
+    },
+  },
   build: {
     manifest: false,
     outDir: 'dist/client',

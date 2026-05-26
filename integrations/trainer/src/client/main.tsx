@@ -1,4 +1,11 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from '@tanstack/react-query'
+import {
+  createHashHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router'
 import { CheckCircle2, ClipboardCheck, Code2, Loader2, Send, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -14,6 +21,23 @@ import './styles.css'
 
 const queryClient = new QueryClient()
 const verdicts: SubmissionVerdict[] = ['accepted', 'wrong_answer', 'runtime_error', 'needs_review']
+
+const rootRoute = createRootRoute()
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: App,
+})
+const router = createRouter({
+  routeTree: rootRoute.addChildren([indexRoute]),
+  history: createHashHistory(),
+})
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
 
 function App() {
   const [selectedChallengeId, setSelectedChallengeId] = useState('two_sum')
@@ -270,6 +294,6 @@ function JudgeModal(props: {
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <QueryClientProvider client={queryClient}>
-    <App />
+    <RouterProvider router={router} />
   </QueryClientProvider>,
 )

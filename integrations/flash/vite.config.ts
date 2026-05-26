@@ -28,6 +28,13 @@ export default defineConfig({
       },
     ],
   },
+  server: {
+    cors: true,
+    watch: {
+      usePolling: true,
+      interval: 250,
+    },
+  },
   build: {
     outDir: 'dist/client',
     emptyOutDir: true,

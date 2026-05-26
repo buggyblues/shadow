@@ -1,9 +1,9 @@
-import type { QnaQuestion } from '../types.js'
+import type { QnaImageAsset, QnaList, QnaQuestion } from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
 
-export interface TopicSummary {
-  topic: string
+export interface TagSummary {
+  tag: string
   count: number
 }
 
@@ -99,7 +99,12 @@ function unwrapCommandPayload<T>(payload: unknown): T {
   return payload as T
 }
 
-export function listQuestions(input: { query?: string; topic?: string; limit?: number }) {
+export function listQuestions(input: {
+  query?: string
+  tag?: string
+  listId?: string
+  limit?: number
+}) {
   return command<{ questions: QnaQuestion[] }>('questions.list', input)
 }
 
@@ -107,12 +112,25 @@ export function getQuestion(questionId: string) {
   return command<{ question: QnaQuestion }>('questions.get', { questionId })
 }
 
-export function askQuestion(input: { title: string; body?: string; topics?: string[] }) {
+export function askQuestion(input: {
+  title: string
+  body?: string
+  tags?: string[]
+  listId?: string
+}) {
   return command<{ question: QnaQuestion }>('questions.ask', input)
 }
 
 export function createAnswer(input: { questionId: string; body: string }) {
   return command('answers.create', input)
+}
+
+export function deleteQuestion(questionId: string) {
+  return command<{ question: QnaQuestion }>('questions.delete', { questionId })
+}
+
+export function deleteAnswer(answerId: string) {
+  return command('answers.delete', { answerId })
 }
 
 export function createComment(input: {
@@ -123,8 +141,33 @@ export function createComment(input: {
   return command('comments.create', input)
 }
 
-export function listTopics() {
-  return command<{ topics: TopicSummary[] }>('topics.list', {})
+export function listTags() {
+  return command<{ tags: TagSummary[] }>('tags.list', {})
+}
+
+export function listLists() {
+  return command<{ lists: QnaList[] }>('lists.list', {})
+}
+
+export function createList(input: { title: string; description?: string }) {
+  return command<{ list: QnaList }>('lists.create', input)
+}
+
+export function addQuestionToList(input: { listId: string; questionId: string }) {
+  return command<{ list: QnaList }>('lists.add_question', input)
+}
+
+export function removeQuestionFromList(input: { listId: string; questionId: string }) {
+  return command<{ list: QnaList }>('lists.remove_question', input)
+}
+
+export async function uploadImage(file: File) {
+  const form = new FormData()
+  form.set('file', file)
+  const res = await fetch('/api/local/images', { method: 'POST', body: form })
+  const payload = (await res.json()) as { ok: boolean; image?: QnaImageAsset; error?: string }
+  if (!res.ok || !payload.ok || !payload.image) throw new Error(payload.error || 'Upload failed')
+  return { image: payload.image }
 }
 
 declare global {

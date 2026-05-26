@@ -17,6 +17,24 @@ export interface QnaComment {
   createdAt: string
 }
 
+export interface QnaImageAsset {
+  id: string
+  filename: string
+  contentType: string
+  size: number
+  url: string
+  uploadedBy: QnaPerson
+  createdAt: string
+}
+
+export interface QnaUploadFile {
+  field?: string
+  filename: string
+  contentType: string
+  size: number
+  dataBase64: string
+}
+
 export interface QnaAnswer {
   id: string
   questionId: string
@@ -31,10 +49,21 @@ export interface QnaQuestion {
   id: string
   title: string
   body?: string
-  topics: string[]
+  tags: string[]
   author: QnaPerson
   comments: QnaComment[]
   answers: QnaAnswer[]
+  imageIds?: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface QnaList {
+  id: string
+  title: string
+  description?: string
+  owner: QnaPerson
+  questionIds: string[]
   createdAt: string
   updatedAt: string
 }
@@ -42,4 +71,6 @@ export interface QnaQuestion {
 export interface QnaState {
   updatedAt: string
   questions: QnaQuestion[]
+  lists: QnaList[]
+  images: QnaImageAsset[]
 }

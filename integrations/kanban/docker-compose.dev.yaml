@@ -1,0 +1,20 @@
+name: shadow-integrations-dev
+
+services:
+  kanban:
+    command: pnpm dev:hot:install
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: 'true'
+      KANBAN_VITE_PORT: ${KANBAN_VITE_PORT:-5169}
+      KANBAN_VITE_DEV_SERVER_URL: ${KANBAN_VITE_DEV_SERVER_URL:-http://localhost:5169}
+    ports:
+      - ${KANBAN_VITE_PORT:-5169}:${KANBAN_VITE_PORT:-5169}
+    volumes:
+      - ${KANBAN_DEV_APP_DIR:-./kanban}:/repo/integrations/kanban
+      - kanban-node-modules:/repo/node_modules
+      - kanban-app-node-modules:/repo/integrations/kanban/node_modules
+
+volumes:
+  kanban-node-modules:
+  kanban-app-node-modules:

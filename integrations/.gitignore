@@ -2,5 +2,6 @@
 *.log
 */.env
 */data/*.json
+*/data/*-uploads/
 */dist/
 */node_modules/

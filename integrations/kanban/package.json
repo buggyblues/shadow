@@ -4,7 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vite build",
+    "compose:dev": "sh -c 'test -f ../.env || cp ../.env.example ../.env; KANBAN_DEV_APP_DIR=$(pwd) docker compose -f ../docker-compose.yaml -f docker-compose.dev.yaml --env-file ../.env up kanban --build'",
+    "compose:dev:down": "sh -c 'test -f ../.env || cp ../.env.example ../.env; KANBAN_DEV_APP_DIR=$(pwd) docker compose -f ../docker-compose.yaml -f docker-compose.dev.yaml --env-file ../.env down'",
     "dev": "tsx watch src/server.ts",
+    "dev:hot": "sh -c 'vite --host 0.0.0.0 --port ${KANBAN_VITE_PORT:-5169} & tsx watch src/server.ts'",
+    "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/kanban-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm dev:hot'",
     "start": "tsx src/server.ts",
     "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
     "typecheck": "tsc --noEmit"
@@ -12,12 +17,20 @@
   "dependencies": {
     "@hono/node-server": "^1.14.1",
     "@shadowob/sdk": "workspace:*",
+    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-router": "^1.168.2",
     "dotenv": "^17.3.1",
-    "hono": "^4.12.17"
+    "hono": "^4.12.17",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
     "tsx": "^4.19.4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8"
   }
 }

@@ -1,0 +1,20 @@
+name: shadow-integrations-dev
+
+services:
+  qna:
+    command: pnpm dev:hot:install
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: 'true'
+      QNA_VITE_PORT: ${QNA_VITE_PORT:-5170}
+      QNA_VITE_DEV_SERVER_URL: ${QNA_VITE_DEV_SERVER_URL:-http://localhost:5170}
+    ports:
+      - ${QNA_VITE_PORT:-5170}:${QNA_VITE_PORT:-5170}
+    volumes:
+      - ${QNA_DEV_APP_DIR:-./qna}:/repo/integrations/qna
+      - qna-node-modules:/repo/node_modules
+      - qna-app-node-modules:/repo/integrations/qna/node_modules
+
+volumes:
+  qna-node-modules:
+  qna-app-node-modules:

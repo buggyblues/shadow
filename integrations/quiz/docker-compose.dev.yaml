@@ -1,0 +1,20 @@
+name: shadow-integrations-dev
+
+services:
+  quiz:
+    command: pnpm dev:hot:install
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: 'true'
+      QUIZ_VITE_PORT: ${QUIZ_VITE_PORT:-5171}
+      QUIZ_VITE_DEV_SERVER_URL: ${QUIZ_VITE_DEV_SERVER_URL:-http://localhost:5171}
+    ports:
+      - ${QUIZ_VITE_PORT:-5171}:${QUIZ_VITE_PORT:-5171}
+    volumes:
+      - ${QUIZ_DEV_APP_DIR:-./quiz}:/repo/integrations/quiz
+      - quiz-node-modules:/repo/node_modules
+      - quiz-app-node-modules:/repo/integrations/quiz/node_modules
+
+volumes:
+  quiz-node-modules:
+  quiz-app-node-modules:

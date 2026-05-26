@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "compose:dev": "sh -c 'test -f ../.env || cp ../.env.example ../.env; TRAINER_DEV_APP_DIR=$(pwd) docker compose -f ../docker-compose.yaml -f docker-compose.dev.yaml --env-file ../.env up trainer --build'",
+    "compose:dev:down": "sh -c 'test -f ../.env || cp ../.env.example ../.env; TRAINER_DEV_APP_DIR=$(pwd) docker compose -f ../docker-compose.yaml -f docker-compose.dev.yaml --env-file ../.env down'",
     "dev": "tsx watch src/server.ts",
+    "dev:hot": "sh -c 'vite --host 0.0.0.0 --port ${TRAINER_VITE_PORT:-5173} & tsx watch src/server.ts'",
+    "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/trainer-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm dev:hot'",
     "start": "tsx src/server.ts",
     "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
     "typecheck": "tsc --noEmit"
@@ -14,6 +18,7 @@
     "@hono/node-server": "^1.14.1",
     "@shadowob/sdk": "workspace:*",
     "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-router": "^1.168.2",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",
     "hono": "^4.12.17",
