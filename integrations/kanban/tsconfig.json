@@ -5,7 +5,7 @@
     "rootDir": ".",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
-  "include": ["src/**/*.ts", "shadow-app.local.json"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "shadow-app.local.json"]
 }

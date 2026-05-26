@@ -207,7 +207,8 @@ export function ServerLayout() {
   const location = useLocation()
   const routeSearch = useSearch({ strict: false }) as RouteSearch
   const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
-  const { mobileView, copilotChannel, openCopilotChannel, closeCopilotChannel } = useUIStore()
+  const { mobileView, copilotChannel, setMobileView, openCopilotChannel, closeCopilotChannel } =
+    useUIStore()
   const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
   const [stableServerMeta, setStableServerMeta] = useState<ServerMeta | null>(null)
   const copilotResize = useCopilotPanelResize()
@@ -420,15 +421,7 @@ export function ServerLayout() {
   const isServerAppsRoute = /\/servers\/[^/]+\/apps(?:\/|$)/u.test(location.pathname)
   const routeCopilotChannelId = getCopilotChannelIdFromSearch(routeSearch)
   const routeServerSlug = serverMeta?.slug ?? serverSlug
-  const copilotMatchesServer =
-    !!copilotChannel &&
-    (copilotChannel.serverSlug === serverSlug || copilotChannel.serverSlug === serverMeta?.slug)
-  const activeCopilotChannelId =
-    isServerAppsRoute && copilotMatchesServer
-      ? copilotChannel.channelId
-      : isServerAppsRoute
-        ? routeCopilotChannelId
-        : null
+  const activeCopilotChannelId = isServerAppsRoute ? routeCopilotChannelId : null
   const isCopilotMode = isServerAppsRoute && Boolean(activeCopilotChannelId)
   const isServerMember = serverAccess?.isMember === true
   const shouldRenderChannelSidebar = !isCopilotMode && isServerMember
@@ -465,6 +458,13 @@ export function ServerLayout() {
       closeCopilotChannel()
     }
   }, [closeCopilotChannel, copilotChannel, isServerAppsRoute])
+
+  useEffect(() => {
+    if (copilotChannel && isServerAppsRoute && !routeCopilotChannelId) {
+      closeCopilotChannel()
+      setMobileView('channels')
+    }
+  }, [closeCopilotChannel, copilotChannel, isServerAppsRoute, routeCopilotChannelId, setMobileView])
 
   useEffect(() => {
     if (!copilotChannel) return
@@ -543,7 +543,15 @@ export function ServerLayout() {
 
   const closeCopilot = () => {
     closeCopilotChannel()
-    navigateServerAppCopilot(null)
+    setMobileView('channels')
+    navigate({
+      to: routeAppKey ? '/servers/$serverSlug/apps/$appKey' : '/servers/$serverSlug/apps',
+      params: routeAppKey
+        ? { serverSlug: routeServerSlug, appKey: routeAppKey }
+        : { serverSlug: routeServerSlug },
+      search: withCopilotChannelSearch(routeSearch, null),
+      replace: true,
+    })
   }
 
   return (

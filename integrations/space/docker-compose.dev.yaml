@@ -1,0 +1,20 @@
+name: shadow-integrations-dev
+
+services:
+  space:
+    command: pnpm dev:hot:install
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: 'true'
+      SPACE_VITE_PORT: ${SPACE_VITE_PORT:-5177}
+      SPACE_VITE_DEV_SERVER_URL: ${SPACE_VITE_DEV_SERVER_URL:-http://localhost:5177}
+    ports:
+      - ${SPACE_VITE_PORT:-5177}:${SPACE_VITE_PORT:-5177}
+    volumes:
+      - ${SPACE_DEV_APP_DIR:-./space}:/repo/integrations/space
+      - space-node-modules:/repo/node_modules
+      - space-app-node-modules:/repo/integrations/space/node_modules
+
+volumes:
+  space-node-modules:
+  space-app-node-modules:

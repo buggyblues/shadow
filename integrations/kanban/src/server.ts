@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
 import type { ShadowServerAppCommandContext, ShadowServerAppCommandName } from '@shadowob/sdk'
 import { Hono } from 'hono'
 import {
@@ -91,7 +92,9 @@ function iconSvg() {
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+app.get('/assets/*', serveStatic({ root: './dist/client' }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
+app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/board', (c) => c.json(getBoard()))
 
 app.post('/api/local/commands/:commandName', async (c) => {

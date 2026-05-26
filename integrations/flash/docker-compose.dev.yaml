@@ -1,0 +1,20 @@
+name: shadow-integrations-dev
+
+services:
+  flash:
+    command: pnpm dev:hot:install
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: 'true'
+      FLASH_VITE_PORT: ${FLASH_VITE_PORT:-5176}
+      FLASH_VITE_DEV_SERVER_URL: ${FLASH_VITE_DEV_SERVER_URL:-http://localhost:5176}
+    ports:
+      - ${FLASH_VITE_PORT:-5176}:${FLASH_VITE_PORT:-5176}
+    volumes:
+      - ${FLASH_DEV_APP_DIR:-./flash}:/repo/integrations/flash
+      - flash-node-modules:/repo/node_modules
+      - flash-app-node-modules:/repo/integrations/flash/node_modules
+
+volumes:
+  flash-node-modules:
+  flash-app-node-modules:

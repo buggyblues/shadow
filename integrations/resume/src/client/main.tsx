@@ -1,4 +1,11 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from '@tanstack/react-query'
+import {
+  createHashHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router'
 import { FilePlus2, Palette, PenLine, Sparkles, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -17,6 +24,23 @@ import './styles.css'
 const queryClient = new QueryClient()
 
 type ModalMode = 'create' | 'generate' | 'edit' | 'style' | null
+
+const rootRoute = createRootRoute()
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: App,
+})
+const router = createRouter({
+  routeTree: rootRoute.addChildren([indexRoute]),
+  history: createHashHistory(),
+})
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
 
 function App() {
   const [query, setQuery] = useState('')
@@ -385,6 +409,6 @@ function Modal(props: { title: string; children: React.ReactNode; onClose: () =>
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <QueryClientProvider client={queryClient}>
-    <App />
+    <RouterProvider router={router} />
   </QueryClientProvider>,
 )

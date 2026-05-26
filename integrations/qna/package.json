@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "compose:dev": "sh -c 'test -f ../.env || cp ../.env.example ../.env; QNA_DEV_APP_DIR=$(pwd) docker compose -f ../docker-compose.yaml -f docker-compose.dev.yaml --env-file ../.env up qna --build'",
+    "compose:dev:down": "sh -c 'test -f ../.env || cp ../.env.example ../.env; QNA_DEV_APP_DIR=$(pwd) docker compose -f ../docker-compose.yaml -f docker-compose.dev.yaml --env-file ../.env down'",
     "dev": "tsx watch src/server.ts",
+    "dev:hot": "sh -c 'vite --host 0.0.0.0 --port ${QNA_VITE_PORT:-5170} & tsx watch src/server.ts'",
+    "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/qna-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm dev:hot'",
     "start": "tsx src/server.ts",
     "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
     "typecheck": "tsc --noEmit"
@@ -15,14 +19,13 @@
     "@shadowob/sdk": "workspace:*",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-router": "^1.168.2",
-    "clsx": "^2.1.1",
+    "dompurify": "^3.3.1",
     "dotenv": "^17.3.1",
     "hono": "^4.12.17",
     "lucide-react": "^0.513.0",
+    "marked": "^17.0.1",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
