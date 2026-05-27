@@ -33,6 +33,7 @@ COPY integrations/qna/package.json ./integrations/qna/
 COPY integrations/quiz/package.json ./integrations/quiz/
 COPY integrations/resume/package.json ./integrations/resume/
 COPY integrations/space/package.json ./integrations/space/
+COPY integrations/skills/package.json ./integrations/skills/
 COPY integrations/trainer/package.json ./integrations/trainer/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/connector/package.json ./packages/connector/
