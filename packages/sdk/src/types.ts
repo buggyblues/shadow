@@ -2,6 +2,7 @@
 
 import type {
   BuddyInboxAdmissionMode as SharedBuddyInboxAdmissionMode,
+  BuddyInboxAdmissionPendingDelivery as SharedBuddyInboxAdmissionPendingDelivery,
   BuddyInboxAdmissionPolicy as SharedBuddyInboxAdmissionPolicy,
   BuddyInboxAdmissionRule as SharedBuddyInboxAdmissionRule,
   BuddyInboxAdmissionSubjectKind as SharedBuddyInboxAdmissionSubjectKind,
@@ -178,6 +179,7 @@ export type ShadowBuddyInboxAdmissionMode = SharedBuddyInboxAdmissionMode
 export type ShadowBuddyInboxAdmissionSubjectKind = SharedBuddyInboxAdmissionSubjectKind
 export type ShadowBuddyInboxAdmissionRule = SharedBuddyInboxAdmissionRule
 export type ShadowBuddyInboxAdmissionPolicy = SharedBuddyInboxAdmissionPolicy
+export type ShadowBuddyInboxAdmissionPendingDelivery = SharedBuddyInboxAdmissionPendingDelivery
 
 export interface ShadowBuddyInboxSummary {
   agent: {
@@ -204,6 +206,18 @@ export interface ShadowEnsureBuddyInboxResult {
 export interface ShadowBuddyInboxAdmissionPolicyResult {
   channel: ShadowChannel | null
   policy: ShadowBuddyInboxAdmissionPolicy
+}
+
+export interface ShadowBuddyInboxAdmissionPendingResult {
+  channel: ShadowChannel | null
+  pending: ShadowBuddyInboxAdmissionPendingDelivery[]
+}
+
+export interface ShadowBuddyInboxAdmissionPendingActionResult {
+  channel: ShadowChannel | null
+  pending: ShadowBuddyInboxAdmissionPendingDelivery
+  message?: ShadowMessage
+  policy?: ShadowBuddyInboxAdmissionPolicy
 }
 
 export interface ShadowInboxTaskInput {
@@ -466,6 +480,13 @@ export interface ShadowServerAppTokenIntrospection {
       profile?: ShadowServerAppActorProfile | null
     }
     channelId?: string | null
+    task?: {
+      messageId: string
+      cardId: string
+      claimId?: string | null
+      workspaceId?: string | null
+      scopes?: string[]
+    }
     permission?: string
     action?: string
     dataClass?: string

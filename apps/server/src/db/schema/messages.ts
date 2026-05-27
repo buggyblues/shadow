@@ -85,6 +85,11 @@ export interface MessageCardCapabilityMetadata {
   issuedAt: string
   expiresAt: string
   claimId?: string
+  binding?: {
+    messageId?: string
+    cardId: string
+    workspaceId?: string
+  }
 }
 
 export interface TaskMessageCardMetadata {
@@ -111,7 +116,12 @@ export interface TaskMessageCardMetadata {
   }>
   createdAt: string
   updatedAt?: string
-  data?: Record<string, unknown>
+  data?: Record<string, unknown> & {
+    task?: {
+      workspaceId?: string
+      [key: string]: unknown
+    }
+  }
 }
 
 export type MessageCardMetadata =

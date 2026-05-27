@@ -173,7 +173,11 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
   command<TCommandName extends Extract<keyof TCommands, string>>(
     commandName: TCommandName,
     input: BridgeCommandInput<TCommands[TCommandName]>,
-    options: { channelId?: string; timeoutMs?: number } = {},
+    options: {
+      channelId?: string
+      timeoutMs?: number
+      task?: { messageId: string; cardId: string; claimId?: string }
+    } = {},
   ): Promise<BridgeCommandResult<TCommands[TCommandName]>> {
     return this.request<unknown>(
       ShadowBridge.commandRequestType,
@@ -182,6 +186,7 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
         commandName,
         input,
         ...(options.channelId ? { channelId: options.channelId } : {}),
+        ...(options.task ? { task: options.task } : {}),
       },
       options.timeoutMs,
     ).then((payload) =>

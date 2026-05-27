@@ -3299,6 +3299,30 @@
     "queueOpen": "작업 큐 준비됨",
     "queueNotReady": "큐가 활성화되지 않음",
     "queueBadge": "작업 큐",
+    "admissionSettings": "전달 권한",
+    "admissionDefaultMode": "기본 전달 정책",
+    "admissionPending": "승인 대기 전달",
+    "admissionRules": "허용 규칙",
+    "admissionNoPending": "승인 대기 전달이 없습니다.",
+    "admissionNoRules": "사용자 규칙이 아직 없습니다.",
+    "admissionApprove": "승인",
+    "admissionReject": "거절",
+    "admissionSave": "정책 저장",
+    "admissionAddRule": "규칙 추가",
+    "admissionSubjectId": "주체 ID",
+    "admissionAppKey": "App Key",
+    "admissionMode": {
+      "allow": "허용",
+      "deny": "거절",
+      "first_time": "처음만 승인",
+      "every_time": "매번 승인"
+    },
+    "admissionSubject": {
+      "server_app": "Server App",
+      "agent": "Buddy",
+      "user": "사용자",
+      "system": "시스템"
+    },
     "filter": {
       "all": "전체",
       "open": "진행 중",

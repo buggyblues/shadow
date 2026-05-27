@@ -457,17 +457,44 @@ def _message_task_card_for_self(
     return None
 
 
-def _format_task_card_prompt(text: str, card: dict[str, Any]) -> str:
+def _format_task_card_prompt(
+    text: str,
+    card: dict[str, Any],
+    *,
+    message_id: str | None = None,
+) -> str:
     title = str(card.get("title") or "Inbox task").strip()
     body = str(card.get("body") or "").strip()
     priority = str(card.get("priority") or "").strip()
     source = card.get("source") if isinstance(card.get("source"), dict) else {}
     source_label = str(source.get("label") or source.get("command") or "").strip()
+    card_id = str(card.get("id") or "").strip()
+    claim = card.get("claim") if isinstance(card.get("claim"), dict) else {}
+    claim_id = str(claim.get("id") or "").strip()
+    data = card.get("data") if isinstance(card.get("data"), dict) else {}
+    task_data = data.get("task") if isinstance(data.get("task"), dict) else {}
+    workspace_id = str(task_data.get("workspaceId") or "").strip()
     lines = ["[Shadow Inbox task]", f"Title: {title}"]
+    if message_id:
+        lines.append(f"Task message id: {message_id}")
+    if card_id:
+        lines.append(f"Task card id: {card_id}")
+    if claim_id:
+        lines.append(f"Task claim id: {claim_id}")
+    if workspace_id:
+        lines.append(f"Task workspace id: {workspace_id}")
     if priority:
         lines.append(f"Priority: {priority}")
     if source_label:
         lines.append(f"Source: {source_label}")
+    if message_id and card_id and claim_id:
+        lines.extend(
+            [
+                "",
+                "Bind Shadow Server App command calls for this task with:",
+                f"--task-message-id {message_id} --task-card-id {card_id} --task-claim-id {claim_id}",
+            ]
+        )
     if body:
         lines.extend(["", body])
     if text and text.strip() and text.strip() not in {title, body}:
@@ -1541,7 +1568,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
             task_card = await self._activate_task_card(message, task_card)
             if not task_card:
                 return
-            text = _format_task_card_prompt(text, task_card)
+            text = _format_task_card_prompt(text, task_card, message_id=message_id)
 
         media_paths, media_types, message_type = await self._resolve_inbound_media(message)
         reply_to_id = _message_reply_to_id(message)

@@ -121,10 +121,12 @@ function AppShell() {
     onSuccess: async (result) => {
       const delivery = ShadowBridge.inboxDeliveries(result)[0]
       const error = ShadowBridge.inboxErrors(result)[0]
-      if (delivery?.messageId) {
+      if (delivery?.messageId || delivery?.pendingId) {
         setNotice({
           kind: 'success',
-          message: `${result.skill.name} sent to ${buddyLabel(selectedBuddy)}`,
+          message: delivery.pendingId
+            ? `${result.skill.name} is waiting for Inbox approval`
+            : `${result.skill.name} sent to ${buddyLabel(selectedBuddy)}`,
         })
       } else {
         setNotice({

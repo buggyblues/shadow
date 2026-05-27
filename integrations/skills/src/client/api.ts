@@ -12,6 +12,8 @@ export interface SkillListResponse {
     guideUrl?: string
     guideUpdatedAt?: string
     indexedCount?: number
+    lastOkAt?: string
+    lastError?: string | null
   }
   guide?: {
     url: string

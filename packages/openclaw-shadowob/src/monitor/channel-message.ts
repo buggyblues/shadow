@@ -61,7 +61,13 @@ type RuntimeTaskCard = ShadowMessageCard & {
     label?: string
   }
   source?: Record<string, unknown>
+  data?: Record<string, unknown> & {
+    task?: {
+      workspaceId?: string
+    }
+  }
   claim?: {
+    id?: string
     actor?: {
       userId?: string
       agentId?: string
@@ -131,15 +137,29 @@ function findTaskCardById(message: ShadowMessage | null, cardId: string) {
   )
 }
 
-function taskCardPrompt(card: RuntimeTaskCard) {
+function taskCardPrompt(message: ShadowMessage, card: RuntimeTaskCard) {
+  const workspaceId =
+    card.data?.task && typeof card.data.task.workspaceId === 'string'
+      ? card.data.task.workspaceId
+      : undefined
+  const claimId = typeof card.claim?.id === 'string' ? card.claim.id : undefined
   return [
     'Shadow Inbox task:',
+    `Task message id: ${message.id}`,
     `Task card id: ${card.id}`,
+    claimId ? `Task claim id: ${claimId}` : '',
+    workspaceId ? `Task workspace id: ${workspaceId}` : '',
     `Task status: ${card.status}`,
     `Task title: ${card.title}`,
     card.priority ? `Task priority: ${card.priority}` : '',
     card.body ? `Task body:\n${card.body}` : '',
     card.source ? `Task source: ${JSON.stringify(card.source)}` : '',
+    claimId
+      ? [
+          'When calling Shadow Server App commands for this task, bind the call with:',
+          `--task-message-id ${message.id} --task-card-id ${card.id} --task-claim-id ${claimId}`,
+        ].join('\n')
+      : '',
     'When you complete useful work for this task, reply with the concrete result and any next action.',
   ]
     .filter(Boolean)
@@ -486,7 +506,7 @@ export async function processShadowMessage(params: {
     viewerCommerceContext,
     mentionContext,
     serverAppContext.prompt,
-    runtimeTaskCard ? taskCardPrompt(runtimeTaskCard) : '',
+    runtimeTaskCard ? taskCardPrompt(message, runtimeTaskCard) : '',
     messageBodyForAgent,
   ]
     .filter(Boolean)
@@ -507,6 +527,9 @@ export async function processShadowMessage(params: {
     Boolean(slashCommandMatch) ||
     mentionRegex.test(message.content)
 
+  const taskSessionKey = runtimeTaskCard
+    ? `${route.sessionKey}:task:${runtimeTaskCard.id}`
+    : route.sessionKey
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: bodyForAgent,
@@ -517,7 +540,7 @@ export async function processShadowMessage(params: {
     CommandSource: 'text',
     From: `shadowob:user:${senderId}`,
     To: `shadowob:channel:${channelId}`,
-    SessionKey: route.sessionKey,
+    SessionKey: taskSessionKey,
     AccountId: route.accountId,
     ChatType: chatType,
     ConversationLabel: conversationLabel,

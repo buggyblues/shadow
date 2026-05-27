@@ -3302,6 +3302,30 @@
     "queueOpen": "任务队列已就绪",
     "queueNotReady": "尚未开通队列",
     "queueBadge": "任务队列",
+    "admissionSettings": "投递授权",
+    "admissionDefaultMode": "默认投递策略",
+    "admissionPending": "待批准投递",
+    "admissionRules": "放行规则",
+    "admissionNoPending": "没有待批准的投递。",
+    "admissionNoRules": "还没有自定义规则。",
+    "admissionApprove": "批准",
+    "admissionReject": "拒绝",
+    "admissionSave": "保存策略",
+    "admissionAddRule": "添加规则",
+    "admissionSubjectId": "主体 ID",
+    "admissionAppKey": "App Key",
+    "admissionMode": {
+      "allow": "直接放行",
+      "deny": "拒绝",
+      "first_time": "首次批准",
+      "every_time": "每次批准"
+    },
+    "admissionSubject": {
+      "server_app": "Server App",
+      "agent": "Buddy",
+      "user": "用户",
+      "system": "系统"
+    },
     "filter": {
       "all": "全部",
       "open": "进行中",

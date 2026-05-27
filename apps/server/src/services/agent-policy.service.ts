@@ -7,7 +7,10 @@ import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { ServerDao } from '../dao/server.dao'
 import { validateJsonLimits } from '../lib/json-limits'
 import { normalizeSlashCommands } from './agent.service'
-import { normalizeBuddyInboxAdmissionPolicy } from './buddy-inbox-protocol'
+import {
+  normalizeBuddyInboxAdmissionPendingDeliveries,
+  normalizeBuddyInboxAdmissionPolicy,
+} from './buddy-inbox-protocol'
 import { getBuddyAllowedServerIds, getBuddyMode } from './buddy-policy'
 
 const AGENT_POLICY_CONFIG_KEYS = new Set([
@@ -30,6 +33,7 @@ const AGENT_POLICY_CONFIG_KEYS = new Set([
   'voiceConsumeScreenShare',
   'voiceScreenshotIntervalSeconds',
   'inboxAdmission',
+  'inboxAdmissionPending',
 ])
 
 function stringArray(value: unknown, key: string): string[] | undefined {
@@ -118,6 +122,9 @@ function validatePolicyConfig(config: Record<string, unknown> | undefined) {
     }
     if (key === 'inboxAdmission') {
       sanitized[key] = normalizeBuddyInboxAdmissionPolicy(value)
+    }
+    if (key === 'inboxAdmissionPending') {
+      sanitized[key] = normalizeBuddyInboxAdmissionPendingDeliveries(value)
     }
   }
   return sanitized

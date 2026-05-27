@@ -1,6 +1,7 @@
 export {
   BUDDY_INBOX_TOPIC_PREFIX,
   type BuddyInboxAdmissionMode,
+  type BuddyInboxAdmissionPendingDelivery,
   type BuddyInboxAdmissionPolicy,
   type BuddyInboxAdmissionRule,
   type BuddyInboxAdmissionSubjectKind,
@@ -9,6 +10,7 @@ export {
   DEFAULT_BUDDY_INBOX_ADMISSION_POLICY,
   isBuddyInboxTopic,
   isTerminalTaskMessageCardStatus,
+  normalizeBuddyInboxAdmissionPendingDeliveries,
   normalizeBuddyInboxAdmissionPolicy,
   parseBuddyInboxAgentId,
   TASK_MESSAGE_CARD_STATUS_TRANSITIONS,

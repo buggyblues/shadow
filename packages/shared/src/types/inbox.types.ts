@@ -1,4 +1,4 @@
-import type { MessageCardStatus } from './message.types'
+import type { MessageCardSource, MessageCardStatus } from './message.types'
 
 export const BUDDY_INBOX_TOPIC_PREFIX = 'shadow:buddy-inbox:' as const
 
@@ -73,6 +73,33 @@ export interface BuddyInboxAdmissionPolicy {
   rules: BuddyInboxAdmissionRule[]
 }
 
+export interface BuddyInboxAdmissionPendingTask {
+  title: string
+  body?: string
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  idempotencyKey?: string
+  source?: MessageCardSource
+  data?: Record<string, unknown>
+}
+
+export interface BuddyInboxAdmissionPendingDelivery {
+  id: string
+  serverId: string
+  channelId: string
+  agentId: string
+  mode: Exclude<BuddyInboxAdmissionMode, 'allow' | 'deny'>
+  subject: {
+    kind: BuddyInboxAdmissionSubjectKind
+    id?: string
+    appKey?: string
+    label?: string
+  }
+  task: BuddyInboxAdmissionPendingTask
+  requestedBy: MessageCardSource
+  requestedAt: string
+  updatedAt?: string
+}
+
 export const DEFAULT_BUDDY_INBOX_ADMISSION_POLICY: BuddyInboxAdmissionPolicy = {
   defaultMode: 'allow',
   rules: [],
@@ -133,4 +160,74 @@ export function normalizeBuddyInboxAdmissionPolicy(value: unknown): BuddyInboxAd
 
 export function buddyInboxAdmissionRuleKey(rule: BuddyInboxAdmissionRule) {
   return [rule.subjectKind, rule.subjectId ?? '', rule.appKey ?? ''].join(':')
+}
+
+function parsePendingTask(value: unknown): BuddyInboxAdmissionPendingTask {
+  if (!isRecord(value)) throw new Error('Invalid Buddy Inbox pending task')
+  const title = parseOptionalString(value.title, 'task.title', 180)
+  if (!title) throw new Error('Invalid Buddy Inbox pending task title')
+  const body = parseOptionalString(value.body, 'task.body', 8000)
+  const priority = value.priority
+  if (
+    priority !== undefined &&
+    priority !== 'low' &&
+    priority !== 'normal' &&
+    priority !== 'high' &&
+    priority !== 'urgent'
+  ) {
+    throw new Error('Invalid Buddy Inbox pending task priority')
+  }
+  const idempotencyKey = parseOptionalString(value.idempotencyKey, 'task.idempotencyKey', 240)
+  const source = isRecord(value.source) ? (value.source as unknown as MessageCardSource) : undefined
+  const data = isRecord(value.data) ? value.data : undefined
+  return {
+    title,
+    ...(body ? { body } : {}),
+    ...(priority ? { priority } : {}),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+    ...(source ? { source } : {}),
+    ...(data ? { data } : {}),
+  }
+}
+
+export function normalizeBuddyInboxAdmissionPendingDeliveries(
+  value: unknown,
+): BuddyInboxAdmissionPendingDelivery[] {
+  if (value === undefined || value === null) return []
+  if (!Array.isArray(value)) throw new Error('Invalid Buddy Inbox pending deliveries')
+  return value.slice(0, 100).map((entry): BuddyInboxAdmissionPendingDelivery => {
+    if (!isRecord(entry)) throw new Error('Invalid Buddy Inbox pending delivery')
+    const id = parseOptionalString(entry.id, 'pending.id', 80)
+    const serverId = parseOptionalString(entry.serverId, 'pending.serverId', 160)
+    const channelId = parseOptionalString(entry.channelId, 'pending.channelId', 160)
+    const agentId = parseOptionalString(entry.agentId, 'pending.agentId', 160)
+    const mode = parseAdmissionMode(entry.mode, 'first_time')
+    if (mode !== 'first_time' && mode !== 'every_time') {
+      throw new Error('Invalid Buddy Inbox pending mode')
+    }
+    if (!isRecord(entry.subject)) throw new Error('Invalid Buddy Inbox pending subject')
+    if (!isRecord(entry.requestedBy)) throw new Error('Invalid Buddy Inbox pending requester')
+    if (!id || !serverId || !channelId || !agentId) {
+      throw new Error('Invalid Buddy Inbox pending delivery identifiers')
+    }
+    const requestedAt = parseOptionalString(entry.requestedAt, 'pending.requestedAt', 64)
+    if (!requestedAt) throw new Error('Invalid Buddy Inbox pending requestedAt')
+    return {
+      id,
+      serverId,
+      channelId,
+      agentId,
+      mode,
+      subject: {
+        kind: parseSubjectKind(entry.subject.kind),
+        id: parseOptionalString(entry.subject.id, 'subject.id', 160),
+        appKey: parseOptionalString(entry.subject.appKey, 'subject.appKey', 120),
+        label: parseOptionalString(entry.subject.label, 'subject.label', 160),
+      },
+      task: parsePendingTask(entry.task),
+      requestedBy: entry.requestedBy as unknown as MessageCardSource,
+      requestedAt,
+      updatedAt: parseOptionalString(entry.updatedAt, 'pending.updatedAt', 64),
+    }
+  })
 }

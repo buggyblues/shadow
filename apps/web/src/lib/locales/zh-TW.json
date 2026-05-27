@@ -3299,6 +3299,30 @@
     "queueOpen": "任務佇列已就緒",
     "queueNotReady": "尚未啟用佇列",
     "queueBadge": "任務佇列",
+    "admissionSettings": "投遞授權",
+    "admissionDefaultMode": "預設投遞策略",
+    "admissionPending": "待批准投遞",
+    "admissionRules": "放行規則",
+    "admissionNoPending": "沒有待批准的投遞。",
+    "admissionNoRules": "還沒有自訂規則。",
+    "admissionApprove": "批准",
+    "admissionReject": "拒絕",
+    "admissionSave": "儲存策略",
+    "admissionAddRule": "新增規則",
+    "admissionSubjectId": "主體 ID",
+    "admissionAppKey": "App Key",
+    "admissionMode": {
+      "allow": "直接放行",
+      "deny": "拒絕",
+      "first_time": "首次批准",
+      "every_time": "每次批准"
+    },
+    "admissionSubject": {
+      "server_app": "Server App",
+      "agent": "Buddy",
+      "user": "使用者",
+      "system": "系統"
+    },
     "filter": {
       "all": "全部",
       "open": "進行中",

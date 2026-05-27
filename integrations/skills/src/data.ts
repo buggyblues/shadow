@@ -698,7 +698,15 @@ function upsertExternalSkill(input: {
   return next
 }
 
-export async function snapshotSkillDirectory(input: { limit?: number } = {}) {
+function markSnapshotFailure(error: unknown) {
+  library.directory = {
+    ...(library.directory ?? {}),
+    lastError: error instanceof Error ? error.message : String(error),
+  }
+  touch()
+}
+
+async function snapshotSkillDirectoryInternal(input: { limit?: number } = {}) {
   const snapshotAt = now()
   const [html, guide] = await Promise.all([
     fetchText(SKILLS_SH_URL),
@@ -718,6 +726,8 @@ export async function snapshotSkillDirectory(input: { limit?: number } = {}) {
     guideUrl: FIND_SKILLS_GUIDE_URL,
     guideUpdatedAt: guide ? snapshotAt : library.directory?.guideUpdatedAt,
     indexedCount: selected.length,
+    lastOkAt: snapshotAt,
+    lastError: null,
   }
   touch()
   return {
@@ -726,6 +736,22 @@ export async function snapshotSkillDirectory(input: { limit?: number } = {}) {
     totalFound: entries.length,
     skills: updatedSkills.map(toSummary),
   }
+}
+
+let snapshotInFlight: Promise<Awaited<ReturnType<typeof snapshotSkillDirectoryInternal>>> | null =
+  null
+
+export async function snapshotSkillDirectory(input: { limit?: number } = {}) {
+  if (snapshotInFlight) return snapshotInFlight
+  snapshotInFlight = snapshotSkillDirectoryInternal(input)
+    .catch((error) => {
+      markSnapshotFailure(error)
+      throw error
+    })
+    .finally(() => {
+      snapshotInFlight = null
+    })
+  return snapshotInFlight
 }
 
 function snapshotIntervalMs() {

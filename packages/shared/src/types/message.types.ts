@@ -119,6 +119,11 @@ export interface MessageCardCapability {
   issuedAt: string
   expiresAt: string
   claimId?: string
+  binding?: {
+    messageId?: string
+    cardId: string
+    workspaceId?: string
+  }
 }
 
 export interface TaskMessageCard {
@@ -147,7 +152,12 @@ export interface TaskMessageCard {
   }>
   createdAt: string
   updatedAt?: string
-  data?: Record<string, unknown>
+  data?: Record<string, unknown> & {
+    task?: {
+      workspaceId?: string
+      [key: string]: unknown
+    }
+  }
   [key: string]: unknown
 }
 

@@ -82,6 +82,8 @@ export interface SkillLibraryState {
     guideUrl?: string
     guideUpdatedAt?: string
     indexedCount?: number
+    lastOkAt?: string
+    lastError?: string | null
   }
   updatedAt: string
 }

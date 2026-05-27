@@ -3299,6 +3299,30 @@
     "queueOpen": "タスクキュー準備完了",
     "queueNotReady": "キュー未有効",
     "queueBadge": "タスクキュー",
+    "admissionSettings": "配信権限",
+    "admissionDefaultMode": "既定の配信ポリシー",
+    "admissionPending": "承認待ちの配信",
+    "admissionRules": "許可ルール",
+    "admissionNoPending": "承認待ちの配信はありません。",
+    "admissionNoRules": "カスタムルールはまだありません。",
+    "admissionApprove": "承認",
+    "admissionReject": "拒否",
+    "admissionSave": "ポリシーを保存",
+    "admissionAddRule": "ルールを追加",
+    "admissionSubjectId": "主体 ID",
+    "admissionAppKey": "App Key",
+    "admissionMode": {
+      "allow": "許可",
+      "deny": "拒否",
+      "first_time": "初回のみ承認",
+      "every_time": "毎回承認"
+    },
+    "admissionSubject": {
+      "server_app": "Server App",
+      "agent": "Buddy",
+      "user": "ユーザー",
+      "system": "システム"
+    },
     "filter": {
       "all": "すべて",
       "open": "進行中",

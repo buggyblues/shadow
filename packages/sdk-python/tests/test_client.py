@@ -844,6 +844,17 @@ def test_buddy_inbox_methods_use_canonical_paths(monkeypatch):
         "agent-1",
         {"defaultMode": "allow", "rules": []},
     ) == {"policy": {"defaultMode": "allow", "rules": []}}
+    assert client.list_buddy_inbox_admission_pending("shadow-plays", "agent-1") == []
+    assert client.approve_buddy_inbox_admission_pending(
+        "shadow-plays",
+        "agent-1",
+        "pending-1",
+    ) == {"ok": True}
+    assert client.reject_buddy_inbox_admission_pending(
+        "shadow-plays",
+        "agent-1",
+        "pending-2",
+    ) == {"ok": True}
     assert client.enqueue_inbox_task_for_agent(
         "shadow-plays",
         "agent-1",
@@ -872,6 +883,17 @@ def test_buddy_inbox_methods_use_canonical_paths(monkeypatch):
             "put",
             "/api/servers/shadow-plays/inboxes/agent-1/admission-policy",
             {"defaultMode": "allow", "rules": []},
+        ),
+        ("get", "/api/servers/shadow-plays/inboxes/agent-1/admission-pending", None),
+        (
+            "post",
+            "/api/servers/shadow-plays/inboxes/agent-1/admission-pending/pending-1/approve",
+            None,
+        ),
+        (
+            "post",
+            "/api/servers/shadow-plays/inboxes/agent-1/admission-pending/pending-2/reject",
+            None,
         ),
         (
             "post",

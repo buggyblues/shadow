@@ -3302,6 +3302,30 @@
     "queueOpen": "Task queue ready",
     "queueNotReady": "Queue not enabled",
     "queueBadge": "Task queue",
+    "admissionSettings": "Delivery access",
+    "admissionDefaultMode": "Default delivery policy",
+    "admissionPending": "Pending deliveries",
+    "admissionRules": "Allow rules",
+    "admissionNoPending": "No pending deliveries.",
+    "admissionNoRules": "No custom rules yet.",
+    "admissionApprove": "Approve",
+    "admissionReject": "Reject",
+    "admissionSave": "Save policy",
+    "admissionAddRule": "Add rule",
+    "admissionSubjectId": "Subject ID",
+    "admissionAppKey": "App key",
+    "admissionMode": {
+      "allow": "Allow",
+      "deny": "Deny",
+      "first_time": "Approve first time",
+      "every_time": "Approve every time"
+    },
+    "admissionSubject": {
+      "server_app": "Server App",
+      "agent": "Buddy",
+      "user": "User",
+      "system": "System"
+    },
     "filter": {
       "all": "All",
       "open": "Open",

@@ -11,6 +11,7 @@ import { type Actor, type ActorInput, actorUserId } from '../security/actor'
 import type { MessageCardInput, MessageCardStatusInput } from '../validators/message.schema'
 import {
   type BuddyInboxAdmissionMode,
+  type BuddyInboxAdmissionPendingDelivery,
   type BuddyInboxAdmissionPolicy,
   type BuddyInboxAdmissionRule,
   type BuddyInboxAdmissionSubjectKind,
@@ -18,6 +19,7 @@ import {
   canTransitionTaskMessageCardStatus,
   DEFAULT_BUDDY_INBOX_ADMISSION_POLICY,
   isTerminalTaskMessageCardStatus,
+  normalizeBuddyInboxAdmissionPendingDeliveries,
   normalizeBuddyInboxAdmissionPolicy,
   parseBuddyInboxAgentId,
 } from './buddy-inbox-protocol'
@@ -34,6 +36,13 @@ type EnqueueTaskInput = {
   idempotencyKey?: string
   source?: TaskMessageCardMetadata['source']
   data?: Record<string, unknown>
+}
+
+type AdmissionSubject = {
+  kind: BuddyInboxAdmissionSubjectKind
+  id?: string
+  appKey?: string
+  label?: string
 }
 
 type InboxAccess = Awaited<ReturnType<PolicyService['requireChannelRead']>>
@@ -98,6 +107,11 @@ function taskIdempotencyKey(card: TaskMessageCardMetadata) {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+function taskWorkspaceId(card: TaskMessageCardMetadata) {
+  const value = card.data?.task?.workspaceId
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
 function assertTaskStatusTransition(from: MessageCardStatusInput, to: MessageCardStatusInput) {
   if (canTransitionTaskMessageCardStatus(from, to)) return
   throw Object.assign(new Error(`Task card cannot move from ${from} to ${to}`), { status: 409 })
@@ -107,33 +121,36 @@ function sourceString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
-function admissionSubjectFromSource(source: TaskMessageCardMetadata['source'] | undefined): {
-  kind: BuddyInboxAdmissionSubjectKind
-  id?: string
-  appKey?: string
-} | null {
+function admissionSubjectFromSource(
+  source: TaskMessageCardMetadata['source'] | undefined,
+): AdmissionSubject | null {
   if (!source) return null
   if (source.kind === 'server_app') {
     return {
       kind: 'server_app',
       id: sourceString(source.appId ?? source.id),
       appKey: sourceString(source.appKey),
+      label: sourceString(source.label ?? source.appKey ?? source.appId ?? source.id),
     }
   }
   if (source.kind === 'agent' || source.kind === 'buddy') {
-    return { kind: 'agent', id: sourceString(source.agentId ?? source.id) }
+    return {
+      kind: 'agent',
+      id: sourceString(source.agentId ?? source.id),
+      label: sourceString(source.label ?? source.agentId ?? source.id),
+    }
   }
   if (source.kind === 'system') {
     return { kind: 'system' }
   }
-  return { kind: 'user', id: sourceString(source.userId ?? source.id) }
+  return {
+    kind: 'user',
+    id: sourceString(source.userId ?? source.id),
+    label: sourceString(source.label ?? source.userId ?? source.id),
+  }
 }
 
-function admissionSubjectFromActor(actor: ActorInput): {
-  kind: BuddyInboxAdmissionSubjectKind
-  id?: string
-  appKey?: string
-} {
+function admissionSubjectFromActor(actor: ActorInput): AdmissionSubject {
   if (typeof actor === 'string') return { kind: 'user', id: actor }
   if (actor.kind === 'agent') return { kind: 'agent', id: actor.agentId ?? actor.userId }
   if (actor.kind === 'oauth') return { kind: 'server_app', id: actor.appId, appKey: actor.appId }
@@ -141,10 +158,7 @@ function admissionSubjectFromActor(actor: ActorInput): {
   return { kind: 'user', id: actor.userId }
 }
 
-function ruleMatchesSubject(
-  rule: BuddyInboxAdmissionRule,
-  subject: { kind: BuddyInboxAdmissionSubjectKind; id?: string; appKey?: string },
-) {
+function ruleMatchesSubject(rule: BuddyInboxAdmissionRule, subject: AdmissionSubject) {
   if (rule.subjectKind !== subject.kind) return false
   if (rule.subjectKind === 'server_app') {
     if (rule.appKey && rule.appKey !== subject.appKey) return false
@@ -153,6 +167,24 @@ function ruleMatchesSubject(
   }
   if (rule.subjectKind === 'system') return true
   return Boolean(rule.subjectId && rule.subjectId === subject.id)
+}
+
+function admissionRuleKeyFromSubject(subject: AdmissionSubject) {
+  return [subject.kind, subject.id ?? '', subject.appKey ?? ''].join(':')
+}
+
+function pendingMatchesTask(
+  pending: BuddyInboxAdmissionPendingDelivery,
+  subject: AdmissionSubject,
+  task: EnqueueTaskInput,
+) {
+  if (admissionRuleKeyFromSubject(pending.subject) !== admissionRuleKeyFromSubject(subject)) {
+    return false
+  }
+  if (pending.task.idempotencyKey && task.idempotencyKey) {
+    return pending.task.idempotencyKey === task.idempotencyKey
+  }
+  return pending.task.title === task.title && (pending.task.body ?? '') === (task.body ?? '')
 }
 
 export class BuddyInboxService {
@@ -207,6 +239,39 @@ export class BuddyInboxService {
     channelId: string
     policy: BuddyInboxAdmissionPolicy
   }) {
+    return this.writeAdmissionState(input)
+  }
+
+  private async readAdmissionPendingDeliveries(
+    serverId: string,
+    agentId: string,
+    channelId: string | null | undefined,
+  ): Promise<BuddyInboxAdmissionPendingDelivery[]> {
+    if (!channelId) return []
+    const policy = await this.deps.agentPolicyDao.findByChannel(agentId, serverId, channelId)
+    const config = policy?.config
+    if (!config || typeof config !== 'object' || Array.isArray(config)) return []
+    return normalizeBuddyInboxAdmissionPendingDeliveries(
+      (config as Record<string, unknown>).inboxAdmissionPending,
+    )
+  }
+
+  private async writeAdmissionPendingDeliveries(input: {
+    serverId: string
+    agentId: string
+    channelId: string
+    pending: BuddyInboxAdmissionPendingDelivery[]
+  }) {
+    return this.writeAdmissionState(input)
+  }
+
+  private async writeAdmissionState(input: {
+    serverId: string
+    agentId: string
+    channelId: string
+    policy?: BuddyInboxAdmissionPolicy
+    pending?: BuddyInboxAdmissionPendingDelivery[]
+  }) {
     const existing = await this.deps.agentPolicyDao.findByChannel(
       input.agentId,
       input.serverId,
@@ -214,7 +279,14 @@ export class BuddyInboxService {
     )
     const config = {
       ...((existing?.config as Record<string, unknown> | undefined) ?? {}),
-      inboxAdmission: normalizeBuddyInboxAdmissionPolicy(input.policy),
+      ...(input.policy !== undefined
+        ? { inboxAdmission: normalizeBuddyInboxAdmissionPolicy(input.policy) }
+        : {}),
+      ...(input.pending !== undefined
+        ? {
+            inboxAdmissionPending: normalizeBuddyInboxAdmissionPendingDeliveries(input.pending),
+          }
+        : {}),
     }
     return this.deps.agentPolicyDao.upsert({
       agentId: input.agentId,
@@ -259,7 +331,68 @@ export class BuddyInboxService {
         status: 403,
       })
     }
-    throw Object.assign(new Error('Buddy Inbox task delivery requires approval'), { status: 403 })
+    const subject =
+      admissionSubjectFromSource(input.task.source) ?? admissionSubjectFromActor(input.actor)
+    const pending = await this.recordPendingAdmission({
+      ...input,
+      mode: decision.mode,
+      subject,
+    })
+    throw Object.assign(new Error('Buddy Inbox task delivery requires approval'), {
+      status: 403,
+      pendingId: pending.id,
+      channelId: input.channelId,
+    })
+  }
+
+  private async recordPendingAdmission(input: {
+    serverId: string
+    channelId: string
+    agentId: string
+    task: EnqueueTaskInput
+    actor: Actor
+    mode: BuddyInboxAdmissionMode
+    subject: AdmissionSubject
+  }) {
+    if (input.mode !== 'first_time' && input.mode !== 'every_time') {
+      throw Object.assign(new Error('Invalid pending admission mode'), { status: 500 })
+    }
+    const current = await this.readAdmissionPendingDeliveries(
+      input.serverId,
+      input.agentId,
+      input.channelId,
+    )
+    const existing = current.find((item) => pendingMatchesTask(item, input.subject, input.task))
+    if (existing) return existing
+
+    const actorUser = await this.deps.userDao.findById(actorUserId(input.actor))
+    const now = new Date().toISOString()
+    const pending: BuddyInboxAdmissionPendingDelivery = {
+      id: randomUUID(),
+      serverId: input.serverId,
+      channelId: input.channelId,
+      agentId: input.agentId,
+      mode: input.mode,
+      subject: input.subject,
+      task: {
+        title: input.task.title,
+        ...(input.task.body ? { body: input.task.body } : {}),
+        ...(input.task.priority ? { priority: input.task.priority } : {}),
+        ...(input.task.idempotencyKey ? { idempotencyKey: input.task.idempotencyKey } : {}),
+        ...(input.task.source ? { source: input.task.source } : {}),
+        ...(input.task.data ? { data: input.task.data } : {}),
+      },
+      requestedBy: actorSource(input.actor, displayName(actorUser, actorUserId(input.actor))),
+      requestedAt: now,
+      updatedAt: now,
+    }
+    await this.writeAdmissionPendingDeliveries({
+      serverId: input.serverId,
+      agentId: input.agentId,
+      channelId: input.channelId,
+      pending: [pending, ...current].slice(0, 100),
+    })
+    return pending
   }
 
   private async assertCanUseTaskCard(
@@ -451,6 +584,97 @@ export class BuddyInboxService {
     return { channel: ensured.channel, policy: normalized }
   }
 
+  async listAdmissionPending(serverId: string, agentId: string, actor: ActorInput) {
+    await this.requireInboxManager(serverId, agentId, actor)
+    const channel = await this.findInboxChannel(serverId, agentId)
+    const pending = await this.readAdmissionPendingDeliveries(serverId, agentId, channel?.id)
+    return { channel, pending }
+  }
+
+  async approveAdmissionPending(
+    serverId: string,
+    agentId: string,
+    pendingId: string,
+    actor: Actor,
+  ) {
+    await this.requireInboxManager(serverId, agentId, actor)
+    const channel = await this.findInboxChannel(serverId, agentId)
+    if (!channel) throw Object.assign(new Error('Buddy Inbox not found'), { status: 404 })
+    const agent = await this.deps.agentDao.findById(agentId)
+    if (!agent) throw Object.assign(new Error('Buddy not found'), { status: 404 })
+
+    const pending = await this.readAdmissionPendingDeliveries(serverId, agentId, channel.id)
+    const target = pending.find((item) => item.id === pendingId)
+    if (!target) throw Object.assign(new Error('Pending Inbox delivery not found'), { status: 404 })
+    const remaining = pending.filter((item) => item.id !== pendingId)
+    let policy = await this.readAdmissionPolicy(serverId, agentId, channel.id)
+    if (target.mode === 'first_time') {
+      const key = admissionRuleKeyFromSubject(target.subject)
+      const now = new Date().toISOString()
+      const nextRule: BuddyInboxAdmissionRule = {
+        subjectKind: target.subject.kind,
+        ...(target.subject.id ? { subjectId: target.subject.id } : {}),
+        ...(target.subject.appKey ? { appKey: target.subject.appKey } : {}),
+        mode: 'first_time',
+        approved: true,
+        updatedAt: now,
+      }
+      policy = {
+        ...policy,
+        rules: [
+          nextRule,
+          ...policy.rules.filter((rule) => {
+            const subject: AdmissionSubject = {
+              kind: rule.subjectKind,
+              id: rule.subjectId,
+              appKey: rule.appKey,
+            }
+            return admissionRuleKeyFromSubject(subject) !== key
+          }),
+        ].slice(0, 100),
+      }
+      await this.writeAdmissionState({
+        serverId,
+        agentId,
+        channelId: channel.id,
+        policy,
+        pending: remaining,
+      })
+    } else {
+      await this.writeAdmissionPendingDeliveries({
+        serverId,
+        agentId,
+        channelId: channel.id,
+        pending: remaining,
+      })
+    }
+
+    const message = await this.createTaskMessage(channel.id, agent, target.task, actor)
+    return { channel, pending: target, message, policy }
+  }
+
+  async rejectAdmissionPending(
+    serverId: string,
+    agentId: string,
+    pendingId: string,
+    actor: ActorInput,
+  ) {
+    await this.requireInboxManager(serverId, agentId, actor)
+    const channel = await this.findInboxChannel(serverId, agentId)
+    if (!channel) throw Object.assign(new Error('Buddy Inbox not found'), { status: 404 })
+    const pending = await this.readAdmissionPendingDeliveries(serverId, agentId, channel.id)
+    const target = pending.find((item) => item.id === pendingId)
+    if (!target) throw Object.assign(new Error('Pending Inbox delivery not found'), { status: 404 })
+    const remaining = pending.filter((item) => item.id !== pendingId)
+    await this.writeAdmissionPendingDeliveries({
+      serverId,
+      agentId,
+      channelId: channel.id,
+      pending: remaining,
+    })
+    return { channel, pending: target }
+  }
+
   private async ensureInboxMembers(
     channelId: string,
     serverId: string,
@@ -479,12 +703,14 @@ export class BuddyInboxService {
       this.deps.userDao.findById(actorUserId(actor)),
     ])
     const now = new Date().toISOString()
-    const data = {
+    const data: Record<string, unknown> = {
       ...(input.data ?? {}),
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     }
+    const cardId = randomUUID()
+    const workspaceId = `task_${cardId.replace(/-/g, '')}`
     const card: TaskMessageCardMetadata = {
-      id: randomUUID(),
+      id: cardId,
       kind: 'task',
       version: 1,
       title: input.title.trim(),
@@ -506,7 +732,15 @@ export class BuddyInboxService {
       ],
       createdAt: now,
       updatedAt: now,
-      ...(Object.keys(data).length > 0 ? { data } : {}),
+      data: {
+        ...data,
+        task: {
+          ...(data.task && typeof data.task === 'object' && !Array.isArray(data.task)
+            ? data.task
+            : {}),
+          workspaceId,
+        },
+      },
     }
 
     return this.deps.messageService.send(channelId, actorUserId(actor), {
@@ -724,6 +958,11 @@ export class BuddyInboxService {
           issuedAt: nowIso,
           expiresAt,
           claimId,
+          binding: {
+            messageId,
+            cardId,
+            ...(taskWorkspaceId(card) ? { workspaceId: taskWorkspaceId(card) } : {}),
+          },
         },
         updatedAt: nowIso,
         progress: [
@@ -801,6 +1040,55 @@ export class BuddyInboxService {
       ...metadata,
       cards: nextCards,
     })
+  }
+
+  async assertTaskCommandAccess(
+    input: {
+      messageId: string
+      cardId: string
+      claimId?: string
+    },
+    actor: Actor,
+  ) {
+    const message = await this.deps.messageDao.findById(input.messageId)
+    if (!message) {
+      throw Object.assign(new Error('Task message not found'), { status: 404 })
+    }
+    const access = await this.deps.policyService.requireChannelRead(actor, message.channelId)
+    const metadata = (message.metadata ?? {}) as MessageMetadata
+    const cards = Array.isArray(metadata.cards) ? metadata.cards : []
+    const card = cards.find(
+      (item): item is TaskMessageCardMetadata => isTaskCard(item) && item.id === input.cardId,
+    )
+    if (!card) {
+      throw Object.assign(new Error('Task card not found'), { status: 404 })
+    }
+    await this.assertCanUseTaskCard(access, card, actor, 'update')
+    if (!card.claim || claimExpired(card)) {
+      throw Object.assign(new Error('Task card must have an active claim before calling apps'), {
+        status: 403,
+      })
+    }
+    if (input.claimId && input.claimId !== card.claim.id) {
+      throw Object.assign(new Error('Task claim does not match this app call'), { status: 403 })
+    }
+    if (card.claim.actor.userId !== actorUserId(actor)) {
+      throw Object.assign(new Error('Only the task claim holder can call apps for this task'), {
+        status: 403,
+      })
+    }
+    return {
+      message,
+      card,
+      task: {
+        messageId: message.id,
+        cardId: card.id,
+        claimId: card.claim.id,
+        channelId: message.channelId,
+        workspaceId: taskWorkspaceId(card) ?? null,
+        scopes: card.capability?.scope ?? [],
+      },
+    }
   }
 
   async retryTaskCard(

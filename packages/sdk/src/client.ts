@@ -2,6 +2,8 @@ import type {
   ShadowAddAgentsToServerResult,
   ShadowAgentUsageSnapshotInput,
   ShadowAuthResponse,
+  ShadowBuddyInboxAdmissionPendingActionResult,
+  ShadowBuddyInboxAdmissionPendingResult,
   ShadowBuddyInboxAdmissionPolicy,
   ShadowBuddyInboxAdmissionPolicyResult,
   ShadowBuddyInboxSummary,
@@ -784,7 +786,11 @@ export class ShadowClient {
     serverIdOrSlug: string,
     appKey: string,
     commandName: string,
-    data?: { input?: unknown; channelId?: string },
+    data?: {
+      input?: unknown
+      channelId?: string
+      task?: { messageId: string; cardId: string; claimId?: string }
+    },
   ): Promise<unknown> {
     return this.request(
       `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/commands/${encodeURIComponent(
@@ -804,6 +810,7 @@ export class ShadowClient {
     data: {
       input?: unknown
       channelId?: string
+      task?: { messageId: string; cardId: string; claimId?: string }
       file: Blob
       filename: string
       field?: string
@@ -812,6 +819,7 @@ export class ShadowClient {
     const form = new FormData()
     form.set('input', JSON.stringify(data.input ?? {}))
     if (data.channelId) form.set('channelId', data.channelId)
+    if (data.task) form.set('task', JSON.stringify(data.task))
     form.set(data.field ?? 'file', data.file, data.filename)
     return this.request(
       `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/commands/${encodeURIComponent(
@@ -1202,6 +1210,35 @@ export class ShadowClient {
       method: 'PUT',
       body: JSON.stringify(policy),
     })
+  }
+
+  async listBuddyInboxAdmissionPending(
+    serverIdOrSlug: string,
+    agentId: string,
+  ): Promise<ShadowBuddyInboxAdmissionPendingResult> {
+    return this.request(`/api/servers/${serverIdOrSlug}/inboxes/${agentId}/admission-pending`)
+  }
+
+  async approveBuddyInboxAdmissionPending(
+    serverIdOrSlug: string,
+    agentId: string,
+    pendingId: string,
+  ): Promise<ShadowBuddyInboxAdmissionPendingActionResult> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/inboxes/${agentId}/admission-pending/${pendingId}/approve`,
+      { method: 'POST' },
+    )
+  }
+
+  async rejectBuddyInboxAdmissionPending(
+    serverIdOrSlug: string,
+    agentId: string,
+    pendingId: string,
+  ): Promise<ShadowBuddyInboxAdmissionPendingActionResult> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/inboxes/${agentId}/admission-pending/${pendingId}/reject`,
+      { method: 'POST' },
+    )
   }
 
   async enqueueInboxTaskForAgent(

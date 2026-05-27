@@ -582,6 +582,13 @@
       "when": 1780318800003,
       "tag": "0082_message_cards_metadata_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1780318800004,
+      "tag": "0083_server_app_task_bound_tokens",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,14 @@ export interface ShadowServerAppCommandContext {
     profile?: ShadowServerAppActorProfile | null
   }
   channelId?: string | null
+  task?: {
+    messageId: string
+    cardId: string
+    claimId?: string | null
+    channelId?: string | null
+    workspaceId?: string | null
+    scopes?: string[]
+  }
   permission: string
   action: string
   dataClass: string
@@ -71,6 +79,7 @@ export interface ShadowServerAppInboxDelivery {
   messageId?: string
   cardId?: string | null
   taskId?: string | null
+  pendingId?: string | null
   idempotencyKey?: string
   error?: string
 }
@@ -131,6 +140,11 @@ export interface ShadowServerAppBridgeCommandRequest {
   commandName: string
   input?: unknown
   channelId?: string
+  task?: {
+    messageId: string
+    cardId: string
+    claimId?: string
+  }
 }
 
 export interface ShadowServerAppBridgeInboxesRequest {

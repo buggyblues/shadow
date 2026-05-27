@@ -396,6 +396,10 @@ export class AppIntegrationDao {
     buddyAgentId?: string | null
     ownerId?: string | null
     channelId?: string | null
+    taskMessageId?: string | null
+    taskCardId?: string | null
+    taskClaimId?: string | null
+    taskWorkspaceId?: string | null
     permission: string
     action: string
     dataClass: string

@@ -495,6 +495,7 @@ export function createAppIntegrationHandler(container: AppContainer) {
           body: callServerAppCommandSchema.parse({
             input: parseJsonField(fields.input ?? fields.payload),
             channelId: fields.channelId,
+            task: fields.task ? parseJsonField(fields.task) : undefined,
           }),
           multipart: { fields, files },
         })

@@ -76,6 +76,7 @@ const commands = shadowApp.defineCommands({
           `Command: shadow-skills skills.download`,
           `Input: {"skillId":"${result.skill.id}"}`,
           `Package: ${result.skill.slug}.skill.zip`,
+          'If this task has a claim, call the command with the task binding flags shown in the Inbox task prompt.',
           result.skill.external?.installCommand
             ? `Upstream install command: ${result.skill.external.installCommand}`
             : '',
@@ -97,8 +98,12 @@ const commands = shadowApp.defineCommands({
         data: {
           skillId: result.skill.id,
           skillSlug: result.skill.slug,
-          downloadCommand: 'skills.download',
-          appKey: shadowServerAppManifest.appKey,
+          runtime: {
+            kind: 'shadow_skill_install',
+            appKey: shadowServerAppManifest.appKey,
+            downloadCommand: 'skills.download',
+            packageFormat: 'zip',
+          },
         },
       },
     ]

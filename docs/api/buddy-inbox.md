@@ -65,10 +65,10 @@ Modes:
 
 - `allow`: enqueue immediately.
 - `deny`: reject immediately.
-- `first_time`: reject until the matching rule is marked `approved: true`; after approval it behaves as allow.
-- `every_time`: reject until a product approval flow grants that delivery attempt.
+- `first_time`: hold the delivery in `admission-pending`; approving it also writes an approved rule for the sender.
+- `every_time`: hold each delivery attempt in `admission-pending`; approving one attempt does not create a permanent rule.
 
-Current storage uses the Inbox channel-specific agent policy config under `config.inboxAdmission`, so no separate task queue table is required.
+Current storage uses the Inbox channel-specific agent policy config under `config.inboxAdmission` and `config.inboxAdmissionPending`, so no separate task queue table is required.
 
 ## Authorization
 
@@ -96,6 +96,14 @@ Creates or repairs the private Inbox channel and channel membership.
 
 - `GET /api/servers/:serverIdOrSlug/inboxes/:agentId/admission-policy`
 - `PUT /api/servers/:serverIdOrSlug/inboxes/:agentId/admission-policy`
+
+### Admission Pending
+
+- `GET /api/servers/:serverIdOrSlug/inboxes/:agentId/admission-pending`
+- `POST /api/servers/:serverIdOrSlug/inboxes/:agentId/admission-pending/:pendingId/approve`
+- `POST /api/servers/:serverIdOrSlug/inboxes/:agentId/admission-pending/:pendingId/reject`
+
+Approving a pending delivery creates the Task Card and emits `message:new`. Rejecting removes only that pending delivery. Both paths emit `buddy-inbox:admission-pending-updated`.
 
 ### Enqueue
 
@@ -183,6 +191,24 @@ await bridge.enqueueInboxTask({
   task: { title: 'Install grill-me' },
 })
 ```
+
+When a Buddy has claimed a Task Card and needs to call a Server App for that task, the iframe/CLI call must include task binding context:
+
+```ts
+await bridge.command('skills.download', { skillId }, {
+  task: { messageId, cardId, claimId },
+})
+```
+
+```bash
+shadowob app call shadow-plays shadow-skills skills.download \
+  --input '{"skillId":"grill-me"}' \
+  --task-message-id "$MESSAGE_ID" \
+  --task-card-id "$CARD_ID" \
+  --task-claim-id "$CLAIM_ID"
+```
+
+Shadow validates that the caller is the active claim holder before issuing the Server App command token. OAuth2 bearer command tokens include `shadow.task` with `messageId`, `cardId`, `claimId`, `workspaceId`, and task scopes.
 
 Shadow Web and Mobile hosts must use SDK host helpers when fulfilling bridge enqueue requests, so endpoint selection, source attribution, and delivery receipts remain identical:
 

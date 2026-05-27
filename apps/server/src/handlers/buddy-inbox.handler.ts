@@ -144,6 +144,74 @@ export function createBuddyInboxHandler(container: AppContainer) {
     },
   )
 
+  handler.get('/servers/:serverId/inboxes/:agentId/admission-pending', async (c) => {
+    const serverId = await resolveServerId(c.req.param('serverId'))
+    const result = await container
+      .resolve('buddyInboxService')
+      .listAdmissionPending(serverId, c.req.param('agentId'), c.get('actor'))
+    return c.json(result)
+  })
+
+  handler.post(
+    '/servers/:serverId/inboxes/:agentId/admission-pending/:pendingId/approve',
+    async (c) => {
+      const serverId = await resolveServerId(c.req.param('serverId'))
+      const result = await container
+        .resolve('buddyInboxService')
+        .approveAdmissionPending(
+          serverId,
+          c.req.param('agentId'),
+          c.req.param('pendingId'),
+          c.get('actor'),
+        )
+
+      try {
+        if (result.channel?.id) {
+          const io = container.resolve('io')
+          io.to(`channel:${result.channel.id}`).emit(
+            'buddy-inbox:admission-pending-updated',
+            result,
+          )
+          if (result.message?.channelId) {
+            io.to(`channel:${result.message.channelId}`).emit('message:new', result.message)
+          }
+        }
+      } catch {
+        /* socket fanout is best-effort */
+      }
+
+      return c.json(result, 201)
+    },
+  )
+
+  handler.post(
+    '/servers/:serverId/inboxes/:agentId/admission-pending/:pendingId/reject',
+    async (c) => {
+      const serverId = await resolveServerId(c.req.param('serverId'))
+      const result = await container
+        .resolve('buddyInboxService')
+        .rejectAdmissionPending(
+          serverId,
+          c.req.param('agentId'),
+          c.req.param('pendingId'),
+          c.get('actor'),
+        )
+
+      try {
+        if (result.channel?.id) {
+          container
+            .resolve('io')
+            .to(`channel:${result.channel.id}`)
+            .emit('buddy-inbox:admission-pending-updated', result)
+        }
+      } catch {
+        /* socket fanout is best-effort */
+      }
+
+      return c.json(result)
+    },
+  )
+
   handler.post(
     '/servers/:serverId/inboxes/:agentId/tasks',
     zValidator('json', enqueueTaskSchema),

@@ -179,6 +179,7 @@ type CommandSubject = {
   subjectUserId: string | null
   buddyAgentId: string | null
 }
+type TaskCommandContext = Awaited<ReturnType<BuddyInboxService['assertTaskCommandAccess']>>['task']
 
 type InboxTaskOutbox = ShadowServerAppInboxTaskOutbox
 
@@ -986,6 +987,7 @@ export class AppIntegrationService {
     channelId: string | null
     buddyAgentId?: string | null
     ownerId?: string | null
+    task?: TaskCommandContext | null
   }) {
     if (input.actor.kind === 'system') {
       throw Object.assign(new Error('System actor cannot call server apps'), { status: 403 })
@@ -995,9 +997,10 @@ export class AppIntegrationService {
       input.ownerId ??
       (input.actor.kind === 'agent' ? await this.actorOwnerUserId(input.actor, buddyAgentId) : null)
     const token = `sat_cmd_v1_${randomBytes(32).toString('base64url')}`
+    const scopes = Array.from(new Set([input.permission, ...(input.task?.scopes ?? [])]))
     await this.deps.appIntegrationDao.createCommandToken({
       tokenHash: hashOpaqueToken(token),
-      scopes: [input.permission],
+      scopes,
       userId: input.actor.userId,
       serverId: input.serverId,
       serverAppId: input.serverAppId,
@@ -1007,6 +1010,10 @@ export class AppIntegrationService {
       buddyAgentId,
       ownerId,
       channelId: input.channelId,
+      taskMessageId: input.task?.messageId ?? null,
+      taskCardId: input.task?.cardId ?? null,
+      taskClaimId: input.task?.claimId ?? null,
+      taskWorkspaceId: input.task?.workspaceId ?? null,
       permission: input.permission,
       action: input.action,
       dataClass: input.dataClass,
@@ -1191,6 +1198,22 @@ export class AppIntegrationService {
     }
   }
 
+  private async taskCommandContext(input: {
+    actor: Actor
+    task?: CallServerAppCommandInput['task']
+  }): Promise<TaskCommandContext | null> {
+    if (!input.task) return null
+    const result = await this.deps.buddyInboxService.assertTaskCommandAccess(
+      {
+        messageId: input.task.messageId,
+        cardId: input.task.cardId,
+        claimId: input.task.claimId,
+      },
+      input.actor,
+    )
+    return result.task
+  }
+
   private async consumeTransientCommandConsent(access: { transientConsentId: string | null }) {
     if (access.transientConsentId) {
       await this.deps.appIntegrationDao.markCommandConsentConsumed(access.transientConsentId)
@@ -1253,6 +1276,9 @@ export class AppIntegrationService {
     const deliveries: ShadowServerAppInboxDelivery[] = []
     const errors: ShadowServerAppInboxDeliveryError[] = []
     for (const task of tasks) {
+      let targetAgentId = task.agentId
+      let targetAgentUserId = task.agentUserId
+      let deliveryIdempotencyKey = task.idempotencyKey
       try {
         const agent = await this.resolveInboxTaskAgent(input.serverId, task)
         if (!agent) {
@@ -1260,6 +1286,8 @@ export class AppIntegrationService {
             status: 404,
           })
         }
+        targetAgentId = agent.id
+        targetAgentUserId = agent.userId
         const idempotencyKey =
           task.idempotencyKey ??
           [
@@ -1272,6 +1300,7 @@ export class AppIntegrationService {
           ]
             .filter(Boolean)
             .join(':')
+        deliveryIdempotencyKey = idempotencyKey
         const inboxRequest = buildShadowServerAppInboxTaskRequest({
           serverIdOrSlug: input.serverId,
           target: { agentId: agent.id },
@@ -1300,6 +1329,24 @@ export class AppIntegrationService {
         })
         this.deps.io.to(`channel:${message.channelId}`).emit('message:new', message)
       } catch (err) {
+        const pendingId =
+          err && typeof err === 'object' && 'pendingId' in err
+            ? optionalString((err as { pendingId?: unknown }).pendingId)
+            : undefined
+        const pendingChannelId =
+          err && typeof err === 'object' && 'channelId' in err
+            ? optionalString((err as { channelId?: unknown }).channelId)
+            : undefined
+        if (pendingId) {
+          deliveries.push({
+            ...(targetAgentId ? { agentId: targetAgentId } : {}),
+            ...(targetAgentUserId ? { agentUserId: targetAgentUserId } : {}),
+            ...(pendingChannelId ? { channelId: pendingChannelId } : {}),
+            pendingId,
+            idempotencyKey: deliveryIdempotencyKey,
+          })
+          continue
+        }
         if (task.required) throw err
         errors.push({
           title: task.title,
@@ -1388,6 +1435,10 @@ export class AppIntegrationService {
       command,
       channelId: input.body.channelId ?? null,
     })
+    const taskContext = await this.taskCommandContext({
+      actor: input.actor,
+      task: input.body.task,
+    })
 
     const jsonLimits = validateJsonLimits(safeJson(input.body.input), COMMAND_INPUT_LIMITS)
     if (!jsonLimits.ok) throw Object.assign(new Error(jsonLimits.error), { status: 413 })
@@ -1410,6 +1461,18 @@ export class AppIntegrationService {
       permission: command.permission,
       action: command.action,
       dataClass: command.dataClass,
+      ...(taskContext
+        ? {
+            task: {
+              messageId: taskContext.messageId,
+              cardId: taskContext.cardId,
+              claimId: taskContext.claimId,
+              channelId: taskContext.channelId,
+              workspaceId: taskContext.workspaceId,
+              scopes: taskContext.scopes,
+            },
+          }
+        : {}),
     }
 
     const authType = serverAppAuthType(app.manifest)
@@ -1437,6 +1500,7 @@ export class AppIntegrationService {
         channelId: input.body.channelId ?? null,
         buddyAgentId,
         ownerId,
+        task: taskContext,
       })}`
     }
 
@@ -1573,6 +1637,17 @@ export class AppIntegrationService {
           profile: actorProfile,
         },
         channelId: payload.channelId ?? null,
+        ...(payload.taskMessageId && payload.taskCardId
+          ? {
+              task: {
+                messageId: payload.taskMessageId,
+                cardId: payload.taskCardId,
+                claimId: payload.taskClaimId ?? null,
+                workspaceId: payload.taskWorkspaceId ?? null,
+                scopes: payload.scopes.filter((scope) => scope.startsWith('task:')),
+              },
+            }
+          : {}),
         permission: payload.permission,
         action: payload.action,
         dataClass: payload.dataClass,

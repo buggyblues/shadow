@@ -571,10 +571,13 @@ class ShadowClient:
         *,
         input: Any | None = None,
         channel_id: str | None = None,
+        task: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"input": input if input is not None else {}}
         if channel_id:
             payload["channelId"] = channel_id
+        if task:
+            payload["task"] = task
         return self._post(
             f"/api/servers/{server_id_or_slug}/apps/{app_key}/commands/{command_name}",
             json=payload,
@@ -900,6 +903,35 @@ class ShadowClient:
         return self._put(
             f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/admission-policy",
             json=policy,
+        )
+
+    def list_buddy_inbox_admission_pending(
+        self,
+        server_id_or_slug: str,
+        agent_id: str,
+    ) -> dict[str, Any]:
+        return self._get(
+            f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/admission-pending"
+        )
+
+    def approve_buddy_inbox_admission_pending(
+        self,
+        server_id_or_slug: str,
+        agent_id: str,
+        pending_id: str,
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/admission-pending/{pending_id}/approve"
+        )
+
+    def reject_buddy_inbox_admission_pending(
+        self,
+        server_id_or_slug: str,
+        agent_id: str,
+        pending_id: str,
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/admission-pending/{pending_id}/reject"
         )
 
     def enqueue_inbox_task_for_agent(

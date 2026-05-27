@@ -67,6 +67,11 @@ interface BridgeRequest {
   commandName: string
   input?: unknown
   channelId?: string
+  task?: {
+    messageId: string
+    cardId: string
+    claimId?: string
+  }
 }
 
 interface BridgeInboxesRequest {
@@ -308,7 +313,11 @@ export function ServerAppsPageRoute({
           )}`,
           {
             method: 'POST',
-            body: JSON.stringify({ input: request.input ?? {}, channelId: request.channelId }),
+            body: JSON.stringify({
+              input: request.input ?? {},
+              channelId: request.channelId,
+              task: request.task,
+            }),
           },
         )
         postBridgeResponse(request.requestId, { ok: true, result })
@@ -368,6 +377,7 @@ export function ServerAppsPageRoute({
         commandName: data.commandName,
         input: data.input,
         channelId: typeof data.channelId === 'string' ? data.channelId : undefined,
+        task: getRecord(data.task) as BridgeRequest['task'],
       })
     }
     window.addEventListener('message', onMessage)
