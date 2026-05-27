@@ -8,6 +8,7 @@ import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
 import { createApiTokenHandler } from './handlers/api-token.handler'
 import { createAppIntegrationHandler } from './handlers/app-integration.handler'
 import { createAuthHandler } from './handlers/auth.handler'
+import { createBuddyInboxHandler } from './handlers/buddy-inbox.handler'
 import { createChannelHandler } from './handlers/channel.handler'
 import { createCloudHandler } from './handlers/cloud.handler'
 import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
@@ -178,6 +179,7 @@ export function createApp(container: AppContainer) {
   app.route('/api', createWorkspaceHandler(container))
   app.route('/api/servers', createServerHandler(container))
   app.route('/api', createChannelHandler(container))
+  app.route('/api', createBuddyInboxHandler(container))
   app.route('/api', createMentionHandler(container))
   app.route('/api', createMessageHandler(container))
   app.route('/api/search', createSearchHandler(container))

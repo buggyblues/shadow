@@ -278,6 +278,42 @@ class ShadowAsyncClient:
     async def get_message(self, message_id: str) -> JsonDict:
         return await self.request("GET", f"/api/messages/{quote(str(message_id), safe='')}")
 
+    async def claim_task_card(
+        self,
+        message_id: str,
+        card_id: str,
+        *,
+        ttl_seconds: int | None = None,
+        note: str | None = None,
+    ) -> JsonDict:
+        body: JsonDict = {}
+        if ttl_seconds is not None:
+            body["ttlSeconds"] = int(ttl_seconds)
+        if note:
+            body["note"] = note
+        return await self.request(
+            "POST",
+            f"/api/messages/{quote(str(message_id), safe='')}/cards/{quote(str(card_id), safe='')}/claim",
+            json_body=body,
+        )
+
+    async def update_task_card(
+        self,
+        message_id: str,
+        card_id: str,
+        *,
+        status: str,
+        note: str | None = None,
+    ) -> JsonDict:
+        body: JsonDict = {"status": status}
+        if note:
+            body["note"] = note
+        return await self.request(
+            "PATCH",
+            f"/api/messages/{quote(str(message_id), safe='')}/cards/{quote(str(card_id), safe='')}",
+            json_body=body,
+        )
+
     async def resolve_attachment_media_url(
         self,
         attachment_id: str,

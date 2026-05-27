@@ -16,6 +16,21 @@ services:
     volumes:
       - kanban-data:/data
 
+  skills:
+    build:
+      context: ..
+      dockerfile: integrations/skills/Dockerfile
+    environment:
+      PORT: '4220'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4220}
+      SHADOW_APP_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.lima.internal:4220}
+      SKILLS_DATA_FILE: /data/skills-library.json
+    ports:
+      - ${SKILLS_PORT:-4220}:4220
+    volumes:
+      - skills-data:/data
+
   qna:
     build:
       context: ..
@@ -166,6 +181,7 @@ services:
 
 volumes:
   kanban-data:
+  skills-data:
   qna-data:
   quiz-data:
   trainer-data:

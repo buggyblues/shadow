@@ -1,9 +1,11 @@
 import { resolve } from 'node:path'
+import { type ShadowServerAppInboxTaskOutbox, ShadowServerAppOutbox } from '@shadowob/sdk'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import type { BoardCard, BoardPerson, BoardState } from './types.js'
 
 const now = () => new Date().toISOString()
 const id = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`
+const DEFAULT_BUDDY_LABEL = 'Strategy Buddy'
 
 function systemPerson(displayName: string): BoardPerson {
   return {
@@ -193,6 +195,31 @@ export function createCard(input: {
   return structuredClone(card)
 }
 
+export function createCardAndDispatch(input: {
+  title: string
+  columnId?: string
+  description?: string
+  label?: string
+  createdBy: BoardPerson
+  assigneeLabel?: string
+  reason?: string
+}) {
+  const assigneeLabel = input.assigneeLabel?.trim() || DEFAULT_BUDDY_LABEL
+  const card = createCard({
+    title: input.title,
+    columnId: input.columnId,
+    description: input.description,
+    label: input.label,
+    createdBy: input.createdBy,
+    assignee: manualPerson(assigneeLabel),
+  })
+  const result = dispatchCardToBuddy(card.id, {
+    assigneeLabel,
+    reason: input.reason ?? 'This Kanban card was created and dispatched to your Inbox.',
+  })
+  return result ?? { card }
+}
+
 export function moveCard(cardId: string, columnId: string) {
   const card = board.cards.find((item) => item.id === cardId)
   if (!card) return null
@@ -230,4 +257,91 @@ export function commentCard(cardId: string, body: string, author: BoardPerson) {
   card.comments.push({ id: id('comment'), body, author, createdAt: now() })
   touch(card)
   return structuredClone(card)
+}
+
+function mentionedBuddyLabel(body: string) {
+  if (/@Strategy\s+Buddy\b/i.test(body)) return DEFAULT_BUDDY_LABEL
+  const match = /@([a-z0-9_.-]+)/i.exec(body)
+  return match?.[1] ?? null
+}
+
+function cardTaskBody(card: BoardCard, extra?: string) {
+  return [
+    card.description,
+    extra,
+    '',
+    `Kanban card: ${card.title}`,
+    `Current column: ${card.columnId}`,
+    `Labels: ${card.labels.join(', ') || 'none'}`,
+  ]
+    .filter((item) => item !== undefined)
+    .join('\n')
+    .trim()
+}
+
+function cardInboxTask(
+  card: BoardCard,
+  input: { assigneeLabel: string; reason: string; triggerKey: string },
+): ShadowServerAppInboxTaskOutbox {
+  const assigneeKey = input.assigneeLabel.toLowerCase().replace(/\s+/g, '-')
+  return {
+    title: card.title,
+    body: cardTaskBody(card, input.reason),
+    assigneeLabel: input.assigneeLabel,
+    priority: card.labels.includes('Urgent') ? 'high' : 'normal',
+    idempotencyKey: `kanban:card:${card.id}:${input.triggerKey}:${assigneeKey}`,
+    resource: {
+      kind: 'kanban.card',
+      id: card.id,
+      label: card.title,
+      url: `/shadow/server#/cards/${card.id}`,
+    },
+    data: {
+      boardId: board.id,
+      cardId: card.id,
+      columnId: card.columnId,
+      labels: card.labels,
+    },
+  }
+}
+
+export function dispatchCardToBuddy(
+  cardId: string,
+  input: { assigneeLabel?: string; reason?: string },
+) {
+  const card = board.cards.find((item) => item.id === cardId)
+  if (!card) return null
+  const assigneeLabel = input.assigneeLabel?.trim() || DEFAULT_BUDDY_LABEL
+  const person = manualPerson(assigneeLabel)
+  if (!card.assignees.some((item) => item.id === person.id)) card.assignees.push(person)
+  card.buddyStatus = 'queued'
+  card.lastDispatchedAt = now()
+  touch(card)
+  const snapshot = structuredClone(card)
+  return new ShadowServerAppOutbox()
+    .enqueueInboxTask(
+      cardInboxTask(snapshot, {
+        assigneeLabel,
+        triggerKey: 'dispatch',
+        reason: input.reason?.trim() || 'This Kanban card was dispatched to your Inbox.',
+      }),
+    )
+    .attachTo({ card: snapshot })
+}
+
+export function commentCardWithBuddyTask(cardId: string, body: string, author: BoardPerson) {
+  const card = commentCard(cardId, body, author)
+  if (!card) return null
+  const assigneeLabel = mentionedBuddyLabel(body)
+  if (!assigneeLabel) return { card }
+  const comment = card.comments.at(-1)
+  return new ShadowServerAppOutbox()
+    .enqueueInboxTask(
+      cardInboxTask(card, {
+        assigneeLabel,
+        triggerKey: comment?.id ?? `comment-${Date.now()}`,
+        reason: `Comment trigger from ${author.displayName}: ${body}`,
+      }),
+    )
+    .attachTo({ card })
 }

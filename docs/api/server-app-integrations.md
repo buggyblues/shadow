@@ -267,6 +267,143 @@ const store = createShadowServerAppJsonStore({
 })
 ```
 
+## Command Response Protocol
+
+Server App command responses use one protocol envelope. Apps should not invent top-level fields for Shadow side effects.
+
+The app runtime returns:
+
+```json
+{
+  "ok": true,
+  "result": {
+    "card": { "id": "card-1", "title": "Review launch" },
+    "shadow": {
+      "protocol": "shadow.app/1",
+      "outbox": {
+        "inboxTasks": [
+          {
+            "title": "Review launch",
+            "body": "Inspect the Kanban card and reply with findings.",
+            "assigneeLabel": "Strategy Buddy",
+            "priority": "normal",
+            "idempotencyKey": "kanban:card:card-1:dispatch:strategy-buddy",
+            "resource": {
+              "kind": "kanban.card",
+              "id": "card-1",
+              "label": "Review launch"
+            },
+            "data": {
+              "cardId": "card-1"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Shadow Server consumes `result.shadow.outbox.inboxTasks`, resolves each target Buddy in the current server, publishes a Task Card to that Buddy's Inbox channel, and returns delivery receipts in the same protocol namespace:
+
+```json
+{
+  "ok": true,
+  "result": {
+    "card": { "id": "card-1", "title": "Review launch" },
+    "shadow": {
+      "protocol": "shadow.app/1",
+      "outbox": {
+        "inboxTasks": [],
+        "deliveries": [
+          {
+            "agentId": "agent-1",
+            "agentUserId": "user-1",
+            "channelId": "channel-inbox-1",
+            "messageId": "message-1",
+            "cardId": "task-card-1",
+            "idempotencyKey": "kanban:card:card-1:dispatch:strategy-buddy"
+          }
+        ]
+      }
+    }
+  },
+  "shadow": {
+    "protocol": "shadow.app/1",
+    "outbox": {
+      "deliveries": [
+        {
+          "agentId": "agent-1",
+          "channelId": "channel-inbox-1",
+          "messageId": "message-1",
+          "cardId": "task-card-1"
+        }
+      ]
+    }
+  }
+}
+```
+
+Iframe clients use `ShadowBridge` instead of hand-rolled `postMessage` handlers. Declare a command map once so `bridge.command(...)` gets command-name autocomplete and typed input/output:
+
+```ts
+import { ShadowBridge, type ShadowBridgeCommandSpec } from '@shadowob/sdk/bridge'
+
+type KanbanBridgeCommands = {
+  'cards.dispatch': ShadowBridgeCommandSpec<
+    {
+      cardId: string
+      assigneeLabel: string
+    },
+    {
+      card: {
+        id: string
+        title: string
+      }
+    }
+  >
+}
+
+const bridge = new ShadowBridge<KanbanBridgeCommands>({
+  appKey: 'shadow-kanban',
+})
+
+const result = await bridge.command('cards.dispatch', {
+  cardId: 'card-1',
+  assigneeLabel: 'Strategy Buddy',
+})
+
+const deliveries = bridge.inboxDeliveries(result)
+const inboxes = await bridge.inboxes()
+
+await bridge.enqueueInboxTask({
+  target: { agentId: inboxes.inboxes[0].agent.id },
+  task: {
+    title: 'Review launch',
+    body: 'Inspect the launch checklist.',
+    assigneeLabel: 'Strategy Buddy',
+  },
+})
+```
+
+`ShadowBridge` is the only iframe-side bridge API. It covers command calls, Buddy Inbox discovery, direct task-card delivery, command payload unwrapping, and delivery/error extraction.
+
+Buddy Inbox REST endpoints, admission policy, claim/update authorization, and retry semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md). Server App backends should prefer the outbox protocol below; iframe clients should use `ShadowBridge`.
+
+Shadow Web and Mobile hosts should not hand-roll bridge fulfillment payloads. Use `buildShadowServerAppInboxTaskRequest()` and `buildShadowServerAppInboxDelivery()` from `@shadowob/sdk/bridge` so both hosts share the same source attribution and delivery receipt shape.
+
+Server App backends use `ShadowServerAppOutbox` to attach outbox work to command results:
+
+```ts
+import { ShadowServerAppOutbox } from '@shadowob/sdk'
+
+return new ShadowServerAppOutbox().enqueueInboxTask(task).attachTo({
+  card,
+})
+```
+
+The canonical namespace is `shadow.protocol === "shadow.app/1"` and `shadow.outbox`. New protocol extensions should be added under `shadow.outbox` or another documented `shadow.*` namespace, not as ad-hoc top-level response fields.
+
 ## Security Model
 
 Each command declares:
@@ -354,10 +491,11 @@ Binary is supported at the protocol layer through multipart commands. A command 
 The App iframe can open `new EventSource(shadow_event_stream)`. Shadow emits:
 
 - `ready`: stream established.
-- `server_app.command.completed`: a Buddy or user completed a CLI/API command through Shadow.
+- `SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT` (`server_app.command.completed`): a Buddy or user completed a CLI/API command through Shadow.
+- `SHADOW_SERVER_APP_COMMAND_FAILED_EVENT` (`server_app.command.failed`): a command failed before completion.
 - `ping`: heartbeat.
 
-Apps should reload their local data when `server_app.command.completed` arrives. The launch token is short-lived and scoped to the server App.
+Apps should import these constants from `@shadowob/sdk` or `@shadowob/sdk/bridge` and reload local data when the completed event arrives. The launch token is short-lived and scoped to the server App.
 
 ## Cloud Template
 

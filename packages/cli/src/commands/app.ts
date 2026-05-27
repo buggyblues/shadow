@@ -512,6 +512,9 @@ export function createAppCommand(): Command {
     .option('--json-input <json>', 'JSON command input')
     .option('--input-file <path>', 'Read JSON command input from file')
     .option('--channel-id <id>', 'Current Shadow channel ID for approval prompts and app context')
+    .option('--task-message-id <id>', 'Inbox task message ID to bind this app command to')
+    .option('--task-card-id <id>', 'Inbox task card ID to bind this app command to')
+    .option('--task-claim-id <id>', 'Inbox task claim ID to bind this app command to')
     .option('--file <path>', 'Attach a binary file')
     .option('--field <field>', 'Multipart file field name', 'file')
     .option('--output <path>', 'Write binary dataBase64 response to this path')
@@ -527,6 +530,9 @@ export function createAppCommand(): Command {
           jsonInput?: string
           inputFile?: string
           channelId?: string
+          taskMessageId?: string
+          taskCardId?: string
+          taskClaimId?: string
           file?: string
           field?: string
           output?: string
@@ -567,10 +573,25 @@ export function createAppCommand(): Command {
             ? await readJsonFile(options.inputFile)
             : parseJsonInput(options.jsonInput)
           const server = resolveServerFlag(options.server)
+          if (
+            (options.taskMessageId || options.taskCardId || options.taskClaimId) &&
+            !(options.taskMessageId && options.taskCardId)
+          ) {
+            throw new Error('--task-message-id and --task-card-id are required together')
+          }
+          const task =
+            options.taskMessageId && options.taskCardId
+              ? {
+                  messageId: options.taskMessageId,
+                  cardId: options.taskCardId,
+                  ...(options.taskClaimId ? { claimId: options.taskClaimId } : {}),
+                }
+              : undefined
           const result = options.file
             ? await client.callServerAppCommandMultipart(server, appKey, commandName, {
                 input,
                 channelId: options.channelId,
+                task,
                 file: new Blob([await readFile(options.file)]),
                 filename: basename(options.file),
                 field: options.field,
@@ -578,6 +599,7 @@ export function createAppCommand(): Command {
             : await client.callServerAppCommand(server, appKey, commandName, {
                 input,
                 channelId: options.channelId,
+                task,
               })
 
           if (

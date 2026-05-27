@@ -1,7 +1,7 @@
 {
   "id": "default",
   "title": "Launch Board",
-  "updatedAt": "2026-05-19T10:26:53.905Z",
+  "updatedAt": "2026-05-27T06:32:00.340Z",
   "columns": [
     {
       "id": "todo",
@@ -23,51 +23,121 @@
   "cards": [
     {
       "id": "card_plan",
-      "columnId": "todo",
+      "columnId": "done",
       "title": "Map onboarding checklist",
       "description": "Write the first-run steps that a human and Buddy can split.",
-      "labels": ["Planning"],
-      "assignees": ["Mia"],
+      "labels": [
+        "Planning"
+      ],
+      "assignees": [
+        {
+          "kind": "manual",
+          "id": "manual:mia",
+          "userId": null,
+          "buddyAgentId": null,
+          "ownerId": null,
+          "displayName": "Mia",
+          "avatarUrl": null
+        }
+      ],
       "comments": [],
-      "createdBy": "system",
+      "createdBy": {
+        "kind": "manual",
+        "id": "manual:system",
+        "userId": null,
+        "buddyAgentId": null,
+        "ownerId": null,
+        "displayName": "system",
+        "avatarUrl": null
+      },
       "createdAt": "2026-05-19T09:11:47.235Z",
-      "updatedAt": "2026-05-19T09:11:47.235Z"
+      "updatedAt": "2026-05-27T03:27:22.287Z"
     },
     {
       "id": "card_bot",
-      "columnId": "doing",
+      "columnId": "done",
       "title": "Ask Strategy Buddy for launch risks",
       "description": "Use the Shadow command surface so the board stays in sync.",
-      "labels": ["Buddy"],
-      "assignees": ["Strategy Buddy"],
+      "labels": [
+        "Buddy"
+      ],
+      "assignees": [
+        {
+          "kind": "manual",
+          "id": "manual:strategy-buddy",
+          "userId": null,
+          "buddyAgentId": null,
+          "ownerId": null,
+          "displayName": "Strategy Buddy",
+          "avatarUrl": null
+        }
+      ],
       "comments": [],
-      "createdBy": "system",
+      "createdBy": {
+        "kind": "manual",
+        "id": "manual:system",
+        "userId": null,
+        "buddyAgentId": null,
+        "ownerId": null,
+        "displayName": "system",
+        "avatarUrl": null
+      },
       "createdAt": "2026-05-19T09:11:47.235Z",
-      "updatedAt": "2026-05-19T10:25:23.644Z"
+      "updatedAt": "2026-05-27T03:27:20.278Z"
     },
     {
       "id": "card_assets",
-      "columnId": "review",
+      "columnId": "done",
       "title": "Review cover assets",
       "description": "Confirm imagery and labels before publishing.",
-      "labels": ["Design"],
-      "assignees": ["Kai"],
+      "labels": [
+        "Design"
+      ],
+      "assignees": [
+        {
+          "kind": "manual",
+          "id": "manual:kai",
+          "userId": null,
+          "buddyAgentId": null,
+          "ownerId": null,
+          "displayName": "Kai",
+          "avatarUrl": null
+        }
+      ],
       "comments": [],
-      "createdBy": "system",
+      "createdBy": {
+        "kind": "manual",
+        "id": "manual:system",
+        "userId": null,
+        "buddyAgentId": null,
+        "ownerId": null,
+        "displayName": "system",
+        "avatarUrl": null
+      },
       "createdAt": "2026-05-19T09:11:47.235Z",
-      "updatedAt": "2026-05-19T09:11:47.235Z"
+      "updatedAt": "2026-05-27T03:27:21.002Z"
     },
     {
       "id": "card_8xbaa9y",
-      "columnId": "todo",
+      "columnId": "done",
       "title": "测试任务",
       "description": "第二个大模型的测试卡片",
-      "labels": ["Testing"],
+      "labels": [
+        "Testing"
+      ],
       "assignees": [],
       "comments": [],
-      "createdBy": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+      "createdBy": {
+        "kind": "manual",
+        "id": "manual:buddy-014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+        "userId": null,
+        "buddyAgentId": null,
+        "ownerId": null,
+        "displayName": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+        "avatarUrl": null
+      },
       "createdAt": "2026-05-19T09:35:50.499Z",
-      "updatedAt": "2026-05-19T09:35:50.499Z"
+      "updatedAt": "2026-05-27T03:27:23.496Z"
     },
     {
       "id": "card_b97of8n",
@@ -75,18 +145,234 @@
       "title": "批准弹窗验证 1779183843666",
       "description": "验证系统授权弹窗链路",
       "labels": [],
-      "assignees": ["Strategy Buddy"],
+      "assignees": [
+        {
+          "kind": "manual",
+          "id": "manual:strategy-buddy",
+          "userId": null,
+          "buddyAgentId": null,
+          "ownerId": null,
+          "displayName": "Strategy Buddy",
+          "avatarUrl": null
+        }
+      ],
       "comments": [
         {
           "id": "comment_xn2iyeu",
           "body": "新 CLI channel-id 验证 1779185730741",
-          "author": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+          "author": {
+            "kind": "manual",
+            "id": "manual:buddy-014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "userId": null,
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "avatarUrl": null
+          },
           "createdAt": "2026-05-19T10:17:25.919Z"
         }
       ],
-      "createdBy": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+      "createdBy": {
+        "kind": "manual",
+        "id": "manual:buddy-014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+        "userId": null,
+        "buddyAgentId": null,
+        "ownerId": null,
+        "displayName": "buddy:014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+        "avatarUrl": null
+      },
       "createdAt": "2026-05-19T09:44:10.139Z",
       "updatedAt": "2026-05-19T10:26:53.905Z"
+    },
+    {
+      "id": "card_7vd374f",
+      "columnId": "done",
+      "title": "Composer smoke test",
+      "description": "UI composer verification",
+      "labels": [],
+      "assignees": [
+        {
+          "kind": "agent",
+          "id": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+          "userId": "3946d507-0663-47bd-aa96-6a8c6d8805fd",
+          "buddyAgentId": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+          "ownerId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+          "displayName": "Strategy Buddy",
+          "avatarUrl": null
+        }
+      ],
+      "comments": [],
+      "createdBy": {
+        "kind": "agent",
+        "id": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+        "userId": "3946d507-0663-47bd-aa96-6a8c6d8805fd",
+        "buddyAgentId": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+        "ownerId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+        "displayName": "Strategy Buddy",
+        "avatarUrl": null
+      },
+      "createdAt": "2026-05-26T14:29:19.694Z",
+      "updatedAt": "2026-05-26T14:29:28.049Z"
+    },
+    {
+      "id": "card_aejsi7h",
+      "columnId": "done",
+      "title": "拉取最新的 hackernews 同步到问答",
+      "labels": [],
+      "assignees": [
+        {
+          "kind": "user",
+          "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+          "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+          "buddyAgentId": null,
+          "ownerId": null,
+          "displayName": "Admin",
+          "avatarUrl": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%23a855f7%22%20rx%3D%2220%22%20%2F%3E%3Cellipse%20cx%3D%2250%22%20cy%3D%2285%22%20rx%3D%2230%22%20ry%3D%226%22%20fill%3D%22rgba(0%2C0%2C0%2C0.2)%22%2F%3E%3Cpath%20d%3D%22M22%2C45%20C15%2C22%2028%2C18%2034%2C22%20C38%2C25%2040%2C38%2040%2C38%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M78%2C45%20C85%2C22%2072%2C18%2066%2C22%20C62%2C25%2060%2C38%2060%2C38%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M26%2C38%20C22%2C26%2029%2C24%2033%2C26%20C35%2C28%2036%2C34%2036%2C34%22%20fill%3D%22%23ffb8b8%22%20opacity%3D%220.8%22%2F%3E%3Cpath%20d%3D%22M74%2C38%20C78%2C26%2071%2C24%2067%2C26%20C65%2C28%2064%2C34%2064%2C34%22%20fill%3D%22%23ffb8b8%22%20opacity%3D%220.8%22%2F%3E%3Cellipse%20cx%3D%2250%22%20cy%3D%2258%22%20rx%3D%2238%22%20ry%3D%2230%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%2F%3E%3Ccircle%20cx%3D%2234%22%20cy%3D%2252%22%20r%3D%227.5%22%20fill%3D%22%23f87171%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2250%22%20r%3D%222.5%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2236%22%20cy%3D%2253%22%20r%3D%221%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2266%22%20cy%3D%2252%22%20r%3D%227.5%22%20fill%3D%22%23f87171%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2250%22%20r%3D%222.5%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2268%22%20cy%3D%2253%22%20r%3D%221%22%20fill%3D%22white%22%2F%3E%3Cpath%20d%3D%22M47%2C62%20L53%2C62%20L50%2C65%20Z%22%20fill%3D%22%23ff9ff3%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M42%2C67%20Q46%2C72%2050%2C67%20M50%2C67%20Q54%2C72%2058%2C67%22%20fill%3D%22none%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M28%2C62%20L15%2C60%20M28%2C65%20L14%2C66%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20opacity%3D%220.6%22%2F%3E%3Cpath%20d%3D%22M72%2C62%20L85%2C60%20M72%2C65%20L86%2C66%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20opacity%3D%220.6%22%2F%3E%3Cpath%20d%3D%22M16%2C35%20Q50%2C20%2084%2C35%22%20fill%3D%22none%22%20stroke%3D%22%23e17055%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M50%2C15%20L60%2C25%20L50%2C28%20L40%2C25%20Z%22%20fill%3D%22%23fab1a0%22%20stroke%3D%22%23e17055%22%20stroke-width%3D%222%22%2F%3E%3C%2Fsvg%3E"
+        },
+        {
+          "kind": "manual",
+          "id": "manual:strategy-buddy",
+          "userId": null,
+          "buddyAgentId": null,
+          "ownerId": null,
+          "displayName": "Strategy Buddy",
+          "avatarUrl": null
+        }
+      ],
+      "comments": [
+        {
+          "id": "comment_vfhlzom",
+          "body": "已抓取 HackerNews 最新前 10 条热门内容，但 问问 (shadow-answers) API 返回 500 Internal Error，questions.list 和 questions.ask 均不可用。无法完成同步。\n\n已抓取内容：\n1. Chemistry behind the Garden Grove chemical tank (261 pts)\n2. Cloudflare Flagship (92 pts)\n3. A few interesting modern pixel fonts (272 pts)\n4. I Bypassed Adobe and Microsoft to Build a Git-Tracked Book Production Pipeline (178 pts)\n5. Erin Brockovich made a map to track data centers (143 pts)\n6. A portentous reunion (64 pts)\n7. Stripe is friendly to friendly fraud (146 pts)\n8. Where does next-token prediction leave us? (22 pts)\n9. The Forgotten Art of the LAN Party (32 pts)\n10. Launch HN: Minicor YC P26 - Windows desktop automations at scale (81 pts)\n\n请修复 问问 服务后重新触发。",
+          "author": {
+            "kind": "agent",
+            "id": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "userId": "3946d507-0663-47bd-aa96-6a8c6d8805fd",
+            "buddyAgentId": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "ownerId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "displayName": "Strategy Buddy",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-05-27T03:28:33.849Z"
+        },
+        {
+          "id": "comment_ml7nd9z",
+          "body": "重试结果 (2026-05-27 11:49 CST): 问问 (shadow-answers) API 仍然返回 500 Internal Error，仍未修复。等待服务端修复后重新触发。",
+          "author": {
+            "kind": "agent",
+            "id": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "userId": "3946d507-0663-47bd-aa96-6a8c6d8805fd",
+            "buddyAgentId": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "ownerId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "displayName": "Strategy Buddy",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-05-27T05:03:15.085Z"
+        },
+        {
+          "id": "comment_ezrk6xg",
+          "body": "✅ 同步完成！HackerNews 最新前 10 条已成功同步到 问问。\n\n创建的问答：\n1. q_uqlhsoi — A few interesting modern pixel fonts (313pts)\n2. q_gdj23cu — Chemistry behind the Garden Grove chemical tank (299pts)\n3. q_w7wcemc — Git-Tracked Book Production Pipeline (205pts)\n4. q_6h820do — Cloudflare Flagship (164pts)\n5. q_expu2ua — Where does next-token prediction leave us? (151pts)\n6. q_wk8sxrj — The just-say-no engineer was a ZIRP phenomenon (120pts)\n7. q_eh73ewo — The Forgotten Art of the LAN Party (103pts)\n8. q_vdl37mz — From Rust to Ruby (95pts)\n9. q_9x3xhzp — Splinter Cell veteran on modern lighting (47pts)\n10. q_n4r1ogi — A History of Obituaries in American Newspapers (10pts)\n\n每条均带 #hackernews 标签及原文链接。",
+          "author": {
+            "kind": "agent",
+            "id": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "userId": "3946d507-0663-47bd-aa96-6a8c6d8805fd",
+            "buddyAgentId": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "ownerId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "displayName": "Strategy Buddy",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-05-27T06:27:16.068Z"
+        },
+        {
+          "id": "comment_d2p8ajy",
+          "body": "后续修复：之前直接贴了英文标题和链接，质量太差。已为全部 10 条问题补上中文回答，内容包括：\n\n- 原文核心内容摘要\n- HN 社区高赞讨论提炼\n- 每条有独立的洞察和上下文\n\n示例：\n- Pixel fonts 那篇补充了社区关于「旧显示器非正方形像素」的历史背景讨论、Departure Mono 推荐、Geist 的争议\n- 化学罐那篇梳理了 MMA 聚合机理、抑制剂悖论，引用了相关论文\n- ZIRP 工程师那篇总结了从「说不的文化」到后 ZIRP 时代的转变\n- 等等\n\n不需要重新触发。",
+          "author": {
+            "kind": "agent",
+            "id": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "userId": "3946d507-0663-47bd-aa96-6a8c6d8805fd",
+            "buddyAgentId": "014ed4fd-1cd6-4313-aeda-03bdbd925f91",
+            "ownerId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "displayName": "Strategy Buddy",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-05-27T06:30:23.049Z"
+        }
+      ],
+      "createdBy": {
+        "kind": "user",
+        "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+        "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+        "buddyAgentId": null,
+        "ownerId": null,
+        "displayName": "Admin",
+        "avatarUrl": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%23a855f7%22%20rx%3D%2220%22%20%2F%3E%3Cellipse%20cx%3D%2250%22%20cy%3D%2285%22%20rx%3D%2230%22%20ry%3D%226%22%20fill%3D%22rgba(0%2C0%2C0%2C0.2)%22%2F%3E%3Cpath%20d%3D%22M22%2C45%20C15%2C22%2028%2C18%2034%2C22%20C38%2C25%2040%2C38%2040%2C38%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M78%2C45%20C85%2C22%2072%2C18%2066%2C22%20C62%2C25%2060%2C38%2060%2C38%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M26%2C38%20C22%2C26%2029%2C24%2033%2C26%20C35%2C28%2036%2C34%2036%2C34%22%20fill%3D%22%23ffb8b8%22%20opacity%3D%220.8%22%2F%3E%3Cpath%20d%3D%22M74%2C38%20C78%2C26%2071%2C24%2067%2C26%20C65%2C28%2064%2C34%2064%2C34%22%20fill%3D%22%23ffb8b8%22%20opacity%3D%220.8%22%2F%3E%3Cellipse%20cx%3D%2250%22%20cy%3D%2258%22%20rx%3D%2238%22%20ry%3D%2230%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%2F%3E%3Ccircle%20cx%3D%2234%22%20cy%3D%2252%22%20r%3D%227.5%22%20fill%3D%22%23f87171%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2250%22%20r%3D%222.5%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2236%22%20cy%3D%2253%22%20r%3D%221%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2266%22%20cy%3D%2252%22%20r%3D%227.5%22%20fill%3D%22%23f87171%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2250%22%20r%3D%222.5%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2268%22%20cy%3D%2253%22%20r%3D%221%22%20fill%3D%22white%22%2F%3E%3Cpath%20d%3D%22M47%2C62%20L53%2C62%20L50%2C65%20Z%22%20fill%3D%22%23ff9ff3%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M42%2C67%20Q46%2C72%2050%2C67%20M50%2C67%20Q54%2C72%2058%2C67%22%20fill%3D%22none%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M28%2C62%20L15%2C60%20M28%2C65%20L14%2C66%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20opacity%3D%220.6%22%2F%3E%3Cpath%20d%3D%22M72%2C62%20L85%2C60%20M72%2C65%20L86%2C66%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20opacity%3D%220.6%22%2F%3E%3Cpath%20d%3D%22M16%2C35%20Q50%2C20%2084%2C35%22%20fill%3D%22none%22%20stroke%3D%22%23e17055%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M50%2C15%20L60%2C25%20L50%2C28%20L40%2C25%20Z%22%20fill%3D%22%23fab1a0%22%20stroke%3D%22%23e17055%22%20stroke-width%3D%222%22%2F%3E%3C%2Fsvg%3E"
+      },
+      "createdAt": "2026-05-27T03:27:36.571Z",
+      "updatedAt": "2026-05-27T06:30:23.049Z",
+      "buddyStatus": "queued",
+      "lastDispatchedAt": "2026-05-27T06:24:04.449Z"
+    },
+    {
+      "id": "card_55jl1yw",
+      "columnId": "doing",
+      "title": "Codex kanban API smoke",
+      "description": "Verify create/get/move endpoints after task card redesign.",
+      "labels": [
+        "Smoke"
+      ],
+      "assignees": [
+        {
+          "kind": "local",
+          "id": "local",
+          "userId": "local",
+          "buddyAgentId": null,
+          "ownerId": null,
+          "displayName": "Local User",
+          "avatarUrl": null
+        }
+      ],
+      "comments": [],
+      "createdBy": {
+        "kind": "local",
+        "id": "local",
+        "userId": "local",
+        "buddyAgentId": null,
+        "ownerId": null,
+        "displayName": "Local User",
+        "avatarUrl": null
+      },
+      "createdAt": "2026-05-27T03:53:08.346Z",
+      "updatedAt": "2026-05-27T03:54:10.426Z"
+    },
+    {
+      "id": "card_gl4kzq8",
+      "columnId": "todo",
+      "title": "拉取最新的 hackernews 同步到问答",
+      "labels": [],
+      "assignees": [
+        {
+          "kind": "manual",
+          "id": "manual:strategy-buddy",
+          "userId": null,
+          "buddyAgentId": null,
+          "ownerId": null,
+          "displayName": "Strategy Buddy",
+          "avatarUrl": null
+        }
+      ],
+      "comments": [],
+      "createdBy": {
+        "kind": "user",
+        "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+        "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+        "buddyAgentId": null,
+        "ownerId": null,
+        "displayName": "Admin",
+        "avatarUrl": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%23a855f7%22%20rx%3D%2220%22%20%2F%3E%3Cellipse%20cx%3D%2250%22%20cy%3D%2285%22%20rx%3D%2230%22%20ry%3D%226%22%20fill%3D%22rgba(0%2C0%2C0%2C0.2)%22%2F%3E%3Cpath%20d%3D%22M22%2C45%20C15%2C22%2028%2C18%2034%2C22%20C38%2C25%2040%2C38%2040%2C38%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M78%2C45%20C85%2C22%2072%2C18%2066%2C22%20C62%2C25%2060%2C38%2060%2C38%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M26%2C38%20C22%2C26%2029%2C24%2033%2C26%20C35%2C28%2036%2C34%2036%2C34%22%20fill%3D%22%23ffb8b8%22%20opacity%3D%220.8%22%2F%3E%3Cpath%20d%3D%22M74%2C38%20C78%2C26%2071%2C24%2067%2C26%20C65%2C28%2064%2C34%2064%2C34%22%20fill%3D%22%23ffb8b8%22%20opacity%3D%220.8%22%2F%3E%3Cellipse%20cx%3D%2250%22%20cy%3D%2258%22%20rx%3D%2238%22%20ry%3D%2230%22%20fill%3D%22%23e8e8e8%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222.5%22%2F%3E%3Ccircle%20cx%3D%2234%22%20cy%3D%2252%22%20r%3D%227.5%22%20fill%3D%22%23f87171%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2250%22%20r%3D%222.5%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2236%22%20cy%3D%2253%22%20r%3D%221%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2266%22%20cy%3D%2252%22%20r%3D%227.5%22%20fill%3D%22%23f87171%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2250%22%20r%3D%222.5%22%20fill%3D%22white%22%2F%3E%3Ccircle%20cx%3D%2268%22%20cy%3D%2253%22%20r%3D%221%22%20fill%3D%22white%22%2F%3E%3Cpath%20d%3D%22M47%2C62%20L53%2C62%20L50%2C65%20Z%22%20fill%3D%22%23ff9ff3%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M42%2C67%20Q46%2C72%2050%2C67%20M50%2C67%20Q54%2C72%2058%2C67%22%20fill%3D%22none%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M28%2C62%20L15%2C60%20M28%2C65%20L14%2C66%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20opacity%3D%220.6%22%2F%3E%3Cpath%20d%3D%22M72%2C62%20L85%2C60%20M72%2C65%20L86%2C66%22%20stroke%3D%22%231a1a1c%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20opacity%3D%220.6%22%2F%3E%3Cpath%20d%3D%22M16%2C35%20Q50%2C20%2084%2C35%22%20fill%3D%22none%22%20stroke%3D%22%23e17055%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M50%2C15%20L60%2C25%20L50%2C28%20L40%2C25%20Z%22%20fill%3D%22%23fab1a0%22%20stroke%3D%22%23e17055%22%20stroke-width%3D%222%22%2F%3E%3C%2Fsvg%3E"
+      },
+      "createdAt": "2026-05-27T06:25:13.691Z",
+      "updatedAt": "2026-05-27T06:32:00.340Z",
+      "buddyStatus": "queued",
+      "lastDispatchedAt": "2026-05-27T06:32:00.340Z"
     }
   ]
 }

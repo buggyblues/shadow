@@ -811,6 +811,113 @@ def test_notifications_mark_all_uses_post(monkeypatch):
     client.close()
 
 
+def test_buddy_inbox_methods_use_canonical_paths(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = []
+
+    def fake_get(path, params=None):
+        captured.append(("get", path, params))
+        return []
+
+    def fake_post(path, json=None):
+        captured.append(("post", path, json))
+        return {"ok": True}
+
+    def fake_put(path, json=None):
+        captured.append(("put", path, json))
+        return {"policy": json}
+
+    def fake_patch(path, json=None):
+        captured.append(("patch", path, json))
+        return {"status": json["status"]}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+    monkeypatch.setattr(client, "_put", fake_put)
+    monkeypatch.setattr(client, "_patch", fake_patch)
+
+    assert client.list_buddy_inboxes() == []
+    assert client.list_server_buddy_inboxes("shadow-plays") == []
+    assert client.ensure_buddy_inbox("shadow-plays", "agent-1") == {"ok": True}
+    assert client.update_buddy_inbox_admission_policy(
+        "shadow-plays",
+        "agent-1",
+        {"defaultMode": "allow", "rules": []},
+    ) == {"policy": {"defaultMode": "allow", "rules": []}}
+    assert client.list_buddy_inbox_admission_pending("shadow-plays", "agent-1") == []
+    assert client.approve_buddy_inbox_admission_pending(
+        "shadow-plays",
+        "agent-1",
+        "pending-1",
+    ) == {"ok": True}
+    assert client.reject_buddy_inbox_admission_pending(
+        "shadow-plays",
+        "agent-1",
+        "pending-2",
+    ) == {"ok": True}
+    assert client.enqueue_inbox_task_for_agent(
+        "shadow-plays",
+        "agent-1",
+        title="Install",
+        idempotency_key="skills:install:x",
+    ) == {"ok": True}
+    assert client.enqueue_inbox_task("channel-1", title="Review") == {"ok": True}
+    assert client.claim_next_inbox_task("shadow-plays", "agent-1", ttl_seconds=60) == {
+        "ok": True
+    }
+    assert client.claim_task_card("message-1", "card-1", note="Start") == {"ok": True}
+    assert client.update_task_card("message-1", "card-1", status="running") == {
+        "status": "running"
+    }
+    assert client.retry_task_card("message-1", "card-1") == {"ok": True}
+    assert client.promote_message_to_inbox_task(
+        "message-1",
+        server_id="server-1",
+        agent_id="agent-1",
+    ) == {"ok": True}
+    assert captured == [
+        ("get", "/api/buddy-inboxes", None),
+        ("get", "/api/servers/shadow-plays/inboxes", None),
+        ("post", "/api/servers/shadow-plays/inboxes/agent-1", None),
+        (
+            "put",
+            "/api/servers/shadow-plays/inboxes/agent-1/admission-policy",
+            {"defaultMode": "allow", "rules": []},
+        ),
+        ("get", "/api/servers/shadow-plays/inboxes/agent-1/admission-pending", None),
+        (
+            "post",
+            "/api/servers/shadow-plays/inboxes/agent-1/admission-pending/pending-1/approve",
+            None,
+        ),
+        (
+            "post",
+            "/api/servers/shadow-plays/inboxes/agent-1/admission-pending/pending-2/reject",
+            None,
+        ),
+        (
+            "post",
+            "/api/servers/shadow-plays/inboxes/agent-1/tasks",
+            {"title": "Install", "idempotencyKey": "skills:install:x"},
+        ),
+        ("post", "/api/channels/channel-1/inbox/tasks", {"title": "Review"}),
+        (
+            "post",
+            "/api/servers/shadow-plays/inboxes/agent-1/claim-next",
+            {"ttlSeconds": 60},
+        ),
+        ("post", "/api/messages/message-1/cards/card-1/claim", {"note": "Start"}),
+        ("patch", "/api/messages/message-1/cards/card-1", {"status": "running"}),
+        ("post", "/api/messages/message-1/cards/card-1/retry", {}),
+        (
+            "post",
+            "/api/messages/message-1/inbox/tasks",
+            {"serverId": "server-1", "agentId": "agent-1"},
+        ),
+    ]
+    client.close()
+
+
 def test_notification_channel_preference_and_push_token_paths(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = []

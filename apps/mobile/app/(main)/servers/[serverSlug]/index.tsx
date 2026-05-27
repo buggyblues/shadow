@@ -13,6 +13,7 @@ import {
   Copy,
   Edit3,
   Hash,
+  Inbox as InboxIcon,
   Lock,
   LockOpen,
   Megaphone,
@@ -102,6 +103,22 @@ interface LaunchContext {
   iframeEntry: string | null
   launchToken: string
   eventStreamPath: string
+}
+
+interface BuddyInboxEntry {
+  agent: {
+    id: string
+    ownerId: string
+    status?: string | null
+    user: {
+      id: string
+      username: string
+      displayName: string | null
+      avatarUrl: string | null
+    }
+  }
+  channel: ServerChannel | null
+  canManage: boolean
 }
 
 function withLaunchParams(entry: string, launch: LaunchContext) {
@@ -207,6 +224,31 @@ export default function ServerHomeScreen() {
     queryKey: ['server-apps', serverSlug],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
     enabled: !!serverSlug && isServerMember,
+  })
+
+  const { data: inboxes = [], refetch: refetchInboxes } = useQuery({
+    queryKey: ['server-inboxes', server?.id],
+    queryFn: () => fetchApi<BuddyInboxEntry[]>(`/api/servers/${server!.id}/inboxes`),
+    enabled: !!server?.id,
+  })
+
+  const ensureInboxMutation = useMutation({
+    mutationFn: async (entry: BuddyInboxEntry) => {
+      if (entry.channel) return entry.channel
+      const result = await fetchApi<{ channel: ServerChannel }>(
+        `/api/servers/${server!.id}/inboxes/${entry.agent.id}`,
+        { method: 'POST' },
+      )
+      return result.channel
+    },
+    onSuccess: (channel) => {
+      queryClient.invalidateQueries({ queryKey: ['channels', server?.id] })
+      queryClient.invalidateQueries({ queryKey: ['server-inboxes', server?.id] })
+      refetchInboxes()
+      if (server) setLastChannel(server.id, channel.id)
+      router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}` as never)
+    },
+    onError: (err: Error) => showToast(err?.message || t('common.error'), 'error'),
   })
 
   const launchAppMutation = useMutation({
@@ -530,6 +572,38 @@ export default function ServerHomeScreen() {
               ) : null
             }
           />
+        )}
+
+        {inboxes.length > 0 && (
+          <View style={styles.inboxSection}>
+            <AppText variant="title" style={styles.cuteSectionLabel}>
+              {t('inbox.title')}
+            </AppText>
+            <GlassPanel style={styles.inboxPanel}>
+              {inboxes.map((entry) => {
+                const label =
+                  entry.agent.user.displayName ?? entry.agent.user.username ?? entry.agent.id
+                return (
+                  <MenuItem
+                    key={entry.agent.id}
+                    icon={InboxIcon}
+                    title={label}
+                    subtitle={
+                      entry.channel
+                        ? t('inbox.channelReady')
+                        : entry.canManage
+                          ? t('inbox.createInbox')
+                          : t('inbox.noAccess')
+                    }
+                    tone={entry.channel ? 'primary' : 'muted'}
+                    disabled={!entry.channel && !entry.canManage}
+                    right={<ChevronRight size={16} color={colors.textMuted} strokeWidth={2.6} />}
+                    onPress={() => ensureInboxMutation.mutate(entry)}
+                  />
+                )
+              })}
+            </GlassPanel>
+          </View>
         )}
 
         {/* ── Channel Bubbles ─────────────────────────── */}
@@ -926,6 +1000,14 @@ const styles = StyleSheet.create({
   channelsList: {
     paddingHorizontal: spacing.md,
     gap: spacing.md,
+  },
+  inboxSection: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  inboxPanel: {
+    padding: spacing.xs,
   },
   appsSection: {
     paddingHorizontal: spacing.md,

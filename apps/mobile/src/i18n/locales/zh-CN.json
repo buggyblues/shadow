@@ -400,6 +400,29 @@
     "setPublic": "设为公开",
     "setPrivate": "设为私有"
   },
+  "inbox": {
+    "title": "Inbox",
+    "channelReady": "任务 Inbox",
+    "createInbox": "创建 Inbox",
+    "noAccess": "无权限",
+    "assignee": "分配给 {{name}}",
+    "unassigned": "未分配 Buddy",
+    "statusUpdated": "任务已更新",
+    "status": {
+      "queued": "排队中",
+      "claimed": "已领取",
+      "running": "执行中",
+      "completed": "已完成",
+      "failed": "已失败",
+      "canceled": "已取消",
+      "transferred": "已转交"
+    },
+    "action": {
+      "start": "开始",
+      "complete": "完成",
+      "fail": "失败"
+    }
+  },
   "chat": {
     "selectChannel": "选择一个频道开始聊天",
     "welcomeChannel": "欢迎来到 #{{channelName}}！",

@@ -14,37 +14,76 @@ export interface ChallengeExample {
   explanation?: string
 }
 
+export interface ChallengeTestCase {
+  id: string
+  description?: string
+  input: string
+  expected: string
+  visibility: 'visible' | 'hidden'
+}
+
+export interface ChallengeSource {
+  provider: 'seed' | 'exercism' | 'leetcode' | 'codeforces' | 'manual'
+  id: string
+  url?: string
+  importedAt?: string
+}
+
+export type ChallengeDifficulty = 'easy' | 'medium' | 'hard'
+export type TrainerLanguage = 'javascript' | 'typescript' | 'python'
+
 export interface Challenge {
   id: string
   title: string
-  difficulty: 'easy' | 'medium' | 'hard'
+  difficulty: ChallengeDifficulty
   tags: string[]
   prompt: string
   starterCode: string
   examples: ChallengeExample[]
+  testCases?: ChallengeTestCase[]
   judgeInstructions: string
+  source?: ChallengeSource
+  createdAt?: string
+  updatedAt?: string
 }
 
-export type SubmissionStatus = 'submitted' | 'judged'
-export type SubmissionVerdict = 'accepted' | 'wrong_answer' | 'runtime_error' | 'needs_review'
+export type SubmissionStatus = 'submitted' | 'analyzed'
+export type SubmissionOutcome = 'accepted' | 'needs_work' | 'runtime_error' | 'incomplete'
+export type SubmissionReviewFocus = 'standard' | 'interview' | 'debug' | 'complexity'
+
+export interface SubmissionAnalysis {
+  outcome: SubmissionOutcome
+  score: number
+  summary: string
+  explanation: string
+  suggestions: string[]
+  complexity?: string
+  analyzer: TrainerPerson
+  analyzedAt: string
+}
+
+export interface SubmissionReviewRequest {
+  agentId?: string
+  assigneeLabel?: string
+  displayName?: string
+  reviewFocus?: SubmissionReviewFocus
+  requestedAt: string
+}
 
 export interface CodeSubmission {
   id: string
   challengeId: string
   author: TrainerPerson
-  language: string
+  language: TrainerLanguage | string
   code: string
   status: SubmissionStatus
-  verdict?: SubmissionVerdict
-  score?: number
-  feedback?: string
-  suggestions?: string[]
-  grader?: TrainerPerson
+  reviewRequest?: SubmissionReviewRequest
+  analysis?: SubmissionAnalysis
   createdAt: string
-  judgedAt?: string
 }
 
 export interface TrainerState {
   updatedAt: string
+  challenges: Challenge[]
   submissions: CodeSubmission[]
 }

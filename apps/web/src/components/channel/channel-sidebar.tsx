@@ -24,6 +24,7 @@ import {
   Hash,
   HeadphoneOff,
   Headphones,
+  Inbox,
   Lock,
   Megaphone,
   Menu,
@@ -34,6 +35,7 @@ import {
   PhoneOff,
   Plus,
   Settings,
+  ShieldCheck,
   Trash2,
   UserPlus,
   Volume2,
@@ -142,6 +144,91 @@ interface ServerAppSummary {
   iconUrl?: string | null
 }
 
+function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const shouldLoadIcon = Boolean(iconUrl && !failed)
+
+  useEffect(() => {
+    setFailed(false)
+    setLoaded(false)
+  }, [iconUrl])
+
+  if (!shouldLoadIcon) return <AppWindow size={14} />
+
+  return (
+    <>
+      {!loaded && <AppWindow size={14} />}
+      <img
+        src={iconUrl ?? ''}
+        alt=""
+        className={cn('h-full w-full object-cover', !loaded && 'hidden')}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </>
+  )
+}
+
+interface BuddyInboxEntry {
+  agent: {
+    id: string
+    ownerId: string
+    status: string
+    user: {
+      id: string
+      username: string
+      displayName: string | null
+      avatarUrl: string | null
+      isBot?: boolean | null
+    }
+  }
+  channel: Channel | null
+  canManage: boolean
+}
+
+type AdmissionMode = 'allow' | 'deny' | 'first_time' | 'every_time'
+type AdmissionSubjectKind = 'user' | 'agent' | 'server_app' | 'system'
+
+interface AdmissionRule {
+  subjectKind: AdmissionSubjectKind
+  subjectId?: string
+  appKey?: string
+  mode: AdmissionMode
+  approved?: boolean
+}
+
+interface AdmissionPolicy {
+  defaultMode: AdmissionMode
+  rules: AdmissionRule[]
+}
+
+interface AdmissionPendingDelivery {
+  id: string
+  mode: Exclude<AdmissionMode, 'allow' | 'deny'>
+  subject: {
+    kind: AdmissionSubjectKind
+    id?: string
+    appKey?: string
+    label?: string
+  }
+  task: {
+    title: string
+    body?: string
+  }
+  requestedAt: string
+}
+
+interface AdmissionPolicyResponse {
+  channel: Channel | null
+  policy: AdmissionPolicy
+}
+
+interface AdmissionPendingResponse {
+  channel: Channel | null
+  pending: AdmissionPendingDelivery[]
+}
+
 const channelIcons = {
   text: Hash,
   voice: Volume2,
@@ -184,6 +271,13 @@ export function ChannelSidebar({
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
   const [newIsPrivate, setNewIsPrivate] = useState(false)
+  const [inboxSettingsEntry, setInboxSettingsEntry] = useState<BuddyInboxEntry | null>(null)
+  const [draftAdmissionPolicy, setDraftAdmissionPolicy] = useState<AdmissionPolicy | null>(null)
+  const [draftAdmissionRule, setDraftAdmissionRule] = useState<AdmissionRule>({
+    subjectKind: 'server_app',
+    appKey: '',
+    mode: 'first_time',
+  })
   const createChannelNameInputRef = useRef<HTMLInputElement>(null)
 
   // Listen for 'create-channel' pending action from task center
@@ -252,6 +346,43 @@ export function ChannelSidebar({
     gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
 
+  const { data: buddyInboxes = [] } = useQuery<BuddyInboxEntry[]>({
+    queryKey: ['buddy-inboxes', serverSlug],
+    queryFn: () => fetchApi<BuddyInboxEntry[]>(`/api/servers/${serverSlug}/inboxes`),
+    enabled: canLoadInitialQueries,
+    staleTime: CHANNEL_NAVIGATION_STALE_MS,
+    gcTime: CHANNEL_NAVIGATION_GC_MS,
+  })
+  const inboxSettingsAgentId = inboxSettingsEntry?.agent.id
+
+  const { data: admissionPolicyData } = useQuery<AdmissionPolicyResponse>({
+    queryKey: ['buddy-inbox-admission-policy', serverSlug, inboxSettingsAgentId],
+    queryFn: () =>
+      fetchApi<AdmissionPolicyResponse>(
+        `/api/servers/${serverSlug}/inboxes/${inboxSettingsAgentId}/admission-policy`,
+      ),
+    enabled: Boolean(serverSlug && inboxSettingsAgentId),
+  })
+
+  const { data: admissionPendingData } = useQuery<AdmissionPendingResponse>({
+    queryKey: ['buddy-inbox-admission-pending', serverSlug, inboxSettingsAgentId],
+    queryFn: () =>
+      fetchApi<AdmissionPendingResponse>(
+        `/api/servers/${serverSlug}/inboxes/${inboxSettingsAgentId}/admission-pending`,
+      ),
+    enabled: Boolean(serverSlug && inboxSettingsAgentId),
+    refetchInterval: inboxSettingsEntry ? 10_000 : false,
+  })
+
+  useEffect(() => {
+    if (admissionPolicyData?.policy) {
+      setDraftAdmissionPolicy({
+        defaultMode: admissionPolicyData.policy.defaultMode,
+        rules: admissionPolicyData.policy.rules ?? [],
+      })
+    }
+  }, [admissionPolicyData?.policy])
+
   // Channel sorting and filter
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -268,9 +399,16 @@ export function ChannelSidebar({
         channel.topic?.toLowerCase().includes(keyword),
     )
   }, [channels, searchQuery])
+  const buddyInboxChannelIds = useMemo(
+    () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
+    [buddyInboxes],
+  )
   const textChannels = useMemo(
-    () => visibleChannels.filter((channel) => channel.type !== 'voice'),
-    [visibleChannels],
+    () =>
+      visibleChannels.filter(
+        (channel) => channel.type !== 'voice' && !buddyInboxChannelIds.has(channel.id),
+      ),
+    [buddyInboxChannelIds, visibleChannels],
   )
   const voiceChannels = useMemo(
     () => visibleChannels.filter((channel) => channel.type === 'voice'),
@@ -360,6 +498,73 @@ export function ChannelSidebar({
       setInviteTargetChannel(data)
       setInviteInitialTab('buddies')
       setShowInvitePanel(true)
+    },
+  })
+
+  const ensureBuddyInbox = useMutation({
+    mutationFn: (agentId: string) =>
+      fetchApi<{ channel: Channel; created: boolean }>(
+        `/api/servers/${serverSlug}/inboxes/${agentId}`,
+        {
+          method: 'POST',
+        },
+      ),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      handleSelectChannel(data.channel)
+    },
+  })
+
+  const saveAdmissionPolicy = useMutation({
+    mutationFn: (data: { agentId: string; policy: AdmissionPolicy }) =>
+      fetchApi<AdmissionPolicyResponse>(
+        `/api/servers/${serverSlug}/inboxes/${data.agentId}/admission-policy`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(data.policy),
+        },
+      ),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['buddy-inbox-admission-policy', serverSlug, variables.agentId],
+      })
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
+    },
+  })
+
+  const approveAdmissionPending = useMutation({
+    mutationFn: (data: { agentId: string; pendingId: string }) =>
+      fetchApi(
+        `/api/servers/${serverSlug}/inboxes/${data.agentId}/admission-pending/${data.pendingId}/approve`,
+        {
+          method: 'POST',
+        },
+      ),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['buddy-inbox-admission-pending', serverSlug, variables.agentId],
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['buddy-inbox-admission-policy', serverSlug, variables.agentId],
+      })
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
+    },
+  })
+
+  const rejectAdmissionPending = useMutation({
+    mutationFn: (data: { agentId: string; pendingId: string }) =>
+      fetchApi(
+        `/api/servers/${serverSlug}/inboxes/${data.agentId}/admission-pending/${data.pendingId}/reject`,
+        {
+          method: 'POST',
+        },
+      ),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['buddy-inbox-admission-pending', serverSlug, variables.agentId],
+      })
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
     },
   })
 
@@ -615,10 +820,41 @@ export function ChannelSidebar({
     }
   })
 
+  useSocketEvent<{ channel?: { id?: string }; channelId?: string }>(
+    'buddy-inbox:admission-policy-updated',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
+      if (inboxSettingsAgentId) {
+        queryClient.invalidateQueries({
+          queryKey: ['buddy-inbox-admission-policy', serverSlug, inboxSettingsAgentId],
+        })
+      }
+    },
+  )
+
+  useSocketEvent<{ channel?: { id?: string }; channelId?: string }>(
+    'buddy-inbox:admission-pending-updated',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
+      if (inboxSettingsAgentId) {
+        queryClient.invalidateQueries({
+          queryKey: ['buddy-inbox-admission-pending', serverSlug, inboxSettingsAgentId],
+        })
+      }
+    },
+  )
+
   const recordChannelMessageActivity = useCallback(
     (event: { id?: string; channelId?: string }) => {
-      if (!event.channelId || !rawChannels.some((channel) => channel.id === event.channelId)) return
+      if (
+        !event.channelId ||
+        (!rawChannels.some((channel) => channel.id === event.channelId) &&
+          !buddyInboxChannelIds.has(event.channelId))
+      ) {
+        return
+      }
       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
       const currentChannelId = useChatStore.getState().activeChannelId
       if (event.channelId === currentChannelId) {
         void requestMarkScopeRead({ channelId: event.channelId, force: true })
@@ -636,7 +872,7 @@ export function ChannelSidebar({
         [event.channelId!]: (prev[event.channelId!] ?? 0) + 1,
       }))
     },
-    [queryClient, rawChannels, requestMarkScopeRead, serverSlug],
+    [buddyInboxChannelIds, queryClient, rawChannels, requestMarkScopeRead, serverSlug],
   )
 
   useSocketEvent<{ id?: string; channelId?: string }>('message:new', recordChannelMessageActivity)
@@ -912,6 +1148,106 @@ export function ChannelSidebar({
     )
   }
 
+  const renderBuddyInboxItem = (entry: BuddyInboxEntry) => {
+    const channel = entry.channel
+    const isActive = Boolean(channel && activeChannelId === channel.id)
+    const unreadCount = channel
+      ? (scopedUnread?.channelUnread?.[channel.id] ?? 0) + (localMessageUnread[channel.id] ?? 0)
+      : 0
+    const isUnread = !isActive && unreadCount > 0
+    const displayName = entry.agent.user.displayName ?? entry.agent.user.username
+
+    return (
+      <div key={entry.agent.id} className="group/inbox flex items-center gap-1">
+        <button
+          type="button"
+          data-app-item
+          disabled={ensureBuddyInbox.isPending}
+          onClick={() => {
+            if (channel) {
+              handleSelectChannel(channel)
+              return
+            }
+            ensureBuddyInbox.mutate(entry.agent.id)
+          }}
+          className={cn(
+            'group flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-[6px] text-left text-sm font-medium transition-all duration-300',
+            isActive
+              ? 'channel-pill-active text-primary ring-1 ring-primary/20'
+              : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
+            isUnread && 'font-bold text-text-primary',
+          )}
+        >
+          <div
+            className={cn(
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-all duration-300',
+              isActive
+                ? 'bg-primary/20 text-primary'
+                : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
+            )}
+          >
+            <Inbox size={14} strokeWidth={2.6} />
+          </div>
+          <span className="min-w-0 flex-1 truncate">{displayName}</span>
+          {!channel && <Lock size={12} className="shrink-0 text-text-muted" />}
+          {isUnread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-danger" />}
+        </button>
+        {entry.canManage && (
+          <button
+            type="button"
+            title={t('inbox.admissionSettings')}
+            onClick={() => setInboxSettingsEntry(entry)}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted opacity-0 transition hover:bg-primary/10 hover:text-primary group-hover/inbox:opacity-100"
+          >
+            <ShieldCheck size={15} />
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const activeAdmissionPolicy = draftAdmissionPolicy ?? {
+    defaultMode: 'allow' as AdmissionMode,
+    rules: [] as AdmissionRule[],
+  }
+  const admissionPending = admissionPendingData?.pending ?? []
+  const admissionSettingsTitle = inboxSettingsEntry
+    ? (inboxSettingsEntry.agent.user.displayName ?? inboxSettingsEntry.agent.user.username)
+    : ''
+
+  const setAdmissionDefaultMode = (mode: AdmissionMode) => {
+    setDraftAdmissionPolicy((current) => ({
+      ...(current ?? activeAdmissionPolicy),
+      defaultMode: mode,
+    }))
+  }
+
+  const addAdmissionRule = () => {
+    const subjectId = draftAdmissionRule.subjectId?.trim()
+    const appKey = draftAdmissionRule.appKey?.trim()
+    if (!subjectId && !appKey && draftAdmissionRule.subjectKind !== 'system') return
+    setDraftAdmissionPolicy((current) => ({
+      ...(current ?? activeAdmissionPolicy),
+      rules: [
+        {
+          subjectKind: draftAdmissionRule.subjectKind,
+          ...(subjectId ? { subjectId } : {}),
+          ...(appKey ? { appKey } : {}),
+          mode: draftAdmissionRule.mode,
+        },
+        ...(current ?? activeAdmissionPolicy).rules,
+      ].slice(0, 100),
+    }))
+    setDraftAdmissionRule({ subjectKind: 'server_app', appKey: '', mode: 'first_time' })
+  }
+
+  const removeAdmissionRule = (index: number) => {
+    setDraftAdmissionPolicy((current) => ({
+      ...(current ?? activeAdmissionPolicy),
+      rules: (current ?? activeAdmissionPolicy).rules.filter((_, itemIndex) => itemIndex !== index),
+    }))
+  }
+
   return (
     <GlassPanel className="w-full h-full overflow-hidden flex flex-col shrink-0 relative z-20">
       {/* Server name header — glassmorphic bar */}
@@ -1001,17 +1337,24 @@ export function ChannelSidebar({
                           : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
                       )}
                     >
-                      {app.iconUrl ? (
-                        <img src={app.iconUrl} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <AppWindow size={14} />
-                      )}
+                      <ServerAppIcon iconUrl={app.iconUrl} />
                     </div>
                     <span className="truncate">{app.name}</span>
                   </button>
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {buddyInboxes.length > 0 && (
+          <div className="mb-3">
+            <div className="flex items-center justify-between px-3 py-1.5">
+              <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
+                {t('inbox.queueTitle')}
+              </span>
+            </div>
+            <div className="px-2 space-y-0.5">{buddyInboxes.map(renderBuddyInboxItem)}</div>
           </div>
         )}
 
@@ -1341,6 +1684,250 @@ export function ChannelSidebar({
                 className="uppercase tracking-widest font-black"
               >
                 {t('common.create')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        open={Boolean(inboxSettingsEntry)}
+        onClose={() => {
+          setInboxSettingsEntry(null)
+          setDraftAdmissionPolicy(null)
+        }}
+      >
+        <ModalContent maxWidth="max-w-2xl">
+          <ModalHeader
+            overline={t('inbox.queueTitle')}
+            icon={<ShieldCheck size={18} strokeWidth={2.6} />}
+            title={t('inbox.admissionSettings')}
+            subtitle={admissionSettingsTitle}
+            closeLabel={t('common.close', '关闭')}
+          />
+          <ModalBody className="space-y-5 py-5">
+            <section className="rounded-2xl border border-border-subtle bg-bg-tertiary/35 p-4">
+              <div className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">
+                {t('inbox.admissionDefaultMode')}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(['allow', 'first_time', 'every_time', 'deny'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setAdmissionDefaultMode(mode)}
+                    className={cn(
+                      'rounded-xl border px-3 py-2 text-left text-xs font-black transition',
+                      activeAdmissionPolicy.defaultMode === mode
+                        ? 'border-primary/40 bg-primary/15 text-primary'
+                        : 'border-border-subtle bg-bg-secondary/55 text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
+                    )}
+                  >
+                    {t(`inbox.admissionMode.${mode}`)}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border-subtle bg-bg-tertiary/35 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">
+                  {t('inbox.admissionPending')}
+                </div>
+                <Badge variant="primary" size="xs">
+                  {admissionPending.length}
+                </Badge>
+              </div>
+              {admissionPending.length === 0 ? (
+                <p className="text-sm font-bold text-text-muted">{t('inbox.admissionNoPending')}</p>
+              ) : (
+                <div className="space-y-2">
+                  {admissionPending.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-border-subtle bg-bg-secondary/70 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-black text-text-primary">
+                            {item.task.title}
+                          </div>
+                          <div className="mt-1 truncate text-xs font-bold text-text-muted">
+                            {item.subject.label ||
+                              item.subject.appKey ||
+                              item.subject.id ||
+                              item.subject.kind}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!inboxSettingsAgentId) return
+                              approveAdmissionPending.mutate({
+                                agentId: inboxSettingsAgentId,
+                                pendingId: item.id,
+                              })
+                            }}
+                            className="h-8 rounded-lg bg-success/15 px-3 text-xs font-black text-success transition hover:bg-success/25"
+                          >
+                            {t('inbox.admissionApprove')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!inboxSettingsAgentId) return
+                              rejectAdmissionPending.mutate({
+                                agentId: inboxSettingsAgentId,
+                                pendingId: item.id,
+                              })
+                            }}
+                            className="h-8 rounded-lg bg-danger/15 px-3 text-xs font-black text-danger transition hover:bg-danger/25"
+                          >
+                            {t('inbox.admissionReject')}
+                          </button>
+                        </div>
+                      </div>
+                      {item.task.body && (
+                        <p className="mt-2 line-clamp-2 text-xs font-bold leading-relaxed text-text-muted">
+                          {item.task.body}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-border-subtle bg-bg-tertiary/35 p-4">
+              <div className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">
+                {t('inbox.admissionRules')}
+              </div>
+              <div className="grid gap-2 md:grid-cols-[150px_1fr_1fr_150px_auto]">
+                <select
+                  value={draftAdmissionRule.subjectKind}
+                  onChange={(event) =>
+                    setDraftAdmissionRule((rule) => ({
+                      ...rule,
+                      subjectKind: event.target.value as AdmissionSubjectKind,
+                    }))
+                  }
+                  className="h-11 rounded-xl border border-border-subtle bg-bg-secondary px-3 text-sm font-bold text-text-primary outline-none"
+                >
+                  {(['server_app', 'agent', 'user', 'system'] as const).map((kind) => (
+                    <option key={kind} value={kind}>
+                      {t(`inbox.admissionSubject.${kind}`)}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  value={draftAdmissionRule.subjectId ?? ''}
+                  onChange={(event) =>
+                    setDraftAdmissionRule((rule) => ({
+                      ...rule,
+                      subjectId: event.target.value,
+                    }))
+                  }
+                  placeholder={t('inbox.admissionSubjectId')}
+                  className="!h-11 !rounded-xl"
+                />
+                <Input
+                  value={draftAdmissionRule.appKey ?? ''}
+                  onChange={(event) =>
+                    setDraftAdmissionRule((rule) => ({
+                      ...rule,
+                      appKey: event.target.value,
+                    }))
+                  }
+                  placeholder={t('inbox.admissionAppKey')}
+                  className="!h-11 !rounded-xl"
+                />
+                <select
+                  value={draftAdmissionRule.mode}
+                  onChange={(event) =>
+                    setDraftAdmissionRule((rule) => ({
+                      ...rule,
+                      mode: event.target.value as AdmissionMode,
+                    }))
+                  }
+                  className="h-11 rounded-xl border border-border-subtle bg-bg-secondary px-3 text-sm font-bold text-text-primary outline-none"
+                >
+                  {(['allow', 'first_time', 'every_time', 'deny'] as const).map((mode) => (
+                    <option key={mode} value={mode}>
+                      {t(`inbox.admissionMode.${mode}`)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={addAdmissionRule}
+                  className="grid h-11 w-11 place-items-center rounded-xl bg-primary/15 text-primary transition hover:bg-primary/25"
+                  title={t('inbox.admissionAddRule')}
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+              {activeAdmissionPolicy.rules.length === 0 ? (
+                <p className="mt-3 text-sm font-bold text-text-muted">
+                  {t('inbox.admissionNoRules')}
+                </p>
+              ) : (
+                <div className="mt-3 divide-y divide-border-subtle overflow-hidden rounded-xl border border-border-subtle">
+                  {activeAdmissionPolicy.rules.map((rule, index) => (
+                    <div
+                      key={`${rule.subjectKind}:${rule.subjectId ?? ''}:${rule.appKey ?? ''}:${index}`}
+                      className="flex items-center gap-3 bg-bg-secondary/60 px-3 py-2"
+                    >
+                      <div className="min-w-0 flex-1 text-sm font-bold text-text-primary">
+                        <span>{t(`inbox.admissionSubject.${rule.subjectKind}`)}</span>
+                        <span className="text-text-muted">
+                          {' '}
+                          {rule.appKey || rule.subjectId || '*'}
+                        </span>
+                      </div>
+                      <Badge variant="primary" size="xs">
+                        {t(`inbox.admissionMode.${rule.mode}`)}
+                      </Badge>
+                      <button
+                        type="button"
+                        onClick={() => removeAdmissionRule(index)}
+                        className="grid h-7 w-7 place-items-center rounded-lg text-text-muted transition hover:bg-danger/15 hover:text-danger"
+                        title={t('common.delete')}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </ModalBody>
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setInboxSettingsEntry(null)
+                  setDraftAdmissionPolicy(null)
+                }}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!inboxSettingsAgentId || saveAdmissionPolicy.isPending}
+                loading={saveAdmissionPolicy.isPending}
+                onClick={() => {
+                  if (!inboxSettingsAgentId) return
+                  saveAdmissionPolicy.mutate({
+                    agentId: inboxSettingsAgentId,
+                    policy: activeAdmissionPolicy,
+                  })
+                }}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('inbox.admissionSave')}
               </Button>
             </ModalButtonGroup>
           </ModalFooter>

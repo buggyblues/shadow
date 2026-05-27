@@ -401,6 +401,29 @@
     "setPublic": "公開にする",
     "setPrivate": "非公開にする"
   },
+  "inbox": {
+    "title": "Inbox",
+    "channelReady": "タスク Inbox",
+    "createInbox": "Inbox を作成",
+    "noAccess": "アクセス権なし",
+    "assignee": "{{name}} に割り当て",
+    "unassigned": "Buddy 未割り当て",
+    "statusUpdated": "タスクを更新しました",
+    "status": {
+      "queued": "待機中",
+      "claimed": "取得済み",
+      "running": "実行中",
+      "completed": "完了",
+      "failed": "失敗",
+      "canceled": "キャンセル済み",
+      "transferred": "転送済み"
+    },
+    "action": {
+      "start": "開始",
+      "complete": "完了",
+      "fail": "失敗"
+    }
+  },
   "chat": {
     "selectChannel": "チャンネルを選んでチャットを始めましょう",
     "welcomeChannel": "#{{channelName}} へようこそ！",

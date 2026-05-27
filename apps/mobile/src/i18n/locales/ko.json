@@ -401,6 +401,29 @@
     "setPublic": "공개로 전환",
     "setPrivate": "비공개로 전환"
   },
+  "inbox": {
+    "title": "Inbox",
+    "channelReady": "작업 Inbox",
+    "createInbox": "Inbox 만들기",
+    "noAccess": "권한 없음",
+    "assignee": "{{name}}에게 할당됨",
+    "unassigned": "할당되지 않은 Buddy",
+    "statusUpdated": "작업이 업데이트되었습니다",
+    "status": {
+      "queued": "대기 중",
+      "claimed": "수락됨",
+      "running": "실행 중",
+      "completed": "완료됨",
+      "failed": "실패함",
+      "canceled": "취소됨",
+      "transferred": "전달됨"
+    },
+    "action": {
+      "start": "시작",
+      "complete": "완료",
+      "fail": "실패"
+    }
+  },
   "chat": {
     "selectChannel": "채널을 선택하여 채팅을 시작하세요",
     "welcomeChannel": "#{{channelName}}에 오신 것을 환영합니다!",

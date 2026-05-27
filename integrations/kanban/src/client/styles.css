@@ -81,7 +81,7 @@ button:disabled {
 main {
   height: calc(100vh - 56px);
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
   padding: 16px;
 }
 
@@ -197,6 +197,32 @@ main {
   overflow-wrap: anywhere;
 }
 
+.buddy-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 22px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  padding: 3px 8px;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.buddy-completed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.buddy-failed,
+.buddy-canceled {
+  background: #fee2e2;
+  color: #b42318;
+}
+
 .card-footer {
   display: flex;
   align-items: center;
@@ -245,8 +271,15 @@ main {
   padding: 0 8px 10px;
 }
 
+.quick-add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .quick-add input,
-.detail textarea {
+.detail textarea,
+.detail input {
   width: 100%;
   min-height: 36px;
   border: 1px solid transparent;
@@ -257,7 +290,8 @@ main {
 }
 
 .quick-add input:focus,
-.detail textarea:focus {
+.detail textarea:focus,
+.detail input:focus {
   border-color: #0079bf;
   box-shadow: inset 0 0 0 1px #0079bf;
 }
@@ -429,6 +463,13 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.dispatch-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
 }
 
 .toast {

@@ -14,8 +14,10 @@ import type {
   SelectionGetInput,
   SelectionUpdateInput,
 } from '@shadowob/flash-types/server-app'
+import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, ShadowBridge } from '@shadowob/sdk/bridge'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
+const bridge = new ShadowBridge({ appKey: 'shadow-flash' })
 
 export interface FlashOAuthSession {
   configured: boolean
@@ -29,19 +31,8 @@ export interface FlashOAuthSession {
   authorizeUrl: string | null
 }
 
-const pending = new Map<
-  string,
-  {
-    resolve: (value: unknown) => void
-    reject: (error: Error) => void
-  }
->()
-
 function canUseBridge() {
-  return (
-    new URLSearchParams(location.search).has('shadow_launch') &&
-    (window.parent !== window || window.ReactNativeWebView)
-  )
+  return bridge.isAvailable()
 }
 
 function isLocalDevMode() {
@@ -66,58 +57,9 @@ export async function getOAuthSession(): Promise<FlashOAuthSession> {
   return (await res.json()) as FlashOAuthSession
 }
 
-function postBridge(message: unknown) {
-  if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify(message))
-    return
-  }
-  window.parent.postMessage(message, '*')
-}
-
-window.addEventListener('message', (event) => {
-  let data = event.data
-  if (typeof data === 'string') {
-    try {
-      data = JSON.parse(data || '{}')
-    } catch {
-      return
-    }
-  }
-  if (!data || data.type !== 'shadow.app.command.response') return
-  const entry = pending.get(data.requestId)
-  if (!entry) return
-  pending.delete(data.requestId)
-  if (data.ok) entry.resolve(data.result)
-  else entry.reject(new Error(data.error || 'Command failed'))
-})
-
-function unwrapCommandPayload<T>(payload: unknown): T {
-  if (payload && typeof payload === 'object' && !Array.isArray(payload) && 'ok' in payload) {
-    const envelope = payload as { ok?: boolean; result?: unknown; error?: string }
-    if (envelope.ok === false) throw new Error(envelope.error || 'Command failed')
-    if ('result' in envelope) return envelope.result as T
-  }
-  return payload as T
-}
-
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
   if (canUseBridge()) {
-    const requestId = `req_${Math.random().toString(36).slice(2)}`
-    postBridge({
-      type: 'shadow.app.command.request',
-      requestId,
-      appKey: 'shadow-flash',
-      commandName,
-      input,
-    })
-    return new Promise((resolve, reject) => {
-      pending.set(requestId, { resolve: resolve as (value: unknown) => void, reject })
-      window.setTimeout(() => {
-        if (!pending.has(requestId)) return
-        pending.delete(requestId)
-        reject(new Error('Command timed out'))
-      }, 60000)
-    }).then((payload) => unwrapCommandPayload<T>(payload))
+    return bridge.command(commandName, input) as Promise<T>
   }
 
   if (!isLocalDevMode()) {
@@ -131,7 +73,7 @@ export async function command<T>(commandName: string, input: unknown): Promise<T
   })
   const payload = (await res.json()) as CommandPayload<T>
   if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return unwrapCommandPayload<T>(payload)
+  return bridge.unwrapCommandPayload<T>(payload)
 }
 
 export function getBoard(input: { boardId?: string } = {}) {
@@ -226,7 +168,7 @@ export function subscribeAppEvents(
 
   if (eventStream) {
     const source = new EventSource(eventStream)
-    source.addEventListener('server_app.command.completed', (event) => {
+    source.addEventListener(SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, (event) => {
       try {
         const payload = JSON.parse((event as MessageEvent).data || '{}') as { command?: string }
         onEvent({ type: 'shadow.command.completed', command: payload.command ?? null })
@@ -240,13 +182,5 @@ export function subscribeAppEvents(
   if (unsubscribers.length === 0) return () => undefined
   return () => {
     for (const unsubscribe of unsubscribers) unsubscribe()
-  }
-}
-
-declare global {
-  interface Window {
-    ReactNativeWebView?: {
-      postMessage: (message: string) => void
-    }
   }
 }

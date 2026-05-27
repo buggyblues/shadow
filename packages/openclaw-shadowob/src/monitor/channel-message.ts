@@ -1,4 +1,9 @@
-import type { ShadowChannelPolicy, ShadowMessage, ShadowServerAppIntegration } from '@shadowob/sdk'
+import type {
+  ShadowChannelPolicy,
+  ShadowMessage,
+  ShadowMessageCard,
+  ShadowServerAppIntegration,
+} from '@shadowob/sdk'
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import type { ReplyPayload } from 'openclaw/plugin-sdk'
 import { createChannelReplyPipeline } from 'openclaw/plugin-sdk/channel-reply-pipeline'
@@ -43,6 +48,35 @@ type ChannelServerInfo = {
   channelName: string
 }
 
+type RuntimeTaskCard = ShadowMessageCard & {
+  id: string
+  kind: 'task'
+  title: string
+  body?: string
+  status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed' | 'canceled' | 'transferred'
+  priority?: string
+  assignee?: {
+    userId?: string
+    agentId?: string
+    label?: string
+  }
+  source?: Record<string, unknown>
+  data?: Record<string, unknown> & {
+    task?: {
+      workspaceId?: string
+    }
+  }
+  claim?: {
+    id?: string
+    actor?: {
+      userId?: string
+      agentId?: string
+      label?: string
+    }
+    expiresAt?: string
+  }
+}
+
 function buildChannelContextForAgent(info: ChannelServerInfo | undefined, channelId: string) {
   if (!info) return `Shadow channel id: ${channelId}`
   return [
@@ -56,6 +90,80 @@ function buildChannelContextForAgent(info: ChannelServerInfo | undefined, channe
 function normalizeStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+}
+
+function isRuntimeTaskCard(card: ShadowMessageCard): card is RuntimeTaskCard {
+  return (
+    card.kind === 'task' &&
+    typeof card.id === 'string' &&
+    typeof card.title === 'string' &&
+    typeof card.status === 'string'
+  )
+}
+
+function isTerminalTaskStatus(status: RuntimeTaskCard['status']) {
+  return (
+    status === 'completed' ||
+    status === 'failed' ||
+    status === 'canceled' ||
+    status === 'transferred'
+  )
+}
+
+function taskClaimExpired(card: RuntimeTaskCard) {
+  if (!card.claim?.expiresAt) return true
+  return new Date(card.claim.expiresAt).getTime() <= Date.now()
+}
+
+function findRuntimeTaskCard(message: ShadowMessage, botUserId: string) {
+  const cards = message.metadata?.cards
+  if (!Array.isArray(cards)) return null
+  return (
+    cards.find(
+      (card): card is RuntimeTaskCard =>
+        isRuntimeTaskCard(card) &&
+        card.assignee?.userId === botUserId &&
+        !isTerminalTaskStatus(card.status),
+    ) ?? null
+  )
+}
+
+function findTaskCardById(message: ShadowMessage | null, cardId: string) {
+  const cards = message?.metadata?.cards
+  if (!Array.isArray(cards)) return null
+  return (
+    cards.find((card): card is RuntimeTaskCard => isRuntimeTaskCard(card) && card.id === cardId) ??
+    null
+  )
+}
+
+function taskCardPrompt(message: ShadowMessage, card: RuntimeTaskCard) {
+  const workspaceId =
+    card.data?.task && typeof card.data.task.workspaceId === 'string'
+      ? card.data.task.workspaceId
+      : undefined
+  const claimId = typeof card.claim?.id === 'string' ? card.claim.id : undefined
+  return [
+    'Shadow Inbox task:',
+    `Task message id: ${message.id}`,
+    `Task card id: ${card.id}`,
+    claimId ? `Task claim id: ${claimId}` : '',
+    workspaceId ? `Task workspace id: ${workspaceId}` : '',
+    `Task status: ${card.status}`,
+    `Task title: ${card.title}`,
+    card.priority ? `Task priority: ${card.priority}` : '',
+    card.body ? `Task body:\n${card.body}` : '',
+    card.source ? `Task source: ${JSON.stringify(card.source)}` : '',
+    claimId
+      ? [
+          'When calling Shadow Server App commands for this task, bind the call with:',
+          `--task-message-id ${message.id} --task-card-id ${card.id} --task-claim-id ${claimId}`,
+        ].join('\n')
+      : '',
+    'When you complete useful work for this task, reply with the concrete result and any next action.',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 function isSenderCommandAuthorized(policyConfig: ShadowPolicyConfig | undefined, senderId: string) {
@@ -288,6 +396,39 @@ export async function processShadowMessage(params: {
   runtime.log?.(`[routing] Resolved agent: ${route.agentId} (account ${accountId})`)
 
   const mediaClient = new ShadowClient(account.serverUrl, account.token)
+  let runtimeTaskCard = findRuntimeTaskCard(message, botUserId)
+  if (
+    runtimeTaskCard &&
+    (runtimeTaskCard.status === 'queued' ||
+      ((runtimeTaskCard.status === 'claimed' || runtimeTaskCard.status === 'running') &&
+        taskClaimExpired(runtimeTaskCard)))
+  ) {
+    try {
+      const claimed = await mediaClient.claimTaskCard(message.id, runtimeTaskCard.id, {
+        ttlSeconds: 3600,
+        note: 'OpenClaw runtime claimed task',
+      })
+      runtimeTaskCard = findTaskCardById(claimed, runtimeTaskCard.id) ?? runtimeTaskCard
+    } catch (err) {
+      runtime.error?.(`[task] Failed claiming task card ${runtimeTaskCard.id}: ${String(err)}`)
+      return
+    }
+  }
+  if (runtimeTaskCard && runtimeTaskCard.status === 'claimed') {
+    await mediaClient
+      .updateTaskCard(message.id, runtimeTaskCard.id, {
+        status: 'running',
+        note: 'OpenClaw runtime started work',
+      })
+      .then((updated) => {
+        runtimeTaskCard = findTaskCardById(updated, runtimeTaskCard!.id) ?? runtimeTaskCard
+      })
+      .catch((err) => {
+        runtime.error?.(
+          `[task] Failed marking task card ${runtimeTaskCard?.id} running: ${String(err)}`,
+        )
+      })
+  }
   const mediaContext = await resolveShadowInboundMediaContext({
     account,
     message,
@@ -365,6 +506,7 @@ export async function processShadowMessage(params: {
     viewerCommerceContext,
     mentionContext,
     serverAppContext.prompt,
+    runtimeTaskCard ? taskCardPrompt(message, runtimeTaskCard) : '',
     messageBodyForAgent,
   ]
     .filter(Boolean)
@@ -385,6 +527,9 @@ export async function processShadowMessage(params: {
     Boolean(slashCommandMatch) ||
     mentionRegex.test(message.content)
 
+  const taskSessionKey = runtimeTaskCard
+    ? `${route.sessionKey}:task:${runtimeTaskCard.id}`
+    : route.sessionKey
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: bodyForAgent,
@@ -395,7 +540,7 @@ export async function processShadowMessage(params: {
     CommandSource: 'text',
     From: `shadowob:user:${senderId}`,
     To: `shadowob:channel:${channelId}`,
-    SessionKey: route.sessionKey,
+    SessionKey: taskSessionKey,
     AccountId: route.accountId,
     ChatType: chatType,
     ConversationLabel: conversationLabel,
@@ -423,6 +568,14 @@ export async function processShadowMessage(params: {
       : {}),
     BotUserId: botUserId,
     BotUsername: botUsername,
+    ...(runtimeTaskCard
+      ? {
+          TaskCardId: runtimeTaskCard.id,
+          TaskCardTitle: runtimeTaskCard.title,
+          TaskCardStatus: runtimeTaskCard.status,
+          TaskCardPriority: runtimeTaskCard.priority,
+        }
+      : {}),
     AgentId: route.agentId,
     ChannelId: channelId,
     ...(slashCommandMatch
@@ -561,9 +714,34 @@ export async function processShadowMessage(params: {
       runtime.error?.(`[usage] Failed to report usage snapshot for ${message.id}: ${String(err)}`)
     })
 
+    if (runtimeTaskCard) {
+      await client
+        .updateTaskCard(message.id, runtimeTaskCard.id, {
+          status: 'completed',
+          note: 'OpenClaw runtime completed reply dispatch',
+        })
+        .catch((err) => {
+          runtime.error?.(
+            `[task] Failed marking task card ${runtimeTaskCard?.id} completed: ${String(err)}`,
+          )
+        })
+    }
+
     socket.updateActivity(channelId, 'ready')
   } catch (err) {
     runtime.error?.(`[msg] AI dispatch failed for message ${message.id}: ${String(err)}`)
+    if (runtimeTaskCard) {
+      await client
+        .updateTaskCard(message.id, runtimeTaskCard.id, {
+          status: 'failed',
+          note: `OpenClaw runtime failed: ${String(err)}`.slice(0, 4000),
+        })
+        .catch((updateErr) => {
+          runtime.error?.(
+            `[task] Failed marking task card ${runtimeTaskCard?.id} failed: ${String(updateErr)}`,
+          )
+        })
+    }
     socket.updateActivity(channelId, null)
     throw err
   } finally {

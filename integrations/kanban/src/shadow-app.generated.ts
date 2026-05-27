@@ -90,6 +90,50 @@ export const shadowServerAppManifest = {
       },
     },
     {
+      name: 'cards.create_and_dispatch',
+      title: 'Create and dispatch card',
+      description:
+        'Create a Kanban card, assign it to a Buddy label, and emit a Shadow Inbox task card for that Buddy.',
+      path: '/api/shadow/commands/cards.create_and_dispatch',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          title: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 180,
+          },
+          columnId: {
+            type: 'string',
+            maxLength: 80,
+          },
+          description: {
+            type: 'string',
+            maxLength: 2000,
+          },
+          label: {
+            type: 'string',
+            maxLength: 40,
+          },
+          assigneeLabel: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 80,
+          },
+          reason: {
+            type: 'string',
+            maxLength: 1000,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'cards.move',
       title: 'Move card',
       description: 'Move a card to another column.',
@@ -144,7 +188,8 @@ export const shadowServerAppManifest = {
     {
       name: 'cards.comment',
       title: 'Comment on card',
-      description: 'Add a short update comment to a task card.',
+      description:
+        'Add a short update comment to a task card. A comment that mentions @Strategy Buddy emits an Inbox task card.',
       path: '/api/shadow/commands/cards.comment',
       permission: 'kanban.cards:write',
       action: 'write',
@@ -167,20 +212,36 @@ export const shadowServerAppManifest = {
         additionalProperties: false,
       },
     },
-  ],
-  skills: [
     {
-      name: 'shadow-kanban-board-ops',
+      name: 'cards.dispatch',
+      title: 'Dispatch card to Buddy',
       description:
-        'Use when a Buddy needs to read, create, move, assign, or comment on Shadow Kanban task cards.',
-      commandHints: [
-        'shadow-kanban boards.get',
-        'shadow-kanban cards.get',
-        'shadow-kanban cards.create',
-        'shadow-kanban cards.move',
-        'shadow-kanban cards.assign',
-        'shadow-kanban cards.comment',
-      ],
+        'Assign a Kanban card to a Buddy and emit a Shadow Inbox task card for the Buddy runtime.',
+      path: '/api/shadow/commands/cards.dispatch',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['cardId'],
+        properties: {
+          cardId: {
+            type: 'string',
+            minLength: 1,
+          },
+          assigneeLabel: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 80,
+          },
+          reason: {
+            type: 'string',
+            maxLength: 1000,
+          },
+        },
+        additionalProperties: false,
+      },
     },
   ],
   events: ['board.updated'],

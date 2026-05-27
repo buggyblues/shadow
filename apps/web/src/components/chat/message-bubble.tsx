@@ -51,6 +51,7 @@ import {
   SelectionControl,
   SendFailureNotice,
 } from './message-bubble/pure'
+import { isTaskCard, TaskCardsView } from './message-bubble/task-card'
 import type {
   Attachment,
   BuddyAgentEntry,
@@ -141,7 +142,11 @@ function MessageBubbleInner({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const actionsRef = useRef<HTMLDivElement>(null)
-
+  const isTaskCardMessage = useMemo(
+    () => (message.metadata?.cards ?? []).some((card) => isTaskCard(card)),
+    [message.metadata?.cards],
+  )
+  const renderGrouped = isGrouped && !isTaskCardMessage
   const showActions = isHovered && !selectionMode
 
   const closeFloatingActions = useCallback(() => {
@@ -528,10 +533,10 @@ function MessageBubbleInner({
     () => decodeWalletRechargeMarker(message.content),
     [message.content],
   )
-  const markdownContent = useMemo(
-    () => (walletRecharge ? stripWalletRechargeMarker(message.content) : message.content),
-    [message.content, walletRecharge],
-  )
+  const markdownContent = useMemo(() => {
+    if (isTaskCardMessage) return ''
+    return walletRecharge ? stripWalletRechargeMarker(message.content) : message.content
+  }, [isTaskCardMessage, message.content, walletRecharge])
   const markdownNode = useMemo(() => {
     if (!markdownContent || markdownContent === '\u200B') return null
 
@@ -622,7 +627,16 @@ function MessageBubbleInner({
     <div
       ref={messageRef}
       id={`msg-${message.id}`}
-      className={`group relative mx-1 flex gap-3 px-3 sm:gap-4 sm:px-4 ${isGrouped ? 'py-0.5 pl-[64px] sm:pl-[72px]' : 'py-2'} message-row hover:bg-bg-tertiary/20 ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
+      className={cn(
+        'group relative mx-1 flex gap-3 px-3 sm:gap-4 sm:px-4',
+        [
+          renderGrouped ? 'py-0.5 pl-[64px] sm:pl-[72px]' : 'py-2',
+          'message-row hover:bg-bg-tertiary/20',
+        ],
+        highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]',
+        isSelected && 'bg-primary/10',
+        selectionMode && 'cursor-pointer',
+      )}
       onMouseEnter={activateHover}
       onMouseLeave={deactivateHover}
       onClick={selectionMode ? () => onToggleSelect?.(message.id) : undefined}
@@ -647,7 +661,7 @@ function MessageBubbleInner({
       {/* Selection checkbox */}
       {selectionMode && <SelectionControl isSelected={isSelected} />}
       {/* Avatar container — hidden in grouped mode */}
-      {!isGrouped && (
+      {!renderGrouped && (
         <div
           ref={avatarRef}
           className={`flex-shrink-0 ${replyToMessage ? 'mt-6' : 'mt-0.5'} cursor-pointer`}
@@ -670,7 +684,7 @@ function MessageBubbleInner({
         {/* Reply reference */}
         {replyToMessage && <ReplyReference replyToMessage={replyToMessage} t={t} />}
         {/* Author line — hidden in grouped mode */}
-        {!isGrouped && (
+        {!renderGrouped && (
           <MessageAuthorLine
             author={author}
             editedTitle={editedTitle}
@@ -695,6 +709,12 @@ function MessageBubbleInner({
         )}
 
         {walletRecharge && <WalletRechargeCard data={walletRecharge} />}
+
+        <TaskCardsView
+          cards={message.metadata?.cards}
+          messageId={message.id}
+          channelId={message.channelId}
+        />
 
         {message.metadata?.commerceCards && message.metadata.commerceCards.length > 0 && (
           <div className="flex flex-col gap-2 mt-2">

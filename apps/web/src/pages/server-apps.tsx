@@ -1,4 +1,10 @@
 import {
+  buildShadowServerAppInboxDelivery,
+  buildShadowServerAppInboxTaskRequest,
+  ShadowBridge,
+  type ShadowBridgeEnqueueInboxTaskInput,
+} from '@shadowob/sdk/bridge'
+import {
   Button,
   GlassPanel,
   Modal,
@@ -15,7 +21,7 @@ import { AppWindow, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiError, fetchApi } from '../lib/api'
-import type { RouteSearch } from '../lib/copilot-route'
+import { type RouteSearch, withCopilotChannelSearch } from '../lib/copilot-route'
 import { leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 
@@ -61,11 +67,40 @@ interface BridgeRequest {
   commandName: string
   input?: unknown
   channelId?: string
+  task?: {
+    messageId: string
+    cardId: string
+    claimId?: string
+  }
+}
+
+interface BridgeInboxesRequest {
+  requestId: string
+}
+
+interface BridgeInboxEnqueueRequest extends ShadowBridgeEnqueueInboxTaskInput {
+  requestId: string
 }
 
 interface PendingApproval {
   request: BridgeRequest
   approval: AppCommandApproval
+}
+
+function getRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function firstDeliveryChannelId(payload: unknown): string | null {
+  const record = getRecord(payload)
+  if (!record) return null
+  const deliveries = ShadowBridge.inboxDeliveries(record)
+  for (const item of deliveries) {
+    if (typeof item.channelId === 'string' && item.channelId) return item.channelId
+  }
+  return firstDeliveryChannelId(record.result)
 }
 
 function withLaunchParams(entry: string, launch: LaunchContext | undefined) {
@@ -176,10 +211,14 @@ export function ServerAppsPageRoute({
   }, [iframeSrc])
 
   const postBridgeResponse = useCallback(
-    (requestId: string, payload: { ok: true; result: unknown } | { ok: false; error: string }) => {
+    (
+      requestId: string,
+      payload: { ok: true; result: unknown } | { ok: false; error: string },
+      responseType = ShadowBridge.commandResponseType,
+    ) => {
       iframeRef.current?.contentWindow?.postMessage(
         {
-          type: 'shadow.app.command.response',
+          type: responseType,
           requestId,
           ...payload,
         },
@@ -187,6 +226,81 @@ export function ServerAppsPageRoute({
       )
     },
     [iframeOrigin],
+  )
+
+  const callBridgeInboxes = useCallback(
+    async (request: BridgeInboxesRequest) => {
+      if (!serverSlug) return
+      try {
+        const inboxes = await fetchApi(`/api/servers/${serverSlug}/inboxes`)
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: { inboxes } },
+          ShadowBridge.inboxesResponseType,
+        )
+      } catch (error) {
+        postBridgeResponse(
+          request.requestId,
+          {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          ShadowBridge.inboxesResponseType,
+        )
+      }
+    },
+    [postBridgeResponse, serverSlug],
+  )
+
+  const callBridgeInboxEnqueue = useCallback(
+    async (request: BridgeInboxEnqueueRequest) => {
+      if (!serverSlug || !activeApp) return
+      try {
+        const inboxRequest = buildShadowServerAppInboxTaskRequest({
+          serverIdOrSlug: serverSlug,
+          target: request.target,
+          task: request.task,
+          app: {
+            id: activeApp.id,
+            appKey: activeApp.appKey,
+            serverId: activeApp.serverId,
+            name: activeApp.name,
+          },
+        })
+        const message = await fetchApi<Record<string, unknown>>(inboxRequest.endpoint, {
+          method: 'POST',
+          body: JSON.stringify(inboxRequest.body),
+        })
+        const delivery = buildShadowServerAppInboxDelivery({
+          target: request.target,
+          message,
+          idempotencyKey: request.task.idempotencyKey,
+        })
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: delivery },
+          ShadowBridge.enqueueInboxTaskResponseType,
+        )
+        if (delivery.channelId) {
+          navigate({
+            to: '/servers/$serverSlug/apps/$appKey',
+            params: { serverSlug, appKey: activeApp.appKey },
+            search: withCopilotChannelSearch(routeSearch, delivery.channelId),
+            replace: true,
+          })
+        }
+      } catch (error) {
+        postBridgeResponse(
+          request.requestId,
+          {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          ShadowBridge.enqueueInboxTaskResponseType,
+        )
+      }
+    },
+    [activeApp, navigate, postBridgeResponse, routeSearch, serverSlug],
   )
 
   const callBridgeCommand = useCallback(
@@ -199,10 +313,23 @@ export function ServerAppsPageRoute({
           )}`,
           {
             method: 'POST',
-            body: JSON.stringify({ input: request.input ?? {}, channelId: request.channelId }),
+            body: JSON.stringify({
+              input: request.input ?? {},
+              channelId: request.channelId,
+              task: request.task,
+            }),
           },
         )
         postBridgeResponse(request.requestId, { ok: true, result })
+        const deliveredChannelId = firstDeliveryChannelId(result)
+        if (deliveredChannelId) {
+          navigate({
+            to: '/servers/$serverSlug/apps/$appKey',
+            params: { serverSlug, appKey: activeApp.appKey },
+            search: withCopilotChannelSearch(routeSearch, deliveredChannelId),
+            replace: true,
+          })
+        }
       } catch (error) {
         if (error instanceof ApiError && error.code === 'SERVER_APP_COMMAND_APPROVAL_REQUIRED') {
           const approval = (error.params?.approval ?? null) as AppCommandApproval | null
@@ -217,7 +344,7 @@ export function ServerAppsPageRoute({
         })
       }
     },
-    [activeApp?.appKey, postBridgeResponse, serverSlug],
+    [activeApp?.appKey, navigate, postBridgeResponse, routeSearch, serverSlug],
   )
 
   useEffect(() => {
@@ -227,19 +354,35 @@ export function ServerAppsPageRoute({
         return
       }
       const data = event.data as Record<string, unknown>
-      if (!data || data.type !== 'shadow.app.command.request') return
+      if (!data) return
       if (data.appKey && data.appKey !== activeApp.appKey) return
+      if (data.type === ShadowBridge.inboxesRequestType) {
+        if (typeof data.requestId !== 'string') return
+        void callBridgeInboxes({ requestId: data.requestId })
+        return
+      }
+      if (data.type === ShadowBridge.enqueueInboxTaskRequestType) {
+        if (typeof data.requestId !== 'string') return
+        void callBridgeInboxEnqueue({
+          requestId: data.requestId,
+          target: data.target as BridgeInboxEnqueueRequest['target'],
+          task: data.task as BridgeInboxEnqueueRequest['task'],
+        })
+        return
+      }
+      if (data.type !== ShadowBridge.commandRequestType) return
       if (typeof data.requestId !== 'string' || typeof data.commandName !== 'string') return
       void callBridgeCommand({
         requestId: data.requestId,
         commandName: data.commandName,
         input: data.input,
         channelId: typeof data.channelId === 'string' ? data.channelId : undefined,
+        task: getRecord(data.task) as BridgeRequest['task'],
       })
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [activeApp, callBridgeCommand])
+  }, [activeApp, callBridgeCommand, callBridgeInboxes, callBridgeInboxEnqueue])
 
   const closeApproval = () => {
     if (pendingApproval) {

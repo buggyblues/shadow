@@ -5,6 +5,7 @@
 
 import type {
   CommerceProductCard,
+  MessageCard,
   MessageMention,
   OAuthLinkCard,
   PaidFileCard,
@@ -98,6 +99,7 @@ export interface MessageMetadata {
   interactive?: InteractiveBlock
   interactiveResponse?: InteractiveResponseMetadata
   interactiveState?: InteractiveStateMetadata
+  cards?: MessageCard[]
   commerceCards?: CommerceProductCard[]
   paidFileCards?: PaidFileCard[]
   oauthLinkCards?: OAuthLinkCard[]

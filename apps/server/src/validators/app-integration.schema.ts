@@ -234,9 +234,16 @@ export const approveServerAppCommandSchema = z.object({
   remember: z.boolean().default(true).optional(),
 })
 
+const serverAppTaskContextSchema = z.object({
+  messageId: z.string().uuid(),
+  cardId: z.string().uuid(),
+  claimId: z.string().uuid().optional(),
+})
+
 export const callServerAppCommandSchema = z.object({
   input: z.unknown().optional(),
   channelId: z.string().uuid().optional(),
+  task: serverAppTaskContextSchema.optional(),
 })
 
 export type ServerAppManifestInput = z.infer<typeof serverAppManifestSchema>

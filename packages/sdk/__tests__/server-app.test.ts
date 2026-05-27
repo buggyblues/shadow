@@ -4,13 +4,20 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ShadowServerAppCommandContext } from '../src/server-app'
 import {
+  buildShadowServerAppInboxDelivery,
+  buildShadowServerAppInboxTaskRequest,
   createShadowServerAppManifest,
   defineShadowServerApp,
   extractShadowServerAppBearerToken,
+  getShadowServerAppInboxDeliveries,
+  getShadowServerAppInboxErrors,
+  getShadowServerAppTaskCardId,
   normalizeShadowServerAppCommandInput,
   parseShadowServerAppCommandRequest,
+  ShadowServerAppOutbox,
   shadowServerAppActorDisplayName,
   shadowServerAppActorRef,
+  unwrapShadowServerAppCommandPayload,
   validateShadowServerAppJsonSchema,
 } from '../src/server-app'
 import { createShadowServerAppJsonStore } from '../src/server-app-node'
@@ -114,6 +121,105 @@ describe('server app helpers', () => {
       title: 'A',
     })
     expect(normalizeShadowServerAppCommandInput({ title: 'A' })).toEqual({ title: 'A' })
+  })
+
+  it('keeps Server App outbox metadata in the shadow.app/1 namespace', () => {
+    const appResult = {
+      item: { id: 'card-1' },
+    }
+    const resultWithOutbox = new ShadowServerAppOutbox()
+      .enqueueInboxTask({
+        title: 'Review card',
+        assigneeLabel: 'Strategy Buddy',
+        resource: { kind: 'kanban.card', id: 'card-1' },
+      })
+      .attachTo(appResult)
+
+    const payload = {
+      ok: true,
+      result: resultWithOutbox,
+      shadow: {
+        protocol: 'shadow.app/1',
+        outbox: {
+          deliveries: [{ agentId: 'agent-1', channelId: 'channel-1', messageId: 'message-1' }],
+          errors: [{ title: 'Skipped optional task', error: 'not found' }],
+        },
+      },
+    }
+
+    const result = unwrapShadowServerAppCommandPayload<typeof resultWithOutbox>(payload)
+    expect(result.shadow?.outbox?.inboxTasks).toHaveLength(1)
+    expect(getShadowServerAppInboxDeliveries(result)).toEqual([
+      { agentId: 'agent-1', channelId: 'channel-1', messageId: 'message-1' },
+    ])
+    expect(getShadowServerAppInboxErrors(result)).toEqual([
+      { title: 'Skipped optional task', error: 'not found' },
+    ])
+  })
+
+  it('builds canonical host Inbox task requests and deliveries', () => {
+    const request = buildShadowServerAppInboxTaskRequest({
+      serverIdOrSlug: 'shadow-plays',
+      target: { agentId: 'agent-1' },
+      task: {
+        title: 'Install grill-me',
+        body: 'Download the zip and install it.',
+        idempotencyKey: 'skills:install:grill-me',
+        resource: { kind: 'skill', id: 'grill-me' },
+        data: { skillId: 'grill-me' },
+      },
+      app: {
+        id: 'server-app-1',
+        appKey: 'shadow-skills',
+        serverId: 'server-1',
+        name: 'Shadow Skills',
+      },
+    })
+
+    expect(request.endpoint).toBe('/api/servers/shadow-plays/inboxes/agent-1/tasks')
+    expect(request.body).toMatchObject({
+      title: 'Install grill-me',
+      body: 'Download the zip and install it.',
+      idempotencyKey: 'skills:install:grill-me',
+      source: {
+        kind: 'server_app',
+        id: 'server-app-1',
+        appId: 'server-app-1',
+        appKey: 'shadow-skills',
+        serverId: 'server-1',
+        label: 'Shadow Skills',
+        resource: { kind: 'skill', id: 'grill-me' },
+      },
+      data: {
+        skillId: 'grill-me',
+        serverApp: { appKey: 'shadow-skills' },
+      },
+    })
+
+    const message = {
+      id: 'message-1',
+      channelId: 'channel-1',
+      metadata: {
+        cards: [
+          { kind: 'task', id: 'task-card-1' },
+          { kind: 'notice', id: 'notice-card-1' },
+        ],
+      },
+    }
+    expect(getShadowServerAppTaskCardId(message)).toBe('task-card-1')
+    expect(
+      buildShadowServerAppInboxDelivery({
+        target: { agentId: 'agent-1' },
+        message,
+        idempotencyKey: 'skills:install:grill-me',
+      }),
+    ).toEqual({
+      agentId: 'agent-1',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      cardId: 'task-card-1',
+      idempotencyKey: 'skills:install:grill-me',
+    })
   })
 
   it('parses command requests through Shadow introspection', async () => {

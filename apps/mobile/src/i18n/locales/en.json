@@ -401,6 +401,29 @@
     "setPublic": "Make Public",
     "setPrivate": "Make Private"
   },
+  "inbox": {
+    "title": "Inbox",
+    "channelReady": "Task Inbox",
+    "createInbox": "Create Inbox",
+    "noAccess": "No access",
+    "assignee": "Assigned to {{name}}",
+    "unassigned": "Unassigned Buddy",
+    "statusUpdated": "Task updated",
+    "status": {
+      "queued": "Queued",
+      "claimed": "Claimed",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "canceled": "Canceled",
+      "transferred": "Transferred"
+    },
+    "action": {
+      "start": "Start",
+      "complete": "Complete",
+      "fail": "Fail"
+    }
+  },
   "chat": {
     "selectChannel": "Select a channel to start chatting",
     "welcomeChannel": "Welcome to #{{channelName}}!",

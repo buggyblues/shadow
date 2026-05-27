@@ -249,6 +249,7 @@ class ShadowServerAppCommandContext:
     actor: ShadowServerAppActor | dict[str, Any]
     command: str | None = None
     channel_id: str | None = None
+    task: dict[str, Any] | None = None
     permission: str | None = None
     action: str | None = None
     data_class: str | None = None

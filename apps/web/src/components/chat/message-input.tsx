@@ -16,6 +16,8 @@ import {
   FolderOpen,
   Hash,
   Image as ImageIcon,
+  ListTodo,
+  Loader2,
   Plus,
   Search,
   Send,
@@ -30,6 +32,7 @@ import { useDraftStorage } from '../../hooks/use-draft-storage'
 import { fetchApi } from '../../lib/api'
 import { getSocket, sendTyping, sendWsMessage } from '../../lib/socket'
 import { playSendSound } from '../../lib/sounds'
+import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { UserAvatar } from '../common/avatar'
@@ -44,6 +47,7 @@ interface MessageInputProps {
   onClearReply?: () => void
   externalFiles?: File[]
   onExternalFilesConsumed?: () => void
+  enableTaskCards?: boolean
 }
 
 interface PendingFile {
@@ -146,6 +150,25 @@ function mentionsForContent(content: string, mentions: MessageMention[]): Messag
   return assignMentionRanges(content, mentions).slice(0, 20)
 }
 
+function taskDraftToInput(value: string): { title: string; body?: string } {
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const firstLine = lines[0] ?? ''
+  const title =
+    firstLine
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/^[-*]\s+/, '')
+      .slice(0, 120)
+      .trim() || value.trim().slice(0, 120)
+  const body = lines.slice(1).join('\n').trim()
+  return {
+    title,
+    ...(body ? { body } : {}),
+  }
+}
+
 export function MessageInput({
   channelId,
   channelName,
@@ -153,6 +176,7 @@ export function MessageInput({
   onClearReply,
   externalFiles,
   onExternalFilesConsumed,
+  enableTaskCards = false,
 }: MessageInputProps) {
   const { t } = useTranslation()
   const { activeServerId } = useChatStore()
@@ -164,6 +188,9 @@ export function MessageInput({
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [showTaskComposer, setShowTaskComposer] = useState(false)
+  const [taskDraft, setTaskDraft] = useState('')
+  const [creatingTask, setCreatingTask] = useState(false)
   const [productQuery, setProductQuery] = useState('')
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
   const [viewingImage, setViewingImage] = useState<PendingFile | null>(null)
@@ -396,6 +423,33 @@ export function MessageInput({
     setShowAttachMenu(false)
     setShowWorkspacePicker(true)
   }, [])
+
+  const openTaskComposer = useCallback(() => {
+    setShowAttachMenu(false)
+    setShowTaskComposer(true)
+    setTaskDraft((current) => current || content)
+  }, [content])
+
+  const createTaskCard = useCallback(async () => {
+    const input = taskDraftToInput(taskDraft)
+    if (!input.title || creatingTask) return
+    setCreatingTask(true)
+    try {
+      await fetchApi(`/api/channels/${channelId}/inbox/tasks`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      })
+      await queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
+      setTaskDraft('')
+      setShowTaskComposer(false)
+      showToast(t('inbox.task.created'), 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('inbox.task.createFailed'), 'error')
+    } finally {
+      setCreatingTask(false)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    }
+  }, [channelId, creatingTask, queryClient, t, taskDraft])
 
   // Scroll active mention item into view
   useEffect(() => {
@@ -1065,6 +1119,67 @@ export function MessageInput({
           ))}
         </div>
       )}
+
+      {showTaskComposer && enableTaskCards && (
+        <div className="absolute bottom-[calc(100%+8px)] left-4 right-4 z-50 rounded-2xl border border-border-subtle bg-bg-primary p-3 shadow-2xl sm:left-6 sm:right-auto sm:w-[420px]">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
+                <ListTodo size={16} strokeWidth={2.4} />
+              </span>
+              <span className="truncate text-sm font-black text-text-primary">
+                {t('inbox.task.new')}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-full"
+              onClick={() => setShowTaskComposer(false)}
+              title={t('common.close')}
+            >
+              <X size={14} />
+            </Button>
+          </div>
+          <textarea
+            value={taskDraft}
+            onChange={(event) => setTaskDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+              event.preventDefault()
+              void createTaskCard()
+            }}
+            placeholder={t('inbox.task.quickPlaceholder')}
+            rows={4}
+            autoFocus
+            className="min-h-24 w-full resize-none rounded-xl border border-border-subtle bg-bg-secondary/70 px-3 py-2 text-sm font-semibold leading-5 text-text-primary outline-none transition focus:border-primary/55 focus:ring-2 focus:ring-primary/10"
+          />
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowTaskComposer(false)}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => void createTaskCard()}
+              disabled={!taskDraft.trim() || creatingTask}
+            >
+              {creatingTask ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <ListTodo size={14} />
+              )}
+              {creatingTask ? t('common.loading') : t('inbox.task.create')}
+            </Button>
+          </div>
+        </div>
+      )}
       {/* Reply indicator */}
       {replyToId && (
         <div className="flex items-center justify-between bg-primary/5 rounded-t-[20px] px-4 py-2 text-xs text-text-secondary border-l-2 border-primary animate-in slide-in-from-top-2 duration-200">
@@ -1224,6 +1339,23 @@ export function MessageInput({
                       </span>
                       <span className="block truncate text-xs text-text-muted">
                         {t('chat.addMenuWorkspaceFileDesc')}
+                      </span>
+                    </span>
+                  </button>
+                )}
+                {enableTaskCards && (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+                    onClick={openTaskComposer}
+                  >
+                    <ListTodo size={18} className="text-primary" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-text-primary">
+                        {t('inbox.task.new')}
+                      </span>
+                      <span className="block truncate text-xs text-text-muted">
+                        {t('inbox.task.addMenuDesc')}
                       </span>
                     </span>
                   </button>
