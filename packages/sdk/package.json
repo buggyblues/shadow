@@ -26,6 +26,13 @@
       "require": "./dist/server-app-node.cjs",
       "default": "./dist/server-app-node.js"
     },
+    "./server-app": {
+      "types": "./dist/server-app.d.ts",
+      "development": "./src/server-app.ts",
+      "import": "./dist/server-app.js",
+      "require": "./dist/server-app.cjs",
+      "default": "./dist/server-app.js"
+    },
     "./bridge": {
       "types": "./dist/bridge.d.ts",
       "development": "./src/bridge.ts",

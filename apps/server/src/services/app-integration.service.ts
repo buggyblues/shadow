@@ -8,7 +8,7 @@ import {
   type ShadowServerAppInboxDeliveryError,
   type ShadowServerAppInboxTaskOutbox,
   type ShadowServerAppResultShadow,
-} from '@shadowob/sdk'
+} from '@shadowob/sdk/server-app'
 import type { Logger } from 'pino'
 import type { Server as SocketIOServer } from 'socket.io'
 import { ZodError } from 'zod'
