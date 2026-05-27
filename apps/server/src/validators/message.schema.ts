@@ -186,11 +186,115 @@ const playLaunchSchema = z.union([
   }),
 ])
 
+export const messageCardStatusSchema = z.enum([
+  'queued',
+  'claimed',
+  'running',
+  'completed',
+  'failed',
+  'canceled',
+  'transferred',
+])
+
+const messageCardSourceSchema = z
+  .object({
+    kind: z.enum(['user', 'pat', 'oauth', 'agent', 'system', 'server_app', 'buddy']),
+    id: z.string().max(160).optional(),
+    label: z.string().max(160).optional(),
+    userId: z.string().uuid().optional(),
+    agentId: z.string().uuid().optional(),
+    appId: z.string().uuid().optional(),
+    serverId: z.string().uuid().optional(),
+    channelId: z.string().uuid().optional(),
+    command: z.string().max(120).optional(),
+    resource: z
+      .object({
+        kind: z.string().min(1).max(80),
+        id: z.string().min(1).max(160),
+        label: z.string().max(180).optional(),
+        url: z.string().max(1000).optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough()
+
+const messageCardClaimSchema = z
+  .object({
+    id: idLikeSchema,
+    actor: messageCardSourceSchema,
+    claimedAt: z.string().max(64),
+    expiresAt: z.string().max(64),
+  })
+  .passthrough()
+
+const messageCardCapabilitySchema = z
+  .object({
+    kind: z.literal('task'),
+    scope: z.array(z.string().min(1).max(160)).max(40),
+    issuedAt: z.string().max(64),
+    expiresAt: z.string().max(64),
+    claimId: idLikeSchema.optional(),
+  })
+  .passthrough()
+
+const taskMessageCardSchema = z
+  .object({
+    id: idLikeSchema,
+    kind: z.literal('task'),
+    version: z.number().int().min(1).max(100).default(1),
+    title: z.string().min(1).max(180),
+    body: z.string().max(8000).optional(),
+    status: messageCardStatusSchema,
+    priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+    assignee: z
+      .object({
+        agentId: z.string().uuid().optional(),
+        userId: z.string().uuid().optional(),
+        label: z.string().max(160).optional(),
+      })
+      .passthrough()
+      .optional(),
+    source: messageCardSourceSchema.optional(),
+    claim: messageCardClaimSchema.optional(),
+    capability: messageCardCapabilitySchema.optional(),
+    progress: z
+      .array(
+        z
+          .object({
+            at: z.string().max(64),
+            status: messageCardStatusSchema,
+            note: z.string().max(4000).optional(),
+            actor: messageCardSourceSchema.optional(),
+          })
+          .passthrough(),
+      )
+      .max(100)
+      .optional(),
+    createdAt: z.string().max(64),
+    updatedAt: z.string().max(64).optional(),
+    data: z.record(z.unknown()).optional(),
+  })
+  .passthrough()
+
+const genericMessageCardSchema = z
+  .object({
+    id: idLikeSchema.optional(),
+    kind: z.string().min(1).max(64),
+    version: z.number().int().min(1).max(100).optional(),
+    title: z.string().max(180).optional(),
+    data: z.record(z.unknown()).optional(),
+  })
+  .passthrough()
+
+export const messageCardSchema = z.union([taskMessageCardSchema, genericMessageCardSchema])
+
 export const metadataSchema = z.object({
   agentChain: agentChainSchema.optional(),
   interactive: interactiveBlockSchema.optional(),
   interactiveResponse: interactiveResponseSchema.optional(),
   mentions: messageMentionsSchema.optional(),
+  cards: z.array(messageCardSchema).max(8).optional(),
   commerceOfferId: z.string().uuid().optional(),
   commerceCards: z
     .array(z.union([commerceOfferCardSchema, commerceProductCardSchema]))
@@ -253,6 +357,8 @@ export const reactionSchema = z.object({
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type MessageMentionInput = z.infer<typeof messageMentionSchema>
+export type MessageCardInput = z.infer<typeof messageCardSchema>
+export type MessageCardStatusInput = z.infer<typeof messageCardStatusSchema>
 export type UpdateMessageInput = z.infer<typeof updateMessageSchema>
 export type CreateThreadInput = z.infer<typeof createThreadSchema>
 export type UpdateThreadInput = z.infer<typeof updateThreadSchema>

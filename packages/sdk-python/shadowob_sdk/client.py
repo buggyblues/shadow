@@ -869,6 +869,165 @@ class ShadowClient:
     def get_message(self, message_id: str) -> dict[str, Any]:
         return self._get(f"/api/messages/{message_id}")
 
+    def list_buddy_inboxes(self) -> list[dict[str, Any]]:
+        return self._get("/api/buddy-inboxes")
+
+    def list_server_buddy_inboxes(self, server_id_or_slug: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id_or_slug}/inboxes")
+
+    def ensure_buddy_inbox(
+        self,
+        server_id_or_slug: str,
+        agent_id: str,
+    ) -> dict[str, Any]:
+        return self._post(f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}")
+
+    def get_buddy_inbox_admission_policy(
+        self,
+        server_id_or_slug: str,
+        agent_id: str,
+    ) -> dict[str, Any]:
+        return self._get(
+            f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/admission-policy"
+        )
+
+    def update_buddy_inbox_admission_policy(
+        self,
+        server_id_or_slug: str,
+        agent_id: str,
+        policy: dict[str, Any],
+    ) -> dict[str, Any]:
+        return self._put(
+            f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/admission-policy",
+            json=policy,
+        )
+
+    def enqueue_inbox_task_for_agent(
+        self,
+        server_id_or_slug: str,
+        agent_id: str,
+        *,
+        title: str,
+        body: str | None = None,
+        priority: str | None = None,
+        idempotency_key: str | None = None,
+        source: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"title": title}
+        if body is not None:
+            payload["body"] = body
+        if priority is not None:
+            payload["priority"] = priority
+        if idempotency_key is not None:
+            payload["idempotencyKey"] = idempotency_key
+        if source is not None:
+            payload["source"] = source
+        if data is not None:
+            payload["data"] = data
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/tasks",
+            json=payload,
+        )
+
+    def enqueue_inbox_task(
+        self,
+        channel_id: str,
+        *,
+        title: str,
+        body: str | None = None,
+        priority: str | None = None,
+        idempotency_key: str | None = None,
+        source: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"title": title}
+        if body is not None:
+            payload["body"] = body
+        if priority is not None:
+            payload["priority"] = priority
+        if idempotency_key is not None:
+            payload["idempotencyKey"] = idempotency_key
+        if source is not None:
+            payload["source"] = source
+        if data is not None:
+            payload["data"] = data
+        return self._post(f"/api/channels/{channel_id}/inbox/tasks", json=payload)
+
+    def claim_task_card(
+        self,
+        message_id: str,
+        card_id: str,
+        *,
+        ttl_seconds: int | None = None,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if ttl_seconds is not None:
+            payload["ttlSeconds"] = ttl_seconds
+        if note is not None:
+            payload["note"] = note
+        return self._post(f"/api/messages/{message_id}/cards/{card_id}/claim", json=payload)
+
+    def update_task_card(
+        self,
+        message_id: str,
+        card_id: str,
+        *,
+        status: str,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"status": status}
+        if note is not None:
+            payload["note"] = note
+        return self._patch(f"/api/messages/{message_id}/cards/{card_id}", json=payload)
+
+    def retry_task_card(
+        self,
+        message_id: str,
+        card_id: str,
+        *,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if note is not None:
+            payload["note"] = note
+        return self._post(f"/api/messages/{message_id}/cards/{card_id}/retry", json=payload)
+
+    def claim_next_inbox_task(
+        self,
+        server_id_or_slug: str,
+        agent_id: str,
+        *,
+        ttl_seconds: int | None = None,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if ttl_seconds is not None:
+            payload["ttlSeconds"] = ttl_seconds
+        if note is not None:
+            payload["note"] = note
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/claim-next",
+            json=payload,
+        )
+
+    def promote_message_to_inbox_task(
+        self,
+        message_id: str,
+        *,
+        server_id: str,
+        agent_id: str,
+        title: str | None = None,
+        priority: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"serverId": server_id, "agentId": agent_id}
+        if title is not None:
+            payload["title"] = title
+        if priority is not None:
+            payload["priority"] = priority
+        return self._post(f"/api/messages/{message_id}/inbox/tasks", json=payload)
+
     def submit_interactive_action(
         self,
         message_id: str,

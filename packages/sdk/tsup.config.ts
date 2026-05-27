@@ -3,7 +3,7 @@ import { defineConfig } from 'tsup'
 const emitDts = process.env.SHADOW_BUILD_DTS !== '0'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/server-app-node.ts'],
+  entry: ['src/index.ts', 'src/bridge.ts', 'src/server-app-node.ts'],
   format: ['esm', 'cjs'],
   dts: emitDts,
   clean: true,

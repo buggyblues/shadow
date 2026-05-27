@@ -6,8 +6,10 @@ import { Hono } from 'hono'
 import {
   assignCard,
   assignCardToPerson,
-  commentCard,
+  commentCardWithBuddyTask,
   createCard,
+  createCardAndDispatch,
+  dispatchCardToBuddy,
   getBoard,
   getCard,
   moveCard,
@@ -34,6 +36,13 @@ const commands = shadowApp.defineCommands({
   'cards.create': (input, { actor }) => ({
     card: createCard({ ...input, createdBy: actor }),
   }),
+  'cards.create_and_dispatch': (input, { actor }) =>
+    createCardAndDispatch({
+      ...input,
+      createdBy: actor,
+      assigneeLabel: input.assigneeLabel,
+      reason: input.reason,
+    }),
   'cards.move': (input) => {
     const card = moveCard(input.cardId, input.columnId)
     if (!card) throw shadowApp.error(404, 'card_not_found')
@@ -47,9 +56,17 @@ const commands = shadowApp.defineCommands({
     return { card }
   },
   'cards.comment': (input, { actor }) => {
-    const card = commentCard(input.cardId, input.body, actor)
-    if (!card) throw shadowApp.error(404, 'card_not_found')
-    return { card }
+    const result = commentCardWithBuddyTask(input.cardId, input.body, actor)
+    if (!result) throw shadowApp.error(404, 'card_not_found')
+    return result
+  },
+  'cards.dispatch': (input) => {
+    const result = dispatchCardToBuddy(input.cardId, {
+      assigneeLabel: input.assigneeLabel,
+      reason: input.reason,
+    })
+    if (!result) throw shadowApp.error(404, 'card_not_found')
+    return result
   },
 })
 

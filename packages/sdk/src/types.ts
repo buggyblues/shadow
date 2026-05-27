@@ -1,8 +1,14 @@
 // ─── Shadow SDK Types ───────────────────────────────────────────────────────
 
 import type {
+  BuddyInboxAdmissionMode as SharedBuddyInboxAdmissionMode,
+  BuddyInboxAdmissionPolicy as SharedBuddyInboxAdmissionPolicy,
+  BuddyInboxAdmissionRule as SharedBuddyInboxAdmissionRule,
+  BuddyInboxAdmissionSubjectKind as SharedBuddyInboxAdmissionSubjectKind,
   MentionSuggestion as SharedMentionSuggestion,
   MentionSuggestionTrigger as SharedMentionSuggestionTrigger,
+  MessageCard as SharedMessageCard,
+  MessageCardSource as SharedMessageCardSource,
   MessageMention as SharedMessageMention,
   OAuthLinkCard as SharedOAuthLinkCard,
 } from '@shadowob/shared'
@@ -150,6 +156,7 @@ export interface ShadowMessageMetadata {
   interactive?: ShadowInteractiveBlock
   interactiveResponse?: ShadowInteractiveResponse
   interactiveState?: ShadowInteractiveState
+  cards?: ShadowMessageCard[]
   commerceCards?: Array<ShadowCommerceProductCard | ShadowCommerceOfferCardInput>
   oauthLinkCards?: ShadowOAuthLinkCard[]
   [key: string]: unknown
@@ -162,9 +169,51 @@ export interface ShadowCommerceOfferCardInput {
 }
 
 export type ShadowMessageMention = SharedMessageMention
+export type ShadowMessageCard = SharedMessageCard
+export type ShadowMessageCardSource = SharedMessageCardSource
 export type ShadowOAuthLinkCard = SharedOAuthLinkCard
 export type ShadowMentionSuggestion = SharedMentionSuggestion
 export type ShadowMentionSuggestionTrigger = SharedMentionSuggestionTrigger
+export type ShadowBuddyInboxAdmissionMode = SharedBuddyInboxAdmissionMode
+export type ShadowBuddyInboxAdmissionSubjectKind = SharedBuddyInboxAdmissionSubjectKind
+export type ShadowBuddyInboxAdmissionRule = SharedBuddyInboxAdmissionRule
+export type ShadowBuddyInboxAdmissionPolicy = SharedBuddyInboxAdmissionPolicy
+
+export interface ShadowBuddyInboxSummary {
+  agent: {
+    id: string
+    ownerId: string
+    status?: string | null
+    user?: ShadowUser | null
+  }
+  channel: ShadowChannel | null
+  canManage: boolean
+  server?: {
+    id: string
+    name: string
+    slug?: string | null
+  }
+}
+
+export interface ShadowEnsureBuddyInboxResult {
+  channel: ShadowChannel
+  agent: ShadowBuddyInboxSummary['agent']
+  created: boolean
+}
+
+export interface ShadowBuddyInboxAdmissionPolicyResult {
+  channel: ShadowChannel | null
+  policy: ShadowBuddyInboxAdmissionPolicy
+}
+
+export interface ShadowInboxTaskInput {
+  title: string
+  body?: string
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  idempotencyKey?: string
+  source?: ShadowMessageCardSource
+  data?: Record<string, unknown>
+}
 
 export interface ShadowAttachment {
   id: string

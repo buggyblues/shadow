@@ -43,6 +43,87 @@ export interface MessageMentionMetadata {
   isPrivate?: boolean
 }
 
+export type MessageCardStatus =
+  | 'queued'
+  | 'claimed'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'canceled'
+  | 'transferred'
+
+export interface MessageCardSourceMetadata {
+  kind: 'user' | 'pat' | 'oauth' | 'agent' | 'system' | 'server_app' | 'buddy'
+  id?: string
+  label?: string
+  userId?: string
+  agentId?: string
+  appId?: string
+  serverId?: string
+  channelId?: string
+  command?: string
+  resource?: {
+    kind: string
+    id: string
+    label?: string
+    url?: string
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+export interface MessageCardClaimMetadata {
+  id: string
+  actor: MessageCardSourceMetadata
+  claimedAt: string
+  expiresAt: string
+}
+
+export interface MessageCardCapabilityMetadata {
+  kind: 'task'
+  scope: string[]
+  issuedAt: string
+  expiresAt: string
+  claimId?: string
+}
+
+export interface TaskMessageCardMetadata {
+  id: string
+  kind: 'task'
+  version: number
+  title: string
+  body?: string
+  status: MessageCardStatus
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  assignee?: {
+    agentId?: string
+    userId?: string
+    label?: string
+  }
+  source?: MessageCardSourceMetadata
+  claim?: MessageCardClaimMetadata
+  capability?: MessageCardCapabilityMetadata
+  progress?: Array<{
+    at: string
+    status: MessageCardStatus
+    note?: string
+    actor?: MessageCardSourceMetadata
+  }>
+  createdAt: string
+  updatedAt?: string
+  data?: Record<string, unknown>
+}
+
+export type MessageCardMetadata =
+  | TaskMessageCardMetadata
+  | ({
+      id?: string
+      kind: string
+      version?: number
+      title?: string
+      data?: Record<string, unknown>
+    } & Record<string, unknown>)
+
 /**
  * Message metadata structure.
  * Can contain various metadata like agent chain info, custom data, etc.
@@ -52,6 +133,8 @@ export interface MessageMetadata {
   agentChain?: MessageAgentChainMetadata
   /** Structured user/channel/server mentions resolved and permission-checked at send time. */
   mentions?: MessageMentionMetadata[]
+  /** Unified extensible message cards. New card-like surfaces should use this field. */
+  cards?: MessageCardMetadata[]
   commerceCards?: Array<Record<string, unknown>>
   /** Custom metadata extensions */
   [key: string]: unknown

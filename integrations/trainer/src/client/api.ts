@@ -1,97 +1,92 @@
-import type { Challenge, CodeSubmission, SubmissionVerdict } from '../types.js'
+import {
+  SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
+  SHADOW_SERVER_APP_COMMAND_FAILED_EVENT,
+  ShadowBridge,
+  type ShadowServerAppCommandEventType,
+  type ShadowServerAppInboxDelivery,
+  type ShadowServerAppInboxDeliveryError,
+  type ShadowServerAppResultShadow,
+} from '@shadowob/sdk/bridge'
+import type {
+  Challenge,
+  CodeSubmission,
+  SubmissionOutcome,
+  SubmissionReviewFocus,
+} from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
 
-const pending = new Map<
-  string,
-  {
-    resolve: (value: unknown) => void
-    reject: (error: Error) => void
+export interface BuddyInboxOption {
+  agent: {
+    id: string
+    ownerId?: string | null
+    status?: string | null
+    user?: {
+      id?: string
+      username?: string | null
+      displayName?: string | null
+      avatarUrl?: string | null
+    } | null
   }
->()
+  channel?: { id?: string; name?: string | null } | null
+  canManage?: boolean
+}
 
-function canUseBridge() {
-  return (
-    new URLSearchParams(location.search).has('shadow_launch') &&
-    (window.parent !== window || window.ReactNativeWebView)
+export type InboxDelivery = ShadowServerAppInboxDelivery
+export type InboxDeliveryError = ShadowServerAppInboxDeliveryError
+
+export interface ProblemSource {
+  provider: 'exercism' | 'leetcode' | 'codeforces'
+  id: string
+  title: string
+  difficulty?: Challenge['difficulty']
+  description?: string
+  url?: string
+}
+
+export interface ProblemSourcePageInfo {
+  offset: number
+  limit: number
+  total: number
+  hasMore: boolean
+}
+
+export interface TrainerRuntimeEvent {
+  type: ShadowServerAppCommandEventType | string
+  command?: string
+}
+
+const bridge = new ShadowBridge({ appKey: 'shadow-trainer' })
+
+function toCommandInput(value: unknown): unknown {
+  if (value === undefined) return {}
+  if (Array.isArray(value)) return value.map(toCommandInput)
+  if (!value || typeof value !== 'object') return value
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, toCommandInput(entry)]),
   )
 }
 
-function postBridge(message: unknown) {
-  if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify(message))
-    return
-  }
-  window.parent.postMessage(message, '*')
-}
-
-window.addEventListener('message', (event) => {
-  let data = event.data
-  if (typeof data === 'string') {
-    try {
-      data = JSON.parse(data || '{}')
-    } catch {
-      return
-    }
-  }
-  if (!data || data.type !== 'shadow.app.command.response') return
-  const entry = pending.get(data.requestId)
-  if (!entry) return
-  pending.delete(data.requestId)
-  if (data.ok) entry.resolve(data.result)
-  else entry.reject(new Error(data.error || 'Command failed'))
-})
-
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  if (canUseBridge()) {
-    const requestId = `req_${Math.random().toString(36).slice(2)}`
-    postBridge({
-      type: 'shadow.app.command.request',
-      requestId,
-      appKey: 'shadow-trainer',
-      commandName,
-      input,
-    })
-    return new Promise((resolve, reject) => {
-      pending.set(requestId, { resolve: resolve as (value: unknown) => void, reject })
-      window.setTimeout(() => {
-        if (!pending.has(requestId)) return
-        pending.delete(requestId)
-        reject(new Error('Command timed out'))
-      }, 60000)
-    }).then((payload) => unwrapCommandPayload<T>(payload))
-  }
+  const commandInput = toCommandInput(input)
+  if (bridge.isAvailable()) return bridge.command(commandName, commandInput) as Promise<T>
 
   const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input }),
+    body: JSON.stringify({ input: commandInput }),
   })
   const payload = (await res.json()) as CommandPayload<T>
   if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return unwrapCommandPayload<T>(payload)
+  return bridge.unwrapCommandPayload<T>(payload)
 }
 
-function unwrapCommandPayload<T>(payload: unknown): T {
-  if (
-    payload &&
-    typeof payload === 'object' &&
-    !Array.isArray(payload) &&
-    'ok' in payload &&
-    (payload as { ok?: boolean }).ok === false
-  ) {
-    throw new Error((payload as { error?: string }).error || 'Command failed')
-  }
-  if (
-    payload &&
-    typeof payload === 'object' &&
-    !Array.isArray(payload) &&
-    'result' in payload &&
-    (payload as { result?: unknown }).result !== undefined
-  ) {
-    return unwrapCommandPayload<T>((payload as { result: unknown }).result)
-  }
-  return payload as T
+export async function listBuddyInboxes() {
+  if (!bridge.isAvailable()) return { inboxes: [] as BuddyInboxOption[] }
+  return bridge.inboxes() as Promise<{ inboxes: BuddyInboxOption[] }>
 }
 
 export function listChallenges(input: { query?: string; difficulty?: Challenge['difficulty'] }) {
@@ -104,8 +99,72 @@ export function getChallenge(challengeId: string) {
   })
 }
 
-export function createSubmission(input: { challengeId: string; language: string; code: string }) {
-  return command<{ submission: CodeSubmission }>('submissions.create', input)
+export function upsertChallenge(input: {
+  id?: string
+  title: string
+  difficulty: Challenge['difficulty']
+  tags?: string[]
+  prompt: string
+  starterCode: string
+  examples?: Challenge['examples']
+  judgeInstructions: string
+}) {
+  return command<{ challenge: Challenge }>('challenges.upsert', input)
+}
+
+export function searchProblemSources(input: {
+  provider?: ProblemSource['provider']
+  query?: string
+  limit?: number
+  offset?: number
+}) {
+  return command<{ sources: ProblemSource[]; pageInfo: ProblemSourcePageInfo }>(
+    'sources.search',
+    input,
+  )
+}
+
+export function importProblemSource(input: {
+  provider?: ProblemSource['provider']
+  sourceId: string
+}) {
+  return command<{ challenge: Challenge }>('sources.import', input)
+}
+
+export function createSubmission(input: {
+  challengeId: string
+  language: string
+  code: string
+  reviewer?: {
+    agentId?: string
+    assigneeLabel?: string
+    displayName?: string
+    reviewFocus?: SubmissionReviewFocus
+  }
+}) {
+  return command<{
+    submission: CodeSubmission
+    shadow?: ShadowServerAppResultShadow
+  }>('submissions.create', input)
+}
+
+export function subscribeTrainerEvents(onEvent: (event: TrainerRuntimeEvent) => void) {
+  const eventStream = new URLSearchParams(location.search).get('shadow_event_stream')
+  if (!eventStream || typeof EventSource === 'undefined') return () => {}
+  const source = new EventSource(eventStream)
+  const handler = (event: MessageEvent) => {
+    try {
+      onEvent(JSON.parse(event.data || '{}') as TrainerRuntimeEvent)
+    } catch {
+      /* ignore malformed runtime events */
+    }
+  }
+  source.addEventListener(SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, handler)
+  source.addEventListener(SHADOW_SERVER_APP_COMMAND_FAILED_EVENT, handler)
+  source.onerror = () => {
+    /* EventSource reconnects automatically. */
+  }
+  return () => source.close()
 }
 
 export function listSubmissions(input: {
@@ -116,6 +175,12 @@ export function listSubmissions(input: {
   return command<{ submissions: CodeSubmission[] }>('submissions.list', input)
 }
 
+export function getSubmission(submissionId: string) {
+  return command<{ submission: CodeSubmission; challenge?: Challenge }>('submissions.get', {
+    submissionId,
+  })
+}
+
 export function pendingSubmissions(input: { limit?: number }) {
   return command<{ submissions: Array<{ submission: CodeSubmission; challenge: Challenge }> }>(
     'submissions.pending',
@@ -123,20 +188,14 @@ export function pendingSubmissions(input: { limit?: number }) {
   )
 }
 
-export function judgeSubmission(input: {
+export function analyzeSubmission(input: {
   submissionId: string
-  verdict: SubmissionVerdict
+  outcome: SubmissionOutcome
   score: number
-  feedback: string
+  summary: string
+  explanation: string
   suggestions?: string[]
+  complexity?: string
 }) {
-  return command<{ submission: CodeSubmission }>('submissions.judge', input)
-}
-
-declare global {
-  interface Window {
-    ReactNativeWebView?: {
-      postMessage: (message: string) => void
-    }
-  }
+  return command<{ submission: CodeSubmission }>('submissions.analyze', input)
 }

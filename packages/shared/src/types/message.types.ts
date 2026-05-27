@@ -70,11 +70,97 @@ export interface MessageMetadata {
   interactive?: Record<string, unknown>
   interactiveResponse?: Record<string, unknown>
   interactiveState?: Record<string, unknown>
+  cards?: MessageCard[]
   commerceCards?: CommerceMessageCard[]
   paidFileCards?: PaidFileCard[]
   oauthLinkCards?: OAuthLinkCard[]
   [key: string]: unknown
 }
+
+export type MessageCardStatus =
+  | 'queued'
+  | 'claimed'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'canceled'
+  | 'transferred'
+
+export interface MessageCardSource {
+  kind: 'user' | 'pat' | 'oauth' | 'agent' | 'system' | 'server_app' | 'buddy'
+  id?: string
+  label?: string
+  userId?: string
+  agentId?: string
+  appId?: string
+  serverId?: string
+  channelId?: string
+  command?: string
+  resource?: {
+    kind: string
+    id: string
+    label?: string
+    url?: string
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+export interface MessageCardClaim {
+  id: string
+  actor: MessageCardSource
+  claimedAt: string
+  expiresAt: string
+}
+
+export interface MessageCardCapability {
+  kind: 'task'
+  scope: string[]
+  issuedAt: string
+  expiresAt: string
+  claimId?: string
+}
+
+export interface TaskMessageCard {
+  id: string
+  kind: 'task'
+  version: number
+  title: string
+  body?: string
+  status: MessageCardStatus
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  assignee?: {
+    agentId?: string
+    userId?: string
+    label?: string
+    [key: string]: unknown
+  }
+  source?: MessageCardSource
+  claim?: MessageCardClaim
+  capability?: MessageCardCapability
+  progress?: Array<{
+    at: string
+    status: MessageCardStatus
+    note?: string
+    actor?: MessageCardSource
+    [key: string]: unknown
+  }>
+  createdAt: string
+  updatedAt?: string
+  data?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export type GenericMessageCard = {
+  id?: string
+  kind: string
+  version?: number
+  title?: string
+  data?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export type MessageCard = TaskMessageCard | GenericMessageCard
 
 export interface CommerceOfferCardInput {
   id?: string

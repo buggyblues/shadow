@@ -1,4 +1,11 @@
-import type { CommerceProductCard, OAuthLinkCard, PaidFileCard } from '@shadowob/shared'
+import type {
+  CommerceProductCard,
+  MessageCard,
+  MessageCardStatus,
+  OAuthLinkCard,
+  PaidFileCard,
+  TaskMessageCard,
+} from '@shadowob/shared'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import * as Clipboard from 'expo-clipboard'
@@ -231,6 +238,70 @@ function WalletRechargeCard({ data }: { data: WalletRechargeMetadata }) {
           {t('chat.modelWalletTasksAction')}
         </Button>
       </View>
+    </View>
+  )
+}
+
+function isTaskMessageCard(card: MessageCard): card is TaskMessageCard {
+  return card.kind === 'task' && typeof card.id === 'string' && typeof card.title === 'string'
+}
+
+function TaskCardsView({ cards }: { cards?: MessageCard[] }) {
+  const taskCards = cards?.filter(isTaskMessageCard) ?? []
+  if (taskCards.length === 0) return null
+  return (
+    <View style={styles.taskCards}>
+      {taskCards.map((card) => (
+        <TaskCardMobile key={card.id} card={card} />
+      ))}
+    </View>
+  )
+}
+
+function TaskCardMobile({ card }: { card: TaskMessageCard }) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const statusColor =
+    card.status === 'completed'
+      ? colors.success
+      : card.status === 'failed' || card.status === 'canceled' || card.status === 'transferred'
+        ? colors.error
+        : card.status === 'running' || card.status === 'claimed'
+          ? colors.warning
+          : colors.primary
+  const assigneeLabel = card.assignee?.label ?? t('inbox.unassigned')
+
+  return (
+    <View
+      style={[styles.taskCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      <View style={styles.taskHeader}>
+        <Avatar
+          uri={null}
+          name={assigneeLabel}
+          userId={card.assignee?.userId ?? card.assignee?.agentId ?? assigneeLabel}
+          size={34}
+        />
+        <View style={styles.taskHeaderText}>
+          <Text style={[styles.taskTitle, { color: colors.text }]}>{card.title}</Text>
+          <Text style={[styles.taskAssignee, { color: colors.textMuted }]}>{assigneeLabel}</Text>
+        </View>
+        <Text
+          style={[
+            styles.taskStatus,
+            {
+              color: statusColor,
+              borderColor: `${statusColor}55`,
+              backgroundColor: `${statusColor}14`,
+            },
+          ]}
+        >
+          {t(`inbox.status.${card.status}`)}
+        </Text>
+      </View>
+      {card.body ? (
+        <Text style={[styles.taskBody, { color: colors.textMuted }]}>{card.body}</Text>
+      ) : null}
     </View>
   )
 }
@@ -562,10 +633,14 @@ function MessageBubbleInner({
     () => decodeWalletRechargeMarker(message.content),
     [message.content],
   )
-  const displayContent = useMemo(
-    () => (walletRecharge ? stripWalletRechargeMarker(message.content) : message.content),
-    [message.content, walletRecharge],
+  const hasTaskCards = useMemo(
+    () => (message.metadata?.cards ?? []).some((card) => isTaskMessageCard(card)),
+    [message.metadata?.cards],
   )
+  const displayContent = useMemo(() => {
+    if (hasTaskCards) return ''
+    return walletRecharge ? stripWalletRechargeMarker(message.content) : message.content
+  }, [hasTaskCards, message.content, walletRecharge])
 
   const getAttachmentContentType = (att: Attachment) =>
     att.contentType ?? att.mimeType ?? 'application/octet-stream'
@@ -779,6 +854,8 @@ function MessageBubbleInner({
           )}
 
           {walletRecharge && <WalletRechargeCard data={walletRecharge} />}
+
+          <TaskCardsView cards={message.metadata?.cards} />
 
           {/* Attachments */}
           {message.attachments?.map((att) => {
@@ -1578,6 +1655,55 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     borderWidth: 1,
     gap: spacing.sm,
+  },
+  taskCards: {
+    marginTop: spacing.xs,
+    gap: spacing.xs,
+  },
+  taskCard: {
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  taskHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  taskHeaderText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  taskTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    lineHeight: 19,
+  },
+  taskStatus: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sm,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    fontSize: 11,
+    fontWeight: '800',
+    overflow: 'hidden',
+  },
+  taskBody: {
+    fontSize: fontSize.sm,
+    lineHeight: 19,
+  },
+  taskAssignee: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
+  taskActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: 2,
   },
   fileIconWrap: {
     width: 40,

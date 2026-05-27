@@ -17,6 +17,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@shadowob/cloud-ui": "workspace:*",
     "@shadowob/connector": "workspace:*",
+    "@shadowob/sdk": "workspace:*",
     "@shadowob/shared": "workspace:*",
     "@shadowob/ui": "workspace:*",
     "@shadowob/views": "workspace:*",

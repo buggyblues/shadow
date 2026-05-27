@@ -1,3 +1,4 @@
+import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, ShadowBridge } from '@shadowob/sdk/bridge'
 import {
   QueryClient,
   QueryClientProvider,
@@ -17,7 +18,15 @@ import type { DragEvent, FormEvent } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { BoardCard, BoardPerson, BoardState } from '../types.js'
-import { assignCard, commentCard, createCard, getBoard, moveCard } from './api.js'
+import {
+  assignCard,
+  commentCard,
+  createAndDispatchCard,
+  createCard,
+  dispatchCard,
+  getBoard,
+  moveCard,
+} from './api.js'
 import './styles.css'
 
 const queryClient = new QueryClient()
@@ -102,7 +111,12 @@ function KanbanApp(props: { selectedCardId?: string }) {
         {board.error ? <div className="emptyState">{board.error.message}</div> : null}
         {board.data ? <BoardView board={board.data} showToast={showToast} /> : null}
       </main>
-      <CardDetail card={selectedCard} open={!!props.selectedCardId} onClose={closeDetail} />
+      <CardDetail
+        card={selectedCard}
+        open={!!props.selectedCardId}
+        onClose={closeDetail}
+        showToast={showToast}
+      />
       <div className={toast ? 'toast show' : 'toast'}>{toast}</div>
     </>
   )
@@ -121,6 +135,15 @@ function BoardView(props: { board: BoardState; showToast: (message: string) => v
     onSuccess: reloadBoard,
     onError: (error) => props.showToast(error.message),
   })
+  const createDispatch = useMutation({
+    mutationFn: createAndDispatchCard,
+    onSuccess: (payload) => {
+      void reloadBoard()
+      const delivered = ShadowBridge.inboxDeliveries(payload).length > 0
+      props.showToast(delivered ? 'Card created and delivered to Inbox' : 'Card created')
+    },
+    onError: (error) => props.showToast(error.message),
+  })
 
   return (
     <section className="board">
@@ -131,6 +154,9 @@ function BoardView(props: { board: BoardState; showToast: (message: string) => v
             cards={cards}
             columnId={column.id}
             count={cards.length}
+            createAndDispatchCard={(input) =>
+              createDispatch.mutate({ ...input, columnId: column.id })
+            }
             createCard={(title) => create.mutate({ title, columnId: column.id })}
             key={column.id}
             moveCard={(cardId) => move.mutate({ cardId, columnId: column.id })}
@@ -146,19 +172,29 @@ function ColumnView(props: {
   cards: BoardCard[]
   columnId: string
   count: number
+  createAndDispatchCard: (input: { title: string; assigneeLabel?: string }) => void
   createCard: (title: string) => void
   moveCard: (cardId: string) => void
   title: string
 }) {
   const [isOver, setIsOver] = useState(false)
   const [title, setTitle] = useState('')
+  const [assigneeLabel, setAssigneeLabel] = useState('Strategy Buddy')
 
+  const nextTitle = () => title.trim()
+  const resetForm = () => setTitle('')
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const trimmed = title.trim()
+    const trimmed = nextTitle()
     if (!trimmed) return
     props.createCard(trimmed)
-    setTitle('')
+    resetForm()
+  }
+  const handleCreateAndDispatch = () => {
+    const trimmed = nextTitle()
+    if (!trimmed) return
+    props.createAndDispatchCard({ title: trimmed, assigneeLabel })
+    resetForm()
   }
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -195,7 +231,18 @@ function ColumnView(props: {
           placeholder="Add a card..."
           value={title}
         />
-        <button type="submit">Add card</button>
+        <input
+          maxLength={80}
+          onChange={(event) => setAssigneeLabel(event.target.value)}
+          placeholder="Buddy"
+          value={assigneeLabel}
+        />
+        <div className="quick-add-actions">
+          <button type="submit">Add card</button>
+          <button className="dispatch" type="button" onClick={handleCreateAndDispatch}>
+            Add & dispatch
+          </button>
+        </div>
       </form>
     </div>
   )
@@ -222,6 +269,9 @@ function CardTile(props: { card: BoardCard }) {
       </div>
       <div className="card-title">{props.card.title}</div>
       {props.card.description ? <div className="card-desc">{props.card.description}</div> : null}
+      {props.card.buddyStatus ? (
+        <div className={`buddy-pill buddy-${props.card.buddyStatus}`}>{props.card.buddyStatus}</div>
+      ) : null}
       <div className="card-footer">
         <div className="avatars">
           {props.card.assignees.slice(0, 4).map((person) => (
@@ -234,16 +284,34 @@ function CardTile(props: { card: BoardCard }) {
   )
 }
 
-function CardDetail(props: { card: BoardCard | null; open: boolean; onClose: () => void }) {
+function CardDetail(props: {
+  card: BoardCard | null
+  open: boolean
+  onClose: () => void
+  showToast: (message: string) => void
+}) {
   const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
+  const [buddyLabel, setBuddyLabel] = useState('Strategy Buddy')
   const reloadBoard = () => queryClient.invalidateQueries({ queryKey: boardQueryKey })
   const assign = useMutation({ mutationFn: assignCard, onSuccess: reloadBoard })
+  const dispatch = useMutation({
+    mutationFn: dispatchCard,
+    onSuccess: (payload) => {
+      void reloadBoard()
+      const delivered = ShadowBridge.inboxDeliveries(payload).length > 0
+      props.showToast(delivered ? 'Card delivered to Inbox' : 'Card dispatched')
+    },
+    onError: (error) => props.showToast(error.message),
+  })
   const createComment = useMutation({
     mutationFn: commentCard,
-    onSuccess: () => {
+    onSuccess: (payload) => {
       setComment('')
       void reloadBoard()
+      if (ShadowBridge.inboxDeliveries(payload).length > 0) {
+        props.showToast('Comment delivered to Inbox')
+      }
     },
   })
 
@@ -301,6 +369,35 @@ function CardDetail(props: { card: BoardCard | null; open: boolean; onClose: () 
               <section className="section">
                 <div className="section-title">Description</div>
                 <p className="description">{props.card.description || 'No description'}</p>
+              </section>
+              <section className="section">
+                <div className="section-title">Buddy Inbox</div>
+                <div className="dispatch-row">
+                  <input
+                    maxLength={80}
+                    onChange={(event) => setBuddyLabel(event.target.value)}
+                    value={buddyLabel}
+                  />
+                  <button
+                    className="primary"
+                    disabled={dispatch.isPending}
+                    type="button"
+                    onClick={() =>
+                      dispatch.mutate({
+                        cardId: props.card!.id,
+                        assigneeLabel: buddyLabel,
+                        reason: 'Kanban card dispatched from the board detail panel.',
+                      })
+                    }
+                  >
+                    Dispatch
+                  </button>
+                </div>
+                {props.card.lastDispatchedAt ? (
+                  <div className="meta">
+                    Last dispatched {new Date(props.card.lastDispatchedAt).toLocaleString()}
+                  </div>
+                ) : null}
               </section>
               <section className="section">
                 <div className="section-title">Created by</div>
@@ -366,7 +463,7 @@ function useLiveEvents(onCommand: () => void) {
     if (!eventStream) return
     const source = new EventSource(eventStream)
     source.addEventListener('ready', () => setStatus('live'))
-    source.addEventListener('server_app.command.completed', (event) => {
+    source.addEventListener(SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, (event) => {
       try {
         const payload = JSON.parse(event.data || '{}') as { command?: string }
         if (payload.command === 'boards.get') return

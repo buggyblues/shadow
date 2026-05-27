@@ -1,5 +1,16 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import {
+  buildShadowServerAppInboxTaskRequest,
+  getShadowServerAppTaskCardId,
+  SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
+  SHADOW_SERVER_APP_PROTOCOL,
+  type ShadowServerAppInboxDelivery,
+  type ShadowServerAppInboxDeliveryError,
+  type ShadowServerAppInboxTaskOutbox,
+  type ShadowServerAppResultShadow,
+} from '@shadowob/sdk'
 import type { Logger } from 'pino'
+import type { Server as SocketIOServer } from 'socket.io'
 import { ZodError } from 'zod'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AppIntegrationDao } from '../dao/app-integration.dao'
@@ -21,6 +32,7 @@ import {
   type UpdateServerAppAccessPolicyInput,
 } from '../validators/app-integration.schema'
 import type { AppIntegrationEventBus } from './app-integration-event-bus'
+import type { BuddyInboxService } from './buddy-inbox.service'
 import type { MediaService } from './media.service'
 import type { PolicyService } from './policy.service'
 
@@ -43,8 +55,12 @@ function normalizeOrigin(value: string) {
   return url.origin
 }
 
+function normalizeHostname(hostname: string) {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, '')
+}
+
 function isLoopbackHost(hostname: string) {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  const host = normalizeHostname(hostname)
   return host === 'localhost' || host === '127.0.0.1' || host === '::1'
 }
 
@@ -52,16 +68,30 @@ function shouldAllowDevLoopback(url: URL) {
   return process.env.NODE_ENV !== 'production' && isLoopbackHost(url.hostname)
 }
 
+function shouldAllowDevServerAppHost(url: URL) {
+  const host = normalizeHostname(url.hostname)
+  return (
+    process.env.NODE_ENV !== 'production' &&
+    (isLoopbackHost(host) || host === 'host.docker.internal' || host === 'host.lima.internal')
+  )
+}
+
 function shouldAllowDevDirectFetch() {
   return process.env.NODE_ENV !== 'production'
 }
 
 function isAllowlistedServerAppHost(url: URL) {
-  const hosts = (process.env.SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS ?? '')
+  const allowedHosts = (process.env.SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS ?? '')
     .split(',')
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean)
-  return hosts.includes(url.hostname.toLowerCase())
+    .map((host) => {
+      if (host.startsWith('http://') || host.startsWith('https://')) {
+        return normalizeHostname(new URL(host).hostname)
+      }
+      return normalizeHostname(host.split(':')[0] ?? host)
+    })
+  return allowedHosts.includes(normalizeHostname(url.hostname))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -150,7 +180,133 @@ type CommandSubject = {
   buddyAgentId: string | null
 }
 
+type InboxTaskOutbox = ShadowServerAppInboxTaskOutbox
+
 const RESTRICTED_DATA_CLASSES = new Set(['financial', 'secret', 'cloud-secret'])
+const TASK_PRIORITIES = new Set(['low', 'normal', 'high', 'urgent'])
+
+function optionalString(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined
+}
+
+function optionalInboxResource(value: unknown): InboxTaskOutbox['resource'] | undefined {
+  if (!isRecord(value)) return undefined
+  const kind = optionalString(value.kind)
+  const id = optionalString(value.id)
+  if (!kind || !id) return undefined
+  return {
+    ...value,
+    kind,
+    id,
+    ...(optionalString(value.label) ? { label: optionalString(value.label) } : {}),
+    ...(optionalString(value.url) ? { url: optionalString(value.url) } : {}),
+  }
+}
+
+function parseInboxTaskOutbox(value: unknown): InboxTaskOutbox | null {
+  if (!isRecord(value)) return null
+  const title = optionalString(value.title)
+  if (!title) return null
+  const priority = optionalString(value.priority)
+  return {
+    title,
+    ...(optionalString(value.body) ? { body: optionalString(value.body) } : {}),
+    ...(priority && TASK_PRIORITIES.has(priority)
+      ? { priority: priority as InboxTaskOutbox['priority'] }
+      : {}),
+    ...(optionalString(value.agentId) ? { agentId: optionalString(value.agentId) } : {}),
+    ...(optionalString(value.agentUserId)
+      ? { agentUserId: optionalString(value.agentUserId) }
+      : {}),
+    ...(optionalString(value.assigneeLabel)
+      ? { assigneeLabel: optionalString(value.assigneeLabel) }
+      : {}),
+    ...(optionalString(value.idempotencyKey)
+      ? { idempotencyKey: optionalString(value.idempotencyKey) }
+      : {}),
+    ...(optionalInboxResource(value.resource)
+      ? { resource: optionalInboxResource(value.resource) }
+      : {}),
+    ...(optionalRecord(value.data) ? { data: optionalRecord(value.data) } : {}),
+    ...(value.required === true ? { required: true } : {}),
+  }
+}
+
+function optionalShadowMeta(value: unknown): ShadowServerAppResultShadow | null {
+  if (!isRecord(value)) return null
+  if (value.protocol !== SHADOW_SERVER_APP_PROTOCOL) return null
+  return value as unknown as ShadowServerAppResultShadow
+}
+
+function inboxTaskListFromRecord(record: Record<string, unknown>) {
+  const shadow = optionalShadowMeta(record.shadow)
+  const raw = shadow?.outbox?.inboxTasks ?? []
+  return raw.map(parseInboxTaskOutbox).filter((task): task is InboxTaskOutbox => Boolean(task))
+}
+
+function collectInboxTaskOutbox(payload: unknown, depth = 0): InboxTaskOutbox[] {
+  if (depth > 4 || !isRecord(payload)) return []
+  const tasks = [...inboxTaskListFromRecord(payload)]
+  const nested = optionalRecord(payload.result)
+  if (nested) tasks.push(...collectInboxTaskOutbox(nested, depth + 1))
+  return tasks
+}
+
+function extractInboxTaskOutbox(payload: unknown) {
+  if (!isRecord(payload)) return []
+  const tasks = collectInboxTaskOutbox(payload)
+
+  const seen = new Set<string>()
+  return tasks.filter((task) => {
+    const key = [
+      task.idempotencyKey,
+      task.agentId,
+      task.agentUserId,
+      task.assigneeLabel,
+      task.title,
+    ]
+      .filter(Boolean)
+      .join('|')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function normalizeAgentLabel(value: string) {
+  return value.trim().replace(/^@+/, '').toLowerCase()
+}
+
+function attachInboxDeliveryResult(
+  payload: Record<string, unknown>,
+  deliveries: ShadowServerAppInboxDelivery[],
+  errors: ShadowServerAppInboxDeliveryError[],
+): Record<string, unknown> {
+  const withDeliveryMeta = (value: Record<string, unknown>) => {
+    const shadow = optionalShadowMeta(value.shadow)
+    return {
+      ...value,
+      shadow: {
+        protocol: SHADOW_SERVER_APP_PROTOCOL,
+        outbox: {
+          ...(shadow?.outbox ?? {}),
+          ...(deliveries.length > 0 ? { deliveries } : {}),
+          ...(errors.length > 0 ? { errors } : {}),
+        },
+      },
+    }
+  }
+  const nested = optionalRecord(payload.result)
+  if (!nested) return withDeliveryMeta(payload)
+  return {
+    ...withDeliveryMeta(payload),
+    result: withDeliveryMeta(nested),
+  }
+}
 
 function safeDefaultPermissions(manifest: {
   commands: Array<{ permission: string; action: string; dataClass: string }>
@@ -202,10 +358,12 @@ export class AppIntegrationService {
       agentDao: AgentDao
       userDao: UserDao
       appIntegrationEventBus: AppIntegrationEventBus
+      buddyInboxService: BuddyInboxService
       serverDao: ServerDao
       policyService: PolicyService
       mediaService: MediaService
       safeHttpClient: SafeHttpClient
+      io: SocketIOServer
       logger: Logger
     },
   ) {}
@@ -1044,10 +1202,116 @@ export class AppIntegrationService {
   }
 
   private async fetchCommand(url: URL, init: RequestInit) {
-    if (shouldAllowDevLoopback(url) || isAllowlistedServerAppHost(url)) {
+    if (
+      shouldAllowDevLoopback(url) ||
+      shouldAllowDevServerAppHost(url) ||
+      isAllowlistedServerAppHost(url)
+    ) {
       return fetch(url, { ...init, redirect: 'manual' })
     }
     return this.deps.safeHttpClient.fetch(url.toString(), init, { maxRedirects: 0 })
+  }
+
+  private async resolveInboxTaskAgent(serverId: string, task: InboxTaskOutbox) {
+    let agent = task.agentId ? await this.deps.agentDao.findById(task.agentId) : null
+    if (!agent && task.agentUserId) {
+      agent = await this.deps.agentDao.findByUserId(task.agentUserId)
+    }
+    if (agent) {
+      const member = await this.deps.serverDao.getMember(serverId, agent.userId)
+      return member ? agent : null
+    }
+
+    const label = task.assigneeLabel ? normalizeAgentLabel(task.assigneeLabel) : ''
+    if (!label) return null
+    const members = await this.deps.serverDao.getMembers(serverId)
+    const match = members.find((member) => {
+      if (!member.agent || !member.user) return false
+      const labels = [
+        member.user.displayName,
+        member.user.username,
+        member.agent.id,
+        member.user.id,
+      ]
+        .filter((item): item is string => typeof item === 'string')
+        .map(normalizeAgentLabel)
+      return labels.includes(label)
+    })
+    return match?.agent ? await this.deps.agentDao.findById(match.agent.id) : null
+  }
+
+  private async attachInboxTaskDeliveries(input: {
+    result: Record<string, unknown>
+    serverId: string
+    app: { id: string; appKey: string; name: string }
+    commandName: string
+    actor: Actor
+  }) {
+    const tasks = extractInboxTaskOutbox(input.result)
+    if (tasks.length === 0) return input.result
+
+    const deliveries: ShadowServerAppInboxDelivery[] = []
+    const errors: ShadowServerAppInboxDeliveryError[] = []
+    for (const task of tasks) {
+      try {
+        const agent = await this.resolveInboxTaskAgent(input.serverId, task)
+        if (!agent) {
+          throw Object.assign(new Error('Inbox task target Buddy was not found in this server'), {
+            status: 404,
+          })
+        }
+        const idempotencyKey =
+          task.idempotencyKey ??
+          [
+            input.app.appKey,
+            input.commandName,
+            task.resource?.kind,
+            task.resource?.id,
+            agent.id,
+            task.title,
+          ]
+            .filter(Boolean)
+            .join(':')
+        const inboxRequest = buildShadowServerAppInboxTaskRequest({
+          serverIdOrSlug: input.serverId,
+          target: { agentId: agent.id },
+          task: { ...task, idempotencyKey },
+          app: {
+            id: input.app.id,
+            appKey: input.app.appKey,
+            serverId: input.serverId,
+            name: input.app.name,
+          },
+          commandName: input.commandName,
+        })
+        const message = await this.deps.buddyInboxService.enqueueTaskForAgent(
+          input.serverId,
+          agent.id,
+          inboxRequest.body,
+          input.actor,
+        )
+        deliveries.push({
+          agentId: agent.id,
+          agentUserId: agent.userId,
+          channelId: message.channelId,
+          messageId: message.id,
+          cardId: getShadowServerAppTaskCardId(message),
+          idempotencyKey,
+        })
+        this.deps.io.to(`channel:${message.channelId}`).emit('message:new', message)
+      } catch (err) {
+        if (task.required) throw err
+        errors.push({
+          title: task.title,
+          ...(task.assigneeLabel ? { assigneeLabel: task.assigneeLabel } : {}),
+          ...(task.agentId ? { agentId: task.agentId } : {}),
+          ...(task.agentUserId ? { agentUserId: task.agentUserId } : {}),
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    return attachInboxDeliveryResult(input.result, deliveries, errors)
   }
 
   private assertSignature(signature: string, expected: string) {
@@ -1066,7 +1330,7 @@ export class AppIntegrationService {
     dataClass: string
   }) {
     this.deps.appIntegrationEventBus.publish({
-      type: 'server_app.command.completed',
+      type: SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
       serverId: input.serverId,
       serverAppId: input.serverAppId,
       appKey: input.appKey,
@@ -1245,6 +1509,13 @@ export class AppIntegrationService {
       await this.consumeTransientCommandConsent(commandAccess)
       return { ok: true, result }
     }
+    const deliveredResult = await this.attachInboxTaskDeliveries({
+      result,
+      serverId,
+      app: { id: app.id, appKey: app.appKey, name: app.name },
+      commandName: command.name,
+      actor: input.actor,
+    })
     this.publishCommandEvent({
       serverId,
       serverAppId: app.id,
@@ -1255,7 +1526,7 @@ export class AppIntegrationService {
       dataClass: command.dataClass,
     })
     await this.consumeTransientCommandConsent(commandAccess)
-    return result
+    return deliveredResult
   }
 
   async introspectCommandToken(serverIdOrSlug: string, appKey: string, token: string) {

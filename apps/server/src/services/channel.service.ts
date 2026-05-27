@@ -3,6 +3,7 @@ import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
 import { type ActorInput, actorUserId } from '../security/actor'
 import type { CreateChannelInput, UpdateChannelInput } from '../validators/channel.schema'
+import { isBuddyInboxTopic } from './buddy-inbox-protocol'
 import type { PolicyService } from './policy.service'
 import type { ServerService } from './server.service'
 
@@ -80,7 +81,7 @@ export class ChannelService {
     const userId = actorUserId(actor)
     const serverMember = await this.deps.policyService.requireServerMember(actor, serverId)
     const allChannels = (await this.deps.channelDao.findByServerId(serverId)).filter(
-      (ch) => !ch.name.startsWith('app:'),
+      (ch) => !ch.name.startsWith('app:') && !isBuddyInboxTopic(ch.topic),
     )
     if (allChannels.length === 0) return []
     try {

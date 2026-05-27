@@ -3294,6 +3294,68 @@
     "communitySupportTitle": "Community support",
     "openGiftShelf": "Choose from assets"
   },
+  "inbox": {
+    "title": "Inbox",
+    "queueTitle": "Buddy Inbox",
+    "queueHint": "Authorized task delivery, separate from chat",
+    "queueUnread": "{{count}} unread",
+    "queueOpen": "Task queue ready",
+    "queueNotReady": "Queue not enabled",
+    "queueBadge": "Task queue",
+    "filter": {
+      "all": "All",
+      "open": "Open",
+      "done": "Done"
+    },
+    "empty": {
+      "allTitle": "No tasks yet",
+      "allHint": "Create task cards from the + menu. Regular messages stay in the chat.",
+      "filterTitle": "No tasks match this filter",
+      "filterHint": "Switch filters or create a new task."
+    },
+    "task": {
+      "new": "New task",
+      "titlePlaceholder": "Task title",
+      "bodyPlaceholder": "Add instructions, links, or acceptance criteria",
+      "create": "Create task",
+      "deliver": "Deliver",
+      "quickPlaceholder": "Write the task title; add acceptance criteria, links, or context on new lines",
+      "created": "Task created",
+      "createFailed": "Failed to create task",
+      "deliveryHint": "Deliver work to this Buddy. Status and progress stay on the task card.",
+      "addMenuDesc": "Create a trackable task card",
+      "unassigned": "Unassigned Buddy",
+      "assignee": "Assignee",
+      "app": "App",
+      "createdAt": "Created",
+      "statusLabel": "Status",
+      "latestProgress": "Latest progress",
+      "noProgress": "No progress yet",
+      "details": "Details",
+      "noDetails": "No details",
+      "todoProgress": "{{done}}/{{total}} done",
+      "showDetails": "Show details",
+      "hideDetails": "Hide details",
+      "retry": "Retry",
+      "start": "Start",
+      "complete": "Complete",
+      "fail": "Fail",
+      "priority": {
+        "low": "Low priority",
+        "high": "High priority",
+        "urgent": "Urgent"
+      },
+      "status": {
+        "queued": "Queued",
+        "claimed": "Claimed",
+        "running": "Running",
+        "completed": "Done",
+        "failed": "Failed",
+        "canceled": "Canceled",
+        "transferred": "Transferred"
+      }
+    }
+  },
   "voice": {
     "ready": "Ready to connect",
     "connected": "Voice Connected",

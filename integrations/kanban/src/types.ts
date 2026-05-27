@@ -20,6 +20,15 @@ export interface BoardCard {
   description?: string
   labels: string[]
   assignees: BoardPerson[]
+  buddyStatus?:
+    | 'queued'
+    | 'claimed'
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'canceled'
+    | 'transferred'
+  lastDispatchedAt?: string
   comments: Array<{
     id: string
     body: string

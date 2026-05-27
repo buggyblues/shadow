@@ -401,6 +401,29 @@
     "setPublic": "設為公開",
     "setPrivate": "設為私有"
   },
+  "inbox": {
+    "title": "Inbox",
+    "channelReady": "任務 Inbox",
+    "createInbox": "建立 Inbox",
+    "noAccess": "無權限",
+    "assignee": "分配給 {{name}}",
+    "unassigned": "未分配 Buddy",
+    "statusUpdated": "任務已更新",
+    "status": {
+      "queued": "排隊中",
+      "claimed": "已領取",
+      "running": "執行中",
+      "completed": "已完成",
+      "failed": "已失敗",
+      "canceled": "已取消",
+      "transferred": "已轉交"
+    },
+    "action": {
+      "start": "開始",
+      "complete": "完成",
+      "fail": "失敗"
+    }
+  },
   "chat": {
     "selectChannel": "選擇一個頻道開始聊天",
     "welcomeChannel": "歡迎來到 #{{channelName}}！",

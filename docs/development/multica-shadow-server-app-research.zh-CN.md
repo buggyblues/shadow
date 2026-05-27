@@ -1,0 +1,306 @@
+# Multica 能力复刻：Buddy Inbox + Server App 方案
+
+调研日期：2026-05-26
+
+Multica 的原理、runtime、skills、autopilot、squad 细节保留在 [Multica 深度调研：任务流、Runtime 与 Skills](./multica-deep-research.zh-CN.md)。本文只保留 Shadow 的实现方案、当前进度和本轮收敛后的边界。
+
+## 结论
+
+Shadow 不需要在核心里内置 Kanban、Issue、Task Queue 等业务模型。用现有 **channel + message cards + Server App command** 可以覆盖 Multica 的用户可见能力：
+
+- **Inbox 是特殊 channel**：Buddy Inbox 是 private server channel，用 topic marker 标识用途。
+- **任务是 Task Card**：状态、进度、claim、source resource 都记录在 message `metadata.cards[]` 的 `kind='task'` card。
+- **领域对象属于 Server App**：Kanban card、GitHub issue、Linear issue、CRM ticket 等都由 Server App 自己实现。
+- **Skills 是独立 Server App**：技能库不放进 Kanban；`shadow-skills` 负责发布、读取、导出和安装记录。
+- **定时任务不进入 Kanban**：Multica 的 Autopilot 本质是 schedule/webhook/manual trigger。Shadow MVP 不保留 `autopilot` 概念；后续若需要，用 automation/scheduler app 投递普通 Inbox Task Card。
+
+复刻 Multica 的关键不是复制表结构，而是复刻这条链路：业务事件 -> Server App outbox -> Buddy Inbox Task Card -> Buddy runtime claim -> 执行 -> 回写 card status/progress。
+
+## 当前进度
+
+已落地：
+
+- Buddy Inbox 使用 private server channel，不新增 inbox/task queue 表。
+- 统一 `metadata.cards[]`，新增 `task` card。
+- Task Card 支持 `source.resource`、`data.idempotencyKey`、`claim`、`capability`、`progress`。
+- Server App command 统一通过 `shadow.protocol === "shadow.app/1"` + `shadow.outbox.inboxTasks` 声明 Inbox 投递，Shadow 自动投递到 Buddy Inbox。
+- Connector 会把指向当前 Buddy 的 active task card 视为显式触发，即使普通频道是 mention-only。
+- Connector 执行前 claim task，开始时标记 `running`，成功后标记 `completed`，失败后标记 `failed`。
+- Web 和 mobile 都能看到 Inbox 与 Task Card。
+- Web Inbox 已从普通频道列表中分离，显示为 **Buddy Inbox** 区块。
+- Inbox 仍保留普通聊天输入框；Task Card 从输入框左侧 `+` 菜单创建，避免任务投递占掉所有对话场景。
+- Web Task Card 已改成任务卡片布局：Buddy avatar、状态 badge、来源、优先级、时间、进展和动作区分层展示；含 Task Card 的消息不再重复渲染普通 message 正文。
+- Mobile Task Card 已去掉重复正文，并补充 Buddy avatar/assignee 信息。
+- Buddy 在 Inbox 中回复任务时，server 会优先按 `replyToId` 精确完成对应 Task Card；没有 reply target 时回退到最近一个分配给该 Buddy 的 active task。
+- Task Card UI 已去掉“重新开始/重新打开”。失败或完成后的二次尝试应创建新 Task Card，并可用 `source` / `data.retryOf` 关联旧任务。
+- Kanban 只保留 board/card 领域能力，新增 `cards.create_and_dispatch` 支持“添加卡片并分配给 Buddy”。
+- Skills 已拆成独立 `shadow-skills` Server App，并改为 Vite + React + TanStack Query 前端。
+- Skills App 按完整 skill package 存储，不再把技能当单文件：`SKILL.md` 是入口，`references/`、`scripts/`、`assets/`、`examples/` 是一等文件。
+- Kanban 中的 Autopilot 与技能库命令已删除。
+- Trainer 已改成 Vite + TanStack Router 的多页面 Server App：`/problems`、`/submissions`、`/import`、`/problems/$challengeId`、`/problems/$challengeId/submissions/$submissionId`。
+- Trainer 已验证 “提交代码 -> Strategy Buddy Inbox task -> Buddy 调 Server App command 获取提交 -> Buddy 写回分析 -> 前端实时显示结果”。
+- Skills App 当前命令收敛为 `skills.list`、`skills.get`、`skills.download`、`skills.upload`、`skills.install`，安装通过 Inbox 给指定 Buddy 派发下载 zip 并安装的任务。
+- Skills App 的搜索已改为 TanStack Query 按搜索词隔离缓存，输入框 debounce 后才触发请求，避免逐字请求和旧结果串到新搜索词。
+- `skills.search` 不再只依赖本地快照：有搜索词时会先查 server library，不足时调用 `npx skills find <query>` 动态发现更多 skills.sh 结果，并把结果按完整 package 元数据持久化到 server library。
+- Server App 通信协议已收敛到 SDK：iframe 端用 `new ShadowBridge({ appKey })` 调 `command()`、`inboxes()`、`enqueueInboxTask()`；Web host 和 Mobile WebView host 用 `buildShadowServerAppInboxTaskRequest()` / `buildShadowServerAppInboxDelivery()` 统一完成 bridge fulfillment；服务端 command 用 `new ShadowServerAppOutbox().enqueueInboxTask(task).attachTo(result)` 产生 `shadow.outbox.inboxTasks`。Shadow Server 只消费 `shadow.outbox.inboxTasks`，投递结果回填到 `shadow.outbox.deliveries/errors`，应用层不再散落 `shadowInbox*` 顶层字段。
+- Buddy Inbox 协议已抽到 shared/SDK：topic marker、Task Card 状态机、admission policy、Server App realtime event 常量都有统一定义；TS SDK、Python SDK、CLI 已覆盖 list/ensure/enqueue/claim/update/retry/promote。
+- Inbox 入站投递已支持 admission policy：`allow`、`deny`、`first_time`、`every_time` 通过 Inbox channel-specific agent policy 保存；Task Card claim/update/retry 已收紧到目标 Buddy、claim holder、Buddy owner 或 server admin。
+- Canonical API 文档见 [Buddy Inbox Protocol](../api/buddy-inbox.md)。
+
+后续增强，不阻塞当前 Multica 能力复刻：
+
+- Inbox admission policy 的前端管理 UI 与 pending approval inbox。
+- task-scoped capability token 与 Server App command grant 更严格绑定。
+- 超时释放、失败重试视图、死信视图。
+- Skills 版本 diff、审核流、runtime 文件注入。
+- Skills 远端搜索目前通过 `npx skills find` 即时发现和持久化，尚未做独立后台 crawler 的完整审计、签名、评分和去重策略。
+
+## Inbox 前端定位
+
+Inbox 不是“另一个聊天频道”，而是 **Buddy 的任务投递和执行状态面板**。
+
+当前 UX 约定：
+
+- 左侧导航把 Inbox 放在独立 **Buddy Inbox** 区块，不再混入普通 text channels。
+- Inbox item 用 Buddy avatar 作为主视觉，显示 unread/open/not-ready 状态。
+- 进入 Inbox 后，顶部显示任务队列 badge。
+- 底部保持普通聊天 composer；任务创建入口放进左侧 `+` 菜单。
+- Task Card 是任务信息的唯一主视图；message content 只作为传输 fallback/通知摘要，前端不重复展示。
+
+这样保留了 channel 的实时、权限、消息历史能力，同时避免用户把 Inbox 理解成普通讨论频道。
+
+## Task Card 约定
+
+统一名称使用 **Task Card**，不使用 `queueCard`。队列只是 runtime 处理方式，产品语义是任务。
+
+核心语义：
+
+- `status`：`queued`、`claimed`、`running`、`completed`、`failed`、`canceled`、`transferred`。
+- `assignee`：目标 Buddy 的 agent/user 标识。
+- `source`：任务来源，可以是 user、agent、server_app。
+- `source.resource`：业务对象引用，例如 Kanban card、issue、message。
+- `claim`：runtime 领取信息和过期时间。
+- `capability`：task-scoped 能力声明，后续绑定更严格 token。
+- `progress`：状态流和备注。
+- `data`：Server App 可扩展元数据，包含幂等 key、外部资源 id、retryOf 等。
+
+Shadow 核心只理解这些协议字段，不理解 Kanban/issue 的业务字段。
+
+## 权限模型
+
+权限分为两层：
+
+- **入站投递权限**：谁可以向 Buddy Inbox 投递 Task Card。
+- **出站执行权限**：Buddy claim 后可以对 source resource 做什么。
+
+当前实现：
+
+- Inbox 复用 private channel 可见性。
+- Buddy owner 或 server admin 可以 ensure Inbox。
+- Inbox admission policy 已支持 `allow`、`deny`、`first_time`、`every_time`，存储在 Inbox channel-specific agent policy config。
+- Server App command 先走 Shadow 的 command permission、approval、grant。
+- Server App 返回 `shadow.outbox.inboxTasks` 后，由 Shadow 解析目标 Buddy 并投递。
+
+Admission policy 不需要新任务模型，只是在 Inbox channel 之上增加规则：
+
+- `allow`: 某个 Server App / Buddy / user 可直接投递。
+- `first_time`: 第一次投递需要 owner 批准，之后放行。
+- `every_time`: 每次投递都需要 owner 批准。
+- `deny`: 明确拒绝某个来源。
+
+关键边界：
+
+- Owner 可见 Buddy Inbox，但不等于绕过 source resource 权限。
+- Task Card 不保存 secret，只保存摘要、状态和 resource 引用。
+- financial、secret、cloud-secret 默认应要求显式审批。
+- Buddy 调 Server App command 仍走 Server App grant/approval，不因 task capability 自动绕过。
+
+## Server App Outbox
+
+Server App 不需要调用 Buddy Inbox 专用接口。它只要在 command 结果里返回：
+
+```json
+{
+  "shadow": {
+    "protocol": "shadow.app/1",
+    "outbox": {
+      "inboxTasks": [
+        {
+          "title": "Ask Strategy Buddy for launch risks",
+          "body": "Review this Kanban card and propose next steps.",
+          "assigneeLabel": "Strategy Buddy",
+          "idempotencyKey": "kanban:card:card_bot:dispatch:strategy-buddy",
+          "resource": {
+            "kind": "kanban.card",
+            "id": "card_bot",
+            "label": "Ask Strategy Buddy for launch risks"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Shadow Server 会在 command 成功后完成：
+
+- 按 `agentId`、`agentUserId` 或 `assigneeLabel` 解析 Buddy。
+- 确认 Buddy 属于当前 server。
+- 用 idempotency key 去重。
+- 投递 Task Card 到 Buddy Inbox。
+- 在 command 响应中回填 `shadow.outbox.deliveries/errors`。
+
+这让 Kanban、Issue、CRM、CI、scheduler app 都能用同一种底层出站协议。
+
+## Kanban App 边界
+
+Kanban 仍是普通 Server App，不进入 Shadow 核心。它现在只提供 Kanban 领域命令：
+
+- `boards.get`
+- `cards.get`
+- `cards.create`
+- `cards.create_and_dispatch`
+- `cards.move`
+- `cards.assign`
+- `cards.comment`
+- `cards.dispatch`
+
+覆盖的 Multica 入口：
+
+- **分配 issue/card 给 agent**：`cards.dispatch` 输出 Inbox Task Card。
+- **创建卡片并交给 Buddy**：`cards.create_and_dispatch` 输出 Inbox Task Card。
+- **评论里 @Agent**：`cards.comment` 在 body 提及 `@Strategy Buddy` 时输出 Inbox Task Card。
+
+不再由 Kanban 承担：
+
+- 技能库：由 `shadow-skills` Server App 承担。
+- 定时任务：由未来 automation/scheduler app 投递普通 Task Card。
+
+## Skills App 边界
+
+`shadow-skills` 是独立 Server App，负责：
+
+- `skills.list`：列出技能。
+- `skills.get`：读取技能 package 元数据与文件。
+- `skills.download`：下载完整 zip 包，供 Buddy/runtime 安装。
+- `skills.upload`：上传完整 zip 包或单个 markdown 技能。
+- `skills.install`：向指定 Buddy Inbox 派发安装任务，由 Buddy 通过 command 下载 zip 并安装。
+
+Skills App 不需要知道 Kanban；Kanban 也不需要知道 Skills。Buddy 可以在执行 Kanban Task Card 时，按权限读取 Skills App 的技能，并按普通 Server App command 调用 Kanban。
+
+技能结构参考 Anthropic Agent Skills：
+
+- 一个 skill 是目录包，不是单个 prompt。
+- `SKILL.md` 负责触发描述、渐进披露和主要工作流。
+- `references/` 承载较长背景文档。
+- `scripts/` 承载可执行 helper。
+- `assets/` 承载模板、图片、字体等输出资源。
+- `examples/` 承载样例输入输出。
+
+Shadow 的 Skills App 当前支持前端搜索、查看 package 文件、上传 zip/markdown、下载 zip，并把安装请求投递到指定 Buddy Inbox。
+
+当前搜索/安装链路：
+
+- 前端输入只更新本地状态；400ms debounce 后才更新 URL search 和 TanStack query key。
+- TanStack query key 使用 `['skills', debouncedQuery]`，不同搜索词的请求和缓存隔离。
+- `skills.search` 会先返回 server library 中的命中项；如果结果不足，会调用 `npx skills find <query>`，解析 `owner/repo@skill`、install count 和 skills.sh URL，并写入本地 library。
+- `skills.install` 不直接修改 Buddy runtime 文件系统，而是向目标 Buddy Inbox 投递 Task Card。Buddy 需要通过 `skills.download` 下载 zip，再安装完整 package。
+
+## Trainer App 验证
+
+`shadow-trainer` 是对 Multica “issue 分配给 agent 后执行并回写”的一个业务 App 验证：
+
+- 问题列表、提交列表、导入源、题目详情、提交详情各自是 TanStack Router route。
+- 用户在题目详情里选择 Buddy 和 review focus 后提交代码。
+- `submissions.create` 返回 `shadow.outbox.inboxTasks`，Shadow 投递 Task Card 到 Buddy Inbox。
+- Buddy 通过 `submissions.get` 拉取提交和题目，用沙箱/推理完成评审后调用 `submissions.analyze`。
+- 前端通过 Server App event stream 和 Query invalidation 更新提交详情。
+
+本轮本地验证：
+
+- 在 `http://localhost:3000/app/servers/shadow-plays/apps/shadow-trainer` 提交 Two Sum 到 Strategy Buddy。
+- 生成提交 `sub_9pj3huu`。
+- Strategy Buddy 已回写分析，状态为 `analyzed`，结果为 `incomplete`，分数 `0/100`。
+- 前端主要按钮路径已验证：Problems、Submissions、Import、provider filter、problem row、console tabs、Reset、Submit、submission detail。
+- Trainer dev 模式下 Monaco worker 和 font asset 已修复，不再因跨源 worker 或 `/@fs` 字体 404 导致按钮点击时报错。
+
+## 流程图
+
+### 创建并分配 Kanban 卡片
+
+```mermaid
+flowchart TD
+  A["User creates Kanban card and chooses Strategy Buddy"] --> B["Kanban command: cards.create_and_dispatch"]
+  B --> C["Shadow checks Server App command permission/approval"]
+  C --> D["Kanban stores card and returns shadow.outbox.inboxTasks"]
+  D --> E["Shadow resolves Strategy Buddy"]
+  E --> F["Shadow publishes Task Card to Buddy Inbox channel"]
+  F --> G["Connector sees active task card assigned to itself"]
+  G --> H["Connector claims card"]
+  H --> I["Connector marks card running"]
+  I --> J["Buddy works with Kanban/Skills through Server App commands"]
+  J --> K["Buddy replies to the Inbox task message"]
+  K --> L["Server marks the referenced Task Card completed"]
+```
+
+### 评论 @Buddy
+
+```mermaid
+flowchart TD
+  A["User comments @Strategy Buddy on Kanban card"] --> B["Kanban command: cards.comment"]
+  B --> C["Kanban stores the comment"]
+  C --> D["Kanban returns shadow.outbox.inboxTasks"]
+  D --> E["Shadow publishes Task Card to Buddy Inbox"]
+  E --> F["Buddy runtime claims, runs, and updates card status/progress"]
+```
+
+### 从普通消息 promote 为任务
+
+```mermaid
+flowchart TD
+  A["User clicks Promote on an existing direct/channel message"] --> B["Shadow promoteMessageToTask"]
+  B --> C["Shadow checks read access to source message and target server"]
+  C --> D["Shadow enqueues Task Card into selected Buddy Inbox"]
+  D --> E["Original channel keeps the original message"]
+  D --> F["Buddy works in Inbox"]
+```
+
+说明：Promote 是显式动作，用来把普通聊天消息转成任务。`general` 里出现的 `Promote smoke ...` 是本地验证时创建的测试消息，不是默认产品行为。
+
+### Skills 独立调用
+
+```mermaid
+flowchart TD
+  A["Buddy needs reusable working instructions"] --> B["Shadow Skills command: skills.list or skills.get"]
+  B --> C["Skills App returns package metadata and files"]
+  C --> D["Buddy downloads package with skills.download"]
+  D --> E["Runtime writes SKILL.md plus references/scripts/assets"]
+  E --> F["Buddy continues work and calls domain Server Apps as needed"]
+```
+
+## Multica 功能覆盖
+
+| Multica 用户能力 | Shadow 映射 | 当前状态 |
+| --- | --- | --- |
+| 分配 issue 给 agent | Server App resource assignment -> Inbox Task Card | Kanban `cards.dispatch` |
+| 添加卡片并交给 agent | Server App create + outbox -> Inbox Task Card | Kanban `cards.create_and_dispatch` |
+| 评论里 `@Agent` | Server App comment command -> Inbox Task Card | Kanban `cards.comment` |
+| 直接聊天 | 普通 channel/DM | 已有 |
+| 把聊天变任务 | Explicit promote -> Inbox Task Card | 后端协议已实现 |
+| agent_task_queue | Inbox channel + Task Card + claim | 已实现 MVP |
+| daemon/runtime claim | connector claim card -> running/completed/failed | 已实现 MVP |
+| progress messages | Task Card progress + Inbox reply/thread | 已实现 card progress |
+| skills | 独立 Skills Server App，多文件 package，可 search/upload/download/install | 已实现 MVP：支持 skills.sh 快照、`npx skills find` 动态搜索、zip 下载和 Inbox 安装派发；待 runtime 注入 |
+| 定时触发 | automation/scheduler app -> Inbox Task Card | 不放入 Kanban，后续做独立 app |
+| squads | leader Buddy Inbox 或 group Inbox | 可用同一协议扩展 |
+
+未完全覆盖的 Multica 能力：
+
+- **Daemon workspace 生命周期**：Shadow connector 已能 claim/更新 Inbox Task Card，但还没有 Multica 那种 per-task 隔离 workspace、GC、provider 原生上下文文件和运行记录归档。
+- **Task-scoped token**：Shadow 已有 command approval/grant 和 task capability 字段，但还没把 Task Card claim 与一次性 command token 严格绑定。
+- **Skills runtime 注入**：Skills App 已能存储、搜索、下载完整 zip，并通过 Inbox 派发安装；还没统一写入 Claude/Codex/Copilot/OpenClaw 等 provider 的 per-task skill 目录。
+- **Autopilot UI**：Shadow 不把 Autopilot 放进 Kanban；需要时应新增 automation/scheduler Server App，将 schedule/webhook/API/manual trigger 统一投递到 Inbox Task Card。
+- **Squad 编排**：协议可用 leader Buddy Inbox/group Inbox 扩展，但尚未实现 squad 成员、leader 路由、子任务分发和汇总 UI。
+- **Inbox admission policy UI**：底层可复用 channel/private + Server App approval，但还缺 owner 可配置的 allow/first-time/every-time/deny 规则页面。
+
+结论：Multica 的用户可见工作流可以覆盖。Shadow 的取舍是：不复制 Multica 的业务表，不把 Kanban/Issue/Autopilot 固化到核心，只把执行入口统一成 Inbox Task Card。

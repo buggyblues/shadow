@@ -1,6 +1,6 @@
 # Code Trainer
 
-Code Trainer is a Server App for LeetCode-style practice. Learners submit code, and a Buddy or human grader can fetch pending submissions, execute them externally, and write back verdicts with learning advice.
+Code Trainer is a Server App for LeetCode-style practice. Learners write code from skeleton starters, assign a server Buddy through Inbox, and wait for sandbox-tested learning feedback.
 
 ```bash
 pnpm -C integrations/trainer typegen
@@ -13,10 +13,13 @@ Commands:
 
 - `challenges.list`
 - `challenges.get`
+- `challenges.upsert`
+- `sources.search`
+- `sources.import`
 - `submissions.create`
 - `submissions.list`
 - `submissions.get`
 - `submissions.pending`
-- `submissions.judge`
+- `submissions.analyze`
 
-State persists through `TRAINER_DATA_FILE`.
+Challenges, imported source metadata, submissions, and Buddy review requests persist through `TRAINER_DATA_FILE`.

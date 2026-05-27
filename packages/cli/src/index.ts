@@ -11,6 +11,7 @@ import { createConfigCommand } from './commands/config.js'
 import { createDiscoverCommand } from './commands/discover.js'
 import { createDirectMessagesCommand } from './commands/dms.js'
 import { createFriendsCommand } from './commands/friends.js'
+import { createInboxCommand } from './commands/inbox.js'
 import { createInvitesCommand } from './commands/invites.js'
 import { createListenCommand } from './commands/listen.js'
 import { createMarketplaceCommand } from './commands/marketplace.js'
@@ -48,6 +49,7 @@ program.addCommand(createServersCommand())
 program.addCommand(createChannelsCommand())
 program.addCommand(createThreadsCommand())
 program.addCommand(createBuddiesCommand())
+program.addCommand(createInboxCommand())
 program.addCommand(createListenCommand())
 program.addCommand(createDirectMessagesCommand())
 program.addCommand(createWorkspaceCommand())

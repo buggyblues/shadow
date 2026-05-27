@@ -63,9 +63,144 @@
       }
     },
     {
+      "name": "challenges.upsert",
+      "title": "Publish challenge",
+      "description": "Create or update a persistent programming challenge for learners.",
+      "path": "/api/shadow/commands/challenges.upsert",
+      "permission": "trainer.challenges:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title", "difficulty", "prompt", "starterCode", "judgeInstructions"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "difficulty": {
+            "enum": ["easy", "medium", "hard"]
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12000
+          },
+          "starterCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40000
+          },
+          "examples": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "required": ["input", "output"],
+              "properties": {
+                "input": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "output": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "explanation": {
+                  "type": "string",
+                  "maxLength": 4000
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "judgeInstructions": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12000
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sources.search",
+      "title": "Search problem sources",
+      "description": "Search supported public problem repositories for importable practice tasks.",
+      "path": "/api/shadow/commands/sources.search",
+      "permission": "trainer.challenges:read",
+      "action": "read",
+      "dataClass": "public",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "enum": ["exercism", "leetcode", "codeforces"]
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sources.import",
+      "title": "Import problem source",
+      "description": "Import a public problem statement and canonical test data into the persistent trainer problem set.",
+      "path": "/api/shadow/commands/sources.import",
+      "permission": "trainer.challenges:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["sourceId"],
+        "properties": {
+          "provider": {
+            "enum": ["exercism", "leetcode", "codeforces"]
+          },
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "submissions.create",
       "title": "Submit solution",
-      "description": "Submit code for external execution and review by a Buddy or human grader.",
+      "description": "Submit code for Buddy analysis and learning feedback.",
       "path": "/api/shadow/commands/submissions.create",
       "permission": "trainer.submissions:write",
       "action": "write",
@@ -73,7 +208,7 @@
       "approvalMode": "first_time",
       "inputSchema": {
         "type": "object",
-        "required": ["challengeId", "language", "code"],
+        "required": ["challengeId", "language", "code", "reviewer"],
         "properties": {
           "challengeId": {
             "type": "string",
@@ -88,6 +223,29 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 40000
+          },
+          "reviewer": {
+            "type": "object",
+            "properties": {
+              "agentId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "assigneeLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "displayName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "reviewFocus": {
+                "enum": ["standard", "interview", "debug", "complexity"]
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -109,7 +267,7 @@
             "minLength": 1
           },
           "status": {
-            "enum": ["submitted", "judged"]
+            "enum": ["submitted", "analyzed"]
           },
           "limit": {
             "type": "integer",
@@ -143,7 +301,7 @@
     {
       "name": "submissions.pending",
       "title": "Fetch pending submissions",
-      "description": "Fetch submitted code waiting for a Buddy or human grader.",
+      "description": "Fetch submitted code waiting for Buddy analysis.",
       "path": "/api/shadow/commands/submissions.pending",
       "permission": "trainer.submissions:read",
       "action": "read",
@@ -161,31 +319,36 @@
       }
     },
     {
-      "name": "submissions.judge",
-      "title": "Judge submission",
-      "description": "Write a verdict, score, feedback, and learning suggestions after executing submitted code.",
-      "path": "/api/shadow/commands/submissions.judge",
-      "permission": "trainer.submissions:grade",
+      "name": "submissions.analyze",
+      "title": "Analyze submission",
+      "description": "Write Buddy analysis, score, explanation, and learning suggestions for submitted code.",
+      "path": "/api/shadow/commands/submissions.analyze",
+      "permission": "trainer.submissions:analyze",
       "action": "manage",
       "dataClass": "server-private",
       "approvalMode": "first_time",
       "inputSchema": {
         "type": "object",
-        "required": ["submissionId", "verdict", "score", "feedback"],
+        "required": ["submissionId", "outcome", "score", "summary", "explanation"],
         "properties": {
           "submissionId": {
             "type": "string",
             "minLength": 1
           },
-          "verdict": {
-            "enum": ["accepted", "wrong_answer", "runtime_error", "needs_review"]
+          "outcome": {
+            "enum": ["accepted", "needs_work", "runtime_error", "incomplete"]
           },
           "score": {
             "type": "number",
             "minimum": 0,
             "maximum": 100
           },
-          "feedback": {
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "explanation": {
             "type": "string",
             "minLength": 1,
             "maxLength": 8000
@@ -198,6 +361,10 @@
               "minLength": 1,
               "maxLength": 500
             }
+          },
+          "complexity": {
+            "type": "string",
+            "maxLength": 1000
           }
         },
         "additionalProperties": false
@@ -211,10 +378,13 @@
       "commandHints": [
         "shadow-trainer challenges.list",
         "shadow-trainer challenges.get",
+        "shadow-trainer challenges.upsert",
+        "shadow-trainer sources.search",
+        "shadow-trainer sources.import",
         "shadow-trainer submissions.create",
         "shadow-trainer submissions.pending",
         "shadow-trainer submissions.get",
-        "shadow-trainer submissions.judge"
+        "shadow-trainer submissions.analyze"
       ]
     }
   ],

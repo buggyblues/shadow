@@ -78,7 +78,14 @@ export function ChannelView({
         joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
         isServerMember?: boolean
         isChannelMember?: boolean
-        channel: { id: string; name: string; type: string; serverId: string; isPrivate: boolean }
+        channel: {
+          id: string
+          name: string
+          type: string
+          serverId: string
+          isPrivate: boolean
+          topic?: string | null
+        }
       }>(`/api/channels/${channelId}/access`),
     enabled: !!channelId,
     retry: false,
@@ -89,9 +96,14 @@ export function ChannelView({
   const { data: channel } = useQuery({
     queryKey: ['channel', channelId],
     queryFn: () =>
-      fetchApi<{ id: string; name: string; type: string; serverId: string; isPrivate: boolean }>(
-        `/api/channels/${channelId}`,
-      ),
+      fetchApi<{
+        id: string
+        name: string
+        type: string
+        serverId: string
+        isPrivate: boolean
+        topic?: string | null
+      }>(`/api/channels/${channelId}`),
     enabled: !!channelId && canAccessChannel,
     staleTime: 30_000,
   })
@@ -286,10 +298,12 @@ export function ChannelView({
     )
   }
 
+  const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
+
   return (
     <>
-      <ChatArea key={channelId} />
-      <MemberList />
+      <ChatArea key={channelId} showMemberToggle={!isInboxChannel} />
+      {!isInboxChannel && <MemberList />}
     </>
   )
 }

@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
+import type { ShadowServerAppCommandEventType } from '@shadowob/sdk'
 
 export interface ServerAppRuntimeEvent {
-  type: 'server_app.command.completed' | 'server_app.command.failed'
+  type: ShadowServerAppCommandEventType
   serverId: string
   serverAppId: string
   appKey: string

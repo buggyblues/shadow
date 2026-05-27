@@ -32,3 +32,31 @@ Environment:
 - `KANBAN_DATA_FILE`: JSON persistence file. Defaults to `./data/kanban-board.json`.
 
 This integration is the reference Server App demo. It uses `@shadowob/sdk` for the modeled Server App runtime, typed command handlers generated from JSON Schema, Shadow OAuth command token introspection, input validation, actor profile display, and JSON persistence.
+
+## Buddy Inbox workflow
+
+Shadow Kanban demonstrates the Multica-style task flow without adding Kanban or issue concepts to Shadow core.
+
+- `cards.create_and_dispatch` creates a board card, assigns a Buddy label, and returns `shadow.outbox.inboxTasks`.
+- `cards.dispatch` assigns a board card to a Buddy label and returns `shadow.outbox.inboxTasks`.
+- `cards.comment` stores the comment and returns `shadow.outbox.inboxTasks` when the body mentions `@Strategy Buddy`.
+
+Shadow Server consumes `shadow.protocol === "shadow.app/1"` plus `shadow.outbox.inboxTasks`, resolves the target Buddy in the current server, publishes a Task Card to the Buddy Inbox channel, and returns delivery receipts under `shadow.outbox.deliveries`.
+
+Kanban intentionally does not own Skills or scheduled Autopilot behavior. Skills live in the standalone `shadow-skills` Server App. Scheduled work should be modeled by an automation app or platform scheduler that enqueues ordinary Inbox task cards.
+
+Local command smoke tests:
+
+```bash
+curl -s http://localhost:4201/api/local/commands/cards.create_and_dispatch \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"title":"Review release risks","assigneeLabel":"Strategy Buddy"}}'
+
+curl -s http://localhost:4201/api/local/commands/cards.dispatch \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"cardId":"card_bot","assigneeLabel":"Strategy Buddy"}}'
+
+curl -s http://localhost:4201/api/local/commands/cards.comment \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"cardId":"card_bot","body":"@Strategy Buddy please review launch risks"}}'
+```

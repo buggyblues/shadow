@@ -3291,6 +3291,68 @@
     "communitySupportTitle": "コミュニティ支援",
     "openGiftShelf": "資産から選ぶ"
   },
+  "inbox": {
+    "title": "Inbox",
+    "queueTitle": "Buddy Inbox",
+    "queueHint": "承認済みのタスク投函をチャットから分離",
+    "queueUnread": "{{count}} 件未読",
+    "queueOpen": "タスクキュー準備完了",
+    "queueNotReady": "キュー未有効",
+    "queueBadge": "タスクキュー",
+    "filter": {
+      "all": "すべて",
+      "open": "進行中",
+      "done": "完了"
+    },
+    "empty": {
+      "allTitle": "タスクはまだありません",
+      "allHint": "入力欄左側の + からタスクカードを作成します。通常のメッセージはチャットに残ります。",
+      "filterTitle": "この条件のタスクはありません",
+      "filterHint": "条件を切り替えるか、新しいタスクを作成してください。"
+    },
+    "task": {
+      "new": "新しいタスク",
+      "titlePlaceholder": "タスク名",
+      "bodyPlaceholder": "指示、リンク、完了条件を追加",
+      "create": "タスクを作成",
+      "deliver": "投函",
+      "quickPlaceholder": "タスク名を書き、改行で完了条件、リンク、背景を追加",
+      "created": "タスクを作成しました",
+      "createFailed": "タスクの作成に失敗しました",
+      "deliveryHint": "この Buddy に作業を投函します。状態と進捗はタスクカードに残ります。",
+      "addMenuDesc": "進捗を追跡できるタスクカードを作成",
+      "unassigned": "Buddy 未割り当て",
+      "assignee": "担当者",
+      "app": "アプリ",
+      "createdAt": "作成日時",
+      "statusLabel": "状態",
+      "latestProgress": "最新の進捗",
+      "noProgress": "進捗はまだありません",
+      "details": "詳細",
+      "noDetails": "詳細はありません",
+      "todoProgress": "{{done}}/{{total}} 完了",
+      "showDetails": "詳細を表示",
+      "hideDetails": "詳細を隠す",
+      "retry": "再試行",
+      "start": "開始",
+      "complete": "完了",
+      "fail": "失敗",
+      "priority": {
+        "low": "低優先度",
+        "high": "高優先度",
+        "urgent": "緊急"
+      },
+      "status": {
+        "queued": "待機中",
+        "claimed": "受付済み",
+        "running": "実行中",
+        "completed": "完了",
+        "failed": "失敗",
+        "canceled": "キャンセル",
+        "transferred": "転送済み"
+      }
+    }
+  },
   "voice": {
     "ready": "接続できます",
     "connected": "ボイス接続中",

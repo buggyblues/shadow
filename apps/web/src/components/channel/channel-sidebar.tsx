@@ -24,6 +24,7 @@ import {
   Hash,
   HeadphoneOff,
   Headphones,
+  Inbox,
   Lock,
   Megaphone,
   Menu,
@@ -142,6 +143,49 @@ interface ServerAppSummary {
   iconUrl?: string | null
 }
 
+function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const shouldLoadIcon = Boolean(iconUrl && !failed)
+
+  useEffect(() => {
+    setFailed(false)
+    setLoaded(false)
+  }, [iconUrl])
+
+  if (!shouldLoadIcon) return <AppWindow size={14} />
+
+  return (
+    <>
+      {!loaded && <AppWindow size={14} />}
+      <img
+        src={iconUrl ?? ''}
+        alt=""
+        className={cn('h-full w-full object-cover', !loaded && 'hidden')}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </>
+  )
+}
+
+interface BuddyInboxEntry {
+  agent: {
+    id: string
+    ownerId: string
+    status: string
+    user: {
+      id: string
+      username: string
+      displayName: string | null
+      avatarUrl: string | null
+      isBot?: boolean | null
+    }
+  }
+  channel: Channel | null
+  canManage: boolean
+}
+
 const channelIcons = {
   text: Hash,
   voice: Volume2,
@@ -252,6 +296,14 @@ export function ChannelSidebar({
     gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
 
+  const { data: buddyInboxes = [] } = useQuery<BuddyInboxEntry[]>({
+    queryKey: ['buddy-inboxes', serverSlug],
+    queryFn: () => fetchApi<BuddyInboxEntry[]>(`/api/servers/${serverSlug}/inboxes`),
+    enabled: canLoadInitialQueries,
+    staleTime: CHANNEL_NAVIGATION_STALE_MS,
+    gcTime: CHANNEL_NAVIGATION_GC_MS,
+  })
+
   // Channel sorting and filter
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -268,9 +320,16 @@ export function ChannelSidebar({
         channel.topic?.toLowerCase().includes(keyword),
     )
   }, [channels, searchQuery])
+  const buddyInboxChannelIds = useMemo(
+    () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
+    [buddyInboxes],
+  )
   const textChannels = useMemo(
-    () => visibleChannels.filter((channel) => channel.type !== 'voice'),
-    [visibleChannels],
+    () =>
+      visibleChannels.filter(
+        (channel) => channel.type !== 'voice' && !buddyInboxChannelIds.has(channel.id),
+      ),
+    [buddyInboxChannelIds, visibleChannels],
   )
   const voiceChannels = useMemo(
     () => visibleChannels.filter((channel) => channel.type === 'voice'),
@@ -360,6 +419,21 @@ export function ChannelSidebar({
       setInviteTargetChannel(data)
       setInviteInitialTab('buddies')
       setShowInvitePanel(true)
+    },
+  })
+
+  const ensureBuddyInbox = useMutation({
+    mutationFn: (agentId: string) =>
+      fetchApi<{ channel: Channel; created: boolean }>(
+        `/api/servers/${serverSlug}/inboxes/${agentId}`,
+        {
+          method: 'POST',
+        },
+      ),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      handleSelectChannel(data.channel)
     },
   })
 
@@ -617,8 +691,15 @@ export function ChannelSidebar({
 
   const recordChannelMessageActivity = useCallback(
     (event: { id?: string; channelId?: string }) => {
-      if (!event.channelId || !rawChannels.some((channel) => channel.id === event.channelId)) return
+      if (
+        !event.channelId ||
+        (!rawChannels.some((channel) => channel.id === event.channelId) &&
+          !buddyInboxChannelIds.has(event.channelId))
+      ) {
+        return
+      }
       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
       const currentChannelId = useChatStore.getState().activeChannelId
       if (event.channelId === currentChannelId) {
         void requestMarkScopeRead({ channelId: event.channelId, force: true })
@@ -636,7 +717,7 @@ export function ChannelSidebar({
         [event.channelId!]: (prev[event.channelId!] ?? 0) + 1,
       }))
     },
-    [queryClient, rawChannels, requestMarkScopeRead, serverSlug],
+    [buddyInboxChannelIds, queryClient, rawChannels, requestMarkScopeRead, serverSlug],
   )
 
   useSocketEvent<{ id?: string; channelId?: string }>('message:new', recordChannelMessageActivity)
@@ -912,6 +993,53 @@ export function ChannelSidebar({
     )
   }
 
+  const renderBuddyInboxItem = (entry: BuddyInboxEntry) => {
+    const channel = entry.channel
+    const isActive = Boolean(channel && activeChannelId === channel.id)
+    const unreadCount = channel
+      ? (scopedUnread?.channelUnread?.[channel.id] ?? 0) + (localMessageUnread[channel.id] ?? 0)
+      : 0
+    const isUnread = !isActive && unreadCount > 0
+    const displayName = entry.agent.user.displayName ?? entry.agent.user.username
+
+    return (
+      <button
+        key={entry.agent.id}
+        type="button"
+        data-app-item
+        disabled={ensureBuddyInbox.isPending}
+        onClick={() => {
+          if (channel) {
+            handleSelectChannel(channel)
+            return
+          }
+          ensureBuddyInbox.mutate(entry.agent.id)
+        }}
+        className={cn(
+          'group flex w-full items-center gap-2 rounded-xl px-2 py-[6px] text-left text-sm font-medium transition-all duration-300',
+          isActive
+            ? 'channel-pill-active text-primary ring-1 ring-primary/20'
+            : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
+          isUnread && 'font-bold text-text-primary',
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-all duration-300',
+            isActive
+              ? 'bg-primary/20 text-primary'
+              : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
+          )}
+        >
+          <Inbox size={14} strokeWidth={2.6} />
+        </div>
+        <span className="min-w-0 flex-1 truncate">{displayName}</span>
+        {!channel && <Lock size={12} className="shrink-0 text-text-muted" />}
+        {isUnread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-danger" />}
+      </button>
+    )
+  }
+
   return (
     <GlassPanel className="w-full h-full overflow-hidden flex flex-col shrink-0 relative z-20">
       {/* Server name header — glassmorphic bar */}
@@ -1001,17 +1129,24 @@ export function ChannelSidebar({
                           : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
                       )}
                     >
-                      {app.iconUrl ? (
-                        <img src={app.iconUrl} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <AppWindow size={14} />
-                      )}
+                      <ServerAppIcon iconUrl={app.iconUrl} />
                     </div>
                     <span className="truncate">{app.name}</span>
                   </button>
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {buddyInboxes.length > 0 && (
+          <div className="mb-3">
+            <div className="flex items-center justify-between px-3 py-1.5">
+              <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
+                {t('inbox.queueTitle')}
+              </span>
+            </div>
+            <div className="px-2 space-y-0.5">{buddyInboxes.map(renderBuddyInboxItem)}</div>
           </div>
         )}
 

@@ -3291,6 +3291,68 @@
     "communitySupportTitle": "커뮤니티 지원",
     "openGiftShelf": "자산에서 선택"
   },
+  "inbox": {
+    "title": "Inbox",
+    "queueTitle": "Buddy Inbox",
+    "queueHint": "승인된 작업 전달을 채팅과 분리",
+    "queueUnread": "{{count}}개 읽지 않음",
+    "queueOpen": "작업 큐 준비됨",
+    "queueNotReady": "큐가 활성화되지 않음",
+    "queueBadge": "작업 큐",
+    "filter": {
+      "all": "전체",
+      "open": "진행 중",
+      "done": "완료"
+    },
+    "empty": {
+      "allTitle": "아직 작업이 없습니다",
+      "allHint": "입력창 왼쪽의 +에서 작업 카드를 만드세요. 일반 메시지는 채팅에 남습니다.",
+      "filterTitle": "이 필터에 맞는 작업이 없습니다",
+      "filterHint": "필터를 바꾸거나 새 작업을 만드세요."
+    },
+    "task": {
+      "new": "새 작업",
+      "titlePlaceholder": "작업 제목",
+      "bodyPlaceholder": "지시, 링크 또는 완료 기준을 추가",
+      "create": "작업 만들기",
+      "deliver": "전달",
+      "quickPlaceholder": "작업 제목을 쓰고 줄을 바꿔 완료 기준, 링크, 맥락을 추가",
+      "created": "작업이 생성되었습니다",
+      "createFailed": "작업 생성 실패",
+      "deliveryHint": "이 Buddy에게 작업을 전달합니다. 상태와 진행 상황은 작업 카드에 남습니다.",
+      "addMenuDesc": "진행 상황을 추적할 수 있는 작업 카드 만들기",
+      "unassigned": "할당되지 않은 Buddy",
+      "assignee": "담당자",
+      "app": "앱",
+      "createdAt": "생성 시간",
+      "statusLabel": "상태",
+      "latestProgress": "최근 진행 상황",
+      "noProgress": "아직 진행 상황 없음",
+      "details": "세부 정보",
+      "noDetails": "세부 정보 없음",
+      "todoProgress": "{{done}}/{{total}} 완료",
+      "showDetails": "세부 정보 보기",
+      "hideDetails": "세부 정보 접기",
+      "retry": "다시 시도",
+      "start": "시작",
+      "complete": "완료",
+      "fail": "실패",
+      "priority": {
+        "low": "낮은 우선순위",
+        "high": "높은 우선순위",
+        "urgent": "긴급"
+      },
+      "status": {
+        "queued": "대기 중",
+        "claimed": "수락됨",
+        "running": "실행 중",
+        "completed": "완료",
+        "failed": "실패",
+        "canceled": "취소됨",
+        "transferred": "전달됨"
+      }
+    }
+  },
   "voice": {
     "ready": "연결 준비됨",
     "connected": "음성 연결됨",

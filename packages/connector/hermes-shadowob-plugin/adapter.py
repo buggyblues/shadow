@@ -55,9 +55,9 @@ except Exception:  # pragma: no cover - lets local static checks import this fil
         return None
 
 try:
-    from .shadow_sdk import ShadowAsyncClient, ShadowSocketClient, parse_bool, split_csv
+    from .shadow_sdk import ShadowApiError, ShadowAsyncClient, ShadowSocketClient, parse_bool, split_csv
 except Exception:  # pragma: no cover - Hermes may load adapter.py as a loose module.
-    from shadow_sdk import ShadowAsyncClient, ShadowSocketClient, parse_bool, split_csv  # type: ignore
+    from shadow_sdk import ShadowApiError, ShadowAsyncClient, ShadowSocketClient, parse_bool, split_csv  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ _AUDIO_CT_PREFIXES = ("audio/",)
 _VIDEO_CT_PREFIXES = ("video/",)
 _DOCUMENT_CT_PREFIXES = ("application/", "text/")
 _SLASH_COMMAND_RE = re.compile(r"^/([a-zA-Z][a-zA-Z0-9._-]{0,63})(?:\s+([\s\S]*))?$")
+_TERMINAL_TASK_STATUSES = {"completed", "failed", "canceled", "transferred"}
 
 
 def _extra(config: Any) -> dict[str, Any]:
@@ -386,6 +387,92 @@ def _message_thread_id(message: dict[str, Any]) -> str | None:
 def _message_reply_to_id(message: dict[str, Any]) -> str | None:
     value = message.get("replyToId") or message.get("reply_to_id") or message.get("replyTo")
     return str(value) if value else None
+
+
+def _message_cards(message: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = message.get("metadata")
+    if not isinstance(metadata, dict):
+        return []
+    cards = metadata.get("cards")
+    if not isinstance(cards, list):
+        return []
+    return [card for card in cards if isinstance(card, dict)]
+
+
+def _card_id(card: dict[str, Any]) -> str | None:
+    value = card.get("id") or card.get("cardId") or card.get("card_id")
+    return str(value) if value else None
+
+
+def _task_card_by_id(message: dict[str, Any], card_id: str | None) -> dict[str, Any] | None:
+    if not card_id:
+        return None
+    for card in _message_cards(message):
+        if str(card.get("id") or "") == card_id:
+            return card
+    return None
+
+
+def _task_card_claim_expired(card: dict[str, Any]) -> bool:
+    claim = card.get("claim")
+    expires_at = claim.get("expiresAt") if isinstance(claim, dict) else None
+    if not expires_at:
+        return True
+    try:
+        expires = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        return expires <= datetime.now(timezone.utc)
+    except Exception:
+        return True
+
+
+def _task_card_matches_self(card: dict[str, Any], *, bot_user_id: str | None, agent_id: str | None) -> bool:
+    if card.get("kind") != "task":
+        return False
+    status = str(card.get("status") or "").lower()
+    if status in _TERMINAL_TASK_STATUSES:
+        return False
+    assignee = card.get("assignee")
+    if not isinstance(assignee, dict):
+        return True
+    assigned_user = assignee.get("userId") or assignee.get("user_id")
+    assigned_agent = assignee.get("agentId") or assignee.get("agent_id")
+    if bot_user_id and assigned_user and str(assigned_user) == bot_user_id:
+        return True
+    if agent_id and assigned_agent and str(assigned_agent) == agent_id:
+        return True
+    return not assigned_user and not assigned_agent
+
+
+def _message_task_card_for_self(
+    message: dict[str, Any],
+    *,
+    bot_user_id: str | None,
+    agent_id: str | None,
+) -> dict[str, Any] | None:
+    for card in _message_cards(message):
+        if _task_card_matches_self(card, bot_user_id=bot_user_id, agent_id=agent_id):
+            return card
+    return None
+
+
+def _format_task_card_prompt(text: str, card: dict[str, Any]) -> str:
+    title = str(card.get("title") or "Inbox task").strip()
+    body = str(card.get("body") or "").strip()
+    priority = str(card.get("priority") or "").strip()
+    source = card.get("source") if isinstance(card.get("source"), dict) else {}
+    source_label = str(source.get("label") or source.get("command") or "").strip()
+    lines = ["[Shadow Inbox task]", f"Title: {title}"]
+    if priority:
+        lines.append(f"Priority: {priority}")
+    if source_label:
+        lines.append(f"Source: {source_label}")
+    if body:
+        lines.extend(["", body])
+    if text and text.strip() and text.strip() not in {title, body}:
+        lines.extend(["", "Original message:", text.strip()])
+    return "\n".join(lines)
 
 
 def _text_without_self_mention(text: str, username: str | None) -> str:
@@ -1305,6 +1392,71 @@ class ShadowOBAdapter(BasePlatformAdapter):
         except Exception as exc:
             logger.warning("[Shadow] Failed to refresh remote config after policy change: %s", exc)
 
+    async def _activate_task_card(
+        self,
+        message: dict[str, Any],
+        card: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if self.client is None or not card:
+            return card
+        message_id = _message_id(message)
+        card_id = _card_id(card)
+        if not message_id or not card_id:
+            return None
+
+        status = str(card.get("status") or "").lower()
+        try:
+            if status == "queued" or (status in {"claimed", "running"} and _task_card_claim_expired(card)):
+                updated = await self.client.claim_task_card(
+                    message_id,
+                    card_id,
+                    ttl_seconds=3600,
+                    note="Hermes accepted the Inbox task.",
+                )
+                message = updated if isinstance(updated, dict) else message
+                card = _task_card_by_id(message, card_id) or card
+                status = str(card.get("status") or status).lower()
+
+            if status in {"queued", "claimed"}:
+                updated = await self.client.update_task_card(
+                    message_id,
+                    card_id,
+                    status="running",
+                    note="Hermes started working on the task.",
+                )
+                message = updated if isinstance(updated, dict) else message
+                card = _task_card_by_id(message, card_id) or card
+            return card
+        except ShadowApiError as exc:
+            if exc.status_code == 409:
+                logger.info("[Shadow] Inbox task card %s is already claimed; skipping message %s", card_id, message_id)
+                return None
+            logger.warning("[Shadow] Failed to activate Inbox task card %s/%s: %s", message_id, card_id, exc)
+            return None
+        except Exception as exc:
+            logger.warning("[Shadow] Failed to activate Inbox task card %s/%s: %s", message_id, card_id, exc)
+            return None
+
+    async def _complete_task_card(
+        self,
+        message_id: str | None,
+        card_id: str | None,
+        *,
+        failed: bool = False,
+        note: str | None = None,
+    ) -> None:
+        if self.client is None or not message_id or not card_id:
+            return
+        try:
+            await self.client.update_task_card(
+                message_id,
+                card_id,
+                status="failed" if failed else "completed",
+                note=(note or ("Hermes failed while processing this task." if failed else "Hermes finished processing this task."))[:4000],
+            )
+        except Exception as exc:
+            logger.debug("[Shadow] Failed to update Inbox task card %s/%s completion: %s", message_id, card_id, exc)
+
     async def _handle_shadow_message(self, message: dict[str, Any], *, source: str) -> None:
         message_id = _message_id(message)
         if not message_id:
@@ -1336,10 +1488,15 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if policy and not _policy_bool(policy, "reply", True):
             logger.debug("[Shadow] policy reply=false skipped message %s", message_id)
             return
+        task_card = _message_task_card_for_self(
+            message,
+            bot_user_id=self._bot_user_id,
+            agent_id=self._agent_id,
+        )
         trigger_user_ids = policy_config.get("allowedTriggerUserIds") or policy_config.get("triggerUserIds")
         if isinstance(trigger_user_ids, list):
             allowed = {str(item) for item in trigger_user_ids if item}
-            if allowed and (not author_id or author_id not in allowed):
+            if allowed and not task_card and (not author_id or author_id not in allowed):
                 logger.debug("[Shadow] policy trigger users skipped message %s", message_id)
                 return
 
@@ -1353,7 +1510,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
 
         text = _interactive_response_text(str(message.get("content") or ""), message, source_message)
         mention_only = self._mention_only or _policy_bool(policy, "mentionOnly", False)
-        if mention_only and not self._message_mentions_self(message):
+        if mention_only and not self._message_mentions_self(message) and not task_card:
             # DMs are allowed even in mention-only mode.
             channel = self._channel_cache.get(channel_id, {})
             kind = str(channel.get("kind") or channel.get("type") or "").lower()
@@ -1379,6 +1536,12 @@ class ShadowOBAdapter(BasePlatformAdapter):
             text = _format_slash_command_prompt(text, slash_match)
         elif text.strip().startswith("/"):
             logger.info("[Shadow] Unknown slash command in message %s; treating as text", message_id)
+
+        if task_card:
+            task_card = await self._activate_task_card(message, task_card)
+            if not task_card:
+                return
+            text = _format_task_card_prompt(text, task_card)
 
         media_paths, media_types, message_type = await self._resolve_inbound_media(message)
         reply_to_id = _message_reply_to_id(message)
@@ -1417,7 +1580,14 @@ class ShadowOBAdapter(BasePlatformAdapter):
             auto_skill=resolve_channel_skills(config_extra, thread_id or channel_id, parent_for_bindings),
             channel_prompt=resolve_channel_prompt(config_extra, thread_id or channel_id, parent_for_bindings),
         )
-        await self.handle_message(event)
+        task_card_id = _card_id(task_card) if task_card else None
+        try:
+            await self.handle_message(event)
+        except Exception as exc:
+            await self._complete_task_card(message_id, task_card_id, failed=True, note=str(exc))
+            raise
+        if task_card_id:
+            await self._complete_task_card(message_id, task_card_id)
 
     def _remember_processed(self, message_id: str) -> None:
         if len(self._processed_ids) == self._processed_ids.maxlen:

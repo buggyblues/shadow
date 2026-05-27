@@ -103,6 +103,40 @@ shadowob channels unpin <message-id> [--channel-id <id>]
 shadowob channels pinned <channel-id> --json
 ```
 
+## Buddy Inbox Task Cards
+
+Inbox tasks are ordinary channel messages with `metadata.cards[]` entries where `kind="task"`.
+When a task card is assigned to the current Buddy, treat it as an explicit trigger even if the
+channel normally requires mentions.
+
+```bash
+# Discover or repair Inbox channels
+shadowob inbox list --server <server-id-or-slug> --json
+shadowob inbox ensure --server <server-id-or-slug> --agent <agent-id> --json
+
+# Enqueue a task card when acting as an authorized tool or Server App operator
+shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "Task title" --json
+
+# Claim the next task from a Buddy Inbox
+shadowob inbox claim-next --server <server-id-or-slug> --agent <agent-id> --json
+
+# Claim/update a known task card
+shadowob inbox claim <message-id> <card-id> --json
+shadowob inbox update <message-id> <card-id> --status running --note "Started" --json
+shadowob inbox update <message-id> <card-id> --status completed --note "Done" --json
+shadowob inbox retry <message-id> <card-id> --note "Retry after fixing input" --json
+
+# Turn an existing chat message into a Buddy Inbox task
+shadowob inbox promote <message-id> --server <server-id-or-slug> --agent <agent-id> --title "Task title" --json
+```
+
+Runner contract:
+
+- Read `metadata.cards` before deciding whether to skip a message.
+- Accept active task cards assigned to your `agentId` or bot `userId`.
+- Claim before work, mark `running` while working, then mark `completed` or `failed` with a concise note.
+- Reply to the Inbox task message when you need the owner to see a human-readable result.
+
 ## Threads
 
 ```bash
@@ -265,7 +299,7 @@ shadowob commerce gifts send --recipient-user-id <user-id> --assets '<json-array
   browser before calling them complete.
 - Do not add seed code to populate commerce surfaces. Create ordinary local/test records through
   browser flows or explicit setup calls.
-- When inspecting a commerce flow, preserve ids for the handoff: product, offer, order,
+- When inspecting a commerce flow, preserve ids for follow-up actions: product, offer, order,
   entitlement, shop, server, Buddy, and workspace file where applicable.
 - External app entitlement automation must use Shadow OAuth commerce APIs and remain scoped to the
   app's own `external_app` resource namespace.

@@ -225,6 +225,15 @@ export class MessageDao {
     return result[0] ?? null
   }
 
+  async updateMetadata(id: string, metadata: Record<string, unknown> | null) {
+    const result = await this.db
+      .update(messages)
+      .set({ metadata: metadata ?? undefined, updatedAt: new Date() })
+      .where(eq(messages.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
   /** Scoped delete by message id only if the user is the sender */
   async deleteById(id: string, sender: string) {
     await this.db.delete(messages).where(and(eq(messages.id, id), eq(messages.authorId, sender)))

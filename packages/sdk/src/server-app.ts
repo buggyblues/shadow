@@ -1,4 +1,5 @@
 import type {
+  ShadowInboxTaskInput,
   ShadowServerAppActorProfile,
   ShadowServerAppManifest,
   ShadowServerAppTokenIntrospection,
@@ -28,6 +29,349 @@ export interface ShadowServerAppCommandContext {
 export interface ShadowServerAppCommandEnvelope<T = unknown> {
   input: T
   context: ShadowServerAppCommandContext
+}
+
+export const SHADOW_SERVER_APP_PROTOCOL = 'shadow.app/1' as const
+export const SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT = 'server_app.command.completed' as const
+export const SHADOW_SERVER_APP_COMMAND_FAILED_EVENT = 'server_app.command.failed' as const
+export const SHADOW_SERVER_APP_COMMAND_EVENTS = [
+  SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
+  SHADOW_SERVER_APP_COMMAND_FAILED_EVENT,
+] as const
+
+export type ShadowServerAppCommandEventType = (typeof SHADOW_SERVER_APP_COMMAND_EVENTS)[number]
+
+export type ShadowServerAppInboxTaskPriority = 'low' | 'normal' | 'high' | 'urgent'
+
+export interface ShadowServerAppInboxTaskResource {
+  kind: string
+  id: string
+  label?: string
+  url?: string
+  [key: string]: unknown
+}
+
+export interface ShadowServerAppInboxTaskOutbox {
+  title: string
+  body?: string
+  priority?: ShadowServerAppInboxTaskPriority
+  agentId?: string
+  agentUserId?: string
+  assigneeLabel?: string
+  idempotencyKey?: string
+  resource?: ShadowServerAppInboxTaskResource
+  data?: Record<string, unknown>
+  required?: boolean
+}
+
+export interface ShadowServerAppInboxDelivery {
+  agentId?: string
+  agentUserId?: string
+  channelId?: string
+  messageId?: string
+  cardId?: string | null
+  taskId?: string | null
+  idempotencyKey?: string
+  error?: string
+}
+
+export interface ShadowServerAppInboxDeliveryError {
+  agentId?: string
+  agentUserId?: string
+  assigneeLabel?: string
+  title?: string
+  error: string
+}
+
+export type ShadowServerAppInboxTarget =
+  | {
+      agentId: string
+      channelId?: string
+    }
+  | {
+      channelId: string
+      agentId?: string
+    }
+
+export interface ShadowServerAppOutboxPayload {
+  inboxTasks?: ShadowServerAppInboxTaskOutbox[]
+  deliveries?: ShadowServerAppInboxDelivery[]
+  errors?: ShadowServerAppInboxDeliveryError[]
+}
+
+export interface ShadowServerAppResultShadow {
+  protocol: typeof SHADOW_SERVER_APP_PROTOCOL
+  outbox?: ShadowServerAppOutboxPayload
+}
+
+export type ShadowServerAppResultWithShadow<TResult extends Record<string, unknown>> = TResult & {
+  shadow?: ShadowServerAppResultShadow
+}
+
+export interface ShadowServerAppCommandSuccessResponse<TResult = unknown> {
+  ok: true
+  result: TResult
+  shadow?: ShadowServerAppResultShadow
+}
+
+export interface ShadowServerAppCommandFailureResponse {
+  ok: false
+  error: string
+  issues?: ShadowServerAppValidationIssue[] | unknown
+}
+
+export type ShadowServerAppCommandResponse<TResult = unknown> =
+  | ShadowServerAppCommandSuccessResponse<TResult>
+  | ShadowServerAppCommandFailureResponse
+
+export interface ShadowServerAppBridgeCommandRequest {
+  type: 'shadow.app.command.request'
+  requestId: string
+  appKey?: string
+  commandName: string
+  input?: unknown
+  channelId?: string
+}
+
+export interface ShadowServerAppBridgeInboxesRequest {
+  type: 'shadow.app.inboxes.request'
+  requestId: string
+  appKey?: string
+}
+
+export interface ShadowServerAppBridgeEnqueueInboxTaskRequest {
+  type: 'shadow.app.inbox.enqueue.request'
+  requestId: string
+  appKey?: string
+  target: ShadowServerAppInboxTarget
+  task: ShadowServerAppInboxTaskOutbox
+}
+
+export type ShadowServerAppBridgeRequest =
+  | ShadowServerAppBridgeCommandRequest
+  | ShadowServerAppBridgeInboxesRequest
+  | ShadowServerAppBridgeEnqueueInboxTaskRequest
+
+export interface ShadowServerAppHostAppRef {
+  id?: string | null
+  appId?: string | null
+  appKey: string
+  serverId?: string | null
+  name?: string | null
+  label?: string | null
+}
+
+export interface ShadowServerAppHostInboxTaskRequestInput {
+  serverIdOrSlug: string
+  target: ShadowServerAppInboxTarget
+  task: ShadowServerAppInboxTaskOutbox
+  app: ShadowServerAppHostAppRef
+  commandName?: string
+}
+
+export interface ShadowServerAppResolvedInboxTaskRequest {
+  endpoint: string
+  body: ShadowInboxTaskInput
+}
+
+export interface ShadowServerAppInboxDeliveryFromMessageInput {
+  target: ShadowServerAppInboxTarget
+  message: unknown
+  idempotencyKey?: string
+}
+
+export type ShadowServerAppBridgeResponseType =
+  | 'shadow.app.command.response'
+  | 'shadow.app.inboxes.response'
+  | 'shadow.app.inbox.enqueue.response'
+
+export interface ShadowServerAppBridgeSuccessResponse<TResult = unknown> {
+  type: ShadowServerAppBridgeResponseType
+  requestId: string
+  ok: true
+  result: TResult
+}
+
+export interface ShadowServerAppBridgeFailureResponse {
+  type: ShadowServerAppBridgeResponseType
+  requestId: string
+  ok: false
+  error: string
+}
+
+export type ShadowServerAppBridgeResponse<TResult = unknown> =
+  | ShadowServerAppBridgeSuccessResponse<TResult>
+  | ShadowServerAppBridgeFailureResponse
+
+function isProtocolRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function optionalProtocolString(value: unknown) {
+  return typeof value === 'string' && value ? value : undefined
+}
+
+function protocolPathSegment(value: string) {
+  return encodeURIComponent(value)
+}
+
+export function shadowServerAppInboxTaskEndpoint(
+  serverIdOrSlug: string,
+  target: ShadowServerAppInboxTarget,
+) {
+  if ('channelId' in target && target.channelId) {
+    return `/api/channels/${protocolPathSegment(target.channelId)}/inbox/tasks`
+  }
+  if ('agentId' in target && target.agentId) {
+    return `/api/servers/${protocolPathSegment(serverIdOrSlug)}/inboxes/${protocolPathSegment(
+      target.agentId,
+    )}/tasks`
+  }
+  throw new Error('Missing Inbox task target')
+}
+
+export function buildShadowServerAppInboxTaskRequest(
+  input: ShadowServerAppHostInboxTaskRequestInput,
+): ShadowServerAppResolvedInboxTaskRequest {
+  const appId = input.app.id ?? input.app.appId ?? input.app.appKey
+  const serverAppData = isProtocolRecord(input.task.data?.serverApp)
+    ? input.task.data.serverApp
+    : {}
+  return {
+    endpoint: shadowServerAppInboxTaskEndpoint(input.serverIdOrSlug, input.target),
+    body: {
+      title: input.task.title,
+      body: input.task.body,
+      priority: input.task.priority,
+      idempotencyKey: input.task.idempotencyKey,
+      source: {
+        kind: 'server_app',
+        id: appId,
+        appId,
+        appKey: input.app.appKey,
+        ...(input.app.serverId ? { serverId: input.app.serverId } : {}),
+        ...(input.commandName ? { command: input.commandName } : {}),
+        label: input.app.label ?? input.app.name ?? input.app.appKey,
+        ...(input.task.resource ? { resource: input.task.resource } : {}),
+      },
+      data: {
+        ...(input.task.data ?? {}),
+        serverApp: {
+          ...serverAppData,
+          appKey: input.app.appKey,
+          ...(input.commandName ? { command: input.commandName } : {}),
+        },
+      },
+    },
+  }
+}
+
+export function getShadowServerAppTaskCardId(message: unknown): string | null {
+  const metadata = isProtocolRecord(message) ? message.metadata : null
+  const cards = isProtocolRecord(metadata) && Array.isArray(metadata.cards) ? metadata.cards : []
+  for (const item of cards) {
+    if (!isProtocolRecord(item)) continue
+    if (item.kind === 'task' && typeof item.id === 'string' && item.id) return item.id
+  }
+  return null
+}
+
+export function buildShadowServerAppInboxDelivery(
+  input: ShadowServerAppInboxDeliveryFromMessageInput,
+): ShadowServerAppInboxDelivery {
+  const message = isProtocolRecord(input.message) ? input.message : {}
+  return {
+    ...('agentId' in input.target && input.target.agentId ? { agentId: input.target.agentId } : {}),
+    channelId: optionalProtocolString(message.channelId),
+    messageId: optionalProtocolString(message.id),
+    cardId: getShadowServerAppTaskCardId(message),
+    idempotencyKey: input.idempotencyKey,
+  }
+}
+
+function shadowFromPayload(payload: Record<string, unknown>): ShadowServerAppResultShadow | null {
+  const shadow = isProtocolRecord(payload.shadow) ? payload.shadow : null
+  if (shadow?.protocol === SHADOW_SERVER_APP_PROTOCOL) {
+    return shadow as unknown as ShadowServerAppResultShadow
+  }
+  return null
+}
+
+function mergeShadowResult(
+  value: Record<string, unknown>,
+  shadow: ShadowServerAppResultShadow | null,
+): Record<string, unknown> {
+  if (!shadow) return value
+  const existing = shadowFromPayload(value)
+  if (!existing) return { ...value, shadow }
+  return {
+    ...value,
+    shadow: {
+      protocol: SHADOW_SERVER_APP_PROTOCOL,
+      outbox: {
+        ...(existing.outbox ?? {}),
+        ...(shadow.outbox ?? {}),
+      },
+    },
+  }
+}
+
+export function getShadowServerAppInboxDeliveries(
+  payload: unknown,
+): ShadowServerAppInboxDelivery[] {
+  if (!isProtocolRecord(payload)) return []
+  const shadow = shadowFromPayload(payload)
+  return shadow?.outbox?.deliveries ?? []
+}
+
+export function getShadowServerAppInboxErrors(
+  payload: unknown,
+): ShadowServerAppInboxDeliveryError[] {
+  if (!isProtocolRecord(payload)) return []
+  const shadow = shadowFromPayload(payload)
+  return shadow?.outbox?.errors ?? []
+}
+
+export function unwrapShadowServerAppCommandPayload<TResult = unknown>(payload: unknown): TResult {
+  if (isProtocolRecord(payload) && payload.ok === false) {
+    throw new Error(typeof payload.error === 'string' ? payload.error : 'Command failed')
+  }
+  if (isProtocolRecord(payload) && 'result' in payload && payload.result !== undefined) {
+    const nested = unwrapShadowServerAppCommandPayload<unknown>(payload.result)
+    const shadow = shadowFromPayload(payload)
+    if (isProtocolRecord(nested)) return mergeShadowResult(nested, shadow) as TResult
+    return nested as TResult
+  }
+  return payload as TResult
+}
+
+export class ShadowServerAppOutbox {
+  private readonly inboxTasks: ShadowServerAppInboxTaskOutbox[] = []
+
+  enqueueInboxTask(task: ShadowServerAppInboxTaskOutbox): this {
+    this.inboxTasks.push(task)
+    return this
+  }
+
+  enqueueInboxTasks(tasks: ShadowServerAppInboxTaskOutbox[]): this {
+    for (const task of tasks) this.enqueueInboxTask(task)
+    return this
+  }
+
+  toShadow(): ShadowServerAppResultShadow {
+    return {
+      protocol: SHADOW_SERVER_APP_PROTOCOL,
+      outbox: {
+        ...(this.inboxTasks.length > 0 ? { inboxTasks: [...this.inboxTasks] } : {}),
+      },
+    }
+  }
+
+  attachTo<TResult extends Record<string, unknown>>(
+    result: TResult,
+  ): ShadowServerAppResultWithShadow<TResult> {
+    return { ...result, shadow: this.toShadow() }
+  }
 }
 
 export interface ShadowServerAppActorRef {
@@ -116,13 +460,13 @@ export type ShadowServerAppCommandHandlers<TManifest extends ShadowServerAppMani
 export interface ShadowServerAppExecutionSuccess<TResult = unknown> {
   ok: true
   status: 200
-  body: { ok: true; result: TResult }
+  body: ShadowServerAppCommandSuccessResponse<TResult>
 }
 
 export interface ShadowServerAppExecutionFailure {
   ok: false
   status: number
-  body: { ok: false; error: string; issues?: ShadowServerAppValidationIssue[] | unknown }
+  body: ShadowServerAppCommandFailureResponse
 }
 
 export type ShadowServerAppExecutionResult<TResult = unknown> =

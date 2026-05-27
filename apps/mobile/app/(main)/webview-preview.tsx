@@ -1,3 +1,9 @@
+import {
+  buildShadowServerAppInboxDelivery,
+  buildShadowServerAppInboxTaskRequest,
+  ShadowBridge,
+  type ShadowBridgeEnqueueInboxTaskInput,
+} from '@shadowob/sdk/bridge'
 import { useLocalSearchParams, useNavigation } from 'expo-router'
 import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -26,6 +32,12 @@ interface BridgeRequest {
   channelId?: string
 }
 
+interface BridgeInboxesRequest {
+  requestId: string
+}
+
+type BridgeInboxEnqueueRequest = { requestId: string } & ShadowBridgeEnqueueInboxTaskInput
+
 export default function WebViewPreviewScreen() {
   const { url, title, serverSlug, appKey } = useLocalSearchParams<{
     url: string
@@ -47,9 +59,13 @@ export default function WebViewPreviewScreen() {
   const decodedUrl = url ? decodeURIComponent(url) : ''
 
   const postBridgeResponse = useCallback(
-    (requestId: string, payload: { ok: true; result: unknown } | { ok: false; error: string }) => {
+    (
+      requestId: string,
+      payload: { ok: true; result: unknown } | { ok: false; error: string },
+      responseType = ShadowBridge.commandResponseType,
+    ) => {
       const message = JSON.stringify({
-        type: 'shadow.app.command.response',
+        type: responseType,
         requestId,
         ...payload,
       })
@@ -60,6 +76,71 @@ export default function WebViewPreviewScreen() {
       )
     },
     [],
+  )
+
+  const callBridgeInboxes = useCallback(
+    async (request: BridgeInboxesRequest) => {
+      if (!serverSlug) return
+      try {
+        const inboxes = await fetchApi(`/api/servers/${serverSlug}/inboxes`)
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: { inboxes } },
+          ShadowBridge.inboxesResponseType,
+        )
+      } catch (error) {
+        postBridgeResponse(
+          request.requestId,
+          {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          ShadowBridge.inboxesResponseType,
+        )
+      }
+    },
+    [postBridgeResponse, serverSlug],
+  )
+
+  const callBridgeInboxEnqueue = useCallback(
+    async (request: BridgeInboxEnqueueRequest) => {
+      if (!serverSlug || !appKey) return
+      try {
+        const inboxRequest = buildShadowServerAppInboxTaskRequest({
+          serverIdOrSlug: serverSlug,
+          target: request.target,
+          task: request.task,
+          app: {
+            appKey,
+            name: title ?? appKey,
+          },
+        })
+        const message = await fetchApi<Record<string, unknown>>(inboxRequest.endpoint, {
+          method: 'POST',
+          body: JSON.stringify(inboxRequest.body),
+        })
+        const delivery = buildShadowServerAppInboxDelivery({
+          target: request.target,
+          message,
+          idempotencyKey: request.task.idempotencyKey,
+        })
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: delivery },
+          ShadowBridge.enqueueInboxTaskResponseType,
+        )
+      } catch (error) {
+        postBridgeResponse(
+          request.requestId,
+          {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          ShadowBridge.enqueueInboxTaskResponseType,
+        )
+      }
+    },
+    [appKey, postBridgeResponse, serverSlug, title],
   )
 
   const approveAndRetry = useCallback(
@@ -166,8 +247,22 @@ export default function WebViewPreviewScreen() {
       }
       if (!data || typeof data !== 'object') return
       const message = data as Record<string, unknown>
-      if (message.type !== 'shadow.app.command.request') return
       if (message.appKey && message.appKey !== appKey) return
+      if (message.type === ShadowBridge.inboxesRequestType) {
+        if (typeof message.requestId !== 'string') return
+        void callBridgeInboxes({ requestId: message.requestId })
+        return
+      }
+      if (message.type === ShadowBridge.enqueueInboxTaskRequestType) {
+        if (typeof message.requestId !== 'string') return
+        void callBridgeInboxEnqueue({
+          requestId: message.requestId,
+          target: message.target as BridgeInboxEnqueueRequest['target'],
+          task: message.task as BridgeInboxEnqueueRequest['task'],
+        })
+        return
+      }
+      if (message.type !== ShadowBridge.commandRequestType) return
       if (typeof message.requestId !== 'string' || typeof message.commandName !== 'string') return
       void callBridgeCommand({
         requestId: message.requestId,
@@ -176,7 +271,7 @@ export default function WebViewPreviewScreen() {
         channelId: typeof message.channelId === 'string' ? message.channelId : undefined,
       })
     },
-    [appKey, callBridgeCommand],
+    [appKey, callBridgeCommand, callBridgeInboxes, callBridgeInboxEnqueue],
   )
 
   const handleGoBack = useCallback(() => {

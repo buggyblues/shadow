@@ -3291,6 +3291,68 @@
     "communitySupportTitle": "社群支持",
     "openGiftShelf": "去資產庫選擇"
   },
+  "inbox": {
+    "title": "Inbox",
+    "queueTitle": "Buddy Inbox",
+    "queueHint": "授權投遞任務，不混入普通頻道",
+    "queueUnread": "{{count}} 則未讀",
+    "queueOpen": "任務佇列已就緒",
+    "queueNotReady": "尚未啟用佇列",
+    "queueBadge": "任務佇列",
+    "filter": {
+      "all": "全部",
+      "open": "進行中",
+      "done": "已結束"
+    },
+    "empty": {
+      "allTitle": "還沒有任務",
+      "allHint": "從輸入框左側的 + 建立任務卡片，普通訊息仍然留在聊天裡。",
+      "filterTitle": "這個篩選下沒有任務",
+      "filterHint": "切換篩選條件，或建立一個新的任務。"
+    },
+    "task": {
+      "new": "新增任務",
+      "titlePlaceholder": "任務標題",
+      "bodyPlaceholder": "補充指令、連結或驗收標準",
+      "create": "建立任務",
+      "deliver": "投遞",
+      "quickPlaceholder": "寫下任務標題；換行補充驗收標準、連結或上下文",
+      "created": "任務已建立",
+      "createFailed": "建立任務失敗",
+      "deliveryHint": "向這個 Buddy 投遞任務，狀態和進度會保留在任務卡片裡。",
+      "addMenuDesc": "建立一張可追蹤進度的任務卡片",
+      "unassigned": "未分配 Buddy",
+      "assignee": "負責人",
+      "app": "應用",
+      "createdAt": "發起時間",
+      "statusLabel": "狀態",
+      "latestProgress": "最新進度",
+      "noProgress": "暫無進度",
+      "details": "詳情",
+      "noDetails": "暫無詳情",
+      "todoProgress": "已完成 {{done}}/{{total}}",
+      "showDetails": "展開詳情",
+      "hideDetails": "收起詳情",
+      "retry": "重試",
+      "start": "開始",
+      "complete": "完成",
+      "fail": "失敗",
+      "priority": {
+        "low": "低優先級",
+        "high": "高優先級",
+        "urgent": "緊急"
+      },
+      "status": {
+        "queued": "排隊中",
+        "claimed": "已認領",
+        "running": "執行中",
+        "completed": "已完成",
+        "failed": "失敗",
+        "canceled": "已取消",
+        "transferred": "已轉交"
+      }
+    }
+  },
   "voice": {
     "ready": "準備連線",
     "connected": "語音已連線",

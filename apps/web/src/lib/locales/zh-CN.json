@@ -3294,6 +3294,68 @@
     "communitySupportTitle": "社区支持",
     "openGiftShelf": "去资产库选择"
   },
+  "inbox": {
+    "title": "Inbox",
+    "queueTitle": "Buddy Inbox",
+    "queueHint": "授权投递任务，不混入普通频道",
+    "queueUnread": "{{count}} 条未读",
+    "queueOpen": "任务队列已就绪",
+    "queueNotReady": "尚未开通队列",
+    "queueBadge": "任务队列",
+    "filter": {
+      "all": "全部",
+      "open": "进行中",
+      "done": "已结束"
+    },
+    "empty": {
+      "allTitle": "还没有任务",
+      "allHint": "从输入框左侧的 + 创建任务卡片，普通消息仍然留在聊天里。",
+      "filterTitle": "这个筛选下没有任务",
+      "filterHint": "切换筛选条件，或创建一个新的任务。"
+    },
+    "task": {
+      "new": "新建任务",
+      "titlePlaceholder": "任务标题",
+      "bodyPlaceholder": "补充指令、链接或验收标准",
+      "create": "创建任务",
+      "deliver": "投递",
+      "quickPlaceholder": "写下任务标题；换行补充验收标准、链接或上下文",
+      "created": "任务已创建",
+      "createFailed": "创建任务失败",
+      "deliveryHint": "向这个 Buddy 投递任务，状态和进度会保留在任务卡片里。",
+      "addMenuDesc": "创建一张可跟踪进度的任务卡片",
+      "unassigned": "未分配 Buddy",
+      "assignee": "负责人",
+      "app": "应用",
+      "createdAt": "发起时间",
+      "statusLabel": "状态",
+      "latestProgress": "最新进展",
+      "noProgress": "暂无进展",
+      "details": "详情",
+      "noDetails": "暂无详情",
+      "todoProgress": "已完成 {{done}}/{{total}}",
+      "showDetails": "展开详情",
+      "hideDetails": "收起详情",
+      "retry": "重试",
+      "start": "开始",
+      "complete": "完成",
+      "fail": "失败",
+      "priority": {
+        "low": "低优先级",
+        "high": "高优先级",
+        "urgent": "紧急"
+      },
+      "status": {
+        "queued": "排队中",
+        "claimed": "已认领",
+        "running": "执行中",
+        "completed": "已完成",
+        "failed": "失败",
+        "canceled": "已取消",
+        "transferred": "已转交"
+      }
+    }
+  },
   "voice": {
     "ready": "准备连接",
     "connected": "语音已连接",

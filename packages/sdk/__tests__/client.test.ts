@@ -1515,4 +1515,48 @@ describe('ShadowClient', () => {
       )
     })
   })
+
+  describe('buddy inbox helpers', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn().mockImplementation(
+        () =>
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ) as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('uses canonical Buddy Inbox API paths', async () => {
+      await client.listBuddyInboxes()
+      await client.listServerBuddyInboxes('shadow-plays')
+      await client.ensureBuddyInbox('shadow-plays', 'agent-1')
+      await client.updateBuddyInboxAdmissionPolicy('shadow-plays', 'agent-1', {
+        defaultMode: 'allow',
+        rules: [],
+      })
+      await client.enqueueInboxTaskForAgent('shadow-plays', 'agent-1', {
+        title: 'Install',
+        idempotencyKey: 'skills:install:x',
+      })
+      await client.enqueueInboxTask('channel-1', { title: 'Review' })
+
+      const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
+      expect(calls.map((call) => call[0])).toEqual([
+        'https://api.example.com/api/buddy-inboxes',
+        'https://api.example.com/api/servers/shadow-plays/inboxes',
+        'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1',
+        'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1/admission-policy',
+        'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1/tasks',
+        'https://api.example.com/api/channels/channel-1/inbox/tasks',
+      ])
+      expect(calls[3]?.[1]).toMatchObject({ method: 'PUT' })
+      expect(calls[4]?.[1]).toMatchObject({ method: 'POST' })
+      expect(calls[5]?.[1]).toMatchObject({ method: 'POST' })
+    })
+  })
 })

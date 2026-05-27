@@ -2,6 +2,9 @@ import type {
   ShadowAddAgentsToServerResult,
   ShadowAgentUsageSnapshotInput,
   ShadowAuthResponse,
+  ShadowBuddyInboxAdmissionPolicy,
+  ShadowBuddyInboxAdmissionPolicyResult,
+  ShadowBuddyInboxSummary,
   ShadowCartItem,
   ShadowCategory,
   ShadowChannel,
@@ -31,11 +34,13 @@ import type {
   ShadowDiyCloudRunStatus,
   ShadowEconomyGift,
   ShadowEconomyTip,
+  ShadowEnsureBuddyInboxResult,
   ShadowEntitlement,
   ShadowEntitlementProvisioning,
   ShadowEntitlementPurchaseResult,
   ShadowFriendship,
   ShadowHomePlayCatalogItem,
+  ShadowInboxTaskInput,
   ShadowInteractiveActionInput,
   ShadowInteractiveActionResult,
   ShadowInteractiveState,
@@ -47,6 +52,7 @@ import type {
   ShadowMentionSuggestion,
   ShadowMentionSuggestionTrigger,
   ShadowMessage,
+  ShadowMessageCard,
   ShadowMessageMention,
   ShadowModelProxyBilling,
   ShadowModelProxyChatCompletionRequest,
@@ -1161,6 +1167,125 @@ export class ShadowClient {
 
   async getMessage(messageId: string): Promise<ShadowMessage> {
     return this.request(`/api/messages/${messageId}`)
+  }
+
+  async listBuddyInboxes(): Promise<ShadowBuddyInboxSummary[]> {
+    return this.request('/api/buddy-inboxes')
+  }
+
+  async listServerBuddyInboxes(serverIdOrSlug: string): Promise<ShadowBuddyInboxSummary[]> {
+    return this.request(`/api/servers/${serverIdOrSlug}/inboxes`)
+  }
+
+  async ensureBuddyInbox(
+    serverIdOrSlug: string,
+    agentId: string,
+  ): Promise<ShadowEnsureBuddyInboxResult> {
+    return this.request(`/api/servers/${serverIdOrSlug}/inboxes/${agentId}`, {
+      method: 'POST',
+    })
+  }
+
+  async getBuddyInboxAdmissionPolicy(
+    serverIdOrSlug: string,
+    agentId: string,
+  ): Promise<ShadowBuddyInboxAdmissionPolicyResult> {
+    return this.request(`/api/servers/${serverIdOrSlug}/inboxes/${agentId}/admission-policy`)
+  }
+
+  async updateBuddyInboxAdmissionPolicy(
+    serverIdOrSlug: string,
+    agentId: string,
+    policy: ShadowBuddyInboxAdmissionPolicy,
+  ): Promise<ShadowBuddyInboxAdmissionPolicyResult> {
+    return this.request(`/api/servers/${serverIdOrSlug}/inboxes/${agentId}/admission-policy`, {
+      method: 'PUT',
+      body: JSON.stringify(policy),
+    })
+  }
+
+  async enqueueInboxTaskForAgent(
+    serverIdOrSlug: string,
+    agentId: string,
+    task: ShadowInboxTaskInput,
+  ): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/servers/${serverIdOrSlug}/inboxes/${agentId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(task),
+    })
+  }
+
+  async enqueueInboxTask(channelId: string, task: ShadowInboxTaskInput): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/channels/${channelId}/inbox/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(task),
+    })
+  }
+
+  async claimTaskCard(
+    messageId: string,
+    cardId: string,
+    data: { ttlSeconds?: number; note?: string } = {},
+  ): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/messages/${messageId}/cards/${cardId}/claim`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateTaskCard(
+    messageId: string,
+    cardId: string,
+    data: {
+      status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed' | 'canceled' | 'transferred'
+      note?: string
+    },
+  ): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/messages/${messageId}/cards/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async retryTaskCard(
+    messageId: string,
+    cardId: string,
+    data: { note?: string } = {},
+  ): Promise<{ original: ShadowMessage; retry: ShadowMessage }> {
+    return this.request(`/api/messages/${messageId}/cards/${cardId}/retry`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async claimNextInboxTask(
+    serverIdOrSlug: string,
+    agentId: string,
+    data: { ttlSeconds?: number; note?: string } = {},
+  ): Promise<{
+    channel: ShadowChannel
+    message: ShadowMessage | null
+    card: ShadowMessageCard | null
+  }> {
+    return this.request(`/api/servers/${serverIdOrSlug}/inboxes/${agentId}/claim-next`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async promoteMessageToInboxTask(
+    messageId: string,
+    data: {
+      serverId: string
+      agentId: string
+      title?: string
+      priority?: 'low' | 'normal' | 'high' | 'urgent'
+    },
+  ): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/messages/${messageId}/inbox/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   }
 
   async submitInteractiveAction(

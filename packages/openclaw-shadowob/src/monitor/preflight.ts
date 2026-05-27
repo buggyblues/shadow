@@ -23,6 +23,29 @@ function normalizeTriggerUserIds(policyConfig: ShadowPolicyConfig | undefined): 
   return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
 }
 
+function messageHasActiveTaskForBot(message: ShadowMessage, botUserId: string) {
+  const cards = message.metadata?.cards
+  if (!Array.isArray(cards)) return false
+  return cards.some((card) => {
+    if (!card || typeof card !== 'object' || Array.isArray(card)) return false
+    const record = card as Record<string, unknown>
+    if (record.kind !== 'task') return false
+    if (
+      record.status === 'completed' ||
+      record.status === 'failed' ||
+      record.status === 'canceled' ||
+      record.status === 'transferred'
+    ) {
+      return false
+    }
+    const assignee =
+      record.assignee && typeof record.assignee === 'object' && !Array.isArray(record.assignee)
+        ? (record.assignee as Record<string, unknown>)
+        : null
+    return assignee?.userId === botUserId
+  })
+}
+
 export function evaluateShadowMessagePreflight(params: {
   message: ShadowMessage
   botUserId: string
@@ -121,6 +144,7 @@ export function evaluateShadowMessagePreflight(params: {
   const wasMentionedExplicitly =
     mentionTargetsBot({ mentions: structuredMentions, botUserId, botUsername }) ||
     mentionsTargetServerApp(structuredMentions) ||
+    messageHasActiveTaskForBot(message, botUserId) ||
     mentionRegex.test(message.content)
 
   if (policy?.mentionOnly && !wasMentionedExplicitly) {

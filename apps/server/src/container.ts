@@ -59,6 +59,7 @@ import { AppIntegrationEventBus } from './services/app-integration-event-bus'
 import { AuditLogService } from './services/audit-log.service'
 // Service classes
 import { AuthService } from './services/auth.service'
+import { BuddyInboxService } from './services/buddy-inbox.service'
 import { CartService } from './services/cart.service'
 import { ChannelService } from './services/channel.service'
 import { ChannelAccessService } from './services/channel-access.service'
@@ -227,6 +228,7 @@ export interface Cradle {
 
   // Services
   authService: AuthService
+  buddyInboxService: BuddyInboxService
   oauthService: OAuthService
   externalOAuthService: ExternalOAuthService
   serverService: ServerService
@@ -385,6 +387,7 @@ export function createAppContainer(db: Database): AppContainer {
 
     // Services
     authService: asClass(AuthService).singleton(),
+    buddyInboxService: asClass(BuddyInboxService).singleton(),
     oauthService: asClass(OAuthService).singleton(),
     externalOAuthService: asClass(ExternalOAuthService).singleton(),
     serverService: asClass(ServerService).singleton(),

@@ -1,9 +1,11 @@
 import type { Logger } from 'pino'
+import type { Server as SocketIOServer } from 'socket.io'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { MessageMetadata, TaskMessageCardMetadata } from '../db/schema/messages'
 import type {
   CreateThreadInput,
   InteractiveActionInput,
@@ -12,6 +14,7 @@ import type {
   UpdateMessageInput,
   UpdateThreadInput,
 } from '../validators/message.schema'
+import { parseBuddyInboxAgentId } from './buddy-inbox-protocol'
 import type { WorkspaceService } from './workspace.service'
 
 type MessageWithMetadata = {
@@ -56,6 +59,16 @@ function buildSubmittedInteractiveState(submission: InteractiveSubmissionRecord)
   }
 }
 
+function isTaskCard(card: unknown): card is TaskMessageCardMetadata {
+  if (!card || typeof card !== 'object' || Array.isArray(card)) return false
+  const record = card as Record<string, unknown>
+  return record.kind === 'task' && typeof record.id === 'string'
+}
+
+function isActiveTaskCard(card: TaskMessageCardMetadata) {
+  return card.status === 'queued' || card.status === 'claimed' || card.status === 'running'
+}
+
 export class MessageService {
   constructor(
     private deps: {
@@ -65,6 +78,7 @@ export class MessageService {
       agentDao: AgentDao
       agentDashboardDao: AgentDashboardDao
       workspaceService?: WorkspaceService
+      io?: SocketIOServer
       logger?: Logger
     },
   ) {}
@@ -277,6 +291,15 @@ export class MessageService {
       }
     }
 
+    await this.completeInboxTaskFromBuddyReply({
+      channelId,
+      messageId: message.id,
+      replyToId: input.replyToId,
+      authorId,
+      authorLabel: user?.displayName ?? user?.username ?? authorId,
+      content: input.content,
+    })
+
     return {
       ...message,
       author: user
@@ -290,6 +313,98 @@ export class MessageService {
           }
         : null,
       attachments: messageAttachments,
+    }
+  }
+
+  private async completeInboxTaskFromBuddyReply(input: {
+    channelId: string
+    messageId: string
+    replyToId?: string
+    authorId: string
+    authorLabel: string
+    content: string
+  }) {
+    try {
+      const channel = await this.deps.channelDao.findById(input.channelId)
+      const agentId = parseBuddyInboxAgentId(channel?.topic)
+      if (!agentId) return
+      const agent = await this.deps.agentDao.findById(agentId)
+      if (!agent || agent.userId !== input.authorId) return
+
+      let target = input.replyToId ? await this.deps.messageDao.findById(input.replyToId) : null
+      if (target) {
+        const metadata = (target.metadata ?? {}) as MessageMetadata
+        const cards = Array.isArray(metadata.cards) ? metadata.cards : []
+        const hasAssignableTask = cards.some(
+          (card) =>
+            isTaskCard(card) &&
+            isActiveTaskCard(card) &&
+            (card.assignee?.userId === input.authorId || card.assignee?.agentId === agentId),
+        )
+        if (!hasAssignableTask) target = null
+      }
+
+      if (!target) {
+        const recent = await this.deps.messageDao.findByChannelId(input.channelId, 25)
+        const candidates = [...recent.messages].reverse().filter((message) => {
+          if (message.id === input.messageId) return false
+          const metadata = (message.metadata ?? {}) as MessageMetadata
+          const cards = Array.isArray(metadata.cards) ? metadata.cards : []
+          return cards.some((card) => {
+            if (!isTaskCard(card) || !isActiveTaskCard(card)) return false
+            return card.assignee?.userId === input.authorId || card.assignee?.agentId === agentId
+          })
+        })
+        target = candidates.length === 1 ? (candidates[0] ?? null) : null
+      }
+      if (!target) return
+
+      const metadata = (target.metadata ?? {}) as MessageMetadata
+      const cards = Array.isArray(metadata.cards) ? metadata.cards : []
+      const now = new Date().toISOString()
+      let changed = false
+      const nextCards = cards.map((card) => {
+        if (!isTaskCard(card) || changed || !isActiveTaskCard(card)) return card
+        if (card.assignee?.userId !== input.authorId && card.assignee?.agentId !== agentId) {
+          return card
+        }
+        changed = true
+        const {
+          claim: _claim,
+          capability: _capability,
+          ...nextCard
+        } = {
+          ...card,
+          status: 'completed' as const,
+          updatedAt: now,
+          progress: [
+            ...(Array.isArray(card.progress) ? card.progress : []),
+            {
+              at: now,
+              status: 'completed' as const,
+              note: `Completed by Buddy reply: ${input.content.slice(0, 240)}`,
+              actor: {
+                kind: 'agent' as const,
+                agentId,
+                userId: input.authorId,
+                label: input.authorLabel,
+              },
+            },
+          ],
+        }
+        return nextCard
+      })
+      if (!changed) return
+      const updated = await this.updateMetadata(target.id, {
+        ...metadata,
+        cards: nextCards,
+      })
+      this.deps.io?.to(`channel:${input.channelId}`).emit('message:updated', updated)
+    } catch (err) {
+      this.deps.logger?.warn?.(
+        { err, channelId: input.channelId, messageId: input.messageId },
+        'Failed to complete Inbox task from Buddy reply',
+      )
     }
   }
 
@@ -307,6 +422,33 @@ export class MessageService {
     // Attach author info and attachments for broadcasting
     const user = await this.deps.userDao.findById(userId)
     const messageAttachments = await this.deps.messageDao.getAttachments(id)
+    return {
+      ...updated,
+      author: user
+        ? {
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+            status: user.status,
+            isBot: user.isBot,
+          }
+        : null,
+      attachments: messageAttachments,
+    }
+  }
+
+  async updateMetadata(id: string, metadata: Record<string, unknown> | null) {
+    const existing = await this.deps.messageDao.findById(id)
+    if (!existing) {
+      throw Object.assign(new Error('Message not found'), { status: 404 })
+    }
+    const updated = await this.deps.messageDao.updateMetadata(id, metadata)
+    const [user, messageAttachments] = await Promise.all([
+      this.deps.userDao.findById(existing.authorId),
+      this.deps.messageDao.getAttachments(id),
+    ])
+
     return {
       ...updated,
       author: user
