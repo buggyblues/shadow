@@ -29,6 +29,12 @@ export interface ChallengeSource {
   importedAt?: string
 }
 
+export interface TrainerOwnerScope {
+  ownerKey: string
+  serverId: string
+  userId: string
+}
+
 export type ChallengeDifficulty = 'easy' | 'medium' | 'hard'
 export type TrainerLanguage = 'javascript' | 'typescript' | 'python'
 
@@ -43,6 +49,7 @@ export interface Challenge {
   testCases?: ChallengeTestCase[]
   judgeInstructions: string
   source?: ChallengeSource
+  owner?: TrainerOwnerScope
   createdAt?: string
   updatedAt?: string
 }
@@ -50,6 +57,13 @@ export interface Challenge {
 export type SubmissionStatus = 'submitted' | 'analyzed'
 export type SubmissionOutcome = 'accepted' | 'needs_work' | 'runtime_error' | 'incomplete'
 export type SubmissionReviewFocus = 'standard' | 'interview' | 'debug' | 'complexity'
+export type SubmissionCoachingFocus =
+  | 'reasoning'
+  | 'edge_cases'
+  | 'complexity'
+  | 'communication'
+  | 'follow_ups'
+  | 'debugging'
 
 export interface SubmissionAnalysis {
   outcome: SubmissionOutcome
@@ -67,12 +81,15 @@ export interface SubmissionReviewRequest {
   assigneeLabel?: string
   displayName?: string
   reviewFocus?: SubmissionReviewFocus
+  coachingFocuses?: SubmissionCoachingFocus[]
+  locale?: string
   requestedAt: string
 }
 
 export interface CodeSubmission {
   id: string
   challengeId: string
+  owner: TrainerOwnerScope
   author: TrainerPerson
   language: TrainerLanguage | string
   code: string

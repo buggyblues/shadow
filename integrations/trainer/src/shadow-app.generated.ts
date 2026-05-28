@@ -43,6 +43,11 @@ export const shadowServerAppManifest = {
           difficulty: {
             enum: ['easy', 'medium', 'hard'],
           },
+          tag: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 40,
+          },
         },
         additionalProperties: false,
       },
@@ -159,7 +164,7 @@ export const shadowServerAppManifest = {
         type: 'object',
         properties: {
           provider: {
-            enum: ['exercism', 'leetcode', 'codeforces'],
+            enum: ['leetcode', 'codeforces'],
           },
           query: {
             type: 'string',
@@ -193,7 +198,7 @@ export const shadowServerAppManifest = {
         required: ['sourceId'],
         properties: {
           provider: {
-            enum: ['exercism', 'leetcode', 'codeforces'],
+            enum: ['leetcode', 'codeforces'],
           },
           sourceId: {
             type: 'string',
@@ -250,6 +255,24 @@ export const shadowServerAppManifest = {
               },
               reviewFocus: {
                 enum: ['standard', 'interview', 'debug', 'complexity'],
+              },
+              coachingFocuses: {
+                type: 'array',
+                maxItems: 8,
+                items: {
+                  enum: [
+                    'reasoning',
+                    'edge_cases',
+                    'complexity',
+                    'communication',
+                    'follow_ups',
+                    'debugging',
+                  ],
+                },
+              },
+              locale: {
+                type: 'string',
+                maxLength: 32,
               },
             },
             additionalProperties: false,

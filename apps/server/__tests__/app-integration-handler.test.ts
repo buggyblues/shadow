@@ -202,4 +202,28 @@ describe('app integration handler', () => {
       }),
     )
   })
+
+  it('accepts null optional command context from launch frames', async () => {
+    const service = {
+      callCommand: vi.fn().mockResolvedValue({ ok: true, result: { tickets: [] } }),
+    }
+    const app = createTestApp(service)
+
+    const response = await app.request('/api/servers/srv-1/apps/demo-desk/commands/tickets.list', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer access-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ input: { limit: 5 }, channelId: null, task: null }),
+    })
+
+    expect(response.status).toBe(200)
+    const call = service.callCommand.mock.calls[0]?.[0] as {
+      body: { input?: unknown; channelId?: string; task?: unknown }
+    }
+    expect(call.body.input).toEqual({ limit: 5 })
+    expect(call.body.channelId).toBeUndefined()
+    expect(call.body.task).toBeUndefined()
+  })
 })

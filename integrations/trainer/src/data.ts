@@ -6,11 +6,13 @@ import type {
   ChallengeDifficulty,
   CodeSubmission,
   SubmissionAnalysis,
+  SubmissionCoachingFocus,
   SubmissionOutcome,
   SubmissionReviewFocus,
   SubmissionReviewRequest,
   SubmissionStatus,
   TrainerLanguage,
+  TrainerOwnerScope,
   TrainerPerson,
   TrainerState,
 } from './types.js'
@@ -75,6 +77,22 @@ const seedChallenges: Challenge[] = [
   },
 ]
 
+const seedChallengeIds = new Set(seedChallenges.map((challenge) => challenge.id))
+const legacyOwner: TrainerOwnerScope = {
+  ownerKey: process.env.TRAINER_LEGACY_OWNER_KEY ?? 'local:local',
+  serverId: process.env.TRAINER_LEGACY_SERVER_ID ?? 'local',
+  userId: process.env.TRAINER_LEGACY_USER_ID ?? 'local',
+}
+
+export type TrainerAccess = {
+  serverId: string
+  ownerKey: string
+  ownerUserId: string
+  buddyAgentId: string | null
+  isBuddy: boolean
+  actor: TrainerPerson
+}
+
 type ChallengeInput = {
   id?: string
   title: string
@@ -93,6 +111,8 @@ type SubmissionReviewerInput = {
   assigneeLabel?: string
   displayName?: string
   reviewFocus?: SubmissionReviewFocus
+  coachingFocuses?: SubmissionCoachingFocus[]
+  locale?: string
 }
 
 type StoredPerson = Partial<TrainerPerson> & {
@@ -222,10 +242,17 @@ function starterWithoutSeedAnswer(challengeId: string, starterCode: string) {
     : starterCode
 }
 
-function uniqueChallengeId(base: string) {
+function challengeIdTaken(candidate: string, ownerKey: string) {
+  return state.challenges.some((challenge) => {
+    if (challenge.id !== candidate) return false
+    return isGlobalChallenge(challenge) || ownerKeyOf(challenge) === ownerKey
+  })
+}
+
+function uniqueChallengeId(base: string, ownerKey: string) {
   let candidate = slugify(base)
   let index = 2
-  while (state.challenges.some((challenge) => challenge.id === candidate)) {
+  while (challengeIdTaken(candidate, ownerKey)) {
     candidate = `${slugify(base)}_${index}`
     index += 1
   }
@@ -252,6 +279,61 @@ function person(actor: ShadowServerAppActorRef): TrainerPerson {
   return normalizePerson(actor, 'Local Coder')
 }
 
+export function accessFromActor(input: {
+  serverId: string
+  actor: ShadowServerAppActorRef
+}): TrainerAccess {
+  const actor = person(input.actor)
+  const serverId = text(input.serverId, 'local') || 'local'
+  const ownerUserId = actor.ownerId || actor.userId || actor.id || 'local'
+  const buddyAgentId = actor.buddyAgentId || null
+  const isBuddy = Boolean(buddyAgentId || actor.kind === 'agent')
+  return {
+    serverId,
+    ownerKey: `${serverId}:${ownerUserId}`,
+    ownerUserId,
+    buddyAgentId,
+    isBuddy,
+    actor,
+  }
+}
+
+function ownerFromAccess(access: TrainerAccess): TrainerOwnerScope {
+  return {
+    ownerKey: access.ownerKey,
+    serverId: access.serverId,
+    userId: access.ownerUserId,
+  }
+}
+
+function normalizeOwnerScope(value: unknown): TrainerOwnerScope | undefined {
+  if (!isRecord(value)) return undefined
+  const ownerKey = text(value.ownerKey)
+  const serverId = text(value.serverId)
+  const userId = text(value.userId)
+  if (!ownerKey || !serverId || !userId) return undefined
+  return { ownerKey, serverId, userId }
+}
+
+function ownerKeyOf(challenge: Challenge) {
+  return challenge.owner?.ownerKey ?? null
+}
+
+function isGlobalChallenge(challenge: Challenge) {
+  return !challenge.owner && seedChallengeIds.has(challenge.id)
+}
+
+function canReadChallenge(challenge: Challenge, access: TrainerAccess) {
+  return isGlobalChallenge(challenge) || ownerKeyOf(challenge) === access.ownerKey
+}
+
+function canReadSubmission(submission: CodeSubmission, access: TrainerAccess) {
+  if (submission.owner.ownerKey !== access.ownerKey) return false
+  if (!access.isBuddy) return true
+  const assignedBuddyId = submission.reviewRequest?.agentId
+  return Boolean(assignedBuddyId && assignedBuddyId === access.buddyAgentId)
+}
+
 function normalizeChallenge(value: unknown): Challenge | null {
   if (!isRecord(value)) return null
   const title = text(value.title)
@@ -261,18 +343,23 @@ function normalizeChallenge(value: unknown): Challenge | null {
   if (!title || !prompt || !starterCode || !judgeInstructions) return null
   const timestamp = text(value.updatedAt, now())
   const source = normalizeSource(value.source)
+  const challengeId = text(value.id, slugify(title))
+  const owner =
+    normalizeOwnerScope(value.owner) ??
+    (seedChallengeIds.has(challengeId) ? undefined : legacyOwner)
 
   return {
-    id: text(value.id, slugify(title)),
+    id: challengeId,
     title,
     difficulty: normalizeDifficulty(value.difficulty),
     tags: normalizeTags(value.tags),
     prompt,
-    starterCode: starterWithoutSeedAnswer(text(value.id, slugify(title)), starterCode),
+    starterCode: starterWithoutSeedAnswer(challengeId, starterCode),
     examples: normalizeExamples(value.examples),
     testCases: normalizeTestCases(value.testCases),
     judgeInstructions,
     ...(source ? { source } : {}),
+    ...(owner ? { owner } : {}),
     createdAt: text(value.createdAt, timestamp),
     updatedAt: timestamp,
   }
@@ -323,6 +410,8 @@ function normalizeReviewRequest(value: unknown): SubmissionReviewRequest | undef
     ...(assigneeLabel ? { assigneeLabel } : {}),
     ...(text(value.displayName) ? { displayName: text(value.displayName) } : {}),
     reviewFocus: normalizeReviewFocus(value.reviewFocus),
+    coachingFocuses: normalizeCoachingFocuses(value.coachingFocuses),
+    ...(normalizeLocale(value.locale) ? { locale: normalizeLocale(value.locale) } : {}),
     requestedAt: text(value.requestedAt, now()),
   }
 }
@@ -341,6 +430,8 @@ function reviewRequestFromInput(
     ...(assigneeLabel ? { assigneeLabel } : {}),
     ...(text(reviewer.displayName) ? { displayName: text(reviewer.displayName) } : {}),
     reviewFocus: normalizeReviewFocus(reviewer.reviewFocus),
+    coachingFocuses: normalizeCoachingFocuses(reviewer.coachingFocuses),
+    ...(normalizeLocale(reviewer.locale) ? { locale: normalizeLocale(reviewer.locale) } : {}),
     requestedAt,
   }
 }
@@ -348,6 +439,25 @@ function reviewRequestFromInput(
 function normalizeReviewFocus(value: unknown): SubmissionReviewFocus {
   if (value === 'interview' || value === 'debug' || value === 'complexity') return value
   return 'standard'
+}
+
+function normalizeCoachingFocuses(value: unknown): SubmissionCoachingFocus[] {
+  if (!Array.isArray(value)) return []
+  const allowed = new Set<SubmissionCoachingFocus>([
+    'reasoning',
+    'edge_cases',
+    'complexity',
+    'communication',
+    'follow_ups',
+    'debugging',
+  ])
+  return [
+    ...new Set(value.filter((item): item is SubmissionCoachingFocus => allowed.has(item))),
+  ].slice(0, 8)
+}
+
+function normalizeLocale(value: unknown) {
+  return text(value).slice(0, 32)
 }
 
 function normalizeOutcome(value: unknown): SubmissionOutcome {
@@ -392,6 +502,7 @@ function normalizeSubmission(value: unknown): CodeSubmission | null {
 
   const analysis = normalizeAnalysis(stored.analysis, stored)
   const reviewRequest = normalizeReviewRequest(stored.reviewRequest)
+  const owner = normalizeOwnerScope(stored.owner) ?? legacyOwner
   const status: SubmissionStatus =
     stored.status === 'analyzed' || stored.status === 'judged' || analysis
       ? 'analyzed'
@@ -400,6 +511,7 @@ function normalizeSubmission(value: unknown): CodeSubmission | null {
   return {
     id: submissionId,
     challengeId,
+    owner,
     author: normalizePerson(stored.author, 'Learner'),
     language: normalizeLanguage(stored.language),
     code,
@@ -446,38 +558,55 @@ function persist() {
   state = stateStore.write(state)
 }
 
-export function listChallenges(input: { query?: string; difficulty?: ChallengeDifficulty }) {
+export function listChallenges(
+  input: {
+    query?: string
+    difficulty?: ChallengeDifficulty
+    tag?: string
+  },
+  access: TrainerAccess,
+) {
   const query = input.query?.trim().toLowerCase()
+  const tag = input.tag?.trim().toLowerCase()
   return structuredClone(
-    state.challenges.filter((challenge) => {
-      const difficultyMatches = !input.difficulty || challenge.difficulty === input.difficulty
-      const haystack = [challenge.title, challenge.prompt, challenge.tags.join(' ')]
-        .join(' ')
-        .toLowerCase()
-      return difficultyMatches && (!query || haystack.includes(query))
-    }),
+    state.challenges
+      .filter((challenge) => canReadChallenge(challenge, access))
+      .filter((challenge) => {
+        const difficultyMatches = !input.difficulty || challenge.difficulty === input.difficulty
+        const tagMatches = !tag || challenge.tags.some((item) => item.toLowerCase() === tag)
+        const haystack = [challenge.title, challenge.prompt, challenge.tags.join(' ')]
+          .join(' ')
+          .toLowerCase()
+        return difficultyMatches && tagMatches && (!query || haystack.includes(query))
+      }),
   )
 }
 
-export function getChallenge(challengeId: string) {
-  const challenge = state.challenges.find((item) => item.id === challengeId)
+export function getChallenge(challengeId: string, access: TrainerAccess) {
+  const challenge =
+    state.challenges.find(
+      (item) => item.id === challengeId && ownerKeyOf(item) === access.ownerKey,
+    ) ?? state.challenges.find((item) => item.id === challengeId && isGlobalChallenge(item))
   if (!challenge) return null
   return structuredClone({
     challenge,
     submissions: state.submissions
       .filter((submission) => submission.challengeId === challengeId)
+      .filter((submission) => canReadSubmission(submission, access))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   })
 }
 
-export function upsertChallenge(input: ChallengeInput) {
+export function upsertChallenge(input: ChallengeInput, access: TrainerAccess) {
   const existing = input.id
-    ? state.challenges.find((challenge) => challenge.id === input.id)
+    ? state.challenges.find(
+        (challenge) => challenge.id === input.id && ownerKeyOf(challenge) === access.ownerKey,
+      )
     : undefined
   const timestamp = now()
   const source = normalizeSource(input.source)
   const challenge: Challenge = {
-    id: existing?.id ?? uniqueChallengeId(input.id || input.title),
+    id: existing?.id ?? uniqueChallengeId(input.id || input.title, access.ownerKey),
     title: input.title.trim(),
     difficulty: normalizeDifficulty(input.difficulty),
     tags: normalizeTags(input.tags),
@@ -487,12 +616,15 @@ export function upsertChallenge(input: ChallengeInput) {
     testCases: normalizeTestCases(input.testCases),
     judgeInstructions: input.judgeInstructions.trim(),
     ...(source ? { source } : {}),
+    owner: existing?.owner ?? ownerFromAccess(access),
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   }
 
   if (existing) {
-    state.challenges = state.challenges.map((item) => (item.id === existing.id ? challenge : item))
+    state.challenges = state.challenges.map((item) =>
+      item.id === existing.id && ownerKeyOf(item) === access.ownerKey ? challenge : item,
+    )
   } else {
     state.challenges.push(challenge)
   }
@@ -507,14 +639,19 @@ export function createSubmission(input: {
   code: string
   reviewer?: SubmissionReviewerInput
   author: ShadowServerAppActorRef
+  access: TrainerAccess
 }) {
-  const challenge = state.challenges.find((item) => item.id === input.challengeId)
+  const challenge =
+    state.challenges.find(
+      (item) => item.id === input.challengeId && ownerKeyOf(item) === input.access.ownerKey,
+    ) ?? state.challenges.find((item) => item.id === input.challengeId && isGlobalChallenge(item))
   if (!challenge) return null
   const createdAt = now()
   const reviewRequest = reviewRequestFromInput(input.reviewer, createdAt)
   const submission: CodeSubmission = {
     id: id('sub'),
     challengeId: challenge.id,
+    owner: ownerFromAccess(input.access),
     author: person(input.author),
     language: normalizeLanguage(input.language),
     code: input.code.trim(),
@@ -527,14 +664,18 @@ export function createSubmission(input: {
   return structuredClone(submission)
 }
 
-export function listSubmissions(input: {
-  challengeId?: string
-  status?: SubmissionStatus
-  limit?: number
-}) {
+export function listSubmissions(
+  input: {
+    challengeId?: string
+    status?: SubmissionStatus
+    limit?: number
+  },
+  access: TrainerAccess,
+) {
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100)
   return structuredClone(
     state.submissions
+      .filter((submission) => canReadSubmission(submission, access))
       .filter((submission) => !input.challengeId || submission.challengeId === input.challengeId)
       .filter((submission) => !input.status || submission.status === input.status)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -542,18 +683,31 @@ export function listSubmissions(input: {
   )
 }
 
-export function getSubmission(submissionId: string) {
+export function getSubmission(submissionId: string, access: TrainerAccess) {
   const submission = state.submissions.find((item) => item.id === submissionId)
-  if (!submission) return null
-  const challenge = state.challenges.find((item) => item.id === submission.challengeId)
+  if (!submission || !canReadSubmission(submission, access)) return null
+  const challenge =
+    state.challenges.find(
+      (item) =>
+        item.id === submission.challengeId && ownerKeyOf(item) === submission.owner.ownerKey,
+    ) ??
+    state.challenges.find((item) => item.id === submission.challengeId && isGlobalChallenge(item))
   return structuredClone({ submission, challenge })
 }
 
-export function pendingSubmissions(input: { limit?: number }) {
-  return listSubmissions({ status: 'submitted', limit: input.limit })
+export function pendingSubmissions(input: { limit?: number }, access: TrainerAccess) {
+  return listSubmissions({ status: 'submitted', limit: input.limit }, access)
     .map((submission) => ({
       submission,
-      challenge: state.challenges.find((challenge) => challenge.id === submission.challengeId),
+      challenge:
+        state.challenges.find(
+          (challenge) =>
+            challenge.id === submission.challengeId &&
+            ownerKeyOf(challenge) === submission.owner.ownerKey,
+        ) ??
+        state.challenges.find(
+          (challenge) => challenge.id === submission.challengeId && isGlobalChallenge(challenge),
+        ),
     }))
     .filter(
       (item): item is { submission: CodeSubmission; challenge: Challenge } => !!item.challenge,
@@ -569,9 +723,10 @@ export function analyzeSubmission(input: {
   suggestions?: string[]
   complexity?: string
   analyzer: ShadowServerAppActorRef
+  access: TrainerAccess
 }) {
   const submission = state.submissions.find((item) => item.id === input.submissionId)
-  if (!submission) return null
+  if (!submission || !canReadSubmission(submission, input.access)) return null
   submission.status = 'analyzed'
   submission.analysis = {
     outcome: normalizeOutcome(input.outcome),
