@@ -1,28 +1,8 @@
 import * as cheerio from 'cheerio'
-import { upsertChallenge } from './data.js'
-import type { Challenge, ChallengeDifficulty, ChallengeTestCase } from './types.js'
+import { type TrainerAccess, upsertChallenge } from './data.js'
+import type { Challenge, ChallengeDifficulty } from './types.js'
 
-type SourceProvider = 'exercism' | 'leetcode' | 'codeforces'
-
-interface GitHubContentEntry {
-  name: string
-  type: string
-  html_url?: string
-}
-
-interface ExercismCanonicalCase {
-  uuid?: string
-  description?: string
-  property?: string
-  input?: unknown
-  expected?: unknown
-  cases?: ExercismCanonicalCase[]
-}
-
-interface ExercismCanonicalData {
-  exercise?: string
-  cases?: ExercismCanonicalCase[]
-}
+type SourceProvider = 'leetcode' | 'codeforces'
 
 interface LeetCodeListProblem {
   acRate?: number
@@ -79,10 +59,6 @@ interface CodeforcesProblemsetResponse {
   }
 }
 
-const exercismRawBase =
-  'https://raw.githubusercontent.com/exercism/problem-specifications/main/exercises'
-const exercismContentsUrl =
-  'https://api.github.com/repos/exercism/problem-specifications/contents/exercises'
 const leetcodeApiBase = (
   process.env.LEETCODE_API_BASE_URL ?? 'https://alfa-leetcode-api.onrender.com'
 ).replace(/\/+$/, '')
@@ -118,10 +94,6 @@ function identifierFromSlug(value: string) {
     )
     .join('')
   return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(candidate) ? candidate : 'solve'
-}
-
-function compactJson(value: unknown) {
-  return JSON.stringify(value, null, 2)
 }
 
 function difficultyFromText(value: string | undefined): ChallengeDifficulty {
@@ -197,29 +169,6 @@ function parseLeetCodeExamples(questionHtml: string): Challenge['examples'] {
 
 function problemFunctionStarter(sourceId: string) {
   return `function ${identifierFromSlug(sourceId)}(...args) {\n  // Write your solution here.\n}`
-}
-
-function flattenCanonicalCases(cases: ExercismCanonicalCase[] | undefined) {
-  const output: ExercismCanonicalCase[] = []
-  const visit = (items: ExercismCanonicalCase[] | undefined) => {
-    for (const item of items ?? []) {
-      if (Array.isArray(item.cases)) visit(item.cases)
-      else if ('input' in item && 'expected' in item) output.push(item)
-    }
-  }
-  visit(cases)
-  return output
-}
-
-async function fetchText(url: string) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'text/plain, application/json',
-      'User-Agent': 'shadow-trainer',
-    },
-  })
-  if (!response.ok) throw new Error(`source_fetch_failed:${response.status}`)
-  return response.text()
 }
 
 async function fetchOptionalText(url: string) {
@@ -372,29 +321,13 @@ async function fetchCodeforcesStatement(problem: CodeforcesProblem) {
   return null
 }
 
-function canonicalCasesToChallengeCases(cases: ExercismCanonicalCase[]): ChallengeTestCase[] {
-  return cases.slice(0, 80).map((testCase, index) => ({
-    id: testCase.uuid || `case_${index + 1}`,
-    ...(testCase.description ? { description: testCase.description } : {}),
-    input: compactJson(testCase.input),
-    expected: compactJson(testCase.expected),
-    visibility: index < 2 ? 'visible' : 'hidden',
-  }))
-}
-
-function starterForSource(sourceId: string, canonicalCases: ExercismCanonicalCase[]) {
-  const property = canonicalCases.find((testCase) => testCase.property)?.property
-  const functionName = identifierFromSlug(property || sourceId)
-  return `function ${functionName}(input) {\n  // Write your solution here.\n}`
-}
-
 export async function searchExternalChallenges(input: {
   provider?: SourceProvider
   query?: string
   limit?: number
   offset?: number
 }) {
-  const provider = input.provider ?? 'exercism'
+  const provider = input.provider ?? 'leetcode'
   const query = input.query?.trim().toLowerCase()
   const limit = Math.min(Math.max(input.limit ?? 24, 1), 50)
   const offset = Math.max(input.offset ?? 0, 0)
@@ -479,23 +412,7 @@ export async function searchExternalChallenges(input: {
     return { sources, pageInfo: pageInfo(offset, limit, filtered.length, sources.length) }
   }
 
-  const entries = await fetchJson<GitHubContentEntry[]>(exercismContentsUrl)
-  const filtered = entries
-    .filter((entry) => entry.type === 'dir')
-    .filter(
-      (entry) =>
-        !query ||
-        entry.name.includes(query) ||
-        titleFromSlug(entry.name).toLowerCase().includes(query),
-    )
-  const sources = filtered.slice(offset, offset + limit).map((entry) => ({
-    provider,
-    id: entry.name,
-    title: titleFromSlug(entry.name),
-    description: 'Exercism exercise with open problem statement and canonical test data.',
-    url: entry.html_url ?? `${exercismRawBase}/${entry.name}`,
-  }))
-  return { sources, pageInfo: pageInfo(offset, limit, filtered.length, sources.length) }
+  throw new Error('unsupported_source_provider')
 }
 
 function pageInfo(offset: number, limit: number, total: number, pageSize: number) {
@@ -507,11 +424,14 @@ function pageInfo(offset: number, limit: number, total: number, pageSize: number
   }
 }
 
-export async function importExternalChallenge(input: {
-  provider?: SourceProvider
-  sourceId: string
-}) {
-  const provider = input.provider ?? 'exercism'
+export async function importExternalChallenge(
+  input: {
+    provider?: SourceProvider
+    sourceId: string
+  },
+  access: TrainerAccess,
+) {
+  const provider = input.provider ?? 'leetcode'
   const sourceId = input.sourceId.trim()
 
   if (provider === 'leetcode') {
@@ -528,44 +448,47 @@ export async function importExternalChallenge(input: {
       expected: example.output,
       visibility: 'visible' as const,
     }))
-    const challenge = upsertChallenge({
-      id: `leetcode_${sourceId}`,
-      title: detail.questionTitle,
-      difficulty: difficultyFromText(detail.difficulty),
-      tags: [
-        'leetcode',
-        'imported',
-        ...(detail.topicTags ?? []).map((tag) => tag.slug || tag.name || '').filter(Boolean),
-      ].slice(0, 12),
-      prompt: htmlToPlainText(detail.question),
-      starterCode: problemFunctionStarter(sourceId),
-      examples: examples.length
-        ? examples
-        : [
-            {
-              input: detail.exampleTestcases || 'See source problem statement',
-              output: 'Buddy should derive expected output from the source statement.',
-            },
-          ],
-      testCases,
-      judgeInstructions: [
-        'Imported from alfa-leetcode-api selected problem endpoint.',
-        'Use visible examples from the statement for initial sandbox checks.',
-        'Do not expose official solutions in learner feedback.',
-        'If additional edge cases are needed, derive them from the constraints and explain them.',
-        detail.hints?.length
-          ? `Source hints available for Buddy coaching: ${detail.hints.map(htmlFragmentToPlainText).join(' ')}`
-          : '',
-      ]
-        .filter(Boolean)
-        .join('\n'),
-      source: {
-        provider,
-        id: sourceId,
-        url: detail.link || `https://leetcode.com/problems/${sourceId}`,
-        importedAt: new Date().toISOString(),
+    const challenge = upsertChallenge(
+      {
+        id: `leetcode_${sourceId}`,
+        title: detail.questionTitle,
+        difficulty: difficultyFromText(detail.difficulty),
+        tags: [
+          'leetcode',
+          'imported',
+          ...(detail.topicTags ?? []).map((tag) => tag.slug || tag.name || '').filter(Boolean),
+        ].slice(0, 12),
+        prompt: htmlToPlainText(detail.question),
+        starterCode: problemFunctionStarter(sourceId),
+        examples: examples.length
+          ? examples
+          : [
+              {
+                input: detail.exampleTestcases || 'See source problem statement',
+                output: 'Buddy should derive expected output from the source statement.',
+              },
+            ],
+        testCases,
+        judgeInstructions: [
+          'Imported from alfa-leetcode-api selected problem endpoint.',
+          'Use visible examples from the statement for initial sandbox checks.',
+          'Do not expose official solutions in learner feedback.',
+          'If additional edge cases are needed, derive them from the constraints and explain them.',
+          detail.hints?.length
+            ? `Source hints available for Buddy coaching: ${detail.hints.map(htmlFragmentToPlainText).join(' ')}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        source: {
+          provider,
+          id: sourceId,
+          url: detail.link || `https://leetcode.com/problems/${sourceId}`,
+          importedAt: new Date().toISOString(),
+        },
       },
-    })
+      access,
+    )
     return { challenge }
   }
 
@@ -583,93 +506,57 @@ export async function importExternalChallenge(input: {
       expected: example.output,
       visibility: 'visible' as const,
     }))
-    const challenge = upsertChallenge({
-      id: `codeforces_${sourceId.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
-      title: `${problem.contestId ?? 'Problemset'}${problem.index}. ${problem.name}`,
-      difficulty: difficultyFromCodeforces(problem),
-      tags: ['codeforces', 'imported', ...(problem.tags ?? [])].slice(0, 12),
-      prompt:
-        importedStatement?.prompt ??
-        [
-          `${problem.name} was imported from Codeforces metadata, but the statement page could not be reached from this server.`,
-          '',
-          'The official Codeforces API exposes metadata, tags, rating, and solve counts. It does not include the problem statement or sample tests.',
-          `Open the source problem for the full statement: ${codeforcesProblemUrl(problem)}`,
-        ].join('\n'),
-      starterCode:
-        'function solve(input) {\n  // Parse Codeforces stdin and write your solution here.\n}',
-      examples,
-      testCases,
-      judgeInstructions: [
-        importedStatement
-          ? 'Imported from Codeforces problemset metadata and mirror statement HTML.'
-          : 'Imported from Codeforces problemset metadata only; statement fetch failed.',
-        examples.length
-          ? 'Use imported sample tests for visible sandbox checks.'
-          : 'No sample tests were imported. Ask the learner to paste samples before sandbox validation.',
-        'Buddy should generate additional hidden edge cases from the constraints and explain why each case matters.',
-        'Do not expose official solutions in learner feedback.',
-        problem.rating ? `Problem rating: ${problem.rating}.` : '',
-        problem.tags?.length ? `Tags: ${problem.tags.join(', ')}.` : '',
-      ]
-        .filter(Boolean)
-        .join('\n'),
-      source: {
-        provider,
-        id: sourceId,
-        url: importedStatement?.statementUrl ?? codeforcesProblemUrl(problem),
-        importedAt: new Date().toISOString(),
+    const challenge = upsertChallenge(
+      {
+        id: `codeforces_${sourceId.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+        title: `${problem.contestId ?? 'Problemset'}${problem.index}. ${problem.name}`,
+        difficulty: difficultyFromCodeforces(problem),
+        tags: ['codeforces', 'imported', ...(problem.tags ?? [])].slice(0, 12),
+        prompt:
+          importedStatement?.prompt ??
+          [
+            `${problem.name} was imported from Codeforces metadata, but the statement page could not be reached from this server.`,
+            '',
+            'The official Codeforces API exposes metadata, tags, rating, and solve counts. It does not include the problem statement or sample tests.',
+            `Open the source problem for the full statement: ${codeforcesProblemUrl(problem)}`,
+          ].join('\n'),
+        starterCode:
+          'function solve(input) {\n  // Parse Codeforces stdin and write your solution here.\n}',
+        examples,
+        testCases,
+        judgeInstructions: [
+          importedStatement
+            ? 'Imported from Codeforces problemset metadata and mirror statement HTML.'
+            : 'Imported from Codeforces problemset metadata only; statement fetch failed.',
+          examples.length
+            ? 'Use imported sample tests for visible sandbox checks.'
+            : 'No sample tests were imported. Ask the learner to paste samples before sandbox validation.',
+          'Buddy should generate additional hidden edge cases from the constraints and explain why each case matters.',
+          'Do not expose official solutions in learner feedback.',
+          problem.rating ? `Problem rating: ${problem.rating}.` : '',
+          problem.tags?.length ? `Tags: ${problem.tags.join(', ')}.` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        source: {
+          provider,
+          id: sourceId,
+          url: importedStatement?.statementUrl ?? codeforcesProblemUrl(problem),
+          importedAt: new Date().toISOString(),
+        },
       },
-    })
+      access,
+    )
     return { challenge }
   }
 
-  if (provider !== 'exercism') throw new Error('unsupported_source_provider')
-  if (!/^[a-z0-9][a-z0-9-]*$/i.test(sourceId)) throw new Error('invalid_source_id')
-
-  const [introduction, instructions, canonicalText] = await Promise.all([
-    fetchOptionalText(`${exercismRawBase}/${sourceId}/introduction.md`),
-    fetchText(`${exercismRawBase}/${sourceId}/instructions.md`),
-    fetchText(`${exercismRawBase}/${sourceId}/canonical-data.json`),
-  ])
-  const canonical = JSON.parse(canonicalText) as ExercismCanonicalData
-  const canonicalCases = flattenCanonicalCases(canonical.cases)
-  if (canonicalCases.length === 0) throw new Error('source_has_no_canonical_tests')
-
-  const testCases = canonicalCasesToChallengeCases(canonicalCases)
-  const title = titleFromSlug(canonical.exercise || sourceId)
-  const challenge = upsertChallenge({
-    id: `exercism_${sourceId}`,
-    title,
-    difficulty: canonicalCases.length > 20 ? 'medium' : 'easy',
-    tags: ['exercism', 'imported'],
-    prompt: [introduction.trim(), instructions.trim()].filter(Boolean).join('\n\n'),
-    starterCode: starterForSource(sourceId, canonicalCases),
-    examples: testCases
-      .filter((testCase) => testCase.visibility === 'visible')
-      .map((testCase) => ({
-        input: testCase.input,
-        output: testCase.expected,
-        ...(testCase.description ? { explanation: testCase.description } : {}),
-      })),
-    testCases,
-    judgeInstructions: [
-      'Use the imported Exercism canonical cases as the primary sandbox test suite.',
-      'Visible examples may be shown to the learner. Hidden cases are for Buddy review and edge-case feedback.',
-      `Canonical test count: ${testCases.length}.`,
-    ].join('\n'),
-    source: {
-      provider,
-      id: sourceId,
-      url: `https://github.com/exercism/problem-specifications/tree/main/exercises/${sourceId}`,
-      importedAt: new Date().toISOString(),
-    },
-  })
-
-  return { challenge }
+  throw new Error('unsupported_source_provider')
 }
 
-export async function refreshImportedCodeforcesChallenge(challenge: Challenge) {
+export async function refreshImportedCodeforcesChallenge(
+  challenge: Challenge,
+  access: TrainerAccess,
+) {
   if (challenge.source?.provider !== 'codeforces') return null
   const metadataOnly =
     challenge.prompt.includes('Codeforces API exposes problem metadata') ||
@@ -678,10 +565,13 @@ export async function refreshImportedCodeforcesChallenge(challenge: Challenge) {
   if (!metadataOnly) return null
 
   try {
-    const result = await importExternalChallenge({
-      provider: 'codeforces',
-      sourceId: challenge.source.id,
-    })
+    const result = await importExternalChallenge(
+      {
+        provider: 'codeforces',
+        sourceId: challenge.source.id,
+      },
+      access,
+    )
     return result.challenge
   } catch {
     return null

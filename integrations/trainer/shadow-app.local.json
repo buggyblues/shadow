@@ -37,6 +37,11 @@
           },
           "difficulty": {
             "enum": ["easy", "medium", "hard"]
+          },
+          "tag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
           }
         },
         "additionalProperties": false
@@ -153,7 +158,7 @@
         "type": "object",
         "properties": {
           "provider": {
-            "enum": ["exercism", "leetcode", "codeforces"]
+            "enum": ["leetcode", "codeforces"]
           },
           "query": {
             "type": "string",
@@ -186,7 +191,7 @@
         "required": ["sourceId"],
         "properties": {
           "provider": {
-            "enum": ["exercism", "leetcode", "codeforces"]
+            "enum": ["leetcode", "codeforces"]
           },
           "sourceId": {
             "type": "string",
@@ -243,6 +248,24 @@
               },
               "reviewFocus": {
                 "enum": ["standard", "interview", "debug", "complexity"]
+              },
+              "coachingFocuses": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                  "enum": [
+                    "reasoning",
+                    "edge_cases",
+                    "complexity",
+                    "communication",
+                    "follow_ups",
+                    "debugging"
+                  ]
+                }
+              },
+              "locale": {
+                "type": "string",
+                "maxLength": 32
               }
             },
             "additionalProperties": false

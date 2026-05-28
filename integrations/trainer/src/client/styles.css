@@ -131,6 +131,8 @@ dd {
 .rememberToggle,
 .submitActions,
 .reviewRequestPill,
+.problemSwitcher,
+.restoreSelect,
 .sourceLink,
 .ghostLightButton,
 .primaryLink,
@@ -256,7 +258,9 @@ h3 {
 }
 
 .librarySearch input,
+.problemSwitcher select,
 .toolbarGroup select,
+.restoreSelect select,
 .reviewerSelect select,
 .focusSelect select {
   min-width: 0;
@@ -277,9 +281,24 @@ h3 {
   margin: 22px 0 14px;
 }
 
+.tagFilterBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.tagFilterBar > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .sourceProviderBar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 22px 0 14px;
 }
@@ -301,333 +320,6 @@ h3 {
   font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
-}
-
-.studyPage {
-  width: min(1220px, calc(100vw - 32px));
-  margin: 0 auto;
-  padding: 30px 0 52px;
-}
-
-.studyHero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 14px;
-  align-items: stretch;
-  margin-bottom: 14px;
-}
-
-.studyHeroCopy,
-.studyHeroPanel,
-.studyTrackRail,
-.theoryStudio,
-.studyQueue {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: color-mix(in oklch, var(--surface) 92%, transparent);
-  box-shadow: 0 22px 70px oklch(22% 0.06 252 / 0.08);
-}
-
-.studyHeroCopy {
-  overflow: hidden;
-  position: relative;
-  min-height: 250px;
-  padding: 34px;
-}
-
-.studyHeroCopy::after {
-  position: absolute;
-  right: 28px;
-  bottom: 22px;
-  width: 190px;
-  height: 6px;
-  background: linear-gradient(90deg, var(--accent), var(--mint), var(--amber));
-  content: "";
-}
-
-.studyHeroCopy h1 {
-  max-width: 900px;
-  font-size: clamp(42px, 6vw, 82px);
-  line-height: 0.96;
-  margin-top: 10px;
-}
-
-.studyHeroCopy p {
-  max-width: 760px;
-  color: var(--muted);
-  font-size: 17px;
-  font-weight: 650;
-  line-height: 1.55;
-  margin-top: 22px;
-}
-
-.studyHeroPanel {
-  display: grid;
-  align-content: end;
-  gap: 10px;
-  padding: 24px;
-}
-
-.studyHeroPanel > span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.studyHeroPanel strong {
-  color: var(--ink);
-  font-size: 52px;
-  line-height: 0.95;
-}
-
-.studyHeroPanel p {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 750;
-}
-
-.studyPhaseStrip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 18px;
-}
-
-.studyPhaseStrip span {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 900;
-  padding: 7px 8px;
-  text-align: center;
-}
-
-.studyStudioGrid {
-  display: grid;
-  grid-template-columns: 330px minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.studyTrackRail {
-  position: sticky;
-  top: 86px;
-  display: grid;
-  gap: 8px;
-  max-height: calc(100vh - 110px);
-  overflow: auto;
-  padding: 14px;
-}
-
-.railHeader,
-.studioHeader,
-.queueHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.railHeader {
-  align-items: center;
-  padding: 2px 2px 8px;
-}
-
-.railHeader span,
-.queueHeader > span {
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 900;
-  padding: 7px 10px;
-  white-space: nowrap;
-}
-
-.studyTrackButton {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-  border-color: var(--line);
-  background: transparent;
-  color: var(--ink);
-  min-height: 84px;
-  padding: 13px;
-  text-align: left;
-}
-
-.studyTrackButton:hover,
-.studyTrackButton.active {
-  border-color: color-mix(in oklch, var(--accent) 35%, var(--line));
-  background: color-mix(in oklch, var(--accent-weak) 55%, var(--surface));
-}
-
-.studyTrackButton span {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-
-.studyTrackButton strong,
-.studyTrackButton small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.studyTrackButton strong {
-  font-size: 14px;
-  line-height: 1.25;
-}
-
-.studyTrackButton small {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.studyTrackButton em {
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--surface);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 900;
-  padding: 5px 8px;
-}
-
-.theoryStudio {
-  display: grid;
-  gap: 16px;
-  padding: 18px;
-}
-
-.studioHeader {
-  align-items: center;
-}
-
-.studioHeader h2 {
-  font-size: 28px;
-  margin-top: 4px;
-}
-
-.studioHeader p {
-  max-width: 720px;
-  color: var(--muted);
-  line-height: 1.5;
-  margin-top: 8px;
-}
-
-.theoryBento {
-  display: grid;
-  grid-auto-flow: dense;
-  grid-auto-rows: minmax(118px, auto);
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.theoryTile {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  grid-column: span 4;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-2);
-  min-width: 0;
-  padding: 16px;
-}
-
-.theoryTileLarge {
-  grid-column: span 5;
-  grid-row: span 2;
-  background: linear-gradient(135deg, oklch(20% 0.04 252), oklch(31% 0.08 265));
-  color: oklch(96% 0.01 240);
-}
-
-.buddyTheoryTile {
-  grid-column: span 7;
-  background: color-mix(in oklch, var(--mint) 20%, var(--surface));
-}
-
-.theoryTile svg {
-  color: var(--accent);
-}
-
-.theoryTileLarge svg {
-  color: var(--mint);
-}
-
-.theoryTileLarge h3 {
-  color: oklch(96% 0.01 240);
-}
-
-.theoryTile h3 {
-  font-size: 15px;
-}
-
-.theoryTile p,
-.theoryTile li {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.55;
-}
-
-.theoryTileLarge p {
-  color: oklch(88% 0.02 240);
-  font-size: 15px;
-}
-
-.theoryTile ol,
-.theoryTile ul {
-  display: grid;
-  gap: 7px;
-  margin: 0;
-  padding-left: 18px;
-}
-
-.studyQueue {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 18px;
-}
-
-.queueHeader h2 {
-  font-size: 23px;
-  margin-top: 4px;
-}
-
-.queueList {
-  display: grid;
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-
-.queueProblemRow {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 12px;
-  background: var(--surface);
-  min-height: 56px;
-  padding: 10px 14px;
-}
-
-.queueProblemRow + .queueProblemRow {
-  border-top: 1px solid var(--line);
-}
-
-.queueProblemRow:hover {
-  background: color-mix(in oklch, var(--accent-weak) 35%, var(--surface));
 }
 
 .segmentedButton {
@@ -821,10 +513,67 @@ h3 {
 .workspacePage {
   display: grid;
   grid-template-columns: minmax(390px, 44vw) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   height: calc(100vh - 70px);
   min-height: 650px;
   padding: 12px;
+}
+
+.workspaceSwitchBar {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in oklch, var(--surface) 92%, var(--surface-2));
+  min-height: 50px;
+  padding: 8px 10px;
+}
+
+.problemSwitcher {
+  flex: 1 1 360px;
+  gap: 9px;
+  min-width: 0;
+}
+
+.problemSwitcher > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.problemSwitcher select {
+  width: min(520px, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 850;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.problemSwitcherMeta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.problemSwitcherMeta > span:not(.difficultyBadge) {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 26px;
+  padding: 5px 9px;
 }
 
 .problemPane,
@@ -1205,6 +954,27 @@ h3 {
   background: oklch(29% 0.035 252);
 }
 
+.restoreSelect {
+  gap: 7px;
+  border: 1px solid oklch(32% 0.03 252);
+  border-radius: var(--radius);
+  background: oklch(23% 0.028 252);
+  color: oklch(86% 0.02 252);
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.restoreSelect select {
+  color: oklch(89% 0.018 252);
+  font-size: 13px;
+  font-weight: 800;
+  max-width: 210px;
+}
+
+.restoreSelect option {
+  color: var(--ink);
+}
+
 .editorFrame {
   flex: 1;
   min-height: 300px;
@@ -1383,6 +1153,57 @@ h3 {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.focusPanel {
+  display: grid;
+  gap: 7px;
+  min-width: min(420px, 100%);
+}
+
+.reviewModeGroup,
+.coachingChecklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reviewModeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.reviewModeButton:hover,
+.reviewModeButton.active {
+  border-color: color-mix(in oklch, var(--accent) 35%, var(--line));
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.coachingChecklist label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.coachingChecklist input {
+  accent-color: var(--accent);
+  margin: 0;
 }
 
 .reviewerSelect,
@@ -1905,6 +1726,7 @@ h3 {
 @media (max-width: 980px) {
   .workspacePage {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
     height: auto;
     min-height: 0;
   }
@@ -1965,54 +1787,18 @@ h3 {
     grid-template-columns: 1fr;
   }
 
-  .studyPage {
-    width: min(100vw - 20px, 1180px);
-    padding-top: 18px;
-  }
-
-  .studyHero,
-  .studyStudioGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .studyHeroCopy {
-    min-height: auto;
-    padding: 24px;
-  }
-
-  .studyHeroCopy h1 {
-    font-size: 42px;
-  }
-
-  .studyTrackRail {
-    position: static;
-    max-height: none;
-  }
-
-  .studioHeader,
-  .queueHeader {
+  .workspaceSwitchBar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .theoryBento {
-    grid-template-columns: 1fr;
+  .problemSwitcher,
+  .problemSwitcherMeta {
+    width: 100%;
   }
 
-  .theoryTile,
-  .theoryTileLarge,
-  .buddyTheoryTile {
-    grid-column: auto;
-    grid-row: auto;
-  }
-
-  .queueProblemRow {
-    grid-template-columns: 34px minmax(0, 1fr) auto;
-  }
-
-  .queueProblemRow .difficultyBadge {
-    grid-column: 2 / -1;
-    justify-self: start;
+  .problemSwitcherMeta {
+    justify-content: flex-start;
   }
 
   .sourceRow .ghostLightButton {
@@ -2084,7 +1870,7 @@ h3 {
 
   .toolbarActions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .submitActions {
@@ -2099,11 +1885,13 @@ h3 {
 
   .submitActions .primaryAction,
   .reviewerSelect,
+  .focusPanel,
   .focusSelect {
     width: 100%;
   }
 
   .reviewerSelect select,
+  .restoreSelect select,
   .focusSelect select {
     max-width: none;
     width: 100%;

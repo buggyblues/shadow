@@ -240,10 +240,14 @@ const serverAppTaskContextSchema = z.object({
   claimId: z.string().uuid().optional(),
 })
 
+function optionalNullable<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => (value === null ? undefined : value), schema.optional())
+}
+
 export const callServerAppCommandSchema = z.object({
   input: z.unknown().optional(),
-  channelId: z.string().uuid().optional(),
-  task: serverAppTaskContextSchema.optional(),
+  channelId: optionalNullable(z.string().uuid()),
+  task: optionalNullable(serverAppTaskContextSchema),
 })
 
 export type ServerAppManifestInput = z.infer<typeof serverAppManifestSchema>

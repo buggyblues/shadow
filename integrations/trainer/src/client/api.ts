@@ -10,6 +10,7 @@ import {
 import type {
   Challenge,
   CodeSubmission,
+  SubmissionCoachingFocus,
   SubmissionOutcome,
   SubmissionReviewFocus,
 } from '../types.js'
@@ -36,7 +37,7 @@ export type InboxDelivery = ShadowServerAppInboxDelivery
 export type InboxDeliveryError = ShadowServerAppInboxDeliveryError
 
 export interface ProblemSource {
-  provider: 'exercism' | 'leetcode' | 'codeforces'
+  provider: 'leetcode' | 'codeforces'
   id: string
   title: string
   difficulty?: Challenge['difficulty']
@@ -89,7 +90,11 @@ export async function listBuddyInboxes() {
   return bridge.inboxes() as Promise<{ inboxes: BuddyInboxOption[] }>
 }
 
-export function listChallenges(input: { query?: string; difficulty?: Challenge['difficulty'] }) {
+export function listChallenges(input: {
+  query?: string
+  difficulty?: Challenge['difficulty']
+  tag?: string
+}) {
   return command<{ challenges: Challenge[] }>('challenges.list', input)
 }
 
@@ -140,6 +145,8 @@ export function createSubmission(input: {
     assigneeLabel?: string
     displayName?: string
     reviewFocus?: SubmissionReviewFocus
+    coachingFocuses?: SubmissionCoachingFocus[]
+    locale?: string
   }
 }) {
   return command<{
