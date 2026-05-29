@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import { Avatar } from './avatar'
+import { OnlineRank } from './online-rank'
 
 export type InviteStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
@@ -18,6 +19,9 @@ export interface BuddyListItemData {
   membershipTier?: string | null
   membershipLevel?: number | null
   totalOnlineSeconds?: number
+  lastHeartbeat?: string | null
+  createdAt?: string
+  updatedAt?: string
   buddyTag?: string | null
   creator?: {
     uid: string
@@ -34,19 +38,6 @@ interface BuddyListItemProps {
   disabled?: boolean
 }
 
-const toReadableSeconds = (seconds?: number) => {
-  if (seconds == null) return '--'
-  const total = Math.max(0, Math.floor(seconds))
-  const hours = Math.floor(total / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`
-  }
-
-  return `${minutes}m`
-}
-
 export function BuddyListItem({
   member,
   showCheckbox,
@@ -59,8 +50,8 @@ export function BuddyListItem({
 
   const canSelect = !disabled && onSelect != null && showCheckbox
   const statusText = t(`member.${member.status}`, member.status)
-  const membershipInfo = (
-    member.membershipTier || member.membershipLevel != null
+  const membershipInfo =
+    !member.isBot && (member.membershipTier || member.membershipLevel != null)
       ? [
           member.membershipTier
             ? t(`settings.membershipTiers.${member.membershipTier}`, member.membershipTier)
@@ -69,10 +60,9 @@ export function BuddyListItem({
             ? t('settings.membershipLevelLabel', { level: member.membershipLevel })
             : null,
         ]
-      : []
-  )
-    .filter(Boolean)
-    .join(' · ')
+          .filter(Boolean)
+          .join(' · ')
+      : ''
 
   const isSelectable = showCheckbox && canSelect
 
@@ -137,29 +127,19 @@ export function BuddyListItem({
           ) : null}
         </View>
 
-        <Text style={[styles.username, { color: colors.textMuted }]} numberOfLines={1}>
-          @{member.username}
-        </Text>
-        <Text style={[styles.subText, { color: colors.textMuted }]}>
-          {t('member.uidLabel', 'UID')}: {member.uid}
-        </Text>
-        <Text style={[styles.subText, { color: colors.textMuted }]}>
-          {statusText}
-          {membershipInfo ? ` · ${membershipInfo}` : ''}
-        </Text>
-        {member.buddyTag ? (
+        {member.isBot ? (
+          member.totalOnlineSeconds && member.totalOnlineSeconds > 0 ? (
+            <View style={styles.rankRow}>
+              <OnlineRank totalSeconds={member.totalOnlineSeconds} />
+            </View>
+          ) : (
+            <Text style={[styles.rankFallback, { color: colors.warning }]}>⭐</Text>
+          )
+        ) : (
           <Text style={[styles.subText, { color: colors.textMuted }]}>
-            {t('member.buddyTagLabel', 'Buddy Tag')}: {member.buddyTag}
+            {[`@${member.username}`, statusText, membershipInfo].filter(Boolean).join(' · ')}
           </Text>
-        ) : null}
-        {member.creator ? (
-          <Text style={[styles.subText, { color: colors.textMuted }]}>
-            {t('channel.buddyOwner', 'Creator')}: {member.creator.nickname}
-          </Text>
-        ) : null}
-        <Text style={[styles.subText, { color: colors.textMuted }]}>
-          {t('member.onlineTime', 'Online Time')}: {toReadableSeconds(member.totalOnlineSeconds)}
-        </Text>
+        )}
       </View>
     </Pressable>
   )
@@ -181,6 +161,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: 'row',
@@ -204,13 +185,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-  username: {
-    fontSize: fontSize.xs,
-    marginTop: 2,
-  },
   subText: {
-    marginTop: 2,
-    fontSize: 11,
+    marginTop: 4,
+    fontSize: fontSize.xs,
+  },
+  rankRow: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  rankFallback: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 14,
   },
   checkbox: {
     width: 14,

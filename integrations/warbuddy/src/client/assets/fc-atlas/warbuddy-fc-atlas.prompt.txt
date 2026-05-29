@@ -1,0 +1,6 @@
+FC / NES 8-bit pixel art game asset atlas for a top-down tank battle arena.
+Exact orthographic pixel art, crisp hard edges, no anti-aliasing look, limited 1980s console palette.
+Compose as a clean 4 columns by 4 rows sprite sheet, equal square cells, no labels, no text, no UI, no perspective tilt.
+Solid #FF00FF magenta background in all empty space between assets.
+Cell contents in reading order: open olive battlefield ground tile, dark steel brick wall tile, brown destructible dirt mound tile, tall grass tile, red player tank facing right, blue enemy tank facing left, red player tank facing up, blue enemy tank facing down, golden star pickup, small red shell projectile, small blue shell projectile, yellow shield ring effect, orange pixel explosion impact, purple freeze spark, green poison cloud, cyan teleport burst.
+Every asset centered in its own cell, contained inside the central 70 percent safe area, consistent pixel scale, strong black 1-pixel outlines, readable at 24 to 48 px.

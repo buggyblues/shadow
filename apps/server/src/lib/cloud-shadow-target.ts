@@ -1,8 +1,15 @@
 import { CLOUD_SAAS_RUNTIME_KEY, extractCloudSaasRuntime } from '@shadowob/cloud'
 
-type PlayLaunchRuntimeMetadata = {
-  defaultChannelName?: string
-  greeting?: string
+type GreetingMessageConfig = {
+  id?: string
+  channelId?: string
+  buddyId?: string
+  content: string
+}
+
+type GreetingRuntimeMetadata = {
+  entryChannelId?: string
+  messages: GreetingMessageConfig[]
   locale?: string
 }
 
@@ -14,81 +21,54 @@ function normalizeName(value: string | undefined | null) {
   return value?.trim().toLowerCase() || ''
 }
 
-export function attachPlayLaunchRuntimeMetadata(
+export function attachGreetingRuntimeMetadata(
   configSnapshot: Record<string, unknown>,
-  metadata: PlayLaunchRuntimeMetadata,
+  metadata: Partial<Omit<GreetingRuntimeMetadata, 'locale'>>,
 ) {
-  if (!metadata.defaultChannelName && !metadata.greeting) return configSnapshot
+  if (!metadata.entryChannelId && !metadata.messages?.length) return configSnapshot
   const runtime = isRecord(configSnapshot[CLOUD_SAAS_RUNTIME_KEY])
     ? (configSnapshot[CLOUD_SAAS_RUNTIME_KEY] as Record<string, unknown>)
     : {}
-  const runtimePlayLaunch = isRecord(runtime.playLaunch) ? runtime.playLaunch : {}
-  const use = Array.isArray(configSnapshot.use)
-    ? configSnapshot.use.map((entry) => {
-        if (!isRecord(entry) || entry.plugin !== 'shadowob') return entry
-        const options = isRecord(entry.options) ? entry.options : {}
-        const playLaunch = isRecord(options.playLaunch) ? options.playLaunch : {}
-        return {
-          ...entry,
-          options: {
-            ...options,
-            playLaunch: {
-              ...playLaunch,
-              ...(metadata.defaultChannelName
-                ? { defaultChannelName: metadata.defaultChannelName }
-                : {}),
-              ...(metadata.greeting ? { greeting: metadata.greeting } : {}),
-            },
-          },
-        }
-      })
-    : configSnapshot.use
+  const runtimeGreeting = normalizeGreetingConfig(runtime.greeting)
 
   return {
     ...configSnapshot,
     [CLOUD_SAAS_RUNTIME_KEY]: {
       ...runtime,
-      playLaunch: {
-        ...runtimePlayLaunch,
-        ...(metadata.defaultChannelName ? { defaultChannelName: metadata.defaultChannelName } : {}),
-        ...(metadata.greeting ? { greeting: metadata.greeting } : {}),
+      greeting: {
+        ...(runtimeGreeting.entryChannelId
+          ? { entryChannelId: runtimeGreeting.entryChannelId }
+          : {}),
+        ...(metadata.entryChannelId ? { entryChannelId: metadata.entryChannelId } : {}),
+        messages: metadata.messages?.length ? metadata.messages : runtimeGreeting.messages,
       },
     },
-    ...(use ? { use } : {}),
   }
 }
 
-function playLaunchRuntimeMetadata(configSnapshot: unknown): PlayLaunchRuntimeMetadata {
-  if (!isRecord(configSnapshot)) return {}
-  const shadowobPlayLaunch = shadowobPlayLaunchMetadata(configSnapshot)
+function greetingRuntimeMetadata(configSnapshot: unknown): GreetingRuntimeMetadata {
+  const empty: GreetingRuntimeMetadata = { messages: [] }
+  if (!isRecord(configSnapshot)) return empty
+  const shadowobGreeting = shadowobGreetingMetadata(configSnapshot)
   const runtime = configSnapshot[CLOUD_SAAS_RUNTIME_KEY]
-  if (!isRecord(runtime)) return shadowobPlayLaunch
+  if (!isRecord(runtime)) return shadowobGreeting
   const contextLocale =
     isRecord(runtime.context) && typeof runtime.context.locale === 'string'
       ? runtime.context.locale
       : undefined
-  if (!isRecord(runtime.playLaunch)) {
-    return {
-      ...shadowobPlayLaunch,
-      ...(contextLocale ? { locale: contextLocale } : {}),
-    }
-  }
+  const runtimeGreeting = normalizeGreetingConfig(runtime.greeting)
   return {
-    ...shadowobPlayLaunch,
+    ...shadowobGreeting,
+    ...(runtimeGreeting.entryChannelId ? { entryChannelId: runtimeGreeting.entryChannelId } : {}),
+    messages: runtimeGreeting.messages.length
+      ? runtimeGreeting.messages
+      : shadowobGreeting.messages,
     ...(contextLocale ? { locale: contextLocale } : {}),
-    ...(typeof runtime.playLaunch.defaultChannelName === 'string'
-      ? { defaultChannelName: runtime.playLaunch.defaultChannelName }
-      : {}),
-    ...(typeof runtime.playLaunch.greeting === 'string'
-      ? { greeting: runtime.playLaunch.greeting }
-      : {}),
   }
 }
 
-export function extractPlayLaunchRuntimeMetadata(
-  configSnapshot: unknown,
-): PlayLaunchRuntimeMetadata {
-  return playLaunchRuntimeMetadata(configSnapshot)
+export function extractGreetingRuntimeMetadata(configSnapshot: unknown): GreetingRuntimeMetadata {
+  return greetingRuntimeMetadata(configSnapshot)
 }
 
 function shadowobOptions(configSnapshot: unknown): Record<string, unknown> | null {
@@ -99,29 +79,52 @@ function shadowobOptions(configSnapshot: unknown): Record<string, unknown> | nul
   return isRecord(shadowobEntry) && isRecord(shadowobEntry.options) ? shadowobEntry.options : null
 }
 
-function shadowobPlayLaunchMetadata(configSnapshot: unknown): PlayLaunchRuntimeMetadata {
+function shadowobGreetingMetadata(configSnapshot: unknown): GreetingRuntimeMetadata {
   const options = shadowobOptions(configSnapshot)
-  const playLaunch = options?.playLaunch
-  if (!isRecord(playLaunch)) return {}
+  return normalizeGreetingConfig(options?.greeting)
+}
+
+function normalizeGreetingConfig(value: unknown): GreetingRuntimeMetadata {
+  const empty: GreetingRuntimeMetadata = { messages: [] }
+  if (!isRecord(value)) return empty
+  const messages = Array.isArray(value.messages)
+    ? value.messages
+        .map((message): GreetingMessageConfig | null => {
+          if (!isRecord(message) || typeof message.content !== 'string') return null
+          return {
+            ...(typeof message.id === 'string' ? { id: message.id } : {}),
+            ...(typeof message.channelId === 'string' ? { channelId: message.channelId } : {}),
+            ...(typeof message.buddyId === 'string' ? { buddyId: message.buddyId } : {}),
+            content: message.content,
+          }
+        })
+        .filter((message): message is GreetingMessageConfig => message !== null)
+    : []
+  if (typeof value.content === 'string') {
+    messages.unshift({
+      ...(typeof value.channelId === 'string' ? { channelId: value.channelId } : {}),
+      ...(typeof value.buddyId === 'string' ? { buddyId: value.buddyId } : {}),
+      content: value.content,
+    })
+  }
   return {
-    ...(typeof playLaunch.defaultChannelName === 'string'
-      ? { defaultChannelName: playLaunch.defaultChannelName }
-      : {}),
-    ...(typeof playLaunch.greeting === 'string' ? { greeting: playLaunch.greeting } : {}),
+    ...(typeof value.entryChannelId === 'string' ? { entryChannelId: value.entryChannelId } : {}),
+    messages,
   }
 }
 
 function resolvePreferredChannelConfigId(
   configSnapshot: unknown,
-  defaultChannelName?: string | null,
+  preferredChannelName?: string | null,
 ): string | null {
   const options = shadowobOptions(configSnapshot)
   const servers = Array.isArray(options?.servers) ? options.servers : []
   const channels = servers.flatMap((server) =>
     isRecord(server) && Array.isArray(server.channels) ? server.channels : [],
   )
+  const greeting = greetingRuntimeMetadata(configSnapshot)
   const normalizedDefault = normalizeName(
-    defaultChannelName ?? playLaunchRuntimeMetadata(configSnapshot).defaultChannelName,
+    preferredChannelName ?? greeting.entryChannelId ?? greeting.messages[0]?.channelId,
   )
 
   if (normalizedDefault) {
@@ -150,7 +153,7 @@ function resolvePreferredChannelConfigId(
 
 export function extractShadowProvisionTarget(
   configSnapshot: unknown,
-  defaultChannelName?: string | null,
+  preferredChannelName?: string | null,
 ): {
   serverId: string | null
   channelId: string | null
@@ -173,7 +176,7 @@ export function extractShadowProvisionTarget(
   }
 
   const channelMap = channels as Record<string, unknown>
-  const preferredConfigId = resolvePreferredChannelConfigId(configSnapshot, defaultChannelName)
+  const preferredConfigId = resolvePreferredChannelConfigId(configSnapshot, preferredChannelName)
   const preferredChannelId =
     preferredConfigId && typeof channelMap[preferredConfigId] === 'string'
       ? (channelMap[preferredConfigId] as string)
@@ -182,6 +185,54 @@ export function extractShadowProvisionTarget(
     Object.values(channelMap).find((value): value is string => typeof value === 'string') ?? null
 
   return { serverId, channelId: preferredChannelId ?? fallbackChannelId }
+}
+
+export function extractShadowGreetingMessages(configSnapshot: unknown): Array<{
+  id: string
+  channelConfigId: string
+  channelId: string
+  buddyConfigId: string | null
+  buddyUserId: string
+  content: string
+}> {
+  const { provisionState } = extractCloudSaasRuntime(configSnapshot)
+  const shadowob = provisionState?.plugins?.shadowob
+  if (!isRecord(shadowob) || !isRecord(shadowob.channels) || !isRecord(shadowob.buddies)) {
+    return []
+  }
+
+  const channelMap = shadowob.channels
+  const buddyEntries = Object.entries(shadowob.buddies).filter(
+    (entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]),
+  )
+  const fallbackBuddy = buddyEntries.find(([, value]) => typeof value.userId === 'string')
+  const greeting = greetingRuntimeMetadata(configSnapshot)
+  const fallbackChannelConfigId = resolvePreferredChannelConfigId(
+    configSnapshot,
+    greeting.entryChannelId,
+  )
+
+  return greeting.messages.flatMap((message, index) => {
+    const channelConfigId = message.channelId ?? fallbackChannelConfigId
+    if (!channelConfigId || typeof channelMap[channelConfigId] !== 'string') return []
+    const buddyEntry =
+      (message.buddyId
+        ? buddyEntries.find(([buddyId]) => buddyId === message.buddyId)
+        : fallbackBuddy) ?? fallbackBuddy
+    const buddyConfigId = buddyEntry?.[0] ?? null
+    const buddyUserId = buddyEntry?.[1].userId
+    if (typeof buddyUserId !== 'string') return []
+    return [
+      {
+        id: message.id ?? `${channelConfigId}:${buddyConfigId ?? 'buddy'}:${index + 1}`,
+        channelConfigId,
+        channelId: channelMap[channelConfigId] as string,
+        buddyConfigId,
+        buddyUserId,
+        content: message.content,
+      },
+    ]
+  })
 }
 
 export function extractShadowProvisionBuddyUserIds(configSnapshot: unknown): string[] {

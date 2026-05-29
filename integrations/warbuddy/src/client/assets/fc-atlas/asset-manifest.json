@@ -1,0 +1,37 @@
+{
+  "name": "warbuddy-fc-atlas",
+  "style": "FC / NES 8-bit pixel art",
+  "source": "image_gen",
+  "mapMode": "grid_mode",
+  "visualModel": "tilemap",
+  "engineTarget": "project-native CSS grid",
+  "rawImage": "warbuddy-fc-atlas-raw.png",
+  "prompt": "warbuddy-fc-atlas.prompt.txt",
+  "processedSheet": "processed/sheet-transparent.png",
+  "qaPreview": "warbuddy-classic-preview.png",
+  "postprocess": {
+    "skill": "generate2dsprite",
+    "mode": "prop_pack_4x4",
+    "rows": 4,
+    "cols": 4,
+    "backgroundKey": "#FF00FF"
+  },
+  "frames": {
+    "ground": "processed/warbuddy_fc-1.png",
+    "wall": "processed/warbuddy_fc-2.png",
+    "dirt": "processed/warbuddy_fc-3.png",
+    "grass": "processed/warbuddy_fc-4.png",
+    "redTankRight": "processed/warbuddy_fc-5.png",
+    "blueTankLeft": "processed/warbuddy_fc-6.png",
+    "redTankUp": "processed/warbuddy_fc-7.png",
+    "blueTankDown": "processed/warbuddy_fc-8.png",
+    "star": "processed/warbuddy_fc-9.png",
+    "redShell": "processed/warbuddy_fc-10.png",
+    "blueShell": "processed/warbuddy_fc-11.png",
+    "shield": "processed/warbuddy_fc-12.png",
+    "explosion": "processed/warbuddy_fc-13.png",
+    "freeze": "processed/warbuddy_fc-14.png",
+    "poison": "processed/warbuddy_fc-15.png",
+    "teleport": "processed/warbuddy_fc-16.png"
+  }
+}

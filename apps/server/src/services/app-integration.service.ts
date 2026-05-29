@@ -4,6 +4,9 @@ import {
   getShadowServerAppTaskCardId,
   SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
   SHADOW_SERVER_APP_PROTOCOL,
+  type ShadowServerAppChannelMessageDelivery,
+  type ShadowServerAppChannelMessageDeliveryError,
+  type ShadowServerAppChannelMessageOutbox,
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppInboxDeliveryError,
   type ShadowServerAppInboxTaskOutbox,
@@ -14,6 +17,8 @@ import type { Server as SocketIOServer } from 'socket.io'
 import { ZodError } from 'zod'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AppIntegrationDao } from '../dao/app-integration.dao'
+import type { ChannelDao } from '../dao/channel.dao'
+import type { MessageDao } from '../dao/message.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
@@ -34,6 +39,7 @@ import {
 import type { AppIntegrationEventBus } from './app-integration-event-bus'
 import type { BuddyInboxService } from './buddy-inbox.service'
 import type { MediaService } from './media.service'
+import type { MessageService } from './message.service'
 import type { PolicyService } from './policy.service'
 
 const MANIFEST_LIMITS = {
@@ -182,6 +188,7 @@ type CommandSubject = {
 type TaskCommandContext = Awaited<ReturnType<BuddyInboxService['assertTaskCommandAccess']>>['task']
 
 type InboxTaskOutbox = ShadowServerAppInboxTaskOutbox
+type ChannelMessageOutbox = ShadowServerAppChannelMessageOutbox
 
 const RESTRICTED_DATA_CLASSES = new Set(['financial', 'secret', 'cloud-secret'])
 const TASK_PRIORITIES = new Set(['low', 'normal', 'high', 'urgent'])
@@ -237,6 +244,49 @@ function parseInboxTaskOutbox(value: unknown): InboxTaskOutbox | null {
   }
 }
 
+function parseChannelMessageOutbox(value: unknown): ChannelMessageOutbox | null {
+  if (!isRecord(value)) return null
+  const content = optionalString(value.content)
+  if (!content) return null
+  return {
+    content,
+    ...(optionalString(value.channelId) ? { channelId: optionalString(value.channelId) } : {}),
+    ...(optionalString(value.channelName)
+      ? { channelName: optionalString(value.channelName) }
+      : {}),
+    ...(optionalRecord(value.metadata) ? { metadata: optionalRecord(value.metadata) } : {}),
+    ...(optionalString(value.idempotencyKey)
+      ? { idempotencyKey: optionalString(value.idempotencyKey) }
+      : {}),
+  }
+}
+
+function channelMessageIdempotencyFromMetadata(metadata: unknown) {
+  if (!isRecord(metadata)) return null
+  const custom = optionalRecord(metadata.custom)
+  const serverApp = optionalRecord(custom?.serverAppChannelMessage)
+  return optionalString(serverApp?.idempotencyKey)
+}
+
+function withChannelMessageIdempotencyMetadata(
+  metadata: Record<string, unknown> | undefined,
+  idempotencyKey: string | undefined,
+) {
+  if (!idempotencyKey) return metadata
+  const custom = optionalRecord(metadata?.custom) ?? {}
+  const serverAppChannelMessage = optionalRecord(custom.serverAppChannelMessage) ?? {}
+  return {
+    ...(metadata ?? {}),
+    custom: {
+      ...custom,
+      serverAppChannelMessage: {
+        ...serverAppChannelMessage,
+        idempotencyKey,
+      },
+    },
+  }
+}
+
 function optionalShadowMeta(value: unknown): ShadowServerAppResultShadow | null {
   if (!isRecord(value)) return null
   if (value.protocol !== SHADOW_SERVER_APP_PROTOCOL) return null
@@ -249,12 +299,28 @@ function inboxTaskListFromRecord(record: Record<string, unknown>) {
   return raw.map(parseInboxTaskOutbox).filter((task): task is InboxTaskOutbox => Boolean(task))
 }
 
+function channelMessageListFromRecord(record: Record<string, unknown>) {
+  const shadow = optionalShadowMeta(record.shadow)
+  const raw = shadow?.outbox?.channelMessages ?? []
+  return raw
+    .map(parseChannelMessageOutbox)
+    .filter((message): message is ChannelMessageOutbox => Boolean(message))
+}
+
 function collectInboxTaskOutbox(payload: unknown, depth = 0): InboxTaskOutbox[] {
   if (depth > 4 || !isRecord(payload)) return []
   const tasks = [...inboxTaskListFromRecord(payload)]
   const nested = optionalRecord(payload.result)
   if (nested) tasks.push(...collectInboxTaskOutbox(nested, depth + 1))
   return tasks
+}
+
+function collectChannelMessageOutbox(payload: unknown, depth = 0): ChannelMessageOutbox[] {
+  if (depth > 4 || !isRecord(payload)) return []
+  const messages = [...channelMessageListFromRecord(payload)]
+  const nested = optionalRecord(payload.result)
+  if (nested) messages.push(...collectChannelMessageOutbox(nested, depth + 1))
+  return messages
 }
 
 function extractInboxTaskOutbox(payload: unknown) {
@@ -270,6 +336,21 @@ function extractInboxTaskOutbox(payload: unknown) {
       task.assigneeLabel,
       task.title,
     ]
+      .filter(Boolean)
+      .join('|')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function extractChannelMessageOutbox(payload: unknown) {
+  if (!isRecord(payload)) return []
+  const messages = collectChannelMessageOutbox(payload)
+
+  const seen = new Set<string>()
+  return messages.filter((message) => {
+    const key = [message.idempotencyKey, message.channelId, message.channelName, message.content]
       .filter(Boolean)
       .join('|')
     if (seen.has(key)) return false
@@ -297,6 +378,33 @@ function attachInboxDeliveryResult(
           ...(shadow?.outbox ?? {}),
           ...(deliveries.length > 0 ? { deliveries } : {}),
           ...(errors.length > 0 ? { errors } : {}),
+        },
+      },
+    }
+  }
+  const nested = optionalRecord(payload.result)
+  if (!nested) return withDeliveryMeta(payload)
+  return {
+    ...withDeliveryMeta(payload),
+    result: withDeliveryMeta(nested),
+  }
+}
+
+function attachChannelMessageDeliveryResult(
+  payload: Record<string, unknown>,
+  deliveries: ShadowServerAppChannelMessageDelivery[],
+  errors: ShadowServerAppChannelMessageDeliveryError[],
+): Record<string, unknown> {
+  const withDeliveryMeta = (value: Record<string, unknown>) => {
+    const shadow = optionalShadowMeta(value.shadow)
+    return {
+      ...value,
+      shadow: {
+        protocol: SHADOW_SERVER_APP_PROTOCOL,
+        outbox: {
+          ...(shadow?.outbox ?? {}),
+          ...(deliveries.length > 0 ? { channelMessageDeliveries: deliveries } : {}),
+          ...(errors.length > 0 ? { channelMessageErrors: errors } : {}),
         },
       },
     }
@@ -357,9 +465,12 @@ export class AppIntegrationService {
     private deps: {
       appIntegrationDao: AppIntegrationDao
       agentDao: AgentDao
+      channelDao: ChannelDao
+      messageDao: MessageDao
       userDao: UserDao
       appIntegrationEventBus: AppIntegrationEventBus
       buddyInboxService: BuddyInboxService
+      messageService: MessageService
       serverDao: ServerDao
       policyService: PolicyService
       mediaService: MediaService
@@ -1138,18 +1249,19 @@ export class AppIntegrationService {
         grant?.permissions,
         input.command.permission,
       )
-      grantApprovalMode = explicitBuddyGrantAllows ? (grant!.approvalMode as ApprovalMode) : null
+      grantApprovalMode = explicitBuddyGrantAllows
+        ? ((grant!.approvalMode as ApprovalMode | null) ?? 'none')
+        : null
     }
 
     const baseAllowed =
       subject.subjectKind === 'buddy' ? defaultAllowed || explicitBuddyGrantAllows : defaultAllowed
 
     const restricted = RESTRICTED_DATA_CLASSES.has(input.command.dataClass)
-    let approvalMode = (
-      grantApprovalMode && grantApprovalMode !== 'none'
-        ? grantApprovalMode
-        : (input.command.approvalMode ?? (input.app.defaultApprovalMode as ApprovalMode))
-    ) as ApprovalMode
+    const manifestApprovalMode = (input.command.approvalMode ??
+      (input.app.defaultApprovalMode as ApprovalMode) ??
+      'none') as ApprovalMode
+    let approvalMode = grantApprovalMode ?? manifestApprovalMode
 
     let reason: 'not_default' | 'first_time' | 'every_time' | 'restricted' | 'policy' = 'first_time'
     if (restricted && approvalMode === 'none') {
@@ -1359,6 +1471,102 @@ export class AppIntegrationService {
     }
 
     return attachInboxDeliveryResult(input.result, deliveries, errors)
+  }
+
+  private async resolveChannelMessageTarget(serverId: string, message: ChannelMessageOutbox) {
+    if (message.channelId) {
+      const channel = await this.deps.channelDao.findById(message.channelId)
+      if (channel?.serverId === serverId) return channel
+      return null
+    }
+    const channelName = message.channelName?.trim()
+    if (!channelName) return null
+    const channels = await this.deps.channelDao.findByServerId(serverId)
+    const normalized = channelName.toLowerCase()
+    return channels.find((channel) => channel.name.toLowerCase() === normalized) ?? null
+  }
+
+  private async findMessageByChannelMessageIdempotencyKey(
+    channelId: string,
+    idempotencyKey?: string,
+  ) {
+    const key = idempotencyKey?.trim()
+    if (!key) return null
+    const recent = await this.deps.messageDao.findByChannelId(channelId, 100)
+    return (
+      recent.messages.find(
+        (message) => channelMessageIdempotencyFromMetadata(message.metadata) === key,
+      ) ?? null
+    )
+  }
+
+  private async attachChannelMessageDeliveries(input: {
+    result: Record<string, unknown>
+    serverId: string
+    actor: Actor
+  }) {
+    const messages = extractChannelMessageOutbox(input.result)
+    if (messages.length === 0) return input.result
+    if (input.actor.kind === 'system') {
+      const errors = messages.map((message) => ({
+        ...(message.channelId ? { channelId: message.channelId } : {}),
+        ...(message.channelName ? { channelName: message.channelName } : {}),
+        ...(message.idempotencyKey ? { idempotencyKey: message.idempotencyKey } : {}),
+        error: 'System actor cannot send channel messages',
+      }))
+      return attachChannelMessageDeliveryResult(input.result, [], errors)
+    }
+
+    const deliveries: ShadowServerAppChannelMessageDelivery[] = []
+    const errors: ShadowServerAppChannelMessageDeliveryError[] = []
+    for (const message of messages) {
+      try {
+        const channel = await this.resolveChannelMessageTarget(input.serverId, message)
+        if (!channel) {
+          throw Object.assign(new Error('Channel message target was not found in this server'), {
+            status: 404,
+          })
+        }
+        const existing = await this.findMessageByChannelMessageIdempotencyKey(
+          channel.id,
+          message.idempotencyKey,
+        )
+        if (existing) {
+          deliveries.push({
+            channelId: channel.id,
+            messageId: existing.id,
+            ...(message.idempotencyKey ? { idempotencyKey: message.idempotencyKey } : {}),
+          })
+          continue
+        }
+        const created = await this.deps.messageService.send(channel.id, input.actor.userId, {
+          content: message.content,
+          ...(message.metadata || message.idempotencyKey
+            ? {
+                metadata: withChannelMessageIdempotencyMetadata(
+                  message.metadata,
+                  message.idempotencyKey,
+                ),
+              }
+            : {}),
+        })
+        deliveries.push({
+          channelId: channel.id,
+          messageId: created.id,
+          ...(message.idempotencyKey ? { idempotencyKey: message.idempotencyKey } : {}),
+        })
+        this.deps.io.to(`channel:${channel.id}`).emit('message:new', created)
+      } catch (err) {
+        errors.push({
+          ...(message.channelId ? { channelId: message.channelId } : {}),
+          ...(message.channelName ? { channelName: message.channelName } : {}),
+          ...(message.idempotencyKey ? { idempotencyKey: message.idempotencyKey } : {}),
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    return attachChannelMessageDeliveryResult(input.result, deliveries, errors)
   }
 
   private assertSignature(signature: string, expected: string) {
@@ -1573,11 +1781,16 @@ export class AppIntegrationService {
       await this.consumeTransientCommandConsent(commandAccess)
       return { ok: true, result }
     }
-    const deliveredResult = await this.attachInboxTaskDeliveries({
+    const deliveredInboxResult = await this.attachInboxTaskDeliveries({
       result,
       serverId,
       app: { id: app.id, appKey: app.appKey, name: app.name },
       commandName: command.name,
+      actor: input.actor,
+    })
+    const deliveredResult = await this.attachChannelMessageDeliveries({
+      result: deliveredInboxResult,
+      serverId,
       actor: input.actor,
     })
     this.publishCommandEvent({

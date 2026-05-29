@@ -279,6 +279,34 @@ export class AgentService {
     return this.getById(id)
   }
 
+  async updateConnectorBinding(
+    id: string,
+    ownerId: string,
+    data: {
+      connectorComputerId: string
+      connectorRuntimeId: string
+      connectorRuntimeLabel: string
+    },
+  ) {
+    const agent = await this.deps.agentDao.findById(id)
+    if (!agent) {
+      throw Object.assign(new Error('Agent not found'), { status: 404 })
+    }
+    if (agent.ownerId !== ownerId) {
+      throw Object.assign(new Error('Not the owner of this agent'), { status: 403 })
+    }
+
+    await this.deps.agentDao.updateConfig(id, {
+      ...((agent.config as Record<string, unknown>) ?? {}),
+      connectorComputerId: data.connectorComputerId,
+      connectorRuntimeId: data.connectorRuntimeId,
+      connectorRuntimeLabel: data.connectorRuntimeLabel,
+      connectorConfiguredAt: new Date().toISOString(),
+    })
+
+    return this.getById(id)
+  }
+
   async getAll() {
     return this.deps.agentDao.findAll()
   }

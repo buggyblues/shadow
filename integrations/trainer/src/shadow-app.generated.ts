@@ -21,7 +21,7 @@ export const shadowServerAppManifest = {
     },
   },
   access: {
-    defaultPermissions: ['trainer.challenges:read'],
+    defaultPermissions: ['trainer.challenges:read', 'trainer.learning:read'],
     defaultApprovalMode: 'none',
   },
   commands: [
@@ -361,7 +361,7 @@ export const shadowServerAppManifest = {
       approvalMode: 'first_time',
       inputSchema: {
         type: 'object',
-        required: ['submissionId', 'outcome', 'score', 'summary', 'explanation'],
+        required: ['submissionId'],
         properties: {
           submissionId: {
             type: 'string',
@@ -398,6 +398,412 @@ export const shadowServerAppManifest = {
             type: 'string',
             maxLength: 1000,
           },
+          verdict: {
+            type: 'string',
+            maxLength: 120,
+          },
+          diagnosis: {
+            type: 'string',
+            maxLength: 4000,
+          },
+          hints: {
+            type: 'array',
+            maxItems: 12,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 500,
+            },
+          },
+        },
+        additionalProperties: true,
+      },
+    },
+    {
+      name: 'learning.overview',
+      title: 'Read learning overview',
+      description:
+        'Read access-safe learning plan, skills, recommendations, tips, checks, wrong problems, reports, and submission summaries.',
+      path: '/api/shadow/commands/learning.overview',
+      permission: 'trainer.learning:read',
+      action: 'read',
+      dataClass: 'server-private',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'settings.upsert',
+      title: 'Update learning settings',
+      description: 'Update adaptive difficulty and deadline target settings for the learner.',
+      path: '/api/shadow/commands/settings.upsert',
+      permission: 'trainer.learning:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          difficultyMode: {
+            enum: ['easy', 'medium', 'hard', 'hell'],
+          },
+          targetProblems: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 999,
+          },
+          deadlineAt: {
+            type: 'string',
+            maxLength: 64,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'learning.plan.upsert',
+      title: 'Upsert learning plan',
+      description: 'Create or adjust a learner training list with tasks and goals.',
+      path: '/api/shadow/commands/learning.plan.upsert',
+      permission: 'trainer.learning:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          id: {
+            type: 'string',
+            maxLength: 120,
+          },
+          title: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 160,
+          },
+          horizon: {
+            enum: ['daily', 'weekly', 'stage'],
+          },
+          goal: {
+            type: 'string',
+            maxLength: 1000,
+          },
+          tasks: {
+            type: 'array',
+            maxItems: 24,
+            items: {
+              type: 'object',
+              required: ['title', 'type', 'reason'],
+              properties: {
+                id: {
+                  type: 'string',
+                  maxLength: 120,
+                },
+                type: {
+                  enum: ['problem', 'review', 'check', 'tip'],
+                },
+                title: {
+                  type: 'string',
+                  minLength: 1,
+                  maxLength: 180,
+                },
+                status: {
+                  enum: ['todo', 'doing', 'done'],
+                },
+                challengeId: {
+                  type: 'string',
+                  maxLength: 120,
+                },
+                challengeTitle: {
+                  type: 'string',
+                  maxLength: 180,
+                },
+                reason: {
+                  type: 'string',
+                  minLength: 1,
+                  maxLength: 600,
+                },
+                dueAt: {
+                  type: 'string',
+                  maxLength: 64,
+                },
+              },
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'skills.update',
+      title: 'Update skill state',
+      description:
+        'Update mastery, attempts, accepted count, level, and weak signals for one algorithm skill.',
+      path: '/api/shadow/commands/skills.update',
+      permission: 'trainer.learning:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 80,
+          },
+          label: {
+            type: 'string',
+            maxLength: 120,
+          },
+          category: {
+            type: 'string',
+            maxLength: 120,
+          },
+          level: {
+            enum: ['new', 'learning', 'stable', 'strong'],
+          },
+          mastery: {
+            type: 'number',
+            minimum: 0,
+            maximum: 100,
+          },
+          attempts: {
+            type: 'integer',
+            minimum: 0,
+            maximum: 10000,
+          },
+          accepted: {
+            type: 'integer',
+            minimum: 0,
+            maximum: 10000,
+          },
+          weakSignals: {
+            type: 'array',
+            maxItems: 8,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 240,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'recommendations.create',
+      title: 'Create recommendation',
+      description:
+        'Create a next problem, wrong variant, review, or special training recommendation.',
+      path: '/api/shadow/commands/recommendations.create',
+      permission: 'trainer.learning:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['challengeId', 'reason'],
+        properties: {
+          kind: {
+            enum: ['next_problem', 'wrong_variant', 'review', 'special_training'],
+          },
+          challengeId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          reason: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 1000,
+          },
+          priority: {
+            type: 'integer',
+            minimum: 0,
+            maximum: 100,
+          },
+          strategy: {
+            enum: ['reinforce', 'diversify', 'review', 'popular'],
+          },
+          predictedAckRate: {
+            type: 'integer',
+            minimum: 0,
+            maximum: 100,
+          },
+          appPath: {
+            type: 'string',
+            maxLength: 240,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'tips.create',
+      title: 'Create training tip',
+      description: 'Create an algorithm tip or template card.',
+      path: '/api/shadow/commands/tips.create',
+      permission: 'trainer.learning:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['title', 'body'],
+        properties: {
+          title: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 160,
+          },
+          body: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 3000,
+          },
+          tags: {
+            type: 'array',
+            maxItems: 12,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 40,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'checks.create',
+      title: 'Create understanding check',
+      description: 'Create a short concept, complexity, boundary, or state-definition check.',
+      path: '/api/shadow/commands/checks.create',
+      permission: 'trainer.learning:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['question', 'choices', 'answerIndex', 'explanation'],
+        properties: {
+          challengeId: {
+            type: 'string',
+            maxLength: 120,
+          },
+          question: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 600,
+          },
+          choices: {
+            type: 'array',
+            minItems: 2,
+            maxItems: 6,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 240,
+            },
+          },
+          answerIndex: {
+            type: 'integer',
+            minimum: 0,
+            maximum: 5,
+          },
+          explanation: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 1200,
+          },
+          tags: {
+            type: 'array',
+            maxItems: 12,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 40,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'reports.create',
+      title: 'Create learning report',
+      description: 'Create a daily, weekly, or stage learning report.',
+      path: '/api/shadow/commands/reports.create',
+      permission: 'trainer.learning:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['title', 'summary'],
+        properties: {
+          period: {
+            enum: ['daily', 'weekly', 'stage'],
+          },
+          title: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 160,
+          },
+          summary: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 3000,
+          },
+          signals: {
+            type: 'array',
+            maxItems: 12,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 300,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'wrongProblems.schedule',
+      title: 'Schedule wrong problem',
+      description: 'Add or update a wrong problem review schedule.',
+      path: '/api/shadow/commands/wrongProblems.schedule',
+      permission: 'trainer.learning:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['challengeId', 'reason'],
+        properties: {
+          challengeId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          lastSubmissionId: {
+            type: 'string',
+            maxLength: 120,
+          },
+          reason: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 1000,
+          },
+          nextReviewAt: {
+            type: 'string',
+            maxLength: 64,
+          },
         },
         additionalProperties: false,
       },
@@ -418,6 +824,15 @@ export const shadowServerAppManifest = {
         'shadow-trainer submissions.pending',
         'shadow-trainer submissions.get',
         'shadow-trainer submissions.analyze',
+        'shadow-trainer learning.overview',
+        'shadow-trainer settings.upsert',
+        'shadow-trainer learning.plan.upsert',
+        'shadow-trainer skills.update',
+        'shadow-trainer recommendations.create',
+        'shadow-trainer tips.create',
+        'shadow-trainer checks.create',
+        'shadow-trainer reports.create',
+        'shadow-trainer wrongProblems.schedule',
       ],
     },
   ],

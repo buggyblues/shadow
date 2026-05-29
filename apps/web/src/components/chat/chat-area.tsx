@@ -39,7 +39,15 @@ import {
   X,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
@@ -63,9 +71,10 @@ import {
   shouldAdjustChatScrollPositionOnItemSizeChange,
 } from './chat-virtualization'
 import { FilePreviewPanel } from './file-preview-panel'
-import { type Message as BubbleMessage, MessageBubble } from './message-bubble'
+import { type Attachment, type Message as BubbleMessage, MessageBubble } from './message-bubble'
 import { MessageInput } from './message-input'
 import { type OAuthLinkPreview, OAuthLinkPreviewPanel } from './oauth-link-card'
+import { type Thread, ThreadPanel } from './thread-panel'
 
 const CopyQrIcon = (props: LucideProps) => <Copy {...props} size={14} strokeWidth={2.4} />
 
@@ -122,6 +131,19 @@ interface Channel {
     status?: string | null
     isBot?: boolean
   } | null
+}
+
+type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
+
+const directPeerStatusColors: Record<PresenceStatus, string> = {
+  online: 'bg-success',
+  idle: 'bg-warning',
+  dnd: 'bg-danger',
+  offline: 'bg-text-muted',
+}
+
+function normalizePresenceStatus(status?: string | null): PresenceStatus {
+  return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline'
 }
 
 export interface ChannelSwitcherOption {
@@ -248,6 +270,32 @@ const WORK_STATUS_TIMEOUT_MS = {
   activity: 120_000,
 } as const
 
+const SELECTION_DRAG_THRESHOLD_PX = 6
+
+interface SelectionDragBox {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+interface SelectionDragStart {
+  clientX: number
+  clientY: number
+  pointerId: number
+}
+
+function isSelectionDragIgnoredTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    Boolean(
+      target.closest(
+        'button,a,input,textarea,select,[role="button"],[data-selection-drag-ignore="true"]',
+      ),
+    )
+  )
+}
+
 export function ChatArea({
   onBack,
   showMemberToggle = true,
@@ -269,7 +317,7 @@ export function ChatArea({
   const queryClient = useQueryClient()
   const { activeChannelId, activeServerId } = useChatStore()
   const user = useAuthStore((s) => s.user)
-  const { setMobileView } = useUIStore()
+  const { closeMobileMemberList, setMobileView, setRightPanelOpen } = useUIStore()
   const parentRef = useRef<HTMLDivElement>(null)
   const [replyToId, setReplyToId] = useState<string | null>(null)
   const [droppedFiles, setDroppedFiles] = useState<File[]>([])
@@ -280,8 +328,12 @@ export function ChatArea({
   const [systemEvents, setSystemEvents] = useState<SystemEvent[]>([])
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
+  const [selectionDragBox, setSelectionDragBox] = useState<SelectionDragBox | null>(null)
   const [showPageQr, setShowPageQr] = useState(false)
   const [inboxTaskFilter, setInboxTaskFilter] = useState<InboxTaskFilter>('all')
+  const [activeThread, setActiveThread] = useState<Thread | null>(null)
+  const [activeThreadParent, setActiveThreadParent] = useState<Message | null>(null)
   const pageShareUrl = window.location.href
   const typingTimersRef = useRef<Map<string, number>>(new Map())
   const activityTimersRef = useRef<Map<string, number>>(new Map())
@@ -291,6 +343,10 @@ export function ChatArea({
   const stickyScrollRafRef = useRef<number | null>(null)
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const hasSeenSocketConnectRef = useRef(false)
+  const selectionDragStartRef = useRef<SelectionDragStart | null>(null)
+  const selectionDragActiveRef = useRef(false)
+  const selectionDragBaseIdsRef = useRef<Set<string>>(new Set())
+  const suppressNextSelectionToggleRef = useRef(false)
   const [previewFile, setPreviewFile] = useState<{
     id: string
     filename: string
@@ -485,12 +541,38 @@ export function ChatArea({
   )
   const directPeer = channel?.kind === 'dm' ? channel.otherUser : null
   const directPeerName = directPeer?.displayName ?? directPeer?.username ?? channel?.name ?? '...'
+  const directPeerStatus = normalizePresenceStatus(directPeer?.status)
   const directPeerIsPrivateBuddy = Boolean(
     directPeer?.isBot && privateBuddyUserIds.has(directPeer.id),
   )
   const channelDisplayName = directPeer ? directPeerName : (channel?.name ?? '...')
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
   const visibleChannelTopic = isInboxChannel ? null : channel?.topic
+
+  const updateDirectPeerPresence = useCallback(
+    (userId: string, status: string) => {
+      if (!activeChannelId) return
+      queryClient.setQueryData<Channel>(['channel', activeChannelId], (current) => {
+        if (!current?.otherUser || current.otherUser.id !== userId) return current
+        return {
+          ...current,
+          otherUser: {
+            ...current.otherUser,
+            status: normalizePresenceStatus(status),
+          },
+        }
+      })
+      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+    },
+    [activeChannelId, queryClient],
+  )
+
+  const { data: threads = [] } = useQuery({
+    queryKey: ['threads', activeChannelId],
+    queryFn: () => fetchApi<Thread[]>(`/api/channels/${activeChannelId}/threads`),
+    enabled: Boolean(activeChannelId),
+    staleTime: 30_000,
+  })
 
   // Fetch messages with infinite query (cursor-based pagination)
   const PAGE_SIZE = 50
@@ -537,6 +619,102 @@ export function ChatArea({
     return map
   }, [messages])
 
+  const threadsByParentId = useMemo(() => {
+    const map = new Map<string, Thread>()
+    for (const thread of threads) {
+      map.set(thread.parentMessageId, thread)
+    }
+    return map
+  }, [threads])
+
+  const buildThreadName = useCallback(
+    (message: Message) => {
+      const content = message.content.trim().replace(/\s+/g, ' ')
+      if (content) return content.slice(0, 96)
+      return t('chat.threadDefaultName')
+    },
+    [t],
+  )
+
+  const closeThreadPanel = useCallback(() => {
+    setActiveThread(null)
+    setActiveThreadParent(null)
+  }, [])
+
+  const openFilePreview = useCallback(
+    (attachment: Attachment) => {
+      closeMobileMemberList()
+      closeThreadPanel()
+      setPreviewOAuthLink(null)
+      setPreviewFile(attachment)
+    },
+    [closeMobileMemberList, closeThreadPanel],
+  )
+
+  const openOAuthPreview = useCallback(
+    (preview: OAuthLinkPreview) => {
+      closeMobileMemberList()
+      closeThreadPanel()
+      setPreviewFile(null)
+      setPreviewOAuthLink(preview)
+    },
+    [closeMobileMemberList, closeThreadPanel],
+  )
+
+  const openThreadPanel = useCallback(
+    (thread: Thread, parentMessage: Message) => {
+      closeMobileMemberList()
+      setPreviewFile(null)
+      setPreviewOAuthLink(null)
+      setActiveThread(thread)
+      setActiveThreadParent(parentMessage)
+    },
+    [closeMobileMemberList],
+  )
+
+  const createThreadMutation = useMutation({
+    mutationFn: ({ message }: { message: Message }) =>
+      fetchApi<Thread>(`/api/channels/${activeChannelId}/threads`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: buildThreadName(message),
+          parentMessageId: message.id,
+        }),
+      }),
+    onSuccess: (thread, { message }) => {
+      queryClient.setQueryData<Thread[]>(['threads', activeChannelId], (old) => {
+        const existing = old ?? []
+        if (existing.some((item) => item.id === thread.id)) return existing
+        return [thread, ...existing]
+      })
+      openThreadPanel(thread, message)
+    },
+  })
+
+  const handleOpenThread = useCallback(
+    (messageId: string) => {
+      const message = messageMap.get(messageId)
+      if (!message || message.threadId) return
+      const existing = threadsByParentId.get(messageId)
+      if (existing) {
+        openThreadPanel(existing, message)
+        return
+      }
+      createThreadMutation.mutate({ message })
+    },
+    [createThreadMutation, messageMap, openThreadPanel, threadsByParentId],
+  )
+
+  useEffect(() => {
+    setActiveThread(null)
+    setActiveThreadParent(null)
+  }, [activeChannelId])
+
+  useEffect(() => {
+    setRightPanelOpen(Boolean(previewFile || previewOAuthLink || activeThread))
+    return () => setRightPanelOpen(false)
+  }, [activeThread, previewFile, previewOAuthLink, setRightPanelOpen])
+
   const interactiveResponsesBySourceId = useMemo(() => {
     const map = new Map<string, InteractiveResponse>()
     for (const m of messages) {
@@ -582,6 +760,7 @@ export function ChatArea({
 
   // Listen for new messages via WebSocket
   useSocketEvent('message:new', (msg: Message) => {
+    if (msg.threadId) return
     if (msg.channelId === activeChannelId) {
       const scrollEl = parentRef.current
       const wasNearBottom = scrollEl ? isScrollNearBottom(scrollEl, 160) : true
@@ -778,6 +957,19 @@ export function ChatArea({
     }, WORK_STATUS_TIMEOUT_MS.activity)
     activityTimersRef.current.set(data.userId, timer)
   })
+
+  useSocketEvent('presence:change', (data: { userId: string; status: PresenceStatus }) => {
+    updateDirectPeerPresence(data.userId, data.status)
+  })
+
+  useSocketEvent(
+    'presence:snapshot',
+    (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
+      if (data.channelId !== activeChannelId || !directPeer) return
+      const peer = data.members.find((member) => member.userId === directPeer.id)
+      if (peer) updateDirectPeerPresence(peer.userId, peer.status)
+    },
+  )
 
   useEffect(() => {
     return () => {
@@ -986,6 +1178,10 @@ export function ChatArea({
   )
 
   const handleToggleSelect = useCallback((messageId: string) => {
+    if (suppressNextSelectionToggleRef.current) {
+      suppressNextSelectionToggleRef.current = false
+      return
+    }
     setSelectedMessageIds((prev) => {
       const next = new Set(prev)
       if (next.has(messageId)) next.delete(messageId)
@@ -997,11 +1193,135 @@ export function ChatArea({
   const handleEnterSelectionMode = useCallback((messageId: string) => {
     setSelectionMode(true)
     setSelectedMessageIds(new Set([messageId]))
+    setSelectionAnchorId(messageId)
   }, [])
 
   const handleExitSelectionMode = useCallback(() => {
     setSelectionMode(false)
     setSelectedMessageIds(new Set())
+    setSelectionAnchorId(null)
+    setSelectionDragBox(null)
+  }, [])
+
+  useEffect(() => {
+    handleExitSelectionMode()
+  }, [activeChannelId, handleExitSelectionMode])
+
+  const handleSelectRangeTo = useCallback(
+    (messageId: string) => {
+      const anchorId = selectionAnchorId ?? messageId
+      const anchorIndex = timelineMessages.findIndex((message) => message.id === anchorId)
+      const targetIndex = timelineMessages.findIndex((message) => message.id === messageId)
+
+      if (anchorIndex === -1 || targetIndex === -1) {
+        setSelectedMessageIds(new Set([messageId]))
+        setSelectionAnchorId(messageId)
+        setSelectionMode(true)
+        return
+      }
+
+      const start = Math.min(anchorIndex, targetIndex)
+      const end = Math.max(anchorIndex, targetIndex)
+      setSelectedMessageIds(new Set(timelineMessages.slice(start, end + 1).map((m) => m.id)))
+      setSelectionMode(true)
+      setSelectionAnchorId(anchorId)
+    },
+    [selectionAnchorId, timelineMessages],
+  )
+
+  const handleSelectionPointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (
+        !selectionMode ||
+        event.pointerType === 'touch' ||
+        event.button !== 0 ||
+        isSelectionDragIgnoredTarget(event.target)
+      ) {
+        return
+      }
+
+      selectionDragStartRef.current = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pointerId: event.pointerId,
+      }
+      selectionDragActiveRef.current = false
+      selectionDragBaseIdsRef.current = new Set(selectedMessageIds)
+      event.preventDefault()
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+    },
+    [selectedMessageIds, selectionMode],
+  )
+
+  const handleSelectionPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const dragStart = selectionDragStartRef.current
+    const scrollEl = parentRef.current
+    if (!dragStart || !scrollEl) return
+
+    const deltaX = event.clientX - dragStart.clientX
+    const deltaY = event.clientY - dragStart.clientY
+    if (
+      !selectionDragActiveRef.current &&
+      Math.hypot(deltaX, deltaY) < SELECTION_DRAG_THRESHOLD_PX
+    ) {
+      return
+    }
+
+    selectionDragActiveRef.current = true
+    event.preventDefault()
+
+    const leftClient = Math.min(dragStart.clientX, event.clientX)
+    const rightClient = Math.max(dragStart.clientX, event.clientX)
+    const topClient = Math.min(dragStart.clientY, event.clientY)
+    const bottomClient = Math.max(dragStart.clientY, event.clientY)
+    const containerRect = scrollEl.getBoundingClientRect()
+    const hitIds = new Set<string>()
+
+    scrollEl.querySelectorAll<HTMLElement>('[data-message-id]').forEach((row) => {
+      const rowRect = row.getBoundingClientRect()
+      const intersects =
+        rowRect.right >= leftClient &&
+        rowRect.left <= rightClient &&
+        rowRect.bottom >= topClient &&
+        rowRect.top <= bottomClient
+      if (intersects) {
+        const id = row.dataset.messageId
+        if (id) hitIds.add(id)
+      }
+    })
+
+    const nextIds = new Set(selectionDragBaseIdsRef.current)
+    hitIds.forEach((id) => nextIds.add(id))
+    setSelectedMessageIds(nextIds)
+    setSelectionDragBox({
+      left: leftClient - containerRect.left + scrollEl.scrollLeft,
+      top: topClient - containerRect.top + scrollEl.scrollTop,
+      width: rightClient - leftClient,
+      height: bottomClient - topClient,
+    })
+  }, [])
+
+  const finishSelectionDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const dragStart = selectionDragStartRef.current
+    const wasActive = selectionDragActiveRef.current
+
+    if (dragStart && event.currentTarget.hasPointerCapture?.(dragStart.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(dragStart.pointerId)
+    }
+
+    selectionDragStartRef.current = null
+    selectionDragActiveRef.current = false
+    selectionDragBaseIdsRef.current = new Set()
+    setSelectionDragBox(null)
+
+    if (wasActive) {
+      event.preventDefault()
+      event.stopPropagation()
+      suppressNextSelectionToggleRef.current = true
+      window.setTimeout(() => {
+        suppressNextSelectionToggleRef.current = false
+      }, 0)
+    }
   }, [])
 
   const handleCopySelectedAsMarkdown = useCallback(() => {
@@ -1153,21 +1473,19 @@ export function ChatArea({
           onReact={handleReact}
           onMessageUpdate={handleMessageUpdate}
           onMessageDelete={handleMessageDelete}
-          onPreviewFile={(att) => {
-            setPreviewOAuthLink(null)
-            setPreviewFile(att)
-          }}
-          onPreviewOAuthLink={(preview) => {
-            setPreviewFile(null)
-            setPreviewOAuthLink(preview)
-          }}
+          onOpenThread={handleOpenThread}
+          onPreviewFile={openFilePreview}
+          onPreviewOAuthLink={openOAuthPreview}
           onSaveToWorkspace={activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined}
           highlight={highlightMsgId === item.data.id}
+          hasThread={threadsByParentId.has(item.data.id)}
+          thread={threadsByParentId.get(item.data.id) ?? null}
           replyToMessage={
             item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
           }
           selectionMode={selectionMode}
           isSelected={selectedMessageIds.has(item.data.id)}
+          selectionAnchorId={selectionAnchorId}
           submittedInteractiveResponse={
             item.data.metadata?.interactiveState?.response ??
             interactiveResponsesBySourceId.get(item.data.id) ??
@@ -1175,6 +1493,7 @@ export function ChatArea({
           }
           onToggleSelect={handleToggleSelect}
           onEnterSelectionMode={handleEnterSelectionMode}
+          onSelectRangeTo={handleSelectRangeTo}
         />
       )}
     </>
@@ -1230,12 +1549,20 @@ export function ChatArea({
             <ArrowLeft size={20} />
           </Button>
           {directPeer ? (
-            <UserAvatar
-              userId={directPeer.id}
-              avatarUrl={directPeer.avatarUrl}
-              displayName={directPeerName}
-              size="sm"
-            />
+            <div className="relative shrink-0">
+              <UserAvatar
+                userId={directPeer.id}
+                avatarUrl={directPeer.avatarUrl}
+                displayName={directPeerName}
+                size="sm"
+              />
+              <span
+                className={cn(
+                  'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-deep',
+                  directPeerStatusColors[directPeerStatus],
+                )}
+              />
+            </div>
           ) : (
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-tertiary/50 text-primary shadow-inner">
               {isInboxChannel ? (
@@ -1429,7 +1756,12 @@ export function ChatArea({
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => useUIStore.getState().toggleMobileMemberList()}
+                    onClick={() => {
+                      setPreviewFile(null)
+                      setPreviewOAuthLink(null)
+                      closeThreadPanel()
+                      useUIStore.getState().toggleMobileMemberList()
+                    }}
                     className="h-8 w-8 rounded-full lg:hidden"
                     title={t('member.toggleList')}
                   >
@@ -1444,8 +1776,26 @@ export function ChatArea({
         {/* Messages */}
         <div
           ref={parentRef}
-          className="chat-scroll-surface flex-1 overflow-y-auto overflow-x-hidden"
+          className={cn(
+            'chat-scroll-surface relative flex-1 overflow-y-auto overflow-x-hidden',
+            selectionMode && 'select-none',
+          )}
+          onPointerDown={handleSelectionPointerDown}
+          onPointerMove={handleSelectionPointerMove}
+          onPointerUp={finishSelectionDrag}
+          onPointerCancel={finishSelectionDrag}
         >
+          {selectionDragBox && (
+            <div
+              className="pointer-events-none absolute z-30 rounded-xl border border-primary/70 bg-primary/15 shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset]"
+              style={{
+                left: selectionDragBox.left,
+                top: selectionDragBox.top,
+                width: selectionDragBox.width,
+                height: selectionDragBox.height,
+              }}
+            />
+          )}
           {isLoadingMessages ? (
             <div className="flex items-center justify-center h-full text-text-muted">
               <span className="animate-pulse">{t('chat.loading', 'Loading...')}</span>
@@ -1660,6 +2010,20 @@ export function ChatArea({
           onClose={() => setSaveToWorkspaceFile(null)}
         />
       )}
+
+      {activeThread && (
+        <ThreadPanel
+          thread={activeThread}
+          parentMessage={activeThreadParent}
+          currentUserId={user?.id ?? ''}
+          serverId={activeServerId}
+          channelName={channel?.name}
+          onClose={closeThreadPanel}
+          onPreviewFile={openFilePreview}
+          onPreviewOAuthLink={openOAuthPreview}
+          onSaveToWorkspace={activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined}
+        />
+      )}
     </div>
   )
 }
@@ -1729,7 +2093,7 @@ function EmptyChannelState({
               </Button>
             )}
           </div>
-        ) : (
+        ) : serverId ? (
           <div className="flex items-center justify-center">
             <Button
               variant="secondary"
@@ -1752,7 +2116,7 @@ function EmptyChannelState({
               <span className="uppercase">{t('channel.addAgent')}</span>
             </Button>
           </div>
-        )}
+        ) : null}
       </div>
 
       {showInvitePanel && serverId && (

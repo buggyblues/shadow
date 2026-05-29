@@ -15,6 +15,7 @@ import {
   Key,
   Lock,
   MessageSquare,
+  Monitor,
   PlugZap,
   Plus,
   RefreshCw,
@@ -24,7 +25,7 @@ import {
   X,
 } from 'lucide-react-native'
 import { pinyin } from 'pinyin-pro'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -91,6 +92,34 @@ interface ServerEntry {
   }
 }
 
+interface ConnectorRuntimeInfo {
+  id: string
+  label: string
+  kind: 'openclaw' | 'cli'
+  status: 'available' | 'missing'
+  version?: string | null
+  command?: string | null
+  detectedAt?: string | null
+}
+
+interface ConnectorComputer {
+  id: string
+  name: string
+  status: 'pending' | 'online' | 'offline'
+  hostname?: string | null
+  os?: string | null
+  arch?: string | null
+  daemonVersion?: string | null
+  runtimes: ConnectorRuntimeInfo[]
+  lastSeenAt?: string | null
+}
+
+interface ConnectorBootstrapResult {
+  computer: ConnectorComputer
+  command: string
+  apiKey: string
+}
+
 function getBuddyMode(agent: Agent | null): BuddyMode {
   return agent?.config?.buddyMode === 'shareable' ? 'shareable' : 'private'
 }
@@ -134,6 +163,7 @@ function deriveBuddyUsername(name: string) {
 }
 
 const connectorTargets: ShadowConnectorTarget[] = ['openclaw', 'hermes', 'cc-connect']
+const CONNECTOR_SERVER_URL = 'https://shadowob.com'
 
 function getConnectorLabel(
   target: ShadowConnectorTarget,
@@ -148,6 +178,12 @@ function getConnectorIcon(target: ShadowConnectorTarget) {
   if (target === 'hermes') return Bot
   if (target === 'cc-connect') return PlugZap
   return Terminal
+}
+
+function availableRuntimes(computer: ConnectorComputer | null | undefined) {
+  return (computer?.runtimes ?? [])
+    .filter((runtime) => runtime.status === 'available')
+    .sort((a, b) => a.label.localeCompare(b.label))
 }
 
 function BuddyAccessEditor({
@@ -293,6 +329,7 @@ export default function BuddyManagementScreen() {
   const colors = useColors()
   const navigation = useNavigation()
   const queryClient = useQueryClient()
+  const serverUrl = CONNECTOR_SERVER_URL
 
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
@@ -305,6 +342,10 @@ export default function BuddyManagementScreen() {
   const [generatedToken, setGeneratedToken] = useState<string | null>(null)
   const [configTab, setConfigTab] = useState<'manual' | 'chat'>('manual')
   const [connectorTarget, setConnectorTarget] = useState<ShadowConnectorTarget>('openclaw')
+  const [selectedConnectorComputerId, setSelectedConnectorComputerId] = useState('')
+  const [selectedConnectorRuntimeId, setSelectedConnectorRuntimeId] = useState('')
+  const [connectorCommand, setConnectorCommand] = useState<string | null>(null)
+  const connectorBootstrapStartedRef = useRef(false)
 
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ['agents'],
@@ -314,6 +355,22 @@ export default function BuddyManagementScreen() {
     queryKey: ['servers', 'buddy-access'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
   })
+  const connectorComputersQuery = useQuery({
+    queryKey: ['connector-computers'],
+    queryFn: () => fetchApi<{ computers: ConnectorComputer[] }>('/api/connector/computers'),
+    enabled: showCreate,
+    refetchInterval: showCreate ? 5000 : false,
+  })
+
+  const connectorComputers = connectorComputersQuery.data?.computers ?? []
+  const selectedConnectorComputer =
+    connectorComputers.find((computer) => computer.id === selectedConnectorComputerId) ?? null
+  const selectedConnectorRuntime =
+    availableRuntimes(selectedConnectorComputer).find(
+      (runtime) => runtime.id === selectedConnectorRuntimeId,
+    ) ?? null
+  const canCreateConnectorBuddy =
+    selectedConnectorComputer?.status === 'online' && Boolean(selectedConnectorRuntime)
 
   useEffect(() => {
     navigation.setOptions({
@@ -334,6 +391,10 @@ export default function BuddyManagementScreen() {
     setCreateDescription('')
     setCreateBuddyMode('private')
     setCreateAllowedServerIds([])
+    setSelectedConnectorComputerId('')
+    setSelectedConnectorRuntimeId('')
+    setConnectorCommand(null)
+    connectorBootstrapStartedRef.current = false
   }
 
   const handleCreateNameChange = (value: string) => {
@@ -353,6 +414,60 @@ export default function BuddyManagementScreen() {
     )
   }
 
+  const connectorBootstrapMutation = useMutation({
+    mutationFn: () =>
+      fetchApi<ConnectorBootstrapResult>('/api/connector/computers/bootstrap', {
+        method: 'POST',
+        body: JSON.stringify({
+          serverUrl,
+          name: t('agentMgmt.connectorDefaultComputerName'),
+        }),
+      }),
+    onSuccess: (result) => {
+      setConnectorCommand(result.command)
+      setSelectedConnectorComputerId(result.computer.id)
+      queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
+    },
+    onError: (err: Error) => {
+      showToast(err.message)
+    },
+  })
+
+  useEffect(() => {
+    if (
+      !showCreate ||
+      connectorComputersQuery.isLoading ||
+      connectorComputers.length > 0 ||
+      connectorCommand ||
+      connectorBootstrapStartedRef.current
+    ) {
+      return
+    }
+    connectorBootstrapStartedRef.current = true
+    connectorBootstrapMutation.mutate()
+  }, [
+    showCreate,
+    connectorComputersQuery.isLoading,
+    connectorComputers.length,
+    connectorCommand,
+    connectorBootstrapMutation,
+  ])
+
+  useEffect(() => {
+    if (!showCreate || selectedConnectorComputerId || connectorComputers.length === 0) return
+    const firstOnline =
+      connectorComputers.find((computer) => computer.status === 'online') ?? connectorComputers[0]
+    if (!firstOnline) return
+    setSelectedConnectorComputerId(firstOnline.id)
+  }, [showCreate, selectedConnectorComputerId, connectorComputers])
+
+  useEffect(() => {
+    if (!showCreate) return
+    const runtimes = availableRuntimes(selectedConnectorComputer)
+    if (runtimes.some((runtime) => runtime.id === selectedConnectorRuntimeId)) return
+    setSelectedConnectorRuntimeId(runtimes[0]?.id ?? '')
+  }, [showCreate, selectedConnectorComputer, selectedConnectorRuntimeId])
+
   const createMutation = useMutation({
     mutationFn: (data: {
       name: string
@@ -360,32 +475,32 @@ export default function BuddyManagementScreen() {
       description?: string
       buddyMode: BuddyMode
       allowedServerIds: string[]
-    }) =>
-      fetchApi<Agent>('/api/agents', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: data.name.trim(),
-          username: data.username.trim(),
-          description: data.description,
-          kernelType: 'openclaw',
-          config: {},
-          buddyMode: data.buddyMode,
-          allowedServerIds: data.allowedServerIds,
-        }),
-      }),
-    onSuccess: async (agent) => {
+    }) => {
+      if (!selectedConnectorComputerId || !selectedConnectorRuntimeId) {
+        throw new Error(t('agentMgmt.connectorNoRuntime'))
+      }
+      return fetchApi<{ agent: Agent; job: { id: string } | null }>(
+        `/api/connector/computers/${selectedConnectorComputerId}/buddies`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            runtimeId: selectedConnectorRuntimeId,
+            serverUrl,
+            name: data.name.trim(),
+            username: data.username.trim(),
+            description: data.description,
+            buddyMode: data.buddyMode,
+            allowedServerIds: data.allowedServerIds,
+          }),
+        },
+      ).then((result) => result.agent)
+    },
+    onSuccess: (agent) => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
       resetCreateForm()
-      showToast(t('buddyMgmt.created', 'Buddy 已创建'))
+      showToast(t('agentMgmt.connectorJobQueuedTitle'))
       setSelectedAgent(agent)
-      // Auto-generate token after creation
-      try {
-        const tokenData = await fetchApi<{ token: string }>(`/api/agents/${agent.id}/token`, {
-          method: 'POST',
-        })
-        setGeneratedToken(tokenData.token)
-        queryClient.invalidateQueries({ queryKey: ['agents'] })
-      } catch {}
+      setGeneratedToken(null)
     },
     onError: (err: Error) => {
       if (err.message?.toLowerCase().includes('username already taken')) {
@@ -508,8 +623,6 @@ export default function BuddyManagementScreen() {
     )
   }, [generatedToken, selectedAgent])
 
-  // Get server URL
-  const serverUrl = 'https://shadowob.com'
   return (
     <BackgroundSurface style={styles.container}>
       {isLoading ? (
@@ -629,6 +742,177 @@ export default function BuddyManagementScreen() {
                   compactModeControl
                 />
 
+                <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
+                  {t('agentMgmt.connectorRuntime')}
+                </Text>
+
+                <View
+                  style={[
+                    styles.connectorSetupPanel,
+                    { backgroundColor: colors.background, borderColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.connectorSetupHeader}>
+                    <Monitor size={16} color={colors.primary} />
+                    <Text style={[styles.connectorSetupTitle, { color: colors.text }]}>
+                      {t('agentMgmt.connectorDaemonTitle')}
+                    </Text>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon={RefreshCw}
+                      iconColor={colors.primary}
+                      style={styles.copySmallBtn}
+                      onPress={() =>
+                        queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
+                      }
+                    >
+                      {t('common.refresh', 'Refresh')}
+                    </Button>
+                  </View>
+                  {(connectorComputers.length === 0 || connectorCommand) && (
+                    <>
+                      <Text style={[styles.connectorSetupDesc, { color: colors.textSecondary }]}>
+                        {t('agentMgmt.connectorDaemonDesc')}
+                      </Text>
+
+                      {connectorCommand ? (
+                        <View style={styles.configBlock}>
+                          <View style={styles.configBlockHeader}>
+                            <Text style={[styles.configBlockLabel, { color: colors.textMuted }]}>
+                              {t('agentMgmt.connectorCliTitle')}
+                            </Text>
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              icon={Copy}
+                              iconColor={colors.primary}
+                              style={styles.copySmallBtn}
+                              onPress={() => copyToClipboard(connectorCommand)}
+                            >
+                              {t('common.copy')}
+                            </Button>
+                          </View>
+                          <View
+                            style={[
+                              styles.codeBlock,
+                              { backgroundColor: colors.surface, borderColor: colors.border },
+                            ]}
+                          >
+                            <Text
+                              style={[styles.codeText, { color: colors.textSecondary }]}
+                              numberOfLines={4}
+                            >
+                              {connectorCommand}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <Button
+                          variant="glass"
+                          size="sm"
+                          icon={Terminal}
+                          style={styles.connectorActionButton}
+                          onPress={() => {
+                            connectorBootstrapStartedRef.current = true
+                            connectorBootstrapMutation.mutate()
+                          }}
+                          disabled={connectorBootstrapMutation.isPending}
+                          loading={connectorBootstrapMutation.isPending}
+                        >
+                          {connectorBootstrapMutation.isPending
+                            ? t('agentMgmt.connectorCreating')
+                            : t('agentMgmt.connectorCreateConnection')}
+                        </Button>
+                      )}
+                    </>
+                  )}
+
+                  {connectorComputers.length > 0 && (
+                    <View style={styles.connectorOptionGroup}>
+                      <Text style={[styles.connectorGroupLabel, { color: colors.textMuted }]}>
+                        {t('agentMgmt.connectorComputer')}
+                      </Text>
+                      {connectorComputers.map((computer) => {
+                        const active = computer.id === selectedConnectorComputerId
+                        return (
+                          <CardPressable
+                            key={computer.id}
+                            variant="glass"
+                            active={active}
+                            padded={false}
+                            style={styles.connectorOption}
+                            onPress={() => setSelectedConnectorComputerId(computer.id)}
+                          >
+                            <Monitor size={16} color={active ? colors.primary : colors.textMuted} />
+                            <View style={styles.connectorOptionBody}>
+                              <Text style={[styles.connectorOptionTitle, { color: colors.text }]}>
+                                {computer.name}
+                              </Text>
+                              <Text
+                                style={[styles.connectorOptionMeta, { color: colors.textMuted }]}
+                                numberOfLines={1}
+                              >
+                                {computer.hostname ?? computer.id.slice(0, 8)}
+                              </Text>
+                            </View>
+                            <Badge
+                              variant={computer.status === 'online' ? 'success' : 'neutral'}
+                              size="xs"
+                            >
+                              {t(`agentMgmt.connectorStatus_${computer.status}`)}
+                            </Badge>
+                          </CardPressable>
+                        )
+                      })}
+                    </View>
+                  )}
+
+                  {selectedConnectorComputer && (
+                    <View style={styles.connectorOptionGroup}>
+                      <Text style={[styles.connectorGroupLabel, { color: colors.textMuted }]}>
+                        {t('agentMgmt.connectorRuntime')}
+                      </Text>
+                      {availableRuntimes(selectedConnectorComputer).length === 0 ? (
+                        <Text style={[styles.connectorSetupDesc, { color: colors.textMuted }]}>
+                          {t('agentMgmt.connectorNoRuntime')}
+                        </Text>
+                      ) : (
+                        availableRuntimes(selectedConnectorComputer).map((runtime) => {
+                          const active = runtime.id === selectedConnectorRuntimeId
+                          return (
+                            <CardPressable
+                              key={runtime.id}
+                              variant="glass"
+                              active={active}
+                              padded={false}
+                              style={styles.connectorOption}
+                              onPress={() => setSelectedConnectorRuntimeId(runtime.id)}
+                            >
+                              <Terminal
+                                size={16}
+                                color={active ? colors.primary : colors.textMuted}
+                              />
+                              <View style={styles.connectorOptionBody}>
+                                <Text style={[styles.connectorOptionTitle, { color: colors.text }]}>
+                                  {runtime.label}
+                                </Text>
+                                <Text
+                                  style={[styles.connectorOptionMeta, { color: colors.textMuted }]}
+                                  numberOfLines={1}
+                                >
+                                  {runtime.version ?? runtime.command ?? runtime.id}
+                                </Text>
+                              </View>
+                              {active && <Check size={16} color={colors.primary} />}
+                            </CardPressable>
+                          )
+                        })
+                      )}
+                    </View>
+                  )}
+                </View>
+
                 <View style={{ height: 72 }} />
               </ScrollView>
 
@@ -662,7 +946,10 @@ export default function BuddyManagementScreen() {
                     })
                   }
                   disabled={
-                    !createName.trim() || !createUsername.trim() || createMutation.isPending
+                    !createName.trim() ||
+                    !createUsername.trim() ||
+                    !canCreateConnectorBuddy ||
+                    createMutation.isPending
                   }
                   loading={createMutation.isPending}
                 >
@@ -841,7 +1128,7 @@ export default function BuddyManagementScreen() {
                             </View>
 
                             <Text style={[styles.connectorGuideDesc, { color: colors.textMuted }]}>
-                              {t('agentMgmt.connectorGuideDesc')}
+                              {t('agentMgmt.connectorLegacyGuideDesc')}
                             </Text>
 
                             <View style={styles.connectorTargets}>
@@ -1289,6 +1576,36 @@ const styles = StyleSheet.create({
   serverOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8 },
   checkbox: { width: 16, height: 16, borderRadius: 4, borderWidth: 1 },
   serverName: { flex: 1, fontSize: fontSize.sm, fontWeight: '600' },
+  connectorSetupPanel: {
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  connectorSetupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  connectorSetupTitle: { flex: 1, fontSize: fontSize.sm, fontWeight: '800' },
+  connectorSetupDesc: { fontSize: fontSize.sm, lineHeight: 20 },
+  connectorActionButton: { alignSelf: 'flex-start' },
+  connectorOptionGroup: { gap: spacing.xs },
+  connectorGroupLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  connectorOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+  },
+  connectorOptionBody: { flex: 1 },
+  connectorOptionTitle: { fontSize: fontSize.sm, fontWeight: '800' },
+  connectorOptionMeta: { fontSize: fontSize.xs, marginTop: 2 },
   textArea: {
     minHeight: 96,
     textAlignVertical: 'top',

@@ -112,6 +112,28 @@ export interface ShadowBinding {
   replyPolicy?: ShadowReplyPolicy
 }
 
+export interface ShadowGreetingMessage {
+  /** Stable id used to dedupe this greeting message for a deployment. */
+  id?: string
+  /** Config id of the channel that should receive the greeting. */
+  channelId?: string
+  /** Config id of the Buddy that should author the greeting. Defaults to the first Buddy. */
+  buddyId?: string
+  /** Greeting copy. Supports runtime placeholders such as {userName}. */
+  content: string
+}
+
+export interface ShadowGreetingConfig {
+  /** Config id of the channel users should land in after deployment. */
+  entryChannelId?: string
+  /** One or more messages sent after Shadow resources are provisioned. */
+  messages?: ShadowGreetingMessage[]
+  /** Shorthand for a single greeting message. */
+  channelId?: string
+  buddyId?: string
+  content?: string
+}
+
 /**
  * A rental listing for a buddy on the Shadow claw marketplace.
  *
@@ -212,6 +234,8 @@ export interface ShadowobPluginConfig {
   buddies?: ShadowBuddy[]
   /** Binding rules connecting buddies to agents */
   bindings?: ShadowBinding[]
+  /** Deployment greeting and landing behavior for provisioned Shadow spaces. */
+  greeting?: ShadowGreetingConfig
   /**
    * Rental listings to publish on the Shadow claw marketplace.
    * Each entry creates or updates a public listing for the referenced buddy.

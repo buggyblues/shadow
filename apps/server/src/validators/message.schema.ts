@@ -176,13 +176,16 @@ const commerceFulfillmentSchema = z.object({
   deliverableId: z.string().uuid(),
 })
 
-const playLaunchSchema = z.union([
+const greetingSchema = z.union([
   z.boolean(),
   z.object({
     kind: z.enum(['public_channel', 'private_room', 'cloud_deploy']).optional(),
     playId: z.string().max(120).nullable().optional(),
     deploymentId: z.string().uuid().optional(),
     templateSlug: z.string().max(160).optional(),
+    messageId: z.string().max(160).optional(),
+    channelId: z.string().max(160).optional(),
+    buddyId: z.string().max(160).optional(),
   }),
 ])
 
@@ -303,7 +306,7 @@ export const metadataSchema = z.object({
   paidFileCards: z.array(paidFileCardSchema).max(3).optional(),
   oauthLinkCards: z.array(oauthLinkCardSchema).max(3).optional(),
   commerceFulfillment: commerceFulfillmentSchema.optional(),
-  playLaunch: playLaunchSchema.optional(),
+  greeting: greetingSchema.optional(),
   custom: z.record(z.unknown()).optional(),
 })
 

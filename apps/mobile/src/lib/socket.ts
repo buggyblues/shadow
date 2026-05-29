@@ -6,6 +6,17 @@ import { API_BASE } from './api'
 
 let socket: Socket | null = null
 let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null
+const joinedChannels = new Set<string>()
+const joinedThreads = new Set<string>()
+
+function rejoinRooms(s: Socket): void {
+  for (const channelId of joinedChannels) {
+    s.emit('channel:join', { channelId })
+  }
+  for (const threadId of joinedThreads) {
+    s.emit('thread:join', { threadId })
+  }
+}
 
 export function getSocket(): Socket {
   if (!socket) {
@@ -25,6 +36,7 @@ export function getSocket(): Socket {
     // Log connection lifecycle for debugging
     socket.on('connect', () => {
       console.log('[Socket] Connected:', socket?.id)
+      if (socket) rejoinRooms(socket)
     })
     socket.on('connect_error', (err) => {
       console.warn('[Socket] Connection error:', err.message)
@@ -57,6 +69,8 @@ export function disconnectSocket(): void {
     socket.disconnect()
     socket = null
   }
+  joinedChannels.clear()
+  joinedThreads.clear()
 }
 
 let backgroundTimer: ReturnType<typeof setTimeout> | null = null
@@ -84,11 +98,23 @@ function handleAppStateChange(nextState: AppStateStatus) {
 }
 
 export function joinChannel(channelId: string): void {
+  joinedChannels.add(channelId)
   getSocket().emit('channel:join', { channelId })
 }
 
 export function leaveChannel(channelId: string): void {
+  joinedChannels.delete(channelId)
   getSocket().emit('channel:leave', { channelId })
+}
+
+export function joinThread(threadId: string): void {
+  joinedThreads.add(threadId)
+  getSocket().emit('thread:join', { threadId })
+}
+
+export function leaveThread(threadId: string): void {
+  joinedThreads.delete(threadId)
+  getSocket().emit('thread:leave', { threadId })
 }
 
 export function sendWsMessage(data: {

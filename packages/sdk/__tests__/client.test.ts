@@ -111,6 +111,82 @@ describe('ShadowClient', () => {
     })
   })
 
+  describe('connector computers', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('calls connector computer endpoints', async () => {
+      const mockFetch = vi.fn().mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ computers: [], command: 'npx', agent: { id: 'a1' } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.listConnectorComputers()
+      await client.createConnectorBootstrap({ serverUrl: 'https://shadowob.com', name: 'Laptop' })
+      await client.createAgentOnConnectorComputer('pc-1', {
+        runtimeId: 'codex',
+        serverUrl: 'https://shadowob.com',
+        name: 'Alice',
+        username: 'alice',
+      })
+      await client.configureAgentOnConnectorComputer('pc-1', 'agent-1', {
+        runtimeId: 'claude-code',
+        serverUrl: 'https://shadowob.com',
+      })
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/connector/computers',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token-123',
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/connector/computers/bootstrap',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ serverUrl: 'https://shadowob.com', name: 'Laptop' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/connector/computers/pc-1/buddies',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            runtimeId: 'codex',
+            serverUrl: 'https://shadowob.com',
+            name: 'Alice',
+            username: 'alice',
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'https://api.example.com/api/connector/computers/pc-1/buddies/agent-1/configure',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            runtimeId: 'claude-code',
+            serverUrl: 'https://shadowob.com',
+          }),
+        }),
+      )
+    })
+  })
+
   describe('media helpers', () => {
     beforeEach(() => {
       globalThis.fetch = vi.fn() as typeof fetch
@@ -842,6 +918,7 @@ describe('ShadowClient', () => {
 
       await client.upsertPolicy('agent-1', 'srv-1', {
         channelId: 'ch-1',
+        listen: false,
         mentionOnly: false,
         reply: true,
         config: { mode: 'test' },
@@ -856,6 +933,7 @@ describe('ShadowClient', () => {
               {
                 serverId: 'srv-1',
                 channelId: 'ch-1',
+                listen: false,
                 mentionOnly: false,
                 reply: true,
                 config: { mode: 'test' },

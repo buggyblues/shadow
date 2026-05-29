@@ -1,22 +1,14 @@
 import type { CommerceProductCard, PaidFileCard } from '@shadowob/shared'
 import { Button, cn } from '@shadowob/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  AlertCircle,
-  CheckCircle2,
-  FileText,
-  Lock,
-  ShieldCheck,
-  Store,
-  Ticket,
-  Unlock,
-} from 'lucide-react'
+import { AlertCircle, CheckCircle2, FileText, Lock, Store, Ticket, Unlock } from 'lucide-react'
 import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../../lib/api'
 import { getApiErrorMessage } from '../../../lib/api-errors'
 import { deliveryDetailHref } from '../../../lib/commerce-delivery'
 import { PurchaseConfirmationModal } from '../../commerce/purchase-confirmation-modal'
+import { PriceDisplay } from '../../shop/ui/currency'
 import { formatFileSize } from '../../workspace/workspace-utils'
 import { openPaidFileInPreview } from './media'
 import type { Attachment } from './types'
@@ -89,11 +81,6 @@ type CommerceCheckoutPreview = {
   nextAction: 'purchase' | 'open_paid_file' | 'view_entitlement'
 }
 
-type ServerRouteSummary = {
-  id: string
-  slug?: string | null
-}
-
 function formatCommercePrice(
   card: CommerceProductCard,
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -114,6 +101,59 @@ function formatPriceValue(
     currency,
     maximumFractionDigits: 2,
   }).format(price / 100)
+}
+
+function CardPrice({
+  price,
+  currency,
+  t,
+}: {
+  price: number
+  currency: string
+  t: (key: string, options?: Record<string, unknown>) => string
+}) {
+  if (currency === 'shrimp_coin') {
+    return <PriceDisplay amount={price} size={18} />
+  }
+
+  return (
+    <span className="text-[13px] font-black tabular-nums text-primary">
+      {formatPriceValue(price, currency, t)}
+    </span>
+  )
+}
+
+function getCommerceInvalidState(preview?: CommerceCheckoutPreview | null) {
+  if (!preview) return null
+  if (
+    preview.viewerState === 'expired' ||
+    preview.viewerState === 'revoked' ||
+    preview.viewerState === 'cancelled' ||
+    preview.viewerState === 'unavailable'
+  ) {
+    return preview.viewerState
+  }
+  if (preview.primaryAction === 'unavailable' || preview.offer.available === false) {
+    return 'unavailable'
+  }
+  return null
+}
+
+type CommerceBlockedState = Exclude<
+  CommerceCheckoutPreview['viewerState'],
+  'not_purchased' | 'active'
+>
+
+function getPaidFileBlockedState(
+  state?: PaidFileState | null,
+  hasStateError = false,
+): CommerceBlockedState | null {
+  if (hasStateError) return 'unavailable'
+  if (!state || state.hasAccess) return null
+  const status = state.entitlement?.status
+  if (status === 'expired' || status === 'revoked' || status === 'cancelled') return status
+  if (status && status !== 'active') return 'unavailable'
+  return null
 }
 
 function CommerceProductCardViewBase({
@@ -140,18 +180,6 @@ function CommerceProductCardViewBase({
     nextAction?: string
   } | null>(null)
   const checkoutPreviewQueryKey = ['commerce-checkout-preview', card.offerId, card.skuId]
-  const { data: shopServer } = useQuery({
-    queryKey: ['server', card.shopScope.kind === 'server' ? card.shopScope.id : null],
-    queryFn: () => fetchApi<ServerRouteSummary>(`/api/servers/${card.shopScope.id}`),
-    enabled: card.shopScope.kind === 'server',
-    staleTime: 60_000,
-  })
-  const productHref = `/app/shop/products/${card.productId}`
-  const serverShopRouteKey = shopServer?.slug ?? card.shopScope.id
-  const shopHref =
-    card.shopScope.kind === 'server'
-      ? `/app/servers/${serverShopRouteKey}/shop`
-      : `/app/shop/users/${card.shopScope.id}?view=buyer`
   const purchaseDeliveryHref = deliveryDetailHref(purchaseResult?.entitlement?.id, {
     openContent: purchaseResult?.nextAction === 'open_paid_file',
   })
@@ -168,6 +196,8 @@ function CommerceProductCardViewBase({
     staleTime: 10_000,
   })
   const currentCheckoutPreview = checkoutPreview ?? checkoutPreviewQuery.data ?? null
+  const isPreviewLoading =
+    !!card.offerId && checkoutPreviewQuery.isLoading && !currentCheckoutPreview
   const loadCheckoutPreview = async () => {
     if (!card.offerId) return null
     const preview = await queryClient.fetchQuery({
@@ -268,7 +298,8 @@ function CommerceProductCardViewBase({
       setIsOpening(true)
       setError(null)
       try {
-        await loadCheckoutPreview()
+        const preview = await loadCheckoutPreview()
+        if (getCommerceInvalidState(preview)) return
         setShowPurchaseModal(true)
       } catch (err) {
         setError(getApiErrorMessage(err, t, 'chat.commercePreviewFailed'))
@@ -281,6 +312,7 @@ function CommerceProductCardViewBase({
     setError(null)
     try {
       const preview = await loadCheckoutPreview()
+      if (getCommerceInvalidState(preview)) return
       if (
         (preview?.primaryAction === 'open_content' || preview?.viewerState === 'active') &&
         preview.paidFile?.id
@@ -397,20 +429,52 @@ function CommerceProductCardViewBase({
   const unlockedActionLabel = opensPaidFile
     ? t('chat.paidFileOpenAction')
     : t('chat.commerceViewEntitlement')
+  const invalidViewerState = purchaseResult ? null : getCommerceInvalidState(currentCheckoutPreview)
+  const invalidStateLabel = invalidViewerState
+    ? t(`commerce.viewerState.${invalidViewerState}`, {
+        defaultValue: t('commerce.viewerState.unavailable'),
+      })
+    : null
+  const previewErrorLabel =
+    !purchaseResult && !currentCheckoutPreview && checkoutPreviewQuery.isError
+      ? t('chat.commercePreviewFailed')
+      : null
+  const cardIssueLabel = previewErrorLabel ?? invalidStateLabel
+  const hasCardIssue = !!cardIssueLabel
+  const productImageUrl = currentCheckoutPreview?.product.imageUrl ?? card.snapshot.imageUrl
+  const productName = currentCheckoutPreview?.product.name ?? card.snapshot.name
+  const productSummary = currentCheckoutPreview?.product.summary ?? card.snapshot.summary
+  const shopName = currentCheckoutPreview?.shop.name ?? card.snapshot.shopName
+  const shopLogoUrl = currentCheckoutPreview?.shop.logoUrl
+  const displayPrice = currentCheckoutPreview?.displayState?.price ?? {
+    amount: currentCheckoutPreview?.product.price ?? card.snapshot.price,
+    currency: currentCheckoutPreview?.product.currency ?? card.snapshot.currency,
+  }
+  const lockedActionLabel = isPreviewLoading
+    ? t('common.loading')
+    : currentCheckoutPreview?.primaryAction === 'open_content' || opensPaidFile
+      ? t('chat.paidFileOpenAction')
+      : t('chat.commerceBuy')
 
   return (
     <article
       className={cn(
         'relative w-full max-w-[460px] flex overflow-hidden rounded-[20px] border backdrop-blur-2xl shadow-xl text-left my-2 group',
-        isUnlocked
-          ? 'border-success/30 bg-bg-secondary/40'
-          : 'border-border-subtle bg-bg-secondary/40',
+        hasCardIssue
+          ? 'border-warning/35 bg-bg-secondary/45'
+          : isUnlocked
+            ? 'border-success/30 bg-bg-secondary/40'
+            : 'border-border-subtle bg-bg-secondary/40',
       )}
     >
       <div
         className={cn(
           'absolute inset-0 bg-gradient-to-r from-transparent pointer-events-none',
-          isUnlocked ? 'via-success/5 to-success/10' : 'via-primary/5 to-primary/10',
+          hasCardIssue
+            ? 'via-warning/5 to-warning/10'
+            : isUnlocked
+              ? 'via-success/5 to-success/10'
+              : 'via-primary/5 to-primary/10',
         )}
       />
       {isDelivering && (
@@ -422,74 +486,81 @@ function CommerceProductCardViewBase({
       <div className="flex-1 p-4 min-w-0 flex flex-col justify-center relative z-10">
         <button
           type="button"
-          className="block w-full text-left transition hover:opacity-80 focus-visible:outline-none"
-          onClick={resolveCardAction}
+          className={cn(
+            'block w-full text-left transition focus-visible:outline-none',
+            hasCardIssue || isPreviewLoading ? 'cursor-default' : 'hover:opacity-80',
+          )}
+          disabled={hasCardIssue || isPreviewLoading}
+          onClick={hasCardIssue || isPreviewLoading ? undefined : resolveCardAction}
         >
-          <div className="flex items-start gap-4">
-            {card.snapshot.imageUrl ? (
-              <img
-                src={card.snapshot.imageUrl}
-                alt={card.snapshot.name}
-                className={cn(
-                  'aspect-[3/2] w-20 shrink-0 rounded-xl bg-bg-tertiary object-cover shadow-sm',
-                  !isUnlocked && 'opacity-90 grayscale-[20%]',
-                )}
-              />
-            ) : (
-              <div
-                className={cn(
-                  'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-inner',
-                  isUnlocked ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary',
-                )}
-              >
-                <Ticket size={24} strokeWidth={2.5} />
-              </div>
-            )}
+          <div className="flex items-center gap-3.5">
+            <div className="relative shrink-0">
+              {productImageUrl ? (
+                <img
+                  src={productImageUrl}
+                  alt={productName}
+                  className={cn(
+                    'h-[76px] w-[76px] rounded-[16px] bg-bg-tertiary object-cover shadow-sm',
+                    !isUnlocked && 'opacity-95',
+                  )}
+                />
+              ) : (
+                <div
+                  className={cn(
+                    'flex h-[76px] w-[76px] items-center justify-center rounded-[16px] shadow-inner',
+                    hasCardIssue
+                      ? 'bg-warning/10 text-warning'
+                      : isUnlocked
+                        ? 'bg-success/10 text-success'
+                        : 'bg-primary/10 text-primary',
+                  )}
+                >
+                  <Ticket size={26} strokeWidth={2.5} />
+                </div>
+              )}
+              {shopLogoUrl ? (
+                <img
+                  src={shopLogoUrl}
+                  alt={shopName ?? ''}
+                  className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full border-2 border-bg-secondary bg-bg-primary object-cover shadow-md"
+                />
+              ) : shopName ? (
+                <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-bg-secondary bg-bg-primary text-text-muted shadow-md">
+                  <Store size={14} />
+                </span>
+              ) : null}
+            </div>
             <div className="min-w-0 flex-1">
               <div
                 className={cn(
-                  'text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 flex items-center gap-1.5',
-                  isUnlocked ? 'text-success/80' : 'text-primary/80',
+                  'mb-1.5 flex items-center gap-1.5 text-[11px] font-black',
+                  hasCardIssue ? 'text-warning' : isUnlocked ? 'text-success' : 'text-primary',
                 )}
               >
-                {isUnlocked ? (
-                  <Unlock size={10} strokeWidth={3} />
+                {hasCardIssue ? (
+                  <AlertCircle size={12} strokeWidth={3} />
+                ) : isUnlocked ? (
+                  <Unlock size={12} strokeWidth={3} />
                 ) : (
-                  <Lock size={10} strokeWidth={3} />
+                  <Lock size={12} strokeWidth={3} />
                 )}
-                {card.snapshot.billingMode === 'subscription'
-                  ? t('chat.commerceSubscription')
-                  : t('chat.commerceEntitlement')}
-                <span className="opacity-30">·</span>
-                <span className="font-mono truncate">{card.id.slice(0, 8).toUpperCase()}</span>
+                <span className="truncate">
+                  {cardIssueLabel ??
+                    (isPreviewLoading ? t('common.loading') : null) ??
+                    shopName ??
+                    (card.snapshot.billingMode === 'subscription'
+                      ? t('chat.commerceSubscription')
+                      : t('chat.commerceEntitlement'))}
+                </span>
               </div>
-              <h4 className="line-clamp-2 text-[15px] font-black text-text-primary leading-tight">
-                {card.snapshot.name}
+              <h4 className="line-clamp-2 text-[15px] font-black leading-tight text-text-primary">
+                {productName}
               </h4>
-              {card.snapshot.summary && (
-                <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-text-secondary">
-                  {card.snapshot.summary}
+              {productSummary && (
+                <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-text-secondary/90">
+                  {productSummary}
                 </p>
               )}
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-bg-primary/65 px-2 py-1 text-[11px] font-black text-text-muted">
-                  <Store size={11} />
-                  <span className="truncate">
-                    {card.snapshot.shopName ?? t('commerce.consumerStorefront')}
-                  </span>
-                </span>
-                <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-black text-primary">
-                  <ShieldCheck size={11} />
-                  <span className="truncate">
-                    {card.snapshot.deliveryPromise ??
-                      card.snapshot.summary ??
-                      t('commerce.immediateDelivery')}
-                  </span>
-                </span>
-                <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-warning/10 px-2 py-1 text-[11px] font-black text-warning">
-                  {t('chat.commerceRefundRule')}
-                </span>
-              </div>
             </div>
           </div>
         </button>
@@ -508,69 +579,44 @@ function CommerceProductCardViewBase({
             )}
           </div>
         )}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <a
-            href={productHref}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border-subtle bg-bg-primary/55 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
-          >
-            <Ticket size={13} />
-            {t('commerce.viewProduct')}
-          </a>
-          <a
-            href={shopHref}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border-subtle bg-bg-primary/55 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
-          >
-            <Store size={13} />
-            {t('shop.openShop')}
-          </a>
-          {purchaseResult && (
-            <a
-              href={purchaseDeliveryHref}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-success/12 px-3 text-xs font-black text-success transition hover:bg-success/18"
-            >
-              <ShieldCheck size={13} />
-              {purchaseResult.entitlement
-                ? t('shop.viewDeliveryDetail')
-                : t('shop.viewPurchaseDelivery')}
-            </a>
-          )}
-        </div>
       </div>
       <div
         className={cn(
           'flex flex-col items-center justify-center relative w-0 border-l-2 border-dashed my-4 z-10',
-          isUnlocked ? 'border-success/30' : 'border-border-subtle/60',
+          hasCardIssue
+            ? 'border-warning/30'
+            : isUnlocked
+              ? 'border-success/30'
+              : 'border-border-subtle/60',
         )}
       />
       <div
         className={cn(
           'w-[130px] shrink-0 p-4 flex flex-col items-center justify-center gap-4 relative z-10',
-          isUnlocked ? 'bg-success/5' : 'bg-primary/5',
+          hasCardIssue ? 'bg-warning/5' : isUnlocked ? 'bg-success/5' : 'bg-primary/5',
         )}
       >
-        <div className="flex flex-col items-center gap-1 w-full text-center">
-          {isUnlocked ? (
-            <>
-              <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">
-                {t('chat.commerceStatusLabel')}
-              </span>
-              <div className="inline-flex max-w-full px-2.5 py-1 rounded-lg bg-success/10 border border-success/20 text-success text-[12px] font-black tracking-wide justify-center">
-                <span className="truncate">{t('member.status.active', 'ACTIVE')}</span>
-              </div>
-            </>
+        <div className="flex w-full flex-col items-center gap-1 text-center">
+          {hasCardIssue ? (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-warning/25 bg-warning/12 text-warning">
+              <AlertCircle size={19} strokeWidth={2.6} />
+            </div>
+          ) : isUnlocked ? (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-success/25 bg-success/12 text-success">
+              <CheckCircle2 size={19} strokeWidth={2.6} />
+            </div>
           ) : (
-            <>
-              <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">
-                {t('chat.commercePriceLabel')}
-              </span>
-              <div className="inline-flex max-w-full px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[13px] font-black font-mono tracking-tight justify-center">
-                <span className="truncate">{formatCommercePrice(card, t)}</span>
-              </div>
-            </>
+            <div className="inline-flex max-w-full items-center justify-center rounded-[14px] border border-primary/20 bg-bg-primary/65 px-3 py-2 shadow-inner">
+              <CardPrice price={displayPrice.amount} currency={displayPrice.currency} t={t} />
+            </div>
           )}
         </div>
         <div className="w-full">
-          {isUnlocked ? (
+          {hasCardIssue ? (
+            <div className="flex h-[36px] w-full items-center justify-center rounded-[12px] border border-warning/25 bg-warning/10 px-2 text-center text-[12px] font-black text-warning shadow-inner">
+              <span className="truncate">{cardIssueLabel}</span>
+            </div>
+          ) : isUnlocked ? (
             <Button
               type="button"
               size="sm"
@@ -593,12 +639,10 @@ function CommerceProductCardViewBase({
             <Button
               size="sm"
               onClick={resolveCardAction}
-              disabled={isBuying || isOpening}
-              className="!rounded-[12px] w-full !px-0 !h-[36px] !text-[13px] shadow-[0_0_15px_rgba(0,198,209,0.2)] hover:shadow-[0_0_25px_rgba(0,198,209,0.35)]"
+              disabled={isBuying || isOpening || isPreviewLoading}
+              className="!h-[36px] w-full !rounded-[12px] !px-0 !text-[13px] shadow-[0_0_15px_rgba(0,198,209,0.2)] hover:shadow-[0_0_25px_rgba(0,198,209,0.35)]"
             >
-              {currentCheckoutPreview?.primaryAction === 'open_content' || opensPaidFile
-                ? t('chat.paidFileOpenAction')
-                : t('chat.commerceBuy')}
+              {lockedActionLabel}
             </Button>
           )}
         </div>
@@ -636,18 +680,35 @@ function PaidFileCardViewBase({
   const [isOpening, setIsOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const { data: state } = useQuery({
+  const paidFileStateQuery = useQuery({
     queryKey: ['paid-file', card.fileId],
     queryFn: () => fetchApi<PaidFileState>(`/api/paid-files/${card.fileId}`),
     staleTime: 10_000,
   })
+  const { data: state } = paidFileStateQuery
   const isUnlocked = state?.hasAccess === true
-  const fileStateLabel = isUnlocked ? t('chat.paidFileUnlocked') : t('chat.paidFileLocked')
+  const isStateLoading = paidFileStateQuery.isLoading && !state
+  const blockedFileState = getPaidFileBlockedState(state, paidFileStateQuery.isError && !state)
+  const blockedFileLabel = blockedFileState
+    ? t(`commerce.viewerState.${blockedFileState}`, {
+        defaultValue: t('commerce.viewerState.unavailable'),
+      })
+    : null
+  const fileStateLabel = blockedFileLabel
+    ? blockedFileLabel
+    : isStateLoading
+      ? t('common.loading')
+      : isUnlocked
+        ? t('chat.paidFileUnlocked')
+        : t('chat.paidFileLocked')
   const fileAccessLabel = isUnlocked
     ? t('chat.paidFileReady')
-    : t('chat.paidFileRequiresEntitlement')
+    : (blockedFileLabel ??
+      (isStateLoading ? t('common.loading') : t('chat.paidFileRequiresEntitlement')))
+  const filePreviewUrl = state?.file.previewUrl ?? card.snapshot.previewUrl
 
   const openFile = async () => {
+    if (blockedFileState || isStateLoading) return
     setIsOpening(true)
     setError(null)
     try {
@@ -669,42 +730,67 @@ function PaidFileCardViewBase({
     <div
       className={cn(
         'relative w-full max-w-[440px] flex overflow-hidden rounded-[18px] border backdrop-blur-xl shadow-sm text-left my-2 group',
-        isUnlocked
-          ? 'border-primary/25 bg-bg-secondary/70'
-          : 'border-border-subtle bg-bg-secondary/70',
+        blockedFileState
+          ? 'border-warning/35 bg-bg-secondary/70'
+          : isUnlocked
+            ? 'border-primary/25 bg-bg-secondary/70'
+            : 'border-border-subtle bg-bg-secondary/70',
       )}
     >
       <div
         className={cn(
           'absolute inset-0 bg-gradient-to-r from-transparent pointer-events-none',
-          isUnlocked ? 'via-primary/5 to-primary/10' : 'via-text-muted/5 to-transparent',
+          blockedFileState
+            ? 'via-warning/5 to-warning/10'
+            : isUnlocked
+              ? 'via-primary/5 to-primary/10'
+              : 'via-text-muted/5 to-transparent',
         )}
       />
       <div className="flex-1 p-4 min-w-0 flex flex-col justify-center relative z-10">
         <div className="flex items-start gap-4">
-          <div
-            className={cn(
-              'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-inner',
-              isUnlocked ? 'bg-primary/10 text-primary' : 'bg-bg-tertiary text-text-muted',
-            )}
-          >
-            <FileText size={24} strokeWidth={2.5} />
-          </div>
+          {filePreviewUrl ? (
+            <img
+              src={filePreviewUrl}
+              alt={card.snapshot.name}
+              className={cn(
+                'h-14 w-14 shrink-0 rounded-xl bg-bg-tertiary object-cover shadow-sm',
+                !isUnlocked && 'opacity-90',
+              )}
+            />
+          ) : (
+            <div
+              className={cn(
+                'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-inner',
+                blockedFileState
+                  ? 'bg-warning/10 text-warning'
+                  : isUnlocked
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-bg-tertiary text-text-muted',
+              )}
+            >
+              <FileText size={24} strokeWidth={2.5} />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <div
               className={cn(
-                'text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 flex items-center gap-1.5',
-                isUnlocked ? 'text-primary/80' : 'text-text-muted',
+                'mb-1.5 flex items-center gap-1.5 text-[11px] font-black',
+                blockedFileState
+                  ? 'text-warning'
+                  : isUnlocked
+                    ? 'text-primary/80'
+                    : 'text-text-muted',
               )}
             >
-              {isUnlocked ? (
+              {blockedFileState ? (
+                <AlertCircle size={10} strokeWidth={3} />
+              ) : isUnlocked ? (
                 <Unlock size={10} strokeWidth={3} />
               ) : (
                 <Lock size={10} strokeWidth={3} />
               )}
               {fileStateLabel}
-              <span className="opacity-30">·</span>
-              <span className="font-mono truncate">{card.fileId.slice(0, 8).toUpperCase()}</span>
             </div>
             <h4 className="truncate text-[15px] font-black text-text-primary leading-tight">
               {card.snapshot.name}
@@ -732,49 +818,62 @@ function PaidFileCardViewBase({
       <div
         className={cn(
           'flex flex-col items-center justify-center relative w-0 border-l-2 border-dashed my-4 z-10',
-          isUnlocked ? 'border-primary/25' : 'border-border-subtle/60',
+          blockedFileState
+            ? 'border-warning/30'
+            : isUnlocked
+              ? 'border-primary/25'
+              : 'border-border-subtle/60',
         )}
       />
       <div
         className={cn(
-          'w-[130px] shrink-0 p-4 flex flex-col items-center justify-center gap-4 relative z-10',
-          isUnlocked ? 'bg-primary/5' : 'bg-bg-tertiary/30',
+          'w-[126px] shrink-0 p-4 flex flex-col items-center justify-center gap-3 relative z-10',
+          blockedFileState ? 'bg-warning/5' : isUnlocked ? 'bg-primary/5' : 'bg-bg-tertiary/30',
         )}
       >
-        <div className="flex flex-col items-center gap-1 w-full text-center">
-          <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">
-            {t('chat.paidFileAccessLabel')}
-          </span>
-          <div
-            className={cn(
-              'inline-flex max-w-full px-2.5 py-1 rounded-lg border text-[12px] font-black tracking-wide justify-center',
-              isUnlocked
-                ? 'bg-primary/10 border-primary/20 text-primary'
-                : 'bg-bg-secondary border-border-subtle text-text-muted',
-            )}
-          >
-            <span className="truncate">{fileAccessLabel}</span>
-          </div>
+        <div
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-full border',
+            blockedFileState
+              ? 'border-warning/25 bg-warning/12 text-warning'
+              : isUnlocked
+                ? 'border-primary/25 bg-primary/12 text-primary'
+                : 'border-border-subtle bg-bg-secondary text-text-muted',
+          )}
+          title={fileAccessLabel}
+        >
+          {blockedFileState ? (
+            <AlertCircle size={17} />
+          ) : isUnlocked ? (
+            <Unlock size={17} />
+          ) : (
+            <Lock size={17} />
+          )}
         </div>
         <div className="w-full">
-          <Button
-            size="sm"
-            onClick={openFile}
-            disabled={isOpening || !isUnlocked}
-            className={cn(
-              '!rounded-[12px] w-full !px-0 !h-[36px] !text-[13px]',
-              isUnlocked
-                ? '!bg-primary/15 hover:!bg-primary/25 !text-primary !border !border-primary/20 shadow-none'
-                : '!bg-bg-secondary !text-text-muted !border !border-border-subtle shadow-none',
-            )}
-            title={isUnlocked ? t('chat.paidFileOpenAction') : fileAccessLabel}
-          >
-            {isOpening
-              ? t('chat.paidFileOpening')
-              : isUnlocked
-                ? t('chat.paidFileOpenAction')
-                : fileAccessLabel}
-          </Button>
+          {isUnlocked ? (
+            <Button
+              size="sm"
+              onClick={openFile}
+              disabled={isOpening}
+              className="!h-[36px] w-full !rounded-[12px] !border !border-primary/20 !bg-primary/15 !px-0 !text-[13px] !text-primary shadow-none hover:!bg-primary/25"
+              title={t('chat.paidFileOpenAction')}
+            >
+              {isOpening ? t('chat.paidFileOpening') : t('chat.paidFileOpenAction')}
+            </Button>
+          ) : (
+            <div
+              className={cn(
+                'flex h-[36px] w-full items-center justify-center rounded-[12px] border px-2 text-center text-[12px] font-black shadow-inner',
+                blockedFileState
+                  ? 'border-warning/25 bg-warning/10 text-warning'
+                  : 'border-border-subtle bg-bg-secondary text-text-secondary',
+              )}
+              title={fileAccessLabel}
+            >
+              <span className="truncate">{fileAccessLabel}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

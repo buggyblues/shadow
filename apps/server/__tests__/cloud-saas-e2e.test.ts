@@ -2159,6 +2159,69 @@ describe('Cloud SaaS — deployment + billing', () => {
     }
   })
 
+  it('POST /api/cloud-saas/deployments accepts direct template env refs', async () => {
+    const slug = uniqueName('e2e-direct-env')
+    const directEnvKey = 'CODE_TRAINER_MANIFEST_URL'
+    const directEnvValue = 'https://trainer.example.test/.well-known/shadow-app.json'
+
+    try {
+      await db.insert(schema.cloudTemplates).values({
+        slug,
+        name: 'E2E Direct Env Template',
+        description: 'Template with a direct env ref outside plugin auth fields',
+        source: 'official',
+        reviewStatus: 'approved',
+        content: {
+          version: '1',
+          name: slug,
+          deployments: {
+            namespace: slug,
+            agents: [
+              {
+                id: 'agent-1',
+                runtime: 'docker',
+                env: {
+                  [directEnvKey]: `\${env:${directEnvKey}}`,
+                },
+                configuration: {},
+              },
+            ],
+          },
+        },
+        tags: ['test'],
+        category: 'test',
+        baseCost: 0,
+      })
+
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace: uniqueName('e2e-direct-env-ns'),
+        name: uniqueName('e2e-direct-env-deploy'),
+        templateSlug: slug,
+        resourceTier: 'lightweight',
+        configSnapshot: {},
+        envVars: {
+          [directEnvKey]: directEnvValue,
+        },
+      })
+
+      expect(createRes.status).toBe(201)
+      const deployment = (await createRes.json()) as { id: string }
+      const [stored] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment.id))
+        .limit(1)
+
+      const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
+      expect(runtime[directEnvKey]).toBe(directEnvValue)
+    } finally {
+      await db
+        .delete(schema.cloudTemplates)
+        .where(eq(schema.cloudTemplates.slug, slug))
+        .catch(() => {})
+    }
+  })
+
   it('POST /api/cloud-saas/deployments persists deployment locale and timezone context', async () => {
     const createRes = await req('POST', '/api/cloud-saas/deployments', {
       namespace: uniqueName('e2e-runtime-context-ns'),

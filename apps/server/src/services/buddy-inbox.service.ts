@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { Server as SocketIOServer } from 'socket.io'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentPolicyDao } from '../dao/agent-policy.dao'
 import type { ChannelDao } from '../dao/channel.dao'
@@ -107,6 +108,24 @@ function taskIdempotencyKey(card: TaskMessageCardMetadata) {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function recordString(record: Record<string, unknown> | null | undefined, key: string) {
+  const value = record?.[key]
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+function normalizedToken(value: string | null | undefined) {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 function taskWorkspaceId(card: TaskMessageCardMetadata) {
   const value = card.data?.task?.workspaceId
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
@@ -196,6 +215,7 @@ export class BuddyInboxService {
       channelMemberDao: ChannelMemberDao
       messageDao: MessageDao
       messageService: MessageService
+      io?: SocketIOServer
       policyService: PolicyService
       serverDao: ServerDao
       userDao: UserDao
@@ -292,11 +312,62 @@ export class BuddyInboxService {
       agentId: input.agentId,
       serverId: input.serverId,
       channelId: input.channelId,
-      listen: existing?.listen ?? true,
-      reply: existing?.reply ?? true,
-      mentionOnly: existing?.mentionOnly ?? false,
+      listen: true,
+      reply: true,
+      mentionOnly: false,
       config,
     })
+  }
+
+  private async ensureInboxRuntimePolicy(input: {
+    serverId: string
+    agentId: string
+    channelId: string
+  }) {
+    const existing = await this.deps.agentPolicyDao.findByChannel(
+      input.agentId,
+      input.serverId,
+      input.channelId,
+    )
+    const config = ((existing?.config as Record<string, unknown> | undefined) ?? {}) as Record<
+      string,
+      unknown
+    >
+    return this.deps.agentPolicyDao.upsert({
+      agentId: input.agentId,
+      serverId: input.serverId,
+      channelId: input.channelId,
+      listen: true,
+      reply: true,
+      mentionOnly: false,
+      config,
+    })
+  }
+
+  private emitInboxReady(input: {
+    serverId: string
+    agent: { id: string; userId: string }
+    channelId: string
+    config?: Record<string, unknown>
+  }) {
+    const io = this.deps.io
+    if (!io) return
+    try {
+      io.to(`user:${input.agent.userId}`).emit('channel:member-added', {
+        channelId: input.channelId,
+        serverId: input.serverId,
+      })
+      io.to(`user:${input.agent.userId}`).emit('agent:policy-changed', {
+        agentId: input.agent.id,
+        serverId: input.serverId,
+        channelId: input.channelId,
+        reply: true,
+        mentionOnly: false,
+        config: input.config ?? {},
+      })
+    } catch {
+      /* socket fanout is best-effort */
+    }
   }
 
   private resolveAdmissionMode(
@@ -444,6 +515,157 @@ export class BuddyInboxService {
     return byAgentId
   }
 
+  private async resolveImmediateFeedbackChannel(input: {
+    serverId: string
+    agentId: string
+    inboxChannelId: string
+    feedback: Record<string, unknown>
+  }) {
+    const channels = await this.deps.channelDao.findByServerId(input.serverId)
+    const visibleChannels = channels.filter(
+      (channel) =>
+        channel.id !== input.inboxChannelId &&
+        !channel.isPrivate &&
+        !parseBuddyInboxAgentId(channel.topic),
+    )
+    if (visibleChannels.length === 0) return null
+
+    const requested = [
+      recordString(input.feedback, 'statusChannelId'),
+      recordString(input.feedback, 'finalChannelId'),
+      recordString(input.feedback, 'channelId'),
+      recordString(input.feedback, 'statusChannelName'),
+      recordString(input.feedback, 'finalChannelName'),
+      recordString(input.feedback, 'channelName'),
+      recordString(input.feedback, 'statusChannel'),
+      recordString(input.feedback, 'finalChannel'),
+      recordString(input.feedback, 'channel'),
+    ].filter((value): value is string => Boolean(value))
+
+    for (const value of requested) {
+      const byId = visibleChannels.find((channel) => channel.id === value)
+      if (byId) return byId
+    }
+
+    for (const value of requested) {
+      const exact = value.trim().toLowerCase()
+      const byExactName = visibleChannels.find((channel) => {
+        return (
+          channel.name.trim().toLowerCase() === exact ||
+          (channel.topic ?? '').trim().toLowerCase() === exact
+        )
+      })
+      if (byExactName) return byExactName
+    }
+
+    for (const value of requested) {
+      const token = normalizedToken(value)
+      if (!token) continue
+      const byName = visibleChannels.find((channel) => {
+        return (
+          normalizedToken(channel.name) === token ||
+          normalizedToken(channel.topic ?? undefined) === token
+        )
+      })
+      if (byName) return byName
+    }
+
+    const policies = await this.deps.agentPolicyDao.findByAgentAndServer(
+      input.agentId,
+      input.serverId,
+    )
+    for (const value of requested) {
+      const token = normalizedToken(value)
+      if (!token) continue
+      const policy = policies.find((candidate) => {
+        const config = recordValue(candidate.config)
+        return (
+          candidate.channelId &&
+          candidate.listen &&
+          candidate.reply &&
+          normalizedToken(recordString(config, 'channelConfigId')) === token
+        )
+      })
+      const channel = policy
+        ? visibleChannels.find((candidate) => candidate.id === policy.channelId)
+        : null
+      if (channel) return channel
+    }
+
+    const policyChannelIds = new Set(
+      policies
+        .filter((policy) => policy.channelId && policy.listen && policy.reply)
+        .map((policy) => policy.channelId),
+    )
+    return visibleChannels.find((channel) => policyChannelIds.has(channel.id)) ?? null
+  }
+
+  private async hasImmediateFeedbackMessage(input: {
+    channelId: string
+    taskMessageId: string
+    taskCardId: string
+  }) {
+    const recent = await this.deps.messageDao.findByChannelId(input.channelId, 30)
+    return recent.messages.some((message) => {
+      const metadata = recordValue(message.metadata)
+      const custom = recordValue(metadata?.custom)
+      const ack = recordValue(custom?.buddyInboxAck)
+      return (
+        recordString(ack, 'taskMessageId') === input.taskMessageId &&
+        recordString(ack, 'taskCardId') === input.taskCardId
+      )
+    })
+  }
+
+  private async sendImmediateClaimFeedback(input: {
+    access: InboxAccess
+    agent: { id: string; userId: string }
+    messageId: string
+    card: TaskMessageCardMetadata
+  }) {
+    const serverId = input.access.channel.serverId
+    if (!serverId) return
+
+    const feedback = recordValue(input.card.data?.immediateFeedback)
+    const expectedAck = recordString(feedback, 'expectedAck')
+    const ackMessage = recordString(feedback, 'ackMessage')
+    if (expectedAck !== 'claim_and_acknowledge' && !ackMessage) return
+
+    const targetChannel = await this.resolveImmediateFeedbackChannel({
+      serverId,
+      agentId: input.agent.id,
+      inboxChannelId: input.access.channel.id,
+      feedback: feedback ?? {},
+    })
+    if (!targetChannel) return
+
+    const alreadySent = await this.hasImmediateFeedbackMessage({
+      channelId: targetChannel.id,
+      taskMessageId: input.messageId,
+      taskCardId: input.card.id,
+    })
+    if (alreadySent) return
+
+    const content =
+      ackMessage ??
+      `Got it: ${input.card.title}. ${input.card.assignee?.label ?? 'Buddy'} has picked it up and is working on it.`
+    const message = await this.deps.messageService.send(targetChannel.id, input.agent.userId, {
+      content,
+      metadata: {
+        custom: {
+          buddyInboxAck: {
+            kind: 'task_claim_ack',
+            taskMessageId: input.messageId,
+            taskCardId: input.card.id,
+            sourceChannelId: input.access.channel.id,
+            claimId: input.card.claim?.id,
+          },
+        },
+      },
+    })
+    this.deps.io?.to(`channel:${targetChannel.id}`).emit('message:new', message)
+  }
+
   private async findMessageByTaskIdempotencyKey(channelId: string, idempotencyKey?: string) {
     const key = idempotencyKey?.trim()
     if (!key) return null
@@ -536,6 +758,17 @@ export class BuddyInboxService {
     const existing = await this.findInboxChannel(serverId, agentId)
     if (existing) {
       await this.ensureInboxMembers(existing.id, serverId, agent, userId)
+      const policy = await this.ensureInboxRuntimePolicy({
+        serverId,
+        agentId,
+        channelId: existing.id,
+      })
+      this.emitInboxReady({
+        serverId,
+        agent,
+        channelId: existing.id,
+        config: policy?.config,
+      })
       return { channel: existing, agent, created: false }
     }
 
@@ -556,6 +789,17 @@ export class BuddyInboxService {
       throw Object.assign(new Error('Failed to create Buddy Inbox'), { status: 500 })
     }
     await this.ensureInboxMembers(channel.id, serverId, agent, userId)
+    const policy = await this.ensureInboxRuntimePolicy({
+      serverId,
+      agentId,
+      channelId: channel.id,
+    })
+    this.emitInboxReady({
+      serverId,
+      agent,
+      channelId: channel.id,
+      config: policy?.config,
+    })
     return { channel, agent, created: true }
   }
 
@@ -771,6 +1015,17 @@ export class BuddyInboxService {
       task: input,
       actor,
     })
+    const policy = await this.ensureInboxRuntimePolicy({
+      serverId: access.channel.serverId,
+      agentId,
+      channelId,
+    })
+    this.emitInboxReady({
+      serverId: access.channel.serverId,
+      agent,
+      channelId,
+      config: policy?.config,
+    })
     return this.createTaskMessage(channelId, agent, input, actor)
   }
 
@@ -812,6 +1067,17 @@ export class BuddyInboxService {
       agentId,
       task: input,
       actor,
+    })
+    const policy = await this.ensureInboxRuntimePolicy({
+      serverId,
+      agentId,
+      channelId: existing.id,
+    })
+    this.emitInboxReady({
+      serverId,
+      agent,
+      channelId: existing.id,
+      config: policy?.config,
     })
     return this.createTaskMessage(existing.id, agent, input, actor)
   }
@@ -943,7 +1209,7 @@ export class BuddyInboxService {
       }
       const progress = Array.isArray(card.progress) ? card.progress : []
       const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString()
-      return {
+      const nextCard = {
         ...card,
         status: 'claimed' as const,
         claim: {
@@ -975,15 +1241,37 @@ export class BuddyInboxService {
           },
         ],
       }
+      return nextCard
     })
     if (!found) {
       throw Object.assign(new Error('Task card not found'), { status: 404 })
     }
+    const claimedCard = nextCards.find(
+      (card): card is TaskMessageCardMetadata => isTaskCard(card) && card.id === cardId,
+    )
 
-    return this.deps.messageService.updateMetadata(messageId, {
+    const updated = await this.deps.messageService.updateMetadata(messageId, {
       ...metadata,
       cards: nextCards,
     })
+    if (claimedCard) {
+      const targetAgentId =
+        claimedCard.assignee?.agentId ?? parseBuddyInboxAgentId(access.channel.topic)
+      const targetAgent = targetAgentId ? await this.deps.agentDao.findById(targetAgentId) : null
+      if (targetAgent) {
+        try {
+          await this.sendImmediateClaimFeedback({
+            access,
+            agent: targetAgent,
+            messageId,
+            card: claimedCard,
+          })
+        } catch {
+          /* best-effort user feedback */
+        }
+      }
+    }
+    return updated
   }
 
   async updateTaskCard(

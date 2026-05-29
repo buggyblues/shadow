@@ -200,7 +200,8 @@ dd {
 }
 
 .libraryPage,
-.submissionsPage {
+.submissionsPage,
+.learningPage {
   width: min(1180px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 32px 0 46px;
@@ -1343,6 +1344,283 @@ h3 {
   margin-top: 18px;
 }
 
+.learningGrid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.learningStats,
+.learningPanel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.learningStats {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.learningMetric {
+  display: grid;
+  gap: 5px;
+  min-height: 76px;
+  border-right: 1px solid var(--line);
+  padding: 14px;
+}
+
+.learningMetric:last-child {
+  border-right: 0;
+}
+
+.learningMetricWide {
+  grid-column: span 2;
+}
+
+.learningMetric small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.learningMetric span,
+.learningPanelIntro span,
+.taskRow span,
+.skillRow span,
+.learningListItem span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.learningMetric strong {
+  color: var(--ink);
+  font-size: 25px;
+  line-height: 1;
+}
+
+.learningPanel {
+  display: grid;
+  grid-column: span 6;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  padding: 16px;
+}
+
+.learningPanelWide {
+  grid-column: span 12;
+}
+
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panelTitle h2 {
+  font-size: 16px;
+}
+
+.panelTitle svg {
+  color: var(--accent);
+}
+
+.signalGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.signalCard {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 112px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 12px;
+}
+
+.signalCard:hover {
+  border-color: var(--line-strong);
+}
+
+.signalCard span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.signalCard strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.signalCard small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.settingsPanel {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 18px;
+}
+
+.difficultyGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.difficultyOption {
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 12px;
+  text-align: left;
+}
+
+.difficultyOption:hover,
+.difficultyOption.active {
+  border-color: rgba(37, 99, 235, 0.38);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.difficultyOption strong {
+  color: var(--ink);
+}
+
+.difficultyOption span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settingsFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.settingsFields label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.settingsFields input {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink);
+  font-size: 14px;
+  padding: 0 12px;
+}
+
+.settingsFields .primaryAction {
+  min-height: 42px;
+}
+
+.learningPanelIntro,
+.taskList,
+.skillStack,
+.learningList {
+  display: grid;
+  gap: 9px;
+}
+
+.learningPanelIntro strong,
+.taskRow strong,
+.skillRow strong,
+.learningListItem strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.taskRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 10px;
+}
+
+.taskRow .statusDot {
+  margin-top: 5px;
+}
+
+.skillRow {
+  display: grid;
+  gap: 8px;
+}
+
+.skillRow strong,
+.skillRow span {
+  display: block;
+}
+
+.masteryBar {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.masteryBar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.learningListItem {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 10px;
+}
+
+.learningListItem:hover {
+  border-color: var(--line-strong);
+}
+
+.learningColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .submissionTable {
   min-width: 0;
 }
@@ -1637,6 +1915,92 @@ h3 {
   margin-top: 4px;
 }
 
+.reviewFlow {
+  display: grid;
+  gap: 12px;
+  border: 1px solid color-mix(in oklch, var(--accent) 18%, var(--line));
+  border-radius: var(--radius);
+  background: color-mix(in oklch, var(--surface) 82%, var(--accent-weak));
+  padding: 14px;
+}
+
+.reviewFlowHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.reviewFlowHeader strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.reviewFlowHeader span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.reviewFlowList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.reviewFlowStep {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 9px;
+  list-style: none;
+}
+
+.reviewFlowMarker {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.reviewFlowStep.complete .reviewFlowMarker {
+  border-color: color-mix(in oklch, var(--success) 36%, var(--line));
+  background: oklch(94% 0.035 150);
+  color: var(--success);
+}
+
+.reviewFlowStep.active .reviewFlowMarker {
+  border-color: color-mix(in oklch, var(--accent) 36%, var(--line));
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.reviewFlowStep.error .reviewFlowMarker {
+  border-color: color-mix(in oklch, var(--danger) 38%, var(--line));
+  background: oklch(96% 0.035 24);
+  color: var(--danger);
+}
+
+.reviewFlowStep strong,
+.reviewFlowStep small {
+  display: block;
+}
+
+.reviewFlowStep strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.reviewFlowStep small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
 .waitingActions {
   display: flex;
   flex-wrap: wrap;
@@ -1766,9 +2130,35 @@ h3 {
   }
 
   .libraryPage,
-  .submissionsPage {
+  .submissionsPage,
+  .learningPage {
     width: min(100vw - 20px, 1120px);
     padding-top: 18px;
+  }
+
+  .learningStats,
+  .learningColumns,
+  .signalGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .difficultyGrid,
+  .settingsFields {
+    grid-template-columns: 1fr;
+  }
+
+  .learningMetric {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .learningMetric:last-child {
+    border-bottom: 0;
+  }
+
+  .learningPanel,
+  .learningPanelWide {
+    grid-column: 1 / -1;
   }
 
   h1 {

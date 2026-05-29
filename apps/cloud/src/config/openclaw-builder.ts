@@ -559,6 +559,25 @@ export function collectPluginBuildEnvVars(
   return envVars
 }
 
+export function collectPluginRuntimeEnvOmitKeys(
+  agent: AgentDeployment,
+  config: CloudConfig,
+  cwd?: string,
+  env?: RuntimeEnv,
+): Set<string> {
+  const keys = new Set<string>()
+
+  forEachEnabledPlugin(agent, config, cwd, env, ({ pluginDef }) => {
+    for (const field of pluginDef.secretFields ?? []) {
+      if (field.runtime !== false) continue
+      keys.add(field.key)
+      for (const alias of field.aliases ?? []) keys.add(alias)
+    }
+  })
+
+  return keys
+}
+
 const COLON_SEPARATED_ENV_KEYS = new Set(['PATH', 'PYTHONPATH', 'NODE_PATH'])
 
 function mergeColonSeparatedEnvValue(current: string | undefined, next: string): string {

@@ -10,11 +10,17 @@ describe('generated Cloud libraries', () => {
   it('packs plugin README and manifest data into the searchable library', () => {
     const plugins = listPluginLibrary()
     const googleWorkspace = plugins.find((plugin) => plugin.id === 'google-workspace')
+    const lark = plugins.find((plugin) => plugin.id === 'lark')
 
     expect(plugins.length).toBeGreaterThan(40)
     expect(googleWorkspace?.manifest.auth.type).toBe('oauth2')
     expect(googleWorkspace?.readme.excerpt).toContain('Google Workspace')
     expect(googleWorkspace?.searchText).toContain('drive')
+    expect(lark?.manifest.capabilities).toEqual(expect.arrayContaining(['cli', 'skill']))
+    expect(lark?.manifest.capabilities).not.toContain('mcp')
+    expect(
+      lark?.manifest.auth.fields.find((field) => field.key === 'LARKSUITE_CLI_APP_ID')?.helpUrl,
+    ).toBe('https://open.feishu.cn/app')
   })
 
   it('searches plugins by request text instead of hardcoded scenario rules', () => {

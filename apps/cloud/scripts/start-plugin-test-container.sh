@@ -256,6 +256,33 @@ append_env_if_absent() {
   fi
 }
 
+append_runtime_env_json() {
+  local json_path="$1"
+  [ -f "$json_path" ] || return 0
+  node - "$json_path" "$ENV_FILE" <<'NODE'
+const fs = require('node:fs')
+const [jsonPath, envPath] = process.argv.slice(2)
+const runtimeEnv = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
+const existing = new Set(
+  fs.existsSync(envPath)
+    ? fs
+        .readFileSync(envPath, 'utf8')
+        .split(/\n/)
+        .map((line) => line.slice(0, line.indexOf('=')))
+        .filter(Boolean)
+    : [],
+)
+const lines = []
+for (const [key, value] of Object.entries(runtimeEnv)) {
+  if (existing.has(key)) continue
+  const text = String(value)
+  if (text.includes('\n') || text.includes('\r')) continue
+  lines.push(`${key}=${text}`)
+}
+if (lines.length > 0) fs.appendFileSync(envPath, `${lines.join('\n')}\n`)
+NODE
+}
+
 runner_dir_for() {
   case "$1" in
     ""|base|node)
@@ -420,6 +447,11 @@ const pkg = buildAgentRuntimePackage({
 for (const [name, content] of Object.entries(pkg.configData)) {
   writeFileSync(join(outDir, name), content)
 }
+writeFileSync(
+  join(outDir, 'runtime-env.json'),
+  `${JSON.stringify({ ...pkg.plainEnv, ...pkg.secretData }, null, 2)}\n`,
+  { mode: 0o600 },
+)
 TS
   (
     cd "$APP_DIR"
@@ -519,8 +551,14 @@ fi`,
 const { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { dirname, resolve } = require('node:path')
 const path = '/etc/openclaw/runtime-files.json'
+const extensionsPath = '/etc/openclaw/runtime-extensions.json'
+const runtimeEnvPath = '/etc/openclaw/runtime-env.json'
+const runtimeEnv = existsSync(runtimeEnvPath) ? JSON.parse(readFileSync(runtimeEnvPath, 'utf8')) : {}
+function envValue(key) {
+  return process.env[key] ?? runtimeEnv[key]
+}
 function replaceEnv(value) {
-  return value.replace(/\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, key) => process.env[key] ?? '')
+  return value.replace(/\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, key) => envValue(key) ?? '')
 }
 function modeFor(file) {
   return file.endsWith('/.env') || /\\.(json|toml|ya?ml)$/u.test(file) ? 0o600 : 0o644
@@ -535,6 +573,27 @@ if (existsSync(path)) {
     writeFileSync(absolute, replaceEnv(content), { encoding: 'utf8', mode })
     chmodSync(absolute, mode)
     if (process.getuid && process.getuid() === 0) {
+      try { require('node:fs').chownSync(dirname(absolute), 1000, 1000) } catch {}
+      try { require('node:fs').chownSync(absolute, 1000, 1000) } catch {}
+    }
+  }
+}
+if (existsSync(extensionsPath)) {
+  const extension = JSON.parse(readFileSync(extensionsPath, 'utf8'))
+  for (const file of extension.credentialFiles ?? []) {
+    if (!file || typeof file !== 'object') continue
+    const envKey = typeof file.envKey === 'string' ? file.envKey : ''
+    const target = typeof file.path === 'string' ? file.path : ''
+    const content = envValue(envKey)
+    if (!envKey || !target || content === undefined) continue
+    const absolute = resolve(target)
+    mkdirSync(dirname(absolute), { recursive: true })
+    const parsedMode = typeof file.mode === 'string' ? Number.parseInt(file.mode, 8) : 0o600
+    const mode = Number.isFinite(parsedMode) ? parsedMode : 0o600
+    writeFileSync(absolute, replaceEnv(String(content)), { encoding: 'utf8', mode })
+    chmodSync(absolute, mode)
+    if (process.getuid && process.getuid() === 0) {
+      try { require('node:fs').chownSync(dirname(absolute), 1000, 1000) } catch {}
       try { require('node:fs').chownSync(absolute, 1000, 1000) } catch {}
     }
   }
@@ -640,6 +699,7 @@ touch "$ENV_FILE"
 if [ -n "$RUNNER_DIR" ]; then
   RUNTIME_ID="$(runtime_id_for_dir "$RUNNER_DIR")"
   write_runner_runtime_config "$RUNTIME_ID" "$RUNTIME_CONFIG_DIR" "${PLUGIN_IDS[@]}"
+  append_runtime_env_json "$RUNTIME_CONFIG_DIR/runtime-env.json"
   append_env_if_absent HOME "/home/shadow"
   append_env_if_absent SHADOW_PLUGIN_TEST_NORMALIZE_USER "1"
   append_env_if_absent SHADOW_RUNNER_CONFIG_MOUNT "/etc/openclaw"
@@ -666,13 +726,14 @@ while IFS= read -r raw; do
   [ -z "$raw" ] && continue
   key="$(node -e 'const item=JSON.parse(process.argv[1]); process.stdout.write(item.key)' "$raw")"
   required="$(node -e 'const item=JSON.parse(process.argv[1]); process.stdout.write(item.required ? "1" : "0")' "$raw")"
+  runtime="$(node -e 'const item=JSON.parse(process.argv[1]); process.stdout.write(item.runtime === false ? "0" : "1")' "$raw")"
   label="$(node -e 'const item=JSON.parse(process.argv[1]); process.stdout.write(item.label || item.key)' "$raw")"
   value="${!key-}"
   if [ -z "$value" ] && [ "$required" = "1" ] && [ "$PROMPT_MISSING" = "1" ]; then
     printf "Enter %s (%s): " "$label" "$key"
     read -r value </dev/tty
   fi
-  if [ -n "$value" ]; then
+  if [ -n "$value" ] && [ "$runtime" = "1" ]; then
     printf "%s=%s\n" "$key" "$value" >> "$ENV_FILE"
   fi
 done < "$ENV_FILE.keys"
@@ -691,18 +752,33 @@ for (const line of lines) {
   if (index > 0) env.set(line.slice(0, index), line.slice(index + 1))
 }
 const append = []
+const expandTemplate = (value) =>
+  String(value).replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
+    (_, key) => env.get(key) ?? process.env[key] ?? '',
+  )
+const appendEnv = (key, value) => {
+  const text = String(value)
+  env.set(key, text)
+  if (text.includes('\n') || text.includes('\r')) return
+  append.push(`${key}=${text}`)
+}
 for (const record of records) {
   for (const [key, value] of Object.entries(record.buildEnv?.literal ?? {})) {
     if (!env.has(key)) {
-      env.set(key, String(value))
-      append.push(`${key}=${value}`)
+      appendEnv(key, value)
     }
   }
   for (const alias of record.buildEnv?.aliases ?? []) {
     if (!env.has(alias.key) && env.has(alias.fromKey)) {
       const value = env.get(alias.fromKey)
-      env.set(alias.key, value)
-      append.push(`${alias.key}=${value}`)
+      appendEnv(alias.key, value)
+    }
+  }
+  for (const [key, value] of Object.entries(record.buildEnv?.templates ?? {})) {
+    if (!env.has(key)) {
+      const rendered = expandTemplate(value)
+      appendEnv(key, rendered)
     }
   }
 }

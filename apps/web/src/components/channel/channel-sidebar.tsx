@@ -272,6 +272,7 @@ export function ChannelSidebar({
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
   const [newIsPrivate, setNewIsPrivate] = useState(false)
   const [inboxSettingsEntry, setInboxSettingsEntry] = useState<BuddyInboxEntry | null>(null)
+  const [isBuddyInboxCollapsed, setBuddyInboxCollapsed] = useState(true)
   const [draftAdmissionPolicy, setDraftAdmissionPolicy] = useState<AdmissionPolicy | null>(null)
   const [draftAdmissionRule, setDraftAdmissionRule] = useState<AdmissionRule>({
     subjectKind: 'server_app',
@@ -403,6 +404,10 @@ export function ChannelSidebar({
     () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
     [buddyInboxes],
   )
+  const isActiveBuddyInbox = Boolean(activeChannelId && buddyInboxChannelIds.has(activeChannelId))
+  useEffect(() => {
+    if (isActiveBuddyInbox) setBuddyInboxCollapsed(false)
+  }, [isActiveBuddyInbox])
   const textChannels = useMemo(
     () =>
       visibleChannels.filter(
@@ -1349,12 +1354,30 @@ export function ChannelSidebar({
 
         {buddyInboxes.length > 0 && (
           <div className="mb-3">
-            <div className="flex items-center justify-between px-3 py-1.5">
+            <button
+              type="button"
+              aria-expanded={!isBuddyInboxCollapsed}
+              onClick={() => setBuddyInboxCollapsed((collapsed) => !collapsed)}
+              className="flex w-full items-center justify-between px-3 py-1.5 text-left transition-colors hover:text-text-primary"
+            >
               <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
                 {t('inbox.queueTitle')}
               </span>
-            </div>
-            <div className="px-2 space-y-0.5">{buddyInboxes.map(renderBuddyInboxItem)}</div>
+              <span className="flex items-center gap-1 text-text-muted/60">
+                <span className="text-[10px] font-bold tabular-nums">{buddyInboxes.length}</span>
+                <ChevronDown
+                  size={13}
+                  strokeWidth={3}
+                  className={cn(
+                    'transition-transform duration-200',
+                    isBuddyInboxCollapsed && '-rotate-90',
+                  )}
+                />
+              </span>
+            </button>
+            {!isBuddyInboxCollapsed && (
+              <div className="px-2 space-y-0.5">{buddyInboxes.map(renderBuddyInboxItem)}</div>
+            )}
           </div>
         )}
 

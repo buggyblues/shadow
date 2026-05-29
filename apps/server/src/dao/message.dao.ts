@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, ilike, inArray, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, ilike, inArray, isNull, lt } from 'drizzle-orm'
 import type { Database } from '../db'
 import {
   attachments,
@@ -85,7 +85,7 @@ export class MessageDao {
   }
 
   async findByChannelId(channelId: string, limit = 50, cursor?: string) {
-    const conditions = [eq(messages.channelId, channelId)]
+    const conditions = [eq(messages.channelId, channelId), isNull(messages.threadId)]
     if (cursor) {
       conditions.push(lt(messages.createdAt, new Date(cursor)))
     }

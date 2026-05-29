@@ -9,6 +9,8 @@ import {
   createShadowServerAppManifest,
   defineShadowServerApp,
   extractShadowServerAppBearerToken,
+  getShadowServerAppChannelMessageDeliveries,
+  getShadowServerAppChannelMessageErrors,
   getShadowServerAppInboxDeliveries,
   getShadowServerAppInboxErrors,
   getShadowServerAppTaskCardId,
@@ -133,6 +135,20 @@ describe('server app helpers', () => {
         assigneeLabel: 'Strategy Buddy',
         resource: { kind: 'kanban.card', id: 'card-1' },
       })
+      .sendChannelMessage({
+        channelName: 'updates',
+        content: 'Open the next card.',
+        metadata: {
+          cards: [
+            {
+              kind: 'server_app',
+              appKey: 'demo',
+              title: 'Open demo',
+              action: { mode: 'open_app', path: '/items/card-1' },
+            },
+          ],
+        },
+      })
       .attachTo(appResult)
 
     const payload = {
@@ -143,6 +159,8 @@ describe('server app helpers', () => {
         outbox: {
           deliveries: [{ agentId: 'agent-1', channelId: 'channel-1', messageId: 'message-1' }],
           errors: [{ title: 'Skipped optional task', error: 'not found' }],
+          channelMessageDeliveries: [{ channelId: 'updates-1', messageId: 'message-2' }],
+          channelMessageErrors: [{ channelName: 'alerts', error: 'not found' }],
         },
       },
     }
@@ -154,6 +172,13 @@ describe('server app helpers', () => {
     ])
     expect(getShadowServerAppInboxErrors(result)).toEqual([
       { title: 'Skipped optional task', error: 'not found' },
+    ])
+    expect(result.shadow?.outbox?.channelMessages).toHaveLength(1)
+    expect(getShadowServerAppChannelMessageDeliveries(result)).toEqual([
+      { channelId: 'updates-1', messageId: 'message-2' },
+    ])
+    expect(getShadowServerAppChannelMessageErrors(result)).toEqual([
+      { channelName: 'alerts', error: 'not found' },
     ])
   })
 

@@ -28,6 +28,9 @@ import { useChatStore } from '../stores/chat.store'
 const SERVER_APP_LIST_STALE_MS = 5 * 60 * 1000
 const SERVER_APP_LAUNCH_STALE_MS = 9 * 60 * 1000
 const SERVER_APP_QUERY_GC_MS = 30 * 60 * 1000
+const SERVER_APP_ROUTE_MESSAGE_TYPE = 'shadow.app.navigate'
+const SERVER_APP_ROUTE_ACK_MESSAGE_TYPE = 'shadow.app.navigate.ack'
+const SERVER_APP_ROUTE_ACK_TIMEOUT_MS = 450
 
 interface ServerAppIntegration {
   id: string
@@ -103,7 +106,19 @@ function firstDeliveryChannelId(payload: unknown): string | null {
   return firstDeliveryChannelId(record.result)
 }
 
-function withLaunchParams(entry: string, launch: LaunchContext | undefined) {
+function appPathFromSearch(search: RouteSearch | null | undefined) {
+  const value = search?.appPath
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return null
+  return trimmed.slice(0, 240)
+}
+
+function withLaunchParams(
+  entry: string,
+  launch: LaunchContext | undefined,
+  appPath?: string | null,
+) {
   if (!launch?.launchToken) return entry
   const url = new URL(entry, window.location.origin)
   url.searchParams.set('shadow_launch', launch.launchToken)
@@ -113,6 +128,7 @@ function withLaunchParams(entry: string, launch: LaunchContext | undefined) {
       new URL(launch.eventStreamPath, window.location.origin).toString(),
     )
   }
+  if (appPath) url.hash = appPath
   return url.toString()
 }
 
@@ -131,10 +147,14 @@ export function ServerAppsPageRoute({
   const navigate = useNavigate()
   const routeSearch = useSearch({ strict: false }) as RouteSearch
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const iframeFrameKeyRef = useRef<string | null>(null)
+  const iframeLastRouteRef = useRef<string | null>(null)
+  const routeAckHandlersRef = useRef<Map<string, () => void>>(new Map())
   const [lastActiveApp, setLastActiveApp] = useState<{
     serverSlug: string
     appKey: string
   } | null>(null)
+  const [iframeSrc, setIframeSrc] = useState<string | null>(null)
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null)
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
   const { serverSlug, appKey } = useParams({ strict: false }) as {
@@ -198,8 +218,24 @@ export function ServerAppsPageRoute({
     refetchOnReconnect: false,
   })
 
-  const iframeSrc =
-    activeApp?.iframeEntry && launch ? withLaunchParams(activeApp.iframeEntry, launch) : null
+  const appPath = appPathFromSearch(routeSearch)
+  const iframeFrameKey =
+    activeApp?.iframeEntry && launch
+      ? `${serverSlug}:${activeApp.appKey}:${launch.launchToken}`
+      : null
+
+  useEffect(() => {
+    if (!activeApp?.iframeEntry || !launch || !iframeFrameKey) {
+      iframeFrameKeyRef.current = null
+      iframeLastRouteRef.current = null
+      setIframeSrc(null)
+      return
+    }
+    if (iframeFrameKeyRef.current === iframeFrameKey) return
+    iframeFrameKeyRef.current = iframeFrameKey
+    iframeLastRouteRef.current = appPath
+    setIframeSrc(withLaunchParams(activeApp.iframeEntry, launch, appPath))
+  }, [activeApp?.appKey, activeApp?.iframeEntry, appPath, iframeFrameKey, launch, serverSlug])
 
   const iframeOrigin = useMemo(() => {
     if (!iframeSrc) return '*'
@@ -209,6 +245,40 @@ export function ServerAppsPageRoute({
       return '*'
     }
   }, [iframeSrc])
+
+  useEffect(() => {
+    const contentWindow = iframeRef.current?.contentWindow
+    if (!activeApp?.iframeEntry || !launch || !iframeSrc || !contentWindow) return
+    if (iframeLastRouteRef.current === appPath) return
+    iframeLastRouteRef.current = appPath
+    const requestId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}:${Math.random()}`
+    let acknowledged = false
+    const clearAck = () => {
+      acknowledged = true
+      routeAckHandlersRef.current.delete(requestId)
+    }
+    routeAckHandlersRef.current.set(requestId, clearAck)
+    contentWindow.postMessage(
+      {
+        type: SERVER_APP_ROUTE_MESSAGE_TYPE,
+        requestId,
+        path: appPath ?? '/',
+      },
+      iframeOrigin,
+    )
+    const timeout = window.setTimeout(() => {
+      routeAckHandlersRef.current.delete(requestId)
+      if (acknowledged) return
+      setIframeSrc(withLaunchParams(activeApp.iframeEntry!, launch, appPath))
+    }, SERVER_APP_ROUTE_ACK_TIMEOUT_MS)
+    return () => {
+      window.clearTimeout(timeout)
+      routeAckHandlersRef.current.delete(requestId)
+    }
+  }, [activeApp?.iframeEntry, appPath, iframeOrigin, iframeSrc, launch])
 
   const postBridgeResponse = useCallback(
     (
@@ -353,9 +423,17 @@ export function ServerAppsPageRoute({
       if (activeApp.allowedOrigins.length > 0 && !activeApp.allowedOrigins.includes(event.origin)) {
         return
       }
-      const data = event.data as Record<string, unknown>
+      const data =
+        event.data && typeof event.data === 'object' && !Array.isArray(event.data)
+          ? (event.data as Record<string, unknown>)
+          : null
       if (!data) return
       if (data.appKey && data.appKey !== activeApp.appKey) return
+      if (data.type === SERVER_APP_ROUTE_ACK_MESSAGE_TYPE) {
+        if (typeof data.requestId !== 'string') return
+        routeAckHandlersRef.current.get(data.requestId)?.()
+        return
+      }
       if (data.type === ShadowBridge.inboxesRequestType) {
         if (typeof data.requestId !== 'string') return
         void callBridgeInboxes({ requestId: data.requestId })

@@ -1,6 +1,6 @@
 # Shadow Server App Integrations
 
-This directory contains runnable Server Apps. `kanban` is the canonical copyable demo; `qna`, `quiz`, `trainer`, `resume`, `flash`, and `space` show richer product patterns.
+This directory contains runnable Server Apps. `kanban` is the canonical copyable demo; `qna`, `quiz`, `trainer`, `resume`, `flash`, `space`, and `warbuddy` show richer product patterns.
 
 Run all standard demos locally:
 
@@ -21,6 +21,7 @@ pnpm -C integrations/trainer compose:dev
 pnpm -C integrations/resume compose:dev
 pnpm -C integrations/flash compose:dev
 pnpm -C integrations/space compose:dev
+pnpm -C integrations/warbuddy compose:dev
 ```
 
 Use the matching `compose:dev:down` script from the same app directory to stop a
@@ -36,4 +37,5 @@ pnpm -C integrations/trainer typegen
 pnpm -C integrations/resume typegen
 pnpm -C integrations/flash typegen
 pnpm -C integrations/space typegen
+pnpm -C integrations/warbuddy typegen
 ```

@@ -170,7 +170,23 @@ export type GenericMessageCard = {
   [key: string]: unknown
 }
 
-export type MessageCard = TaskMessageCard | GenericMessageCard
+export interface ServerAppMessageCard {
+  id?: string
+  kind: 'server_app'
+  version?: number
+  appKey: string
+  title: string
+  description?: string
+  label?: string
+  action?: {
+    mode: 'open_app'
+    path?: string
+  }
+  data?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export type MessageCard = TaskMessageCard | ServerAppMessageCard | GenericMessageCard
 
 export interface CommerceOfferCardInput {
   id?: string

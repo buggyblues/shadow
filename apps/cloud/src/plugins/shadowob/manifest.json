@@ -41,9 +41,9 @@
         "type": "array",
         "description": "Binding rules connecting buddies to agents and channels"
       },
-      "playLaunch": {
+      "greeting": {
         "type": "object",
-        "description": "Landing behavior for play launch flows, including default channel and greeting"
+        "description": "Greeting and entry-channel behavior for provisioned Shadow spaces"
       }
     }
   },

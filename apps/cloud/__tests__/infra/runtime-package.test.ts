@@ -262,6 +262,79 @@ describe('buildAgentRuntimePackage', () => {
     )
   })
 
+  it('writes Lark CLI app credentials to config files without raw lark env injection', () => {
+    const config: CloudConfig = {
+      version: '1',
+      use: [{ plugin: 'lark' }],
+      deployments: {
+        agents: [
+          {
+            id: 'lark-agent',
+            runtime: 'openclaw',
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const runtimePackage = buildAgentRuntimePackage({
+      agent: config.deployments!.agents[0]!,
+      config,
+      extraEnv: {
+        LARKSUITE_CLI_APP_ID: 'cli_app',
+        LARKSUITE_CLI_APP_SECRET: 'app_secret',
+        LARKSUITE_CLI_BRAND: 'lark',
+        LARKSUITE_CLI_DEFAULT_AS: 'bot',
+        LARKSUITE_CLI_STRICT_MODE: 'bot',
+        MEEGLE_HOST: 'project.feishu.cn',
+        MEEGLE_USER_ACCESS_TOKEN: 'meegle-token',
+      },
+    })
+    const runtimeExtensions = JSON.parse(runtimePackage.configData['runtime-extensions.json']!)
+    const larkConfig = JSON.parse(runtimePackage.secretData.LARKSUITE_CLI_CREDENTIALS_JSON!)
+
+    expect(runtimeExtensions.mcpServers).toBeUndefined()
+    expect(runtimeExtensions.runtimeDependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'lark-cli', packages: ['@larksuite/cli'] }),
+        expect.objectContaining({ id: 'meegle', packages: ['@lark-project/meegle'] }),
+      ]),
+    )
+    expect(runtimeExtensions.skillSources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'lark-cli-skills', includePattern: 'lark-*' }),
+        expect.objectContaining({ id: 'meegle-cli-skills', include: ['meegle'] }),
+      ]),
+    )
+    expect(runtimeExtensions.credentialFiles).toContainEqual({
+      envKey: 'LARKSUITE_CLI_CREDENTIALS_JSON',
+      path: '/home/shadow/.lark-cli/openclaw/config.json',
+      mode: '0600',
+    })
+    expect(larkConfig).toMatchObject({
+      strictMode: 'bot',
+      currentApp: 'shadow-cloud',
+      apps: [
+        {
+          name: 'shadow-cloud',
+          appId: 'cli_app',
+          appSecret: 'app_secret',
+          brand: 'lark',
+          defaultAs: 'bot',
+          strictMode: 'bot',
+          users: [],
+        },
+      ],
+    })
+    expect(runtimePackage.plainEnv.LARKSUITE_CLI_CONFIG_DIR).toBe('/home/shadow/.lark-cli')
+    expect(runtimePackage.plainEnv.LARKSUITE_CLI_APP_ID).toBeUndefined()
+    expect(runtimePackage.secretData.LARKSUITE_CLI_APP_SECRET).toBeUndefined()
+    expect(runtimePackage.plainEnv.LARKSUITE_CLI_BRAND).toBeUndefined()
+    expect(runtimePackage.configData['config.json']).not.toContain('app_secret')
+    expect(runtimePackage.plainEnv.MEEGLE_HOST).toBe('project.feishu.cn')
+    expect(runtimePackage.secretData.MEEGLE_USER_ACCESS_TOKEN).toBe('meegle-token')
+  })
+
   it('includes Lovart skill mounts and keeps credentials in secrets', () => {
     const config: CloudConfig = {
       version: '1',

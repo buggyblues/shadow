@@ -323,6 +323,60 @@ class ShadowClient:
     def generate_agent_token(self, agent_id: str) -> dict[str, Any]:
         return self._post(f"/api/agents/{agent_id}/token")
 
+    def list_connector_computers(self) -> dict[str, Any]:
+        return self._get("/api/connector/computers")
+
+    def create_connector_bootstrap(
+        self,
+        *,
+        server_url: str,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {"serverUrl": server_url}
+        if name:
+            data["name"] = name
+        return self._post("/api/connector/computers/bootstrap", json=data)
+
+    def create_agent_on_connector_computer(
+        self,
+        computer_id: str,
+        *,
+        runtime_id: str,
+        server_url: str,
+        name: str,
+        username: str,
+        description: str | None = None,
+        avatar_url: str | None = None,
+        buddy_mode: str = "private",
+        allowed_server_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "runtimeId": runtime_id,
+            "serverUrl": server_url,
+            "name": name,
+            "username": username,
+            "buddyMode": buddy_mode,
+            "allowedServerIds": allowed_server_ids or [],
+        }
+        if description:
+            data["description"] = description
+        if avatar_url is not None:
+            data["avatarUrl"] = avatar_url
+        return self._post(f"/api/connector/computers/{computer_id}/buddies", json=data)
+
+    def configure_agent_on_connector_computer(
+        self,
+        computer_id: str,
+        agent_id: str,
+        *,
+        runtime_id: str,
+        server_url: str,
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/connector/computers/{computer_id}/buddies/{agent_id}/configure",
+            json={"runtimeId": runtime_id, "serverUrl": server_url},
+        )
+
     def start_agent(self, agent_id: str) -> dict[str, Any]:
         return self._post(f"/api/agents/{agent_id}/start")
 

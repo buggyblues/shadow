@@ -163,6 +163,21 @@ services:
     volumes:
       - space-data:/data
 
+  warbuddy:
+    build:
+      context: ..
+      dockerfile: integrations/warbuddy/Dockerfile
+    environment:
+      PORT: '4218'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${WARBUDDY_PUBLIC_BASE_URL:-http://localhost:4218}
+      SHADOW_APP_API_BASE_URL: ${WARBUDDY_API_BASE_URL:-http://host.lima.internal:4218}
+      WARBUDDY_DATA_FILE: /data/warbuddy.json
+    ports:
+      - ${WARBUDDY_PORT:-4218}:4218
+    volumes:
+      - warbuddy-data:/data
+
   space-postgres:
     image: postgres:16-alpine
     environment:
@@ -190,3 +205,4 @@ volumes:
   flash-redis-data:
   space-data:
   space-postgres-data:
+  warbuddy-data:

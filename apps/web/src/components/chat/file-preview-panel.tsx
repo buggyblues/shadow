@@ -1013,7 +1013,7 @@ export function FilePreviewPanel({
     ? `fixed inset-2 z-50 rounded-3xl animate-fade-in ${panelBaseClasses}`
     : shouldUseSheet
       ? `${isNarrowSheet ? 'fixed inset-2' : 'fixed inset-y-3 right-3'} z-40 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
-      : `relative my-3 mr-3 ml-2 h-[calc(100%-24px)] shrink-0 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
+      : `relative mr-3 ml-2 h-full shrink-0 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
   const panelStyle =
     isFullscreen || isNarrowSheet ? undefined : { width: shouldUseSheet ? sheetWidth : inlineWidth }
 

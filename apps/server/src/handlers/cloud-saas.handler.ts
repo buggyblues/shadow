@@ -1977,6 +1977,17 @@ function addProviderManagedEnvKeys(keys: Set<string>, provider: ProviderCatalogV
   if (provider.modelEnvKey) keys.add(provider.modelEnvKey)
 }
 
+async function collectAllowedDeploymentEnvKeys(configSnapshot: unknown): Promise<Set<string>> {
+  const [runtimeEnvRequirements, envRefPolicy] = await Promise.all([
+    collectRuntimeEnvRequirements(configSnapshot),
+    collectRuntimeEnvRefPolicy(configSnapshot),
+  ])
+  return new Set([
+    ...runtimeEnvRequirements,
+    ...extractRequiredEnvVars(configSnapshot, envRefPolicy),
+  ])
+}
+
 export function createCloudSaasHandler(container: AppContainer) {
   const h = new Hono()
   const diyRateLimit = createRateLimitMiddleware({
@@ -3039,7 +3050,7 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     if (deployment.status === 'deployed') {
       await container
-        .resolve('playLaunchService')
+        .resolve('greetingService')
         .ensureCloudDeploymentGreeting(user.userId, deployment)
         .catch(() => null)
     }
@@ -3636,7 +3647,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           input.configSnapshot,
         )
         assertCloudTemplatePolicy(serverTemplateSnapshot)
-        const allowedEnvKeys = new Set(await collectRuntimeEnvRequirements(serverTemplateSnapshot))
+        const allowedEnvKeys = await collectAllowedDeploymentEnvKeys(serverTemplateSnapshot)
         const submittedEnvKeys = Object.keys(input.envVars ?? {})
         const illegalEnvKey = submittedEnvKeys.find(
           (key) => isReservedRuntimeEnvKey(key) || !allowedEnvKeys.has(key),
@@ -4342,7 +4353,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           }
         }
 
-        const allowedEnvKeys = new Set(await collectRuntimeEnvRequirements(baseConfigSnapshot))
+        const allowedEnvKeys = await collectAllowedDeploymentEnvKeys(baseConfigSnapshot)
         const illegalEnvKey = Object.keys(redeployInput.envVars ?? {}).find(
           (key) => isReservedRuntimeEnvKey(key) || !allowedEnvKeys.has(key),
         )

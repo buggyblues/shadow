@@ -153,6 +153,7 @@ export default function ServerHomeScreen() {
   const [editingChannel, setEditingChannel] = useState<ServerChannel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
   const [showSortModal, setShowSortModal] = useState(false)
+  const [isInboxCollapsed, setInboxCollapsed] = useState(true)
 
   // ── Queries ─────────────────────────────────────
 
@@ -576,33 +577,53 @@ export default function ServerHomeScreen() {
 
         {inboxes.length > 0 && (
           <View style={styles.inboxSection}>
-            <AppText variant="title" style={styles.cuteSectionLabel}>
-              {t('inbox.title')}
-            </AppText>
-            <GlassPanel style={styles.inboxPanel}>
-              {inboxes.map((entry) => {
-                const label =
-                  entry.agent.user.displayName ?? entry.agent.user.username ?? entry.agent.id
-                return (
-                  <MenuItem
-                    key={entry.agent.id}
-                    icon={InboxIcon}
-                    title={label}
-                    subtitle={
-                      entry.channel
-                        ? t('inbox.channelReady')
-                        : entry.canManage
-                          ? t('inbox.createInbox')
-                          : t('inbox.noAccess')
-                    }
-                    tone={entry.channel ? 'primary' : 'muted'}
-                    disabled={!entry.channel && !entry.canManage}
-                    right={<ChevronRight size={16} color={colors.textMuted} strokeWidth={2.6} />}
-                    onPress={() => ensureInboxMutation.mutate(entry)}
-                  />
-                )
-              })}
-            </GlassPanel>
+            <Pressable
+              style={styles.inboxHeader}
+              onPress={() => setInboxCollapsed((collapsed) => !collapsed)}
+            >
+              <AppText variant="title" style={styles.cuteSectionLabel}>
+                {t('inbox.title')}
+              </AppText>
+              <View style={styles.inboxHeaderRight}>
+                <AppText style={[styles.inboxCount, { color: colors.textMuted }]}>
+                  {inboxes.length}
+                </AppText>
+                <ChevronDown
+                  size={16}
+                  color={colors.textMuted}
+                  strokeWidth={3}
+                  style={{
+                    transform: [{ rotate: isInboxCollapsed ? '-90deg' : '0deg' }],
+                  }}
+                />
+              </View>
+            </Pressable>
+            {!isInboxCollapsed && (
+              <GlassPanel style={styles.inboxPanel}>
+                {inboxes.map((entry) => {
+                  const label =
+                    entry.agent.user.displayName ?? entry.agent.user.username ?? entry.agent.id
+                  return (
+                    <MenuItem
+                      key={entry.agent.id}
+                      icon={InboxIcon}
+                      title={label}
+                      subtitle={
+                        entry.channel
+                          ? t('inbox.channelReady')
+                          : entry.canManage
+                            ? t('inbox.createInbox')
+                            : t('inbox.noAccess')
+                      }
+                      tone={entry.channel ? 'primary' : 'muted'}
+                      disabled={!entry.channel && !entry.canManage}
+                      right={<ChevronRight size={16} color={colors.textMuted} strokeWidth={2.6} />}
+                      onPress={() => ensureInboxMutation.mutate(entry)}
+                    />
+                  )
+                })}
+              </GlassPanel>
+            )}
           </View>
         )}
 
@@ -1008,6 +1029,20 @@ const styles = StyleSheet.create({
   },
   inboxPanel: {
     padding: spacing.xs,
+  },
+  inboxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  inboxHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inboxCount: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   appsSection: {
     paddingHorizontal: spacing.md,

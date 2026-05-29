@@ -49,7 +49,10 @@
             "channels": ["choose", "build", "review"],
             "agentId": "agent-marketplace-buddy"
           }
-        ]
+        ],
+        "greeting": {
+          "entryChannelId": "choose"
+        }
       }
     }
   ],

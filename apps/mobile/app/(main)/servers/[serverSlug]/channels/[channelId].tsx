@@ -72,7 +72,14 @@ import { useSocketEvent } from '../../../../../src/hooks/use-socket'
 import { useVoiceInput } from '../../../../../src/hooks/use-voice-input'
 import { fetchApi } from '../../../../../src/lib/api'
 import { setLastChannel } from '../../../../../src/lib/last-channel'
-import { getSocket, leaveChannel, sendTyping, sendWsMessage } from '../../../../../src/lib/socket'
+import {
+  getSocket,
+  joinThread,
+  leaveChannel,
+  leaveThread,
+  sendTyping,
+  sendWsMessage,
+} from '../../../../../src/lib/socket'
 import { playReceiveSound, playSendSound } from '../../../../../src/lib/sounds'
 import { useAuthStore } from '../../../../../src/stores/auth.store'
 import { useChatStore } from '../../../../../src/stores/chat.store'
@@ -83,6 +90,7 @@ import type {
   Message,
   MessagesPage,
   SystemEvent,
+  Thread,
   TimelineItem,
 } from '../../../../../src/types/message'
 import { normalizeMessage } from '../../../../../src/types/message'
@@ -244,8 +252,21 @@ export default function ChannelViewScreen() {
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
+  const [activeThread, setActiveThread] = useState<Thread | null>(null)
+  const [activeThreadParent, setActiveThreadParent] = useState<Message | null>(null)
+  const [threadInputText, setThreadInputText] = useState('')
+  const [threadReplyTo, setThreadReplyTo] = useState<Message | null>(null)
+  const [threadSending, setThreadSending] = useState(false)
+  const [threadPendingFiles, setThreadPendingFiles] = useState<
+    Array<{ uri: string; name: string; type: string; size?: number }>
+  >([])
+  const [showThreadEmojiPicker, setShowThreadEmojiPicker] = useState(false)
+  const [showThreadPlusMenu, setShowThreadPlusMenu] = useState(false)
   const searchInputRef = useRef<TextInput>(null)
   const inputRef = useRef<TextInput>(null)
+  const threadInputRef = useRef<TextInput>(null)
+  const threadListRef = useRef<FlatList<Message>>(null)
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const showScrollBottomRef = useRef(false)
   const pendingShowScrollBottomRef = useRef(false)
@@ -488,6 +509,47 @@ export default function ChannelViewScreen() {
 
   const slashCommands = slashCommandData?.commands ?? []
 
+  const { data: threads = [] } = useQuery({
+    queryKey: ['threads', channelId],
+    queryFn: () => fetchApi<Thread[]>(`/api/channels/${channelId}/threads`),
+    enabled: Boolean(channelId && canAccessChannel),
+    staleTime: 30_000,
+  })
+
+  const threadsByParentId = useMemo(() => {
+    const map = new Map<string, Thread>()
+    for (const thread of threads) {
+      map.set(thread.parentMessageId, thread)
+    }
+    return map
+  }, [threads])
+
+  const activeThreadId = activeThread?.id ?? null
+  const { data: rawThreadMessages = [], isLoading: isThreadLoading } = useQuery({
+    queryKey: ['thread-messages', activeThreadId],
+    queryFn: async () => {
+      const result = await fetchApi<Record<string, unknown>[]>(
+        `/api/threads/${activeThreadId}/messages?limit=100`,
+      )
+      return result.map((item) => normalizeMessage(item))
+    },
+    enabled: Boolean(activeThreadId),
+    staleTime: 15_000,
+  })
+
+  const threadMessages = useMemo(
+    () =>
+      [...rawThreadMessages].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      ),
+    [rawThreadMessages],
+  )
+
+  const threadMessagesWithParent = useMemo(
+    () => (activeThreadParent ? [activeThreadParent, ...threadMessages] : threadMessages),
+    [activeThreadParent, threadMessages],
+  )
+
   useEffect(() => {
     if (!channelId) return
     const socket = getSocket()
@@ -687,6 +749,59 @@ export default function ChannelViewScreen() {
       .reverse()
   }, [data])
 
+  const buildThreadName = useCallback(
+    (message: Message) => {
+      const content = message.content.trim().replace(/\s+/g, ' ')
+      if (content) return content.slice(0, 96)
+      return t('chat.threadDefaultName')
+    },
+    [t],
+  )
+
+  const createThreadMutation = useMutation({
+    mutationFn: ({ message }: { message: Message }) =>
+      fetchApi<Thread>(`/api/channels/${channelId}/threads`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: buildThreadName(message),
+          parentMessageId: message.id,
+        }),
+      }),
+    onSuccess: (thread, { message }) => {
+      queryClient.setQueryData<Thread[]>(['threads', channelId], (old) => {
+        const existing = old ?? []
+        if (existing.some((item) => item.id === thread.id)) return existing
+        return [thread, ...existing]
+      })
+      setActiveThread(thread)
+      setActiveThreadParent(message)
+      setThreadReplyTo(null)
+    },
+  })
+
+  const openThreadForMessage = useCallback(
+    (message: Message) => {
+      if (message.threadId) return
+      const existing = threadsByParentId.get(message.id)
+      if (existing) {
+        setActiveThread(existing)
+        setActiveThreadParent(message)
+        setThreadReplyTo(null)
+        return
+      }
+      createThreadMutation.mutate({ message })
+    },
+    [createThreadMutation, threadsByParentId],
+  )
+
+  useEffect(() => {
+    setActiveThread(null)
+    setActiveThreadParent(null)
+    setThreadInputText('')
+    setThreadReplyTo(null)
+    setThreadPendingFiles([])
+  }, [channelId])
+
   // ---------- Timeline with system events + date separators (inverted: newest first) ----------
   const timeline = useMemo<TimelineItem[]>(() => {
     // Messages are already newest-first
@@ -882,6 +997,14 @@ export default function ChannelViewScreen() {
     }
   }, [canAccessChannel, channelId, joinChannelWithAck])
 
+  useEffect(() => {
+    if (!activeThreadId) return
+    joinThread(activeThreadId)
+    return () => {
+      leaveThread(activeThreadId)
+    }
+  }, [activeThreadId])
+
   // Reconnection: invalidate messages cache on reconnect to catch any missed while offline
   useEffect(() => {
     const socket = getSocket()
@@ -918,6 +1041,20 @@ export default function ChannelViewScreen() {
     (raw: Record<string, unknown>) => {
       if ((raw.channelId as string) !== channelId) return
       const msg = normalizeMessage(raw)
+
+      if (msg.threadId) {
+        queryClient.setQueryData<Message[]>(['thread-messages', msg.threadId], (old) => {
+          const existing = old ?? []
+          if (existing.some((m) => m.id === msg.id)) {
+            return existing.map((m) => (m.id === msg.id ? msg : m))
+          }
+          return [...existing, msg]
+        })
+        if (msg.threadId === activeThreadId && msg.authorId !== currentUser?.id) {
+          playReceiveSound()
+        }
+        return
+      }
 
       // Play receive sound for messages from others
       if (msg.authorId !== currentUser?.id) {
@@ -972,7 +1109,7 @@ export default function ChannelViewScreen() {
         }, 150)
       })
     },
-    [channelId, queryClient, currentUser?.id, markChannelScopeRead],
+    [activeThreadId, channelId, queryClient, currentUser?.id, markChannelScopeRead],
   )
 
   useSocketEvent('message:new', appendMessage)
@@ -993,6 +1130,12 @@ export default function ChannelViewScreen() {
       (raw: Record<string, unknown>) => {
         if ((raw.channelId as string) !== channelId) return
         const msg = normalizeMessage(raw)
+        if (msg.threadId) {
+          queryClient.setQueryData<Message[]>(['thread-messages', msg.threadId], (old) =>
+            (old ?? []).map((m) => (m.id === msg.id ? { ...m, ...msg } : m)),
+          )
+          return
+        }
         queryClient.setQueryData<InfiniteData>(['messages', channelId], (old) => {
           if (!old) return old
           return {
@@ -1012,6 +1155,11 @@ export default function ChannelViewScreen() {
     'message:deleted',
     useCallback(
       ({ id }: { id: string }) => {
+        if (activeThreadId) {
+          queryClient.setQueryData<Message[]>(['thread-messages', activeThreadId], (old) =>
+            (old ?? []).filter((m) => m.id !== id),
+          )
+        }
         queryClient.setQueryData<InfiniteData>(['messages', channelId], (old) => {
           if (!old) return old
           return {
@@ -1023,7 +1171,7 @@ export default function ChannelViewScreen() {
           }
         })
       },
-      [channelId, queryClient],
+      [activeThreadId, channelId, queryClient],
     ),
   )
 
@@ -1037,6 +1185,13 @@ export default function ChannelViewScreen() {
         reactions: Array<{ emoji: string; count: number; userIds: string[] }>
       }) => {
         if (payload.channelId !== channelId) return
+        if (activeThreadId) {
+          queryClient.setQueryData<Message[]>(['thread-messages', activeThreadId], (old) =>
+            (old ?? []).map((m) =>
+              m.id === payload.messageId ? { ...m, reactions: payload.reactions } : m,
+            ),
+          )
+        }
         queryClient.setQueryData<InfiniteData>(['messages', channelId], (old) => {
           if (!old) return old
           return {
@@ -1050,7 +1205,7 @@ export default function ChannelViewScreen() {
           }
         })
       },
-      [channelId, queryClient],
+      [activeThreadId, channelId, queryClient],
     ),
   )
 
@@ -1250,6 +1405,84 @@ export default function ChannelViewScreen() {
 
   const removePendingFile = (index: number) => {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleThreadPickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: true,
+        copyToCacheDirectory: true,
+      })
+      if (result.canceled || !result.assets) return
+      setThreadPendingFiles((prev) => [
+        ...prev,
+        ...result.assets.map((a) => ({
+          uri: a.uri,
+          name: a.name,
+          type: a.mimeType ?? 'application/octet-stream',
+          size: a.size,
+        })),
+      ])
+    } catch {
+      /* cancelled */
+    }
+  }
+
+  const handleThreadPickImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) {
+        Alert.alert(t('common.error'), t('chat.mediaPermissionDenied', '需要相册访问权限'))
+        return
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      })
+      if (result.canceled || !result.assets) return
+      setThreadPendingFiles((prev) => [
+        ...prev,
+        ...result.assets.map((a) => ({
+          uri: a.uri,
+          name: a.fileName ?? `image_${Date.now()}.jpg`,
+          type: a.mimeType ?? 'image/jpeg',
+          size: a.fileSize,
+        })),
+      ])
+    } catch {
+      /* cancelled */
+    }
+  }
+
+  const handleThreadTakePhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync()
+      if (!perm.granted) {
+        Alert.alert(t('common.error'), t('chat.cameraPermissionDenied', '需要相机权限'))
+        return
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+      })
+      if (result.canceled || !result.assets) return
+      setThreadPendingFiles((prev) => [
+        ...prev,
+        ...result.assets.map((a) => ({
+          uri: a.uri,
+          name: a.fileName ?? `photo_${Date.now()}.jpg`,
+          type: a.mimeType ?? 'image/jpeg',
+          size: a.fileSize,
+        })),
+      ])
+    } catch {
+      /* cancelled */
+    }
+  }
+
+  const removeThreadPendingFile = (index: number) => {
+    setThreadPendingFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   // ---------- Send message ----------
@@ -1507,6 +1740,140 @@ export default function ChannelViewScreen() {
     }
   }
 
+  const markThreadMessageFailed = useCallback(
+    (tempId: string) => {
+      if (!activeThreadId) return
+      queryClient.setQueryData<Message[]>(['thread-messages', activeThreadId], (old) =>
+        (old ?? []).map((m) => (m.id === tempId ? { ...m, sendStatus: 'failed' as const } : m)),
+      )
+    },
+    [activeThreadId, queryClient],
+  )
+
+  const replaceThreadMessage = useCallback(
+    (tempId: string | null, created: Message) => {
+      if (!activeThreadId) return
+      queryClient.setQueryData<Message[]>(['thread-messages', activeThreadId], (old) => {
+        const messages = old ?? []
+        if (messages.some((m) => m.id === created.id)) return messages
+        if (!tempId) return [...messages, created]
+        const replaced = messages.map((m) => (m.id === tempId ? created : m))
+        return replaced.some((m) => m.id === created.id) ? replaced : [...replaced, created]
+      })
+    },
+    [activeThreadId, queryClient],
+  )
+
+  const insertOptimisticThreadMessage = useCallback(
+    (content: string, replyToId?: string | null) => {
+      if (!activeThread || !activeThreadId) return null
+      const tempId = `temp-thread-${Date.now()}`
+      const optimisticMsg: Message = {
+        id: tempId,
+        content,
+        channelId: activeThread.channelId,
+        authorId: currentUser?.id ?? '',
+        threadId: activeThreadId,
+        replyToId: replyToId ?? null,
+        isEdited: false,
+        isPinned: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        author: currentUser
+          ? {
+              id: currentUser.id,
+              username: currentUser.username,
+              displayName: currentUser.displayName ?? currentUser.username,
+              avatarUrl: currentUser.avatarUrl ?? null,
+            }
+          : undefined,
+        sendStatus: 'sending',
+      }
+      queryClient.setQueryData<Message[]>(['thread-messages', activeThreadId], (old) => [
+        ...(old ?? []),
+        optimisticMsg,
+      ])
+      requestAnimationFrame(() => {
+        setTimeout(() => threadListRef.current?.scrollToEnd({ animated: true }), 120)
+      })
+      return tempId
+    },
+    [activeThread, activeThreadId, currentUser, queryClient],
+  )
+
+  const handleThreadSend = useCallback(async () => {
+    if (!activeThread || !activeThreadId || threadSending) return
+    const content = threadInputText.trim()
+    if (!content && threadPendingFiles.length === 0) return
+
+    setThreadSending(true)
+    const tempId = content ? insertOptimisticThreadMessage(content, threadReplyTo?.id) : null
+    const savedContent = content
+    const savedReplyTo = threadReplyTo
+    const savedFiles = [...threadPendingFiles]
+    setThreadInputText('')
+    setThreadReplyTo(null)
+    setThreadPendingFiles([])
+    playSendSound()
+
+    try {
+      const uploadedAttachments: Array<{
+        url: string
+        filename: string
+        contentType: string
+        size: number
+      }> = []
+      for (const file of savedFiles) {
+        const formData = new FormData()
+        formData.append('file', { uri: file.uri, name: file.name, type: file.type } as any)
+        const uploaded = await fetchApi<{ url: string; size: number }>('/api/media/upload', {
+          method: 'POST',
+          body: formData,
+          headers: {},
+        })
+        uploadedAttachments.push({
+          url: uploaded.url,
+          filename: file.name,
+          contentType: file.type,
+          size: uploaded.size,
+        })
+      }
+
+      const created = await fetchApi<Record<string, unknown>>(
+        `/api/threads/${activeThreadId}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            content: savedContent || '\u200B',
+            replyToId: savedReplyTo?.id,
+            ...(uploadedAttachments.length > 0 ? { attachments: uploadedAttachments } : {}),
+          }),
+        },
+      )
+      replaceThreadMessage(tempId, normalizeMessage(created))
+      setTimeout(() => threadInputRef.current?.focus(), 50)
+    } catch (err) {
+      if (tempId) {
+        markThreadMessageFailed(tempId)
+      } else {
+        Alert.alert(t('common.error'), (err as Error).message || t('chat.sendFailed'))
+      }
+    } finally {
+      setThreadSending(false)
+    }
+  }, [
+    activeThread,
+    activeThreadId,
+    insertOptimisticThreadMessage,
+    markThreadMessageFailed,
+    replaceThreadMessage,
+    t,
+    threadInputText,
+    threadPendingFiles,
+    threadReplyTo,
+    threadSending,
+  ])
+
   const handleRetry = useCallback(
     async (failedMsg: Message) => {
       // Remove the failed message
@@ -1540,6 +1907,33 @@ export default function ChannelViewScreen() {
       }
     },
     [channelId, queryClient, insertOptimisticMessage, removeMessage, markMessageFailed],
+  )
+
+  const handleThreadRetry = useCallback(
+    async (failedMsg: Message) => {
+      if (!failedMsg.threadId) return
+      queryClient.setQueryData<Message[]>(['thread-messages', failedMsg.threadId], (old) =>
+        (old ?? []).filter((m) => m.id !== failedMsg.id),
+      )
+      const tempId = insertOptimisticThreadMessage(failedMsg.content, failedMsg.replyToId)
+      if (!tempId) return
+      try {
+        const created = await fetchApi<Record<string, unknown>>(
+          `/api/threads/${failedMsg.threadId}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              content: failedMsg.content,
+              replyToId: failedMsg.replyToId ?? undefined,
+            }),
+          },
+        )
+        replaceThreadMessage(tempId, normalizeMessage(created))
+      } catch {
+        markThreadMessageFailed(tempId)
+      }
+    },
+    [insertOptimisticThreadMessage, markThreadMessageFailed, queryClient, replaceThreadMessage],
   )
 
   const handleTyping = useCallback(() => {
@@ -1649,12 +2043,40 @@ export default function ChannelViewScreen() {
   const handleEnterSelectionMode = useCallback((messageId: string) => {
     setSelectionMode(true)
     setSelectedMessageIds(new Set([messageId]))
+    setSelectionAnchorId(messageId)
   }, [])
 
   const handleExitSelectionMode = useCallback(() => {
     setSelectionMode(false)
     setSelectedMessageIds(new Set())
+    setSelectionAnchorId(null)
   }, [])
+
+  useEffect(() => {
+    handleExitSelectionMode()
+  }, [channelId, handleExitSelectionMode])
+
+  const handleSelectRangeTo = useCallback(
+    (messageId: string) => {
+      const anchorId = selectionAnchorId ?? messageId
+      const anchorIndex = messages.findIndex((message) => message.id === anchorId)
+      const targetIndex = messages.findIndex((message) => message.id === messageId)
+
+      if (anchorIndex === -1 || targetIndex === -1) {
+        setSelectedMessageIds(new Set([messageId]))
+        setSelectionAnchorId(messageId)
+        setSelectionMode(true)
+        return
+      }
+
+      const start = Math.min(anchorIndex, targetIndex)
+      const end = Math.max(anchorIndex, targetIndex)
+      setSelectedMessageIds(new Set(messages.slice(start, end + 1).map((message) => message.id)))
+      setSelectionMode(true)
+      setSelectionAnchorId(anchorId)
+    },
+    [messages, selectionAnchorId],
+  )
 
   const handleCopySelectedAsMarkdown = useCallback(async () => {
     const selectedMsgs = messages
@@ -1735,13 +2157,18 @@ export default function ChannelViewScreen() {
             message={item.data}
             onReply={() => handleReply(item.data)}
             onRetry={handleRetry}
+            onOpenThread={() => openThreadForMessage(item.data)}
+            hasThread={threadsByParentId.has(item.data.id)}
             channelId={channelId!}
+            serverSlug={serverSlug}
             allMessages={messages}
             isGrouped={isGrouped}
             selectionMode={selectionMode}
             isSelected={selectedMessageIds.has(item.data.id)}
+            selectionAnchorId={selectionAnchorId}
             onToggleSelect={handleToggleSelect}
             onEnterSelectionMode={handleEnterSelectionMode}
+            onSelectRangeTo={handleSelectRangeTo}
           />
         </View>
       )
@@ -1752,19 +2179,48 @@ export default function ChannelViewScreen() {
       channelId,
       handleReply,
       handleRetry,
+      openThreadForMessage,
+      threadsByParentId,
       messages,
       timeline,
       highlightMessageId,
       selectionMode,
       selectedMessageIds,
+      selectionAnchorId,
       handleToggleSelect,
       handleEnterSelectionMode,
+      handleSelectRangeTo,
     ],
+  )
+
+  const renderThreadMessage = useCallback(
+    ({ item, index }: { item: Message; index: number }) => {
+      const prev = index > 0 ? threadMessages[index - 1] : null
+      const isGrouped =
+        prev != null &&
+        prev.authorId === item.authorId &&
+        !item.replyToId &&
+        new Date(item.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60 * 1000
+      return (
+        <MessageBubble
+          message={item}
+          onReply={() => setThreadReplyTo(item)}
+          onRetry={handleThreadRetry}
+          channelId={item.channelId}
+          serverSlug={serverSlug}
+          allMessages={threadMessagesWithParent}
+          isGrouped={isGrouped}
+        />
+      )
+    },
+    [handleThreadRetry, serverSlug, threadMessages, threadMessagesWithParent],
   )
 
   const getItemKey = useCallback((item: TimelineItem) => {
     return item.data.id
   }, [])
+
+  const getMessageKey = useCallback((item: Message) => item.id, [])
 
   if (access && !access.canAccess) {
     const gateChannel = access.channel ?? channel
@@ -1909,7 +2365,7 @@ export default function ChannelViewScreen() {
           data={timeline}
           keyExtractor={getItemKey}
           renderItem={renderTimelineItem}
-          extraData={selectionMode ? selectedMessageIds : null}
+          extraData={selectionMode ? { selectedMessageIds, selectionAnchorId } : null}
           contentContainerStyle={styles.messageList}
           inverted
           onEndReached={handleLoadMore}
@@ -2182,6 +2638,120 @@ export default function ChannelViewScreen() {
           />
         )}
       </Sheet>
+
+      <Modal
+        visible={Boolean(activeThread)}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setActiveThread(null)
+          setActiveThreadParent(null)
+          setThreadReplyTo(null)
+        }}
+      >
+        <BackgroundSurface style={styles.threadModal}>
+          <GlassHeader style={[styles.threadHeader, { paddingTop: insets.top }]}>
+            <Button
+              variant="ghost"
+              size="icon"
+              icon={ChevronLeft}
+              onPress={() => {
+                setActiveThread(null)
+                setActiveThreadParent(null)
+                setThreadReplyTo(null)
+              }}
+              hitSlop={8}
+              iconColor={colors.text}
+              style={styles.headerBackBtn}
+            />
+            <View style={styles.threadHeaderTitle}>
+              <View style={styles.threadHeaderNameRow}>
+                <MessageSquare size={16} color={colors.primary} />
+                <AppText variant="title" style={styles.threadHeaderName} numberOfLines={1}>
+                  {activeThread?.name ?? t('chat.thread')}
+                </AppText>
+              </View>
+              <AppText variant="label" tone="secondary" numberOfLines={1}>
+                # {channel?.name ?? t('chat.channelFallback')}
+              </AppText>
+            </View>
+          </GlassHeader>
+
+          {activeThreadParent && (
+            <View style={[styles.threadSource, { borderBottomColor: colors.border }]}>
+              <AppText variant="label" tone="secondary" style={styles.threadSourceLabel}>
+                {t('chat.threadSource')}
+              </AppText>
+              <MessageBubble
+                message={activeThreadParent}
+                onReply={() => setThreadReplyTo(activeThreadParent)}
+                onRetry={handleRetry}
+                channelId={activeThreadParent.channelId}
+                serverSlug={serverSlug}
+                allMessages={messages}
+              />
+            </View>
+          )}
+
+          {isThreadLoading ? (
+            <View style={styles.loading}>
+              <Spinner />
+            </View>
+          ) : threadMessages.length === 0 ? (
+            <View style={styles.threadEmpty}>
+              <MessageSquare size={28} color={colors.primary} />
+              <AppText variant="bodyStrong" tone="secondary">
+                {t('chat.threadEmpty')}
+              </AppText>
+            </View>
+          ) : (
+            <FlatList
+              ref={threadListRef}
+              data={threadMessages}
+              keyExtractor={getMessageKey}
+              renderItem={renderThreadMessage}
+              contentContainerStyle={styles.threadMessageList}
+              keyboardDismissMode="interactive"
+              keyboardShouldPersistTaps="handled"
+              onContentSizeChange={() => threadListRef.current?.scrollToEnd({ animated: true })}
+            />
+          )}
+
+          <ChatComposer
+            inputText={threadInputText}
+            onInputChange={setThreadInputText}
+            onSend={handleThreadSend}
+            inputRef={threadInputRef}
+            pendingFiles={threadPendingFiles}
+            onRemovePendingFile={removeThreadPendingFile}
+            replyTo={threadReplyTo}
+            onClearReply={() => setThreadReplyTo(null)}
+            typingUsers={[]}
+            keyboardVisible={keyboardVisible}
+            insetsBottom={insets.bottom}
+            canUseVoice={false}
+            showEmojiPicker={showThreadEmojiPicker}
+            setShowEmojiPicker={setShowThreadEmojiPicker}
+            showPlusMenu={showThreadPlusMenu}
+            setShowPlusMenu={setShowThreadPlusMenu}
+            panelHeight={keyboardHeight}
+            onPickImage={handleThreadPickImage}
+            onPickFile={handleThreadPickFile}
+            onTakePhoto={handleThreadTakePhoto}
+            onPasteImage={(imageDataUri) => {
+              const timestamp = Date.now()
+              setThreadPendingFiles((prev) => [
+                ...prev,
+                {
+                  uri: imageDataUri,
+                  name: `clipboard_${timestamp}.png`,
+                  type: 'image/png',
+                },
+              ])
+            }}
+          />
+        </BackgroundSurface>
+      </Modal>
 
       {/* Member list modal */}
       <Modal
@@ -2668,6 +3238,7 @@ export default function ChannelViewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  threadModal: { flex: 1 },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   // Custom header (replaces native header for left-aligned Discord style)
   customHeader: {
@@ -2728,6 +3299,51 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  threadHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 56,
+    paddingHorizontal: spacing.md,
+  },
+  threadHeaderTitle: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  threadHeaderNameRow: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  threadHeaderName: {
+    flexShrink: 1,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  threadSource: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  threadSourceLabel: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    textTransform: 'uppercase',
+  },
+  threadMessageList: {
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  threadEmpty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
   },
   emptyState: {
     flex: 1,

@@ -112,21 +112,33 @@ function copyMappings(result: PluginK8sResult | undefined) {
   return mappings
 }
 
-function requiredEnv(plugin: PluginDefinition, result: PluginK8sResult | undefined) {
-  const env = new Map<string, { label?: string; required: boolean; sensitive: boolean }>()
+function requiredEnv(
+  plugin: PluginDefinition,
+  result: PluginK8sResult | undefined,
+  generatedEnvKeys: Set<string>,
+) {
+  const secretFields = new Map((plugin.secretFields ?? []).map((field) => [field.key, field]))
+  const env = new Map<
+    string,
+    { label?: string; required: boolean; sensitive: boolean; runtime?: boolean }
+  >()
   for (const field of plugin.manifest.auth.fields) {
+    const secretField = secretFields.get(field.key)
     env.set(field.key, {
       label: field.label,
       required: field.required,
       sensitive: field.sensitive,
+      runtime: secretField?.runtime,
     })
   }
   for (const check of plugin.runtime?.verificationChecks ?? []) {
     for (const key of check.requiredEnv ?? []) {
+      if (generatedEnvKeys.has(key)) continue
       const current = env.get(key)
       env.set(key, { ...current, required: true, sensitive: current?.sensitive ?? true })
     }
     for (const key of check.requiredEnvAny ?? []) {
+      if (generatedEnvKeys.has(key)) continue
       if (!env.has(key)) env.set(key, { required: false, sensitive: true })
     }
   }
@@ -145,6 +157,7 @@ function buildEnvAliases(plugin: PluginDefinition) {
   )
   const aliases: Array<{ key: string; fromKey: string }> = []
   const literal: Record<string, string> = {}
+  const templates: Record<string, string> = {}
 
   for (const fn of plugin._hooks.buildEnv) {
     const vars =
@@ -176,15 +189,24 @@ function buildEnvAliases(plugin: PluginDefinition) {
         cwd: appRoot,
       }) ?? {}
     for (const [key, value] of Object.entries(vars)) {
-      if (value.startsWith(markerPrefix)) {
-        aliases.push({ key, fromKey: value.slice(markerPrefix.length) })
+      const aliasField = plugin.manifest.auth.fields.find(
+        (field) => value === `${markerPrefix}${field.key}`,
+      )
+      if (aliasField) {
+        aliases.push({ key, fromKey: aliasField.key })
+      } else if (value.includes(markerPrefix)) {
+        let template = value
+        for (const field of plugin.manifest.auth.fields) {
+          template = template.split(`${markerPrefix}${field.key}`).join(`\${${field.key}}`)
+        }
+        templates[key] = template
       } else {
         literal[key] = value
       }
     }
   }
 
-  return { aliases, literal }
+  return { aliases, literal, templates }
 }
 
 if (listOnly) {
@@ -201,14 +223,20 @@ const records = []
 for (const pluginId of pluginIds) {
   const plugin = await loadPlugin(pluginId)
   const k8s = buildK8s(plugin, pluginId)
+  const buildEnv = buildEnvAliases(plugin)
+  const generatedEnvKeys = new Set([
+    ...buildEnv.aliases.map((alias) => alias.key),
+    ...Object.keys(buildEnv.literal),
+    ...Object.keys(buildEnv.templates),
+  ])
   records.push({
     id: pluginId,
     name: plugin.manifest.name,
     hasRuntimeAssets: Boolean(plugin.k8s),
     installCommand: installCommand(pluginId, k8s),
     copyMappings: copyMappings(k8s),
-    env: requiredEnv(plugin, k8s),
-    buildEnv: buildEnvAliases(plugin),
+    env: requiredEnv(plugin, k8s, generatedEnvKeys),
+    buildEnv,
     envVars: k8s?.envVars ?? [],
   })
 }

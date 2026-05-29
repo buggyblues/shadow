@@ -99,8 +99,168 @@ export interface CodeSubmission {
   createdAt: string
 }
 
+export type SkillLevel = 'new' | 'learning' | 'stable' | 'strong'
+
+export interface SkillState {
+  id: string
+  owner: TrainerOwnerScope
+  label: string
+  category: string
+  level: SkillLevel
+  mastery: number
+  attempts: number
+  accepted: number
+  weakSignals: string[]
+  lastPracticedAt?: string
+  updatedAt: string
+}
+
+export type TrainingTaskType = 'problem' | 'review' | 'check' | 'tip'
+export type TrainingTaskStatus = 'todo' | 'doing' | 'done'
+
+export interface TrainingTask {
+  id: string
+  type: TrainingTaskType
+  title: string
+  status: TrainingTaskStatus
+  challengeId?: string
+  challengeTitle?: string
+  reason: string
+  dueAt?: string
+}
+
+export interface TrainingList {
+  id: string
+  owner: TrainerOwnerScope
+  title: string
+  horizon: 'daily' | 'weekly' | 'stage'
+  goal: string
+  tasks: TrainingTask[]
+  updatedAt: string
+}
+
+export type RecommendationKind = 'next_problem' | 'wrong_variant' | 'review' | 'special_training'
+export type RecommendationStrategy = 'reinforce' | 'diversify' | 'review' | 'popular'
+export type TrainerDifficultyMode = 'easy' | 'medium' | 'hard' | 'hell'
+
+export interface Recommendation {
+  id: string
+  owner: TrainerOwnerScope
+  kind: RecommendationKind
+  strategy?: RecommendationStrategy
+  challengeId: string
+  challengeTitle: string
+  difficulty: ChallengeDifficulty
+  tags: string[]
+  reason: string
+  priority: number
+  predictedAckRate?: number
+  appPath?: string
+  source?: {
+    provider: 'leetcode' | 'codeforces'
+    query: string
+    reason: string
+  }
+  createdAt: string
+}
+
+export interface Tip {
+  id: string
+  owner: TrainerOwnerScope
+  title: string
+  body: string
+  tags: string[]
+  createdAt: string
+}
+
+export interface UnderstandingCheck {
+  id: string
+  owner: TrainerOwnerScope
+  challengeId?: string
+  question: string
+  choices: string[]
+  answerIndex: number
+  explanation: string
+  tags: string[]
+  createdAt: string
+}
+
+export interface WrongProblem {
+  owner: TrainerOwnerScope
+  challengeId: string
+  challengeTitle: string
+  tags: string[]
+  lastSubmissionId: string
+  reason: string
+  reviewCount: number
+  nextReviewAt: string
+  updatedAt: string
+}
+
+export interface Report {
+  id: string
+  owner: TrainerOwnerScope
+  period: 'daily' | 'weekly' | 'stage'
+  title: string
+  summary: string
+  signals: string[]
+  createdAt: string
+}
+
+export interface TrainerSettings {
+  owner: TrainerOwnerScope
+  difficultyMode: TrainerDifficultyMode
+  targetProblems?: number
+  deadlineAt?: string
+  updatedAt: string
+}
+
+export interface TrainerOverview {
+  updatedAt: string
+  settings: TrainerSettings
+  skills: SkillState[]
+  trainingLists: TrainingList[]
+  recommendations: Recommendation[]
+  tips: Tip[]
+  checks: UnderstandingCheck[]
+  wrongProblems: WrongProblem[]
+  reports: Report[]
+  recentSubmissions: Array<{
+    id: string
+    challengeId: string
+    challengeTitle: string
+    language: string
+    status: SubmissionStatus
+    outcome?: SubmissionOutcome
+    score?: number
+    summary?: string
+    tags: string[]
+    createdAt: string
+  }>
+  stats: {
+    totalProblems: number
+    attemptedProblems: number
+    acceptedProblems: number
+    pendingReviews: number
+    weakSkills: number
+    activeTasks: number
+    targetProblems?: number
+    targetCompleted?: number
+    deadlineAt?: string
+    daysRemaining?: number
+  }
+}
+
 export interface TrainerState {
   updatedAt: string
   challenges: Challenge[]
   submissions: CodeSubmission[]
+  skills: SkillState[]
+  trainingLists: TrainingList[]
+  recommendations: Recommendation[]
+  tips: Tip[]
+  checks: UnderstandingCheck[]
+  wrongProblems: WrongProblem[]
+  reports: Report[]
+  settings: TrainerSettings[]
 }

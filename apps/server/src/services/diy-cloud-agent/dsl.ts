@@ -228,9 +228,16 @@ export function compileTemplateDsl(
               agentId: 'diy-buddy-agent',
             },
           ],
-          playLaunch: {
-            defaultChannelName: channelRecords[0]?.id ?? 'general',
-            greeting: compactText(dsl.guidebook?.summary, 500) || description,
+          greeting: {
+            entryChannelId: channelRecords[0]?.id ?? 'general',
+            messages: [
+              {
+                id: 'welcome',
+                channelId: channelRecords[0]?.id ?? 'general',
+                buddyId: 'diy-buddy',
+                content: compactText(dsl.guidebook?.summary, 500) || description,
+              },
+            ],
           },
         },
       },

@@ -17,7 +17,7 @@ import {
 import { type ReactNode, useEffect, useId, useState } from 'react'
 import { UserAvatar } from '../common/avatar'
 import { ConfigCodeBlock } from './config-code-block'
-import { OpenClawSetupGuide } from './openclaw-setup-guide'
+import { DaemonConnectionGuide } from './daemon-connection-guide'
 import {
   type Agent,
   type BuddyMode,
@@ -371,29 +371,14 @@ export function AgentDetail({
     </CollapsiblePanel>
   )
 
-  const openClawSection = (
+  const connectorSection = (
     <CollapsiblePanel
       title={t('agentMgmt.connectorGuideTitle')}
       icon={<BookOpen size={16} />}
       expanded={isGuideSectionExpanded}
       onToggle={() => setIsGuideSectionExpanded((expanded) => !expanded)}
     >
-      {showOfflineGuide ? (
-        <div className="rounded-xl border border-border-subtle/70 bg-bg-primary/40 px-3 py-2.5 mb-3">
-          <p className="relative text-sm text-text-secondary leading-6">
-            {t('agentMgmt.connectorGuideDesc')}
-          </p>
-        </div>
-      ) : null}
-      <OpenClawSetupGuide
-        agent={agent}
-        generatedToken={generatedToken}
-        onGenerateToken={() => tokenMutation.mutate(agent.id)}
-        generatingToken={tokenMutation.isPending}
-        t={t}
-        compact
-        focusConnectButton={showOfflineGuide}
-      />
+      <DaemonConnectionGuide agent={agent} t={t} />
     </CollapsiblePanel>
   )
 
@@ -570,13 +555,13 @@ export function AgentDetail({
         </div>
       </div>
 
-      {showOfflineGuide ? (
-        openClawSection
+      {showOfflineGuide && canManageAgent ? (
+        connectorSection
       ) : (
         <>
           {accessPolicySection}
           {canManageAgent && tokenSection}
-          {openClawSection}
+          {canManageAgent && connectorSection}
         </>
       )}
     </div>

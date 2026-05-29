@@ -29,11 +29,14 @@ export function StorePage() {
   const categories = data?.categories ?? []
   const categoryLabels = useMemo(
     () =>
-      Object.fromEntries(categories.map((category) => [category.id, category.label])) as Record<
-        string,
-        string
-      >,
-    [categories],
+      Object.fromEntries(
+        categories.map((category) => {
+          const key = `store.categories.${category.id}`
+          const translated = t(key)
+          return [category.id, translated === key ? category.label : translated]
+        }),
+      ) as Record<string, string>,
+    [categories, t],
   )
   const filtered = useMemo(() => {
     let list = templates

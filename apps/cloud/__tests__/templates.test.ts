@@ -165,6 +165,31 @@ function readFirstAgentPackOptions(file: string): Record<string, unknown> {
   return agentPack.options as Record<string, unknown>
 }
 
+describe('code trainer template', () => {
+  it('greets learners from every provisioned learning channel', () => {
+    const content = readFlatTemplate('code-trainer.template.json')
+    const use = content.use as Array<Record<string, unknown>>
+    const shadowob = use.find((entry) => entry.plugin === 'shadowob')!
+    const options = shadowob.options as Record<string, unknown>
+    const greeting = options.greeting as Record<string, unknown>
+    const messages = greeting.messages as Array<Record<string, unknown>>
+
+    expect(greeting.entryChannelId).toBe('learning-plan')
+    expect(messages).toHaveLength(6)
+    expect(messages.map((message) => message.channelId).sort()).toEqual([
+      'algorithm-tips',
+      'assistant-news',
+      'code-review',
+      'learning-plan',
+      'problem-recommendations',
+      'wrong-problems',
+    ])
+    expect(messages.find((message) => message.channelId === 'learning-plan')?.content).toContain(
+      '{userName}',
+    )
+  })
+})
+
 describe('community pack template mounts', () => {
   it('gstack-buddy mounts the OpenClaw-native gstack artifacts', () => {
     expect(readAgentPackMounts('gstack-buddy.template.json')).toEqual(
@@ -296,5 +321,112 @@ describe('community pack template mounts', () => {
       emoji: '📎',
     })
     expect(content.deployments.agents[0].env).toBeUndefined()
+  })
+
+  it('code-trainer provisions one training buddy, learning channels, routines, and scoped Server App grants', () => {
+    const content = readFlatTemplate('code-trainer.template.json')
+    const shadowob = ((content.use as Array<Record<string, unknown>>).find(
+      (entry) => entry.plugin === 'shadowob',
+    )?.options ?? {}) as Record<string, unknown>
+    const server = ((shadowob.servers as Array<Record<string, unknown>>)[0] ?? {}) as Record<
+      string,
+      unknown
+    >
+    const channels = server.channels as Array<Record<string, unknown>>
+    const buddies = shadowob.buddies as Array<Record<string, unknown>>
+    const bindings = shadowob.bindings as Array<Record<string, unknown>>
+    const serverApp = (shadowob.serverApps as Array<Record<string, unknown>>)[0] as Record<
+      string,
+      unknown
+    >
+    const grants = serverApp.grants as Array<Record<string, unknown>>
+    const routines = content.routines as Array<Record<string, unknown>>
+    const routineDeliveries = shadowob.routines as Array<Record<string, unknown>>
+    const greeting = shadowob.greeting as {
+      entryChannelId?: string
+      messages?: Array<Record<string, unknown>>
+    }
+    const agents = (content.deployments as Record<string, unknown>).agents as Array<
+      Record<string, unknown>
+    >
+
+    expect(channels.map((channel) => channel.id)).toEqual([
+      'assistant-news',
+      'problem-recommendations',
+      'learning-plan',
+      'code-review',
+      'wrong-problems',
+      'algorithm-tips',
+    ])
+    expect(buddies.map((buddy) => buddy.name)).toEqual(['算法教练'])
+    expect(bindings).toHaveLength(1)
+    expect(bindings[0]).toMatchObject({
+      targetId: 'code-trainer-buddy',
+      agentId: 'code-trainer-buddy',
+      channels: [
+        'assistant-news',
+        'problem-recommendations',
+        'learning-plan',
+        'code-review',
+        'wrong-problems',
+        'algorithm-tips',
+      ],
+    })
+    expect(agents.map((agent) => agent.id)).toEqual(['code-trainer-buddy'])
+    expect(routines.map((routine) => routine.id)).toEqual([
+      'sync-submissions',
+      'recommend-next-problem',
+      'refresh-learning-plan',
+      'push-algorithm-tip',
+      'wrong-problem-review',
+      'generate-progress-report',
+      'detect-learning-risk',
+      'weekly-problem-quality-check',
+    ])
+    expect(routineDeliveries.map((delivery) => delivery.routineId).sort()).toEqual(
+      routines.map((routine) => routine.id).sort(),
+    )
+    expect(greeting.entryChannelId).toBe('learning-plan')
+    expect(greeting.messages?.map((message) => message.channelId)).toEqual([
+      'assistant-news',
+      'problem-recommendations',
+      'learning-plan',
+      'code-review',
+      'wrong-problems',
+      'algorithm-tips',
+    ])
+    expect(
+      greeting.messages?.find((message) => message.id === 'code-review-welcome'),
+    ).toMatchObject({
+      buddyId: 'code-trainer-buddy',
+      content: expect.stringContaining('先确认收到'),
+    })
+    expect(routines.find((routine) => routine.id === 'sync-submissions')).toMatchObject({
+      prompt: expect.stringContaining('acknowledgement'),
+      agentId: 'code-trainer-buddy',
+    })
+    expect(agents.find((agent) => agent.id === 'code-trainer-buddy')?.identity).toMatchObject({
+      name: '算法教练',
+      systemPrompt: expect.stringContaining('Use channels as modes'),
+    })
+    expect(serverApp).toMatchObject({
+      id: 'code-trainer-app',
+      serverId: 'code-trainer-server',
+      manifestUrl: '${env:CODE_TRAINER_MANIFEST_URL}',
+    })
+    expect(grants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          buddyId: 'code-trainer-buddy',
+          permissions: expect.arrayContaining([
+            'trainer.challenges:write',
+            'trainer.submissions:analyze',
+            'trainer.learning:read',
+            'trainer.learning:write',
+          ]),
+        }),
+      ]),
+    )
+    expect(grants).toHaveLength(1)
   })
 })

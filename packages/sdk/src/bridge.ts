@@ -1,6 +1,10 @@
 import {
+  getShadowServerAppChannelMessageDeliveries,
+  getShadowServerAppChannelMessageErrors,
   getShadowServerAppInboxDeliveries,
   getShadowServerAppInboxErrors,
+  type ShadowServerAppChannelMessageDelivery,
+  type ShadowServerAppChannelMessageDeliveryError,
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppInboxDeliveryError,
   type ShadowServerAppInboxTarget,
@@ -9,6 +13,9 @@ import {
 } from './server-app'
 
 export type {
+  ShadowServerAppChannelMessageDelivery,
+  ShadowServerAppChannelMessageDeliveryError,
+  ShadowServerAppChannelMessageOutbox,
   ShadowServerAppCommandEventType,
   ShadowServerAppHostAppRef,
   ShadowServerAppHostInboxTaskRequestInput,
@@ -24,6 +31,8 @@ export type {
 export {
   buildShadowServerAppInboxDelivery,
   buildShadowServerAppInboxTaskRequest,
+  getShadowServerAppChannelMessageDeliveries,
+  getShadowServerAppChannelMessageErrors,
   getShadowServerAppTaskCardId,
   SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
   SHADOW_SERVER_APP_COMMAND_EVENTS,
@@ -101,6 +110,14 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
 
   static inboxErrors(payload: unknown): ShadowServerAppInboxDeliveryError[] {
     return getShadowServerAppInboxErrors(payload)
+  }
+
+  static channelMessageDeliveries(payload: unknown): ShadowServerAppChannelMessageDelivery[] {
+    return getShadowServerAppChannelMessageDeliveries(payload)
+  }
+
+  static channelMessageErrors(payload: unknown): ShadowServerAppChannelMessageDeliveryError[] {
+    return getShadowServerAppChannelMessageErrors(payload)
   }
 
   static unwrapCommandPayload<TResult = unknown>(payload: unknown): TResult {
@@ -222,6 +239,14 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
 
   inboxErrors(payload: unknown): ShadowServerAppInboxDeliveryError[] {
     return getShadowServerAppInboxErrors(payload)
+  }
+
+  channelMessageDeliveries(payload: unknown): ShadowServerAppChannelMessageDelivery[] {
+    return getShadowServerAppChannelMessageDeliveries(payload)
+  }
+
+  channelMessageErrors(payload: unknown): ShadowServerAppChannelMessageDeliveryError[] {
+    return getShadowServerAppChannelMessageErrors(payload)
   }
 
   private request<TResult>(

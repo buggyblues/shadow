@@ -93,7 +93,9 @@ function getCategoryLabel(
   category: string,
   translate: (key: string, options?: Record<string, unknown>) => string,
 ) {
-  return translate(`store.categories.${category}`)
+  const key = `store.categories.${category}`
+  const value = translate(key)
+  return value === key ? category : value
 }
 
 function getDifficultyLabel(
@@ -101,6 +103,14 @@ function getDifficultyLabel(
   translate: (key: string, options?: Record<string, unknown>) => string,
 ) {
   return translate(`store.difficulties.${difficulty}`)
+}
+
+function translateOptional(
+  translate: (key: string, options?: Record<string, unknown>) => string,
+  key: string,
+): string | undefined {
+  const value = translate(key)
+  return value === key ? undefined : value
 }
 
 function getProviderSecretEnvName(providerId: string): string {
@@ -173,6 +183,80 @@ type ModelProxyApiExtension = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+type TemplateRuntimePreview = {
+  greetingMessageCount: number
+  greetingChannelCount: number
+  entryChannelName?: string
+  hasServerApps: boolean
+  serverAppCount: number
+  routineCount: number
+}
+
+function readRecordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : []
+}
+
+function readShadowobOptions(config: unknown): Record<string, unknown> | null {
+  if (!isRecord(config)) return null
+  for (const entry of readRecordArray(config.use)) {
+    if (entry.plugin === 'shadowob' && isRecord(entry.options)) return entry.options
+  }
+  return null
+}
+
+function readShadowobChannelNames(options: Record<string, unknown>): Map<string, string> {
+  const names = new Map<string, string>()
+  for (const server of readRecordArray(options.servers)) {
+    for (const channel of readRecordArray(server.channels)) {
+      if (typeof channel.id !== 'string') continue
+      names.set(channel.id, typeof channel.title === 'string' ? channel.title : channel.id)
+    }
+  }
+  return names
+}
+
+function extractTemplateRuntimePreview(config: unknown): TemplateRuntimePreview | null {
+  const options = readShadowobOptions(config)
+  if (!options || !isRecord(config)) return null
+
+  const greeting = isRecord(options.greeting) ? options.greeting : null
+  const greetingMessages = readRecordArray(greeting?.messages)
+  const greetingChannelIds = new Set(
+    greetingMessages
+      .map((message) => message.channelId)
+      .filter((channelId): channelId is string => typeof channelId === 'string'),
+  )
+  const channelNames = readShadowobChannelNames(options)
+  const entryChannelId =
+    greeting && typeof greeting.entryChannelId === 'string' ? greeting.entryChannelId : null
+  const serverAppCount = readRecordArray(options.serverApps).length
+  const routineCount = readRecordArray(config.routines).length
+
+  if (greetingMessages.length === 0 && serverAppCount === 0 && routineCount === 0) return null
+
+  return {
+    greetingMessageCount: greetingMessages.length,
+    greetingChannelCount: greetingChannelIds.size,
+    ...(entryChannelId
+      ? { entryChannelName: channelNames.get(entryChannelId) ?? entryChannelId }
+      : {}),
+    hasServerApps: serverAppCount > 0,
+    serverAppCount,
+    routineCount,
+  }
+}
+
+function useTemplateRuntimePreview(name: string, enabled = true) {
+  const api = useApiClient()
+  return useQuery({
+    queryKey: ['template-runtime-preview', name],
+    queryFn: () => api.templates.get(name),
+    enabled,
+    retry: false,
+    select: extractTemplateRuntimePreview,
+  })
 }
 
 function shouldHideOfficialModelEnvKey(key: string, mode: ModelProviderMode) {
@@ -303,6 +387,7 @@ function StepOverview({ name }: { name: string }) {
 
   const template = data?.template
   const displayTitle = template?.title || name
+  const { data: runtimePreview } = useTemplateRuntimePreview(name, !isStoreError)
 
   return (
     <div className="space-y-4">
@@ -368,6 +453,69 @@ function StepOverview({ name }: { name: string }) {
           </div>
         </div>
       </GlassPanel>
+
+      {runtimePreview && (
+        <GlassPanel className="rounded-2xl bg-bg-secondary/18 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                <Sparkles size={18} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-text-primary">
+                  {t('deploy.proactivePreviewTitle')}
+                </h3>
+                <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                  {t('deploy.proactivePreviewDescription', {
+                    channels: runtimePreview.greetingChannelCount,
+                    messages: runtimePreview.greetingMessageCount,
+                  })}
+                </p>
+                {runtimePreview.entryChannelName && (
+                  <p className="mt-2 text-xs font-medium text-text-secondary">
+                    {t('deploy.proactiveEntryChannel', {
+                      channel: runtimePreview.entryChannelName,
+                    })}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3 md:min-w-[360px]">
+              <div className="rounded-xl bg-bg-secondary/20 px-3 py-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
+                  <Sparkles size={13} className="text-primary" />
+                  {t('deploy.proactiveGreetingMetric')}
+                </div>
+                <p className="mt-1 text-lg font-semibold text-text-primary">
+                  {runtimePreview.greetingChannelCount}
+                </p>
+              </div>
+              {runtimePreview.hasServerApps && (
+                <div className="rounded-xl bg-bg-secondary/20 px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
+                    <Server size={13} className="text-success" />
+                    {t('deploy.proactiveServerAppMetric')}
+                  </div>
+                  <p className="mt-1 text-lg font-semibold text-text-primary">
+                    {runtimePreview.serverAppCount}
+                  </p>
+                </div>
+              )}
+              {runtimePreview.routineCount > 0 && (
+                <div className="rounded-xl bg-bg-secondary/20 px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
+                    <Clock size={13} className="text-warning" />
+                    {t('deploy.proactiveRoutineMetric')}
+                  </div>
+                  <p className="mt-1 text-lg font-semibold text-text-primary">
+                    {runtimePreview.routineCount}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </GlassPanel>
+      )}
 
       {/* Requirements */}
       {(template?.requirements.length ?? 0) > 0 && (
@@ -709,10 +857,13 @@ function StepConfigure({
     for (const field of envRefsData?.fields ?? []) {
       if (field.key === 'SHADOW_SERVER_URL' || field.key === 'SHADOW_USER_TOKEN') continue
       if (shouldHideOfficialModelEnvKey(field.key, modelProviderMode)) continue
+      const localizedLabel = translateOptional(t, `deploy.envFieldLabels.${field.key}`)
+      const localizedDescription = translateOptional(t, `deploy.envFieldDescriptions.${field.key}`)
       fields.set(field.key, {
         key: field.key,
-        label: field.label || envKeyToLabel(field.key),
+        label: localizedLabel ?? field.label ?? envKeyToLabel(field.key),
         description:
+          localizedDescription ??
           field.description ??
           (field.source === 'plugin'
             ? t('deploy.pluginFieldDescription')
@@ -731,15 +882,17 @@ function StepConfigure({
       if (key === 'SHADOW_SERVER_URL' || key === 'SHADOW_USER_TOKEN') continue
       if (shouldHideOfficialModelEnvKey(key, modelProviderMode)) continue
       if (!fields.has(key) && !autoDetectedKeys.has(key)) {
+        const localizedLabel = translateOptional(t, `deploy.envFieldLabels.${key}`)
+        const localizedDescription = translateOptional(t, `deploy.envFieldDescriptions.${key}`)
         fields.set(key, {
           key,
-          label: envKeyToLabel(key),
+          label: localizedLabel ?? envKeyToLabel(key),
           required: true,
           sensitive: isSensitiveEnvVarKey(key),
           source: 'template',
           sourceId: 'template',
           sourceLabel: t('deploy.templateFieldSource'),
-          description: t('deploy.templateFieldDescription'),
+          description: localizedDescription ?? t('deploy.templateFieldDescription'),
         })
       }
     }
@@ -1924,6 +2077,7 @@ function StepDeploy({
   const template = detailData?.template
   const displayTitle = template?.title || name
   const targetNamespace = config.namespace || template?.namespace || name
+  const { data: runtimePreview } = useTemplateRuntimePreview(name)
 
   // Fetch wallet balance
   const { data: walletData } = useQuery({
@@ -2519,7 +2673,11 @@ function StepDeploy({
               <span className="mt-0.5 text-xs text-primary">•</span>
               <p className="text-xs text-text-secondary">
                 <strong className="text-text-primary">{t('deploy.whatHappensNext')}</strong>{' '}
-                {t('deploy.whatHappensNextDesc')}
+                {t(
+                  runtimePreview
+                    ? 'deploy.whatHappensNextProactiveDesc'
+                    : 'deploy.whatHappensNextDesc',
+                )}
               </p>
             </div>
 
@@ -2783,7 +2941,8 @@ function StepDeploy({
 // ── Main Wizard Page ──────────────────────────────────────────────────────────
 
 export function DeployWizardPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const api = useApiClient()
   const { name } = useParams({ strict: false }) as { name: string }
   const [currentStep, setCurrentStep] = useState(0)
   const steps = getWizardSteps(t)
@@ -2793,6 +2952,12 @@ export function DeployWizardPage() {
     envPersistence: DEFAULT_ENV_PERSISTENCE,
     modelProviderMode: 'official',
   })
+  const { data: detailData } = useQuery({
+    queryKey: ['template-detail', name, i18n.language],
+    queryFn: () => api.templates.detail(name, i18n.language),
+    retry: false,
+  })
+  const displayTitle = detailData?.template?.title || name
 
   // Determine nav button label for current step
   const nextLabel =
@@ -2806,11 +2971,11 @@ export function DeployWizardPage() {
     <PageShell
       breadcrumb={[
         { label: t('store.title'), to: '/store' },
-        { label: name, to: `/store/${name}` },
+        { label: displayTitle, to: `/store/${name}` },
         { label: t('common.deploy') },
       ]}
       breadcrumbPosition="inside"
-      title={name}
+      title={displayTitle}
       bodyClassName="space-y-4"
       headerContent={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">

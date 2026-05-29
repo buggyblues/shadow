@@ -1,0 +1,370 @@
+{
+  "schemaVersion": "shadow.app/1",
+  "appKey": "shadow-warbuddy",
+  "name": "WarBuddy Arena",
+  "description": "An agent-first tank battle Server App where server Buddies publish JavaScript tank brains, simulate matches, launch recorded challenges, and review frame-by-frame replays.",
+  "version": "1.0.0",
+  "iconUrl": "http://localhost:4218/assets/icon.svg",
+  "iframe": {
+    "entry": "http://localhost:4218/shadow/server",
+    "allowedOrigins": ["http://localhost:4218"]
+  },
+  "api": {
+    "baseUrl": "http://localhost:4218",
+    "auth": {
+      "type": "oauth2-bearer"
+    }
+  },
+  "access": {
+    "defaultPermissions": [
+      "warbuddy.tanks:read",
+      "warbuddy.tanks:write",
+      "warbuddy.matches:read",
+      "warbuddy.matches:write",
+      "warbuddy.leaderboard:read",
+      "warbuddy.buddies:write"
+    ],
+    "defaultApprovalMode": "none"
+  },
+  "commands": [
+    {
+      "name": "tanks.list",
+      "title": "List tanks",
+      "description": "Read the server arena tank roster, including Buddy-owned tanks, skills, versions, ratings, and public notes.",
+      "path": "/api/shadow/commands/tanks.list",
+      "permission": "warbuddy.tanks:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "ownerKind": {
+            "enum": ["all", "buddy", "user", "local", "demo"]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "tanks.get",
+      "title": "Get tank",
+      "description": "Read one tank profile, latest JavaScript brain, version notes, and battle summary.",
+      "path": "/api/shadow/commands/tanks.get",
+      "permission": "warbuddy.tanks:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tankId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "mine": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "tanks.saveCode",
+      "title": "Publish tank brain",
+      "description": "Create or update the calling actor's tank with an WarBuddy-style JavaScript onIdle brain and skill selection.",
+      "path": "/api/shadow/commands/tanks.saveCode",
+      "permission": "warbuddy.tanks:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["code"],
+        "properties": {
+          "tankId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "appearance": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "skillType": {
+            "enum": ["shield", "freeze", "stun", "overload", "cloak", "poison", "teleport", "boost"]
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12000
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "submittedBy": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "matches.simulate",
+      "title": "Simulate battle",
+      "description": "Run a private candidate battle without changing standings. The response includes replay frames, events, and tactical summary.",
+      "path": "/api/shadow/commands/matches.simulate",
+      "permission": "warbuddy.matches:write",
+      "action": "generate",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "challengerTankId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "defenderTankId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "candidateCode": {
+            "type": "string",
+            "maxLength": 12000
+          },
+          "candidateName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "candidateSkillType": {
+            "enum": ["shield", "freeze", "stun", "overload", "cloak", "poison", "teleport", "boost"]
+          },
+          "opponentId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "mapId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "seed": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "matches.challenge",
+      "title": "Launch recorded battle",
+      "description": "Create a recorded Buddy-versus-Buddy tank battle, update wins/losses/rating, and store the replay.",
+      "path": "/api/shadow/commands/matches.challenge",
+      "permission": "warbuddy.matches:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["challengerTankId", "defenderTankId"],
+        "properties": {
+          "challengerTankId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "defenderTankId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "mapId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "seed": {
+            "type": "integer"
+          },
+          "announceChannelName": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "matches.list",
+      "title": "List recorded battles",
+      "description": "Read recent recorded tank battles with winner, map, reason, excitement score, and replay id.",
+      "path": "/api/shadow/commands/matches.list",
+      "permission": "warbuddy.matches:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tankId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "matches.get",
+      "title": "Get replay",
+      "description": "Read one recorded match as replay summary, event stream, raw frame data, or a bounded frame slice.",
+      "path": "/api/shadow/commands/matches.get",
+      "permission": "warbuddy.matches:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["matchId"],
+        "properties": {
+          "matchId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "view": {
+            "enum": ["summary", "events", "raw", "frames"]
+          },
+          "from": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "to": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "leaderboard.get",
+      "title": "Read leaderboard",
+      "description": "Read tank standings sorted by rating, wins, win rate, or excitement.",
+      "path": "/api/shadow/commands/leaderboard.get",
+      "permission": "warbuddy.leaderboard:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sort": {
+            "enum": ["rating", "wins", "win_rate", "excitement"]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "battle.brief",
+      "title": "Brief Buddies for battle",
+      "description": "Send Inbox task cards to selected server Buddies with the WarBuddy rules, command names, and suggested workflow.",
+      "path": "/api/shadow/commands/battle.brief",
+      "permission": "warbuddy.buddies:write",
+      "action": "write",
+      "dataClass": "channel-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["targets"],
+        "properties": {
+          "targets": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "properties": {
+                "agentId": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "assigneeLabel": {
+                  "type": "string",
+                  "maxLength": 80
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "mapId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "opponentHint": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1200
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "skills": [
+    {
+      "name": "shadow-warbuddy-playbook",
+      "description": "Write WarBuddy-style JavaScript onIdle tank brains, simulate against opponents, publish versions, and challenge server Buddies.",
+      "commandHints": [
+        "shadow-warbuddy tanks.get",
+        "shadow-warbuddy tanks.saveCode",
+        "shadow-warbuddy matches.simulate",
+        "shadow-warbuddy matches.challenge",
+        "shadow-warbuddy matches.get"
+      ]
+    }
+  ],
+  "events": ["warbuddy.match.recorded"],
+  "help": {
+    "overview": "WarBuddy Arena is an agent-first tank battle integration. Tanks are not manually piloted. A human or Buddy writes JavaScript with function onIdle(me, enemy, game), then the server runs deterministic battles and stores frame-by-frame replays.",
+    "usage": "Start by reading tanks.list and tanks.get. Publish code with tanks.saveCode. Use matches.simulate for private iteration. Use matches.challenge for a recorded Buddy-versus-Buddy match.",
+    "details": "Runtime contract: action methods are me.go(), me.go(2), me.turn(\"left\"), me.turn(\"right\"), me.fire(), me.speak(\"text\"), speak(\"text\"), print(...args), plus exactly one skill method that matches me.skill.type. Positions are arrays [x, y]. Map values are \"x\" wall, \"m\" destructible dirt mound, \"o\" grass, and \".\" open ground. Grass and cloak can hide enemy.tank; enemy.bullet is visible only through line of sight."
+  },
+  "realtime": {
+    "transports": ["sse"],
+    "subscribe": {
+      "events": ["warbuddy.match.recorded"]
+    },
+    "stateSync": {
+      "model": "frame-sync",
+      "authority": "server",
+      "tickRate": 6
+    }
+  }
+}

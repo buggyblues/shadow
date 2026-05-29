@@ -4,6 +4,7 @@ import type {
   MessageCardStatus,
   OAuthLinkCard,
   PaidFileCard,
+  ServerAppMessageCard,
   TaskMessageCard,
 } from '@shadowob/shared'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -17,6 +18,8 @@ import { useRouter } from 'expo-router'
 import * as Sharing from 'expo-sharing'
 import {
   AlertCircle,
+  AppWindow,
+  ArrowRight,
   Check,
   CheckSquare,
   ChevronRight,
@@ -27,11 +30,13 @@ import {
   Film,
   Globe2,
   Lock,
+  MessageSquare,
   Music,
   RefreshCw,
   Save,
   Share2,
   Square as SquareIcon,
+  Ticket,
   Unlock,
   Wallet,
   X,
@@ -55,7 +60,7 @@ import Animated, { ZoomIn } from 'react-native-reanimated'
 import WebView from 'react-native-webview'
 import type { EmojiType } from 'rn-emoji-keyboard'
 import RNEmojiPicker from 'rn-emoji-keyboard'
-import { fetchApi, getImageUrl } from '../../lib/api'
+import { API_BASE, fetchApi, getImageUrl } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../theme'
@@ -66,8 +71,8 @@ import type {
   Message,
 } from '../../types/message'
 import { Avatar } from '../common/avatar'
-import { formatCommercePrice } from '../common/price-display'
-import { Badge, Button, CardPressable, ChipButton, IconButton, MenuItem, Sheet } from '../ui'
+import { formatCommercePrice, PriceCompact } from '../common/price-display'
+import { Button, CardPressable, ChipButton, IconButton, MenuItem, Sheet } from '../ui'
 import { MarkdownRenderer } from './markdown-renderer'
 import type { PopupAction } from './selection-popup'
 import { SelectionPopup } from './selection-popup'
@@ -92,6 +97,69 @@ type PaidFileState = {
   }
   entitlement: { id: string; status: string; expiresAt?: string | null } | null
   hasAccess: boolean
+}
+
+type CommerceViewerState =
+  | 'not_purchased'
+  | 'active'
+  | 'expired'
+  | 'revoked'
+  | 'cancelled'
+  | 'unavailable'
+
+type CommerceBlockedState = Exclude<CommerceViewerState, 'not_purchased' | 'active'>
+
+type CommerceCheckoutPreview = {
+  offer: { available: boolean }
+  product?: {
+    name?: string | null
+    summary?: string | null
+    imageUrl?: string | null
+    price?: number
+    currency?: string
+  }
+  shop?: { name?: string | null; logoUrl?: string | null }
+  viewerState: CommerceViewerState
+  primaryAction?:
+    | 'purchase'
+    | 'open_content'
+    | 'renew'
+    | 'view_detail'
+    | 'view_progress'
+    | 'unavailable'
+  displayState?: {
+    price?: { amount: number; currency: string }
+  }
+}
+
+function getCommerceInvalidState(
+  preview?: CommerceCheckoutPreview | null,
+): CommerceViewerState | null {
+  if (!preview) return null
+  if (
+    preview.viewerState === 'expired' ||
+    preview.viewerState === 'revoked' ||
+    preview.viewerState === 'cancelled' ||
+    preview.viewerState === 'unavailable'
+  ) {
+    return preview.viewerState
+  }
+  if (preview.primaryAction === 'unavailable' || preview.offer.available === false) {
+    return 'unavailable'
+  }
+  return null
+}
+
+function getPaidFileBlockedState(
+  state?: PaidFileState | null,
+  hasStateError = false,
+): CommerceBlockedState | null {
+  if (hasStateError) return 'unavailable'
+  if (!state || state.hasAccess) return null
+  const status = state.entitlement?.status
+  if (status === 'expired' || status === 'revoked' || status === 'cancelled') return status
+  if (status && status !== 'active') return 'unavailable'
+  return null
 }
 
 interface WalletRechargeMetadata {
@@ -246,6 +314,31 @@ function isTaskMessageCard(card: MessageCard): card is TaskMessageCard {
   return card.kind === 'task' && typeof card.id === 'string' && typeof card.title === 'string'
 }
 
+function isServerAppCard(card: MessageCard): card is ServerAppMessageCard {
+  return (
+    card.kind === 'server_app' && typeof card.appKey === 'string' && typeof card.title === 'string'
+  )
+}
+
+interface LaunchContext {
+  iframeEntry: string | null
+  launchToken: string
+  eventStreamPath: string
+}
+
+function withLaunchParams(entry: string, launch: LaunchContext, appPath?: string) {
+  const url = new URL(entry)
+  url.searchParams.set('shadow_launch', launch.launchToken)
+  if (launch.eventStreamPath) {
+    url.searchParams.set(
+      'shadow_event_stream',
+      `${API_BASE}${launch.eventStreamPath.startsWith('/') ? '' : '/'}${launch.eventStreamPath}`,
+    )
+  }
+  if (appPath?.startsWith('/') && !appPath.startsWith('//')) url.hash = appPath
+  return url.toString()
+}
+
 function TaskCardsView({ cards }: { cards?: MessageCard[] }) {
   const taskCards = cards?.filter(isTaskMessageCard) ?? []
   if (taskCards.length === 0) return null
@@ -255,6 +348,87 @@ function TaskCardsView({ cards }: { cards?: MessageCard[] }) {
         <TaskCardMobile key={card.id} card={card} />
       ))}
     </View>
+  )
+}
+
+function ServerAppCardsView({ cards, serverSlug }: { cards?: MessageCard[]; serverSlug?: string }) {
+  const appCards = cards?.filter(isServerAppCard) ?? []
+  if (appCards.length === 0) return null
+  return (
+    <View style={styles.taskCards}>
+      {appCards.map((card, index) => (
+        <ServerAppCardMobile
+          key={card.id ?? `${card.appKey}:${index}`}
+          card={card}
+          serverSlug={serverSlug}
+        />
+      ))}
+    </View>
+  )
+}
+
+function ServerAppCardMobile({
+  card,
+  serverSlug,
+}: {
+  card: ServerAppMessageCard
+  serverSlug?: string
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const router = useRouter()
+  const openApp = useMutation({
+    mutationFn: async () => {
+      if (!serverSlug) throw new Error(t('serverApps.selectFromSidebar'))
+      const launch = await fetchApi<LaunchContext>(
+        `/api/servers/${serverSlug}/apps/${card.appKey}/launch`,
+        { method: 'POST' },
+      )
+      const entry = launch.iframeEntry
+      if (!entry) throw new Error(t('serverApps.noIframe'))
+      return withLaunchParams(entry, launch, card.action?.path)
+    },
+    onSuccess: (url) => {
+      router.push({
+        pathname: '/(main)/webview-preview',
+        params: {
+          url: encodeURIComponent(url),
+          title: card.title,
+          serverSlug,
+          appKey: card.appKey,
+        },
+      })
+    },
+    onError: (error: Error) => showToast(error.message || t('common.error'), 'error'),
+  })
+
+  return (
+    <Pressable
+      disabled={!serverSlug || openApp.isPending}
+      style={[
+        styles.serverAppCard,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+      onPress={() => openApp.mutate()}
+    >
+      <View style={[styles.serverAppIcon, { backgroundColor: `${colors.primary}18` }]}>
+        <AppWindow size={18} color={colors.primary} />
+      </View>
+      <View style={styles.serverAppCardText}>
+        <Text style={[styles.taskTitle, { color: colors.text }]}>{card.title}</Text>
+        {card.description ? (
+          <Text style={[styles.taskBody, { color: colors.textMuted }]} numberOfLines={2}>
+            {card.description}
+          </Text>
+        ) : null}
+        <View style={styles.serverAppAction}>
+          <Text style={[styles.serverAppActionText, { color: colors.primary }]}>
+            {card.label ?? t('chat.appCard.open')}
+          </Text>
+          <ArrowRight size={14} color={colors.primary} />
+        </View>
+      </View>
+    </Pressable>
   )
 }
 
@@ -310,13 +484,18 @@ interface MessageBubbleProps {
   message: Message
   onReply: () => void
   onRetry?: (message: Message) => void
+  onOpenThread?: () => void
+  hasThread?: boolean
   channelId: string
+  serverSlug?: string
   allMessages?: Message[]
   isGrouped?: boolean
   selectionMode?: boolean
   isSelected?: boolean
+  selectionAnchorId?: string | null
   onToggleSelect?: (messageId: string) => void
   onEnterSelectionMode?: (messageId: string) => void
+  onSelectRangeTo?: (messageId: string) => void
 }
 
 function SignedAttachmentImage({ attachment }: { attachment: Attachment }) {
@@ -361,13 +540,18 @@ function MessageBubbleInner({
   message,
   onReply,
   onRetry,
+  onOpenThread,
+  hasThread,
   channelId: _channelId,
+  serverSlug,
   allMessages = [],
   isGrouped = false,
   selectionMode,
   isSelected,
+  selectionAnchorId,
   onToggleSelect,
   onEnterSelectionMode,
+  onSelectRangeTo,
 }: MessageBubbleProps) {
   const { t } = useTranslation()
   const colors = useColors()
@@ -533,13 +717,13 @@ function MessageBubbleInner({
 
   const handleLongPress = useCallback(
     (event: GestureResponderEvent) => {
-      if (selectionMode) return
+      if (selectionMode && (!onSelectRangeTo || selectionAnchorId === message.id)) return
       Haptics.selectionAsync()
       const { pageX, pageY } = event.nativeEvent
       setPopupPosition({ touchX: pageX, touchY: pageY })
       setShowPopup(true)
     },
-    [selectionMode],
+    [message.id, onSelectRangeTo, selectionAnchorId, selectionMode],
   )
 
   const dismissPopup = useCallback(() => {
@@ -556,6 +740,11 @@ function MessageBubbleInner({
     dismissPopup()
     onReply()
   }, [dismissPopup, onReply])
+
+  const handleThreadAction = useCallback(() => {
+    dismissPopup()
+    onOpenThread?.()
+  }, [dismissPopup, onOpenThread])
 
   const handleReaction = useCallback(
     (emoji: string) => {
@@ -576,6 +765,11 @@ function MessageBubbleInner({
     dismissPopup()
     onEnterSelectionMode?.(message.id)
   }, [dismissPopup, onEnterSelectionMode, message.id])
+
+  const handleSelectRangeTo = useCallback(() => {
+    dismissPopup()
+    onSelectRangeTo?.(message.id)
+  }, [dismissPopup, onSelectRangeTo, message.id])
 
   const handleDeleteMessage = useCallback(() => {
     dismissPopup()
@@ -599,10 +793,22 @@ function MessageBubbleInner({
   const isOwnMessage = currentUser ? message.authorId === currentUser.id : false
 
   const popupActions = useMemo<PopupAction[]>(() => {
+    if (selectionMode) {
+      return onSelectRangeTo && selectionAnchorId !== message.id
+        ? [{ label: t('chat.selectToHere', '选择到此消息'), onPress: handleSelectRangeTo }]
+        : []
+    }
+
     const actions: PopupAction[] = [
       { label: t('chat.copy', '复制'), onPress: handleCopyMessage },
       { label: t('chat.reply', '回复'), onPress: handleReplyAction },
     ]
+    if (onOpenThread && !message.threadId) {
+      actions.push({
+        label: t(hasThread ? 'chat.openThread' : 'chat.startThread'),
+        onPress: handleThreadAction,
+      })
+    }
     if (onEnterSelectionMode) {
       actions.push({
         label: t('chat.multiSelect', '多选'),
@@ -620,9 +826,18 @@ function MessageBubbleInner({
     t,
     handleCopyMessage,
     handleReplyAction,
+    handleThreadAction,
     handleEnterMultiSelect,
+    handleSelectRangeTo,
     handleDeleteMessage,
     onEnterSelectionMode,
+    onSelectRangeTo,
+    onOpenThread,
+    selectionAnchorId,
+    selectionMode,
+    message.threadId,
+    message.id,
+    hasThread,
     isOwnMessage,
   ])
 
@@ -738,7 +953,7 @@ function MessageBubbleInner({
         isSelected && { backgroundColor: `${colors.primary}18` },
       ]}
       onPress={selectionMode ? () => onToggleSelect?.(message.id) : () => Keyboard.dismiss()}
-      onLongPress={selectionMode ? undefined : handleLongPress}
+      onLongPress={handleLongPress}
       delayLongPress={300}
     >
       {/* Reply reference */}
@@ -856,6 +1071,7 @@ function MessageBubbleInner({
           {walletRecharge && <WalletRechargeCard data={walletRecharge} />}
 
           <TaskCardsView cards={message.metadata?.cards} />
+          <ServerAppCardsView cards={message.metadata?.cards} serverSlug={serverSlug} />
 
           {/* Attachments */}
           {message.attachments?.map((att) => {
@@ -1057,7 +1273,7 @@ function MessageBubbleInner({
               <SelectionPopup
                 actions={popupActions}
                 arrowDirection={popupAbove ? 'down' : 'up'}
-                onQuickReaction={handleQuickReaction}
+                onQuickReaction={selectionMode ? undefined : handleQuickReaction}
               />
             </View>
           )}
@@ -1127,21 +1343,35 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
   const [isOpening, setIsOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const { data: state } = useQuery({
+  const paidFileStateQuery = useQuery({
     queryKey: ['paid-file', card.fileId],
     queryFn: () => fetchApi<PaidFileState>(`/api/paid-files/${card.fileId}`),
     staleTime: 10_000,
   })
+  const { data: state } = paidFileStateQuery
 
   const isUnlocked = state?.hasAccess === true
+  const isStateLoading = paidFileStateQuery.isLoading && !state
+  const blockedFileState = getPaidFileBlockedState(state, paidFileStateQuery.isError && !state)
+  const blockedFileLabel = blockedFileState ? t(`commerce.viewerState.${blockedFileState}`) : null
   const metaText =
     formatByteSize(card.snapshot.sizeBytes) || card.snapshot.mime || t('chat.paidFile')
-  const fileStateLabel = isUnlocked ? t('chat.paidFileUnlocked') : t('chat.paidFileLocked')
+  const fileStateLabel = blockedFileLabel
+    ? blockedFileLabel
+    : isStateLoading
+      ? t('common.loading')
+      : isUnlocked
+        ? t('chat.paidFileUnlocked')
+        : t('chat.paidFileLocked')
   const fileAccessLabel = isUnlocked
     ? t('chat.paidFileReady')
-    : t('chat.paidFileRequiresEntitlement')
+    : (blockedFileLabel ??
+      (isStateLoading ? t('common.loading') : t('chat.paidFileRequiresEntitlement')))
+  const rawPreviewUrl = state?.file.previewUrl ?? card.snapshot.previewUrl
+  const previewUri = rawPreviewUrl ? (getImageUrl(rawPreviewUrl) ?? rawPreviewUrl) : null
 
   const openFile = async () => {
+    if (blockedFileState || isStateLoading) return
     setIsOpening(true)
     setError(null)
     try {
@@ -1169,21 +1399,42 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
         styles.paidFileCard,
         {
           backgroundColor: colors.surface,
-          borderColor: isUnlocked ? `${colors.primary}55` : colors.border,
+          borderColor: blockedFileState
+            ? `${colors.warning}55`
+            : isUnlocked
+              ? `${colors.primary}55`
+              : colors.border,
         },
       ]}
     >
-      <View
-        style={[
-          styles.paidFileIconWrap,
-          { backgroundColor: isUnlocked ? `${colors.primary}18` : colors.surfaceHover },
-        ]}
-      >
-        <FileText size={22} color={isUnlocked ? colors.primary : colors.textMuted} />
-      </View>
+      {previewUri ? (
+        <Image source={{ uri: previewUri }} style={styles.paidFilePreview} />
+      ) : (
+        <View
+          style={[
+            styles.paidFileIconWrap,
+            {
+              backgroundColor: blockedFileState
+                ? `${colors.warning}18`
+                : isUnlocked
+                  ? `${colors.primary}18`
+                  : colors.surfaceHover,
+            },
+          ]}
+        >
+          <FileText
+            size={22}
+            color={
+              blockedFileState ? colors.warning : isUnlocked ? colors.primary : colors.textMuted
+            }
+          />
+        </View>
+      )}
       <View style={styles.paidFileInfo}>
         <View style={styles.paidFileLabelRow}>
-          {isUnlocked ? (
+          {blockedFileState ? (
+            <AlertCircle size={11} color={colors.warning} />
+          ) : isUnlocked ? (
             <Unlock size={11} color={colors.primary} />
           ) : (
             <Lock size={11} color={colors.textMuted} />
@@ -1191,14 +1442,17 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
           <Text
             style={[
               styles.paidFileLabel,
-              { color: isUnlocked ? colors.primary : colors.textMuted },
+              {
+                color: blockedFileState
+                  ? colors.warning
+                  : isUnlocked
+                    ? colors.primary
+                    : colors.textMuted,
+              },
             ]}
             numberOfLines={1}
           >
             {fileStateLabel}
-          </Text>
-          <Text style={[styles.paidFileId, { color: colors.textMuted }]}>
-            {card.fileId.slice(0, 8).toUpperCase()}
           </Text>
         </View>
         <Text style={[styles.paidFileName, { color: colors.text }]} numberOfLines={1}>
@@ -1223,22 +1477,61 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
       </View>
       <View style={[styles.paidFileDivider, { borderColor: colors.border }]} />
       <View style={styles.paidFileActionCol}>
-        <Text style={[styles.paidFileActionLabel, { color: colors.textMuted }]}>
-          {t('chat.paidFileAccessLabel')}
-        </Text>
-        <Badge variant={isUnlocked ? 'primary' : 'neutral'} size="xs">
-          {fileAccessLabel}
-        </Badge>
-        <Button
-          variant={isUnlocked ? 'outline' : 'secondary'}
-          size="xs"
-          disabled={isOpening || !isUnlocked}
-          onPress={openFile}
-          loading={isOpening}
-          style={styles.paidFileButton}
+        <View
+          style={[
+            styles.paidFileStatusIcon,
+            {
+              backgroundColor: blockedFileState
+                ? `${colors.warning}18`
+                : isUnlocked
+                  ? `${colors.primary}18`
+                  : colors.surfaceHover,
+              borderColor: blockedFileState
+                ? `${colors.warning}44`
+                : isUnlocked
+                  ? `${colors.primary}44`
+                  : colors.border,
+            },
+          ]}
         >
-          {isUnlocked ? t('chat.paidFileOpenAction') : fileAccessLabel}
-        </Button>
+          {blockedFileState ? (
+            <AlertCircle size={15} color={colors.warning} />
+          ) : isUnlocked ? (
+            <Unlock size={15} color={colors.primary} />
+          ) : (
+            <Lock size={15} color={colors.textMuted} />
+          )}
+        </View>
+        {isUnlocked ? (
+          <Button
+            variant="primary"
+            size="xs"
+            disabled={isOpening}
+            onPress={openFile}
+            loading={isOpening}
+            style={styles.paidFileButton}
+          >
+            {t('chat.paidFileOpenAction')}
+          </Button>
+        ) : (
+          <View
+            style={[
+              styles.paidFileLockedPill,
+              blockedFileState
+                ? { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}44` }
+                : { backgroundColor: colors.surfaceHover, borderColor: colors.border },
+            ]}
+          >
+            <Text
+              style={[
+                styles.paidFileLockedText,
+                { color: blockedFileState ? colors.warning : colors.textSecondary },
+              ]}
+            >
+              {fileAccessLabel}
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   )
@@ -1421,11 +1714,47 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
   const { t } = useTranslation()
   const colors = useColors()
   const [isBuying, setIsBuying] = useState(false)
-  const imageUri = card.snapshot.imageUrl
-    ? (getImageUrl(card.snapshot.imageUrl) ?? undefined)
-    : undefined
+  const checkoutPreviewQuery = useQuery({
+    queryKey: ['commerce-checkout-preview', card.offerId, card.skuId],
+    queryFn: () =>
+      fetchApi<CommerceCheckoutPreview>(
+        `/api/commerce/offers/${card.offerId}/checkout-preview${
+          card.skuId ? `?skuId=${encodeURIComponent(card.skuId)}` : ''
+        }`,
+      ),
+    enabled: Boolean(card.offerId),
+    staleTime: 10_000,
+  })
+  const { data: checkoutPreview } = checkoutPreviewQuery
+  const isPreviewLoading =
+    Boolean(card.offerId) && checkoutPreviewQuery.isLoading && !checkoutPreview
+  const invalidViewerState = getCommerceInvalidState(checkoutPreview)
+  const invalidStateLabel = invalidViewerState
+    ? t(`commerce.viewerState.${invalidViewerState}`)
+    : null
+  const previewErrorLabel =
+    !checkoutPreview && checkoutPreviewQuery.isError ? t('chat.commercePreviewFailed') : null
+  const cardIssueLabel = previewErrorLabel ?? invalidStateLabel
+  const hasCardIssue = Boolean(cardIssueLabel)
+  const productImageUrl = checkoutPreview?.product?.imageUrl ?? card.snapshot.imageUrl
+  const imageUri = productImageUrl ? (getImageUrl(productImageUrl) ?? productImageUrl) : undefined
+  const productName = checkoutPreview?.product?.name ?? card.snapshot.name
+  const productSummary = checkoutPreview?.product?.summary ?? card.snapshot.summary
+  const displayPrice = {
+    amount:
+      checkoutPreview?.displayState?.price?.amount ??
+      checkoutPreview?.product?.price ??
+      card.snapshot.price,
+    currency:
+      checkoutPreview?.displayState?.price?.currency ??
+      checkoutPreview?.product?.currency ??
+      card.snapshot.currency,
+  }
+  const isShrimpPrice = displayPrice.currency === 'shrimp_coin'
+  const shopName = checkoutPreview?.shop?.name ?? card.snapshot.shopName
 
   const buy = async () => {
+    if (hasCardIssue || isPreviewLoading) return
     setIsBuying(true)
     try {
       const path = `/api/messages/${messageId}/commerce-cards/${card.id}/purchase`
@@ -1446,68 +1775,107 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
 
   return (
     <View
-      style={[styles.commerceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      style={[
+        styles.commerceCard,
+        {
+          backgroundColor: colors.surface,
+          borderColor: hasCardIssue ? `${colors.warning}55` : colors.border,
+        },
+      ]}
     >
-      {imageUri ? <Image source={{ uri: imageUri }} style={styles.commerceImage} /> : null}
-      <View style={styles.commerceInfo}>
-        <View style={styles.commerceHeader}>
+      <View style={styles.commerceBody}>
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.commerceImage} />
+        ) : (
+          <View
+            style={[
+              styles.commerceImageFallback,
+              {
+                backgroundColor: hasCardIssue ? `${colors.warning}18` : `${colors.primary}18`,
+              },
+            ]}
+          >
+            <Ticket
+              size={24}
+              color={hasCardIssue ? colors.warning : colors.primary}
+              strokeWidth={2.5}
+            />
+          </View>
+        )}
+        <View style={styles.commerceInfo}>
+          <Text
+            style={[
+              styles.commerceShopName,
+              { color: hasCardIssue ? colors.warning : colors.primary },
+            ]}
+            numberOfLines={1}
+          >
+            {cardIssueLabel ?? (isPreviewLoading ? t('common.loading') : null) ?? shopName}
+          </Text>
           <Text style={[styles.commerceTitle, { color: colors.text }]} numberOfLines={2}>
-            {card.snapshot.name}
+            {productName}
           </Text>
-          <Text style={[styles.commercePrice, { color: colors.primary }]}>
-            {formatCommercePrice(card.snapshot.price, card.snapshot.currency, t)}
-          </Text>
+          {productSummary ? (
+            <Text style={[styles.commerceSummary, { color: colors.textMuted }]} numberOfLines={2}>
+              {productSummary}
+            </Text>
+          ) : null}
         </View>
-        {card.snapshot.summary ? (
-          <Text style={[styles.commerceSummary, { color: colors.textMuted }]} numberOfLines={2}>
-            {card.snapshot.summary}
-          </Text>
-        ) : null}
-        <View style={styles.commerceMetaChips}>
-          <Text
-            style={[
-              styles.commerceMetaChip,
-              { color: colors.textMuted, borderColor: colors.border },
-            ]}
-            numberOfLines={1}
-          >
-            {card.snapshot.shopName ?? t('shop.shopReply')}
-          </Text>
-          <Text
-            style={[styles.commerceMetaChip, { color: colors.primary, borderColor: colors.border }]}
-            numberOfLines={1}
-          >
-            {card.snapshot.deliveryPromise ??
-              card.snapshot.summary ??
-              t('chat.commerceEntitlement')}
-          </Text>
-          <Text
-            style={[
-              styles.commerceMetaChip,
-              { color: colors.textMuted, borderColor: colors.border },
-            ]}
-            numberOfLines={1}
-          >
-            {t('chat.commerceRefundRule')}
-          </Text>
-        </View>
-        <View style={styles.commerceFooter}>
-          <Text style={[styles.commerceMode, { color: colors.textMuted }]}>
-            {card.snapshot.billingMode === 'subscription'
-              ? t('chat.commerceSubscription')
-              : t('chat.commerceEntitlement')}
-          </Text>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={isBuying}
-            onPress={buy}
-            loading={isBuying}
-            style={styles.commerceButton}
-          >
-            {t('chat.commerceBuy')}
-          </Button>
-        </View>
+      </View>
+      <View style={[styles.commerceDivider, { borderColor: colors.border }]} />
+      <View style={styles.commerceActionCol}>
+        {hasCardIssue ? (
+          <>
+            <View
+              style={[
+                styles.commerceInvalidIcon,
+                { backgroundColor: `${colors.warning}18`, borderColor: `${colors.warning}44` },
+              ]}
+            >
+              <AlertCircle size={16} color={colors.warning} />
+            </View>
+            <View
+              style={[
+                styles.commerceInvalidPill,
+                { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}44` },
+              ]}
+            >
+              <Text
+                style={[styles.commerceInvalidText, { color: colors.warning }]}
+                numberOfLines={1}
+              >
+                {cardIssueLabel}
+              </Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <View
+              style={[
+                styles.commercePriceWrap,
+                { backgroundColor: colors.surfaceHover, borderColor: colors.border },
+              ]}
+            >
+              {isShrimpPrice ? (
+                <PriceCompact amount={displayPrice.amount} size={15} />
+              ) : (
+                <Text style={[styles.commercePrice, { color: colors.primary }]} numberOfLines={1}>
+                  {formatCommercePrice(displayPrice.amount, displayPrice.currency, t)}
+                </Text>
+              )}
+            </View>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={isBuying || isPreviewLoading}
+              onPress={buy}
+              loading={isBuying}
+              style={styles.commerceButton}
+            >
+              {isPreviewLoading ? t('common.loading') : t('chat.commerceBuy')}
+            </Button>
+          </>
+        )}
       </View>
     </View>
   )
@@ -1518,12 +1886,16 @@ export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
     prev.message === next.message &&
     prev.channelId === next.channelId &&
     prev.isGrouped === next.isGrouped &&
+    prev.hasThread === next.hasThread &&
     prev.allMessages === next.allMessages &&
     prev.onRetry === next.onRetry &&
+    prev.onOpenThread === next.onOpenThread &&
     prev.selectionMode === next.selectionMode &&
     prev.isSelected === next.isSelected &&
+    prev.selectionAnchorId === next.selectionAnchorId &&
     prev.onToggleSelect === next.onToggleSelect &&
-    prev.onEnterSelectionMode === next.onEnterSelectionMode
+    prev.onEnterSelectionMode === next.onEnterSelectionMode &&
+    prev.onSelectRangeTo === next.onSelectRangeTo
   )
 })
 
@@ -1666,6 +2038,35 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     gap: spacing.xs,
   },
+  serverAppCard: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  serverAppIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+  },
+  serverAppCardText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  serverAppAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  serverAppActionText: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
   taskHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1807,6 +2208,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  paidFilePreview: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+  },
   paidFileInfo: {
     flex: 1,
     minWidth: 0,
@@ -1822,10 +2228,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textTransform: 'uppercase',
     flexShrink: 1,
-  },
-  paidFileId: {
-    fontSize: 10,
-    fontWeight: '700',
   },
   paidFileName: {
     fontSize: fontSize.sm,
@@ -1861,10 +2263,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  paidFileActionLabel: {
-    fontSize: 9,
-    fontWeight: '900',
-    textTransform: 'uppercase',
+  paidFileStatusIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   paidFileButton: {
     width: '100%',
@@ -1873,6 +2278,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+  },
+  paidFileLockedPill: {
+    width: '100%',
+    minHeight: 32,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  paidFileLockedText: {
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   commerceCard: {
     flexDirection: 'row',
@@ -1883,64 +2302,91 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     maxWidth: 340,
   },
+  commerceBody: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   commerceImage: {
     width: 64,
     height: 64,
     borderRadius: radius.md,
   },
+  commerceImageFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   commerceInfo: {
     flex: 1,
     minWidth: 0,
   },
-  commerceHeader: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+  commerceShopName: {
+    fontSize: 10,
+    fontWeight: '900',
+    marginBottom: 3,
   },
   commerceTitle: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-  },
-  commercePrice: {
     fontSize: fontSize.sm,
     fontWeight: '800',
+  },
+  commercePrice: {
+    fontSize: fontSize.xs,
+    fontWeight: '900',
   },
   commerceSummary: {
     fontSize: fontSize.xs,
     marginTop: 2,
   },
-  commerceMetaChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginTop: spacing.xs,
+  commerceDivider: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
   },
-  commerceMetaChip: {
+  commerceActionCol: {
+    width: 82,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  commercePriceWrap: {
     maxWidth: '100%',
+    minHeight: 30,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commerceInvalidIcon: {
+    width: 32,
+    height: 32,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  commerceFooter: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-    gap: spacing.sm,
+    justifyContent: 'center',
   },
-  commerceMode: {
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+  commerceInvalidPill: {
+    width: '100%',
+    minHeight: 32,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  commerceInvalidText: {
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   commerceButton: {
     borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
+    width: '100%',
+    paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
   },
   oauthCard: {

@@ -27,6 +27,8 @@ interface UIState {
   mobileMemberListOpen: boolean
   /** Whether the file preview panel is open (hides member list on desktop) */
   filePreviewOpen: boolean
+  /** Whether a right-side auxiliary panel is open (file preview, OAuth preview, thread, etc.) */
+  rightPanelOpen: boolean
   /** Theme mode: dark, light, or system */
   theme: ThemeMode
   /** Custom background image URL */
@@ -47,6 +49,7 @@ interface UIState {
   toggleMobileMemberList: () => void
   closeMobileMemberList: () => void
   setFilePreviewOpen: (open: boolean) => void
+  setRightPanelOpen: (open: boolean) => void
   setTheme: (theme: ThemeMode) => void
   setBackgroundImage: (url: string | null) => void
   setEnableBackgroundMovement: (enabled: boolean) => void
@@ -84,6 +87,7 @@ export const useUIStore = create<UIState>((set) => ({
   mobileServerSidebarOpen: false,
   mobileMemberListOpen: false,
   filePreviewOpen: false,
+  rightPanelOpen: false,
   theme: savedTheme,
   backgroundImage: savedBgImage,
   enableBackgroundMovement: savedBgMovement,
@@ -93,9 +97,15 @@ export const useUIStore = create<UIState>((set) => ({
   setMobileView: (view) => set({ mobileView: view, mobileMemberListOpen: false }),
   openMobileServerSidebar: () => set({ mobileServerSidebarOpen: true }),
   closeMobileServerSidebar: () => set({ mobileServerSidebarOpen: false }),
-  toggleMobileMemberList: () => set((s) => ({ mobileMemberListOpen: !s.mobileMemberListOpen })),
+  toggleMobileMemberList: () =>
+    set((s) => ({
+      mobileMemberListOpen: !s.mobileMemberListOpen,
+      rightPanelOpen: s.mobileMemberListOpen ? s.rightPanelOpen : false,
+    })),
   closeMobileMemberList: () => set({ mobileMemberListOpen: false }),
-  setFilePreviewOpen: (open) => set({ filePreviewOpen: open }),
+  setFilePreviewOpen: (open) => set({ filePreviewOpen: open, rightPanelOpen: open }),
+  setRightPanelOpen: (open) =>
+    set(open ? { rightPanelOpen: true, mobileMemberListOpen: false } : { rightPanelOpen: false }),
   setTheme: (theme) => {
     applyTheme(theme)
     set({ theme })

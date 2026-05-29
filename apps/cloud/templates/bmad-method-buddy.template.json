@@ -49,7 +49,10 @@
             "channels": ["analysis", "planning", "delivery"],
             "agentId": "bmad-buddy"
           }
-        ]
+        ],
+        "greeting": {
+          "entryChannelId": "delivery"
+        }
       }
     }
   ],

@@ -199,6 +199,7 @@
       "research": "Research",
       "monitoring": "Monitoring",
       "business": "Business",
+      "education": "Education",
       "demo": "Demo"
     },
     "difficulties": {
@@ -246,6 +247,12 @@
   "deploy": {
     "reviewTemplate": "Review Template",
     "confirmDeployKubernetes": "Review the deployment you are about to start.",
+    "proactivePreviewTitle": "Buddy starts proactively after deploy",
+    "proactivePreviewDescription": "The template sends {{messages}} greeting message(s) across {{channels}} channel(s) and connects key actions to the right Buddy.",
+    "proactiveEntryChannel": "Default entry: {{channel}}",
+    "proactiveGreetingMetric": "Greeting channels",
+    "proactiveServerAppMetric": "Server Apps",
+    "proactiveRoutineMetric": "Routines",
     "ownTemplateDescription": "Your custom template.",
     "agentsLabel": "Agents",
     "namespaceLabel": "Namespace",
@@ -264,6 +271,12 @@
     "envFieldSlotsDescription": "{{count}} total, {{required}} required.",
     "templateFieldSource": "Template Config",
     "templateFieldDescription": "A value this template needs.",
+    "envFieldLabels": {
+      "CODE_TRAINER_MANIFEST_URL": "Code Trainer Manifest URL"
+    },
+    "envFieldDescriptions": {
+      "CODE_TRAINER_MANIFEST_URL": "Provide the Code Trainer Server App manifest URL. Buddy uses it to install the app, read submissions and learning state, and write reviews back to the trainer."
+    },
     "pluginFieldDescription": "Connects this service. Saved secrets can be reused.",
     "templateFieldGroupDescription": "Variables this template needs.",
     "pluginFieldGroupDescription": "{{plugin}} connection credentials. Saved secrets are reused automatically.",
@@ -309,6 +322,7 @@
     "configured": "configured",
     "whatHappensNext": "What happens next:",
     "whatHappensNextDesc": "Shadow Cloud will initialize the template, generate Kubernetes manifests, and deploy them to your cluster. You can monitor the progress in real time below.",
+    "whatHappensNextProactiveDesc": "Shadow Cloud will create the server, channels, and Buddies, send greetings, install Server App access, then deploy the agents. You can monitor the progress in real time below.",
     "deploymentLog": "Deployment Log",
     "download": "Download",
     "showTimestamps": "Show timestamps",

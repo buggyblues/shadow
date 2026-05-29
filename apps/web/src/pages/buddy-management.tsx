@@ -14,6 +14,7 @@ import {
   ArrowRight,
   ChevronDown,
   Clock,
+  Cloud,
   Edit,
   Eye,
   LockKeyhole,
@@ -22,19 +23,30 @@ import {
   Pause,
   Play,
   Plus,
+  RefreshCw,
   Search,
   Store,
   Terminal,
   Trash2,
   Users,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgentDetail } from '../components/buddy-management/agent-detail'
-import { CreateAgentDialog, EditAgentDialog } from '../components/buddy-management/agent-dialogs'
+import {
+  CLOUD_RUNTIME_LABELS,
+  type CloudBuddyRuntimeId,
+  CreateAgentDialog,
+  EditAgentDialog,
+  getBuddyIntroPrompt,
+  RuntimeIcon,
+} from '../components/buddy-management/agent-dialogs'
+import { ConfigCodeBlock } from '../components/buddy-management/config-code-block'
 import {
   type Agent,
   type BuddyMode,
+  type ConnectorComputer,
+  type ConnectorRuntimeInfo,
   getAgentBuddyMode,
   type TokenResponse,
 } from '../components/buddy-management/types'
@@ -105,6 +117,66 @@ type ServerEntry = {
     name: string
     slug?: string | null
   }
+}
+
+type ConnectorBootstrapResult = {
+  computer: ConnectorComputer
+  command: string
+}
+
+type CreateBuddyTarget = 'local' | 'cloud'
+
+const CLOUD_BUDDY_RUNTIME_OPTIONS: Array<{
+  id: CloudBuddyRuntimeId
+  label: string
+  descriptionKey: string
+}> = [
+  {
+    id: 'openclaw',
+    label: CLOUD_RUNTIME_LABELS.openclaw,
+    descriptionKey: 'agentMgmt.cloudRuntimeOpenClawDesc',
+  },
+  {
+    id: 'hermes',
+    label: CLOUD_RUNTIME_LABELS.hermes,
+    descriptionKey: 'agentMgmt.cloudRuntimeHermesDesc',
+  },
+  {
+    id: 'claude-code',
+    label: CLOUD_RUNTIME_LABELS['claude-code'],
+    descriptionKey: 'agentMgmt.cloudRuntimeClaudeCodeDesc',
+  },
+  {
+    id: 'codex',
+    label: CLOUD_RUNTIME_LABELS.codex,
+    descriptionKey: 'agentMgmt.cloudRuntimeCodexDesc',
+  },
+  {
+    id: 'opencode',
+    label: CLOUD_RUNTIME_LABELS.opencode,
+    descriptionKey: 'agentMgmt.cloudRuntimeOpenCodeDesc',
+  },
+  {
+    id: 'gemini',
+    label: CLOUD_RUNTIME_LABELS.gemini,
+    descriptionKey: 'agentMgmt.cloudRuntimeGeminiDesc',
+  },
+]
+
+function availableRuntimes(computer: ConnectorComputer | null | undefined) {
+  return (computer?.runtimes ?? []).filter((runtime) => runtime.status === 'available')
+}
+
+function runtimeSortKey(runtime: ConnectorRuntimeInfo) {
+  const priority: Record<string, number> = {
+    openclaw: 0,
+    hermes: 1,
+    'claude-code': 2,
+    codex: 3,
+    opencode: 4,
+    gemini: 5,
+  }
+  return priority[runtime.id] ?? 50
 }
 
 const STATUS_STYLES: Record<string, { labelKey: string; bg: string; text: string }> = {
@@ -191,6 +263,366 @@ function getAgentOnlineDotClass(agent: Agent): string {
     return 'bg-success'
   }
   return 'bg-text-muted/50'
+}
+
+function CreateBuddyFlowPanel({
+  onClose,
+  onSuccess,
+  onError,
+  t,
+}: {
+  onClose: () => void
+  onSuccess: (agent: Agent) => void
+  onError: (message?: string) => void
+  t: TranslateFn
+}) {
+  const queryClient = useQueryClient()
+  const [createBuddyTarget, setCreateBuddyTarget] = useState<CreateBuddyTarget>('local')
+  const [selectedCloudRuntimeId, setSelectedCloudRuntimeId] =
+    useState<CloudBuddyRuntimeId>('openclaw')
+  const [selectedConnectorComputerId, setSelectedConnectorComputerId] = useState<string | null>(
+    null,
+  )
+  const [selectedConnectorRuntimeId, setSelectedConnectorRuntimeId] = useState<string | null>(null)
+  const [connectorSelectionConfirmed, setConnectorSelectionConfirmed] = useState(false)
+  const [connectorCommand, setConnectorCommand] = useState<string | null>(null)
+  const connectorBootstrapStartedRef = useRef(false)
+
+  const { data: connectorData, isFetching: isConnectorFetching } = useQuery({
+    queryKey: ['connector-computers'],
+    queryFn: () => fetchApi<{ computers: ConnectorComputer[] }>('/api/connector/computers'),
+    enabled: createBuddyTarget === 'local' && !connectorSelectionConfirmed,
+    refetchInterval: createBuddyTarget === 'local' && !connectorSelectionConfirmed ? 5000 : false,
+  })
+
+  const connectorComputers = connectorData?.computers ?? []
+  const connectorRuntimeOptions = useMemo(
+    () =>
+      connectorComputers
+        .flatMap((computer) =>
+          availableRuntimes(computer).map((runtime) => ({
+            key: `${computer.id}:${runtime.id}`,
+            computer,
+            runtime,
+          })),
+        )
+        .sort(
+          (a, b) =>
+            runtimeSortKey(a.runtime) - runtimeSortKey(b.runtime) ||
+            a.runtime.label.localeCompare(b.runtime.label),
+        ),
+    [connectorComputers],
+  )
+  const selectedConnectorRuntimeOption =
+    connectorRuntimeOptions.find(
+      (option) =>
+        option.computer.id === selectedConnectorComputerId &&
+        option.runtime.id === selectedConnectorRuntimeId,
+    ) ??
+    connectorRuntimeOptions[0] ??
+    null
+  const selectedConnectorComputer = selectedConnectorRuntimeOption?.computer ?? null
+  const selectedConnectorRuntime = selectedConnectorRuntimeOption?.runtime ?? null
+  const connectorRuntimeOptionKeys = connectorRuntimeOptions
+    .map((option) => option.key)
+    .join('\u0000')
+  const selectedCloudRuntime =
+    CLOUD_BUDDY_RUNTIME_OPTIONS.find((option) => option.id === selectedCloudRuntimeId) ??
+    CLOUD_BUDDY_RUNTIME_OPTIONS[0]
+  const canContinue =
+    createBuddyTarget === 'cloud'
+      ? Boolean(selectedCloudRuntime)
+      : Boolean(selectedConnectorRuntime)
+
+  const connectorBootstrap = useMutation({
+    mutationFn: () =>
+      fetchApi<ConnectorBootstrapResult>('/api/connector/computers/bootstrap', {
+        method: 'POST',
+        body: JSON.stringify({
+          serverUrl: window.location.origin,
+          name: t('agentMgmt.connectorDefaultComputerName'),
+        }),
+      }),
+    onSuccess: (result) => {
+      setConnectorCommand(result.command)
+      queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
+    },
+    onError: (error: Error) => {
+      showToast(error.message || t('agentMgmt.connectorCreateFailed'), 'error')
+    },
+  })
+
+  useEffect(() => {
+    if (createBuddyTarget !== 'local' || connectorData === undefined) return
+    if (
+      connectorRuntimeOptions.length > 0 ||
+      connectorCommand ||
+      connectorBootstrap.isPending ||
+      connectorBootstrapStartedRef.current
+    ) {
+      return
+    }
+    connectorBootstrapStartedRef.current = true
+    connectorBootstrap.mutate()
+  }, [
+    connectorBootstrap,
+    connectorCommand,
+    connectorData,
+    connectorRuntimeOptions.length,
+    createBuddyTarget,
+  ])
+
+  useEffect(() => {
+    if (createBuddyTarget !== 'local') return
+    if (!connectorRuntimeOptionKeys) {
+      if (selectedConnectorComputerId) setSelectedConnectorComputerId(null)
+      if (selectedConnectorRuntimeId) setSelectedConnectorRuntimeId(null)
+      return
+    }
+    if (!selectedConnectorRuntimeOption) return
+    if (selectedConnectorComputerId !== selectedConnectorRuntimeOption.computer.id) {
+      setSelectedConnectorComputerId(selectedConnectorRuntimeOption.computer.id)
+    }
+    if (selectedConnectorRuntimeId !== selectedConnectorRuntimeOption.runtime.id) {
+      setSelectedConnectorRuntimeId(selectedConnectorRuntimeOption.runtime.id)
+    }
+  }, [
+    connectorRuntimeOptionKeys,
+    createBuddyTarget,
+    selectedConnectorComputerId,
+    selectedConnectorRuntimeId,
+    selectedConnectorRuntimeOption,
+  ])
+
+  if (connectorSelectionConfirmed && canContinue) {
+    return (
+      <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">
+        <CreateAgentDialog
+          onClose={onClose}
+          onSuccess={(agent) => {
+            queryClient.invalidateQueries({ queryKey: ['agents'] })
+            queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+            queryClient.invalidateQueries({ queryKey: ['cloud-saas'] })
+            onSuccess(agent)
+          }}
+          onError={onError}
+          t={t}
+          embedded
+          quick
+          onBack={() => setConnectorSelectionConfirmed(false)}
+          connectorComputerId={
+            createBuddyTarget === 'local' ? selectedConnectorComputer?.id : undefined
+          }
+          connectorRuntimeId={
+            createBuddyTarget === 'local' ? selectedConnectorRuntime?.id : undefined
+          }
+          connectorRuntimeLabel={
+            createBuddyTarget === 'local' ? selectedConnectorRuntime?.label : undefined
+          }
+          serverUrl={createBuddyTarget === 'local' ? window.location.origin : undefined}
+          cloudRuntimeId={createBuddyTarget === 'cloud' ? selectedCloudRuntime?.id : undefined}
+          cloudRuntimeLabel={
+            createBuddyTarget === 'cloud' ? selectedCloudRuntime?.label : undefined
+          }
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+      <div
+        role="tablist"
+        aria-label={t('agentMgmt.createRunTarget')}
+        className="grid grid-cols-2 rounded-2xl border border-border-subtle bg-bg-deep/40 p-1"
+      >
+        {(['local', 'cloud'] as const).map((target) => {
+          const selected = createBuddyTarget === target
+          const Icon = target === 'cloud' ? Cloud : Terminal
+          return (
+            <button
+              key={target}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => {
+                setCreateBuddyTarget(target)
+                setConnectorSelectionConfirmed(false)
+              }}
+              className={cn(
+                'flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black transition',
+                selected
+                  ? 'bg-primary/15 text-primary shadow-sm'
+                  : 'text-text-muted hover:bg-bg-tertiary/60 hover:text-text-primary',
+              )}
+            >
+              <Icon size={16} />
+              <span>
+                {t(
+                  target === 'cloud'
+                    ? 'agentMgmt.createRunTargetCloud'
+                    : 'agentMgmt.createRunTargetLocal',
+                )}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {createBuddyTarget === 'local' ? (
+        <>
+          {connectorRuntimeOptions.length === 0 && (
+            <div className="rounded-2xl border border-border-subtle bg-bg-tertiary/40 px-4 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary">
+                  <Terminal size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-black text-text-primary">
+                    {t('agentMgmt.connectorDaemonTitle')}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4">
+                {connectorCommand ? (
+                  <ConfigCodeBlock content={connectorCommand} mode="single" t={t} />
+                ) : (
+                  <div className="rounded-2xl border border-border-subtle bg-bg-deep/40 px-4 py-3 text-xs leading-5 text-text-muted">
+                    {t('agentMgmt.connectorCreating')}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {connectorRuntimeOptions.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+                  {t('agentMgmt.connectorRuntime')}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
+                  }
+                  disabled={isConnectorFetching}
+                >
+                  <RefreshCw size={14} className={cn(isConnectorFetching && 'animate-spin')} />
+                  {t('common.refresh')}
+                </Button>
+              </div>
+              {connectorComputers.map((computer) => {
+                const runtimes = availableRuntimes(computer).sort(
+                  (a, b) => runtimeSortKey(a) - runtimeSortKey(b) || a.label.localeCompare(b.label),
+                )
+                if (runtimes.length === 0) return null
+                return (
+                  <div key={computer.id} className="space-y-2">
+                    <div className="text-xs font-black text-text-secondary">{computer.name}</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {runtimes.map((runtime) => {
+                        const optionKey = `${computer.id}:${runtime.id}`
+                        const selected = selectedConnectorRuntimeOption?.key === optionKey
+                        return (
+                          <button
+                            key={optionKey}
+                            type="button"
+                            onClick={() => {
+                              setSelectedConnectorComputerId(computer.id)
+                              setSelectedConnectorRuntimeId(runtime.id)
+                              setConnectorSelectionConfirmed(false)
+                            }}
+                            className={cn(
+                              'rounded-2xl border px-4 py-3 text-left transition',
+                              selected
+                                ? 'border-primary/50 bg-primary/10'
+                                : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
+                                <RuntimeIcon
+                                  runtimeId={runtime.id}
+                                  label={runtime.label}
+                                  className="h-5 w-5"
+                                />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-black text-text-primary">
+                                  {runtime.label}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs text-text-muted">
+                                  {runtime.version ?? runtime.command ?? runtime.id}
+                                </span>
+                              </span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="space-y-3">
+          <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+            {t('agentMgmt.cloudRuntime')}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {CLOUD_BUDDY_RUNTIME_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => {
+                  setSelectedCloudRuntimeId(option.id)
+                  setConnectorSelectionConfirmed(false)
+                }}
+                className={cn(
+                  'rounded-2xl border px-4 py-3 text-left transition',
+                  selectedCloudRuntime?.id === option.id
+                    ? 'border-primary/50 bg-primary/10'
+                    : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
+                    <RuntimeIcon runtimeId={option.id} label={option.label} className="h-6 w-6" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-black text-text-primary">
+                      {option.label}
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-5 text-text-muted">
+                      {t(option.descriptionKey)}
+                    </span>
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {t('common.cancel')}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => setConnectorSelectionConfirmed(true)}
+          disabled={!canContinue}
+        >
+          {t('agentMgmt.connectorContinue')}
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 export function MyBuddySettingsContent({
@@ -430,6 +862,26 @@ export function BuddyManagementContent({
     showMsg(t('agentMgmt.tokenCopied'), true)
   }
 
+  const openBuddyDm = async (agent: Agent) => {
+    const userId = agent.botUser?.id ?? agent.userId
+    try {
+      const data = await fetchApi<{ id: string }>('/api/channels/dm', {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      })
+      await new Promise((resolve) => window.setTimeout(resolve, 800))
+      await fetchApi(`/api/channels/${data.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content: getBuddyIntroPrompt(t) }),
+      }).catch(() => null)
+      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+      queryClient.invalidateQueries({ queryKey: ['messages', data.id] })
+      navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: data.id } })
+    } catch (error) {
+      showToast((error as Error).message || t('agentMgmt.createFailed'), 'error')
+    }
+  }
+
   // Main full-height split layout
   return (
     <>
@@ -631,17 +1083,15 @@ export function BuddyManagementContent({
           {effectiveSection === 'market' ? (
             <BuddyRentalsPanel />
           ) : showCreateMode ? (
-            <CreateAgentDialog
+            <CreateBuddyFlowPanel
               onClose={() => onSectionChange('buddies')}
               onSuccess={(agent) => {
                 queryClient.invalidateQueries({ queryKey: ['agents'] })
-                navigateBuddyView({ section: 'buddies', view: 'detail', agentId: agent.id })
                 showMsg(t('agentMgmt.createSuccess'), true)
+                void openBuddyDm(agent)
               }}
               onError={(message) => showMsg(message || t('agentMgmt.createFailed'), false)}
               t={t}
-              embedded
-              initialData={{}}
             />
           ) : isDetailMode ? (
             <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">

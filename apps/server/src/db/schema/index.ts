@@ -41,6 +41,12 @@ export {
   featureFlags,
 } from './config-management'
 export {
+  type ConnectorRuntimeInfo,
+  type ConnectorRuntimeStatus,
+  connectorComputers,
+  connectorJobs,
+} from './connector'
+export {
   commerceFulfillmentRecordStatusEnum,
   commerceFulfillmentRecords,
   communityAssetDefinitionStatusEnum,
