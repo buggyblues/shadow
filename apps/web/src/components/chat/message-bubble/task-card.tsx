@@ -195,7 +195,7 @@ function InfoItem({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0 rounded-lg border border-border-subtle/70 bg-bg-primary/24 px-3 py-2.5">
       <div className="text-[11px] font-bold uppercase text-text-muted">{label}</div>
-      <div className="mt-1 min-w-0 truncate text-sm font-black text-text-primary">{children}</div>
+      <div className="mt-1 min-w-0 text-sm font-black leading-5 text-text-primary">{children}</div>
     </div>
   )
 }
@@ -347,20 +347,20 @@ function TaskCardView({
 
         <div className="border-t border-border-subtle/70" />
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2">
           <InfoItem label={t('inbox.task.assignee')}>
             {assigneeLink ? (
               <a
                 href={assigneeLink}
-                className="inline-flex max-w-full items-center gap-1 rounded-md text-text-primary transition hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
+                className="inline-flex max-w-full items-start gap-1 rounded-md text-text-primary transition hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
               >
-                <Bot size={14} className="shrink-0" />
-                <span className="truncate">{assigneeLabel}</span>
+                <Bot size={14} className="mt-0.5 shrink-0" />
+                <span className="line-clamp-2 min-w-0 break-words">{assigneeLabel}</span>
               </a>
             ) : (
-              <span className="inline-flex max-w-full items-center gap-1">
-                <Bot size={14} className="shrink-0 text-text-muted" />
-                <span className="truncate">{assigneeLabel}</span>
+              <span className="inline-flex max-w-full items-start gap-1">
+                <Bot size={14} className="mt-0.5 shrink-0 text-text-muted" />
+                <span className="line-clamp-2 min-w-0 break-words">{assigneeLabel}</span>
               </span>
             )}
           </InfoItem>
@@ -371,15 +371,15 @@ function TaskCardView({
                   href={sourceLink}
                   target={sourceLink.startsWith('http') ? '_blank' : undefined}
                   rel={sourceLink.startsWith('http') ? 'noopener noreferrer' : undefined}
-                  className="inline-flex max-w-full items-center gap-1 rounded-md text-primary transition hover:underline focus:outline-none focus:ring-2 focus:ring-primary/35"
+                  className="inline-flex max-w-full items-start gap-1 rounded-md text-primary transition hover:underline focus:outline-none focus:ring-2 focus:ring-primary/35"
                 >
-                  <AppWindow size={14} className="shrink-0" />
-                  <span className="truncate">{source.label}</span>
+                  <AppWindow size={14} className="mt-0.5 shrink-0" />
+                  <span className="line-clamp-2 min-w-0 break-words">{source.label}</span>
                 </a>
               ) : (
-                <span className="inline-flex max-w-full items-center gap-1">
-                  <AppWindow size={14} className="shrink-0 text-text-muted" />
-                  <span className="truncate">{source.label}</span>
+                <span className="inline-flex max-w-full items-start gap-1">
+                  <AppWindow size={14} className="mt-0.5 shrink-0 text-text-muted" />
+                  <span className="line-clamp-2 min-w-0 break-words">{source.label}</span>
                 </span>
               )
             ) : (
@@ -387,9 +387,11 @@ function TaskCardView({
             )}
           </InfoItem>
           <InfoItem label={t('inbox.task.createdAt')}>
-            <span className="inline-flex max-w-full items-center gap-1">
-              <CalendarClock size={14} className="shrink-0 text-text-muted" />
-              <span className="truncate">{createdAt ?? t('common.unknown')}</span>
+            <span className="inline-flex max-w-full items-start gap-1">
+              <CalendarClock size={14} className="mt-0.5 shrink-0 text-text-muted" />
+              <span className="line-clamp-2 min-w-0 break-words">
+                {createdAt ?? t('common.unknown')}
+              </span>
             </span>
           </InfoItem>
           <InfoItem label={t('inbox.task.statusLabel')}>{statusLabel}</InfoItem>

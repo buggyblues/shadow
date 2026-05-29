@@ -415,6 +415,11 @@ export class DeployService {
             for (const e of provisionResults.errors) {
               this.logger.warn(`Plugin provision error (${e.pluginId}): ${e.error}`)
             }
+            throw new Error(
+              `Plugin provisioning failed: ${provisionResults.errors
+                .map((e) => `${e.pluginId}: ${e.error}`)
+                .join('; ')}`,
+            )
           }
           // Merge provisioned secrets into agent env
           if (Object.keys(provisionResults.secrets).length > 0) {
@@ -444,8 +449,10 @@ export class DeployService {
             await options.onProvisionState?.(merged)
           }
         }
-      } catch {
-        // Plugin provisioning is optional — continue if plugin system unavailable
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        this.logger.warn(`Plugin provisioning failed; aborting deploy: ${message}`)
+        throw err
       }
     }
 

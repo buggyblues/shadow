@@ -1,0 +1,10 @@
+FC / NES 8-bit pixel art animation sprite sheet for a top-down tank battle game.
+Exact orthographic top-down view, not isometric, not 3/4, no perspective tilt.
+Crisp hard-edged pixel art, no antialiasing look, limited 1980s console palette, strong black 1-pixel outlines.
+Compose as a clean 4 columns by 4 rows sheet with equal square cells, no text, no labels, no UI.
+Solid #FF00FF magenta background in all empty space.
+Row 1: tall grass tile sway animation frames 1-4, same patch of grass bending left, center, right, center, tile fills the cell.
+Row 2: golden star pickup sparkle animation frames 1-4, same star pulsing and rotating subtly, centered.
+Row 3: red player tank top-down directional sprites, up, right, down, left; exact overhead view with turret/barrel pointing direction, centered, readable at 32 px.
+Row 4: blue enemy tank top-down directional sprites, up, right, down, left; exact overhead view with turret/barrel pointing direction, centered, readable at 32 px.
+Keep every frame inside central 70 percent safe area except grass may fill tile edges, consistent scale within each row.

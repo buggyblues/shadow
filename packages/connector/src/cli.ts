@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { arch, homedir, hostname, platform } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseToml } from 'smol-toml'
@@ -16,10 +16,11 @@ import {
 import { createConnectorPlan, type ShadowConnectorTarget } from './index.js'
 
 interface CliOptions {
-  command: 'plan' | 'connect' | 'update' | 'doctor' | 'fix' | 'status' | 'scan'
+  command: 'plan' | 'connect' | 'update' | 'doctor' | 'fix' | 'status' | 'scan' | 'daemon'
   target?: ShadowConnectorTarget
   serverUrl: string
   token: string
+  apiKey?: string
   openclawConfig?: string
   hermesHome?: string
   workDir?: string
@@ -30,15 +31,18 @@ interface CliOptions {
   install: boolean
   start: boolean
   dryRun: boolean
+  once: boolean
+  pollIntervalMs: number
 }
 
 const TARGETS = new Set(['openclaw', 'hermes', 'cc-connect'])
-const COMMANDS = new Set(['plan', 'connect', 'update', 'doctor', 'fix', 'status', 'scan'])
+const COMMANDS = new Set(['plan', 'connect', 'update', 'doctor', 'fix', 'status', 'scan', 'daemon'])
 const ALL_TARGETS = ['openclaw', 'hermes', 'cc-connect'] as const
 const SHADOW_CLI_PACKAGE = '@shadowob/cli@latest'
 const SHADOW_CONNECTOR_PACKAGE = '@shadowob/connector@latest'
 const DEFAULT_OPENCLAW_CONFIG = '~/.openclaw/openclaw.json'
 const LEGACY_OPENCLAW_CONFIG = '~/.shadowob/openclaw.json'
+const DEFAULT_DAEMON_POLL_INTERVAL_MS = 5_000
 
 function readOption(args: string[], name: string): string | undefined {
   const prefix = `${name}=`
@@ -61,11 +65,14 @@ function usage(): string {
     '  shadowob-connector update --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
     '  shadowob-connector fix --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
     '  shadowob-connector scan [--target <openclaw|hermes|cc-connect>] [--server-url <url>] [--token <token>]',
+    '  shadowob-connector --daemon --server-url <url> --api-key <machine-key>',
+    '  shadowob-connector daemon --server-url <url> --api-key <machine-key>',
     '  shadowob-connector doctor [--target <openclaw|hermes|cc-connect>]',
     '  shadowob-connector status [--target <openclaw|hermes|cc-connect>]',
     '',
     'Options:',
     '  --server-url <url>      Shadow server URL, default https://shadowob.com',
+    '  --api-key <key>         Connector daemon machine key',
     '  --openclaw-config <path> OpenClaw JSON config, default $OPENCLAW_CONFIG or ~/.openclaw/openclaw.json',
     '  --hermes-home <path>    Hermes config directory, default $HERMES_HOME or ~/.hermes',
     '  --work-dir <path>       cc-connect project work directory',
@@ -77,6 +84,8 @@ function usage(): string {
     '  --no-install            Skip connector runtime dependency installation',
     '  --start                 Start Hermes gateway or cc-connect after setup',
     '  --dry-run               Show what would be applied without changing files',
+    '  --once                  Daemon mode: heartbeat, process one job batch, then exit',
+    '  --poll-interval-ms <n>  Daemon mode polling interval, default 5000',
   ].join('\n')
 }
 
@@ -93,14 +102,24 @@ function parseArgs(args: string[]): CliOptions {
 
   const commandArg = args[0]
   const hasCommand = commandArg ? COMMANDS.has(commandArg) : false
-  const command = hasCommand ? (commandArg as CliOptions['command']) : 'plan'
+  const command = hasFlag(args, '--daemon')
+    ? 'daemon'
+    : hasCommand
+      ? (commandArg as CliOptions['command'])
+      : 'plan'
   const optionArgs = hasCommand ? args.slice(1) : args
 
   const target = readOption(optionArgs, '--target') as ShadowConnectorTarget | undefined
   if (target && !TARGETS.has(target)) {
     throw new Error('Missing or invalid --target')
   }
-  if (!target && command !== 'doctor' && command !== 'status' && command !== 'scan') {
+  if (
+    !target &&
+    command !== 'doctor' &&
+    command !== 'status' &&
+    command !== 'scan' &&
+    command !== 'daemon'
+  ) {
     throw new Error('Missing or invalid --target')
   }
   const install =
@@ -115,6 +134,7 @@ function parseArgs(args: string[]): CliOptions {
     target,
     serverUrl: readOption(optionArgs, '--server-url') ?? 'https://shadowob.com',
     token: readOption(optionArgs, '--token') ?? '',
+    apiKey: readOption(optionArgs, '--api-key'),
     openclawConfig: readOption(optionArgs, '--openclaw-config'),
     hermesHome: readOption(optionArgs, '--hermes-home'),
     workDir: readOption(optionArgs, '--work-dir'),
@@ -125,6 +145,10 @@ function parseArgs(args: string[]): CliOptions {
     install,
     start: hasFlag(optionArgs, '--start'),
     dryRun: hasFlag(optionArgs, '--dry-run'),
+    once: hasFlag(optionArgs, '--once'),
+    pollIntervalMs:
+      Number.parseInt(readOption(optionArgs, '--poll-interval-ms') ?? '', 10) ||
+      DEFAULT_DAEMON_POLL_INTERVAL_MS,
   }
 }
 
@@ -889,6 +913,251 @@ function printScan(options: CliOptions): void {
   }
 }
 
+type ConnectorRuntimeKind = 'openclaw' | 'cli'
+
+interface DaemonRuntime {
+  id: string
+  label: string
+  kind: ConnectorRuntimeKind
+  status: 'available' | 'missing'
+  version?: string | null
+  command?: string | null
+  detectedAt: string
+}
+
+interface DaemonJob {
+  id: string
+  type: 'configure-buddy' | string
+  agentId?: string | null
+  payload: {
+    serverUrl: string
+    token: string
+    runtimeId: string
+    projectName?: string
+    workDir?: string
+    buddy?: { id?: string; username?: string; displayName?: string | null }
+  }
+}
+
+function packageVersion(): string {
+  try {
+    const json = JSON.parse(readFileSync(resolve(packageRoot(), 'package.json'), 'utf8')) as {
+      version?: string
+    }
+    return json.version ?? 'dev'
+  } catch {
+    return 'dev'
+  }
+}
+
+function commandVersion(command: string): { ok: boolean; version?: string | null } {
+  const result = spawnSync(command, ['--version'], { encoding: 'utf8' })
+  if (result.status !== 0) return { ok: false }
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
+  return { ok: true, version: output.split(/\r?\n/)[0]?.slice(0, 120) || null }
+}
+
+function detectRuntime(input: {
+  id: string
+  label: string
+  kind: ConnectorRuntimeKind
+  command: string
+}): DaemonRuntime {
+  const version = commandVersion(input.command)
+  return {
+    id: input.id,
+    label: input.label,
+    kind: input.kind,
+    status: version.ok ? 'available' : 'missing',
+    version: version.version ?? null,
+    command: input.command,
+    detectedAt: new Date().toISOString(),
+  }
+}
+
+function scanDaemonRuntimes(): DaemonRuntime[] {
+  return [
+    detectRuntime({ id: 'openclaw', label: 'OpenClaw', kind: 'openclaw', command: 'openclaw' }),
+    detectRuntime({ id: 'claude-code', label: 'Claude Code', kind: 'cli', command: 'claude' }),
+    detectRuntime({ id: 'codex', label: 'Codex CLI', kind: 'cli', command: 'codex' }),
+    detectRuntime({ id: 'opencode', label: 'OpenCode', kind: 'cli', command: 'opencode' }),
+    detectRuntime({ id: 'gemini', label: 'Gemini CLI', kind: 'cli', command: 'gemini' }),
+    detectRuntime({ id: 'cursor', label: 'Cursor CLI', kind: 'cli', command: 'cursor' }),
+    detectRuntime({ id: 'kimi', label: 'Kimi CLI', kind: 'cli', command: 'kimi' }),
+    detectRuntime({ id: 'copilot', label: 'Copilot CLI', kind: 'cli', command: 'copilot' }),
+    detectRuntime({
+      id: 'antigravity',
+      label: 'Antigravity CLI',
+      kind: 'cli',
+      command: 'antigravity',
+    }),
+  ]
+}
+
+function daemonHeaders(options: CliOptions): Record<string, string> {
+  if (!options.apiKey?.trim()) throw new Error('Missing --api-key for daemon mode')
+  return {
+    Authorization: `Bearer ${options.apiKey.trim()}`,
+    'Content-Type': 'application/json',
+  }
+}
+
+function apiUrl(options: CliOptions, path: string): string {
+  return `${normalizeServerUrl(options.serverUrl)}${path}`
+}
+
+async function apiJson<T>(options: CliOptions, path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(apiUrl(options, path), {
+    ...init,
+    headers: {
+      ...daemonHeaders(options),
+      ...(init?.headers ?? {}),
+    },
+  })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Daemon API ${path} failed (${response.status}): ${body}`)
+  }
+  return response.json() as Promise<T>
+}
+
+async function heartbeat(options: CliOptions): Promise<void> {
+  const runtimes = scanDaemonRuntimes()
+  const available = runtimes.filter((runtime) => runtime.status === 'available')
+  await apiJson(options, '/api/connector/daemon/heartbeat', {
+    method: 'POST',
+    body: JSON.stringify({
+      hostname: hostname(),
+      os: platform(),
+      arch: arch(),
+      daemonVersion: packageVersion(),
+      runtimes,
+    }),
+  })
+  console.log(`[daemon] heartbeat sent (${available.length}/${runtimes.length} runtimes available)`)
+}
+
+function ccAgentTypeForRuntime(runtimeId: string): string {
+  const map: Record<string, string> = {
+    'claude-code': 'claudecode',
+    codex: 'codex',
+    opencode: 'opencode',
+    gemini: 'gemini',
+    cursor: 'cursor',
+    kimi: 'kimi',
+    copilot: 'copilot',
+    antigravity: 'antigravity',
+  }
+  return map[runtimeId] ?? runtimeId
+}
+
+function startDetached(binaryPath: string, dryRun: boolean): void {
+  if (dryRun) {
+    console.log(`[dry-run] start detached ${binaryPath}`)
+    return
+  }
+  const child = spawn(binaryPath, [], {
+    detached: true,
+    stdio: 'ignore',
+  })
+  child.unref()
+}
+
+async function applyDaemonJob(
+  job: DaemonJob,
+  baseOptions: CliOptions,
+): Promise<Record<string, unknown>> {
+  if (job.type !== 'configure-buddy') {
+    throw new Error(`Unsupported daemon job type: ${job.type}`)
+  }
+
+  const payload = job.payload
+  const runtimeId = payload.runtimeId
+  const projectName = payload.projectName?.trim() || payload.buddy?.username || 'shadow-buddy'
+  const workDir = payload.workDir?.trim() || '.'
+
+  if (runtimeId === 'openclaw') {
+    applyOpenClaw(
+      {
+        ...baseOptions,
+        target: 'openclaw',
+        serverUrl: payload.serverUrl,
+        token: payload.token,
+        projectName,
+        workDir,
+        install: true,
+      },
+      { restart: true },
+    )
+    return { runtimeId, target: 'openclaw' }
+  }
+
+  await applyCcConnect({
+    ...baseOptions,
+    target: 'cc-connect',
+    serverUrl: payload.serverUrl,
+    token: payload.token,
+    projectName,
+    workDir,
+    agentType: ccAgentTypeForRuntime(runtimeId),
+    install: true,
+    start: false,
+  })
+  const installed = await ensureCcConnectFork({
+    dryRun: baseOptions.dryRun,
+    log: (message) => console.log(message),
+  })
+  startDetached(installed.binaryPath ?? 'cc-connect', baseOptions.dryRun)
+  return { runtimeId, target: 'cc-connect', agentType: ccAgentTypeForRuntime(runtimeId) }
+}
+
+async function pollJobs(options: CliOptions): Promise<void> {
+  const response = await apiJson<{ jobs: DaemonJob[] }>(options, '/api/connector/daemon/jobs')
+  if (response.jobs.length === 0) return
+
+  for (const job of response.jobs) {
+    try {
+      console.log(`[daemon] running job ${job.id} (${job.type})`)
+      const result = await applyDaemonJob(job, options)
+      await apiJson(options, `/api/connector/daemon/jobs/${job.id}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ status: 'completed', result }),
+      })
+      console.log(`[daemon] completed job ${job.id}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await apiJson(options, `/api/connector/daemon/jobs/${job.id}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ status: 'failed', error: message }),
+      }).catch(() => {})
+      console.error(`[daemon] failed job ${job.id}: ${message}`)
+    }
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
+}
+
+async function runDaemon(options: CliOptions): Promise<void> {
+  if (!options.apiKey?.trim()) throw new Error('Missing --api-key for daemon mode')
+  let stopped = false
+  const stop = () => {
+    stopped = true
+  }
+  process.once('SIGINT', stop)
+  process.once('SIGTERM', stop)
+
+  console.log(`[daemon] connecting to ${normalizeServerUrl(options.serverUrl)}`)
+  do {
+    await heartbeat(options)
+    await pollJobs(options)
+    if (options.once) break
+    await delay(Math.max(1000, options.pollIntervalMs))
+  } while (!stopped)
+  console.log('[daemon] stopped')
+}
+
 function hermesPluginSource(): string {
   const candidates = [
     resolve(packageRoot(), 'hermes-shadowob-plugin'),
@@ -1038,7 +1307,9 @@ async function repair(options: CliOptions, mode: 'fix' | 'update'): Promise<void
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2))
-  if (options.command === 'connect') {
+  if (options.command === 'daemon') {
+    await runDaemon(options)
+  } else if (options.command === 'connect') {
     await connect(options)
   } else if (options.command === 'fix' || options.command === 'update') {
     await repair(options, options.command)

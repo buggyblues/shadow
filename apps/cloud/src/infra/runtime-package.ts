@@ -1,5 +1,6 @@
 import {
   collectPluginBuildEnvVars,
+  collectPluginRuntimeEnvOmitKeys,
   collectPluginRuntimeExtensions,
 } from '../config/openclaw-builder.js'
 import type { AgentDeployment, CloudConfig, OpenClawConfig } from '../config/schema.js'
@@ -95,6 +96,10 @@ function classifyEnv(
   return { plainEnv, secretData }
 }
 
+function omitEnvKeys(env: Record<string, string>, keys: Set<string>): void {
+  for (const key of keys) delete env[key]
+}
+
 function runtimePackageEnvDefaults(options: {
   runtimeKind: RuntimeKind
   hasExtensions: boolean
@@ -133,6 +138,7 @@ export function buildAgentRuntimePackage(options: {
     ...(agent.env ?? {}),
     ...(extraEnv ?? {}),
   }
+  const runtimeEnvOmitKeys = collectPluginRuntimeEnvOmitKeys(agent, config, cwd, runtimeEnv)
   const runtimeExtensions = collectPluginRuntimeExtensions(agent, config, cwd, runtimeEnv)
 
   const mergedEnv: Record<string, string> = {
@@ -162,6 +168,7 @@ export function buildAgentRuntimePackage(options: {
   if (runtimeArtifacts.provisionSecrets) {
     Object.assign(mergedEnv, runtimeArtifacts.provisionSecrets)
   }
+  omitEnvKeys(mergedEnv, runtimeEnvOmitKeys)
 
   const { plainEnv, secretData } = classifyEnv(registrySecretEnv, mergedEnv)
 

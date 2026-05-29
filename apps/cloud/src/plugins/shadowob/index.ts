@@ -34,6 +34,21 @@ interface ShadowBinding {
   }
 }
 
+interface ShadowGreetingMessage {
+  id?: string
+  channelId?: string
+  buddyId?: string
+  content: string
+}
+
+interface ShadowGreetingConfig {
+  entryChannelId?: string
+  messages?: ShadowGreetingMessage[]
+  channelId?: string
+  buddyId?: string
+  content?: string
+}
+
 interface ShadowServerApp {
   id: string
   serverId: string
@@ -58,6 +73,7 @@ interface ShadowRoutineDeliveryBinding {
 interface ShadowobPluginConfig {
   buddies?: ShadowBuddy[]
   bindings?: ShadowBinding[]
+  greeting?: ShadowGreetingConfig
   servers?: Array<{ id: string; name?: string; channels?: Array<{ id: string }> }>
   serverApps?: ShadowServerApp[]
   routines?: ShadowRoutineDeliveryBinding[]
@@ -315,6 +331,19 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
   }
 }
 
+function normalizeGreetingMessages(greeting: ShadowGreetingConfig | undefined) {
+  if (!greeting) return []
+  const messages = Array.isArray(greeting.messages) ? [...greeting.messages] : []
+  if (typeof greeting.content === 'string') {
+    messages.unshift({
+      ...(greeting.channelId ? { channelId: greeting.channelId } : {}),
+      ...(greeting.buddyId ? { buddyId: greeting.buddyId } : {}),
+      content: greeting.content,
+    })
+  }
+  return messages
+}
+
 export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig, (api) => {
   api.onBuildPrompt(() => SHADOWOB_CLI_SKILL_INTRO)
 
@@ -426,6 +455,40 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
         errors.push({
           path: `bindings.${binding.targetId}`,
           message: `Binding references non-existent buddy "${binding.targetId}"`,
+          severity: 'error',
+        })
+      }
+    }
+    const greetingMessages = normalizeGreetingMessages(shadowConfig.greeting)
+    if (
+      shadowConfig.greeting?.entryChannelId &&
+      !channelIds.has(shadowConfig.greeting.entryChannelId)
+    ) {
+      errors.push({
+        path: 'greeting.entryChannelId',
+        message: `Greeting entry channel references non-existent channel "${shadowConfig.greeting.entryChannelId}"`,
+        severity: 'error',
+      })
+    }
+    for (const [index, message] of greetingMessages.entries()) {
+      if (message.channelId && !channelIds.has(message.channelId)) {
+        errors.push({
+          path: `greeting.messages.${index}.channelId`,
+          message: `Greeting message references non-existent channel "${message.channelId}"`,
+          severity: 'error',
+        })
+      }
+      if (message.buddyId && !buddyIds.has(message.buddyId)) {
+        errors.push({
+          path: `greeting.messages.${index}.buddyId`,
+          message: `Greeting message references non-existent buddy "${message.buddyId}"`,
+          severity: 'error',
+        })
+      }
+      if (!message.content.trim()) {
+        errors.push({
+          path: `greeting.messages.${index}.content`,
+          message: 'Greeting message content is required',
           severity: 'error',
         })
       }

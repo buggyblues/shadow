@@ -43,11 +43,14 @@ import { ImageViewer } from './image-viewer'
 interface MessageInputProps {
   channelId: string
   channelName?: string
+  threadId?: string | null
+  threadName?: string
   replyToId?: string | null
   onClearReply?: () => void
   externalFiles?: File[]
   onExternalFilesConsumed?: () => void
   enableTaskCards?: boolean
+  onMessageSent?: (message: Record<string, unknown>) => void
 }
 
 interface PendingFile {
@@ -172,11 +175,14 @@ function taskDraftToInput(value: string): { title: string; body?: string } {
 export function MessageInput({
   channelId,
   channelName,
+  threadId = null,
+  threadName,
   replyToId,
   onClearReply,
   externalFiles,
   onExternalFilesConsumed,
   enableTaskCards = false,
+  onMessageSent,
 }: MessageInputProps) {
   const { t } = useTranslation()
   const { activeServerId } = useChatStore()
@@ -211,12 +217,13 @@ export function MessageInput({
   }, [])
 
   const composerChannelName = channelName ?? t('chat.channelFallback')
-  const composerPlaceholder = t(
-    useCompactPlaceholder ? 'chat.inputPlaceholderCompact' : 'chat.inputPlaceholder',
-    {
-      channelName: composerChannelName,
-    },
-  )
+  const composerPlaceholder = threadId
+    ? t('chat.threadInputPlaceholder', {
+        threadName: threadName ?? t('chat.thread'),
+      })
+    : t(useCompactPlaceholder ? 'chat.inputPlaceholderCompact' : 'chat.inputPlaceholder', {
+        channelName: composerChannelName,
+      })
 
   const focusComposer = useCallback(() => {
     const textarea = textareaRef.current
@@ -238,7 +245,8 @@ export function MessageInput({
   }, [channelId, focusComposer])
 
   // Draft storage for persistent input
-  const { scheduleSave, clear: clearDraft } = useDraftStorage(channelId, (savedText) => {
+  const draftScopeId = threadId ? `thread:${threadId}` : channelId
+  const { scheduleSave, clear: clearDraft } = useDraftStorage(draftScopeId, (savedText) => {
     setContent(savedText)
     // Auto-resize textarea after restoring content
     requestAnimationFrame(() => {
@@ -567,6 +575,7 @@ export function MessageInput({
     const currentUser = useAuthStore.getState().user
     const tempId = `temp-${Date.now()}`
     type MessagesPage = { messages: Record<string, unknown>[]; hasMore: boolean }
+    const threadMessagesKey = threadId ? (['thread-messages', threadId] as const) : null
 
     if ((text || selectedCommerceCards.length > 0) && pendingFiles.length === 0) {
       const optimisticMsg = {
@@ -574,7 +583,7 @@ export function MessageInput({
         content: text || '\u200B',
         channelId,
         authorId: currentUser?.id ?? '',
-        threadId: null,
+        threadId: threadId ?? null,
         replyToId: replyToId ?? null,
         isEdited: false,
         isPinned: false,
@@ -593,16 +602,23 @@ export function MessageInput({
         sendStatus: 'sending' as const,
       }
 
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
-        if (!old || old.pages.length === 0) return old
-        const pages = [...old.pages]
-        const firstPage = pages[0]!
-        pages[0] = {
-          ...firstPage,
-          messages: [...firstPage.messages, optimisticMsg],
-        }
-        return { ...old, pages }
-      })
+      if (threadMessagesKey) {
+        queryClient.setQueryData<Record<string, unknown>[]>(threadMessagesKey, (old) => [
+          ...(old ?? []),
+          optimisticMsg,
+        ])
+      } else {
+        queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
+          if (!old || old.pages.length === 0) return old
+          const pages = [...old.pages]
+          const firstPage = pages[0]!
+          pages[0] = {
+            ...firstPage,
+            messages: [...firstPage.messages, optimisticMsg],
+          }
+          return { ...old, pages }
+        })
+      }
     }
 
     // Clear input immediately for responsiveness
@@ -662,81 +678,127 @@ export function MessageInput({
         }
 
         const contentToSend = savedContent || '\u200B'
-        await fetchApi(`/api/channels/${channelId}/messages`, {
-          method: 'POST',
-          body: JSON.stringify({
-            content: contentToSend,
-            ...(savedReplyTo ? { replyToId: savedReplyTo } : {}),
-            ...(savedMentions.length > 0 ? { mentions: savedMentions } : {}),
-            ...(savedMetadata ? { metadata: savedMetadata } : {}),
-            attachments: uploadedAttachments,
-          }),
-        })
-      } else if (savedContent || savedCommerceCards.length > 0) {
-        const sock = getSocket()
-        const contentToSend = savedContent || '\u200B'
-        if (sock.connected) {
-          sendWsMessage({
-            channelId,
-            content: contentToSend,
-            replyToId: savedReplyTo ?? undefined,
-            mentions: savedMentions,
-            metadata: savedMetadata,
-          })
-          // WS: message:new will replace the temp message via dedup in chat-area
-          // Set timeout to mark as failed if no confirmation
-          setTimeout(() => {
-            queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
-              if (!old) return old
-              const stillPending = old.pages.some((p) =>
-                p.messages.some(
-                  (m) =>
-                    (m as { id: string; sendStatus?: string }).id === tempId &&
-                    (m as { sendStatus?: string }).sendStatus === 'sending',
-                ),
-              )
-              if (stillPending) {
-                return {
-                  ...old,
-                  pages: old.pages.map((page) => ({
-                    ...page,
-                    messages: page.messages.map((m) =>
-                      (m as { id: string }).id === tempId ? { ...m, sendStatus: 'failed' } : m,
-                    ),
-                  })),
-                }
-              }
-              return old
-            })
-          }, 10000)
-        } else {
-          // Socket not connected — use REST fallback
-          await fetchApi(`/api/channels/${channelId}/messages`, {
+        const created = await fetchApi<Record<string, unknown>>(
+          threadId ? `/api/threads/${threadId}/messages` : `/api/channels/${channelId}/messages`,
+          {
             method: 'POST',
             body: JSON.stringify({
               content: contentToSend,
               ...(savedReplyTo ? { replyToId: savedReplyTo } : {}),
               ...(savedMentions.length > 0 ? { mentions: savedMentions } : {}),
               ...(savedMetadata ? { metadata: savedMetadata } : {}),
+              attachments: uploadedAttachments,
             }),
+          },
+        )
+        if (threadMessagesKey) {
+          queryClient.setQueryData<Record<string, unknown>[]>(threadMessagesKey, (old) => {
+            const messages = old ?? []
+            const withoutTemp = messages.filter((m) => m.id !== tempId)
+            if (withoutTemp.some((m) => m.id === created.id)) return withoutTemp
+            return [...withoutTemp, created]
           })
+          onMessageSent?.(created)
+        }
+      } else if (savedContent || savedCommerceCards.length > 0) {
+        const contentToSend = savedContent || '\u200B'
+        if (threadId && threadMessagesKey) {
+          const created = await fetchApi<Record<string, unknown>>(
+            `/api/threads/${threadId}/messages`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                content: contentToSend,
+                ...(savedReplyTo ? { replyToId: savedReplyTo } : {}),
+                ...(savedMentions.length > 0 ? { mentions: savedMentions } : {}),
+                ...(savedMetadata ? { metadata: savedMetadata } : {}),
+              }),
+            },
+          )
+          queryClient.setQueryData<Record<string, unknown>[]>(threadMessagesKey, (old) => {
+            const messages = old ?? []
+            const withoutTemp = messages.filter((m) => m.id !== tempId)
+            if (withoutTemp.some((m) => m.id === created.id)) return withoutTemp
+            const replaced = messages.map((m) => (m.id === tempId ? created : m))
+            return replaced.some((m) => m.id === created.id) ? replaced : [...replaced, created]
+          })
+          onMessageSent?.(created)
+        } else {
+          const sock = getSocket()
+          if (sock.connected) {
+            sendWsMessage({
+              channelId,
+              content: contentToSend,
+              replyToId: savedReplyTo ?? undefined,
+              mentions: savedMentions,
+              metadata: savedMetadata,
+            })
+            // WS: message:new will replace the temp message via dedup in chat-area
+            // Set timeout to mark as failed if no confirmation
+            setTimeout(() => {
+              queryClient.setQueryData<InfiniteData<MessagesPage>>(
+                ['messages', channelId],
+                (old) => {
+                  if (!old) return old
+                  const stillPending = old.pages.some((p) =>
+                    p.messages.some(
+                      (m) =>
+                        (m as { id: string; sendStatus?: string }).id === tempId &&
+                        (m as { sendStatus?: string }).sendStatus === 'sending',
+                    ),
+                  )
+                  if (stillPending) {
+                    return {
+                      ...old,
+                      pages: old.pages.map((page) => ({
+                        ...page,
+                        messages: page.messages.map((m) =>
+                          (m as { id: string }).id === tempId ? { ...m, sendStatus: 'failed' } : m,
+                        ),
+                      })),
+                    }
+                  }
+                  return old
+                },
+              )
+            }, 10000)
+          } else {
+            // Socket not connected — use REST fallback
+            await fetchApi(`/api/channels/${channelId}/messages`, {
+              method: 'POST',
+              body: JSON.stringify({
+                content: contentToSend,
+                ...(savedReplyTo ? { replyToId: savedReplyTo } : {}),
+                ...(savedMentions.length > 0 ? { mentions: savedMentions } : {}),
+                ...(savedMetadata ? { metadata: savedMetadata } : {}),
+              }),
+            })
+          }
         }
       }
     } catch (err) {
       console.error('Failed to send message:', err)
       // Mark optimistic message as failed
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          pages: old.pages.map((page) => ({
-            ...page,
-            messages: page.messages.map((m) =>
-              (m as { id: string }).id === tempId ? { ...m, sendStatus: 'failed' } : m,
-            ),
-          })),
-        }
-      })
+      if (threadMessagesKey) {
+        queryClient.setQueryData<Record<string, unknown>[]>(threadMessagesKey, (old) =>
+          (old ?? []).map((m) =>
+            (m as { id: string }).id === tempId ? { ...m, sendStatus: 'failed' } : m,
+          ),
+        )
+      } else {
+        queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) =>
+                (m as { id: string }).id === tempId ? { ...m, sendStatus: 'failed' } : m,
+              ),
+            })),
+          }
+        })
+      }
     } finally {
       setUploading(false)
     }
@@ -748,8 +810,10 @@ export function MessageInput({
     selectedMentions,
     selectedCommerceCards,
     onClearReply,
+    onMessageSent,
     queryClient,
     clearDraft,
+    threadId,
   ])
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -916,7 +980,7 @@ export function MessageInput({
     }
 
     // Typing indicator (heartbeat: send every 2s while typing)
-    if (!typingTimerRef.current) {
+    if (!threadId && !typingTimerRef.current) {
       sendTyping(channelId)
       typingTimerRef.current = setTimeout(() => {
         typingTimerRef.current = null
@@ -1422,6 +1486,8 @@ export function MessageInput({
           size="icon"
           className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
           onClick={handleSend}
+          title={t('chat.sendMessage')}
+          aria-label={t('chat.sendMessage')}
           disabled={
             (!content.trim() && pendingFiles.length === 0 && selectedCommerceCards.length === 0) ||
             uploading

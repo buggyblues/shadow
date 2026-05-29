@@ -5,16 +5,31 @@ import type {
   Challenge,
   ChallengeDifficulty,
   CodeSubmission,
+  Recommendation,
+  RecommendationStrategy,
+  Report,
+  SkillLevel,
+  SkillState,
   SubmissionAnalysis,
   SubmissionCoachingFocus,
   SubmissionOutcome,
   SubmissionReviewFocus,
   SubmissionReviewRequest,
   SubmissionStatus,
+  Tip,
+  TrainerDifficultyMode,
   TrainerLanguage,
+  TrainerOverview,
   TrainerOwnerScope,
   TrainerPerson,
+  TrainerSettings,
   TrainerState,
+  TrainingList,
+  TrainingTask,
+  TrainingTaskStatus,
+  TrainingTaskType,
+  UnderstandingCheck,
+  WrongProblem,
 } from './types.js'
 
 const now = () => new Date().toISOString()
@@ -22,6 +37,34 @@ const id = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 
 const languages = new Set<TrainerLanguage>(['javascript', 'typescript', 'python'])
 
 const seedTimestamp = '2026-01-01T00:00:00.000Z'
+
+const skillCatalog: Record<string, { label: string; category: string; weakSignal: string }> = {
+  array: {
+    label: 'Array',
+    category: 'Data structure',
+    weakSignal: 'Index boundaries and traversal invariants need reinforcement.',
+  },
+  'hash-map': {
+    label: 'Hash Map',
+    category: 'Data structure',
+    weakSignal: 'Lookup key design or complement tracking is not yet stable.',
+  },
+  stack: {
+    label: 'Stack',
+    category: 'Data structure',
+    weakSignal: 'Push/pop invariants need more practice.',
+  },
+  string: {
+    label: 'String',
+    category: 'Data structure',
+    weakSignal: 'Character scanning and normalization need more coverage.',
+  },
+  sorting: {
+    label: 'Sorting',
+    category: 'Technique',
+    weakSignal: 'Ordering preconditions and post-sort scans need reinforcement.',
+  },
+}
 
 const seedChallenges: Challenge[] = [
   {
@@ -115,6 +158,70 @@ type SubmissionReviewerInput = {
   locale?: string
 }
 
+type TrainingListInput = {
+  id?: string
+  title: string
+  horizon?: TrainingList['horizon']
+  goal?: string
+  tasks?: Array<Partial<TrainingTask> & Pick<TrainingTask, 'title' | 'type' | 'reason'>>
+}
+
+type SkillStateInput = {
+  id: string
+  label?: string
+  category?: string
+  level?: SkillLevel
+  mastery?: number
+  attempts?: number
+  accepted?: number
+  weakSignals?: string[]
+}
+
+type RecommendationInput = {
+  kind?: Recommendation['kind']
+  challengeId: string
+  reason: string
+  priority?: number
+  strategy?: RecommendationStrategy
+  predictedAckRate?: number
+  appPath?: string
+}
+
+type TipInput = {
+  title: string
+  body: string
+  tags?: string[]
+}
+
+type CheckInput = {
+  challengeId?: string
+  question: string
+  choices: string[]
+  answerIndex: number
+  explanation: string
+  tags?: string[]
+}
+
+type ReportInput = {
+  period?: Report['period']
+  title: string
+  summary: string
+  signals?: string[]
+}
+
+type WrongProblemInput = {
+  challengeId: string
+  lastSubmissionId?: string
+  reason: string
+  nextReviewAt?: string
+}
+
+type TrainerSettingsInput = {
+  difficultyMode?: TrainerDifficultyMode
+  targetProblems?: number
+  deadlineAt?: string
+}
+
 type StoredPerson = Partial<TrainerPerson> & {
   profile?: {
     id?: string | null
@@ -134,7 +241,19 @@ type StoredSubmission = Omit<Partial<CodeSubmission>, 'status'> & {
 }
 
 function defaultState(): TrainerState {
-  return { updatedAt: now(), challenges: structuredClone(seedChallenges), submissions: [] }
+  return {
+    updatedAt: now(),
+    challenges: structuredClone(seedChallenges),
+    submissions: [],
+    skills: [],
+    trainingLists: [],
+    recommendations: [],
+    tips: [],
+    checks: [],
+    wrongProblems: [],
+    reports: [],
+    settings: [],
+  }
 }
 
 function dataFilePath() {
@@ -177,6 +296,43 @@ function normalizeTags(value: unknown) {
     .map((item) => text(item))
     .filter(Boolean)
     .slice(0, 12)
+}
+
+function normalizeTextList(value: unknown, limit = 12) {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => text(item))
+    .filter(Boolean)
+    .slice(0, limit)
+}
+
+function skillIdFromTag(tag: string) {
+  return slugify(tag).replace(/_/g, '-')
+}
+
+function displaySkillLabel(tag: string) {
+  const id = skillIdFromTag(tag)
+  return (
+    skillCatalog[id]?.label ??
+    tag
+      .split(/[-_\s]+/)
+      .filter(Boolean)
+      .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+      .join(' ')
+  )
+}
+
+function skillCategory(tag: string) {
+  return skillCatalog[skillIdFromTag(tag)]?.category ?? 'Algorithm skill'
+}
+
+function weakSignalForTag(tag: string) {
+  const id = skillIdFromTag(tag)
+  return skillCatalog[id]?.weakSignal ?? `${displaySkillLabel(tag)} needs more targeted practice.`
+}
+
+function uniqueText(values: string[], limit = 8) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].slice(0, limit)
 }
 
 function normalizeExamples(value: unknown) {
@@ -522,6 +678,240 @@ function normalizeSubmission(value: unknown): CodeSubmission | null {
   }
 }
 
+function normalizeSkillLevel(value: unknown): SkillLevel {
+  if (value === 'learning' || value === 'stable' || value === 'strong') return value
+  return 'new'
+}
+
+function normalizeTaskType(value: unknown): TrainingTaskType {
+  if (value === 'review' || value === 'check' || value === 'tip') return value
+  return 'problem'
+}
+
+function normalizeTaskStatus(value: unknown): TrainingTaskStatus {
+  if (value === 'doing' || value === 'done') return value
+  return 'todo'
+}
+
+function normalizeHorizon(value: unknown): TrainingList['horizon'] {
+  if (value === 'weekly' || value === 'stage') return value
+  return 'daily'
+}
+
+function normalizeRecommendationKind(value: unknown): Recommendation['kind'] {
+  if (value === 'wrong_variant' || value === 'review' || value === 'special_training') {
+    return value
+  }
+  return 'next_problem'
+}
+
+function normalizeRecommendationStrategy(value: unknown): RecommendationStrategy {
+  if (value === 'diversify' || value === 'review' || value === 'popular') return value
+  return 'reinforce'
+}
+
+function normalizeDifficultyMode(value: unknown): TrainerDifficultyMode {
+  if (value === 'easy' || value === 'hard' || value === 'hell') return value
+  return 'medium'
+}
+
+function normalizeReportPeriod(value: unknown): Report['period'] {
+  if (value === 'weekly' || value === 'stage') return value
+  return 'daily'
+}
+
+function normalizeSkill(value: unknown): SkillState | null {
+  if (!isRecord(value)) return null
+  const owner = normalizeOwnerScope(value.owner)
+  const skillId = text(value.id)
+  if (!owner || !skillId) return null
+  return {
+    id: skillIdFromTag(skillId),
+    owner,
+    label: text(value.label, displaySkillLabel(skillId)),
+    category: text(value.category, skillCategory(skillId)),
+    level: normalizeSkillLevel(value.level),
+    mastery: clampScore(value.mastery),
+    attempts: Math.max(0, Math.round(typeof value.attempts === 'number' ? value.attempts : 0)),
+    accepted: Math.max(0, Math.round(typeof value.accepted === 'number' ? value.accepted : 0)),
+    weakSignals: normalizeTextList(value.weakSignals, 8),
+    ...(text(value.lastPracticedAt) ? { lastPracticedAt: text(value.lastPracticedAt) } : {}),
+    updatedAt: text(value.updatedAt, now()),
+  }
+}
+
+function normalizeTrainingTask(value: unknown): TrainingTask | null {
+  if (!isRecord(value)) return null
+  const title = text(value.title)
+  const reason = text(value.reason)
+  if (!title || !reason) return null
+  return {
+    id: text(value.id, id('task')),
+    type: normalizeTaskType(value.type),
+    title,
+    status: normalizeTaskStatus(value.status),
+    ...(text(value.challengeId) ? { challengeId: text(value.challengeId) } : {}),
+    ...(text(value.challengeTitle) ? { challengeTitle: text(value.challengeTitle) } : {}),
+    reason,
+    ...(text(value.dueAt) ? { dueAt: text(value.dueAt) } : {}),
+  }
+}
+
+function normalizeTrainingList(value: unknown): TrainingList | null {
+  if (!isRecord(value)) return null
+  const owner = normalizeOwnerScope(value.owner)
+  const title = text(value.title)
+  if (!owner || !title) return null
+  return {
+    id: text(value.id, id('list')),
+    owner,
+    title,
+    horizon: normalizeHorizon(value.horizon),
+    goal: text(value.goal, 'Keep the current algorithm training loop moving.'),
+    tasks: Array.isArray(value.tasks)
+      ? value.tasks
+          .map((task) => normalizeTrainingTask(task))
+          .filter((task): task is TrainingTask => !!task)
+          .slice(0, 24)
+      : [],
+    updatedAt: text(value.updatedAt, now()),
+  }
+}
+
+function normalizeRecommendation(value: unknown): Recommendation | null {
+  if (!isRecord(value)) return null
+  const owner = normalizeOwnerScope(value.owner)
+  const challengeId = text(value.challengeId)
+  const challengeTitle = text(value.challengeTitle)
+  const reason = text(value.reason)
+  if (!owner || !challengeId || !challengeTitle || !reason) return null
+  return {
+    id: text(value.id, id('rec')),
+    owner,
+    kind: normalizeRecommendationKind(value.kind),
+    strategy: normalizeRecommendationStrategy(value.strategy),
+    challengeId,
+    challengeTitle,
+    difficulty: normalizeDifficulty(value.difficulty),
+    tags: normalizeTags(value.tags),
+    reason,
+    priority: Math.max(0, Math.round(typeof value.priority === 'number' ? value.priority : 50)),
+    predictedAckRate:
+      typeof value.predictedAckRate === 'number'
+        ? Math.max(0, Math.min(100, Math.round(value.predictedAckRate)))
+        : undefined,
+    ...(text(value.appPath) ? { appPath: text(value.appPath) } : {}),
+    ...(isRecord(value.source)
+      ? {
+          source: {
+            provider: value.source.provider === 'codeforces' ? 'codeforces' : 'leetcode',
+            query: text(value.source.query),
+            reason: text(value.source.reason, 'External source search'),
+          },
+        }
+      : {}),
+    createdAt: text(value.createdAt, now()),
+  }
+}
+
+function normalizeTip(value: unknown): Tip | null {
+  if (!isRecord(value)) return null
+  const owner = normalizeOwnerScope(value.owner)
+  const title = text(value.title)
+  const body = text(value.body)
+  if (!owner || !title || !body) return null
+  return {
+    id: text(value.id, id('tip')),
+    owner,
+    title,
+    body,
+    tags: normalizeTags(value.tags),
+    createdAt: text(value.createdAt, now()),
+  }
+}
+
+function normalizeCheck(value: unknown): UnderstandingCheck | null {
+  if (!isRecord(value)) return null
+  const owner = normalizeOwnerScope(value.owner)
+  const question = text(value.question)
+  const explanation = text(value.explanation)
+  const choices = normalizeTextList(value.choices, 6)
+  if (!owner || !question || !explanation || choices.length < 2) return null
+  const answerIndex =
+    typeof value.answerIndex === 'number' && Number.isInteger(value.answerIndex)
+      ? value.answerIndex
+      : 0
+  return {
+    id: text(value.id, id('check')),
+    owner,
+    ...(text(value.challengeId) ? { challengeId: text(value.challengeId) } : {}),
+    question,
+    choices,
+    answerIndex: Math.max(0, Math.min(choices.length - 1, answerIndex)),
+    explanation,
+    tags: normalizeTags(value.tags),
+    createdAt: text(value.createdAt, now()),
+  }
+}
+
+function normalizeWrongProblem(value: unknown): WrongProblem | null {
+  if (!isRecord(value)) return null
+  const owner = normalizeOwnerScope(value.owner)
+  const challengeId = text(value.challengeId)
+  const challengeTitle = text(value.challengeTitle)
+  const lastSubmissionId = text(value.lastSubmissionId)
+  const reason = text(value.reason)
+  if (!owner || !challengeId || !challengeTitle || !lastSubmissionId || !reason) return null
+  return {
+    owner,
+    challengeId,
+    challengeTitle,
+    tags: normalizeTags(value.tags),
+    lastSubmissionId,
+    reason,
+    reviewCount: Math.max(
+      0,
+      Math.round(typeof value.reviewCount === 'number' ? value.reviewCount : 0),
+    ),
+    nextReviewAt: text(value.nextReviewAt, now()),
+    updatedAt: text(value.updatedAt, now()),
+  }
+}
+
+function normalizeReport(value: unknown): Report | null {
+  if (!isRecord(value)) return null
+  const owner = normalizeOwnerScope(value.owner)
+  const title = text(value.title)
+  const summary = text(value.summary)
+  if (!owner || !title || !summary) return null
+  return {
+    id: text(value.id, id('report')),
+    owner,
+    period: normalizeReportPeriod(value.period),
+    title,
+    summary,
+    signals: normalizeTextList(value.signals, 12),
+    createdAt: text(value.createdAt, now()),
+  }
+}
+
+function normalizeSettings(value: unknown): TrainerSettings | null {
+  if (!isRecord(value)) return null
+  const owner = normalizeOwnerScope(value.owner)
+  if (!owner) return null
+  const targetProblems =
+    typeof value.targetProblems === 'number' && Number.isFinite(value.targetProblems)
+      ? Math.max(1, Math.min(999, Math.round(value.targetProblems)))
+      : undefined
+  return {
+    owner,
+    difficultyMode: normalizeDifficultyMode(value.difficultyMode),
+    ...(targetProblems ? { targetProblems } : {}),
+    ...(text(value.deadlineAt) ? { deadlineAt: text(value.deadlineAt) } : {}),
+    updatedAt: text(value.updatedAt, now()),
+  }
+}
+
 function normalizeState(value: unknown): TrainerState {
   const fallback = defaultState()
   if (!isRecord(value)) return fallback
@@ -542,6 +932,36 @@ function normalizeState(value: unknown): TrainerState {
     updatedAt: text(value.updatedAt, fallback.updatedAt),
     challenges: challenges.length ? challenges : structuredClone(seedChallenges),
     submissions,
+    skills: Array.isArray(value.skills)
+      ? value.skills.map(normalizeSkill).filter((item): item is SkillState => !!item)
+      : [],
+    trainingLists: Array.isArray(value.trainingLists)
+      ? value.trainingLists
+          .map(normalizeTrainingList)
+          .filter((item): item is TrainingList => !!item)
+      : [],
+    recommendations: Array.isArray(value.recommendations)
+      ? value.recommendations
+          .map(normalizeRecommendation)
+          .filter((item): item is Recommendation => !!item)
+      : [],
+    tips: Array.isArray(value.tips)
+      ? value.tips.map(normalizeTip).filter((item): item is Tip => !!item)
+      : [],
+    checks: Array.isArray(value.checks)
+      ? value.checks.map(normalizeCheck).filter((item): item is UnderstandingCheck => !!item)
+      : [],
+    wrongProblems: Array.isArray(value.wrongProblems)
+      ? value.wrongProblems
+          .map(normalizeWrongProblem)
+          .filter((item): item is WrongProblem => !!item)
+      : [],
+    reports: Array.isArray(value.reports)
+      ? value.reports.map(normalizeReport).filter((item): item is Report => !!item)
+      : [],
+    settings: Array.isArray(value.settings)
+      ? value.settings.map(normalizeSettings).filter((item): item is TrainerSettings => !!item)
+      : [],
   }
 }
 
@@ -556,6 +976,489 @@ let state = stateStore.write(normalizeState(stateStore.read()))
 function persist() {
   state.updatedAt = now()
   state = stateStore.write(state)
+}
+
+function ownerMatches<T extends { owner: TrainerOwnerScope }>(item: T, access: TrainerAccess) {
+  return item.owner.ownerKey === access.ownerKey
+}
+
+function challengeForSubmission(submission: CodeSubmission) {
+  return (
+    state.challenges.find(
+      (item) =>
+        item.id === submission.challengeId && ownerKeyOf(item) === submission.owner.ownerKey,
+    ) ??
+    state.challenges.find((item) => item.id === submission.challengeId && isGlobalChallenge(item))
+  )
+}
+
+function acceptedSubmission(submission: CodeSubmission) {
+  return submission.analysis?.outcome === 'accepted'
+}
+
+function skillLevel(mastery: number): SkillLevel {
+  if (mastery >= 85) return 'strong'
+  if (mastery >= 65) return 'stable'
+  if (mastery >= 30) return 'learning'
+  return 'new'
+}
+
+function addDays(value: string, days: number) {
+  const date = new Date(value)
+  date.setDate(date.getDate() + days)
+  return date.toISOString()
+}
+
+function settingsForOwner(owner: TrainerOwnerScope): TrainerSettings {
+  const existing = state.settings.find((item) => item.owner.ownerKey === owner.ownerKey)
+  return (
+    existing ?? {
+      owner,
+      difficultyMode: 'medium',
+      updatedAt: now(),
+    }
+  )
+}
+
+function upsertSkillFromTag(
+  owner: TrainerOwnerScope,
+  tag: string,
+  outcome: SubmissionOutcome,
+  timestamp: string,
+) {
+  const skillId = skillIdFromTag(tag)
+  const existing = state.skills.find(
+    (item) => item.owner.ownerKey === owner.ownerKey && item.id === skillId,
+  )
+  const accepted = outcome === 'accepted'
+  const attempts = (existing?.attempts ?? 0) + 1
+  const acceptedCount = (existing?.accepted ?? 0) + (accepted ? 1 : 0)
+  const delta = accepted ? 18 : outcome === 'runtime_error' ? -14 : -9
+  const mastery = Math.max(0, Math.min(100, (existing?.mastery ?? 20) + delta))
+  const weakSignals = accepted
+    ? (existing?.weakSignals ?? []).filter((signal) => signal !== weakSignalForTag(tag))
+    : uniqueText([weakSignalForTag(tag), ...(existing?.weakSignals ?? [])], 8)
+  const next: SkillState = {
+    id: skillId,
+    owner,
+    label: existing?.label ?? displaySkillLabel(tag),
+    category: existing?.category ?? skillCategory(tag),
+    level: skillLevel(mastery),
+    mastery,
+    attempts,
+    accepted: acceptedCount,
+    weakSignals,
+    lastPracticedAt: timestamp,
+    updatedAt: timestamp,
+  }
+
+  if (existing) {
+    state.skills = state.skills.map((item) =>
+      item.owner.ownerKey === owner.ownerKey && item.id === skillId ? next : item,
+    )
+  } else {
+    state.skills.push(next)
+  }
+}
+
+function recommendationReason(
+  challenge: Challenge,
+  weakTags: string[],
+  strategy: RecommendationStrategy = 'reinforce',
+  predictedAckRate?: number,
+) {
+  const ackText = typeof predictedAckRate === 'number' ? ` Estimated ACK ${predictedAckRate}%.` : ''
+  if (strategy === 'diversify') {
+    return `Switch topics to avoid overfitting one pattern: ${challenge.tags.join(', ') || challenge.difficulty}.${ackText}`
+  }
+  if (strategy === 'review') {
+    return `Spaced review is due; retry this problem before the memory trace fades.${ackText}`
+  }
+  if (strategy === 'popular') {
+    return `Topic coverage is high, so move to a popular external-style problem to avoid blind spots.${ackText}`
+  }
+  const overlap = challenge.tags.filter((tag) => weakTags.includes(skillIdFromTag(tag)))
+  if (overlap.length) {
+    return `Reinforces ${overlap.map(displaySkillLabel).join(', ')} after recent review signals.${ackText}`
+  }
+  return `Good next step at ${challenge.difficulty} difficulty with ${challenge.tags.join(', ') || 'general'} practice.${ackText}`
+}
+
+function ownerChallenges(owner: TrainerOwnerScope) {
+  return state.challenges.filter(
+    (challenge) => isGlobalChallenge(challenge) || ownerKeyOf(challenge) === owner.ownerKey,
+  )
+}
+
+function submissionsForOwner(owner: TrainerOwnerScope) {
+  return state.submissions.filter((submission) => submission.owner.ownerKey === owner.ownerKey)
+}
+
+function attemptedChallengeIds(owner: TrainerOwnerScope) {
+  const attempted = new Set(submissionsForOwner(owner).map((submission) => submission.challengeId))
+  return attempted
+}
+
+function recentAcceptedRate(owner: TrainerOwnerScope) {
+  const analyzed = submissionsForOwner(owner)
+    .filter((submission) => submission.status === 'analyzed')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 12)
+  if (analyzed.length === 0) return 50
+  const accepted = analyzed.filter(acceptedSubmission).length
+  return Math.round((accepted / analyzed.length) * 100)
+}
+
+function averageTagMastery(owner: TrainerOwnerScope, tags: string[]) {
+  if (tags.length === 0) return 45
+  const skills = tags.map((tag) =>
+    state.skills.find(
+      (skill) => skill.owner.ownerKey === owner.ownerKey && skill.id === skillIdFromTag(tag),
+    ),
+  )
+  const values = skills.map((skill) => skill?.mastery ?? 35)
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function predictedAckRate(owner: TrainerOwnerScope, challenge: Challenge) {
+  const base = challenge.difficulty === 'easy' ? 76 : challenge.difficulty === 'medium' ? 48 : 18
+  const mastery = averageTagMastery(owner, challenge.tags)
+  const recent = recentAcceptedRate(owner)
+  const seenProviderPenalty = challenge.source?.provider === 'codeforces' ? -6 : 0
+  return Math.max(
+    1,
+    Math.min(
+      95,
+      Math.round(base + (mastery - 45) * 0.55 + (recent - 50) * 0.2 + seenProviderPenalty),
+    ),
+  )
+}
+
+function targetAckRange(mode: TrainerDifficultyMode) {
+  if (mode === 'easy') return { min: 75, max: 100 }
+  if (mode === 'hard') return { min: 5, max: 20 }
+  if (mode === 'hell') return { min: 0, max: 5 }
+  return { min: 20, max: 75 }
+}
+
+function targetDistance(rate: number, mode: TrainerDifficultyMode) {
+  const range = targetAckRange(mode)
+  if (rate >= range.min && rate <= range.max) return 0
+  return rate < range.min ? range.min - rate : rate - range.max
+}
+
+function recentDominantTag(owner: TrainerOwnerScope) {
+  const challengeById = new Map(
+    ownerChallenges(owner).map((challenge) => [challenge.id, challenge]),
+  )
+  const recentTags = submissionsForOwner(owner)
+    .filter(acceptedSubmission)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 3)
+    .map((submission) => challengeById.get(submission.challengeId)?.tags[0])
+    .filter((tag): tag is string => Boolean(tag))
+  if (recentTags.length < 2) return null
+  return recentTags.every((tag) => tag === recentTags[0]) ? recentTags[0] : null
+}
+
+function topicCoverage(owner: TrainerOwnerScope, tags: string[]) {
+  const candidates = ownerChallenges(owner).filter((challenge) =>
+    challenge.tags.some((tag) => tags.includes(tag)),
+  )
+  if (candidates.length === 0) return 0
+  const accepted = new Set(
+    submissionsForOwner(owner)
+      .filter(acceptedSubmission)
+      .map((submission) => submission.challengeId),
+  )
+  return candidates.filter((challenge) => accepted.has(challenge.id)).length / candidates.length
+}
+
+function externalSourceHint(challenge: Challenge, strategy: RecommendationStrategy) {
+  const primaryTag = challenge.tags.find(
+    (tag) => !['leetcode', 'codeforces', 'imported'].includes(tag),
+  )
+  const query = strategy === 'popular' ? 'top interview' : primaryTag || challenge.title
+  return {
+    provider: 'leetcode' as const,
+    query,
+    reason:
+      strategy === 'popular'
+        ? 'Search LeetCode popular interview problems after local topic coverage is high.'
+        : `Search imported variants around ${query}.`,
+  }
+}
+
+function nextChallengeForOwner(owner: TrainerOwnerScope) {
+  const attempted = attemptedChallengeIds(owner)
+  const weakTags = state.skills
+    .filter((skill) => skill.owner.ownerKey === owner.ownerKey && skill.level !== 'strong')
+    .map((skill) => skill.id)
+  const settings = settingsForOwner(owner)
+  const candidates = ownerChallenges(owner).filter((challenge) => !attempted.has(challenge.id))
+  const dominantTag = recentDominantTag(owner)
+  const strategy: RecommendationStrategy = state.wrongProblems.some(
+    (item) => item.owner.ownerKey === owner.ownerKey && new Date(item.nextReviewAt) <= new Date(),
+  )
+    ? 'review'
+    : dominantTag
+      ? 'diversify'
+      : weakTags.length
+        ? 'reinforce'
+        : 'popular'
+  const scored = candidates
+    .filter((challenge) =>
+      strategy === 'diversify'
+        ? !dominantTag || !challenge.tags.includes(dominantTag)
+        : strategy === 'reinforce'
+          ? challenge.tags.some((tag) => weakTags.includes(skillIdFromTag(tag)))
+          : true,
+    )
+    .map((challenge) => {
+      const ack = predictedAckRate(owner, challenge)
+      const overlap = challenge.tags.filter((tag) => weakTags.includes(skillIdFromTag(tag))).length
+      return {
+        challenge,
+        ack,
+        score:
+          100 -
+          targetDistance(ack, settings.difficultyMode) * 2 +
+          overlap * 8 +
+          (challenge.source?.provider === 'leetcode' ? 4 : 0),
+      }
+    })
+    .sort((a, b) => b.score - a.score)
+
+  const fallback = candidates
+    .map((challenge) => ({ challenge, ack: predictedAckRate(owner, challenge), score: 0 }))
+    .sort(
+      (a, b) =>
+        targetDistance(a.ack, settings.difficultyMode) -
+        targetDistance(b.ack, settings.difficultyMode),
+    )[0]
+  const picked = scored[0] ?? fallback
+  if (!picked) return null
+  const coverage = topicCoverage(owner, picked.challenge.tags)
+  const finalStrategy: RecommendationStrategy = coverage >= 0.75 ? 'popular' : strategy
+  return {
+    challenge: picked.challenge,
+    strategy: finalStrategy,
+    predictedAckRate: picked.ack,
+    source: coverage >= 0.75 ? externalSourceHint(picked.challenge, finalStrategy) : undefined,
+  }
+}
+
+function createRecommendationForChallenge(
+  owner: TrainerOwnerScope,
+  challenge: Challenge,
+  kind: Recommendation['kind'],
+  reason: string,
+  priority = 70,
+  options: {
+    strategy?: RecommendationStrategy
+    predictedAckRate?: number
+    appPath?: string
+    source?: Recommendation['source']
+  } = {},
+) {
+  state.recommendations = state.recommendations.filter(
+    (item) =>
+      !(
+        item.owner.ownerKey === owner.ownerKey &&
+        item.challengeId === challenge.id &&
+        item.kind === kind
+      ),
+  )
+  state.recommendations.push({
+    id: id('rec'),
+    owner,
+    kind,
+    strategy: options.strategy ?? 'reinforce',
+    challengeId: challenge.id,
+    challengeTitle: challenge.title,
+    difficulty: challenge.difficulty,
+    tags: challenge.tags,
+    reason,
+    priority,
+    ...(typeof options.predictedAckRate === 'number'
+      ? { predictedAckRate: options.predictedAckRate }
+      : {}),
+    appPath: options.appPath ?? `/problems/${challenge.id}`,
+    ...(options.source ? { source: options.source } : {}),
+    createdAt: now(),
+  })
+  state.recommendations = state.recommendations
+    .filter((item) => item.owner.ownerKey !== owner.ownerKey || item.kind !== kind)
+    .concat(
+      state.recommendations
+        .filter((item) => item.owner.ownerKey === owner.ownerKey && item.kind === kind)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 6),
+    )
+}
+
+function ensureDefaultTipAndCheck(owner: TrainerOwnerScope, challenge: Challenge) {
+  const primaryTag = challenge.tags[0] ?? 'algorithm'
+  if (
+    !state.tips.some(
+      (tip) => tip.owner.ownerKey === owner.ownerKey && tip.tags.includes(primaryTag),
+    )
+  ) {
+    state.tips.push({
+      id: id('tip'),
+      owner,
+      title: `${displaySkillLabel(primaryTag)} pattern`,
+      body: `Before coding ${challenge.title}, state the invariant and the boundary case that would break it first.`,
+      tags: [primaryTag],
+      createdAt: now(),
+    })
+  }
+  if (
+    !state.checks.some(
+      (check) => check.owner.ownerKey === owner.ownerKey && check.challengeId === challenge.id,
+    )
+  ) {
+    state.checks.push({
+      id: id('check'),
+      owner,
+      challengeId: challenge.id,
+      question: `What should you verify first before submitting ${challenge.title}?`,
+      choices: ['Only sample output', 'Boundary cases and complexity', 'Variable names only'],
+      answerIndex: 1,
+      explanation:
+        'A strong submission needs sample correctness, boundary coverage, and a clear complexity claim.',
+      tags: challenge.tags,
+      createdAt: now(),
+    })
+  }
+}
+
+function updateTrainingList(owner: TrainerOwnerScope, challenge: Challenge, timestamp: string) {
+  const activeWrong = state.wrongProblems.find((item) => item.owner.ownerKey === owner.ownerKey)
+  const tasks: TrainingTask[] = [
+    {
+      id: `problem:${challenge.id}`,
+      type: 'problem',
+      title: `Practice ${challenge.title}`,
+      status: 'todo',
+      challengeId: challenge.id,
+      challengeTitle: challenge.title,
+      reason: recommendationReason(
+        challenge,
+        state.skills
+          .filter((skill) => skill.owner.ownerKey === owner.ownerKey && skill.level !== 'strong')
+          .map((skill) => skill.id),
+      ),
+    },
+    {
+      id: `check:${challenge.id}`,
+      type: 'check',
+      title: 'State invariant and complexity',
+      status: 'todo',
+      challengeId: challenge.id,
+      challengeTitle: challenge.title,
+      reason: 'Short checks keep the practice loop honest before code review.',
+    },
+  ]
+  if (activeWrong) {
+    tasks.push({
+      id: `review:${activeWrong.challengeId}`,
+      type: 'review',
+      title: `Retry ${activeWrong.challengeTitle}`,
+      status: 'todo',
+      challengeId: activeWrong.challengeId,
+      challengeTitle: activeWrong.challengeTitle,
+      reason: activeWrong.reason,
+      dueAt: activeWrong.nextReviewAt,
+    })
+  }
+  const list: TrainingList = {
+    id: `daily:${owner.ownerKey}`,
+    owner,
+    title: 'Daily algorithm loop',
+    horizon: 'daily',
+    goal: 'Submit one focused attempt, review the feedback, and turn one weak signal into the next task.',
+    tasks,
+    updatedAt: timestamp,
+  }
+  state.trainingLists = state.trainingLists.filter(
+    (item) => !(item.owner.ownerKey === owner.ownerKey && item.id === list.id),
+  )
+  state.trainingLists.push(list)
+}
+
+function refreshLearningLoopAfterAnalysis(submission: CodeSubmission, challenge: Challenge) {
+  const timestamp = now()
+  for (const tag of challenge.tags) {
+    upsertSkillFromTag(
+      submission.owner,
+      tag,
+      submission.analysis?.outcome ?? 'incomplete',
+      timestamp,
+    )
+  }
+
+  if (!acceptedSubmission(submission)) {
+    const existing = state.wrongProblems.find(
+      (item) =>
+        item.owner.ownerKey === submission.owner.ownerKey && item.challengeId === challenge.id,
+    )
+    const wrongProblem: WrongProblem = {
+      owner: submission.owner,
+      challengeId: challenge.id,
+      challengeTitle: challenge.title,
+      tags: challenge.tags,
+      lastSubmissionId: submission.id,
+      reason: submission.analysis?.summary ?? 'Submission needs another pass.',
+      reviewCount: (existing?.reviewCount ?? 0) + 1,
+      nextReviewAt: addDays(timestamp, existing ? 3 : 1),
+      updatedAt: timestamp,
+    }
+    state.wrongProblems = state.wrongProblems.filter(
+      (item) =>
+        !(item.owner.ownerKey === submission.owner.ownerKey && item.challengeId === challenge.id),
+    )
+    state.wrongProblems.push(wrongProblem)
+  }
+
+  const next = nextChallengeForOwner(submission.owner)
+  if (next) {
+    const weakTags = state.skills
+      .filter(
+        (skill) => skill.owner.ownerKey === submission.owner.ownerKey && skill.level !== 'strong',
+      )
+      .map((skill) => skill.id)
+    createRecommendationForChallenge(
+      submission.owner,
+      next.challenge,
+      acceptedSubmission(submission) ? 'next_problem' : 'wrong_variant',
+      recommendationReason(next.challenge, weakTags, next.strategy, next.predictedAckRate),
+      acceptedSubmission(submission) ? 80 : 90,
+      {
+        strategy: next.strategy,
+        predictedAckRate: next.predictedAckRate,
+        appPath: next.source
+          ? `/import?provider=${next.source.provider}&q=${encodeURIComponent(next.source.query)}`
+          : `/problems/${next.challenge.id}`,
+        source: next.source,
+      },
+    )
+    ensureDefaultTipAndCheck(submission.owner, next.challenge)
+    updateTrainingList(submission.owner, next.challenge, timestamp)
+  }
+
+  state.reports.push({
+    id: id('report'),
+    owner: submission.owner,
+    period: 'daily',
+    title: 'Latest training signal',
+    summary: `${challenge.title}: ${submission.analysis?.summary ?? 'Review is pending.'}`,
+    signals: uniqueText([
+      ...(submission.analysis?.suggestions ?? []),
+      ...(acceptedSubmission(submission) ? ['Accepted attempt'] : ['Needs another focused pass']),
+    ]),
+    createdAt: timestamp,
+  })
 }
 
 export function listChallenges(
@@ -714,6 +1617,290 @@ export function pendingSubmissions(input: { limit?: number }, access: TrainerAcc
     )
 }
 
+function readableChallenges(access: TrainerAccess) {
+  return state.challenges.filter((challenge) => canReadChallenge(challenge, access))
+}
+
+function challengeForInput(challengeId: string, access: TrainerAccess) {
+  return readableChallenges(access).find((challenge) => challenge.id === challengeId) ?? null
+}
+
+function daysRemaining(deadlineAt?: string) {
+  if (!deadlineAt) return undefined
+  const deadline = new Date(deadlineAt).getTime()
+  if (!Number.isFinite(deadline)) return undefined
+  return Math.max(0, Math.ceil((deadline - Date.now()) / (24 * 60 * 60 * 1000)))
+}
+
+export function learningOverview(access: TrainerAccess): TrainerOverview {
+  const challenges = readableChallenges(access)
+  const submissions = state.submissions.filter(
+    (submission) => submission.owner.ownerKey === access.ownerKey,
+  )
+  const owner = ownerFromAccess(access)
+  const settings = settingsForOwner(owner)
+  const challengeById = new Map(challenges.map((challenge) => [challenge.id, challenge]))
+  const acceptedProblemIds = new Set(
+    submissions.filter(acceptedSubmission).map((submission) => submission.challengeId),
+  )
+  const attemptedProblemIds = new Set(submissions.map((submission) => submission.challengeId))
+  const activeTasks = state.trainingLists
+    .filter((item) => ownerMatches(item, access))
+    .flatMap((item) => item.tasks)
+    .filter((task) => task.status !== 'done').length
+
+  return structuredClone({
+    updatedAt: state.updatedAt,
+    settings,
+    skills: state.skills.filter((item) => ownerMatches(item, access)),
+    trainingLists: state.trainingLists.filter((item) => ownerMatches(item, access)),
+    recommendations: state.recommendations
+      .filter((item) => ownerMatches(item, access))
+      .sort((a, b) => b.priority - a.priority || b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 20),
+    tips: state.tips
+      .filter((item) => ownerMatches(item, access))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 20),
+    checks: state.checks
+      .filter((item) => ownerMatches(item, access))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 20),
+    wrongProblems: state.wrongProblems.filter((item) => ownerMatches(item, access)),
+    reports: state.reports
+      .filter((item) => ownerMatches(item, access))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 20),
+    recentSubmissions: submissions
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 20)
+      .map((submission) => {
+        const challenge = challengeById.get(submission.challengeId)
+        return {
+          id: submission.id,
+          challengeId: submission.challengeId,
+          challengeTitle: challenge?.title ?? submission.challengeId,
+          language: submission.language,
+          status: submission.status,
+          ...(submission.analysis?.outcome ? { outcome: submission.analysis.outcome } : {}),
+          ...(submission.analysis?.score !== undefined ? { score: submission.analysis.score } : {}),
+          ...(submission.analysis?.summary ? { summary: submission.analysis.summary } : {}),
+          tags: challenge?.tags ?? [],
+          createdAt: submission.createdAt,
+        }
+      }),
+    stats: {
+      totalProblems: challenges.length,
+      attemptedProblems: attemptedProblemIds.size,
+      acceptedProblems: acceptedProblemIds.size,
+      pendingReviews: submissions.filter((submission) => submission.status === 'submitted').length,
+      weakSkills: state.skills.filter(
+        (skill) =>
+          ownerMatches(skill, access) && (skill.level === 'new' || skill.level === 'learning'),
+      ).length,
+      activeTasks,
+      ...(settings.targetProblems ? { targetProblems: settings.targetProblems } : {}),
+      ...(settings.targetProblems ? { targetCompleted: acceptedProblemIds.size } : {}),
+      ...(settings.deadlineAt ? { deadlineAt: settings.deadlineAt } : {}),
+      ...(daysRemaining(settings.deadlineAt) !== undefined
+        ? { daysRemaining: daysRemaining(settings.deadlineAt) }
+        : {}),
+    },
+  })
+}
+
+export function upsertTrainingList(input: TrainingListInput, access: TrainerAccess) {
+  const timestamp = now()
+  const owner = ownerFromAccess(access)
+  const listId = text(input.id, `list:${normalizeHorizon(input.horizon)}:${owner.ownerKey}`)
+  const tasks = (input.tasks ?? [])
+    .map((task) =>
+      normalizeTrainingTask({
+        ...task,
+        id: task.id ?? id('task'),
+        status: task.status ?? 'todo',
+      }),
+    )
+    .filter((task): task is TrainingTask => !!task)
+    .slice(0, 24)
+  const list: TrainingList = {
+    id: listId,
+    owner,
+    title: input.title.trim(),
+    horizon: normalizeHorizon(input.horizon),
+    goal: text(input.goal, 'Keep the algorithm training loop moving.'),
+    tasks,
+    updatedAt: timestamp,
+  }
+  state.trainingLists = state.trainingLists.filter(
+    (item) => !(item.owner.ownerKey === owner.ownerKey && item.id === list.id),
+  )
+  state.trainingLists.push(list)
+  persist()
+  return structuredClone(list)
+}
+
+export function upsertTrainerSettings(input: TrainerSettingsInput, access: TrainerAccess) {
+  const owner = ownerFromAccess(access)
+  const existing = settingsForOwner(owner)
+  const targetProblems =
+    typeof input.targetProblems === 'number' && Number.isFinite(input.targetProblems)
+      ? Math.max(1, Math.min(999, Math.round(input.targetProblems)))
+      : undefined
+  const settings: TrainerSettings = {
+    owner,
+    difficultyMode: normalizeDifficultyMode(input.difficultyMode ?? existing.difficultyMode),
+    ...((targetProblems ?? existing.targetProblems)
+      ? { targetProblems: targetProblems ?? existing.targetProblems }
+      : {}),
+    ...(text(input.deadlineAt) || existing.deadlineAt
+      ? { deadlineAt: text(input.deadlineAt, existing.deadlineAt) }
+      : {}),
+    updatedAt: now(),
+  }
+  state.settings = state.settings.filter((item) => item.owner.ownerKey !== owner.ownerKey)
+  state.settings.push(settings)
+  persist()
+  return structuredClone(settings)
+}
+
+export function updateSkillState(input: SkillStateInput, access: TrainerAccess) {
+  const owner = ownerFromAccess(access)
+  const skillId = skillIdFromTag(input.id)
+  const existing = state.skills.find(
+    (skill) => skill.owner.ownerKey === owner.ownerKey && skill.id === skillId,
+  )
+  const mastery =
+    input.mastery === undefined ? (existing?.mastery ?? 20) : clampScore(input.mastery)
+  const skill: SkillState = {
+    id: skillId,
+    owner,
+    label: text(input.label, existing?.label ?? displaySkillLabel(skillId)),
+    category: text(input.category, existing?.category ?? skillCategory(skillId)),
+    level: input.level ?? skillLevel(mastery),
+    mastery,
+    attempts: Math.max(0, Math.round(input.attempts ?? existing?.attempts ?? 0)),
+    accepted: Math.max(0, Math.round(input.accepted ?? existing?.accepted ?? 0)),
+    weakSignals: uniqueText(input.weakSignals ?? existing?.weakSignals ?? [], 8),
+    lastPracticedAt: existing?.lastPracticedAt,
+    updatedAt: now(),
+  }
+  state.skills = state.skills.filter(
+    (item) => !(item.owner.ownerKey === owner.ownerKey && item.id === skill.id),
+  )
+  state.skills.push(skill)
+  persist()
+  return structuredClone(skill)
+}
+
+export function createRecommendation(input: RecommendationInput, access: TrainerAccess) {
+  const challenge = challengeForInput(input.challengeId, access)
+  if (!challenge) return null
+  const owner = ownerFromAccess(access)
+  const recommendation: Recommendation = {
+    id: id('rec'),
+    owner,
+    kind: normalizeRecommendationKind(input.kind),
+    strategy: input.strategy ?? 'reinforce',
+    challengeId: challenge.id,
+    challengeTitle: challenge.title,
+    difficulty: challenge.difficulty,
+    tags: challenge.tags,
+    reason: input.reason.trim(),
+    priority: Math.max(0, Math.min(100, Math.round(input.priority ?? 70))),
+    ...(typeof input.predictedAckRate === 'number'
+      ? { predictedAckRate: Math.max(0, Math.min(100, Math.round(input.predictedAckRate))) }
+      : {}),
+    appPath: text(input.appPath, `/problems/${challenge.id}`),
+    createdAt: now(),
+  }
+  state.recommendations.push(recommendation)
+  persist()
+  return structuredClone(recommendation)
+}
+
+export function latestRecommendation(access: TrainerAccess) {
+  return structuredClone(
+    state.recommendations
+      .filter((item) => ownerMatches(item, access))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null,
+  )
+}
+
+export function createTip(input: TipInput, access: TrainerAccess) {
+  const tip: Tip = {
+    id: id('tip'),
+    owner: ownerFromAccess(access),
+    title: input.title.trim(),
+    body: input.body.trim(),
+    tags: normalizeTags(input.tags),
+    createdAt: now(),
+  }
+  state.tips.push(tip)
+  persist()
+  return structuredClone(tip)
+}
+
+export function createCheck(input: CheckInput, access: TrainerAccess) {
+  const choices = normalizeTextList(input.choices, 6)
+  const check: UnderstandingCheck = {
+    id: id('check'),
+    owner: ownerFromAccess(access),
+    ...(text(input.challengeId) ? { challengeId: text(input.challengeId) } : {}),
+    question: input.question.trim(),
+    choices,
+    answerIndex: Math.max(0, Math.min(choices.length - 1, Math.round(input.answerIndex))),
+    explanation: input.explanation.trim(),
+    tags: normalizeTags(input.tags),
+    createdAt: now(),
+  }
+  state.checks.push(check)
+  persist()
+  return structuredClone(check)
+}
+
+export function createReport(input: ReportInput, access: TrainerAccess) {
+  const report: Report = {
+    id: id('report'),
+    owner: ownerFromAccess(access),
+    period: normalizeReportPeriod(input.period),
+    title: input.title.trim(),
+    summary: input.summary.trim(),
+    signals: normalizeTextList(input.signals, 12),
+    createdAt: now(),
+  }
+  state.reports.push(report)
+  persist()
+  return structuredClone(report)
+}
+
+export function scheduleWrongProblem(input: WrongProblemInput, access: TrainerAccess) {
+  const challenge = challengeForInput(input.challengeId, access)
+  if (!challenge) return null
+  const owner = ownerFromAccess(access)
+  const existing = state.wrongProblems.find(
+    (item) => item.owner.ownerKey === owner.ownerKey && item.challengeId === challenge.id,
+  )
+  const timestamp = now()
+  const wrongProblem: WrongProblem = {
+    owner,
+    challengeId: challenge.id,
+    challengeTitle: challenge.title,
+    tags: challenge.tags,
+    lastSubmissionId: text(input.lastSubmissionId, existing?.lastSubmissionId ?? 'manual'),
+    reason: input.reason.trim(),
+    reviewCount: (existing?.reviewCount ?? 0) + 1,
+    nextReviewAt: text(input.nextReviewAt, addDays(timestamp, 1)),
+    updatedAt: timestamp,
+  }
+  state.wrongProblems = state.wrongProblems.filter(
+    (item) => !(item.owner.ownerKey === owner.ownerKey && item.challengeId === challenge.id),
+  )
+  state.wrongProblems.push(wrongProblem)
+  persist()
+  return structuredClone(wrongProblem)
+}
+
 export function analyzeSubmission(input: {
   submissionId: string
   outcome: SubmissionOutcome
@@ -738,6 +1925,8 @@ export function analyzeSubmission(input: {
     analyzer: person(input.analyzer),
     analyzedAt: now(),
   }
+  const challenge = challengeForSubmission(submission)
+  if (challenge) refreshLearningLoopAfterAnalysis(submission, challenge)
   persist()
   return structuredClone(submission)
 }

@@ -99,6 +99,40 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
       logger.info({ userId, channelId, socketId: socket.id }, 'Left channel room')
     })
 
+    // thread:join
+    socket.on(
+      'thread:join',
+      async ({ threadId }: { threadId: string }, ack?: (res: { ok: boolean }) => void) => {
+        if (!userId) {
+          if (typeof ack === 'function') ack({ ok: false })
+          return
+        }
+
+        try {
+          const messageService = container.resolve('messageService')
+          const thread = await messageService.getThread(threadId)
+          const allowed = await canUseChannelRoom(container, thread.channelId, userId)
+          if (!allowed) {
+            logger.warn({ userId, threadId, channelId: thread.channelId }, 'Denied thread:join')
+            if (typeof ack === 'function') ack({ ok: false })
+            return
+          }
+          await socket.join(`thread:${threadId}`)
+          logger.info({ userId, threadId, socketId: socket.id }, 'Joined thread room')
+          if (typeof ack === 'function') ack({ ok: true })
+        } catch (err) {
+          logger.warn({ err, userId, threadId }, 'thread:join failed')
+          if (typeof ack === 'function') ack({ ok: false })
+        }
+      },
+    )
+
+    // thread:leave
+    socket.on('thread:leave', async ({ threadId }: { threadId: string }) => {
+      await socket.leave(`thread:${threadId}`)
+      logger.info({ userId, threadId, socketId: socket.id }, 'Left thread room')
+    })
+
     // message:send
     socket.on(
       'message:send',

@@ -55,6 +55,39 @@ class ShadowUser:
 
 
 @dataclass
+class ShadowConnectorRuntimeInfo:
+    id: str
+    label: str
+    kind: str
+    status: str
+    version: str | None = None
+    command: str | None = None
+    detected_at: str | None = None
+
+
+@dataclass
+class ShadowConnectorComputer:
+    id: str
+    name: str
+    status: str
+    runtimes: list[ShadowConnectorRuntimeInfo | dict[str, Any]] = field(default_factory=list)
+    hostname: str | None = None
+    os: str | None = None
+    arch: str | None = None
+    daemon_version: str | None = None
+    last_seen_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowConnectorBootstrapResult:
+    computer: ShadowConnectorComputer | dict[str, Any]
+    command: str
+    api_key: str
+
+
+@dataclass
 class ShadowHomePlayCatalogItem:
     id: str
     image: str

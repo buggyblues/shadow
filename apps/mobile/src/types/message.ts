@@ -131,6 +131,17 @@ export interface MessagesPage {
   hasMore: boolean
 }
 
+export interface Thread {
+  id: string
+  name: string
+  channelId: string
+  parentMessageId: string
+  creatorId: string
+  isArchived: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Channel {
   id: string
   name: string

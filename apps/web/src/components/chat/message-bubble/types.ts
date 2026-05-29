@@ -60,6 +60,13 @@ export interface Message {
   sendStatus?: 'sending' | 'failed'
 }
 
+export interface ThreadPreview {
+  id: string
+  name: string
+  parentMessageId: string
+  createdAt?: string
+}
+
 /** Phase 2 interactive block shape — mirrors server schema. */
 export interface InteractiveButtonItem {
   id: string
@@ -126,6 +133,7 @@ export interface MessageBubbleProps {
   onReact?: (messageId: string, emoji: string) => void
   onMessageUpdate?: (msg: Message) => void
   onMessageDelete?: (msgId: string) => void
+  onOpenThread?: (messageId: string) => void
   onPreviewFile?: (attachment: Attachment) => void
   onPreviewOAuthLink?: (preview: OAuthLinkPreview) => void
   onSaveToWorkspace?: (attachment: Attachment) => void
@@ -135,12 +143,16 @@ export interface MessageBubbleProps {
   deleteApi?: (messageId: string) => Promise<void>
   highlight?: boolean
   replyToMessage?: Message | null
+  hasThread?: boolean
+  thread?: ThreadPreview | null
   /** Multi-select mode */
   selectionMode?: boolean
   isSelected?: boolean
+  selectionAnchorId?: string | null
   submittedInteractiveResponse?: InteractiveResponseMetadata | null
   onToggleSelect?: (messageId: string) => void
   onEnterSelectionMode?: (messageId: string) => void
+  onSelectRangeTo?: (messageId: string) => void
   /** When true, this message is grouped with the previous message (same author, within 1 min) — hide avatar & name */
   isGrouped?: boolean
 }

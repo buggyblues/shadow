@@ -589,6 +589,13 @@
       "when": 1780318800004,
       "tag": "0083_server_app_task_bound_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1780318800005,
+      "tag": "0084_connector_daemon",
+      "breakpoints": true
     }
   ]
 }

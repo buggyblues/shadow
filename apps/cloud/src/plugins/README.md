@@ -1,6 +1,6 @@
 # Cloud Plugin Directory
 
-This directory contains built-in Shadow Cloud plugins. Each plugin is a small, independently enabled connector that can contribute credentials, skills, CLI tools, MCP metadata, runtime assets, verification checks, and deployment configuration.
+This directory contains built-in Shadow Cloud plugins. Each plugin is a small, independently enabled connector that can contribute credentials, skills, CLI tools, optional MCP metadata, runtime assets, verification checks, and deployment configuration.
 
 ## How To Read A Plugin
 
@@ -54,7 +54,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 | [inference.sh](./inference-sh/README.md) | `INFSH_API_KEY` | inference.sh CLI and auth docs |
 | [Klaviyo](./klaviyo/README.md) | `KLAVIYO_API_KEY` | Klaviyo MCP |
 | [Kuaidi100](./kuaidi100/README.md) | `KUAIDI100_KEY`, `KUAIDI100_CUSTOMER` | Kuaidi100 MCP |
-| [Lark / Feishu](./lark/README.md) | `LARKSUITE_CLI_APP_ID`, `LARKSUITE_CLI_APP_SECRET`, `LARKSUITE_CLI_BRAND` | Lark CLI, MCP, skills |
+| [Lark / Feishu](./lark/README.md) | `LARKSUITE_CLI_APP_ID`, `LARKSUITE_CLI_APP_SECRET`, `LARKSUITE_CLI_BRAND`, optional Meegle keys | Lark CLI, Meegle CLI, skills |
 | [Linear](./linear/README.md) | `LINEAR_API_KEY`, `LINEAR_WORKSPACE_ID`, `LINEAR_TEAM_ID` | Linear MCP and API |
 | [Lovart](./lovart/README.md) | `LOVART_ACCESS_KEY`, `LOVART_SECRET_KEY` | Lovart OpenClaw skill |
 | [Meta Ads](./meta-ads/README.md) | `META_ACCESS_TOKEN`, `META_AD_ACCOUNT_ID` | Meta Marketing APIs |
@@ -92,7 +92,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 
 1. Add one plugin per platform or service. Do not combine unrelated services into a single plugin.
 2. Prefer official Skills plus official CLI when both exist.
-3. Register MCP metadata when the upstream service documents a stable MCP endpoint or package.
+3. Register MCP metadata only when the upstream service documents a stable MCP endpoint or package and the plugin cannot provide the workflow through skills plus CLI alone.
 4. Add `PluginAuthField` entries with clear `label`, `description`, `required`, `sensitive`, `placeholder`, and `helpUrl` values.
 5. Add verification checks for installed CLI tools and mounted skill files.
 6. Document every key and setup path in the plugin README.

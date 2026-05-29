@@ -343,23 +343,33 @@ describe('loadAllPlugins', () => {
     const skyline = registry.get('wechat-miniprogram-skyline')
     const gitee = registry.get('gitee')
 
-    expect(lark?.manifest.capabilities).toEqual(expect.arrayContaining(['skill', 'cli', 'mcp']))
+    expect(lark?.manifest.capabilities).toEqual(expect.arrayContaining(['skill', 'cli']))
+    expect(lark?.manifest.capabilities).not.toContain('mcp')
     expect(lark?.runtime?.skillSources).toContainEqual(
       expect.objectContaining({
         id: 'lark-cli-skills',
         url: 'https://github.com/larksuite/cli.git',
       }),
     )
+    expect(lark?.runtime?.skillSources).toContainEqual(
+      expect.objectContaining({
+        id: 'meegle-cli-skills',
+        url: 'https://github.com/larksuite/meegle-cli.git',
+        include: ['meegle'],
+      }),
+    )
     expect(lark?.runtime?.runtimeDependencies).toContainEqual(
       expect.objectContaining({ packages: ['@larksuite/cli'] }),
     )
-    expect(lark?.runtime?.mcpServers).toContainEqual(
-      expect.objectContaining({
-        id: 'lark-mcp',
-        command: 'npx',
-        args: ['-y', '@larksuiteoapi/lark-mcp@latest'],
-      }),
+    expect(lark?.runtime?.runtimeDependencies).toContainEqual(
+      expect.objectContaining({ packages: ['@lark-project/meegle'] }),
     )
+    expect(lark?.runtime?.mcpServers).toBeUndefined()
+    expect(lark?.runtime?.credentialFiles).toContainEqual({
+      envKey: 'LARKSUITE_CLI_CREDENTIALS_JSON',
+      path: '/home/shadow/.lark-cli/openclaw/config.json',
+      mode: '0600',
+    })
 
     expect(dingtalk?.runtime?.mcpServers).toContainEqual(
       expect.objectContaining({
@@ -1648,5 +1658,113 @@ describe('Tool plugins', () => {
     const ctx = makeBuildContext({ secrets: { STRIPE_SECRET_KEY: 'sk_test' }, agentConfig: {} })
     const result = plugin._hooks.validate[0]!(ctx)
     expect(result?.valid).toBe(true)
+  })
+
+  it('lark plugin should inject CLI credentials through config files and omit MCP', async () => {
+    const mod = await import('../../src/plugins/lark/index.js')
+    const plugin = mod.default as PluginDefinition
+    expect(plugin.manifest.id).toBe('lark')
+    expect(plugin.mcp).toBeUndefined()
+    expect(plugin.runtime?.mcpServers).toBeUndefined()
+    expect(plugin.cli?.map((tool) => tool.command)).toEqual(
+      expect.arrayContaining(['lark-cli', 'meegle']),
+    )
+    expect(
+      plugin.secretFields
+        ?.filter((field) => field.key.startsWith('LARKSUITE_CLI_'))
+        .every((field) => field.runtime === false),
+    ).toBe(true)
+    expect(
+      plugin.secretFields?.find((field) => field.key === 'MEEGLE_USER_ACCESS_TOKEN')?.runtime,
+    ).toBeUndefined()
+
+    const ctx = makeBuildContext({
+      secrets: {
+        LARKSUITE_CLI_APP_ID: 'cli_app',
+        LARKSUITE_CLI_APP_SECRET: 'app_secret',
+        LARKSUITE_CLI_BRAND: 'lark',
+        MEEGLE_HOST: 'project.feishu.cn',
+        MEEGLE_USER_ACCESS_TOKEN: 'meegle-token',
+      },
+    })
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
+    expect(fragment?.skills).toMatchObject({
+      load: { extraDirs: ['/workspace/.agents/plugin-skills/lark'] },
+      entries: {
+        lark: {
+          enabled: true,
+          config: {
+            cli: { lark: 'lark-cli', meegle: 'meegle' },
+            skillSources: ['/workspace/.agents/plugin-skills/lark'],
+          },
+        },
+      },
+    })
+
+    const env = Object.assign({}, ...plugin._hooks.buildEnv.map((fn) => fn(ctx)))
+    expect(env.LARKSUITE_CLI_CONFIG_DIR).toBe('/home/shadow/.lark-cli')
+    expect(env.LARKSUITE_CLI_APP_ID).toBeUndefined()
+    expect(env.LARKSUITE_CLI_APP_SECRET).toBeUndefined()
+    expect(env.MEEGLE_HOST).toBe('project.feishu.cn')
+    expect(env.MEEGLE_USER_ACCESS_TOKEN).toBe('meegle-token')
+    const larkConfig = JSON.parse(env.LARKSUITE_CLI_CREDENTIALS_JSON)
+    expect(larkConfig).toMatchObject({
+      strictMode: 'bot',
+      currentApp: 'shadow-cloud',
+      apps: [
+        {
+          name: 'shadow-cloud',
+          appId: 'cli_app',
+          appSecret: 'app_secret',
+          brand: 'lark',
+          defaultAs: 'bot',
+          strictMode: 'bot',
+          users: [],
+        },
+      ],
+    })
+
+    expect(plugin.runtime?.credentialFiles).toEqual(
+      expect.arrayContaining([
+        {
+          envKey: 'LARKSUITE_CLI_CREDENTIALS_JSON',
+          path: '/home/shadow/.lark-cli/config.json',
+          mode: '0600',
+        },
+        {
+          envKey: 'LARKSUITE_CLI_CREDENTIALS_JSON',
+          path: '/home/shadow/.lark-cli/openclaw/config.json',
+          mode: '0600',
+        },
+      ]),
+    )
+    expect(plugin.runtime?.verificationChecks?.map((check) => check.id)).toEqual(
+      expect.arrayContaining([
+        'lark-cli-installed',
+        'meegle-cli-installed',
+        'lark-cli-auth-status',
+        'lark-skills-mounted',
+        'meegle-skill-mounted',
+      ]),
+    )
+    expect(
+      plugin.runtime?.verificationChecks?.find((check) => check.id === 'meegle-cli-installed'),
+    ).toMatchObject({ command: ['meegle', 'version'] })
+    const k8s = plugin.k8s?.buildK8s(
+      {
+        id: 'agent-1',
+        runtime: 'openclaw',
+        use: [{ plugin: 'lark' }],
+        configuration: {},
+      },
+      {
+        agent: { id: 'agent-1', runtime: 'openclaw', configuration: {} },
+        config: { version: '1' },
+        namespace: 'default',
+      },
+    )
+    expect(k8s?.initContainers?.[0]?.command.join(' ')).toContain(
+      '/runtime-deps/bin/meegle version',
+    )
   })
 })

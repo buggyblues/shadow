@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CloudConfig } from '../../src/config/schema.js'
+import { defineSkillPlugin } from '../../src/plugins/helpers.js'
+import { getPluginRegistry, resetPluginRegistry } from '../../src/plugins/registry.js'
+import type { PluginManifest } from '../../src/plugins/types.js'
 import { DeployService } from '../../src/services/deploy.service.js'
 
 const originalShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
@@ -13,12 +16,14 @@ describe('DeployService', () => {
   let tempDir: string
 
   beforeEach(() => {
+    resetPluginRegistry()
     tempDir = mkdtempSync(join(tmpdir(), 'deploy-service-test-'))
     process.env.SHADOW_SERVER_URL = 'http://server:3002'
     process.env.SHADOW_AGENT_SERVER_URL = 'http://host.lima.internal:3002'
   })
 
   afterEach(() => {
+    resetPluginRegistry()
     rmSync(tempDir, { recursive: true, force: true })
     vi.restoreAllMocks()
 
@@ -40,6 +45,19 @@ describe('DeployService', () => {
       process.env.HOME = originalHome
     }
   })
+
+  function makeProvisionPluginManifest(id = 'failing-provision-plugin'): PluginManifest {
+    return {
+      id,
+      name: 'Failing Provision Plugin',
+      description: 'Test plugin',
+      version: '1.0.0',
+      category: 'other',
+      capabilities: ['tool'],
+      tags: ['test'],
+      auth: { type: 'none', fields: [] },
+    }
+  }
 
   it('prefers SHADOW_AGENT_SERVER_URL for pod-facing shadowServerUrl', async () => {
     const filePath = join(tempDir, 'shadowob-cloud.json')
@@ -106,6 +124,79 @@ describe('DeployService', () => {
         shadowServerUrl: 'http://host.lima.internal:3002',
       }),
     )
+  })
+
+  it('aborts the deployment when plugin provisioning fails', async () => {
+    const filePath = join(tempDir, 'shadowob-cloud.json')
+    writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
+
+    const config: CloudConfig = {
+      version: '1.0.0',
+      use: [{ plugin: 'failing-provision-plugin' }],
+      deployments: {
+        namespace: 'shadowob-cloud',
+        backend: 'deployment',
+        agents: [
+          {
+            id: 'buddy-agent',
+            runtime: 'openclaw',
+            configuration: { openclaw: {} },
+          },
+        ],
+      },
+    } as CloudConfig
+
+    getPluginRegistry().register(
+      defineSkillPlugin(makeProvisionPluginManifest(), {}, (api) => {
+        api.onProvision(() => {
+          throw new Error('server app install failed')
+        })
+      }),
+    )
+
+    const configService = {
+      parseFile: vi.fn().mockResolvedValue(config),
+      resolve: vi.fn().mockResolvedValue(config),
+    }
+    const manifestService = {
+      build: vi.fn(),
+    }
+    const k8s = {
+      isToolInstalled: vi.fn().mockReturnValue(true),
+      kindClusterExists: vi.fn().mockReturnValue(true),
+      createKindCluster: vi.fn(),
+      isKubeReachable: vi.fn().mockReturnValue(true),
+      getOrCreateStack: vi.fn(),
+      deployStack: vi.fn(),
+      waitForAgentSandboxReady: vi.fn(),
+      getStackOutputs: vi.fn(),
+      checkAgentSandboxPreflight: vi.fn().mockReturnValue({ ok: true, missing: [], warnings: [] }),
+    }
+    const logger = {
+      step: vi.fn(),
+      info: vi.fn(),
+      dim: vi.fn(),
+      warn: vi.fn(),
+      success: vi.fn(),
+    }
+
+    const service = new DeployService(
+      configService as never,
+      manifestService as never,
+      k8s as never,
+      logger as never,
+    )
+
+    await expect(
+      service.up({
+        filePath,
+        shadowUrl: 'http://server:3002',
+        shadowToken: 'pat_test',
+      }),
+    ).rejects.toThrow('Plugin provisioning failed')
+
+    expect(k8s.getOrCreateStack).not.toHaveBeenCalled()
+    expect(k8s.deployStack).not.toHaveBeenCalled()
   })
 
   it('uses per-request runtime env overrides before ambient process env', async () => {

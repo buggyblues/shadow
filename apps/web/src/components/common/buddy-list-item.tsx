@@ -51,11 +51,87 @@ interface BuddyListItemProps {
   children?: React.ReactNode
 }
 
+interface BuddyInfoProps {
+  buddy: BuddyListItemData
+  className?: string
+  showBotBadge?: boolean
+  showRoleBadge?: boolean
+  showOnlineRank?: boolean
+  onlineRankCompact?: boolean
+}
+
 const statusColors: Record<string, string> = {
   online: 'bg-success',
   idle: 'bg-warning/100',
   dnd: 'bg-danger/100',
   offline: 'bg-text-muted',
+}
+
+export function BuddyInfo({
+  buddy,
+  className = '',
+  showBotBadge = true,
+  showRoleBadge = true,
+  showOnlineRank = true,
+  onlineRankCompact = false,
+}: BuddyInfoProps) {
+  const { t } = useTranslation()
+  const displayName = buddy.nickname ?? buddy.displayName
+  const roleBadge =
+    showRoleBadge && buddy.role && buddy.role !== 'member'
+      ? {
+          label: t(`member.${buddy.role}`),
+        }
+      : null
+
+  return (
+    <div className={`flex min-w-0 flex-1 items-center gap-3 ${className}`}>
+      <div className="relative shrink-0">
+        <UserAvatar
+          userId={buddy.userId}
+          avatarUrl={buddy.avatarUrl}
+          displayName={displayName}
+          size="sm"
+        />
+        <div
+          className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-bg-secondary ${statusColors[buddy.status]}`}
+          title={t(`member.${buddy.status}`)}
+        />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <span
+            className={`truncate text-[15px] font-medium ${buddy.status === 'offline' ? 'text-text-muted' : 'text-text-secondary group-hover:text-text-primary'} transition`}
+          >
+            {displayName}
+          </span>
+          {buddy.isBot && showBotBadge && (
+            <Badge variant="info" size="xs">
+              <Check size={8} className="mr-0.5" />
+              Buddy
+            </Badge>
+          )}
+        </div>
+        {roleBadge && (
+          <Badge
+            variant={
+              buddy.role === 'owner' ? 'warning' : buddy.role === 'admin' ? 'info' : 'neutral'
+            }
+            size="xs"
+          >
+            {roleBadge.label}
+          </Badge>
+        )}
+        {buddy.isBot &&
+          showOnlineRank &&
+          buddy.totalOnlineSeconds != null &&
+          buddy.totalOnlineSeconds > 0 && (
+            <OnlineRank totalSeconds={buddy.totalOnlineSeconds} compact={onlineRankCompact} />
+          )}
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -78,7 +154,6 @@ export function BuddyListItem({
   onlineRankCompact = false,
   children,
 }: BuddyListItemProps) {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   const itemRef = useRef<HTMLButtonElement>(null)
 
@@ -86,8 +161,6 @@ export function BuddyListItem({
   const [isHovered, setIsHovered] = useState(false)
   const [hoverAnchorRect, setHoverAnchorRect] = useState<DOMRect | null>(null)
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const displayName = buddy.nickname ?? buddy.displayName
 
   const handleClick = useCallback(() => {
     if (onClick) {
@@ -114,19 +187,6 @@ export function BuddyListItem({
       setIsHovered(false)
     }, 200)
   }, [])
-
-  const roleBadge =
-    showRoleBadge && buddy.role && buddy.role !== 'member'
-      ? {
-          label: t(`member.${buddy.role}`),
-          color:
-            buddy.role === 'owner'
-              ? 'text-accent'
-              : buddy.role === 'admin'
-                ? 'text-primary'
-                : 'text-text-muted',
-        }
-      : null
 
   if (children) {
     return (
@@ -156,52 +216,13 @@ export function BuddyListItem({
         onMouseLeave={handleMouseLeave}
         className={`flex items-center gap-3 px-2 py-1.5 w-full rounded-md hover:bg-bg-tertiary/50 hover:backdrop-blur-sm transition group text-left ${className}`}
       >
-        {/* Avatar with status dot */}
-        <div className="relative shrink-0">
-          <UserAvatar
-            userId={buddy.userId}
-            avatarUrl={buddy.avatarUrl}
-            displayName={displayName}
-            size="sm"
-          />
-          <div
-            className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-bg-secondary ${statusColors[buddy.status]}`}
-            title={t(`member.${buddy.status}`)}
-          />
-        </div>
-
-        {/* Name and info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1">
-            <span
-              className={`text-[15px] truncate font-medium ${buddy.status === 'offline' ? 'text-text-muted' : 'text-text-secondary group-hover:text-text-primary'} transition`}
-            >
-              {displayName}
-            </span>
-            {buddy.isBot && showBotBadge && (
-              <Badge variant="info" size="xs">
-                <Check size={8} className="mr-0.5" />
-                Buddy
-              </Badge>
-            )}
-          </div>
-          {roleBadge && (
-            <Badge
-              variant={
-                buddy.role === 'owner' ? 'warning' : buddy.role === 'admin' ? 'info' : 'neutral'
-              }
-              size="xs"
-            >
-              {roleBadge.label}
-            </Badge>
-          )}
-          {buddy.isBot &&
-            showOnlineRank &&
-            buddy.totalOnlineSeconds != null &&
-            buddy.totalOnlineSeconds > 0 && (
-              <OnlineRank totalSeconds={buddy.totalOnlineSeconds} compact={onlineRankCompact} />
-            )}
-        </div>
+        <BuddyInfo
+          buddy={buddy}
+          showBotBadge={showBotBadge}
+          showRoleBadge={showRoleBadge}
+          showOnlineRank={showOnlineRank}
+          onlineRankCompact={onlineRankCompact}
+        />
 
         {/* Right element (actions, select button, etc.) */}
         {rightElement && <div className="shrink-0">{rightElement}</div>}

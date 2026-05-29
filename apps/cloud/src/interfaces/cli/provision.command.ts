@@ -69,7 +69,7 @@ export function createProvisionCommand(container: ServiceContainer) {
 
           const agents = resolved.deployments?.agents ?? []
           const namespace = resolved.deployments?.namespace ?? 'shadowob-cloud'
-          const existing = loadProvisionState(filePath, options.stateDir)
+          const existing = options.force ? null : loadProvisionState(filePath, options.stateDir)
           const extraSecrets: Record<string, string> = {
             SHADOW_SERVER_URL: shadowUrl,
             SHADOW_USER_TOKEN: shadowToken,

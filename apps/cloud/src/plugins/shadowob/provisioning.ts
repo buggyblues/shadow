@@ -527,11 +527,12 @@ async function provisionChannel(
   // Check existing channels
   try {
     const channels = await client.getServerChannels(serverId)
-    const expectedName = normalizeChannelName(channelDef.title)
-    const expectedId = normalizeChannelName(channelDef.id)
+    const expectedKeys = new Set([
+      ...channelMatchKeys(channelDef.title),
+      ...channelMatchKeys(channelDef.id),
+    ])
     const existing = channels.find((c) => {
-      const channelName = normalizeChannelName(c.name)
-      return channelName === expectedName || channelName === expectedId
+      return channelMatchKeys(c.name).some((key) => expectedKeys.has(key))
     })
     if (existing) {
       log.dim(`    Channel "${channelDef.title}" already exists (${existing.id})`)
@@ -749,53 +750,76 @@ async function processBinding(
     }
   }
 
-  // Apply replyPolicy per channel via upsertPolicy (if specified in binding)
-  if (binding.replyPolicy) {
-    const policy = binding.replyPolicy
-    const mentionOnly = policy.mode === 'mentionOnly'
-    const reply = policy.mode !== 'disabled'
-    const policyConfig: Record<string, unknown> = {}
-    if (policy.mode === 'custom' && policy.custom) {
-      Object.assign(policyConfig, policy.custom)
-    }
+  const policyMode = binding.replyPolicy?.mode ?? 'default'
+  const policyConfig: Record<string, unknown> = {}
+  if (binding.replyPolicy?.mode === 'custom' && binding.replyPolicy.custom) {
+    Object.assign(policyConfig, binding.replyPolicy.custom)
+  }
+  const channelPolicy = {
+    listen: binding.replyPolicy?.mode !== 'disabled',
+    reply: binding.replyPolicy?.mode !== 'disabled',
+    mentionOnly: binding.replyPolicy?.mode === 'mentionOnly',
+    config: policyConfig,
+  }
 
-    for (const serverConfigId of binding.servers) {
-      const serverId = result.servers.get(serverConfigId)
-      if (!serverId) continue
+  for (const serverConfigId of binding.servers) {
+    const serverId = result.servers.get(serverConfigId)
+    if (!serverId) continue
 
-      // Apply server-level policy (no channelId = default for all channels)
+    if (binding.channels.length > 0) {
+      // A channel-scoped binding must not leave the server-wide default permissive,
+      // otherwise the Buddy listens/replies in every channel when runtime config
+      // falls back to the server default.
       try {
         await client.upsertPolicy(buddyInfo.agentId, serverId, {
           channelId: null,
-          mentionOnly,
-          reply,
-          config: policyConfig,
+          listen: false,
+          reply: false,
+          mentionOnly: false,
+          config: {},
         })
         log.success(
-          `  Applied replyPolicy "${policy.mode}" to buddy "${binding.targetId}" in server "${serverConfigId}"`,
+          `  Disabled server-wide default for channel-scoped buddy "${binding.targetId}" in server "${serverConfigId}"`,
         )
       } catch {
         log.dim(
-          `  Could not apply replyPolicy to buddy "${binding.targetId}" in server "${serverConfigId}"`,
+          `  Could not disable server-wide default for buddy "${binding.targetId}" in server "${serverConfigId}"`,
         )
       }
 
-      // Override per-channel if channels are explicitly listed
       for (const channelConfigId of binding.channels) {
         const channelId = result.channels.get(channelConfigId)
         if (!channelId) continue
         try {
           await client.upsertPolicy(buddyInfo.agentId, serverId, {
             channelId,
-            mentionOnly,
-            reply,
-            config: policyConfig,
+            ...channelPolicy,
           })
-        } catch {
+          log.success(
+            `  Applied channel-scoped replyPolicy "${policyMode}" to buddy "${binding.targetId}" in channel "${channelConfigId}"`,
+          )
+        } catch (err) {
           log.dim(
-            `  Could not apply per-channel replyPolicy for "${channelConfigId}" — server policy applies`,
+            `  Could not apply channel-scoped replyPolicy for "${channelConfigId}": ${formatErrorMessage(err)}`,
           )
         }
+      }
+      continue
+    }
+
+    if (binding.replyPolicy) {
+      try {
+        await client.upsertPolicy(buddyInfo.agentId, serverId, {
+          channelId: null,
+          ...channelPolicy,
+        })
+        log.success(
+          `  Applied replyPolicy "${binding.replyPolicy.mode}" to buddy "${binding.targetId}" in server "${serverConfigId}"`,
+        )
+      } catch {
+        log.dim(
+          `  Could not apply replyPolicy to buddy "${binding.targetId}" in server "${serverConfigId}"`,
+        )
       }
     }
   }
@@ -862,13 +886,18 @@ async function listAccessibleServers(client: ShadowClient): Promise<AccessibleSh
   }
 }
 
-function normalizeChannelName(value: string | null | undefined): string {
-  return (value ?? '')
-    .toLowerCase()
-    .trim()
-    .replace(/^#/, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+function channelMatchKeys(value: string | null | undefined): string[] {
+  const raw = (value ?? '').toLowerCase().normalize('NFKC').trim().replace(/^#/, '')
+  const keys = new Set<string>()
+  const unicodeKey = raw.replace(/\s+/g, ' ')
+  if (unicodeKey) keys.add(unicodeKey)
+
+  // ASCII slugs are useful for matching config ids like "code-review" against
+  // user-visible names, but pure non-Latin names must never collapse to "".
+  const asciiSlug = raw.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  if (asciiSlug) keys.add(asciiSlug)
+
+  return [...keys]
 }
 
 function formatErrorMessage(err: unknown): string {

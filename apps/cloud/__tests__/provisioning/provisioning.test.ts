@@ -292,6 +292,224 @@ describe('provisioning', () => {
       ])
     })
 
+    it('creates separate non-ASCII named channels instead of collapsing them', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [
+                {
+                  id: 'trainer-server',
+                  name: 'Code Trainer',
+                  channels: [
+                    { id: 'assistant-news', title: '助教资讯' },
+                    { id: 'learning-plan', title: '学习规划' },
+                    { id: 'wrong-problems', title: '错题回炉' },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      }
+
+      const createdChannels: Array<{ id: string; serverId: string; name: string }> = []
+      shadowClientMocks.listServers.mockResolvedValue([])
+      shadowClientMocks.createServer.mockResolvedValue({ id: 'server-real', name: 'Code Trainer' })
+      shadowClientMocks.getServerChannels.mockImplementation(async () => createdChannels)
+      shadowClientMocks.createChannel.mockImplementation(async (serverId, data) => {
+        const channel = {
+          id: `channel-${createdChannels.length + 1}`,
+          serverId,
+          name: data.name,
+        }
+        createdChannels.push(channel)
+        return channel
+      })
+
+      const result = await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.createChannel).toHaveBeenCalledTimes(3)
+      expect(createdChannels.map((channel) => channel.name)).toEqual([
+        '助教资讯',
+        '学习规划',
+        '错题回炉',
+      ])
+      expect(new Set(result.channels.values()).size).toBe(3)
+    })
+
+    it('reuses only the exact non-ASCII channel match when one already exists', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [
+                {
+                  id: 'trainer-server',
+                  name: 'Code Trainer',
+                  channels: [
+                    { id: 'assistant-news', title: '助教资讯' },
+                    { id: 'problem-recommendations', title: '题目推荐' },
+                    { id: 'learning-plan', title: '学习规划' },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      }
+
+      const createdChannels: Array<{ id: string; serverId: string; name: string }> = [
+        { id: 'existing-news', serverId: 'server-real', name: '助教资讯' },
+      ]
+      shadowClientMocks.listServers.mockResolvedValue([])
+      shadowClientMocks.createServer.mockResolvedValue({ id: 'server-real', name: 'Code Trainer' })
+      shadowClientMocks.getServerChannels.mockImplementation(async () => createdChannels)
+      shadowClientMocks.createChannel.mockImplementation(async (serverId, data) => {
+        const channel = {
+          id: `channel-${createdChannels.length + 1}`,
+          serverId,
+          name: data.name,
+        }
+        createdChannels.push(channel)
+        return channel
+      })
+
+      const result = await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.createChannel).toHaveBeenCalledTimes(2)
+      expect(createdChannels.map((channel) => channel.name)).toEqual([
+        '助教资讯',
+        '题目推荐',
+        '学习规划',
+      ])
+      expect(Object.fromEntries(result.channels)).toEqual({
+        'assistant-news': 'existing-news',
+        'problem-recommendations': 'channel-2',
+        'learning-plan': 'channel-3',
+      })
+      expect(new Set(result.channels.values()).size).toBe(3)
+    })
+
+    it('keeps channel-scoped buddy bindings out of the server-wide default policy', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [
+                {
+                  id: 'trainer-server',
+                  name: 'Code Trainer',
+                  channels: [
+                    { id: 'plan', title: '学习规划' },
+                    { id: 'review', title: '代码复盘' },
+                  ],
+                },
+              ],
+              buddies: [{ id: 'coach-buddy', name: '算法教练' }],
+              bindings: [
+                {
+                  targetId: 'coach-buddy',
+                  targetType: 'buddy',
+                  servers: ['trainer-server'],
+                  channels: ['plan', 'review'],
+                  agentId: 'coach-agent',
+                  replyPolicy: { mode: 'mentionOnly' },
+                },
+              ],
+            },
+          },
+        ],
+      }
+
+      shadowClientMocks.listServers.mockResolvedValue([])
+      shadowClientMocks.createServer.mockResolvedValue({ id: 'server-real', name: 'Code Trainer' })
+      shadowClientMocks.getServerChannels.mockResolvedValue([])
+      shadowClientMocks.createChannel
+        .mockResolvedValueOnce({ id: 'channel-plan', serverId: 'server-real', name: '学习规划' })
+        .mockResolvedValueOnce({ id: 'channel-review', serverId: 'server-real', name: '代码复盘' })
+      shadowClientMocks.listAgents.mockResolvedValue([])
+      shadowClientMocks.createAgent.mockResolvedValue({
+        id: 'agent-real',
+        userId: 'buddy-user-real',
+      })
+      shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'buddy-token' })
+      shadowClientMocks.addAgentsToServer.mockResolvedValue({ added: ['agent-real'], failed: [] })
+      shadowClientMocks.addChannelMember.mockResolvedValue(undefined)
+      shadowClientMocks.upsertPolicy.mockResolvedValue({})
+
+      await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.addChannelMember).toHaveBeenCalledWith(
+        'channel-plan',
+        'buddy-user-real',
+      )
+      expect(shadowClientMocks.addChannelMember).toHaveBeenCalledWith(
+        'channel-review',
+        'buddy-user-real',
+      )
+      expect(shadowClientMocks.upsertPolicy).toHaveBeenCalledWith('agent-real', 'server-real', {
+        channelId: null,
+        listen: false,
+        reply: false,
+        mentionOnly: false,
+        config: {},
+      })
+      expect(shadowClientMocks.upsertPolicy).toHaveBeenCalledWith('agent-real', 'server-real', {
+        channelId: 'channel-plan',
+        listen: true,
+        reply: true,
+        mentionOnly: true,
+        config: {},
+      })
+      expect(shadowClientMocks.upsertPolicy).toHaveBeenCalledWith('agent-real', 'server-real', {
+        channelId: 'channel-review',
+        listen: true,
+        reply: true,
+        mentionOnly: true,
+        config: {},
+      })
+    })
+
     it('fails provisioning when server binding rejects the buddy', async () => {
       const config: CloudConfig = {
         version: '1',

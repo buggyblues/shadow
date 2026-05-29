@@ -11,9 +11,16 @@
     {
       "plugin": "shadowob",
       "options": {
-        "playLaunch": {
-          "defaultChannelName": "match-street",
-          "greeting": "{userName}，夜风有点冷。我把一盒会发光的火柴留在掌心。等你准备好，我们可以先划亮一根。"
+        "greeting": {
+          "entryChannelId": "match-street",
+          "messages": [
+            {
+              "id": "match-street-welcome",
+              "channelId": "match-street",
+              "buddyId": "match-girl",
+              "content": "{userName}，夜风有点冷。我把一盒会发光的火柴留在掌心。等你准备好，我们可以先划亮一根。"
+            }
+          ]
         },
         "servers": [
           {

@@ -57,6 +57,11 @@ describe('play launch orchestration', () => {
       findByUserId: vi.fn(),
       findPlayCatalogBuddyByTemplateSlug: vi.fn(),
     },
+    greetingService: {
+      getUserProfile: vi.fn(),
+      addBuddiesAndGreet: vi.fn(),
+      ensureCloudDeploymentGreeting: vi.fn(),
+    },
     agentPolicyService: {
       ensureServerDefault: vi.fn(),
     },
@@ -113,6 +118,12 @@ describe('play launch orchestration', () => {
       username: 'alice',
       displayName: 'Alice',
     })
+    deps.greetingService.getUserProfile.mockResolvedValue({
+      friendlyName: 'Alice',
+      channelNameSegment: 'Alice',
+    })
+    deps.greetingService.addBuddiesAndGreet.mockResolvedValue(undefined)
+    deps.greetingService.ensureCloudDeploymentGreeting.mockResolvedValue(undefined)
     deps.agentDao.findByUserId.mockResolvedValue({
       id: 'agent-1',
       userId: 'buddy-user-1',
@@ -222,7 +233,6 @@ describe('play launch orchestration', () => {
         serverSlug: 'community',
         channelName: 'general',
         buddyUserIds: ['buddy-user-1'],
-        greeting: '{userName}, welcome to World Pulse.',
       },
     })
 
@@ -239,13 +249,21 @@ describe('play launch orchestration', () => {
       serverId: 'server-1',
       channelId: 'channel-1',
     })
-    expect(deps.messageService.send).toHaveBeenCalledWith(
+    expect(deps.greetingService.addBuddiesAndGreet).toHaveBeenCalledWith(
+      'server-1',
       'channel-1',
-      'buddy-user-1',
+      [{ userId: 'buddy-user-1', agentId: 'agent-1' }],
       expect.objectContaining({
-        content: 'Alice, welcome to World Pulse.',
+        greeting: expect.stringContaining('world-pulse'),
+        metadata: expect.objectContaining({
+          greeting: expect.objectContaining({
+            kind: 'public_channel',
+            playId: 'world-pulse',
+          }),
+        }),
       }),
     )
+    expect(deps.greetingService.addBuddiesAndGreet.mock.calls[0]?.[3].greeting).toContain('Alice')
   })
 
   it('does not fall back to an arbitrary public server for incomplete play actions', async () => {
@@ -323,7 +341,6 @@ describe('play launch orchestration', () => {
       locale: 'zh-CN',
     })
 
-    expect(deps.serverService.addBotMember).toHaveBeenCalledWith('server-1', 'buddy-user-1')
     expect(deps.channelService.create).toHaveBeenCalledWith(
       'server-1',
       expect.objectContaining({
@@ -332,42 +349,21 @@ describe('play launch orchestration', () => {
       }),
       'user-1',
     )
-    expect(deps.agentPolicyService.ensureServerDefault).toHaveBeenCalledWith('agent-1', 'server-1')
-    expect(deps.channelService.addMember).toHaveBeenCalledWith('channel-1', 'buddy-user-1')
-    expect(deps.io.to).toHaveBeenCalledWith('user:buddy-user-1')
-    expect(ioEmit).toHaveBeenCalledWith('channel:member-added', {
-      channelId: 'channel-1',
-      serverId: 'server-1',
-    })
-    expect(ioEmit).toHaveBeenCalledWith(
-      'agent:policy-changed',
-      expect.objectContaining({
-        agentId: 'agent-1',
-        channelId: 'channel-1',
-        serverId: 'server-1',
-        reply: true,
-      }),
-    )
-    expect(deps.messageService.send).toHaveBeenCalledWith(
+    expect(deps.greetingService.addBuddiesAndGreet).toHaveBeenCalledWith(
+      'server-1',
       'channel-1',
-      'buddy-user-1',
+      [{ userId: 'buddy-user-1', agentId: 'agent-1' }],
       expect.objectContaining({
-        content: expect.stringContaining('退休助手'),
+        greeting: expect.stringContaining('退休助手'),
         metadata: expect.objectContaining({
-          playLaunch: expect.objectContaining({
+          greeting: expect.objectContaining({
             kind: 'private_room',
             templateSlug: 'retire-buddy',
           }),
         }),
       }),
     )
-    expect(deps.messageService.send).toHaveBeenCalledWith(
-      'channel-1',
-      'buddy-user-1',
-      expect.objectContaining({
-        content: expect.stringContaining('Alice'),
-      }),
-    )
+    expect(deps.greetingService.addBuddiesAndGreet.mock.calls[0]?.[3].greeting).toContain('Alice')
     expect(result).toMatchObject({
       status: 'launched',
       channelId: 'channel-1',
@@ -467,26 +463,24 @@ describe('play launch orchestration', () => {
                 OPENAI_COMPATIBLE_BASE_URL: 'http://host.lima.internal:3002/api/ai/v1',
                 OPENAI_COMPATIBLE_API_KEY: expect.stringMatching(/^smp_/),
               }),
-            }),
-            use: expect.arrayContaining([
-              expect.objectContaining({
-                plugin: 'shadowob',
-                options: expect.objectContaining({
-                  playLaunch: expect.objectContaining({
-                    greeting: expect.stringContaining('Alice'),
+              greeting: expect.objectContaining({
+                messages: expect.arrayContaining([
+                  expect.objectContaining({
+                    id: 'default',
+                    content: expect.stringContaining('Alice'),
                   }),
-                }),
+                ]),
               }),
-            ]),
+            }),
           }),
         }),
       )
       const createArg = deps.cloudDeploymentDao.create.mock.calls[0]?.[0]
       expect(createArg?.configSnapshot.__shadowobRuntime.envVars.DEEPSEEK_API_KEY).toBeUndefined()
       expect(createArg?.configSnapshot.__shadowobRuntime.envVars.SHADOW_USER_TOKEN).toBeUndefined()
-      expect(createArg?.configSnapshot.use[0]?.options.playLaunch.greeting).not.toContain(
-        'undefined',
-      )
+      expect(
+        createArg?.configSnapshot.__shadowobRuntime.greeting.messages[0]?.content,
+      ).not.toContain('undefined')
       expect(deps.channelService.create).not.toHaveBeenCalled()
       expect(result).toMatchObject({
         status: 'deploying',
@@ -586,9 +580,16 @@ describe('play launch orchestration', () => {
     const deployedSnapshot = {
       ...templateContent,
       __shadowobRuntime: {
-        playLaunch: {
-          defaultChannelName: 'delivery',
-          greeting: '{userName}，欢迎来到 BMAD 方法空间。',
+        greeting: {
+          entryChannelId: 'delivery',
+          messages: [
+            {
+              id: 'welcome',
+              channelId: 'delivery',
+              buddyId: 'gstack-bot',
+              content: '{userName}，欢迎来到 BMAD 方法空间。',
+            },
+          ],
         },
         provisionState: {
           plugins: {
@@ -651,7 +652,6 @@ describe('play launch orchestration', () => {
         kind: 'cloud_deploy',
         templateSlug: 'gstack-buddy',
         resourceTier: 'lightweight',
-        defaultChannelName: 'delivery',
       },
     })
 
@@ -661,35 +661,12 @@ describe('play launch orchestration', () => {
       locale: 'zh-CN',
     })
 
-    expect(deps.messageService.send).toHaveBeenCalledWith(
-      'channel-1',
-      'buddy-user-1',
+    expect(deps.greetingService.ensureCloudDeploymentGreeting).toHaveBeenCalledWith(
+      'user-1',
       expect.objectContaining({
-        content: 'Alice，欢迎来到 BMAD 方法空间。',
-        metadata: expect.objectContaining({
-          playLaunch: expect.objectContaining({
-            kind: 'cloud_deploy',
-            deploymentId: 'deployment-1',
-          }),
-        }),
-      }),
-    )
-    const greetingMessage = deps.messageService.send.mock.calls[0]?.[2]
-    expect(greetingMessage?.metadata?.commerceCards).toBeUndefined()
-    expect(deps.serverService.addBotMember).toHaveBeenCalledWith('server-1', 'buddy-user-1')
-    expect(deps.channelService.addMember).toHaveBeenCalledWith('channel-1', 'buddy-user-1')
-    expect(deps.agentPolicyService.ensureServerDefault).toHaveBeenCalledWith('agent-1', 'server-1')
-    expect(ioEmit).toHaveBeenCalledWith('channel:member-added', {
-      channelId: 'channel-1',
-      serverId: 'server-1',
-    })
-    expect(ioEmit).toHaveBeenCalledWith(
-      'agent:policy-changed',
-      expect.objectContaining({
-        agentId: 'agent-1',
-        channelId: 'channel-1',
-        serverId: 'server-1',
-        reply: true,
+        id: 'deployment-1',
+        status: 'deployed',
+        templateSlug: 'gstack-buddy',
       }),
     )
     expect(result).toMatchObject({

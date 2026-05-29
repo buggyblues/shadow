@@ -84,5 +84,6 @@ apps/flash/data/
 apps/flash/output/
 integrations/flash/data/
 integrations/flash/output/
+integrations/agentank/data/
 
 .claude/

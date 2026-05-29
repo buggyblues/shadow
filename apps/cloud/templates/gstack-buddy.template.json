@@ -44,7 +44,10 @@
             "channels": ["office-hours", "weekly-retro"],
             "agentId": "strategy-buddy"
           }
-        ]
+        ],
+        "greeting": {
+          "entryChannelId": "office-hours"
+        }
       }
     }
   ],

@@ -130,6 +130,7 @@ export type TemplateCategoryId =
   | 'research'
   | 'monitoring'
   | 'business'
+  | 'education'
   | 'demo'
 
 export type TemplateDifficulty = 'beginner' | 'intermediate' | 'advanced'

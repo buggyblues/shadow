@@ -13,6 +13,7 @@ import { createChannelHandler } from './handlers/channel.handler'
 import { createCloudHandler } from './handlers/cloud.handler'
 import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
 import { createConfigHandler } from './handlers/config.handler'
+import { createConnectorHandler } from './handlers/connector.handler'
 import { createDiscoverHandler } from './handlers/discover.handler'
 import { createEconomyHandler } from './handlers/economy.handler'
 import { createFeatureFlagsHandler } from './handlers/feature-flags.handler'
@@ -174,6 +175,9 @@ export function createApp(container: AppContainer) {
   // mounted before broad /api sub-app auth middleware.
   app.route('/api', createPaidFileHandler(container))
   app.route('/api', createAppIntegrationHandler(container))
+  // Connector daemon routes use machine-token auth and must be mounted before broad /api
+  // handlers that apply user auth middleware to every child path.
+  app.route('/api', createConnectorHandler(container))
   // Mount workspace before /api/servers so nested /api/servers/:serverId/workspace/*
   // routes are not pre-empted by server auth middleware.
   app.route('/api', createWorkspaceHandler(container))

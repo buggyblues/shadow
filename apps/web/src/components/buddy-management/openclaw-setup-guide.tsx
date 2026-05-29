@@ -144,7 +144,9 @@ export function OpenClawSetupGuide({
         <h3 className="text-sm font-semibold text-text-primary">
           {t('agentMgmt.connectorGuideTitle')}
         </h3>
-        <p className="text-sm text-text-secondary leading-6">{t('agentMgmt.connectorGuideDesc')}</p>
+        <p className="text-sm text-text-secondary leading-6">
+          {t('agentMgmt.connectorLegacyGuideDesc')}
+        </p>
         <div className="pt-1">{connectButton}</div>
       </div>
     )
@@ -166,7 +168,7 @@ export function OpenClawSetupGuide({
       ) : null}
       {!compact && (
         <p className="text-sm text-text-muted font-bold italic mb-5">
-          {t('agentMgmt.connectorGuideDesc')}
+          {t('agentMgmt.connectorLegacyGuideDesc')}
         </p>
       )}
 

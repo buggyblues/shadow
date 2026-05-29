@@ -3,7 +3,6 @@ export type ShadowPlayAvailability = 'available' | 'gated' | 'coming_soon' | 'mi
 type PlayActionBase = {
   buddyUserIds?: string[]
   buddyTemplateSlug?: string
-  greeting?: string
 }
 
 export type ShadowPlayAction =
@@ -25,7 +24,6 @@ export type ShadowPlayAction =
       kind: 'cloud_deploy'
       templateSlug: string
       resourceTier?: 'lightweight' | 'standard' | 'pro'
-      defaultChannelName?: string
     })
   | {
       kind: 'external_oauth_app'
@@ -88,30 +86,26 @@ const playTemplate = (id: string) => ({
   materials: { cover: playCover(id) },
 })
 
-const communityAction = (channelName: string, greeting?: string): ShadowPlayAction => ({
+const communityAction = (channelName: string): ShadowPlayAction => ({
   kind: 'public_channel',
   channelName,
   buddyTemplateSlug: channelName,
-  ...(greeting ? { greeting } : {}),
 })
 
-const roomAction = (namePrefix: string, greeting?: string): ShadowPlayAction => ({
+const roomAction = (namePrefix: string): ShadowPlayAction => ({
   kind: 'private_room',
   namePrefix,
   buddyTemplateSlug: namePrefix,
-  ...(greeting ? { greeting } : {}),
 })
 
 const cloudAction = (
   templateSlug: string,
   resourceTier: 'lightweight' | 'standard' | 'pro' = 'lightweight',
-  defaultChannelName?: string,
 ): ShadowPlayAction => ({
   kind: 'cloud_deploy',
   templateSlug,
   buddyTemplateSlug: templateSlug,
   resourceTier,
-  ...(defaultChannelName ? { defaultChannelName } : {}),
 })
 
 export function getPlayBuddyUsername(templateSlug: string) {
@@ -174,17 +168,16 @@ function cloudPlay(
   input: Omit<
     ShadowHomePlayCatalogItem,
     'id' | 'image' | 'status' | 'action' | 'gates' | 'template' | 'materials'
-  > & { defaultChannelName?: string },
+  >,
 ): ShadowHomePlayCatalogItem {
-  const { defaultChannelName, ...content } = input
   return {
     id,
     image: playCover(id),
     status: 'gated',
-    action: cloudAction(id, 'lightweight', defaultChannelName),
+    action: cloudAction(id, 'lightweight'),
     gates: { auth: 'required', membership: 'required', profile: 'optional' },
     ...playTemplate(id),
-    ...content,
+    ...input,
   }
 }
 
@@ -350,7 +343,7 @@ export const DEFAULT_HOMEPLAY_CATALOG: ShadowHomePlayCatalogItem[] = [
     accentColor: '#f59e0b',
     hot: true,
     status: 'gated',
-    action: cloudAction('little-match-girl', 'lightweight', 'match-street'),
+    action: cloudAction('little-match-girl', 'lightweight'),
     gates: { auth: 'required', membership: 'required', profile: 'optional' },
     ...playTemplate('little-match-girl'),
     materials: { cover: '/home-assets/topics/night-radio.jpg' },
@@ -366,7 +359,6 @@ export const DEFAULT_HOMEPLAY_CATALOG: ShadowHomePlayCatalogItem[] = [
     starts: '16.4k',
     accentColor: '#22d3ee',
     hot: true,
-    defaultChannelName: 'choose',
   }),
   cloudPlay('bmad-method-buddy', {
     title: 'BMAD 方法 Buddy',
@@ -378,7 +370,6 @@ export const DEFAULT_HOMEPLAY_CATALOG: ShadowHomePlayCatalogItem[] = [
     categoryEn: 'Buddy Teams',
     starts: '13.7k',
     accentColor: '#60a5fa',
-    defaultChannelName: 'delivery',
   }),
   cloudPlay('claude-ads-buddy', {
     title: 'Claude Ads Buddy',
@@ -448,7 +439,6 @@ export const DEFAULT_HOMEPLAY_CATALOG: ShadowHomePlayCatalogItem[] = [
     starts: '15.1k',
     accentColor: '#fb923c',
     hot: true,
-    defaultChannelName: 'office-hours',
   }),
   cloudPlay('marketingskills-buddy', {
     title: '营销技能 Buddy',

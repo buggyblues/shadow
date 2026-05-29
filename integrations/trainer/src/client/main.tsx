@@ -16,10 +16,13 @@ import {
   Outlet,
   RouterProvider,
   useNavigate,
+  useSearch,
 } from '@tanstack/react-router'
 import clsx from 'clsx'
 import {
+  AlertCircle,
   ArrowRight,
+  BarChart3,
   BookOpen,
   Bot,
   CheckCircle2,
@@ -37,6 +40,8 @@ import {
   RotateCcw,
   Search,
   Send,
+  Settings,
+  Target,
   TerminalSquare,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
@@ -49,12 +54,17 @@ import type {
   SubmissionCoachingFocus,
   SubmissionReviewFocus,
   TrainerLanguage,
+  TrainerOverview,
+  TrainerSettings,
 } from '../types.js'
 import {
   type BuddyInboxOption,
   createSubmission,
   getChallenge,
+  getLearningOverview,
   getSubmission,
+  type InboxDelivery,
+  type InboxDeliveryError,
   importProblemSource,
   listBuddyInboxes,
   listChallenges,
@@ -62,6 +72,7 @@ import {
   type ProblemSource,
   searchProblemSources,
   subscribeTrainerEvents,
+  updateTrainerSettings,
 } from './api.js'
 import { configureMonacoWorkers } from './monaco.js'
 import './styles.css'
@@ -80,6 +91,17 @@ type ReviewFocusOption = {
   label: string
   hint: string
 }
+type ReviewDispatchStatus = 'delivered' | 'pending_approval' | 'error' | 'unconfirmed'
+type ReviewDispatchNotice = {
+  status: ReviewDispatchStatus
+  reviewerLabel: string
+  channelId?: string
+  messageId?: string
+  taskId?: string | null
+  pendingId?: string | null
+  error?: string
+}
+type ReviewFlowStepState = 'complete' | 'active' | 'waiting' | 'error'
 type ProblemSourceProvider = ProblemSource['provider']
 
 const queryClient = new QueryClient()
@@ -91,6 +113,9 @@ const languageOptions: LanguageOption[] = [
 const reviewerStorageKey = 'shadow-trainer:preferred-reviewer'
 const reviewFocusStorageKey = 'shadow-trainer:review-focus'
 const coachingFocusStorageKey = 'shadow-trainer:coaching-focuses'
+const reviewDispatchStoragePrefix = 'shadow-trainer:review-dispatch:'
+const hostNavigationRequestType = 'shadow.app.navigate'
+const hostNavigationAckType = 'shadow.app.navigate.ack'
 const reviewFocusOptions: ReviewFocusOption[] = [
   {
     value: 'standard',
@@ -197,10 +222,22 @@ const submissionsRoute = createRoute({
   component: SubmissionsPage,
 })
 
+const learningRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/learning',
+  component: LearningPage,
+})
+
 const importRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/import',
   component: ImportPage,
+})
+
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  component: SettingsPage,
 })
 
 const problemRoute = createRoute({
@@ -231,7 +268,9 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   problemsRoute,
   submissionsRoute,
+  learningRoute,
   importRoute,
+  settingsRoute,
   problemRoute,
   problemSubmissionsRoute,
   submissionDetailRoute,
@@ -251,6 +290,7 @@ declare module '@tanstack/react-router' {
 
 function RootLayout() {
   useTrainerRuntimeInvalidation()
+  useTrainerHostNavigation()
 
   return (
     <div className="appShell">
@@ -271,8 +311,14 @@ function RootLayout() {
           <Link activeProps={{ className: 'active' }} to="/submissions">
             Submissions
           </Link>
+          <Link activeProps={{ className: 'active' }} to="/learning">
+            Learning
+          </Link>
           <Link activeProps={{ className: 'active' }} to="/import">
             Import
+          </Link>
+          <Link activeProps={{ className: 'active' }} to="/settings">
+            Settings
           </Link>
         </nav>
       </header>
@@ -425,16 +471,346 @@ function ProblemCard({ challenge, index }: { challenge: Challenge; index: number
   )
 }
 
+function LearningPage() {
+  const overviewQuery = useQuery({
+    queryKey: ['learning-overview'],
+    queryFn: getLearningOverview,
+  })
+  const overview = overviewQuery.data?.overview
+
+  return (
+    <main className="learningPage">
+      <section className="libraryHeader">
+        <div>
+          <p className="eyebrow">Training loop</p>
+          <h1>Learning signals</h1>
+        </div>
+      </section>
+
+      {overviewQuery.isLoading ? (
+        <EmptyState icon={<Loader2 className="spinIcon" />} title="Loading learning state" />
+      ) : overview ? (
+        <div className="learningGrid">
+          <LearningStats overview={overview} />
+          <BuddySignalsPanel overview={overview} />
+          <SkillsPanel overview={overview} />
+          <RecentLearningPanel overview={overview} />
+        </div>
+      ) : (
+        <EmptyState icon={<BarChart3 size={24} />} title="Learning state unavailable" />
+      )}
+    </main>
+  )
+}
+
+const difficultyOptions: Array<{
+  value: TrainerSettings['difficultyMode']
+  label: string
+  detail: string
+}> = [
+  { value: 'easy', label: 'Easy', detail: 'ACK > 75%' },
+  { value: 'medium', label: 'Medium', detail: 'ACK 20%-75%' },
+  { value: 'hard', label: 'Hard', detail: 'ACK 5%-20%' },
+  { value: 'hell', label: 'Hell', detail: 'ACK < 5%' },
+]
+
+function SettingsPage() {
+  const client = useQueryClient()
+  const overviewQuery = useQuery({
+    queryKey: ['learning-overview'],
+    queryFn: getLearningOverview,
+  })
+  const settings = overviewQuery.data?.overview.settings
+  const [difficultyMode, setDifficultyMode] = useState<TrainerSettings['difficultyMode']>('medium')
+  const [targetProblems, setTargetProblems] = useState('20')
+  const [deadlineAt, setDeadlineAt] = useState('')
+  const saveSettings = useMutation({
+    mutationFn: () =>
+      updateTrainerSettings({
+        difficultyMode,
+        targetProblems: Number(targetProblems) || undefined,
+        deadlineAt: deadlineAt ? new Date(deadlineAt).toISOString() : undefined,
+      }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['learning-overview'] })
+    },
+  })
+
+  useEffect(() => {
+    if (!settings) return
+    setDifficultyMode(settings.difficultyMode)
+    setTargetProblems(String(settings.targetProblems ?? 20))
+    setDeadlineAt(settings.deadlineAt ? settings.deadlineAt.slice(0, 16) : '')
+  }, [settings])
+
+  return (
+    <main className="learningPage">
+      <section className="libraryHeader">
+        <div>
+          <p className="eyebrow">Adaptive loop</p>
+          <h1>Learning settings</h1>
+        </div>
+      </section>
+      <section className="settingsPanel">
+        <PanelTitle icon={<Settings size={17} />} title="Difficulty control" />
+        <div className="difficultyGrid">
+          {difficultyOptions.map((option) => (
+            <button
+              className={clsx('difficultyOption', difficultyMode === option.value && 'active')}
+              key={option.value}
+              type="button"
+              onClick={() => setDifficultyMode(option.value)}
+            >
+              <strong>{option.label}</strong>
+              <span>{option.detail}</span>
+            </button>
+          ))}
+        </div>
+        <PanelTitle icon={<Target size={17} />} title="Deadline target" />
+        <div className="settingsFields">
+          <label>
+            <span>Target problems</span>
+            <input
+              min={1}
+              max={999}
+              type="number"
+              value={targetProblems}
+              onChange={(event) => setTargetProblems(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Deadline</span>
+            <input
+              type="datetime-local"
+              value={deadlineAt}
+              onChange={(event) => setDeadlineAt(event.target.value)}
+            />
+          </label>
+          <button
+            className="primaryAction"
+            disabled={saveSettings.isPending}
+            type="button"
+            onClick={() => saveSettings.mutate()}
+          >
+            {saveSettings.isPending ? 'Saving' : 'Save settings'}
+          </button>
+        </div>
+        {saveSettings.error ? <div className="errorText">{saveSettings.error.message}</div> : null}
+      </section>
+    </main>
+  )
+}
+
+function LearningStats({ overview }: { overview: TrainerOverview }) {
+  const ackRate =
+    overview.stats.attemptedProblems > 0
+      ? Math.round((overview.stats.acceptedProblems / overview.stats.attemptedProblems) * 100)
+      : null
+  const stats = [
+    ['Problems', overview.stats.totalProblems],
+    ['Attempted', overview.stats.attemptedProblems],
+    ['Accepted', overview.stats.acceptedProblems],
+    ['ACK rate', ackRate === null ? '--' : `${ackRate}%`],
+    ['Pending reviews', overview.stats.pendingReviews],
+    [
+      'Target',
+      overview.stats.targetProblems
+        ? `${overview.stats.targetCompleted ?? 0}/${overview.stats.targetProblems}`
+        : '--',
+      overview.stats.daysRemaining !== undefined
+        ? `${overview.stats.daysRemaining} days left`
+        : undefined,
+    ],
+  ] as const
+
+  return (
+    <section className="learningStats">
+      {stats.map(([label, value, detail]) => (
+        <div className="learningMetric" key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+          {detail ? <small>{detail}</small> : null}
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function BuddySignalsPanel({ overview }: { overview: TrainerOverview }) {
+  const latestRecommendation = overview.recommendations[0]
+  const latestReport = overview.reports[0]
+  const latestTip = overview.tips[0]
+  const dueReviews = overview.wrongProblems.length
+  const recommendationHref = latestRecommendation?.appPath
+    ? `#${latestRecommendation.appPath}`
+    : latestRecommendation
+      ? `#/problems/${latestRecommendation.challengeId}`
+      : null
+
+  return (
+    <section className="learningPanel learningPanelWide">
+      <PanelTitle icon={<Bot size={17} />} title="Buddy signals" />
+      <div className="signalGrid">
+        <SignalCard
+          label="Next recommendation"
+          value={latestRecommendation?.challengeTitle ?? 'Waiting'}
+          detail={
+            latestRecommendation
+              ? [
+                  latestRecommendation.strategy
+                    ? recommendationStrategyLabel(latestRecommendation.strategy)
+                    : null,
+                  typeof latestRecommendation.predictedAckRate === 'number'
+                    ? `ACK ${latestRecommendation.predictedAckRate}%`
+                    : null,
+                  latestRecommendation.reason,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'No recommendation recorded'
+          }
+          href={recommendationHref}
+        />
+        <SignalCard
+          label="Due reviews"
+          value={dueReviews}
+          detail={
+            dueReviews
+              ? overview.wrongProblems[0]?.challengeTitle
+              : 'No wrong-problem review scheduled'
+          }
+        />
+        <SignalCard
+          label="Tips logged"
+          value={overview.tips.length}
+          detail={latestTip?.title ?? 'No tip recorded'}
+        />
+        <SignalCard
+          label="Reports logged"
+          value={overview.reports.length}
+          detail={latestReport?.title ?? 'No report recorded'}
+        />
+      </div>
+    </section>
+  )
+}
+
+function SignalCard({
+  label,
+  value,
+  detail,
+  href,
+}: {
+  label: string
+  value: ReactNode
+  detail?: string
+  href?: string | null
+}) {
+  const content = (
+    <>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {detail ? <small>{detail}</small> : null}
+    </>
+  )
+  return href ? (
+    <a className="signalCard" href={href}>
+      {content}
+    </a>
+  ) : (
+    <div className="signalCard">{content}</div>
+  )
+}
+
+function SkillsPanel({ overview }: { overview: TrainerOverview }) {
+  const skills = overview.skills.slice(0, 6)
+  return (
+    <section className="learningPanel">
+      <PanelTitle icon={<BarChart3 size={17} />} title="Skills" />
+      {skills.length ? (
+        <div className="skillStack">
+          {skills.map((skill) => (
+            <div className="skillRow" key={skill.id}>
+              <div>
+                <strong>{skill.label}</strong>
+                <span>
+                  {skill.level} · {skill.accepted}/{skill.attempts} accepted
+                </span>
+              </div>
+              <div className="masteryBar" aria-label={`${skill.label} mastery`}>
+                <span style={{ width: `${skill.mastery}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mutedText">Skill graph starts after the first analyzed submission.</p>
+      )}
+    </section>
+  )
+}
+
+function RecentLearningPanel({ overview }: { overview: TrainerOverview }) {
+  const submissions = overview.recentSubmissions.slice(0, 6)
+  return (
+    <section className="learningPanel">
+      <PanelTitle icon={<History size={17} />} title="Recent outcomes" />
+      {submissions.length ? (
+        <div className="learningList">
+          {submissions.map((submission) => (
+            <Link
+              className="learningListItem"
+              key={submission.id}
+              params={{ challengeId: submission.challengeId, submissionId: submission.id }}
+              to="/problems/$challengeId/submissions/$submissionId"
+            >
+              <strong>{submission.challengeTitle}</strong>
+              <span>
+                {submission.outcome ? outcomeLabel(submission.outcome) : 'Pending'} ·{' '}
+                {submission.score !== undefined ? `${submission.score}/100 · ` : ''}
+                {formatDate(submission.createdAt)}
+              </span>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p className="mutedText">No submission history recorded.</p>
+      )}
+    </section>
+  )
+}
+
+function PanelTitle({ icon, title }: { icon: ReactNode; title: string }) {
+  return (
+    <header className="panelTitle">
+      {icon}
+      <h2>{title}</h2>
+    </header>
+  )
+}
+
 function ImportPage() {
   const client = useQueryClient()
   const navigate = useNavigate()
-  const [provider, setProvider] = useState<ProblemSourceProvider>('leetcode')
-  const [query, setQuery] = useState('')
+  const routeSearch = useSearch({ strict: false }) as {
+    provider?: ProblemSourceProvider
+    q?: string
+  }
+  const [provider, setProvider] = useState<ProblemSourceProvider>(
+    routeSearch.provider === 'codeforces' ? 'codeforces' : 'leetcode',
+  )
+  const [query, setQuery] = useState(routeSearch.q ?? '')
   const [page, setPage] = useState(0)
   const selectedProvider =
     problemSourceOptions.find((option) => option.value === provider) ?? defaultProblemSourceOption
   const normalizedQuery = query.trim()
   const offset = page * problemSourcePageSize
+  useEffect(() => {
+    const nextProvider = routeSearch.provider === 'codeforces' ? 'codeforces' : 'leetcode'
+    setProvider(nextProvider)
+    setQuery(routeSearch.q ?? '')
+    setPage(0)
+  }, [routeSearch.provider, routeSearch.q])
   const sourcesQuery = useQuery({
     queryKey: ['problem-sources', provider, normalizedQuery, page],
     queryFn: () =>
@@ -622,6 +998,9 @@ function ProblemWorkspace({
   const latestSubmission = submissions[0]
   const selectedSubmission =
     submissionQuery.data?.submission ?? submissions.find((item) => item.id === submissionId)
+  const selectedReviewDispatch = selectedSubmission
+    ? readStoredReviewDispatch(selectedSubmission.id)
+    : null
   const submissionReviewMode = view === 'submission' && !!selectedSubmission
   const editorLanguage = submissionReviewMode
     ? knownLanguage(selectedSubmission.language, language)
@@ -731,12 +1110,9 @@ function ProblemWorkspace({
       const { submission } = result
       if (reviewerAgentId) {
         const label = selectedReviewer ? buddyInboxLabel(selectedReviewer) : 'selected Buddy'
-        const error = ShadowBridge.inboxErrors(result)[0]
-        setSubmitNotice(
-          error
-            ? `Submitted, but ${label} assignment needs attention: ${error.error}`
-            : `Submitted and assigned to ${label}.`,
-        )
+        const reviewDispatch = reviewDispatchFromResult(result, label)
+        writeStoredReviewDispatch(submission.id, reviewDispatch)
+        setSubmitNotice(reviewDispatchNoticeText(reviewDispatch))
       } else {
         setSubmitNotice(null)
       }
@@ -839,6 +1215,7 @@ function ProblemWorkspace({
             <WaitingSubmission
               challengeId={challenge.id}
               isLoading={submissionQuery.isLoading}
+              reviewDispatch={selectedReviewDispatch}
               submission={selectedSubmission}
             />
           ) : (
@@ -1312,10 +1689,12 @@ function SubmissionRow({
 function WaitingSubmission({
   challengeId,
   isLoading,
+  reviewDispatch,
   submission,
 }: {
   challengeId: string
   isLoading: boolean
+  reviewDispatch?: ReviewDispatchNotice | null
   submission?: CodeSubmission
 }) {
   const challengesQuery = useQuery({
@@ -1349,6 +1728,7 @@ function WaitingSubmission({
           <h2>{submission.analysis ? 'Review ready' : 'Waiting for Buddy review'}</h2>
         </div>
       </div>
+      <ReviewFlow reviewDispatch={reviewDispatch} submission={submission} />
       <section className="analysisBlock">
         {submission.analysis ? (
           <>
@@ -1386,6 +1766,98 @@ function WaitingSubmission({
         ) : null}
       </div>
     </article>
+  )
+}
+
+function ReviewFlow({
+  reviewDispatch,
+  submission,
+}: {
+  reviewDispatch?: ReviewDispatchNotice | null
+  submission: CodeSubmission
+}) {
+  const assignedLabel = submission.reviewRequest
+    ? reviewRequestLabel(submission.reviewRequest)
+    : 'Buddy'
+  const fallbackDispatch: ReviewDispatchNotice = {
+    reviewerLabel: assignedLabel,
+    status: submission.reviewRequest ? 'unconfirmed' : 'error',
+    error: submission.reviewRequest ? undefined : 'Review assignment is missing.',
+  }
+  const assignment = reviewDispatch ?? fallbackDispatch
+  const hasAnalysis = !!submission.analysis
+  const assignmentState: ReviewFlowStepState =
+    assignment.status === 'error'
+      ? 'error'
+      : assignment.status === 'delivered'
+        ? 'complete'
+        : assignment.status === 'pending_approval'
+          ? 'waiting'
+          : 'active'
+  const sandboxState: ReviewFlowStepState = hasAnalysis
+    ? 'complete'
+    : assignmentState === 'error'
+      ? 'waiting'
+      : 'active'
+  const steps: Array<{
+    title: string
+    detail: string
+    state: ReviewFlowStepState
+  }> = [
+    {
+      title: 'Submission saved',
+      detail: `${submission.language} code is stored in Code Trainer.`,
+      state: 'complete',
+    },
+    {
+      title: reviewDispatchStepTitle(assignment),
+      detail: reviewDispatchStepDetail(assignment),
+      state: assignmentState,
+    },
+    {
+      title: 'Buddy sandbox review',
+      detail: hasAnalysis
+        ? 'Buddy finished the test run and diagnosis.'
+        : 'Buddy should claim, acknowledge, run cases, then write the result back.',
+      state: sandboxState,
+    },
+    {
+      title: 'Feedback written back',
+      detail: hasAnalysis
+        ? 'The analysis is ready in this workspace.'
+        : 'This page refreshes automatically as soon as submissions.analyze completes.',
+      state: hasAnalysis ? 'complete' : 'waiting',
+    },
+  ]
+
+  return (
+    <section className="reviewFlow" aria-label="Review progress">
+      <div className="reviewFlowHeader">
+        <strong>Live review</strong>
+        <span>{hasAnalysis ? 'Feedback ready' : reviewDispatchNoticeText(assignment)}</span>
+      </div>
+      <ol className="reviewFlowList">
+        {steps.map((step) => (
+          <li className={clsx('reviewFlowStep', step.state)} key={step.title}>
+            <span className="reviewFlowMarker">
+              {step.state === 'complete' ? (
+                <CheckCircle2 size={15} />
+              ) : step.state === 'error' ? (
+                <AlertCircle size={15} />
+              ) : step.state === 'active' ? (
+                <Loader2 className="spinIcon" size={15} />
+              ) : (
+                <Clock3 size={15} />
+              )}
+            </span>
+            <span>
+              <strong>{step.title}</strong>
+              <small>{step.detail}</small>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
@@ -1647,6 +2119,124 @@ function reviewFocusLabel(value: SubmissionReviewFocus) {
   return reviewFocusOptions.find((option) => option.value === value)?.label ?? 'Sandbox review'
 }
 
+function reviewDispatchFromResult(payload: unknown, reviewerLabel: string): ReviewDispatchNotice {
+  const delivery = ShadowBridge.inboxDeliveries(payload)[0]
+  const error = ShadowBridge.inboxErrors(payload)[0]
+  if (delivery) return reviewDispatchFromDelivery(delivery, reviewerLabel)
+  if (error) return reviewDispatchFromError(error, reviewerLabel)
+  return {
+    reviewerLabel,
+    status: 'unconfirmed',
+  }
+}
+
+function reviewDispatchFromDelivery(
+  delivery: InboxDelivery,
+  reviewerLabel: string,
+): ReviewDispatchNotice {
+  return {
+    reviewerLabel,
+    status: delivery.pendingId ? 'pending_approval' : 'delivered',
+    channelId: delivery.channelId,
+    messageId: delivery.messageId,
+    taskId: delivery.taskId,
+    pendingId: delivery.pendingId,
+  }
+}
+
+function reviewDispatchFromError(
+  error: InboxDeliveryError,
+  reviewerLabel: string,
+): ReviewDispatchNotice {
+  return {
+    reviewerLabel,
+    status: 'error',
+    error: error.error,
+  }
+}
+
+function reviewDispatchNoticeText(notice: ReviewDispatchNotice) {
+  if (notice.status === 'delivered') {
+    return `Task sent to ${notice.reviewerLabel} Inbox. Buddy can claim it now.`
+  }
+  if (notice.status === 'pending_approval') {
+    return `Submitted. ${notice.reviewerLabel} assignment is waiting for Inbox approval.`
+  }
+  if (notice.status === 'error') {
+    return `Submitted, but ${notice.reviewerLabel} assignment needs attention: ${notice.error ?? 'delivery failed'}.`
+  }
+  return `Submitted. Waiting for Shadow to confirm ${notice.reviewerLabel} Inbox delivery.`
+}
+
+function reviewDispatchStepTitle(notice: ReviewDispatchNotice) {
+  if (notice.status === 'delivered') return 'Inbox task delivered'
+  if (notice.status === 'pending_approval') return 'Inbox approval pending'
+  if (notice.status === 'error') return 'Inbox delivery needs attention'
+  return 'Confirming Inbox delivery'
+}
+
+function reviewDispatchStepDetail(notice: ReviewDispatchNotice) {
+  if (notice.status === 'delivered') {
+    return `${notice.reviewerLabel} has the review card and can respond immediately.`
+  }
+  if (notice.status === 'pending_approval') {
+    return 'Shadow created the assignment request and is waiting for approval before Buddy receives it.'
+  }
+  if (notice.status === 'error') {
+    return notice.error ?? 'Shadow could not deliver the review card to Buddy Inbox.'
+  }
+  return 'Shadow is still reporting the task delivery receipt.'
+}
+
+function reviewDispatchStorageKey(submissionId: string) {
+  return `${reviewDispatchStoragePrefix}${submissionId}`
+}
+
+function isReviewDispatchStatus(value: unknown): value is ReviewDispatchStatus {
+  return (
+    value === 'delivered' ||
+    value === 'pending_approval' ||
+    value === 'error' ||
+    value === 'unconfirmed'
+  )
+}
+
+function optionalStoredString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function readStoredReviewDispatch(submissionId: string): ReviewDispatchNotice | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(reviewDispatchStorageKey(submissionId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!isReviewDispatchStatus(parsed.status)) return null
+    const reviewerLabel = optionalStoredString(parsed.reviewerLabel)
+    if (!reviewerLabel) return null
+    return {
+      reviewerLabel,
+      status: parsed.status,
+      channelId: optionalStoredString(parsed.channelId),
+      messageId: optionalStoredString(parsed.messageId),
+      taskId: optionalStoredString(parsed.taskId) ?? null,
+      pendingId: optionalStoredString(parsed.pendingId) ?? null,
+      error: optionalStoredString(parsed.error),
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeStoredReviewDispatch(submissionId: string, notice: ReviewDispatchNotice) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(reviewDispatchStorageKey(submissionId), JSON.stringify(notice))
+  } catch {
+    /* session persistence is best-effort */
+  }
+}
+
 function readStoredReviewFocus(): SubmissionReviewFocus {
   if (typeof window === 'undefined') return 'standard'
   try {
@@ -1738,7 +2328,14 @@ function useTrainerRuntimeInvalidation() {
         event.command !== 'submissions.analyze' &&
         event.command !== 'submissions.create' &&
         event.command !== 'challenges.upsert' &&
-        event.command !== 'sources.import'
+        event.command !== 'sources.import' &&
+        event.command !== 'learning.plan.upsert' &&
+        event.command !== 'skills.update' &&
+        event.command !== 'recommendations.create' &&
+        event.command !== 'tips.create' &&
+        event.command !== 'checks.create' &&
+        event.command !== 'reports.create' &&
+        event.command !== 'wrongProblems.schedule'
       ) {
         return
       }
@@ -1746,8 +2343,43 @@ function useTrainerRuntimeInvalidation() {
       void client.invalidateQueries({ queryKey: ['submission'] })
       void client.invalidateQueries({ queryKey: ['submissions'] })
       void client.invalidateQueries({ queryKey: ['challenges'] })
+      void client.invalidateQueries({ queryKey: ['learning-overview'] })
     })
   }, [client])
+}
+
+function normalizeHostNavigationPath(value: unknown) {
+  if (typeof value !== 'string') return null
+  const path = value.trim()
+  if (!path.startsWith('/') || path.startsWith('//')) return null
+  return path.slice(0, 240)
+}
+
+function useTrainerHostNavigation() {
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const data =
+        event.data && typeof event.data === 'object' && !Array.isArray(event.data)
+          ? (event.data as Record<string, unknown>)
+          : null
+      if (data?.type !== hostNavigationRequestType) return
+      const path = normalizeHostNavigationPath(data.path)
+      if (!path) return
+      window.location.hash = path
+      if (typeof data.requestId === 'string' && event.source) {
+        const sourceWindow = event.source as Window
+        sourceWindow.postMessage(
+          {
+            type: hostNavigationAckType,
+            requestId: data.requestId,
+          },
+          event.origin || '*',
+        )
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
 }
 
 function usePersistentDraft(challengeId: string, language: TrainerLanguage, starter: string) {
@@ -1807,6 +2439,15 @@ function visibleChallengeTags(challenge: Challenge) {
 function providerLabel(provider: ProblemSourceProvider) {
   if (provider === 'leetcode') return 'LeetCode'
   return 'Codeforces'
+}
+
+function recommendationStrategyLabel(
+  value: NonNullable<TrainerOverview['recommendations'][number]['strategy']>,
+) {
+  if (value === 'reinforce') return 'Reinforce'
+  if (value === 'diversify') return 'Diversify'
+  if (value === 'review') return 'Review'
+  return 'Popular'
 }
 
 function sourceKey(source: ProblemSource) {

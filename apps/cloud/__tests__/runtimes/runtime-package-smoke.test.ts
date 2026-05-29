@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { parse as parseToml } from 'smol-toml'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
@@ -272,5 +273,54 @@ describe('runner runtime package smoke checks', () => {
         '${SHADOW_CHANNEL_DAILY}',
       ])
     }
+  })
+
+  it('packages Code Trainer buddy routine with Server App metadata', () => {
+    const config = JSON.parse(
+      readFileSync(new URL('../../templates/code-trainer.template.json', import.meta.url), 'utf-8'),
+    ) as CloudConfig
+    const subject = config.deployments?.agents.find((item) => item.id === 'code-trainer-buddy')
+    if (!subject) throw new Error('code-trainer-buddy agent not found')
+
+    const pkg = buildAgentRuntimePackage({
+      agent: subject,
+      config,
+      extraEnv: {
+        SHADOW_SERVER_URL,
+        SHADOW_TOKEN_CODE_TRAINER_BUDDY: SHADOW_TOKEN,
+      },
+    })
+    const files = runtimeFiles(pkg.configData)
+    const seed = JSON.parse(files['/etc/shadowob/template-routines.json'] ?? '{}')
+    const runtimeExtensions = JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}')
+
+    expect(seed.routines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'sync-submissions',
+          agentId: 'code-trainer-buddy',
+          deliveries: [
+            expect.objectContaining({
+              pluginId: 'shadowob',
+              target: expect.objectContaining({
+                accountId: 'code-trainer-buddy',
+                channelConfigId: 'code-review',
+                channelEnvKey: 'SHADOW_CHANNEL_CODE_REVIEW',
+                serverEnvKey: 'SHADOW_SERVER_CODE_TRAINER_SERVER',
+              }),
+            }),
+          ],
+        }),
+      ]),
+    )
+    expect(runtimeExtensions.shadowob.accounts[0].serverApps[0]).toMatchObject({
+      id: 'code-trainer-app',
+      appKeyEnvKey: 'SHADOW_SERVER_APP_KEY_CODE_TRAINER_APP',
+      permissions: expect.arrayContaining([
+        'trainer.submissions:analyze',
+        'trainer.learning:read',
+        'trainer.learning:write',
+      ]),
+    })
   })
 })

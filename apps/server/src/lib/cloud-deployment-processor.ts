@@ -794,7 +794,14 @@ async function processCloudDeploymentQueueTick(
       ['pending'],
       deploymentDao,
       async (latestDeployment) => {
-        await processDeployment(latestDeployment, deploymentDao, clusterDao, container, database)
+        await processDeployment(
+          latestDeployment,
+          deploymentDao,
+          clusterDao,
+          container,
+          database,
+          appContainer,
+        )
       },
     )
   }
@@ -1503,6 +1510,7 @@ async function processDeployment(
   clusterDao: CloudClusterDao,
   container: ServiceContainer,
   database: Database,
+  appContainer?: AppContainer,
 ) {
   logger.info({ deploymentId: deployment.id, deploymentName: deployment.name }, 'Deploying stack')
 
@@ -1602,12 +1610,12 @@ async function processDeployment(
     )
 
     let provisionStatePersisted = false
+    let deployedConfigSnapshot: unknown = deployment.configSnapshot
     const persistProvisionState = async (state: NonNullable<typeof provisionState>) => {
       assertNoSecretsInProvisionState(state)
-      await deploymentDao.updateConfigSnapshot(
-        deployment.id,
-        attachCloudSaasProvisionState(deployment.configSnapshot, state),
-      )
+      const nextConfigSnapshot = attachCloudSaasProvisionState(deployment.configSnapshot, state)
+      await deploymentDao.updateConfigSnapshot(deployment.id, nextConfigSnapshot)
+      deployedConfigSnapshot = nextConfigSnapshot
       provisionStatePersisted = true
       await deploymentDao.appendLog(
         deployment.id,
@@ -1634,6 +1642,14 @@ async function processDeployment(
       },
       onStackReady: (stack: { cancel: () => Promise<void> }) => {
         cancelToken.stack = stack
+        if (cancelToken.cancelled && !cancelToken.cancelSignalled) {
+          void signalRunningOperationCancel(
+            deployment.id,
+            cancelToken,
+            'stack became ready after cancellation request',
+            cancelToken.cancellationStatus,
+          )
+        }
       },
       isCancelled: () => cancelToken.cancelled,
     })
@@ -1669,6 +1685,30 @@ async function processDeployment(
       await handleInitialCloudHourlyBillingFailure(deployment, deploymentDao, err)
       return
     }
+
+    if (appContainer) {
+      try {
+        await appContainer
+          .resolve('greetingService')
+          .ensureCloudDeploymentGreeting(deployment.userId, {
+            id: deployment.id,
+            status: 'deployed',
+            name: deployment.name,
+            templateSlug: deployment.templateSlug,
+            configSnapshot: deployedConfigSnapshot,
+          })
+        await deploymentDao.appendLog(
+          deployment.id,
+          'Greeting workflow completed for provisioned server',
+          'info',
+        )
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        logger.warn({ deploymentId: deployment.id, error: message }, 'Deployment greeting failed')
+        await deploymentDao.appendLog(deployment.id, `Greeting workflow failed: ${message}`, 'warn')
+      }
+    }
+
     logger.info(
       { deploymentId: deployment.id, agentCount: result.agentCount },
       'Deployment completed',

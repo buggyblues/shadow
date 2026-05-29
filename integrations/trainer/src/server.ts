@@ -11,14 +11,24 @@ import { Hono } from 'hono'
 import {
   accessFromActor,
   analyzeSubmission,
+  createCheck,
+  createRecommendation,
+  createReport,
   createSubmission,
+  createTip,
   getChallenge,
   getSubmission,
+  latestRecommendation,
+  learningOverview,
   listChallenges,
   listSubmissions,
   pendingSubmissions,
+  scheduleWrongProblem,
   type TrainerAccess,
+  updateSkillState,
   upsertChallenge,
+  upsertTrainerSettings,
+  upsertTrainingList,
 } from './data.js'
 import { manifest, shadowApp } from './manifest.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
@@ -30,7 +40,9 @@ import {
 import type {
   Challenge,
   CodeSubmission,
+  Recommendation,
   SubmissionCoachingFocus,
+  SubmissionOutcome,
   SubmissionReviewFocus,
 } from './types.js'
 import { shellPage } from './ui.js'
@@ -153,6 +165,40 @@ function reviewFocusInstruction(submission: CodeSubmission, locale: TaskLocale) 
     : 'Focus on sandbox correctness: run cases, identify correctness gaps, and explain the core invariant.'
 }
 
+function reviewTaskPriority(submission: CodeSubmission): 'urgent' | 'high' {
+  const focus = submission.reviewRequest?.reviewFocus
+  return focus === 'debug' || focus === 'interview' ? 'urgent' : 'high'
+}
+
+function reviewTaskAssigneeLabel(reviewRequest: NonNullable<CodeSubmission['reviewRequest']>) {
+  return (
+    reviewRequest.displayName?.trim() ||
+    reviewRequest.assigneeLabel?.trim() ||
+    reviewRequest.agentId?.trim() ||
+    'Buddy'
+  )
+}
+
+function immediateFeedbackProtocol(submission: CodeSubmission, locale: TaskLocale) {
+  const label = submission.reviewRequest
+    ? reviewTaskAssigneeLabel(submission.reviewRequest)
+    : 'Buddy'
+  if (locale === 'zh') {
+    return [
+      '即时反馈协议：',
+      `- 先 claim 这个 Inbox 任务，并在 60 秒内用 ${label} 身份回复一句收到，例如“我已收到，会先跑示例和边界用例，结果写回 Code Trainer”。`,
+      '- 如果评审超过 3 分钟，补一条简短进度说明，让学习者知道你还在运行用例或定位问题。',
+      '- 写回 submissions.analyze 后，标记任务完成，并在代码复盘频道给出结论、分数和下一步，不要让用户只看见静默等待。',
+    ].join('\n')
+  }
+  return [
+    'Immediate feedback protocol:',
+    `- Claim this Inbox task first, then reply as ${label} within 60 seconds with a short acknowledgement, e.g. "Got it. I am running examples and edge cases, then I will write the result back to Code Trainer."`,
+    '- If the review takes more than 3 minutes, post a brief progress note so the learner knows the sandbox or diagnosis is still running.',
+    '- After writing submissions.analyze, mark the task complete and post the verdict, score, and next action to the code review channel. Do not leave the learner in silent waiting.',
+  ].join('\n')
+}
+
 function reviewTaskBody(submission: CodeSubmission, challenge: Challenge) {
   const locale = taskLocale(submission)
   const examples = challenge.examples
@@ -200,6 +246,8 @@ function reviewTaskBody(submission: CodeSubmission, challenge: Challenge) {
     return [
       `请评审提交 ${submission.id}，题目是「${challenge.title}」。`,
       '',
+      immediateFeedbackProtocol(submission, locale),
+      '',
       '工作流：',
       `1. 使用 shadow-trainer submissions.get 和 {"submissionId":"${submission.id}"} 获取提交。`,
       '2. 在你的沙箱里运行可见示例、隐藏用例和必要边界用例。不要把判题委托给在线评测平台。',
@@ -228,6 +276,8 @@ function reviewTaskBody(submission: CodeSubmission, challenge: Challenge) {
 
   return [
     `Review submission ${submission.id} for "${challenge.title}".`,
+    '',
+    immediateFeedbackProtocol(submission, locale),
     '',
     'Workflow:',
     `1. Fetch the submission with shadow-trainer submissions.get using {"submissionId":"${submission.id}"}.`,
@@ -261,12 +311,13 @@ function reviewInboxTask(submission: CodeSubmission, challenge: Challenge) {
   const assignee = reviewRequest.agentId || reviewRequest.assigneeLabel
   if (!assignee) return null
   const locale = taskLocale(submission)
+  const assigneeLabel = reviewTaskAssigneeLabel(reviewRequest)
 
   return {
     title:
       locale === 'zh' ? `评审「${challenge.title}」提交` : `Review ${challenge.title} submission`,
     body: reviewTaskBody(submission, challenge),
-    priority: 'normal' as const,
+    priority: reviewTaskPriority(submission),
     agentId: reviewRequest.agentId,
     assigneeLabel: reviewRequest.assigneeLabel,
     idempotencyKey: `trainer:submission-review:${submission.id}:${assignee}`,
@@ -285,6 +336,18 @@ function reviewInboxTask(submission: CodeSubmission, challenge: Challenge) {
         fetchSubmission: 'submissions.get',
         writeAnalysis: 'submissions.analyze',
       },
+      immediateFeedback: {
+        expectedAck: 'claim_and_acknowledge',
+        ackWithinSeconds: 60,
+        ackMessage:
+          locale === 'zh'
+            ? `${assigneeLabel}已收到「${challenge.title}」提交，会先跑示例和边界用例，结果写回 Code Trainer。`
+            : `${assigneeLabel} has picked up the ${challenge.title} submission and is running examples and edge cases before writing the result back to Code Trainer.`,
+        progressAfterSeconds: 180,
+        finalChannel: 'code-review',
+        finalChannelName: locale === 'zh' ? '代码复盘' : 'code review',
+        finalCommand: 'submissions.analyze',
+      },
       learningGoals: [
         ...(locale === 'zh'
           ? ['沙箱用例执行', '算法正确性反馈', '复杂度解释', '面试准备指导']
@@ -299,6 +362,161 @@ function reviewInboxTask(submission: CodeSubmission, challenge: Challenge) {
     },
     required: false,
   }
+}
+
+function optionalText(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+function optionalTextList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => optionalText(item))
+      .filter((item): item is string => Boolean(item))
+      .slice(0, 12)
+  }
+  const single = optionalText(value)
+  return single ? [single] : undefined
+}
+
+function outcomeFromAlias(input: Record<string, unknown>): SubmissionOutcome {
+  const explicit = optionalText(input.outcome)
+  if (
+    explicit === 'accepted' ||
+    explicit === 'needs_work' ||
+    explicit === 'runtime_error' ||
+    explicit === 'incomplete'
+  ) {
+    return explicit
+  }
+  const verdict = optionalText(input.verdict)?.toLowerCase()
+  if (verdict) {
+    if (['accepted', 'accept', 'pass', 'passed', 'success', 'correct'].includes(verdict)) {
+      return 'accepted'
+    }
+    if (['runtime_error', 'runtime error', 'error', 'exception'].includes(verdict)) {
+      return 'runtime_error'
+    }
+    if (['incomplete', 'partial', 'missing'].includes(verdict)) return 'incomplete'
+    if (['needs_work', 'needs work', 'wrong', 'failed', 'fail', 'incorrect'].includes(verdict)) {
+      return 'needs_work'
+    }
+  }
+  const score = typeof input.score === 'number' ? input.score : Number.NaN
+  if (Number.isFinite(score) && score >= 90) return 'accepted'
+  if (Number.isFinite(score) && score < 40) return 'incomplete'
+  return 'needs_work'
+}
+
+function normalizeAnalyzeInput(input: Record<string, unknown>) {
+  const hints = optionalTextList(input.hints)
+  const suggestions = optionalTextList(input.suggestions) ?? hints
+  const diagnosis = optionalText(input.diagnosis)
+  const fallbackExplanation = [diagnosis, hints?.length ? `Hints: ${hints.join(' ')}` : undefined]
+    .filter(Boolean)
+    .join('\n\n')
+  const explanation =
+    optionalText(input.explanation) ??
+    optionalText(fallbackExplanation) ??
+    optionalText(input.summary) ??
+    'Buddy analysis was submitted without a detailed explanation.'
+  const summary =
+    optionalText(input.summary) ??
+    diagnosis ??
+    optionalText(input.verdict) ??
+    explanation.slice(0, 240)
+  const outcome = outcomeFromAlias(input)
+  return {
+    ...input,
+    submissionId: optionalText(input.submissionId) ?? '',
+    outcome,
+    score:
+      typeof input.score === 'number' && Number.isFinite(input.score)
+        ? input.score
+        : outcome === 'accepted'
+          ? 100
+          : 70,
+    summary,
+    explanation,
+    ...(suggestions ? { suggestions } : {}),
+    ...(optionalText(input.complexity) ? { complexity: optionalText(input.complexity) } : {}),
+  }
+}
+
+function recommendationCard(recommendation: Recommendation, locale: TaskLocale) {
+  const ack =
+    typeof recommendation.predictedAckRate === 'number'
+      ? locale === 'zh'
+        ? `预估通过率 ${recommendation.predictedAckRate}%`
+        : `Estimated ACK ${recommendation.predictedAckRate}%`
+      : null
+  const strategyLabel =
+    locale === 'zh'
+      ? {
+          reinforce: '巩固',
+          diversify: '多样性',
+          review: '复习',
+          popular: '热门补齐',
+        }[recommendation.strategy ?? 'reinforce']
+      : {
+          reinforce: 'Reinforce',
+          diversify: 'Diversify',
+          review: 'Review',
+          popular: 'Popular coverage',
+        }[recommendation.strategy ?? 'reinforce']
+  return {
+    kind: 'server_app',
+    version: 1,
+    appKey: 'shadow-trainer',
+    title:
+      locale === 'zh'
+        ? `下一题：${recommendation.challengeTitle}`
+        : `Next problem: ${recommendation.challengeTitle}`,
+    description: [strategyLabel, recommendation.reason, ack].filter(Boolean).join(' · '),
+    label: locale === 'zh' ? '打开并开始' : 'Open and start',
+    action: {
+      mode: 'open_app',
+      path: recommendation.appPath ?? `/problems/${recommendation.challengeId}`,
+    },
+    data: {
+      recommendationId: recommendation.id,
+      challengeId: recommendation.challengeId,
+      strategy: recommendation.strategy ?? 'reinforce',
+      predictedAckRate: recommendation.predictedAckRate,
+      source: recommendation.source,
+    },
+  }
+}
+
+function recommendationMessage(recommendation: Recommendation, locale: TaskLocale) {
+  const ack =
+    typeof recommendation.predictedAckRate === 'number'
+      ? locale === 'zh'
+        ? `预估通过率 ${recommendation.predictedAckRate}%`
+        : `estimated ACK ${recommendation.predictedAckRate}%`
+      : null
+  if (locale === 'zh') {
+    return [
+      `下一题推荐：**${recommendation.challengeTitle}**`,
+      recommendation.reason,
+      ack ? `难度控制：${ack}。` : '',
+      recommendation.source
+        ? `如果本地题库没有合适变式，先打开 Import 搜索 ${recommendation.source.provider}。`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+  return [
+    `Next recommendation: **${recommendation.challengeTitle}**`,
+    recommendation.reason,
+    ack ? `Difficulty control: ${ack}.` : '',
+    recommendation.source
+      ? `If the local library lacks a good variant, open Import and search ${recommendation.source.provider}.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 function commandAccess(handlerContext: ShadowServerAppCommandHandlerContext): TrainerAccess {
@@ -363,13 +581,67 @@ const commands = shadowApp.defineCommands({
     submissions: pendingSubmissions(input, commandAccess(context)),
   }),
   'submissions.analyze': (input, context) => {
+    const access = commandAccess(context)
     const submission = analyzeSubmission({
-      ...input,
-      access: commandAccess(context),
+      ...normalizeAnalyzeInput(input),
+      access,
       analyzer: context.actor,
     })
     if (!submission) throw shadowApp.error(404, 'submission_not_found')
-    return { submission }
+    const recommendation = latestRecommendation(access)
+    if (submission.analysis?.outcome !== 'accepted' || !recommendation) {
+      return { submission }
+    }
+    const locale = taskLocale(submission)
+    return new ShadowServerAppOutbox()
+      .sendChannelMessage({
+        channelName: locale === 'zh' ? '代码复盘' : 'code review',
+        content: recommendationMessage(recommendation, locale),
+        idempotencyKey: `trainer:next-recommendation:${submission.id}`,
+        metadata: {
+          cards: [recommendationCard(recommendation, locale)],
+          custom: {
+            trainerRecommendation: {
+              submissionId: submission.id,
+              recommendationId: recommendation.id,
+            },
+          },
+        },
+      })
+      .attachTo({ submission, recommendation })
+  },
+  'learning.overview': (_input, context) => ({
+    overview: learningOverview(commandAccess(context)),
+  }),
+  'settings.upsert': (input, context) => {
+    const access = commandAccess(context)
+    requireOwnerAccess(access)
+    return { settings: upsertTrainerSettings(input, access) }
+  },
+  'learning.plan.upsert': (input, context) => ({
+    list: upsertTrainingList(input, commandAccess(context)),
+  }),
+  'skills.update': (input, context) => ({
+    skill: updateSkillState(input, commandAccess(context)),
+  }),
+  'recommendations.create': (input, context) => {
+    const recommendation = createRecommendation(input, commandAccess(context))
+    if (!recommendation) throw shadowApp.error(404, 'challenge_not_found')
+    return { recommendation }
+  },
+  'tips.create': (input, context) => ({
+    tip: createTip(input, commandAccess(context)),
+  }),
+  'checks.create': (input, context) => ({
+    check: createCheck(input, commandAccess(context)),
+  }),
+  'reports.create': (input, context) => ({
+    report: createReport(input, commandAccess(context)),
+  }),
+  'wrongProblems.schedule': (input, context) => {
+    const wrongProblem = scheduleWrongProblem(input, commandAccess(context))
+    if (!wrongProblem) throw shadowApp.error(404, 'challenge_not_found')
+    return { wrongProblem }
   },
 })
 

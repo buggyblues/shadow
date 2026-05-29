@@ -1,0 +1,7 @@
+FC / NES 8-bit pixel art effect animation sprite sheet for a top-down tank battle game.
+Exact orthographic pixel art effects, crisp hard-edged pixels, no antialiasing look, limited 1980s console palette, strong black 1-pixel outlines where useful.
+Compose as a clean 4 columns by 2 rows sheet with equal square cells, no text, no labels, no UI.
+Solid #FF00FF magenta background in all empty space.
+Row 1: tank summon / spawn animation frames 1-4, cyan teleport circle starts small, grows into bright ring, vertical energy pillar, final ring fade; centered and sized to fit behind a top-down tank.
+Row 2: tank death / destruction animation frames 1-4, orange explosion burst, larger explosion with debris, smoke and broken tread pieces, fading scorch cloud; centered.
+Every frame contained inside central 75 percent safe area, consistent scale within each row, readable at 32 to 48 px.

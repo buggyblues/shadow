@@ -15,6 +15,7 @@ export function getCategoryColor(category: TemplateCategoryId): string {
     research: 'bg-purple-900/50 text-purple-300 border-purple-800/60',
     monitoring: 'bg-yellow-900/50 text-yellow-300 border-yellow-800/60',
     business: 'bg-orange-900/50 text-orange-300 border-orange-800/60',
+    education: 'bg-indigo-900/50 text-indigo-300 border-indigo-800/60',
     demo: 'bg-cyan-900/50 text-cyan-300 border-cyan-800/60',
   }
 

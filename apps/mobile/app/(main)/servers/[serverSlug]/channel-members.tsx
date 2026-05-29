@@ -91,7 +91,10 @@ interface BuddyAgent {
   accessRole?: 'owner' | 'tenant'
   userId: string
   status: string
+  lastHeartbeat?: string | null
   totalOnlineSeconds?: number
+  createdAt?: string
+  updatedAt?: string
   botUser?: {
     id: string
     username: string
@@ -135,6 +138,32 @@ type InviteCandidate = BuddyListItemData & {
   canAddToServer: boolean
   agentId?: string
 }
+
+const getInviteTime = (value: string | null | undefined) => {
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+const getBuddySortTime = (candidate: InviteCandidate) =>
+  Math.max(
+    getInviteTime(candidate.lastHeartbeat),
+    getInviteTime(candidate.updatedAt),
+    getInviteTime(candidate.createdAt),
+  )
+
+const isInviteBuddyOnline = (candidate: InviteCandidate) => candidate.status !== 'offline'
+
+const sortInviteCandidates = (items: InviteCandidate[]) =>
+  [...items].sort((a, b) => {
+    const onlineDelta = Number(isInviteBuddyOnline(b)) - Number(isInviteBuddyOnline(a))
+    if (onlineDelta !== 0) return onlineDelta
+
+    const timeDelta = getBuddySortTime(b) - getBuddySortTime(a)
+    if (timeDelta !== 0) return timeDelta
+
+    return a.nickname.localeCompare(b.nickname)
+  })
 
 const canBuddyJoinServer = (agent: BuddyAgent, serverId: string | undefined) => {
   if (!serverId) return false
@@ -194,6 +223,7 @@ export default function ChannelMembersScreen() {
   const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<Set<string>>(new Set())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [copiedInvite, setCopiedInvite] = useState(false)
+  const [showOfflineBuddies, setShowOfflineBuddies] = useState(false)
 
   // Channel info
   const { data: channel } = useQuery({
@@ -315,6 +345,9 @@ export default function ChannelMembersScreen() {
           membershipTier: m.membershipTier,
           membershipLevel: m.membershipLevel,
           totalOnlineSeconds: m.totalOnlineSeconds,
+          lastHeartbeat: agent.lastHeartbeat ?? null,
+          createdAt: agent.createdAt,
+          updatedAt: agent.updatedAt,
           buddyTag: agent.config?.buddyTag ?? null,
           creator: {
             uid: agent.owner?.userId || agent.owner?.id || '',
@@ -352,6 +385,9 @@ export default function ChannelMembersScreen() {
           membershipTier: null,
           membershipLevel: null,
           totalOnlineSeconds: agent.totalOnlineSeconds,
+          lastHeartbeat: agent.lastHeartbeat ?? null,
+          createdAt: agent.createdAt,
+          updatedAt: agent.updatedAt,
           buddyTag: agent.config?.buddyTag ?? null,
           creator: agent.owner
             ? {
@@ -367,7 +403,7 @@ export default function ChannelMembersScreen() {
   }, [myAgents, serverBotUserIds, searchKeyword, channelId, channel?.serverId])
 
   const buddyCandidates = useMemo(
-    () => [...buddyCandidatesOnServer, ...buddyCandidatesNew],
+    () => sortInviteCandidates([...buddyCandidatesOnServer, ...buddyCandidatesNew]),
     [buddyCandidatesOnServer, buddyCandidatesNew],
   )
 
@@ -380,6 +416,33 @@ export default function ChannelMembersScreen() {
     () => activeCandidates.filter((candidate) => selectedCandidateKeys.has(candidate.key)),
     [activeCandidates, selectedCandidateKeys],
   )
+
+  const onlineBuddyCandidates = useMemo(
+    () => buddyCandidates.filter(isInviteBuddyOnline),
+    [buddyCandidates],
+  )
+  const offlineBuddyCandidates = useMemo(
+    () => buddyCandidates.filter((candidate) => !isInviteBuddyOnline(candidate)),
+    [buddyCandidates],
+  )
+  const shouldShowOfflineBuddies = showOfflineBuddies || Boolean(searchKeyword)
+  const visibleCandidates = useMemo(
+    () =>
+      inviteMode === 'buddies'
+        ? [...onlineBuddyCandidates, ...(shouldShowOfflineBuddies ? offlineBuddyCandidates : [])]
+        : activeCandidates,
+    [
+      activeCandidates,
+      inviteMode,
+      offlineBuddyCandidates,
+      onlineBuddyCandidates,
+      shouldShowOfflineBuddies,
+    ],
+  )
+
+  useEffect(() => {
+    setShowOfflineBuddies(false)
+  }, [channelId, inviteMode])
 
   const addToChannelCandidate = useMutation({
     mutationFn: (userId: string) =>
@@ -483,9 +546,7 @@ export default function ChannelMembersScreen() {
       ? channelId
         ? t('member.inviteToChannelDesc', { channel: channel?.name ?? '' })
         : t('member.inviteSelectChannelDesc')
-      : channelId
-        ? t('member.addBuddyToChannelDesc', { channel: channel?.name ?? '' })
-        : t('member.addBuddyToServerDesc')
+      : null
 
   const copyInviteCode = async () => {
     if (!inviteLink) return
@@ -816,9 +877,11 @@ export default function ChannelMembersScreen() {
             </Pressable>
           </View>
 
-          <Text style={[styles.inviteDesc, { color: colors.textMuted }]}>
-            {inviteToChannelDescription}
-          </Text>
+          {inviteToChannelDescription ? (
+            <Text style={[styles.inviteDesc, { color: colors.textMuted }]}>
+              {inviteToChannelDescription}
+            </Text>
+          ) : null}
 
           <View style={[styles.inviteSearchRow, { backgroundColor: colors.inputBackground }]}>
             <Search size={16} color={colors.textMuted} />
@@ -842,7 +905,7 @@ export default function ChannelMembersScreen() {
           </View>
 
           <FlatList
-            data={activeCandidates}
+            data={visibleCandidates}
             contentContainerStyle={styles.inviteList}
             keyboardShouldPersistTaps="handled"
             keyExtractor={(item) => item.key}
@@ -859,17 +922,48 @@ export default function ChannelMembersScreen() {
               )
             }}
             ListEmptyComponent={
-              <View style={styles.inviteEmpty}>
-                <Text
-                  style={{ color: colors.textMuted, textAlign: 'center', marginBottom: spacing.md }}
+              inviteMode === 'buddies' && activeCandidates.length > 0 ? null : (
+                <View style={styles.inviteEmpty}>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      textAlign: 'center',
+                      marginBottom: spacing.md,
+                    }}
+                  >
+                    {inviteMode === 'members'
+                      ? t('member.noInvitable', '暂无可邀请成员')
+                      : myAgents.length === 0
+                        ? t('member.noBuddies', '暂无可用 Buddy')
+                        : t('member.noInvitable', '暂无可邀请成员')}
+                  </Text>
+                </View>
+              )
+            }
+            ListFooterComponent={
+              inviteMode === 'buddies' && offlineBuddyCandidates.length > 0 && !searchKeyword ? (
+                <Pressable
+                  onPress={() => setShowOfflineBuddies((value) => !value)}
+                  style={({ pressed }) => [
+                    styles.offlineToggle,
+                    {
+                      backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
                 >
-                  {inviteMode === 'members'
-                    ? t('member.noInvitable', '暂无可邀请成员')
-                    : myAgents.length === 0
-                      ? t('member.noBuddies', '暂无可用 Buddy')
-                      : t('member.noInvitable', '暂无可邀请成员')}
-                </Text>
-              </View>
+                  <Text style={[styles.offlineToggleText, { color: colors.textMuted }]}>
+                    {t('member.offlineBuddiesToggle', {
+                      count: offlineBuddyCandidates.length,
+                    })}
+                  </Text>
+                  <ChevronRight
+                    size={16}
+                    color={colors.textMuted}
+                    style={{ transform: [{ rotate: showOfflineBuddies ? '-90deg' : '90deg' }] }}
+                  />
+                </Pressable>
+              ) : null
             }
           />
 
@@ -1127,6 +1221,21 @@ const styles = StyleSheet.create({
   },
   inviteList: {
     paddingBottom: spacing.md + spacing.sm,
+  },
+  offlineToggle: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  offlineToggleText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
   },
   inviteEmpty: {
     alignItems: 'center',

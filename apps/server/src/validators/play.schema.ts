@@ -3,7 +3,6 @@ import { z } from 'zod'
 const playActionBaseSchema = z.object({
   buddyUserIds: z.array(z.string().uuid()).optional(),
   buddyTemplateSlug: z.string().min(1).max(128).optional(),
-  greeting: z.string().max(1000).optional(),
 })
 
 export const playActionSchema = z.discriminatedUnion('kind', [
@@ -25,7 +24,6 @@ export const playActionSchema = z.discriminatedUnion('kind', [
     kind: z.literal('cloud_deploy'),
     templateSlug: z.string().min(1).max(128),
     resourceTier: z.enum(['lightweight', 'standard', 'pro']).optional(),
-    defaultChannelName: z.string().min(1).max(100).optional(),
   }),
   z.object({
     kind: z.literal('external_oauth_app'),

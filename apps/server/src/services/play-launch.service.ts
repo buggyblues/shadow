@@ -13,20 +13,17 @@ import {
   type ShadowPlayAction,
 } from '@shadowob/shared/play-catalog'
 import { and, desc, eq, sql } from 'drizzle-orm'
-import type { Server as SocketIOServer } from 'socket.io'
 import type { AgentDao } from '../dao/agent.dao'
 import type { CloudActivityDao } from '../dao/cloud-activity.dao'
 import type { CloudClusterDao } from '../dao/cloud-cluster.dao'
 import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { CloudTemplateDao } from '../dao/cloud-template.dao'
-import type { UserDao } from '../dao/user.dao'
 import type { Database } from '../db'
 import { cloudTemplates, configSchemas, configValues } from '../db/schema'
 import { applySafeDeploymentPreferences } from '../lib/cloud-saas-deployment-preferences'
 import {
-  attachPlayLaunchRuntimeMetadata,
-  extractPlayLaunchRuntimeMetadata,
-  extractShadowProvisionBuddyUserIds,
+  attachGreetingRuntimeMetadata,
+  extractGreetingRuntimeMetadata,
   extractShadowProvisionTarget,
 } from '../lib/cloud-shadow-target'
 import {
@@ -35,24 +32,20 @@ import {
   resolveOfficialModelProxyRuntimeServerUrl,
   shouldCopyServerRuntimeEnvKey,
 } from '../lib/model-proxy-config'
-import type { AgentPolicyService } from './agent-policy.service'
 import type { ChannelService } from './channel.service'
 import { assertCloudTemplatePolicy } from './cloud-template-policy.service'
+import { buildDefaultGreeting, compactChannelName, type GreetingService } from './greeting.service'
 import type { MembershipService } from './membership.service'
-import type { MessageService } from './message.service'
 import type { ServerService } from './server.service'
 import type { WalletService } from './wallet.service'
 
 type PlayActionBase = {
   buddyUserIds?: string[]
   buddyTemplateSlug?: string
-  greeting?: string
 }
 
 export type PlayAction = ShadowPlayAction
-type CloudDeployPlayAction = Extract<PlayAction, { kind: 'cloud_deploy' }> & {
-  defaultChannelName?: string
-}
+type CloudDeployPlayAction = Extract<PlayAction, { kind: 'cloud_deploy' }>
 
 export interface PlayLaunchInput {
   playId?: string
@@ -86,11 +79,6 @@ type LaunchRequestContext = {
 const CLOUD_DEPLOYMENT_HOURLY_COST = 1
 const CLOUD_DEPLOYMENT_BILLING_PRECISION_MINUTES = 15
 const PLAY_BUDDY_ONLINE_MS = 90_000
-
-type LaunchUserProfile = {
-  friendlyName: string
-  channelNameSegment: string
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -168,58 +156,6 @@ function playError(message: string, status: number, code: string, extra?: Record
   return Object.assign(new Error(message), { status, code, ...extra })
 }
 
-function compactSlug(input: string) {
-  return (
-    input
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 32) || 'play'
-  )
-}
-
-function compactChannelSegment(input: string) {
-  return (
-    input
-      .trim()
-      .normalize('NFKC')
-      .replace(/[\s_]+/g, '-')
-      .replace(/[^\p{L}\p{N}-]+/gu, '')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 32) || ''
-  )
-}
-
-function compactChannelName(parts: string[]) {
-  return (
-    parts
-      .map((part) => compactChannelSegment(part) || compactSlug(part))
-      .filter(Boolean)
-      .join('-')
-      .slice(0, 100)
-      .replace(/-+$/g, '') || 'play'
-  )
-}
-
-function personalizeGreeting(greeting: string, userName: string | undefined, locale?: string) {
-  const trimmed = greeting.trim()
-  if (!userName) return trimmed
-  if (
-    trimmed.includes('{userName}') ||
-    trimmed.includes('{nickname}') ||
-    trimmed.includes('{user}')
-  ) {
-    return trimmed
-      .replaceAll('{userName}', userName)
-      .replaceAll('{nickname}', userName)
-      .replaceAll('{user}', userName)
-  }
-  if (trimmed.includes(userName)) return trimmed
-  if (locale?.startsWith('zh')) return `${userName}，${trimmed}`
-  return `Hi ${userName}, ${trimmed.replace(/^Hi,\s*/i, '')}`
-}
-
 function compactKubernetesName(input: string, maxLength = 63) {
   const normalized =
     input
@@ -281,69 +217,9 @@ function resolveTemplateText(
   }
 }
 
-function templatePlayLaunchGreeting(content: unknown): string | undefined {
-  if (!content || typeof content !== 'object' || Array.isArray(content)) return undefined
-  const use = (content as Record<string, unknown>).use
-  if (!Array.isArray(use)) return undefined
-  for (const entry of use) {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
-    const record = entry as Record<string, unknown>
-    if (record.plugin !== 'shadowob') continue
-    const options = record.options
-    if (!options || typeof options !== 'object' || Array.isArray(options)) continue
-    const playLaunch = (options as Record<string, unknown>).playLaunch
-    if (!playLaunch || typeof playLaunch !== 'object' || Array.isArray(playLaunch)) continue
-    const greeting = (playLaunch as Record<string, unknown>).greeting
-    if (typeof greeting === 'string' && greeting.trim()) return greeting
-  }
-  return undefined
-}
-
 function localizedPlayTitle(play: ShadowHomePlayCatalogItem, locale?: string) {
   const fallback = play.title || play.titleEn || play.id || 'Buddy'
   return locale?.startsWith('zh') ? play.title || fallback : play.titleEn || fallback
-}
-
-function defaultLaunchGreeting(input: {
-  title: string
-  locale?: string
-  kind: 'community' | 'private' | 'cloud'
-  userName?: string
-}) {
-  let greeting: string
-  if (input.locale?.startsWith('zh')) {
-    if (input.kind === 'cloud') {
-      greeting = `你好，我是 ${input.title}。空间已经准备好了，直接告诉我你的目标，我们马上开始。`
-      return personalizeGreeting(greeting, input.userName, input.locale)
-    }
-    if (input.kind === 'private') {
-      greeting = `你好，我是 ${input.title}。这个房间已经为你准备好，可以把你的想法直接发给我。`
-      return personalizeGreeting(greeting, input.userName, input.locale)
-    }
-    greeting = `你好，我是 ${input.title}。欢迎来到这里，直接发消息开始体验吧。`
-    return personalizeGreeting(greeting, input.userName, input.locale)
-  }
-  if (input.kind === 'cloud') {
-    greeting = `I am ${input.title}. Your space is ready. Tell me your goal and we will begin.`
-    return personalizeGreeting(greeting, input.userName, input.locale)
-  }
-  if (input.kind === 'private') {
-    greeting = `I am ${input.title}. This room is ready for you. Send me what you want to explore.`
-    return personalizeGreeting(greeting, input.userName, input.locale)
-  }
-  greeting = `I am ${input.title}. Welcome in. Send a message whenever you are ready.`
-  return personalizeGreeting(greeting, input.userName, input.locale)
-}
-
-function playLaunchMetadataMatches(metadata: unknown, key: string, value: string) {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
-  const playLaunch = (metadata as Record<string, unknown>).playLaunch
-  return (
-    playLaunch &&
-    typeof playLaunch === 'object' &&
-    !Array.isArray(playLaunch) &&
-    (playLaunch as Record<string, unknown>)[key] === value
-  )
 }
 
 function isAgentOnline(agent: { status: string; lastHeartbeat?: Date | string | null }) {
@@ -376,13 +252,10 @@ export class PlayLaunchService {
   constructor(
     private deps: {
       db: Database
-      io: SocketIOServer
-      userDao: UserDao
       serverService: ServerService
       channelService: ChannelService
       agentDao: AgentDao
-      agentPolicyService: AgentPolicyService
-      messageService: MessageService
+      greetingService: GreetingService
       membershipService: MembershipService
       cloudTemplateDao: CloudTemplateDao
       cloudDeploymentDao: CloudDeploymentDao
@@ -559,19 +432,16 @@ export class PlayLaunchService {
     })
     await this.deps.channelService.addMember(channel.id, userId)
     if (buddies.length > 0) {
-      const launchUser = await this.getLaunchUserProfile(userId)
-      await this.addBuddiesAndGreet(server.id, channel.id, buddies, action, {
-        greeting:
-          action.greeting !== undefined
-            ? personalizeGreeting(action.greeting, launchUser.friendlyName, input.locale)
-            : defaultLaunchGreeting({
-                title: localizedPlayTitle(play, input.locale),
-                locale: input.locale,
-                kind: 'community',
-                userName: launchUser.friendlyName,
-              }),
+      const launchUser = await this.deps.greetingService.getUserProfile(userId)
+      await this.deps.greetingService.addBuddiesAndGreet(server.id, channel.id, buddies, {
+        greeting: buildDefaultGreeting({
+          title: localizedPlayTitle(play, input.locale),
+          locale: input.locale,
+          kind: 'community',
+          userName: launchUser.friendlyName,
+        }),
         metadata: {
-          playLaunch: {
+          greeting: {
             kind: 'public_channel',
             playId: input.playId,
             templateSlug: action.buddyTemplateSlug ?? play.template?.slug ?? play.id,
@@ -611,7 +481,7 @@ export class PlayLaunchService {
       requireRunning: true,
       playId: input.playId,
     })
-    const launchUser = await this.getLaunchUserProfile(userId)
+    const launchUser = await this.deps.greetingService.getUserProfile(userId)
     const server = await this.deps.serverService.ensureMember(targetServerId, userId, {
       allowPrivatePlay: true,
     })
@@ -634,18 +504,15 @@ export class PlayLaunchService {
       throw Object.assign(new Error('Failed to create play room'), { status: 500 })
     }
 
-    await this.addBuddiesAndGreet(server.id, channel.id, buddies, action, {
-      greeting:
-        action.greeting !== undefined
-          ? personalizeGreeting(action.greeting, launchUser.friendlyName, input.locale)
-          : defaultLaunchGreeting({
-              title: localizedPlayTitle(play, input.locale),
-              locale: input.locale,
-              kind: 'private',
-              userName: launchUser.friendlyName,
-            }),
+    await this.deps.greetingService.addBuddiesAndGreet(server.id, channel.id, buddies, {
+      greeting: buildDefaultGreeting({
+        title: localizedPlayTitle(play, input.locale),
+        locale: input.locale,
+        kind: 'private',
+        userName: launchUser.friendlyName,
+      }),
       metadata: {
-        playLaunch: {
+        greeting: {
           kind: 'private_room',
           playId: input.playId,
           templateSlug: action.buddyTemplateSlug ?? play.template?.slug ?? play.id,
@@ -692,7 +559,7 @@ export class PlayLaunchService {
     context: LaunchRequestContext,
   ) {
     await this.requireCloudDeployMember(userId, input.inviteCode)
-    const launchUser = await this.getLaunchUserProfile(userId)
+    const launchUser = await this.deps.greetingService.getUserProfile(userId)
     const template = await this.deps.cloudTemplateDao.findBySlug(action.templateSlug)
     if (!template || !canUseCloudTemplate(template, userId)) {
       throw playError('Template not found or not approved', 404, 'PLAY_TARGET_UNAVAILABLE', {
@@ -753,25 +620,37 @@ export class PlayLaunchService {
           namespace,
         },
       )
-      const templateGreeting = templatePlayLaunchGreeting(template.content)
-      const configSnapshot = attachPlayLaunchRuntimeMetadata(
-        prepareCloudSaasConfigSnapshot(serverTemplateSnapshot, envVars, {
-          locale: input.locale,
-        }),
+      const templateGreeting = extractGreetingRuntimeMetadata(serverTemplateSnapshot)
+      const preparedConfigSnapshot = prepareCloudSaasConfigSnapshot(
+        serverTemplateSnapshot,
+        envVars,
         {
-          defaultChannelName: action.defaultChannelName,
-          greeting:
-            action.greeting !== undefined
-              ? personalizeGreeting(action.greeting, launchUser.friendlyName, input.locale)
-              : templateGreeting !== undefined
-                ? personalizeGreeting(templateGreeting, launchUser.friendlyName, input.locale)
-                : defaultLaunchGreeting({
+          locale: input.locale,
+        },
+      )
+      const configSnapshot = attachGreetingRuntimeMetadata(
+        preparedConfigSnapshot,
+        templateGreeting.messages.length
+          ? {}
+          : {
+              ...(templateGreeting.entryChannelId
+                ? { entryChannelId: templateGreeting.entryChannelId }
+                : {}),
+              messages: [
+                {
+                  id: 'default',
+                  ...(templateGreeting.entryChannelId
+                    ? { channelId: templateGreeting.entryChannelId }
+                    : {}),
+                  content: buildDefaultGreeting({
                     title: localizedPlayTitle(play, input.locale),
                     locale: input.locale,
                     kind: 'cloud',
                     userName: launchUser.friendlyName,
                   }),
-        },
+                },
+              ],
+            },
       )
       const { name } = resolveTemplateText(template, input.locale)
 
@@ -911,18 +790,6 @@ export class PlayLaunchService {
     return applyRuntimeEnvRefPolicy(envVars, envRefPolicy)
   }
 
-  private async getLaunchUserProfile(userId: string): Promise<LaunchUserProfile> {
-    const user = await this.deps.userDao.findById(userId).catch(() => null)
-    const friendlyName =
-      (user?.displayName?.trim() || user?.username?.trim() || userId.slice(0, 8)).slice(0, 64) ||
-      '朋友'
-    const channelNameSegment =
-      compactChannelSegment(user?.displayName ?? '') ||
-      compactChannelSegment(user?.username ?? '') ||
-      compactSlug(userId)
-    return { friendlyName, channelNameSegment }
-  }
-
   private async cloudDeploymentLaunchResult(
     userId: string,
     playId: string | undefined,
@@ -934,7 +801,9 @@ export class PlayLaunchService {
       configSnapshot?: unknown
     },
   ): Promise<PlayLaunchResult> {
-    await this.ensureCloudDeploymentGreeting(userId, deployment).catch(() => null)
+    await this.deps.greetingService
+      .ensureCloudDeploymentGreeting(userId, deployment)
+      .catch(() => null)
     const target = extractShadowProvisionTarget(deployment.configSnapshot)
     if (deployment.status === 'deployed' && target.serverId) {
       const server = await this.deps.serverService.getById(target.serverId).catch(() => null)
@@ -964,72 +833,6 @@ export class PlayLaunchService {
       deploymentStatus: deployment.status,
       templateSlug: deployment.templateSlug ?? undefined,
     }
-  }
-
-  async ensureCloudDeploymentGreeting(
-    userId: string,
-    deployment: {
-      id: string
-      status: string
-      name?: string | null
-      templateSlug?: string | null
-      configSnapshot?: unknown
-    },
-  ) {
-    if (deployment.status !== 'deployed') return
-    const target = extractShadowProvisionTarget(deployment.configSnapshot)
-    if (!target.serverId) return
-
-    await this.deps.serverService.ensureMember(target.serverId, userId, { allowPrivatePlay: true })
-    if (!target.channelId) return
-
-    const buddyUserIds = extractShadowProvisionBuddyUserIds(deployment.configSnapshot)
-    const buddyUserId = buddyUserIds[0]
-    if (!buddyUserId) return
-
-    const recent = await this.deps.messageService.getByChannelId(target.channelId, 100)
-    if (
-      recent.messages.some((message) =>
-        playLaunchMetadataMatches(message.metadata, 'deploymentId', deployment.id),
-      )
-    ) {
-      return
-    }
-
-    await this.deps.serverService.addBotMember(target.serverId, buddyUserId)
-    await this.deps.channelService.addMember(target.channelId, buddyUserId).catch(() => null)
-    const agent = await this.deps.agentDao.findByUserId(buddyUserId)
-    if (agent) {
-      await this.deps.agentPolicyService.ensureServerDefault(agent.id, target.serverId)
-      this.notifyBuddyChannelAdded({
-        serverId: target.serverId,
-        channelId: target.channelId,
-        buddyUserId,
-        agentId: agent.id,
-      })
-    }
-
-    const runtime = extractPlayLaunchRuntimeMetadata(deployment.configSnapshot)
-    const launchUser = await this.getLaunchUserProfile(userId)
-    const greeting =
-      runtime.greeting !== undefined
-        ? personalizeGreeting(runtime.greeting, launchUser.friendlyName, runtime.locale)
-        : defaultLaunchGreeting({
-            title: deployment.name ?? deployment.templateSlug ?? 'Buddy',
-            locale: runtime.locale,
-            kind: 'cloud',
-            userName: launchUser.friendlyName,
-          })
-    await this.deps.messageService.send(target.channelId, buddyUserId, {
-      content: greeting,
-      metadata: {
-        playLaunch: {
-          kind: 'cloud_deploy',
-          deploymentId: deployment.id,
-          templateSlug: deployment.templateSlug ?? undefined,
-        },
-      },
-    })
   }
 
   private launchExternalOAuth(
@@ -1106,61 +909,6 @@ export class PlayLaunchService {
       buddies.push({ userId: buddyUserId, agentId: agent.id })
     }
     return buddies
-  }
-
-  private async addBuddiesAndGreet(
-    serverId: string,
-    channelId: string,
-    buddies: Array<{ userId: string; agentId: string }>,
-    action: PlayActionBase,
-    options: {
-      greeting?: string
-      metadata?: Record<string, unknown>
-    } = {},
-  ) {
-    for (const buddy of buddies) {
-      await this.deps.serverService.addBotMember(serverId, buddy.userId)
-      await this.deps.agentPolicyService.ensureServerDefault(buddy.agentId, serverId)
-      await this.deps.channelService.addMember(channelId, buddy.userId)
-      this.notifyBuddyChannelAdded({
-        serverId,
-        channelId,
-        buddyUserId: buddy.userId,
-        agentId: buddy.agentId,
-      })
-      const greeting = options.greeting ?? action.greeting
-      if (greeting) {
-        await this.deps.messageService.send(channelId, buddy.userId, {
-          content: greeting,
-          metadata: options.metadata ?? { playLaunch: true },
-        })
-      }
-    }
-  }
-
-  private notifyBuddyChannelAdded(input: {
-    serverId: string
-    channelId: string
-    buddyUserId: string
-    agentId: string
-  }) {
-    this.deps.io.to(`user:${input.buddyUserId}`).emit('channel:member-added', {
-      channelId: input.channelId,
-      serverId: input.serverId,
-    })
-    this.deps.io.to(`user:${input.buddyUserId}`).emit('agent:policy-changed', {
-      agentId: input.agentId,
-      serverId: input.serverId,
-      channelId: input.channelId,
-      mentionOnly: false,
-      reply: true,
-      config: {},
-    })
-    this.deps.io.to(`channel:${input.channelId}`).emit('channel:slash-commands-updated', {
-      channelId: input.channelId,
-      serverId: input.serverId,
-      botUserId: input.buddyUserId,
-    })
   }
 
   private channelUrl(server: { id: string; slug: string | null }, channelId: string) {

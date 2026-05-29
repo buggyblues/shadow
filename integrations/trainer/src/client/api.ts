@@ -13,6 +13,9 @@ import type {
   SubmissionCoachingFocus,
   SubmissionOutcome,
   SubmissionReviewFocus,
+  TrainerDifficultyMode,
+  TrainerOverview,
+  TrainerSettings,
 } from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
@@ -205,4 +208,16 @@ export function analyzeSubmission(input: {
   complexity?: string
 }) {
   return command<{ submission: CodeSubmission }>('submissions.analyze', input)
+}
+
+export function getLearningOverview() {
+  return command<{ overview: TrainerOverview }>('learning.overview', {})
+}
+
+export function updateTrainerSettings(input: {
+  difficultyMode?: TrainerDifficultyMode
+  targetProblems?: number
+  deadlineAt?: string
+}) {
+  return command<{ settings: TrainerSettings }>('settings.upsert', input)
 }

@@ -29,6 +29,8 @@ import type {
   ShadowCommunityAsset,
   ShadowCommunityAssetDefinition,
   ShadowCommunityAssetGrant,
+  ShadowConnectorBootstrapResult,
+  ShadowConnectorComputer,
   ShadowContract,
   ShadowDiyCloudGenerateInput,
   ShadowDiyCloudRun,
@@ -436,6 +438,59 @@ export class ShadowClient {
     return this.request(`/api/agents/${agentId}/token`, { method: 'POST' })
   }
 
+  async listConnectorComputers(): Promise<{ computers: ShadowConnectorComputer[] }> {
+    return this.request('/api/connector/computers')
+  }
+
+  async createConnectorBootstrap(data: {
+    serverUrl: string
+    name?: string
+  }): Promise<ShadowConnectorBootstrapResult> {
+    return this.request('/api/connector/computers/bootstrap', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async createAgentOnConnectorComputer(
+    computerId: string,
+    data: {
+      runtimeId: string
+      serverUrl: string
+      name: string
+      username: string
+      description?: string
+      avatarUrl?: string | null
+      buddyMode?: 'private' | 'shareable'
+      allowedServerIds?: string[]
+    },
+  ): Promise<{
+    agent: { id: string; userId: string; status: string }
+    job: { id: string } | null
+  }> {
+    return this.request(`/api/connector/computers/${computerId}/buddies`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async configureAgentOnConnectorComputer(
+    computerId: string,
+    agentId: string,
+    data: {
+      runtimeId: string
+      serverUrl: string
+    },
+  ): Promise<{
+    agent: { id: string; userId: string; status: string }
+    job: { id: string } | null
+  }> {
+    return this.request(`/api/connector/computers/${computerId}/buddies/${agentId}/configure`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
   async startAgent(agentId: string): Promise<{ ok: boolean }> {
     return this.request(`/api/agents/${agentId}/start`, { method: 'POST' })
   }
@@ -524,6 +579,7 @@ export class ShadowClient {
     serverId: string,
     data: {
       channelId?: string | null
+      listen?: boolean
       mentionOnly?: boolean
       reply?: boolean
       config?: Record<string, unknown>
@@ -540,6 +596,7 @@ export class ShadowClient {
     const policy = {
       serverId,
       ...(data.channelId !== undefined ? { channelId: data.channelId } : {}),
+      ...(data.listen !== undefined ? { listen: data.listen } : {}),
       ...(data.mentionOnly !== undefined ? { mentionOnly: data.mentionOnly } : {}),
       ...(data.reply !== undefined ? { reply: data.reply } : {}),
       ...(data.config !== undefined ? { config: data.config } : {}),

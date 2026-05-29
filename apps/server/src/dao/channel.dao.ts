@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, like, or } from 'drizzle-orm'
+import { and, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { channels, users } from '../db/schema'
+import { agents, channels, users } from '../db/schema'
 
 export function normalizeDirectPair(userAId: string, userBId: string) {
   const sorted = [userAId, userBId].sort()
@@ -81,10 +81,23 @@ export class ChannelDao {
             username: users.username,
             displayName: users.displayName,
             avatarUrl: users.avatarUrl,
-            status: users.status,
+            status: sql<'online' | 'idle' | 'dnd' | 'offline'>`
+              CASE
+                WHEN ${users.isBot} THEN
+                  CASE
+                    WHEN ${agents.status} = 'running'
+                      AND ${agents.lastHeartbeat} IS NOT NULL
+                      AND EXTRACT(EPOCH FROM (NOW() - ${agents.lastHeartbeat})) <= 90
+                    THEN 'online'::user_status
+                    ELSE 'offline'::user_status
+                  END
+                ELSE ${users.status}
+              END
+            `.as('status'),
             isBot: users.isBot,
           })
           .from(users)
+          .leftJoin(agents, eq(agents.userId, users.id))
           .where(inArray(users.id, [...new Set(otherIds)]))
       : []
     const userMap = new Map(otherUsers.map((user) => [user.id, user]))
@@ -107,10 +120,23 @@ export class ChannelDao {
         username: users.username,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
-        status: users.status,
+        status: sql<'online' | 'idle' | 'dnd' | 'offline'>`
+          CASE
+            WHEN ${users.isBot} THEN
+              CASE
+                WHEN ${agents.status} = 'running'
+                  AND ${agents.lastHeartbeat} IS NOT NULL
+                  AND EXTRACT(EPOCH FROM (NOW() - ${agents.lastHeartbeat})) <= 90
+                THEN 'online'::user_status
+                ELSE 'offline'::user_status
+              END
+            ELSE ${users.status}
+          END
+        `.as('status'),
         isBot: users.isBot,
       })
       .from(users)
+      .leftJoin(agents, eq(agents.userId, users.id))
       .where(eq(users.id, peerId))
       .limit(1)
     return result[0] ?? null

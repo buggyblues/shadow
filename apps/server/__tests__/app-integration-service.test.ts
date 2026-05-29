@@ -196,12 +196,52 @@ function createService(overrides: Record<string, unknown> = {}) {
       findById: vi.fn().mockResolvedValue({ id: 'agent-1', userId: 'bot-1', ownerId: 'user-1' }),
       findByUserId: vi.fn().mockResolvedValue({ id: 'agent-1', userId: 'bot-1' }),
     },
+    channelDao: {
+      findById: vi.fn().mockResolvedValue({
+        id: 'channel-1',
+        serverId: 'srv-1',
+        name: 'general',
+      }),
+      findByServerId: vi.fn().mockResolvedValue([
+        {
+          id: 'channel-1',
+          serverId: 'srv-1',
+          name: 'general',
+        },
+      ]),
+    },
+    messageDao: {
+      findByChannelId: vi.fn().mockResolvedValue({ messages: [] }),
+    },
     userDao: {
       findById: vi.fn().mockResolvedValue({
         id: 'bot-1',
         username: 'demo-buddy',
         displayName: 'Demo Buddy',
         avatarUrl: '/shadow/uploads/buddy.png',
+      }),
+    },
+    buddyInboxService: {
+      enqueueTaskForAgent: vi.fn().mockResolvedValue({
+        id: 'message-1',
+        channelId: 'inbox-1',
+        metadata: { cards: [{ kind: 'task', id: 'task-card-1' }] },
+      }),
+      assertTaskCommandAccess: vi.fn().mockResolvedValue({
+        task: {
+          messageId: 'message-1',
+          cardId: 'task-card-1',
+          channelId: 'inbox-1',
+          scopes: ['task:read', 'task:write'],
+        },
+      }),
+    },
+    messageService: {
+      send: vi.fn().mockResolvedValue({
+        id: 'posted-message-1',
+        channelId: 'channel-1',
+        content: 'Posted',
+        metadata: null,
       }),
     },
     mediaService: {
@@ -220,6 +260,9 @@ function createService(overrides: Record<string, unknown> = {}) {
     },
     safeHttpClient: {
       fetch: vi.fn(),
+    },
+    io: {
+      to: vi.fn().mockReturnValue({ emit: vi.fn() }),
     },
     logger: {
       warn: vi.fn(),
@@ -514,6 +557,224 @@ describe('AppIntegrationService', () => {
           },
         },
         permission: 'demo.tickets:read',
+      },
+    })
+  })
+
+  it('respects a Buddy grant approval override when the command defaults to approval', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { ticket: { id: 'ticket-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const base = createService()
+    const manifestWithCommandApproval: ServerAppManifestInput = {
+      ...manifest,
+      commands: manifest.commands.map((command) =>
+        command.name === 'tickets.create'
+          ? { ...command, approvalMode: 'first_time' as const }
+          : command,
+      ),
+    }
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...base.deps.appIntegrationDao,
+        findByServerAndKey: vi.fn().mockResolvedValue({
+          ...base.appRow,
+          manifest: manifestWithCommandApproval,
+        }),
+        findBuddyGrant: vi.fn().mockResolvedValue({
+          id: 'grant-1',
+          permissions: ['demo.tickets:write'],
+          approvalMode: 'none',
+          expiresAt: null,
+        }),
+      },
+    })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.create',
+      actor: {
+        kind: 'agent',
+        userId: 'bot-1',
+        agentId: 'agent-1',
+        ownerId: 'user-1',
+        scopes: [],
+      },
+      body: { input: { title: 'Need help' } },
+    })
+
+    expect(result).toEqual({ ok: true, result: { ticket: { id: 'ticket-1' } } })
+    expect(deps.appIntegrationDao.findCommandConsent).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL('http://localhost:4199/api/shadow/commands/tickets.create'),
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('delivers Server App channel message outbox cards', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            ticket: { id: 'ticket-1' },
+            shadow: {
+              protocol: 'shadow.app/1',
+              outbox: {
+                channelMessages: [
+                  {
+                    channelName: 'general',
+                    content: 'Next card is ready.',
+                    idempotencyKey: 'demo:next-card',
+                    metadata: {
+                      cards: [
+                        {
+                          kind: 'server_app',
+                          appKey: 'demo-desk',
+                          title: 'Open ticket',
+                          action: { mode: 'open_app', path: '/tickets/ticket-1' },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService()
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: {
+        kind: 'agent',
+        userId: 'bot-1',
+        agentId: 'agent-1',
+        ownerId: 'user-1',
+        scopes: [],
+      },
+      body: { input: {} },
+    })
+
+    expect(deps.messageService.send).toHaveBeenCalledWith('channel-1', 'bot-1', {
+      content: 'Next card is ready.',
+      metadata: {
+        cards: [
+          {
+            kind: 'server_app',
+            appKey: 'demo-desk',
+            title: 'Open ticket',
+            action: { mode: 'open_app', path: '/tickets/ticket-1' },
+          },
+        ],
+        custom: {
+          serverAppChannelMessage: {
+            idempotencyKey: 'demo:next-card',
+          },
+        },
+      },
+    })
+    expect(result).toMatchObject({
+      result: {
+        shadow: {
+          outbox: {
+            channelMessageDeliveries: [
+              {
+                channelId: 'channel-1',
+                messageId: 'posted-message-1',
+                idempotencyKey: 'demo:next-card',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('deduplicates Server App channel messages by idempotency key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            ticket: { id: 'ticket-1' },
+            shadow: {
+              protocol: 'shadow.app/1',
+              outbox: {
+                channelMessages: [
+                  {
+                    channelName: 'general',
+                    content: 'Next card is ready.',
+                    idempotencyKey: 'demo:next-card',
+                  },
+                ],
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService({
+      messageDao: {
+        findByChannelId: vi.fn().mockResolvedValue({
+          messages: [
+            {
+              id: 'existing-message-1',
+              channelId: 'channel-1',
+              metadata: {
+                custom: {
+                  serverAppChannelMessage: {
+                    idempotencyKey: 'demo:next-card',
+                  },
+                },
+              },
+            },
+          ],
+        }),
+      },
+    })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: {
+        kind: 'agent',
+        userId: 'bot-1',
+        agentId: 'agent-1',
+        ownerId: 'user-1',
+        scopes: [],
+      },
+      body: { input: {} },
+    })
+
+    expect(deps.messageService.send).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      result: {
+        shadow: {
+          outbox: {
+            channelMessageDeliveries: [
+              {
+                channelId: 'channel-1',
+                messageId: 'existing-message-1',
+                idempotencyKey: 'demo:next-card',
+              },
+            ],
+          },
+        },
       },
     })
   })

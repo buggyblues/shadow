@@ -1,0 +1,331 @@
+{
+  "version": "1.0.0",
+  "name": "code-trainer",
+  "title": "${i18n:title}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "routines": [
+    {
+      "id": "sync-submissions",
+      "agentId": "code-trainer-buddy",
+      "title": "Pull learner submissions",
+      "description": "Check for submitted code that needs review.",
+      "schedule": {
+        "interval": "15m"
+      },
+      "prompt": "Open Code Trainer through the Shadow Server App CLI. Treat this run as #代码复盘. Fetch pending submissions, claim any Inbox task assigned to you, post a one-line acknowledgement before running cases, run sandbox review for assigned work, write analysis with shadow-trainer submissions.analyze, then read shadow-trainer learning.overview to confirm skills, wrong problems, recommendations, plan, and report state updated. Post only a short status summary to the channel."
+    },
+    {
+      "id": "recommend-next-problem",
+      "agentId": "code-trainer-buddy",
+      "title": "Recommend next problem",
+      "description": "Pick the next suitable training problem after recent progress.",
+      "schedule": {
+        "cron": "0 18 * * *",
+        "timezone": "Asia/Shanghai"
+      },
+      "prompt": "Treat this run as #题目推荐. Call shadow-trainer learning.overview, inspect skills, wrong problems, recent submissions, current plan, and difficulty settings. Create a recommendation with shadow-trainer recommendations.create when a concrete next problem is clear. Post the recommendation reason, predicted ACK rate if available, and one lighter fallback to the channel."
+    },
+    {
+      "id": "refresh-learning-plan",
+      "agentId": "code-trainer-buddy",
+      "title": "Refresh learning plan",
+      "description": "Update daily and weekly learning tasks.",
+      "schedule": {
+        "cron": "0 8 * * *",
+        "timezone": "Asia/Shanghai"
+      },
+      "prompt": "Treat this run as #学习规划. Call shadow-trainer learning.overview, then create or adjust today's learning list with shadow-trainer learning.plan.upsert. If the learner has no plan yet, create a starter list with one main problem, one review task, and one small check. Use recent reviews, weak tags, wrong problems, and the current training stage. Post only the first concrete action."
+    },
+    {
+      "id": "push-algorithm-tip",
+      "agentId": "code-trainer-buddy",
+      "title": "Push algorithm tip",
+      "description": "Send a concise technique card for the current stage.",
+      "schedule": {
+        "cron": "30 8 * * *",
+        "timezone": "Asia/Shanghai"
+      },
+      "prompt": "Treat this run as #算法小技巧. Call shadow-trainer learning.overview, choose one weak or active tag, then create a tip with shadow-trainer tips.create and a short check with shadow-trainer checks.create. Include the pattern, one pitfall, and a short complexity reminder."
+    },
+    {
+      "id": "wrong-problem-review",
+      "agentId": "code-trainer-buddy",
+      "title": "Schedule wrong problem review",
+      "description": "Select wrong problems that should be retried.",
+      "schedule": {
+        "cron": "0 20 * * *",
+        "timezone": "Asia/Shanghai"
+      },
+      "prompt": "Treat this run as #错题回炉. Call shadow-trainer learning.overview. If a recent failed or incomplete review exists, schedule it with shadow-trainer wrongProblems.schedule and post the retry reason plus one similar variation. If nothing is due, stay quiet unless a due review exists."
+    },
+    {
+      "id": "generate-progress-report",
+      "agentId": "code-trainer-buddy",
+      "title": "Generate learning report",
+      "description": "Summarize completion, error distribution, skill movement, and plan risk.",
+      "schedule": {
+        "cron": "0 21 * * *",
+        "timezone": "Asia/Shanghai"
+      },
+      "prompt": "Treat this run as #助教资讯. Call shadow-trainer learning.overview. Create a daily report with shadow-trainer reports.create including completion signals, accepted-rate trend, weak tags, repeated error types, and one concrete next action. Post the same concise summary to 助教资讯."
+    },
+    {
+      "id": "detect-learning-risk",
+      "agentId": "code-trainer-buddy",
+      "title": "Detect learning risk",
+      "description": "Identify inactivity, repeated failures, and plan drift that need intervention.",
+      "schedule": {
+        "cron": "30 21 * * *",
+        "timezone": "Asia/Shanghai"
+      },
+      "prompt": "Treat this run as #助教资讯. Call shadow-trainer learning.overview. If the learner is inactive, repeatedly failing the same tag, or drifting from the active plan, create a risk-focused report with shadow-trainer reports.create and post a short intervention note. If there is no risk, only post a one-line healthy status."
+    },
+    {
+      "id": "weekly-problem-quality-check",
+      "agentId": "code-trainer-buddy",
+      "title": "Check problem bank quality",
+      "description": "Review tags, difficulty, examples, and test coverage.",
+      "schedule": {
+        "cron": "0 10 * * 1",
+        "timezone": "Asia/Shanghai"
+      },
+      "prompt": "Treat this run as #算法小技巧. Audit Code Trainer problems that produced confusing reviews. Suggest tag fixes, missing tests, or difficulty calibration. Use shadow-trainer challenges.upsert only when the owner explicitly asks you to apply a change."
+    }
+  ],
+  "use": [
+    {
+      "plugin": "model-provider",
+      "options": {
+        "model": "custom/default"
+      }
+    },
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "code-trainer-server",
+            "name": "Code Trainer",
+            "slug": "code-trainer",
+            "description": "Algorithm learning and practice workspace.",
+            "channels": [
+              {
+                "id": "assistant-news",
+                "title": "助教资讯",
+                "type": "text",
+                "description": "Review summaries, learning reminders, stage feedback, and system notices."
+              },
+              {
+                "id": "problem-recommendations",
+                "title": "题目推荐",
+                "type": "text",
+                "description": "Daily recommendations, next problem suggestions, wrong problem variants, and drills."
+              },
+              {
+                "id": "learning-plan",
+                "title": "学习规划",
+                "type": "text",
+                "description": "Daily tasks, weekly lists, stage goals, and plan adjustments."
+              },
+              {
+                "id": "code-review",
+                "title": "代码复盘",
+                "type": "text",
+                "description": "Post-submission causes, fixes, and review questions."
+              },
+              {
+                "id": "wrong-problems",
+                "title": "错题回炉",
+                "type": "text",
+                "description": "Second-pass problems, similar problems, forgetting reminders, and review tasks."
+              },
+              {
+                "id": "algorithm-tips",
+                "title": "算法小技巧",
+                "type": "text",
+                "description": "Stage-specific templates, tips, pitfalls, and complexity reminders."
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "code-trainer-buddy",
+            "name": "算法教练",
+            "description": "一个 Buddy 负责提交复盘、题目推荐、学习规划、算法技巧、错题回炉和进度摘要；频道用于区分工作语境。"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "code-trainer-buddy",
+            "targetType": "buddy",
+            "servers": ["code-trainer-server"],
+            "channels": [
+              "assistant-news",
+              "problem-recommendations",
+              "learning-plan",
+              "code-review",
+              "wrong-problems",
+              "algorithm-tips"
+            ],
+            "agentId": "code-trainer-buddy",
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
+          }
+        ],
+        "greeting": {
+          "entryChannelId": "learning-plan",
+          "messages": [
+            {
+              "id": "assistant-news-welcome",
+              "channelId": "assistant-news",
+              "buddyId": "code-trainer-buddy",
+              "content": "这里是训练动态和日报摘要。我会把复盘写回、计划偏离、风险提醒和阶段变化放在这里，默认只发关键变化。"
+            },
+            {
+              "id": "problem-recommendations-welcome",
+              "channelId": "problem-recommendations",
+              "buddyId": "code-trainer-buddy",
+              "content": "这里是题目推荐区。我会根据提交结果、薄弱标签、复习节奏和难度系数推荐下一题，也会给出变式或降阶备选。"
+            },
+            {
+              "id": "learning-plan-welcome",
+              "channelId": "learning-plan",
+              "buddyId": "code-trainer-buddy",
+              "content": "{userName}，欢迎来到 Code Trainer。我是算法教练，一个 Buddy 会在不同频道里处理复盘、推荐、计划、技巧和错题。你可以先告诉我目标、语言和截止时间；也可以直接打开 Code Trainer 提交代码。"
+            },
+            {
+              "id": "code-review-welcome",
+              "channelId": "code-review",
+              "buddyId": "code-trainer-buddy",
+              "content": "这里用来复盘提交。你在 Code Trainer 里提交后，我会先确认收到，再运行示例、隐藏用例和边界用例，最后写回结论、分数、复杂度和下一步。"
+            },
+            {
+              "id": "wrong-problems-welcome",
+              "channelId": "wrong-problems",
+              "buddyId": "code-trainer-buddy",
+              "content": "这里会沉淀错题和二刷安排。我会把重复错误、遗忘点和相似变体拆出来，按间隔复习。"
+            },
+            {
+              "id": "algorithm-tips-welcome",
+              "channelId": "algorithm-tips",
+              "buddyId": "code-trainer-buddy",
+              "content": "这里是算法技巧和短检查区。我会把当前阶段最该掌握的模板、坑点和复杂度判断压缩成可练的一小块。"
+            }
+          ]
+        },
+        "serverApps": [
+          {
+            "id": "code-trainer-app",
+            "serverId": "code-trainer-server",
+            "manifestUrl": "${env:CODE_TRAINER_MANIFEST_URL}",
+            "grants": [
+              {
+                "buddyId": "code-trainer-buddy",
+                "permissions": [
+                  "trainer.challenges:read",
+                  "trainer.challenges:write",
+                  "trainer.submissions:read",
+                  "trainer.submissions:analyze",
+                  "trainer.learning:read",
+                  "trainer.learning:write"
+                ],
+                "approvalMode": "none"
+              }
+            ]
+          }
+        ],
+        "routines": [
+          {
+            "routineId": "sync-submissions",
+            "serverId": "code-trainer-server",
+            "channelId": "code-review",
+            "accountId": "code-trainer-buddy"
+          },
+          {
+            "routineId": "recommend-next-problem",
+            "serverId": "code-trainer-server",
+            "channelId": "problem-recommendations",
+            "accountId": "code-trainer-buddy"
+          },
+          {
+            "routineId": "refresh-learning-plan",
+            "serverId": "code-trainer-server",
+            "channelId": "learning-plan",
+            "accountId": "code-trainer-buddy"
+          },
+          {
+            "routineId": "push-algorithm-tip",
+            "serverId": "code-trainer-server",
+            "channelId": "algorithm-tips",
+            "accountId": "code-trainer-buddy"
+          },
+          {
+            "routineId": "wrong-problem-review",
+            "serverId": "code-trainer-server",
+            "channelId": "wrong-problems",
+            "accountId": "code-trainer-buddy"
+          },
+          {
+            "routineId": "generate-progress-report",
+            "serverId": "code-trainer-server",
+            "channelId": "assistant-news",
+            "accountId": "code-trainer-buddy"
+          },
+          {
+            "routineId": "detect-learning-risk",
+            "serverId": "code-trainer-server",
+            "channelId": "assistant-news",
+            "accountId": "code-trainer-buddy"
+          },
+          {
+            "routineId": "weekly-problem-quality-check",
+            "serverId": "code-trainer-server",
+            "channelId": "algorithm-tips",
+            "accountId": "code-trainer-buddy"
+          }
+        ]
+      }
+    }
+  ],
+  "deployments": {
+    "namespace": "code-trainer",
+    "backend": "deployment",
+    "backendPolicy": "deployment-only",
+    "agents": [
+      {
+        "id": "code-trainer-buddy",
+        "runtime": "openclaw",
+        "description": "单一 Code Trainer 算法教练，按频道承担复盘、推荐、计划、技巧、错题和进度摘要。",
+        "identity": {
+          "name": "算法教练",
+          "personality": "You are structured, direct, patient, and proactive. You keep one coherent coaching memory across all Code Trainer channels while respecting each channel purpose.",
+          "systemPrompt": "You are the single Code Trainer Buddy. Use the mounted shadowob CLI skill as the source of truth: run `shadowob app discover --server \"$SHADOW_SERVER_APP_SERVER_CODE_TRAINER_APP\" --json`, then call `shadowob app call \"$SHADOW_SERVER_APP_KEY_CODE_TRAINER_APP\" <command> --server \"$SHADOW_SERVER_APP_SERVER_CODE_TRAINER_APP\" --json-input '<raw-command-input-json>' --json`.\n\nUse channels as modes, not separate identities:\n- #代码复盘: claim Inbox tasks immediately, acknowledge within 60 seconds, run visible examples plus hidden/edge cases, then write submissions.analyze with verdict, score, complexity, diagnosis, and next steps. If review takes more than 3 minutes, post one brief progress note.\n- #题目推荐: recommend the next problem from learning.overview using reinforcement, diversity, review, and popular coverage. Include predicted ACK rate when available and offer a lighter fallback.\n- #学习规划: maintain daily/weekly lists, deadline target, and first concrete action.\n- #算法小技巧: post compact templates, pitfalls, complexity reminders, and short checks tied to current weak or active tags.\n- #错题回炉: schedule spaced review for wrong or nearly forgotten problems and suggest one similar variation.\n- #助教资讯: post concise status summaries, daily reports, and risk alerts.\n\nKeep outputs concise. Prefer Chinese when the learner uses Chinese. Be proactive after submissions, but avoid noisy duplicate reports. Do not paste a full final solution unless explicitly asked by the owner."
+        },
+        "resources": {
+          "requests": {
+            "cpu": "150m",
+            "memory": "384Mi"
+          },
+          "limits": {
+            "cpu": "1500m",
+            "memory": "1Gi"
+          }
+        },
+        "configuration": {}
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "title": "Code Trainer",
+      "description": "A single-Buddy algorithm training template with Code Trainer Server App authorization, learning channels, scheduled reviews, recommendations, plans, tips, wrong-problem review, and progress reports."
+    },
+    "zh-CN": {
+      "title": "Code Trainer 算法训练",
+      "description": "基于 Code Trainer Server App 授权的单 Buddy 算法训练模板，用多个频道承载自动复盘、题目推荐、学习计划、技巧推送、错题回炉和进度报告。"
+    }
+  }
+}

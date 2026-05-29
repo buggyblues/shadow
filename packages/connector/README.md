@@ -1,10 +1,22 @@
 # Shadow Connector
 
-Connection helpers for attaching a Shadow Buddy token to OpenClaw, Hermes Agent, or cc-connect.
+Connection helpers for attaching Shadow Buddies to local OpenClaw and CLI runtimes.
 
-The package exports pure plan builders for app UIs and a `shadowob-connector` CLI for terminal setup.
+The package exports pure plan builders for legacy app UIs and a `shadowob-connector` CLI for terminal setup.
 
 ## CLI
+
+Run the daemon flow used by the Buddy creation panel:
+
+```bash
+npx @shadowob/connector@latest --daemon \
+  --server-url https://shadowob.com \
+  --api-key sk_machine_...
+```
+
+The daemon connects this computer once, scans supported runtimes, sends heartbeats to Shadow, claims Buddy setup jobs, and configures the selected runtime. Supported runtime detection currently includes OpenClaw, Claude Code, Codex CLI, OpenCode, Gemini CLI, Cursor CLI, Kimi CLI, Copilot CLI, and Antigravity CLI.
+
+Use `--once` to run one heartbeat/job pass for debugging, and `--poll-interval-ms` to tune the loop interval.
 
 Print a plan:
 

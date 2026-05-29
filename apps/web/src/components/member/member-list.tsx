@@ -87,7 +87,7 @@ export function MemberList() {
   const currentChannelId = routeChannelId ?? activeChannelId ?? null
   const currentUser = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
-  const { mobileMemberListOpen, closeMobileMemberList, filePreviewOpen } = useUIStore()
+  const { mobileMemberListOpen, closeMobileMemberList, rightPanelOpen } = useUIStore()
   const [showInvitePanel, setShowInvitePanel] = useState(false)
   const [inviteInitialTab, setInviteInitialTab] = useState<'members' | 'buddies'>('members')
   const [inviteCopied, setInviteCopied] = useState(false)
@@ -425,8 +425,8 @@ export function MemberList() {
 
   return (
     <>
-      {/* Desktop member list — hidden when file preview panel is open */}
-      {!filePreviewOpen && (
+      {/* Desktop member list — hidden when a right-side auxiliary panel is open */}
+      {!rightPanelOpen && (
         <GlassPanel className="w-[240px] overflow-hidden overflow-y-auto shrink-0 pt-4 hidden lg:block h-full scrollbar-hidden">
           {memberContent}
         </GlassPanel>

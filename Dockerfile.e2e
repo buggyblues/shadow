@@ -35,6 +35,7 @@ COPY integrations/resume/package.json ./integrations/resume/
 COPY integrations/space/package.json ./integrations/space/
 COPY integrations/skills/package.json ./integrations/skills/
 COPY integrations/trainer/package.json ./integrations/trainer/
+COPY integrations/warbuddy/package.json ./integrations/warbuddy/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/connector/package.json ./packages/connector/
 COPY packages/oauth/package.json ./packages/oauth/

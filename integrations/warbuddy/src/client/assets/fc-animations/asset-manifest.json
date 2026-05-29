@@ -1,0 +1,60 @@
+{
+  "name": "warbuddy-fc-animations",
+  "style": "FC / NES 8-bit top-down pixel art",
+  "source": "image_gen",
+  "postprocess": {
+    "skill": "generate2dsprite",
+    "backgroundKey": "#FF00FF"
+  },
+  "sheets": {
+    "tankGrassStar": {
+      "rawImage": "tank-grass-star/raw.png",
+      "prompt": "tank-grass-star/prompt.txt",
+      "rows": 4,
+      "cols": 4,
+      "processedSheet": "tank-grass-star/processed/sheet-transparent.png"
+    },
+    "effects": {
+      "rawImage": "effects/raw.png",
+      "prompt": "effects/prompt.txt",
+      "rows": 2,
+      "cols": 4,
+      "processedSheet": "effects/processed/sheet-transparent.png"
+    },
+    "engineer": {
+      "rawImage": "engineer-v1/raw.png",
+      "prompt": "engineer-v1/prompt.txt",
+      "rows": 2,
+      "cols": 2,
+      "processedSheet": "engineer-v1/processed/sheet-transparent.png"
+    }
+  },
+  "frames": {
+    "grassSway": [
+      "grass-v3/processed/grass-1.png",
+      "grass-v3/processed/grass-2.png",
+      "grass-v3/processed/grass-3.png",
+      "grass-v3/processed/grass-4.png"
+    ],
+    "starSparkle": [
+      "star-v2/processed/star-1.png",
+      "star-v2/processed/star-2.png",
+      "star-v2/processed/star-3.png",
+      "star-v2/processed/star-4.png"
+    ],
+    "redTankBase": "tank-grass-star/processed/anim-10.png",
+    "blueTankBase": "tank-grass-star/processed/anim-14.png",
+    "engineerWalk": [
+      "engineer-v1/processed/engineer-1.png",
+      "engineer-v1/processed/engineer-2.png",
+      "engineer-v1/processed/engineer-3.png",
+      "engineer-v1/processed/engineer-4.png"
+    ],
+    "tankDeath": [
+      "effects/processed/fx-5.png",
+      "effects/processed/fx-6.png",
+      "effects/processed/fx-7.png",
+      "effects/processed/fx-8.png"
+    ]
+  }
+}

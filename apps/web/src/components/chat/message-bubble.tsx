@@ -7,9 +7,12 @@ import { zhCN } from 'date-fns/locale'
 import {
   Check,
   CheckSquare,
+  ChevronRight,
   Copy,
+  CornerDownRight,
   ExternalLink,
   HandCoins,
+  MessageSquare,
   MoreHorizontal,
   Pencil,
   Reply,
@@ -51,6 +54,7 @@ import {
   SelectionControl,
   SendFailureNotice,
 } from './message-bubble/pure'
+import { ServerAppCardsView } from './message-bubble/server-app-card'
 import { isTaskCard, TaskCardsView } from './message-bubble/task-card'
 import type {
   Attachment,
@@ -81,6 +85,7 @@ export type {
   Message,
   MessageBubbleProps,
   ReactionGroup,
+  ThreadPreview,
 } from './message-bubble/types'
 
 function lowerText(value: unknown) {
@@ -88,6 +93,7 @@ function lowerText(value: unknown) {
 }
 
 const MESSAGE_ACTIONS_ACTIVE_EVENT = 'shadow:message-actions-active'
+const BUDDY_INTRO_PROMPT_KEY = 'agentMgmt.buddyIntroPrompt'
 type MessageActionsActiveEvent = CustomEvent<{ messageId: string }>
 
 function MessageBubbleInner({
@@ -98,6 +104,7 @@ function MessageBubbleInner({
   onReact,
   onMessageUpdate,
   onMessageDelete,
+  onOpenThread,
   onPreviewFile,
   onPreviewOAuthLink,
   onSaveToWorkspace,
@@ -105,11 +112,15 @@ function MessageBubbleInner({
   deleteApi,
   highlight,
   replyToMessage,
+  hasThread,
+  thread,
   selectionMode,
   isSelected,
+  selectionAnchorId,
   submittedInteractiveResponse,
   onToggleSelect,
   onEnterSelectionMode,
+  onSelectRangeTo,
   isGrouped = false,
 }: MessageBubbleProps) {
   const { t, i18n } = useTranslation()
@@ -147,7 +158,9 @@ function MessageBubbleInner({
     [message.metadata?.cards],
   )
   const renderGrouped = isGrouped && !isTaskCardMessage
-  const showActions = isHovered && !selectionMode
+  const canSelectRangeTo =
+    selectionMode && Boolean(onSelectRangeTo) && selectionAnchorId !== message.id
+  const showActions = isHovered && (!selectionMode || canSelectRangeTo)
 
   const closeFloatingActions = useCallback(() => {
     if (hoverTimeoutRef.current) {
@@ -535,8 +548,11 @@ function MessageBubbleInner({
   )
   const markdownContent = useMemo(() => {
     if (isTaskCardMessage) return ''
-    return walletRecharge ? stripWalletRechargeMarker(message.content) : message.content
-  }, [isTaskCardMessage, message.content, walletRecharge])
+    const content = walletRecharge ? stripWalletRechargeMarker(message.content) : message.content
+    return content === BUDDY_INTRO_PROMPT_KEY
+      ? t(BUDDY_INTRO_PROMPT_KEY, '你好，请介绍一下你自己，并告诉我你能帮我做什么。')
+      : content
+  }, [isTaskCardMessage, message.content, t, walletRecharge])
   const markdownNode = useMemo(() => {
     if (!markdownContent || markdownContent === '\u200B') return null
 
@@ -578,6 +594,39 @@ function MessageBubbleInner({
 
   const handleRetrySend = useCallback(
     (failedMessage: Message) => {
+      if (failedMessage.threadId) {
+        const threadId = failedMessage.threadId
+        queryClient.setQueryData<Message[]>(['thread-messages', threadId], (old) =>
+          (old ?? []).filter((m) => m.id !== failedMessage.id),
+        )
+        const tempId = `temp-${Date.now()}`
+        const retryMsg = { ...failedMessage, id: tempId, sendStatus: 'sending' as const }
+        queryClient.setQueryData<Message[]>(['thread-messages', threadId], (old) => [
+          ...(old ?? []),
+          retryMsg,
+        ])
+        fetchApi<Message>(`/api/threads/${threadId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            content: failedMessage.content,
+            replyToId: failedMessage.replyToId,
+          }),
+        })
+          .then((created) => {
+            queryClient.setQueryData<Message[]>(['thread-messages', threadId], (old) =>
+              (old ?? []).map((m) => (m.id === tempId ? created : m)),
+            )
+          })
+          .catch(() => {
+            queryClient.setQueryData<Message[]>(['thread-messages', threadId], (old) =>
+              (old ?? []).map((m) =>
+                m.id === tempId ? { ...m, sendStatus: 'failed' as const } : m,
+              ),
+            )
+          })
+        return
+      }
+
       const channelId = failedMessage.channelId
       if (!channelId) return
       queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
@@ -627,6 +676,7 @@ function MessageBubbleInner({
     <div
       ref={messageRef}
       id={`msg-${message.id}`}
+      data-message-id={message.id}
       className={cn(
         'group relative mx-1 flex gap-3 px-3 sm:gap-4 sm:px-4',
         [
@@ -635,11 +685,21 @@ function MessageBubbleInner({
         ],
         highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]',
         isSelected && 'bg-primary/10',
-        selectionMode && 'cursor-pointer',
+        selectionMode && 'cursor-pointer select-none',
       )}
       onMouseEnter={activateHover}
       onMouseLeave={deactivateHover}
-      onClick={selectionMode ? () => onToggleSelect?.(message.id) : undefined}
+      onClick={
+        selectionMode
+          ? (event) => {
+              if (event.shiftKey && canSelectRangeTo) {
+                onSelectRangeTo?.(message.id)
+                return
+              }
+              onToggleSelect?.(message.id)
+            }
+          : undefined
+      }
       onTouchStart={() => {
         longPressTimerRef.current = setTimeout(() => {
           activateHover()
@@ -715,6 +775,8 @@ function MessageBubbleInner({
           messageId={message.id}
           channelId={message.channelId}
         />
+
+        <ServerAppCardsView cards={message.metadata?.cards} />
 
         {message.metadata?.commerceCards && message.metadata.commerceCards.length > 0 && (
           <div className="flex flex-col gap-2 mt-2">
@@ -796,6 +858,38 @@ function MessageBubbleInner({
           />
         )}
 
+        {thread && !message.threadId && onOpenThread && (
+          <div className="relative mt-2 max-w-[34rem]">
+            <div
+              aria-hidden="true"
+              className="absolute -left-8 -top-2 h-[calc(50%+8px)] w-8 rounded-bl-xl border-b-2 border-l-2 border-border-subtle/70 sm:-left-9 sm:w-9"
+            />
+            <button
+              type="button"
+              onClick={() => onOpenThread(message.id)}
+              className="group/thread flex w-full min-w-0 items-center gap-2 rounded-lg border border-border-subtle bg-bg-secondary/45 px-3 py-2 text-left transition hover:border-primary/35 hover:bg-primary/8 focus:outline-none focus:ring-2 focus:ring-primary/35"
+              title={t('chat.openThread')}
+              aria-label={t('chat.openThread')}
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <MessageSquare size={15} strokeWidth={2.3} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-black text-text-primary">
+                  {thread.name || t('chat.threadDefaultName')}
+                </span>
+                <span className="block truncate text-xs font-semibold text-text-muted">
+                  {t('chat.viewThread')}
+                </span>
+              </span>
+              <ChevronRight
+                size={16}
+                className="shrink-0 text-text-muted transition group-hover/thread:text-primary"
+              />
+            </button>
+          </div>
+        )}
+
         {/* Reactions */}
         {message.reactions && message.reactions.length > 0 && (
           <MessageReactions
@@ -816,7 +910,10 @@ function MessageBubbleInner({
       {showActions &&
         messageRef.current &&
         (() => {
-          const floatingStyle = getFloatingControlsStyle(16, canSendEconomyAction ? 184 : 116)
+          const floatingStyle = getFloatingControlsStyle(
+            16,
+            selectionMode ? 132 : canSendEconomyAction ? 218 : 150,
+          )
           if (!floatingStyle) return null
           return createPortal(
             <div
@@ -826,135 +923,164 @@ function MessageBubbleInner({
               onMouseEnter={activateHover}
               onMouseLeave={deactivateHover}
             >
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-                title={t('chat.addEmoji')}
-              >
-                <Smile size={18} strokeWidth={2} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => onReply?.(message.id)}
-                className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-                title={t('chat.reply')}
-              >
-                <Reply size={18} strokeWidth={2} />
-              </Button>
-              {canSendEconomyAction && (
+              {selectionMode ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-selection-drag-ignore="true"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onSelectRangeTo?.(message.id)
+                  }}
+                  className="!h-8 !rounded-[10px] !px-2.5 !font-semibold !normal-case !tracking-normal text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <CornerDownRight size={15} strokeWidth={2.2} className="mr-1.5" />
+                  {t('chat.selectToHere')}
+                </Button>
+              ) : (
                 <>
-                  <div className="mx-0.5 h-5 w-px bg-black/5 dark:bg-white/10" />
                   <Button
                     variant="ghost"
                     size="xs"
-                    onClick={() => {
-                      setShowMoreMenu(false)
-                      setShowTipModal(true)
-                    }}
-                    className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
-                    title={t('communityEconomy.supportMessage')}
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                    title={t('chat.addEmoji')}
                   >
-                    <HandCoins size={18} strokeWidth={2} />
+                    <Smile size={18} strokeWidth={2} />
                   </Button>
-                </>
-              )}
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => setShowMoreMenu(!showMoreMenu)}
-                  className={`!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal transition-colors ${showMoreMenu ? 'bg-black/5 dark:bg-white/10 text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10'}`}
-                  title={t('chat.more')}
-                >
-                  <MoreHorizontal size={18} strokeWidth={2} />
-                </Button>
-                {/* More dropdown menu */}
-                {showMoreMenu && (
-                  <div className="absolute top-[calc(100%+4px)] right-0 origin-top-right bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 min-w-[180px] z-50 flex flex-col gap-0.5 px-1.5 animate-in fade-in zoom-in-95 duration-100">
-                    {isOwn && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleEdit}
-                        className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-                      >
-                        <Pencil size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
-                        {t('chat.editMessage')}
-                      </Button>
-                    )}
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => onReply?.(message.id)}
+                    className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                    title={t('chat.reply')}
+                  >
+                    <Reply size={18} strokeWidth={2} />
+                  </Button>
+                  {onOpenThread && !message.threadId && (
                     <Button
                       variant="ghost"
-                      size="sm"
-                      onClick={handleCopy}
-                      className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                      size="xs"
+                      onClick={() => onOpenThread(message.id)}
+                      className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                      title={t(hasThread ? 'chat.openThread' : 'chat.startThread')}
                     >
-                      <Copy size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
-                      {copied ? t('common.copied') : t('chat.copyMessage')}
+                      <MessageSquare size={18} strokeWidth={2} />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleShareLink}
-                      className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-                    >
-                      <ExternalLink size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
-                      {t('chat.shareLink')}
-                    </Button>
-                    {canSendEconomyAction && (
-                      <>
-                        <div className="h-px bg-black/5 dark:bg-white/10 mx-2 my-1" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setShowMoreMenu(false)
-                            setShowTipModal(true)
-                          }}
-                          className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-primary/10 hover:text-primary transition-colors"
-                        >
-                          <HandCoins size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
-                          {t('communityEconomy.supportMessage')}
-                        </Button>
-                      </>
-                    )}
-                    {onEnterSelectionMode && (
+                  )}
+                  {canSendEconomyAction && (
+                    <>
+                      <div className="mx-0.5 h-5 w-px bg-black/5 dark:bg-white/10" />
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="xs"
                         onClick={() => {
                           setShowMoreMenu(false)
-                          onEnterSelectionMode(message.id)
+                          setShowTipModal(true)
                         }}
-                        className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                        className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
+                        title={t('communityEconomy.supportMessage')}
                       >
-                        <CheckSquare size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
-                        {t('chat.selectMessages')}
+                        <HandCoins size={18} strokeWidth={2} />
                       </Button>
-                    )}
-                    {canDelete && (
-                      <>
-                        <div className="h-px bg-black/5 dark:bg-white/10 mx-2 my-1" />
+                    </>
+                  )}
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setShowMoreMenu(!showMoreMenu)}
+                      className={`!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal transition-colors ${showMoreMenu ? 'bg-black/5 dark:bg-white/10 text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10'}`}
+                      title={t('chat.more')}
+                    >
+                      <MoreHorizontal size={18} strokeWidth={2} />
+                    </Button>
+                    {/* More dropdown menu */}
+                    {showMoreMenu && (
+                      <div className="absolute top-[calc(100%+4px)] right-0 origin-top-right bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 min-w-[180px] z-50 flex flex-col gap-0.5 px-1.5 animate-in fade-in zoom-in-95 duration-100">
+                        {isOwn && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleEdit}
+                            className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                          >
+                            <Pencil size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
+                            {t('chat.editMessage')}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={handleDelete}
-                          className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-danger hover:!bg-danger/10 hover:text-danger transition-colors group"
+                          onClick={handleCopy}
+                          className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                         >
-                          <Trash2
-                            size={16}
-                            strokeWidth={2}
-                            className="mr-1.5 opacity-80 group-hover:opacity-100"
-                          />
-                          {t('chat.deleteMessage')}
+                          <Copy size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
+                          {copied ? t('common.copied') : t('chat.copyMessage')}
                         </Button>
-                      </>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleShareLink}
+                          className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                        >
+                          <ExternalLink size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
+                          {t('chat.shareLink')}
+                        </Button>
+                        {canSendEconomyAction && (
+                          <>
+                            <div className="h-px bg-black/5 dark:bg-white/10 mx-2 my-1" />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setShowMoreMenu(false)
+                                setShowTipModal(true)
+                              }}
+                              className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-primary/10 hover:text-primary transition-colors"
+                            >
+                              <HandCoins size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
+                              {t('communityEconomy.supportMessage')}
+                            </Button>
+                          </>
+                        )}
+                        {onEnterSelectionMode && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setShowMoreMenu(false)
+                              onEnterSelectionMode(message.id)
+                            }}
+                            className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                          >
+                            <CheckSquare size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
+                            {t('chat.selectMessages')}
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <>
+                            <div className="h-px bg-black/5 dark:bg-white/10 mx-2 my-1" />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleDelete}
+                              className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-danger hover:!bg-danger/10 hover:text-danger transition-colors group"
+                            >
+                              <Trash2
+                                size={16}
+                                strokeWidth={2}
+                                className="mr-1.5 opacity-80 group-hover:opacity-100"
+                              />
+                              {t('chat.deleteMessage')}
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </div>,
             document.body,
           )
@@ -1179,9 +1305,13 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   if (prev.currentUserId !== next.currentUserId) return false
   if (prev.serverId !== next.serverId) return false
   if (prev.highlight !== next.highlight) return false
+  if (prev.hasThread !== next.hasThread) return false
+  if (prev.thread?.id !== next.thread?.id) return false
+  if (prev.thread?.name !== next.thread?.name) return false
   if (prev.isGrouped !== next.isGrouped) return false
   if (prev.selectionMode !== next.selectionMode) return false
   if (prev.isSelected !== next.isSelected) return false
+  if (prev.selectionAnchorId !== next.selectionAnchorId) return false
   if (
     !interactiveResponseEqual(prev.submittedInteractiveResponse, next.submittedInteractiveResponse)
   ) {

@@ -709,7 +709,6 @@ export type ShadowPlayAction =
       inviteCode?: string
       buddyUserIds?: string[]
       buddyTemplateSlug?: string
-      greeting?: string
     }
   | {
       kind: 'private_room'
@@ -718,16 +717,13 @@ export type ShadowPlayAction =
       namePrefix?: string
       buddyUserIds?: string[]
       buddyTemplateSlug?: string
-      greeting?: string
     }
   | {
       kind: 'cloud_deploy'
       templateSlug: string
       buddyTemplateSlug?: string
       buddyUserIds?: string[]
-      greeting?: string
       resourceTier?: 'lightweight' | 'standard' | 'pro'
-      defaultChannelName?: string
     }
   | {
       kind: 'external_oauth_app'
@@ -948,6 +944,36 @@ export interface ShadowAgentUsageSnapshotInput {
   providers?: ShadowUsageProviderSnapshot[]
   raw?: Record<string, unknown>
   generatedAt?: string
+}
+
+export interface ShadowConnectorRuntimeInfo {
+  id: string
+  label: string
+  kind: 'openclaw' | 'cli'
+  status: 'available' | 'missing'
+  version?: string | null
+  command?: string | null
+  detectedAt?: string | null
+}
+
+export interface ShadowConnectorComputer {
+  id: string
+  name: string
+  status: 'pending' | 'online' | 'offline'
+  hostname: string | null
+  os: string | null
+  arch: string | null
+  daemonVersion: string | null
+  runtimes: ShadowConnectorRuntimeInfo[]
+  lastSeenAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ShadowConnectorBootstrapResult {
+  computer: ShadowConnectorComputer
+  apiKey: string
+  command: string
 }
 
 // ─── Socket Event Payloads ──────────────────────────────────────────────────

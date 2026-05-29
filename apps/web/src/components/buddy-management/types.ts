@@ -52,3 +52,27 @@ export interface TokenResponse {
   agent: { id: string; userId: string; status: string }
   botUser: { id: string; username: string; displayName: string | null; avatarUrl: string | null }
 }
+
+export interface ConnectorRuntimeInfo {
+  id: string
+  label: string
+  kind: 'openclaw' | 'cli'
+  status: 'available' | 'missing'
+  version?: string | null
+  command?: string | null
+  detectedAt?: string | null
+}
+
+export interface ConnectorComputer {
+  id: string
+  name: string
+  status: 'pending' | 'online' | 'offline'
+  hostname: string | null
+  os: string | null
+  arch: string | null
+  daemonVersion: string | null
+  runtimes: ConnectorRuntimeInfo[]
+  lastSeenAt: string | null
+  createdAt: string
+  updatedAt: string
+}

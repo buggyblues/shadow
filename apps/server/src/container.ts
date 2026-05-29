@@ -18,6 +18,7 @@ import { CloudDeploymentBackupDao } from './dao/cloud-deployment-backup.dao'
 import { CloudEnvVarDao } from './dao/cloud-envvar.dao'
 import { CloudTemplateDao } from './dao/cloud-template.dao'
 import { CloudUsageDao } from './dao/cloud-usage.dao'
+import { ConnectorDao } from './dao/connector.dao'
 import { EntitlementDao } from './dao/entitlement.dao'
 import { FriendshipDao } from './dao/friendship.dao'
 import { InviteCodeDao } from './dao/invite-code.dao'
@@ -70,6 +71,7 @@ import { CommerceCheckoutService } from './services/commerce-checkout.service'
 import { CommerceFulfillmentService } from './services/commerce-fulfillment.service'
 import { CommerceOfferService } from './services/commerce-offer.service'
 import { CommunityAssetService } from './services/community-asset.service'
+import { ConnectorService } from './services/connector.service'
 import { DiyCloudRunService } from './services/diy-cloud-run.service'
 import { EconomyAuditService } from './services/economy-audit.service'
 import { EconomyIdempotencyService } from './services/economy-idempotency.service'
@@ -83,6 +85,7 @@ import { EntitlementRenewalService } from './services/entitlement-renewal.servic
 import { ExternalOAuthService } from './services/external-oauth.service'
 import { FriendshipService } from './services/friendship.service'
 import { GiftService } from './services/gift.service'
+import { GreetingService } from './services/greeting.service'
 import { LedgerService } from './services/ledger.service'
 import { MediaService } from './services/media.service'
 import { MembershipService } from './services/membership.service'
@@ -212,10 +215,12 @@ export interface Cradle {
   cloudClusterDao: CloudClusterDao
   cloudActivityDao: CloudActivityDao
   cloudUsageDao: CloudUsageDao
+  connectorDao: ConnectorDao
   // Cloud Service
   cloudService: CloudService
   cloudUsageService: CloudUsageService
   diyCloudRunService: DiyCloudRunService
+  connectorService: ConnectorService
 
   // Profile Comment DAOs
   profileCommentDao: ProfileCommentDao
@@ -284,6 +289,7 @@ export interface Cradle {
   voiceChannelService: VoiceChannelService
   agentDashboardService: AgentDashboardService
   membershipService: MembershipService
+  greetingService: GreetingService
   playLaunchService: PlayLaunchService
   modelProxyService: ModelProxyService
 }
@@ -376,6 +382,7 @@ export function createAppContainer(db: Database): AppContainer {
     cloudClusterDao: asClass(CloudClusterDao).singleton(),
     cloudActivityDao: asClass(CloudActivityDao).singleton(),
     cloudUsageDao: asClass(CloudUsageDao).singleton(),
+    connectorDao: asClass(ConnectorDao).singleton(),
     // Profile Comment DAOs
     profileCommentDao: asClass(ProfileCommentDao).singleton(),
 
@@ -445,7 +452,9 @@ export function createAppContainer(db: Database): AppContainer {
     cloudService: asClass(CloudService).singleton(),
     cloudUsageService: asClass(CloudUsageService).singleton(),
     diyCloudRunService: asClass(DiyCloudRunService).singleton(),
+    connectorService: asClass(ConnectorService).singleton(),
     membershipService: asClass(MembershipService).singleton(),
+    greetingService: asClass(GreetingService).singleton(),
     playLaunchService: asClass(PlayLaunchService).singleton(),
     modelProxyService: asClass(ModelProxyService).singleton(),
   })

@@ -92,6 +92,27 @@ export interface ShadowServerAppInboxDeliveryError {
   error: string
 }
 
+export interface ShadowServerAppChannelMessageOutbox {
+  content: string
+  channelId?: string
+  channelName?: string
+  metadata?: Record<string, unknown>
+  idempotencyKey?: string
+}
+
+export interface ShadowServerAppChannelMessageDelivery {
+  channelId: string
+  messageId: string
+  idempotencyKey?: string
+}
+
+export interface ShadowServerAppChannelMessageDeliveryError {
+  channelId?: string
+  channelName?: string
+  idempotencyKey?: string
+  error: string
+}
+
 export type ShadowServerAppInboxTarget =
   | {
       agentId: string
@@ -104,8 +125,11 @@ export type ShadowServerAppInboxTarget =
 
 export interface ShadowServerAppOutboxPayload {
   inboxTasks?: ShadowServerAppInboxTaskOutbox[]
+  channelMessages?: ShadowServerAppChannelMessageOutbox[]
   deliveries?: ShadowServerAppInboxDelivery[]
   errors?: ShadowServerAppInboxDeliveryError[]
+  channelMessageDeliveries?: ShadowServerAppChannelMessageDelivery[]
+  channelMessageErrors?: ShadowServerAppChannelMessageDeliveryError[]
 }
 
 export interface ShadowServerAppResultShadow {
@@ -346,6 +370,22 @@ export function getShadowServerAppInboxErrors(
   return shadow?.outbox?.errors ?? []
 }
 
+export function getShadowServerAppChannelMessageDeliveries(
+  payload: unknown,
+): ShadowServerAppChannelMessageDelivery[] {
+  if (!isProtocolRecord(payload)) return []
+  const shadow = shadowFromPayload(payload)
+  return shadow?.outbox?.channelMessageDeliveries ?? []
+}
+
+export function getShadowServerAppChannelMessageErrors(
+  payload: unknown,
+): ShadowServerAppChannelMessageDeliveryError[] {
+  if (!isProtocolRecord(payload)) return []
+  const shadow = shadowFromPayload(payload)
+  return shadow?.outbox?.channelMessageErrors ?? []
+}
+
 export function unwrapShadowServerAppCommandPayload<TResult = unknown>(payload: unknown): TResult {
   if (isProtocolRecord(payload) && payload.ok === false) {
     throw new Error(typeof payload.error === 'string' ? payload.error : 'Command failed')
@@ -361,6 +401,7 @@ export function unwrapShadowServerAppCommandPayload<TResult = unknown>(payload: 
 
 export class ShadowServerAppOutbox {
   private readonly inboxTasks: ShadowServerAppInboxTaskOutbox[] = []
+  private readonly channelMessages: ShadowServerAppChannelMessageOutbox[] = []
 
   enqueueInboxTask(task: ShadowServerAppInboxTaskOutbox): this {
     this.inboxTasks.push(task)
@@ -372,11 +413,22 @@ export class ShadowServerAppOutbox {
     return this
   }
 
+  sendChannelMessage(message: ShadowServerAppChannelMessageOutbox): this {
+    this.channelMessages.push(message)
+    return this
+  }
+
+  sendChannelMessages(messages: ShadowServerAppChannelMessageOutbox[]): this {
+    for (const message of messages) this.sendChannelMessage(message)
+    return this
+  }
+
   toShadow(): ShadowServerAppResultShadow {
     return {
       protocol: SHADOW_SERVER_APP_PROTOCOL,
       outbox: {
         ...(this.inboxTasks.length > 0 ? { inboxTasks: [...this.inboxTasks] } : {}),
+        ...(this.channelMessages.length > 0 ? { channelMessages: [...this.channelMessages] } : {}),
       },
     }
   }

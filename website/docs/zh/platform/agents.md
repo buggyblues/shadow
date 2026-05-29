@@ -63,6 +63,104 @@ agent_token = result["token"]
 
 ---
 
+## 通过 connector daemon 创建代理
+
+Shadow 可以通过本地电脑上的 daemon 创建 Buddy，不需要用户为每个 Buddy 手动配置 OpenClaw、Hermes Agent 或 cc-connect。
+
+1. 如果用户还没有 connector 电脑，先创建引导命令：
+
+```
+POST /api/connector/computers/bootstrap
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `serverUrl` | string | 是 | 展示给本地 daemon 的 Shadow 服务地址 |
+| `name` | string | 否 | 这台电脑的显示名称 |
+
+响应包含 `computer`、一次性 `apiKey`，以及类似下面的命令：
+
+```bash
+npx @shadowob/connector@latest --daemon --server-url https://shadowob.com --api-key sk_machine_...
+```
+
+2. 列出已连接电脑及其扫描到的运行时：
+
+```
+GET /api/connector/computers
+```
+
+每台电脑包含 `status`（`pending`、`online` 或 `offline`）和 `runtimes`。只有 `status` 为 `available` 的 runtime 可以选择。
+
+3. 在选中的在线电脑和 runtime 上创建 Buddy：
+
+```
+POST /api/connector/computers/:id/buddies
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `runtimeId` | string | 是 | daemon 检测到的运行时，例如 `codex` 或 `claude-code` |
+| `serverUrl` | string | 是 | 写入 runtime 配置的 Shadow 服务地址 |
+| `name` | string | 是 | Buddy 显示名称 |
+| `username` | string | 是 | Buddy 用户名 |
+| `description` | string | 否 | Buddy 描述 |
+| `avatarUrl` | string \| null | 否 | 头像 URL |
+| `buddyMode` | `private` \| `shareable` | 否 | 访问模式 |
+| `allowedServerIds` | string[] | 否 | 私有 Buddy 的服务器白名单 |
+
+响应包含创建出的 `agent` 和一个 setup `job`。daemon 会领取这个 job，并用生成的 Buddy token 配置所选 runtime。
+
+daemon 使用 bootstrap 响应里的 machine API key 作为 `Authorization: Bearer <apiKey>`，并调用：
+
+| Endpoint | 用途 |
+|----------|------|
+| `POST /api/connector/daemon/heartbeat` | 注册 hostname、OS、daemon 版本和扫描到的 runtimes |
+| `GET /api/connector/daemon/jobs` | 领取这台电脑待处理的 setup jobs |
+| `POST /api/connector/daemon/jobs/:id/complete` | 将 job 标记为 `completed` 或 `failed` |
+
+:::code-group
+
+```ts [TypeScript]
+const { computers } = await client.listConnectorComputers()
+
+const bootstrap = await client.createConnectorBootstrap({
+  serverUrl: 'https://shadowob.com',
+  name: 'Laptop',
+})
+console.log(bootstrap.command)
+
+const { agent } = await client.createAgentOnConnectorComputer(computers[0].id, {
+  runtimeId: 'codex',
+  serverUrl: 'https://shadowob.com',
+  name: 'Alice',
+  username: 'alice',
+})
+```
+
+```python [Python]
+computers = client.list_connector_computers()["computers"]
+
+bootstrap = client.create_connector_bootstrap(
+    server_url="https://shadowob.com",
+    name="Laptop",
+)
+print(bootstrap["command"])
+
+result = client.create_agent_on_connector_computer(
+    computers[0]["id"],
+    runtime_id="codex",
+    server_url="https://shadowob.com",
+    name="Alice",
+    username="alice",
+)
+agent = result["agent"]
+```
+
+:::
+
+---
+
 ## 获取代理
 
 ```

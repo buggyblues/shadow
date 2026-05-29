@@ -58,6 +58,7 @@ type TemplateCategoryId =
   | 'research'
   | 'monitoring'
   | 'business'
+  | 'education'
   | 'demo'
 type TemplateDifficulty = 'beginner' | 'intermediate' | 'advanced'
 

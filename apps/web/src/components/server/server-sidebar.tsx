@@ -36,6 +36,8 @@ import {
   MessageCircle,
   PawPrint,
   Plus,
+  RefreshCw,
+  Terminal,
   UserPlus,
   Volume2,
 } from 'lucide-react'
@@ -50,9 +52,15 @@ import { UnifiedContactSidebar } from '../../pages/friends'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
-import { CreateAgentDialog } from '../buddy-management/agent-dialogs'
-import { OpenClawSetupGuide } from '../buddy-management/openclaw-setup-guide'
-import type { Agent, TokenResponse } from '../buddy-management/types'
+import {
+  CLOUD_RUNTIME_LABELS,
+  type CloudBuddyRuntimeId,
+  CreateAgentDialog,
+  getBuddyIntroPrompt,
+  RuntimeIcon,
+} from '../buddy-management/agent-dialogs'
+import { ConfigCodeBlock } from '../buddy-management/config-code-block'
+import type { Agent, ConnectorComputer, ConnectorRuntimeInfo } from '../buddy-management/types'
 import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
@@ -84,6 +92,27 @@ interface DirectChannelEntry {
     status: string
     isBot: boolean
   } | null
+}
+
+type ConnectorBootstrapResult = {
+  computer: ConnectorComputer
+  command: string
+}
+
+function availableRuntimes(computer: ConnectorComputer | null | undefined) {
+  return (computer?.runtimes ?? []).filter((runtime) => runtime.status === 'available')
+}
+
+function runtimeSortKey(runtime: ConnectorRuntimeInfo) {
+  const priority: Record<string, number> = {
+    openclaw: 0,
+    hermes: 1,
+    'claude-code': 2,
+    codex: 3,
+    opencode: 4,
+    gemini: 5,
+  }
+  return priority[runtime.id] ?? 50
 }
 
 const directStatusColors: Record<string, string> = {
@@ -235,6 +264,44 @@ interface ScopedUnread {
 }
 
 type QuickBuddyStep = 'basic' | 'advanced'
+type CreateBuddyTarget = 'local' | 'cloud'
+
+const CLOUD_BUDDY_RUNTIME_OPTIONS: Array<{
+  id: CloudBuddyRuntimeId
+  label: string
+  descriptionKey: string
+}> = [
+  {
+    id: 'openclaw',
+    label: CLOUD_RUNTIME_LABELS.openclaw,
+    descriptionKey: 'agentMgmt.cloudRuntimeOpenClawDesc',
+  },
+  {
+    id: 'hermes',
+    label: CLOUD_RUNTIME_LABELS.hermes,
+    descriptionKey: 'agentMgmt.cloudRuntimeHermesDesc',
+  },
+  {
+    id: 'claude-code',
+    label: CLOUD_RUNTIME_LABELS['claude-code'],
+    descriptionKey: 'agentMgmt.cloudRuntimeClaudeCodeDesc',
+  },
+  {
+    id: 'codex',
+    label: CLOUD_RUNTIME_LABELS.codex,
+    descriptionKey: 'agentMgmt.cloudRuntimeCodexDesc',
+  },
+  {
+    id: 'opencode',
+    label: CLOUD_RUNTIME_LABELS.opencode,
+    descriptionKey: 'agentMgmt.cloudRuntimeOpenCodeDesc',
+  },
+  {
+    id: 'gemini',
+    label: CLOUD_RUNTIME_LABELS.gemini,
+    descriptionKey: 'agentMgmt.cloudRuntimeGeminiDesc',
+  },
+]
 
 export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { t } = useTranslation()
@@ -247,9 +314,16 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [showDmPicker, setShowDmPicker] = useState(false)
   const [showCreateBuddy, setShowCreateBuddy] = useState(false)
-  const [createdBuddy, setCreatedBuddy] = useState<Agent | null>(null)
   const [quickBuddyStep, setQuickBuddyStep] = useState<QuickBuddyStep>('basic')
-  const [quickGeneratedToken, setQuickGeneratedToken] = useState<string | null>(null)
+  const [createBuddyTarget, setCreateBuddyTarget] = useState<CreateBuddyTarget>('local')
+  const [selectedCloudRuntimeId, setSelectedCloudRuntimeId] =
+    useState<CloudBuddyRuntimeId>('openclaw')
+  const [selectedConnectorComputerId, setSelectedConnectorComputerId] = useState<string | null>(
+    null,
+  )
+  const [selectedConnectorRuntimeId, setSelectedConnectorRuntimeId] = useState<string | null>(null)
+  const [connectorSelectionConfirmed, setConnectorSelectionConfirmed] = useState(false)
+  const [connectorCommand, setConnectorCommand] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [isPublic, setIsPublic] = useState(true)
   const [joinCode, setJoinCode] = useState('')
@@ -261,6 +335,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   } | null>(null)
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
+  const connectorBootstrapStartedRef = useRef(false)
   const { user } = useAuthStore()
   const createServerNameInputRef = useRef<HTMLInputElement>(null)
   const loadServerNavigation = useDeferredQueryEnabled({
@@ -314,6 +389,70 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     refetchInterval: 15_000,
   })
 
+  const { data: connectorData, isFetching: isConnectorFetching } = useQuery({
+    queryKey: ['connector-computers'],
+    queryFn: () => fetchApi<{ computers: ConnectorComputer[] }>('/api/connector/computers'),
+    enabled: showCreateBuddy && createBuddyTarget === 'local',
+    refetchInterval: showCreateBuddy && createBuddyTarget === 'local' ? 5000 : false,
+  })
+
+  const connectorComputers = connectorData?.computers ?? []
+  const connectorRuntimeOptions = useMemo(
+    () =>
+      connectorComputers
+        .flatMap((computer) =>
+          availableRuntimes(computer).map((runtime) => ({
+            key: `${computer.id}:${runtime.id}`,
+            computer,
+            runtime,
+          })),
+        )
+        .sort(
+          (a, b) =>
+            runtimeSortKey(a.runtime) - runtimeSortKey(b.runtime) ||
+            a.runtime.label.localeCompare(b.runtime.label),
+        ),
+    [connectorComputers],
+  )
+  const selectedConnectorRuntimeOption =
+    connectorRuntimeOptions.find(
+      (option) =>
+        option.computer.id === selectedConnectorComputerId &&
+        option.runtime.id === selectedConnectorRuntimeId,
+    ) ??
+    connectorRuntimeOptions[0] ??
+    null
+  const selectedConnectorComputer = selectedConnectorRuntimeOption?.computer ?? null
+  const selectedConnectorRuntime = selectedConnectorRuntimeOption?.runtime ?? null
+  const connectorRuntimeOptionKeys = connectorRuntimeOptions
+    .map((option) => option.key)
+    .join('\u0000')
+  const canCreateConnectorBuddy = Boolean(selectedConnectorRuntimeOption)
+  const selectedCloudRuntime =
+    CLOUD_BUDDY_RUNTIME_OPTIONS.find((option) => option.id === selectedCloudRuntimeId) ??
+    CLOUD_BUDDY_RUNTIME_OPTIONS[0]
+  const canContinueCreateBuddy =
+    createBuddyTarget === 'cloud' ? Boolean(selectedCloudRuntime) : canCreateConnectorBuddy
+  const isCreateBuddyDetailsStep = connectorSelectionConfirmed && canContinueCreateBuddy
+
+  const connectorBootstrap = useMutation({
+    mutationFn: () =>
+      fetchApi<ConnectorBootstrapResult>('/api/connector/computers/bootstrap', {
+        method: 'POST',
+        body: JSON.stringify({
+          serverUrl: window.location.origin,
+          name: t('agentMgmt.connectorDefaultComputerName'),
+        }),
+      }),
+    onSuccess: (result) => {
+      setConnectorCommand(result.command)
+      queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
+    },
+    onError: (error: Error) => {
+      showToast(error.message || t('agentMgmt.connectorCreateFailed'), 'error')
+    },
+  })
+
   const { data: notificationPreference } = useQuery({
     queryKey: ['notification-preferences'],
     queryFn: () => fetchApi<NotificationPreference>('/api/notifications/preferences'),
@@ -352,7 +491,51 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       })
   }, [directChannels, scopedUnread?.channelUnread])
 
-  const isQuickBuddyAdvanced = !createdBuddy && quickBuddyStep === 'advanced'
+  const isQuickBuddyAdvanced = quickBuddyStep === 'advanced'
+
+  useEffect(() => {
+    if (!showCreateBuddy || createBuddyTarget !== 'local' || connectorData === undefined) return
+    if (
+      connectorRuntimeOptions.length > 0 ||
+      connectorCommand ||
+      connectorBootstrap.isPending ||
+      connectorBootstrapStartedRef.current
+    ) {
+      return
+    }
+    connectorBootstrapStartedRef.current = true
+    connectorBootstrap.mutate()
+  }, [
+    connectorBootstrap,
+    connectorCommand,
+    connectorRuntimeOptions.length,
+    connectorData,
+    createBuddyTarget,
+    showCreateBuddy,
+  ])
+
+  useEffect(() => {
+    if (!showCreateBuddy || createBuddyTarget !== 'local') return
+    if (!connectorRuntimeOptionKeys) {
+      if (selectedConnectorComputerId) setSelectedConnectorComputerId(null)
+      if (selectedConnectorRuntimeId) setSelectedConnectorRuntimeId(null)
+      return
+    }
+    if (!selectedConnectorRuntimeOption) return
+    if (selectedConnectorComputerId !== selectedConnectorRuntimeOption.computer.id) {
+      setSelectedConnectorComputerId(selectedConnectorRuntimeOption.computer.id)
+    }
+    if (selectedConnectorRuntimeId !== selectedConnectorRuntimeOption.runtime.id) {
+      setSelectedConnectorRuntimeId(selectedConnectorRuntimeOption.runtime.id)
+    }
+  }, [
+    connectorRuntimeOptionKeys,
+    createBuddyTarget,
+    selectedConnectorComputerId,
+    selectedConnectorRuntimeId,
+    selectedConnectorRuntimeOption,
+    showCreateBuddy,
+  ])
 
   const updateNotificationPreference = useMutation({
     mutationFn: (payload: Partial<NotificationPreference>) =>
@@ -364,17 +547,6 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
       queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
-    },
-  })
-
-  const quickBuddyTokenMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetchApi<TokenResponse>(`/api/agents/${id}/token`, { method: 'POST' }),
-    onSuccess: (data) => {
-      setQuickGeneratedToken(data.token)
-    },
-    onError: (error: Error) => {
-      showToast(error.message || t('agentMgmt.createFailed'), 'error')
     },
   })
 
@@ -443,6 +615,18 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
   })
 
+  useSocketEvent('presence:change', () => {
+    queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+  })
+
+  useSocketEvent('connector:computer-updated', () => {
+    queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
+  })
+
+  useSocketEvent('connector:job-updated', () => {
+    queryClient.invalidateQueries({ queryKey: ['agents'] })
+  })
+
   const joinServer = useMutation({
     mutationFn: (inviteCode: string) =>
       fetchApi<{ id: string; slug: string | null }>('/api/servers/_/join', {
@@ -478,9 +662,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
   const closeCreateBuddy = useCallback(() => {
     setShowCreateBuddy(false)
-    setCreatedBuddy(null)
     setQuickBuddyStep('basic')
-    setQuickGeneratedToken(null)
+    setCreateBuddyTarget('local')
+    setSelectedCloudRuntimeId('openclaw')
+    setSelectedConnectorComputerId(null)
+    setSelectedConnectorRuntimeId(null)
+    setConnectorSelectionConfirmed(false)
+    setConnectorCommand(null)
+    connectorBootstrapStartedRef.current = false
   }, [])
 
   const handleSelect = (serverId: string, slug?: string | null) => {
@@ -507,6 +696,27 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     navigate({ to: '/dm/$dmChannelId', params: { dmChannelId } })
     requestMarkScopeRead({ channelId: dmChannelId })
     onNavigate?.()
+  }
+
+  const openCreatedBuddyDm = async (agent: Agent) => {
+    const userId = agent.botUser?.id ?? agent.userId
+    try {
+      const data = await fetchApi<{ id: string }>('/api/channels/dm', {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      })
+      await new Promise((resolve) => window.setTimeout(resolve, 800))
+      await fetchApi(`/api/channels/${data.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content: getBuddyIntroPrompt(t) }),
+      }).catch(() => null)
+      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+      queryClient.invalidateQueries({ queryKey: ['messages', data.id] })
+      closeCreateBuddy()
+      handleSelectDirectChannel(data.id)
+    } catch (error) {
+      showToast((error as Error).message || t('agentMgmt.createFailed'), 'error')
+    }
   }
 
   return (
@@ -613,6 +823,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                       onClick={() => {
                         setShowAddMenu(false)
                         setQuickBuddyStep('basic')
+                        setCreateBuddyTarget('local')
+                        setSelectedCloudRuntimeId('openclaw')
+                        setSelectedConnectorComputerId(null)
+                        setSelectedConnectorRuntimeId(null)
+                        setConnectorSelectionConfirmed(false)
+                        setConnectorCommand(null)
+                        connectorBootstrapStartedRef.current = false
                         setShowCreateBuddy(true)
                       }}
                     >
@@ -818,52 +1035,36 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
         <Modal open={showCreateBuddy} onClose={closeCreateBuddy}>
           <ModalContent
-            maxWidth={createdBuddy || isQuickBuddyAdvanced ? 'max-w-2xl' : 'max-w-[420px]'}
+            maxWidth={
+              isQuickBuddyAdvanced || !isCreateBuddyDetailsStep ? 'max-w-2xl' : 'max-w-[560px]'
+            }
             className={cn(
-              'transition-[max-width,height] duration-300 ease-out',
-              createdBuddy || isQuickBuddyAdvanced ? 'h-[760px]' : 'h-[340px]',
+              'transition-[max-width,height] duration-300 ease-out max-h-[calc(100vh-48px)]',
+              !isCreateBuddyDetailsStep
+                ? createBuddyTarget === 'cloud'
+                  ? 'h-[560px]'
+                  : 'h-[520px]'
+                : isQuickBuddyAdvanced
+                  ? 'h-[520px]'
+                  : 'h-[760px]',
             )}
           >
             <ModalHeader
               icon={<PawPrint size={18} strokeWidth={2.5} />}
-              title={createdBuddy ? t('agentMgmt.connectorGuideTitle') : t('agentMgmt.createTitle')}
-              subtitle={createdBuddy ? t('agentMgmt.connectorGuideDesc') : undefined}
+              title={t('agentMgmt.createTitle')}
               closeLabel={t('common.close', '关闭')}
               onClose={closeCreateBuddy}
             />
-            {createdBuddy ? (
-              <ModalBody className="min-h-0 space-y-4 py-5">
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-success/20 bg-success/10 px-4 py-3">
-                    <div className="text-sm font-black text-text-primary">
-                      {t('agentMgmt.createSuccess')}
-                    </div>
-                    <div className="mt-1 text-xs leading-5 text-text-muted">
-                      {createdBuddy.botUser?.displayName ??
-                        createdBuddy.botUser?.username ??
-                        createdBuddy.id}
-                    </div>
-                  </div>
-                  <OpenClawSetupGuide
-                    agent={createdBuddy}
-                    generatedToken={quickGeneratedToken}
-                    onGenerateToken={() => quickBuddyTokenMutation.mutate(createdBuddy.id)}
-                    generatingToken={quickBuddyTokenMutation.isPending}
-                    t={t}
-                    compact
-                  />
-                </div>
-              </ModalBody>
-            ) : (
+            {isCreateBuddyDetailsStep ? (
               <CreateAgentDialog
                 onClose={closeCreateBuddy}
                 onSuccess={(agent) => {
                   queryClient.invalidateQueries({ queryKey: ['agents'] })
                   queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
-                  setCreatedBuddy(agent)
+                  queryClient.invalidateQueries({ queryKey: ['cloud-saas'] })
                   setQuickBuddyStep('basic')
-                  setQuickGeneratedToken(null)
                   showToast(t('agentMgmt.createSuccess'), 'success')
+                  void openCreatedBuddyDm(agent)
                 }}
                 onError={(message) => showToast(message || t('agentMgmt.createFailed'), 'error')}
                 t={t}
@@ -871,8 +1072,239 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 quick
                 hideTitle
                 modalSections
+                onBack={() => {
+                  setConnectorSelectionConfirmed(false)
+                  setQuickBuddyStep('basic')
+                }}
                 onQuickStepChange={setQuickBuddyStep}
+                connectorComputerId={
+                  createBuddyTarget === 'local' ? selectedConnectorComputer?.id : undefined
+                }
+                connectorRuntimeId={
+                  createBuddyTarget === 'local' ? selectedConnectorRuntime?.id : undefined
+                }
+                connectorRuntimeLabel={
+                  createBuddyTarget === 'local' ? selectedConnectorRuntime?.label : undefined
+                }
+                serverUrl={createBuddyTarget === 'local' ? window.location.origin : undefined}
+                cloudRuntimeId={
+                  createBuddyTarget === 'cloud' ? selectedCloudRuntime?.id : undefined
+                }
+                cloudRuntimeLabel={
+                  createBuddyTarget === 'cloud' ? selectedCloudRuntime?.label : undefined
+                }
               />
+            ) : (
+              <>
+                <ModalBody className="min-h-0 space-y-5 overflow-y-auto py-5">
+                  <div
+                    role="tablist"
+                    aria-label={t('agentMgmt.createRunTarget')}
+                    className="grid grid-cols-2 rounded-2xl border border-border-subtle bg-bg-deep/40 p-1"
+                  >
+                    {(['local', 'cloud'] as const).map((target) => {
+                      const selected = createBuddyTarget === target
+                      const Icon = target === 'cloud' ? Cloud : Terminal
+                      return (
+                        <button
+                          key={target}
+                          type="button"
+                          role="tab"
+                          aria-selected={selected}
+                          onClick={() => {
+                            setCreateBuddyTarget(target)
+                            setConnectorSelectionConfirmed(false)
+                            setQuickBuddyStep('basic')
+                          }}
+                          className={cn(
+                            'flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black transition',
+                            selected
+                              ? 'bg-primary/15 text-primary shadow-sm'
+                              : 'text-text-muted hover:bg-bg-tertiary/60 hover:text-text-primary',
+                          )}
+                        >
+                          <Icon size={16} />
+                          <span>
+                            {t(
+                              target === 'cloud'
+                                ? 'agentMgmt.createRunTargetCloud'
+                                : 'agentMgmt.createRunTargetLocal',
+                            )}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {createBuddyTarget === 'local' ? (
+                    <>
+                      {connectorRuntimeOptions.length === 0 && (
+                        <div className="rounded-2xl border border-border-subtle bg-bg-tertiary/40 px-4 py-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary">
+                              <Terminal size={18} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-black text-text-primary">
+                                {t('agentMgmt.connectorDaemonTitle')}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-4">
+                            {connectorCommand ? (
+                              <ConfigCodeBlock content={connectorCommand} mode="single" t={t} />
+                            ) : (
+                              <div className="rounded-2xl border border-border-subtle bg-bg-deep/40 px-4 py-3 text-xs leading-5 text-text-muted">
+                                {t('agentMgmt.connectorCreating')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {connectorRuntimeOptions.length > 0 && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+                              {t('agentMgmt.connectorRuntime')}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                queryClient.invalidateQueries({
+                                  queryKey: ['connector-computers'],
+                                })
+                              }
+                              disabled={isConnectorFetching}
+                            >
+                              <RefreshCw
+                                size={14}
+                                className={cn(isConnectorFetching && 'animate-spin')}
+                              />
+                              {t('common.refresh')}
+                            </Button>
+                          </div>
+                          {connectorComputers.map((computer) => {
+                            const runtimes = availableRuntimes(computer).sort(
+                              (a, b) =>
+                                runtimeSortKey(a) - runtimeSortKey(b) ||
+                                a.label.localeCompare(b.label),
+                            )
+                            if (runtimes.length === 0) return null
+                            return (
+                              <div key={computer.id} className="space-y-2">
+                                <div className="text-xs font-black text-text-secondary">
+                                  {computer.name}
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {runtimes.map((runtime) => {
+                                    const optionKey = `${computer.id}:${runtime.id}`
+                                    const selected =
+                                      selectedConnectorRuntimeOption?.key === optionKey
+                                    return (
+                                      <button
+                                        key={optionKey}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedConnectorComputerId(computer.id)
+                                          setSelectedConnectorRuntimeId(runtime.id)
+                                          setConnectorSelectionConfirmed(false)
+                                        }}
+                                        className={cn(
+                                          'rounded-2xl border px-4 py-3 text-left transition',
+                                          selected
+                                            ? 'border-primary/50 bg-primary/10'
+                                            : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
+                                        )}
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
+                                            <RuntimeIcon
+                                              runtimeId={runtime.id}
+                                              label={runtime.label}
+                                              className="h-5 w-5"
+                                            />
+                                          </span>
+                                          <span className="min-w-0">
+                                            <span className="block truncate text-sm font-black text-text-primary">
+                                              {runtime.label}
+                                            </span>
+                                            <span className="mt-0.5 block truncate text-xs text-text-muted">
+                                              {runtime.version ?? runtime.command ?? runtime.id}
+                                            </span>
+                                          </span>
+                                        </div>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+                        {t('agentMgmt.cloudRuntime')}
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {CLOUD_BUDDY_RUNTIME_OPTIONS.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCloudRuntimeId(option.id)
+                              setConnectorSelectionConfirmed(false)
+                            }}
+                            className={cn(
+                              'rounded-2xl border px-4 py-3 text-left transition',
+                              selectedCloudRuntime?.id === option.id
+                                ? 'border-primary/50 bg-primary/10'
+                                : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
+                            )}
+                          >
+                            <div className="flex items-start gap-3">
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
+                                <RuntimeIcon
+                                  runtimeId={option.id}
+                                  label={option.label}
+                                  className="h-6 w-6"
+                                />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-black text-text-primary">
+                                  {option.label}
+                                </span>
+                                <span className="mt-0.5 block text-xs leading-5 text-text-muted">
+                                  {t(option.descriptionKey)}
+                                </span>
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </ModalBody>
+                <ModalFooter className="justify-end">
+                  <ModalButtonGroup>
+                    <Button variant="ghost" size="sm" onClick={closeCreateBuddy}>
+                      {t('common.cancel')}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setConnectorSelectionConfirmed(true)}
+                      disabled={!canContinueCreateBuddy}
+                    >
+                      {t('agentMgmt.connectorContinue')}
+                    </Button>
+                  </ModalButtonGroup>
+                </ModalFooter>
+              </>
             )}
           </ModalContent>
         </Modal>

@@ -3,10 +3,14 @@ import { io, type Socket } from 'socket.io-client'
 
 let socket: Socket | null = null
 const joinedChannels = new Set<string>()
+const joinedThreads = new Set<string>()
 
 function rejoinRooms(s: Socket): void {
   for (const channelId of joinedChannels) {
     s.emit('channel:join', { channelId })
+  }
+  for (const threadId of joinedThreads) {
+    s.emit('thread:join', { threadId })
   }
 }
 
@@ -48,6 +52,7 @@ export function disconnectSocket(): void {
     socket = null
   }
   joinedChannels.clear()
+  joinedThreads.clear()
 }
 
 function handleBeforeUnload() {
@@ -96,6 +101,22 @@ export function leaveChannel(channelId: string): void {
   const s = getSocket()
   if (s.connected) {
     s.emit('channel:leave', { channelId })
+  }
+}
+
+export function joinThread(threadId: string): void {
+  joinedThreads.add(threadId)
+  const s = getSocket()
+  if (s.connected) {
+    s.emit('thread:join', { threadId })
+  }
+}
+
+export function leaveThread(threadId: string): void {
+  joinedThreads.delete(threadId)
+  const s = getSocket()
+  if (s.connected) {
+    s.emit('thread:leave', { threadId })
   }
 }
 

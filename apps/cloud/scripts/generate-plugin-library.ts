@@ -117,15 +117,23 @@ async function readOptional(path: string) {
   }
 }
 
-function evalExpression(node: ts.Expression): unknown {
+function evalExpression(node: ts.Expression, constants = new Map<string, unknown>()): unknown {
   if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node))
-    return evalExpression(node.expression)
+    return evalExpression(node.expression, constants)
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text
   if (ts.isNumericLiteral(node)) return Number(node.text)
   if (node.kind === ts.SyntaxKind.TrueKeyword) return true
   if (node.kind === ts.SyntaxKind.FalseKeyword) return false
+  if (ts.isIdentifier(node)) return constants.get(node.text)
+  if (ts.isPropertyAccessExpression(node)) {
+    const target = evalExpression(node.expression, constants)
+    if (target && typeof target === 'object') {
+      return (target as Record<string, unknown>)[node.name.text]
+    }
+    return undefined
+  }
   if (ts.isArrayLiteralExpression(node))
-    return node.elements.map((element) => evalExpression(element as ts.Expression))
+    return node.elements.map((element) => evalExpression(element as ts.Expression, constants))
   if (ts.isObjectLiteralExpression(node)) {
     const output: Record<string, unknown> = {}
     for (const property of node.properties) {
@@ -133,7 +141,7 @@ function evalExpression(node: ts.Expression): unknown {
       const name = property.name
       const key = ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined
       if (!key) continue
-      output[key] = evalExpression(property.initializer)
+      output[key] = evalExpression(property.initializer, constants)
     }
     return output
   }
@@ -143,10 +151,10 @@ function evalExpression(node: ts.Expression): unknown {
     node.expression.text === 'connectorField'
   ) {
     const [keyNode, labelNode, optionsNode] = node.arguments
-    const key = keyNode ? evalExpression(keyNode) : ''
-    const label = labelNode ? evalExpression(labelNode) : ''
+    const key = keyNode ? evalExpression(keyNode, constants) : ''
+    const label = labelNode ? evalExpression(labelNode, constants) : ''
     const options = optionsNode
-      ? ((evalExpression(optionsNode) as Record<string, unknown>) ?? {})
+      ? ((evalExpression(optionsNode, constants) as Record<string, unknown>) ?? {})
       : {}
     return {
       key,
@@ -161,8 +169,26 @@ function evalExpression(node: ts.Expression): unknown {
   return undefined
 }
 
+function collectTopLevelConstants(source: ts.SourceFile): Map<string, unknown> {
+  const constants = new Map<string, unknown>()
+
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    if (!(statement.declarationList.flags & ts.NodeFlags.Const)) continue
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue
+      const value = evalExpression(declaration.initializer, constants)
+      if (value !== undefined) constants.set(declaration.name.text, value)
+    }
+  }
+
+  return constants
+}
+
 function findConnectorManifest(source: ts.SourceFile): Record<string, unknown> | null {
   let found: Record<string, unknown> | null = null
+  const constants = collectTopLevelConstants(source)
   const visit = (node: ts.Node) => {
     if (found) return
     if (
@@ -172,7 +198,7 @@ function findConnectorManifest(source: ts.SourceFile): Record<string, unknown> |
     ) {
       const [arg] = node.arguments
       if (arg && ts.isObjectLiteralExpression(arg)) {
-        found = evalExpression(arg) as Record<string, unknown>
+        found = evalExpression(arg, constants) as Record<string, unknown>
         return
       }
     }

@@ -5,6 +5,9 @@ from shadowob_sdk import (
     ShadowClient,
     ShadowCommerceProductContext,
     ShadowCommunityAssetDefinition,
+    ShadowConnectorBootstrapResult,
+    ShadowConnectorComputer,
+    ShadowConnectorRuntimeInfo,
     ShadowEntitlement,
     ShadowPaidFileOpenResult,
     ShadowSocket,
@@ -23,6 +26,9 @@ def test_client_creation():
 def test_commerce_models_are_exported():
     assert ShadowCommerceProductContext
     assert ShadowCommunityAssetDefinition
+    assert ShadowConnectorBootstrapResult
+    assert ShadowConnectorComputer
+    assert ShadowConnectorRuntimeInfo
     assert ShadowEntitlement
     assert ShadowPaidFileOpenResult
     assert ShadowSettlementLine
@@ -88,6 +94,66 @@ def test_get_play_catalog_returns_plays(monkeypatch):
 
     assert captured == {"path": "/api/play/catalog"}
     assert result == [{"id": "gstack-buddy", "status": "gated"}]
+    client.close()
+
+
+def test_connector_computer_methods(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    def fake_get(path):
+        calls.append(("get", path))
+        return {"computers": []}
+
+    def fake_post(path, json=None):
+        calls.append(("post", path, json))
+        return {"command": "npx @shadowob/connector@latest --daemon", "computer": {"id": "pc-1"}}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    assert client.list_connector_computers() == {"computers": []}
+    assert client.create_connector_bootstrap(server_url="https://shadowob.com", name="Laptop")[
+        "command"
+    ].startswith("npx")
+    assert client.create_agent_on_connector_computer(
+        "pc-1",
+        runtime_id="codex",
+        server_url="https://shadowob.com",
+        name="Alice",
+        username="alice",
+    )["computer"]["id"] == "pc-1"
+    assert client.configure_agent_on_connector_computer(
+        "pc-1",
+        "agent-1",
+        runtime_id="claude-code",
+        server_url="https://shadowob.com",
+    )["computer"]["id"] == "pc-1"
+    assert calls == [
+        ("get", "/api/connector/computers"),
+        (
+            "post",
+            "/api/connector/computers/bootstrap",
+            {"serverUrl": "https://shadowob.com", "name": "Laptop"},
+        ),
+        (
+            "post",
+            "/api/connector/computers/pc-1/buddies",
+            {
+                "runtimeId": "codex",
+                "serverUrl": "https://shadowob.com",
+                "name": "Alice",
+                "username": "alice",
+                "buddyMode": "private",
+                "allowedServerIds": [],
+            },
+        ),
+        (
+            "post",
+            "/api/connector/computers/pc-1/buddies/agent-1/configure",
+            {"runtimeId": "claude-code", "serverUrl": "https://shadowob.com"},
+        ),
+    ]
     client.close()
 
 
@@ -369,6 +435,7 @@ def test_upsert_policy_uses_batch_agent_policies_endpoint(monkeypatch):
         "agent-1",
         "srv-1",
         channelId="ch-1",
+        listen=False,
         reply=True,
         mentionOnly=False,
     )
@@ -380,6 +447,7 @@ def test_upsert_policy_uses_batch_agent_policies_endpoint(monkeypatch):
                 {
                     "serverId": "srv-1",
                     "channelId": "ch-1",
+                    "listen": False,
                     "reply": True,
                     "mentionOnly": False,
                 }
