@@ -410,6 +410,12 @@ class ShadowAsyncClient:
         content_type: str | None = None,
         *,
         message_id: str | None = None,
+        kind: str | None = None,
+        duration_ms: int | None = None,
+        waveform_peaks: list[int] | None = None,
+        transcript_text: str | None = None,
+        transcript_language: str | None = None,
+        transcript_source: str | None = None,
     ) -> JsonDict:
         await self.open()
         content_type = content_type or infer_content_type(filename)
@@ -417,6 +423,18 @@ class ShadowAsyncClient:
         form_data: dict[str, str] = {}
         if message_id:
             form_data["messageId"] = message_id
+        if kind:
+            form_data["kind"] = kind
+        if duration_ms is not None:
+            form_data["durationMs"] = str(int(duration_ms))
+        if waveform_peaks is not None:
+            form_data["waveformPeaks"] = json.dumps(waveform_peaks)
+        if transcript_text:
+            form_data["transcriptText"] = transcript_text
+        if transcript_language:
+            form_data["transcriptLanguage"] = transcript_language
+        if transcript_source:
+            form_data["transcriptSource"] = transcript_source
         response = await self.client.post(
             self._url("/api/media/upload"),
             headers=self._headers(json_content=False),
@@ -427,7 +445,18 @@ class ShadowAsyncClient:
             raise ShadowApiError("POST", "/api/media/upload", response.status_code, response.text)
         return response.json()
 
-    async def upload_media_from_path(self, path: str | os.PathLike[str], *, message_id: str | None = None) -> JsonDict:
+    async def upload_media_from_path(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        message_id: str | None = None,
+        kind: str | None = None,
+        duration_ms: int | None = None,
+        waveform_peaks: list[int] | None = None,
+        transcript_text: str | None = None,
+        transcript_language: str | None = None,
+        transcript_source: str | None = None,
+    ) -> JsonDict:
         p = Path(path).expanduser()
         data = p.read_bytes()
         return await self.upload_media(
@@ -435,22 +464,54 @@ class ShadowAsyncClient:
             p.name,
             infer_content_type(p.name),
             message_id=message_id,
+            kind=kind,
+            duration_ms=duration_ms,
+            waveform_peaks=waveform_peaks,
+            transcript_text=transcript_text,
+            transcript_language=transcript_language,
+            transcript_source=transcript_source,
         )
 
-    async def upload_media_from_url(self, url_or_path: str, *, message_id: str | None = None) -> JsonDict:
+    async def upload_media_from_url(
+        self,
+        url_or_path: str,
+        *,
+        message_id: str | None = None,
+        kind: str | None = None,
+        duration_ms: int | None = None,
+        waveform_peaks: list[int] | None = None,
+        transcript_text: str | None = None,
+        transcript_language: str | None = None,
+        transcript_source: str | None = None,
+    ) -> JsonDict:
         value = str(url_or_path).strip()
         if value.upper().startswith("MEDIA:"):
             value = value.split(":", 1)[1].strip()
         if value.startswith("file://"):
             value = value[7:]
         if value.startswith("~") or value.startswith("/") or not urlparse(value).scheme:
-            return await self.upload_media_from_path(value, message_id=message_id)
+            return await self.upload_media_from_path(
+                value,
+                message_id=message_id,
+                kind=kind,
+                duration_ms=duration_ms,
+                waveform_peaks=waveform_peaks,
+                transcript_text=transcript_text,
+                transcript_language=transcript_language,
+                transcript_source=transcript_source,
+            )
         downloaded = await self.download_file(value)
         return await self.upload_media(
             downloaded.data,
             downloaded.filename,
             downloaded.content_type,
             message_id=message_id,
+            kind=kind,
+            duration_ms=duration_ms,
+            waveform_peaks=waveform_peaks,
+            transcript_text=transcript_text,
+            transcript_language=transcript_language,
+            transcript_source=transcript_source,
         )
 
     async def download_file(self, file_url: str) -> DownloadedFile:

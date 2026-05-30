@@ -1,7 +1,17 @@
 import { Bot, Check } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
 import { Avatar } from './avatar'
 import { OnlineRank } from './online-rank'
 
@@ -72,7 +82,6 @@ export function BuddyListItem({
         styles.container,
         {
           backgroundColor: pressed ? (colors.surfaceHover ?? colors.border) : colors.surface,
-          opacity: disabled ? 0.6 : 1,
         },
       ]}
       onPress={() => {
@@ -88,7 +97,7 @@ export function BuddyListItem({
             style={[
               styles.checkbox,
               {
-                backgroundColor: selected ? colors.primary : 'transparent',
+                backgroundColor: selected ? colors.primary : colors.surface,
                 borderColor: disabled
                   ? colors.textMuted
                   : selected
@@ -97,7 +106,7 @@ export function BuddyListItem({
               },
             ]}
           >
-            {selected ? <Check size={10} color="#fff" /> : null}
+            {selected ? <Check size={iconSize.micro} color={palette.white} /> : null}
           </View>
         ) : null}
       </View>
@@ -120,8 +129,8 @@ export function BuddyListItem({
             {member.nickname}
           </Text>
           {member.isBot ? (
-            <View style={[styles.badge, { backgroundColor: `${colors.primary}20` }]}>
-              <Bot size={10} color={colors.primary} />
+            <View style={[styles.badge, { backgroundColor: colors.inputBackground }]}>
+              <Bot size={iconSize.micro} color={colors.primary} />
               <Text style={[styles.badgeText, { color: colors.primary }]}>Buddy</Text>
             </View>
           ) : null}
@@ -153,10 +162,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderRadius: radius.lg,
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   checkboxWrap: {
-    width: 20,
+    width: size.badgeLg,
     alignItems: 'center',
   },
   content: {
@@ -176,33 +185,33 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.px,
     borderRadius: radius.sm,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '600',
   },
   subText: {
-    marginTop: 4,
+    marginTop: spacing.xs,
     fontSize: fontSize.xs,
   },
   rankRow: {
-    marginTop: 4,
+    marginTop: spacing.xs,
     alignSelf: 'flex-start',
   },
   rankFallback: {
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 14,
+    marginTop: spacing.xs,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeight.micro,
   },
   checkbox: {
-    width: 14,
-    height: 14,
-    borderWidth: 1,
-    borderRadius: 4,
+    width: iconSize.sm,
+    height: iconSize.sm,
+    borderWidth: border.hairline,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },

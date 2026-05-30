@@ -583,13 +583,14 @@ function MessageBubbleInner({
       <AttachmentView
         key={attachment.id}
         attachment={attachment}
+        isOwn={isOwn}
         onPreviewFile={onPreviewFile}
         onSaveToWorkspace={onSaveToWorkspace}
         onImageContextMenu={onImageContextMenu}
         onOpenImage={onOpenImage}
       />
     ),
-    [],
+    [isOwn],
   )
 
   const handleRetrySend = useCallback(

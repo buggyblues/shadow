@@ -9,6 +9,7 @@ import type {
 } from '@shadowob/shared'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
+import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import * as Clipboard from 'expo-clipboard'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as Haptics from 'expo-haptics'
@@ -32,12 +33,15 @@ import {
   Lock,
   MessageSquare,
   Music,
+  Pause,
+  Radio,
   RefreshCw,
   Save,
   Share2,
   Square as SquareIcon,
   Ticket,
   Unlock,
+  Volume2,
   Wallet,
   X,
 } from 'lucide-react-native'
@@ -63,7 +67,17 @@ import RNEmojiPicker from 'rn-emoji-keyboard'
 import { API_BASE, fetchApi, getImageUrl } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
 import type {
   Attachment,
   InteractiveBlock,
@@ -201,6 +215,48 @@ function formatByteSize(bytes: number | null | undefined) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+const DEFAULT_VOICE_PEAKS = [
+  18, 32, 54, 42, 76, 64, 30, 46, 68, 58, 36, 72, 88, 52, 34, 60, 78, 44, 28, 66, 84, 50, 38, 70,
+  56, 32, 62, 74, 48, 26, 58, 82,
+]
+
+function normalizeVoicePeaks(peaks?: number[] | null) {
+  return (peaks?.length ? peaks : DEFAULT_VOICE_PEAKS).map((peak) =>
+    Math.max(8, Math.min(100, peak)),
+  )
+}
+
+function formatVoiceDuration(durationMs?: number | null, fallbackSeconds = 0) {
+  const secondsValue =
+    typeof durationMs === 'number' && durationMs > 0
+      ? durationMs / 1000
+      : fallbackSeconds > 0
+        ? fallbackSeconds
+        : null
+  if (!secondsValue) return '--:--'
+  const totalSeconds = Math.max(1, Math.round(secondsValue))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+function isVoiceAttachment(attachment: Attachment, contentType: string) {
+  return (
+    attachment.kind === 'voice' ||
+    (contentType.startsWith('audio/') &&
+      (typeof attachment.durationMs === 'number' ||
+        Boolean(attachment.waveformPeaks?.length) ||
+        /^voice[-_]\d+/i.test(attachment.filename)))
+  )
+}
+
+async function markVoicePlayback(attachmentId: string, positionMs: number, completed: boolean) {
+  await fetchApi(`/api/attachments/${attachmentId}/voice-playback`, {
+    method: 'PUT',
+    body: JSON.stringify({ positionMs, completed }),
+  })
+}
+
 function formatCoinValue(value: number | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—'
 }
@@ -263,12 +319,12 @@ function WalletRechargeCard({ data }: { data: WalletRechargeMetadata }) {
     <View
       style={[
         styles.walletRechargeCard,
-        { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}35` },
+        { backgroundColor: colors.inputBackground, borderColor: colors.warning },
       ]}
     >
       <View style={styles.walletRechargeHeader}>
-        <View style={[styles.walletRechargeIcon, { backgroundColor: `${colors.warning}20` }]}>
-          <Wallet size={20} color={colors.warning} />
+        <View style={[styles.walletRechargeIcon, { backgroundColor: colors.inputBackground }]}>
+          <Wallet size={iconSize.xl} color={colors.warning} />
         </View>
         <View style={styles.walletRechargeText}>
           <Text style={[styles.walletRechargeTitle, { color: colors.text }]}>
@@ -411,8 +467,8 @@ function ServerAppCardMobile({
       ]}
       onPress={() => openApp.mutate()}
     >
-      <View style={[styles.serverAppIcon, { backgroundColor: `${colors.primary}18` }]}>
-        <AppWindow size={18} color={colors.primary} />
+      <View style={[styles.serverAppIcon, { backgroundColor: colors.inputBackground }]}>
+        <AppWindow size={iconSize.lg} color={colors.primary} />
       </View>
       <View style={styles.serverAppCardText}>
         <Text style={[styles.taskTitle, { color: colors.text }]}>{card.title}</Text>
@@ -425,7 +481,7 @@ function ServerAppCardMobile({
           <Text style={[styles.serverAppActionText, { color: colors.primary }]}>
             {card.label ?? t('chat.appCard.open')}
           </Text>
-          <ArrowRight size={14} color={colors.primary} />
+          <ArrowRight size={iconSize.sm} color={colors.primary} />
         </View>
       </View>
     </Pressable>
@@ -465,8 +521,8 @@ function TaskCardMobile({ card }: { card: TaskMessageCard }) {
             styles.taskStatus,
             {
               color: statusColor,
-              borderColor: `${statusColor}55`,
-              backgroundColor: `${statusColor}14`,
+              borderColor: colors.border,
+              backgroundColor: colors.inputBackground,
             },
           ]}
         >
@@ -504,6 +560,7 @@ function SignedAttachmentImage({ attachment }: { attachment: Attachment }) {
   useEffect(() => {
     let cancelled = false
     resolveAttachmentMediaUrl(attachment.id, 'inline', 'preview')
+      .catch(() => resolveAttachmentMediaUrl(attachment.id, 'inline'))
       .then((signedUrl) => {
         if (!cancelled) setUri(getImageUrl(signedUrl) ?? signedUrl)
       })
@@ -533,6 +590,167 @@ function SignedAttachmentImage({ attachment }: { attachment: Attachment }) {
       contentFit="cover"
       transition={200}
     />
+  )
+}
+
+function VoiceAttachmentView({
+  attachment,
+  disabled,
+  isOwn,
+}: {
+  attachment: Attachment
+  disabled?: boolean
+  isOwn?: boolean
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const playerRef = useRef<AudioPlayer | null>(null)
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [played, setPlayed] = useState(Boolean(attachment.playback?.played))
+  const peaks = useMemo(
+    () => normalizeVoicePeaks(attachment.waveformPeaks),
+    [attachment.waveformPeaks],
+  )
+
+  useEffect(() => {
+    setPlayed(Boolean(attachment.playback?.played))
+  }, [attachment.playback?.played])
+
+  useEffect(() => {
+    return () => {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current)
+      playerRef.current?.pause()
+      playerRef.current = null
+    }
+  }, [])
+
+  const clearProgressTimer = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current)
+      progressTimerRef.current = null
+    }
+  }, [])
+
+  const ensurePlayer = useCallback(async () => {
+    if (playerRef.current) return playerRef.current
+    setIsLoading(true)
+    try {
+      const signedUrl = await resolveAttachmentMediaUrl(attachment.id, 'inline')
+      const url = getImageUrl(signedUrl) ?? signedUrl
+      const player = createAudioPlayer(url)
+      playerRef.current = player
+      return player
+    } finally {
+      setIsLoading(false)
+    }
+  }, [attachment.id])
+
+  const startProgressTimer = useCallback(
+    (player: AudioPlayer) => {
+      clearProgressTimer()
+      progressTimerRef.current = setInterval(() => {
+        const total = player.duration || (attachment.durationMs ?? 0) / 1000 || 1
+        const ratio = Math.min(1, player.currentTime / total)
+        setProgress(ratio)
+        if (ratio >= 0.98 && total > 0) {
+          clearProgressTimer()
+          setIsPlaying(false)
+          setProgress(1)
+          void markVoicePlayback(attachment.id, Math.round(total * 1000), true).catch(
+            () => undefined,
+          )
+        }
+      }, 180)
+    },
+    [attachment.durationMs, attachment.id, clearProgressTimer],
+  )
+
+  const togglePlayback = useCallback(async () => {
+    if (disabled) return
+    const player = await ensurePlayer()
+    if (isPlaying) {
+      player.pause()
+      setIsPlaying(false)
+      clearProgressTimer()
+      void markVoicePlayback(attachment.id, Math.round(player.currentTime * 1000), false).catch(
+        () => undefined,
+      )
+      return
+    }
+    await setAudioModeAsync({ playsInSilentMode: true })
+    player.play()
+    setIsPlaying(true)
+    setPlayed(true)
+    startProgressTimer(player)
+    void markVoicePlayback(attachment.id, Math.round(player.currentTime * 1000), false).catch(
+      () => undefined,
+    )
+  }, [attachment.id, clearProgressTimer, disabled, ensurePlayer, isPlaying, startProgressTimer])
+
+  const activeIndex = Math.floor(progress * peaks.length)
+  const foregroundColor = isOwn ? palette.foundation : colors.text
+  const activeWaveColor = isOwn ? palette.foundation : colors.primary
+  const inactiveWaveColor = isOwn ? palette.foundation : colors.textMuted
+
+  return (
+    <View style={styles.voiceAttachmentBlock}>
+      <Pressable
+        disabled={disabled || isLoading}
+        onPress={() => void togglePlayback()}
+        style={[
+          styles.voiceBubble,
+          {
+            backgroundColor: isOwn ? colors.success : colors.inputBackground,
+            borderColor: isOwn ? colors.success : colors.border,
+          },
+        ]}
+      >
+        <Text style={[styles.voiceDuration, { color: foregroundColor }]}>
+          {formatVoiceDuration(attachment.durationMs, playerRef.current?.duration ?? 0)}
+        </Text>
+        <View style={styles.voiceWaveform}>
+          {peaks.slice(0, 28).map((peak, index) => (
+            <View
+              key={`${attachment.id}-${index}`}
+              style={[
+                styles.voiceWaveformBar,
+                {
+                  height: Math.max(6, Math.round(peak * 0.2)),
+                  backgroundColor: index <= activeIndex ? activeWaveColor : inactiveWaveColor,
+                  opacity: index <= activeIndex ? 1 : 0.34,
+                },
+              ]}
+            />
+          ))}
+        </View>
+        <View style={styles.voicePlayButton}>
+          {isPlaying ? (
+            <Pause size={iconSize.md} color={foregroundColor} fill={foregroundColor} />
+          ) : (
+            <Volume2 size={iconSize.lg} color={foregroundColor} />
+          )}
+        </View>
+        {!isOwn && !played ? (
+          <View style={[styles.voiceUnreadDot, { backgroundColor: colors.error }]} />
+        ) : null}
+      </Pressable>
+      {attachment.transcript?.status === 'ready' && attachment.transcript.text ? (
+        <View style={[styles.voiceTranscriptBox, { backgroundColor: colors.surface }]}>
+          <View style={styles.voiceTranscriptHeader}>
+            <Radio size={iconSize.xs} color={colors.textMuted} />
+            <Text style={[styles.voiceTranscriptLabel, { color: colors.textMuted }]}>
+              {t('chat.voiceTranscript')}
+            </Text>
+          </View>
+          <Text style={[styles.voiceTranscriptText, { color: colors.textSecondary }]}>
+            {attachment.transcript.text}
+          </Text>
+        </View>
+      ) : null}
+    </View>
   )
 }
 
@@ -892,16 +1110,16 @@ function MessageBubbleInner({
   }
 
   const getFileAccentColor = (contentType: string) => {
-    if (contentType.startsWith('audio/')) return '#E879F9'
-    if (contentType.startsWith('video/')) return '#F97316'
+    if (contentType.startsWith('audio/')) return palette.indigo
+    if (contentType.startsWith('video/')) return palette.warning
     if (
       contentType.includes('zip') ||
       contentType.includes('archive') ||
       contentType.includes('tar') ||
       contentType.includes('rar')
     )
-      return '#FBBF24'
-    if (contentType.includes('pdf')) return '#EF4444'
+      return palette.yellow
+    if (contentType.includes('pdf')) return palette.crimson
     if (
       contentType.includes('json') ||
       contentType.includes('javascript') ||
@@ -912,14 +1130,14 @@ function MessageBubbleInner({
       contentType.includes('python') ||
       contentType.includes('java')
     )
-      return '#22D3EE'
+      return palette.cyan
     if (
       contentType.includes('word') ||
       contentType.includes('document') ||
       contentType.includes('text/')
     )
-      return '#3B82F6'
-    if (contentType.includes('spreadsheet') || contentType.includes('excel')) return '#22C55E'
+      return palette.indigo
+    if (contentType.includes('spreadsheet') || contentType.includes('excel')) return palette.emerald
     return colors.primary
   }
 
@@ -950,7 +1168,7 @@ function MessageBubbleInner({
       style={[
         styles.container,
         isGrouped && styles.containerGrouped,
-        isSelected && { backgroundColor: `${colors.primary}18` },
+        isSelected && { backgroundColor: colors.surfaceHover },
       ]}
       onPress={selectionMode ? () => onToggleSelect?.(message.id) : () => Keyboard.dismiss()}
       onLongPress={handleLongPress}
@@ -962,7 +1180,7 @@ function MessageBubbleInner({
           style={[
             styles.replyRef,
             { borderLeftColor: colors.primary },
-            selectionMode && { marginLeft: 0 },
+            selectionMode && { marginLeft: spacing.none },
           ]}
         >
           <Text style={[styles.replyRefAuthor, { color: colors.primary }]}>
@@ -976,11 +1194,13 @@ function MessageBubbleInner({
 
       <View style={styles.row}>
         {selectionMode && (
-          <View style={{ paddingTop: 8, paddingRight: 8, paddingLeft: 4 }}>
+          <View
+            style={{ paddingTop: spacing.sm, paddingRight: spacing.sm, paddingLeft: spacing.xs }}
+          >
             {isSelected ? (
-              <CheckSquare size={20} color={colors.primary} />
+              <CheckSquare size={iconSize.xl} color={colors.primary} />
             ) : (
-              <SquareIcon size={20} color={colors.textMuted} />
+              <SquareIcon size={iconSize.xl} color={colors.textMuted} />
             )}
           </View>
         )}
@@ -1076,6 +1296,16 @@ function MessageBubbleInner({
           {/* Attachments */}
           {message.attachments?.map((att) => {
             const contentType = getAttachmentContentType(att)
+            if (isVoiceAttachment(att, contentType)) {
+              return (
+                <VoiceAttachmentView
+                  key={att.id}
+                  attachment={att}
+                  disabled={selectionMode}
+                  isOwn={isOwnMessage}
+                />
+              )
+            }
             if (isImageAtt(att)) {
               return (
                 <Pressable
@@ -1137,8 +1367,8 @@ function MessageBubbleInner({
                   })
                 }
               >
-                <View style={[styles.fileIconWrap, { backgroundColor: `${accentColor}18` }]}>
-                  <FileIcon size={20} color={accentColor} />
+                <View style={[styles.fileIconWrap, { backgroundColor: colors.inputBackground }]}>
+                  <FileIcon size={iconSize.xl} color={accentColor} />
                 </View>
                 <View style={styles.fileInfo}>
                   <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>
@@ -1196,7 +1426,7 @@ function MessageBubbleInner({
                       style={[
                         styles.reaction,
                         {
-                          backgroundColor: isReacted ? `${colors.primary}20` : colors.surface,
+                          backgroundColor: isReacted ? colors.surfaceHover : colors.surface,
                           borderColor: isReacted ? colors.primary : colors.border,
                         },
                       ]}
@@ -1237,7 +1467,7 @@ function MessageBubbleInner({
           {/* Send status indicator — only show on failure */}
           {message.sendStatus === 'failed' && (
             <View style={styles.sendStatus}>
-              <AlertCircle size={12} color={colors.error} />
+              <AlertCircle size={iconSize.xs} color={colors.error} />
               <Text style={[styles.sendStatusText, { color: colors.error }]}>
                 {t('chat.sendFailed', '发送失败')}
               </Text>
@@ -1267,7 +1497,7 @@ function MessageBubbleInner({
                 popupAbove
                   ? { bottom: screenHeight - popupPosition.touchY + 12 }
                   : { top: popupPosition.touchY + 12 },
-                { left: 0, right: 0 },
+                { left: spacing.none, right: spacing.none },
               ]}
             >
               <SelectionPopup
@@ -1400,9 +1630,9 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
         {
           backgroundColor: colors.surface,
           borderColor: blockedFileState
-            ? `${colors.warning}55`
+            ? colors.warning
             : isUnlocked
-              ? `${colors.primary}55`
+              ? colors.primary
               : colors.border,
         },
       ]}
@@ -1415,15 +1645,15 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
             styles.paidFileIconWrap,
             {
               backgroundColor: blockedFileState
-                ? `${colors.warning}18`
+                ? colors.inputBackground
                 : isUnlocked
-                  ? `${colors.primary}18`
+                  ? colors.surfaceHover
                   : colors.surfaceHover,
             },
           ]}
         >
           <FileText
-            size={22}
+            size={iconSize['2xl']}
             color={
               blockedFileState ? colors.warning : isUnlocked ? colors.primary : colors.textMuted
             }
@@ -1468,7 +1698,7 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
         ) : null}
         {error ? (
           <View style={styles.paidFileErrorRow}>
-            <AlertCircle size={12} color={colors.error} />
+            <AlertCircle size={iconSize.xs} color={colors.error} />
             <Text style={[styles.paidFileError, { color: colors.error }]} numberOfLines={2}>
               {error}
             </Text>
@@ -1482,14 +1712,14 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
             styles.paidFileStatusIcon,
             {
               backgroundColor: blockedFileState
-                ? `${colors.warning}18`
+                ? colors.inputBackground
                 : isUnlocked
-                  ? `${colors.primary}18`
+                  ? colors.surfaceHover
                   : colors.surfaceHover,
               borderColor: blockedFileState
-                ? `${colors.warning}44`
+                ? colors.warning
                 : isUnlocked
-                  ? `${colors.primary}44`
+                  ? colors.primary
                   : colors.border,
             },
           ]}
@@ -1518,7 +1748,7 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
             style={[
               styles.paidFileLockedPill,
               blockedFileState
-                ? { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}44` }
+                ? { backgroundColor: colors.inputBackground, borderColor: colors.warning }
                 : { backgroundColor: colors.surfaceHover, borderColor: colors.border },
             ]}
           >
@@ -1621,12 +1851,12 @@ function OAuthLinkCardMobile({
         {iconUri ? (
           <Image source={{ uri: iconUri }} style={styles.oauthIcon} />
         ) : (
-          <Globe2 size={18} color={colors.textMuted} />
+          <Globe2 size={iconSize.lg} color={colors.textMuted} />
         )}
       </View>
       <View style={styles.oauthInfo}>
         <View style={styles.oauthLabelRow}>
-          <Globe2 size={12} color={colors.textMuted} />
+          <Globe2 size={iconSize.xs} color={colors.textMuted} />
           <Text style={[styles.oauthLabel, { color: colors.textMuted }]}>
             {t('chat.oauthLinkCardLabel')}
           </Text>
@@ -1646,7 +1876,7 @@ function OAuthLinkCardMobile({
           {origin}
         </Text>
       </View>
-      <ChevronRight size={20} color={colors.textMuted} />
+      <ChevronRight size={iconSize.xl} color={colors.textMuted} />
 
       <Modal visible={isOpen} animationType="slide" presentationStyle="pageSheet">
         <View style={[styles.oauthModal, { backgroundColor: colors.background }]}>
@@ -1779,7 +2009,7 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
         styles.commerceCard,
         {
           backgroundColor: colors.surface,
-          borderColor: hasCardIssue ? `${colors.warning}55` : colors.border,
+          borderColor: hasCardIssue ? colors.warning : colors.border,
         },
       ]}
     >
@@ -1791,12 +2021,12 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
             style={[
               styles.commerceImageFallback,
               {
-                backgroundColor: hasCardIssue ? `${colors.warning}18` : `${colors.primary}18`,
+                backgroundColor: hasCardIssue ? colors.inputBackground : colors.surfaceHover,
               },
             ]}
           >
             <Ticket
-              size={24}
+              size={iconSize['3xl']}
               color={hasCardIssue ? colors.warning : colors.primary}
               strokeWidth={2.5}
             />
@@ -1829,15 +2059,15 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
             <View
               style={[
                 styles.commerceInvalidIcon,
-                { backgroundColor: `${colors.warning}18`, borderColor: `${colors.warning}44` },
+                { backgroundColor: colors.inputBackground, borderColor: colors.warning },
               ]}
             >
-              <AlertCircle size={16} color={colors.warning} />
+              <AlertCircle size={iconSize.md} color={colors.warning} />
             </View>
             <View
               style={[
                 styles.commerceInvalidPill,
-                { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}44` },
+                { backgroundColor: colors.inputBackground, borderColor: colors.warning },
               ]}
             >
               <Text
@@ -1901,24 +2131,24 @@ export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 2,
+    paddingVertical: spacing.xxs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.sm,
-    marginBottom: 1,
+    marginBottom: spacing.px,
   },
   containerGrouped: {
-    paddingVertical: 0,
-    marginBottom: 0,
+    paddingVertical: spacing.none,
+    marginBottom: spacing.none,
   },
   // Reply reference
   replyRef: {
-    borderLeftWidth: 2,
+    borderLeftWidth: border.active,
     paddingLeft: spacing.sm,
-    marginLeft: 44,
-    marginBottom: 2,
+    marginLeft: size.controlMd,
+    marginBottom: spacing.xxs,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   replyRefAuthor: {
     fontSize: fontSize.xs,
@@ -1937,34 +2167,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   lightBubblePlate: {
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderColor: 'rgba(15, 23, 42, 0.08)',
+    backgroundColor: palette.white,
+    borderColor: palette.lineLight,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
+    paddingVertical: spacing.xs,
   },
   groupedGutter: {
-    width: 36,
+    width: size.iconButtonMd,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginBottom: 1,
+    marginBottom: spacing.px,
   },
   username: {
     fontSize: fontSize.sm,
     fontWeight: '700',
   },
   botBadge: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.px,
+    borderRadius: radius.xs,
   },
   botBadgeText: {
-    color: '#fff',
-    fontSize: 9,
+    color: palette.white,
+    fontSize: fontSize.micro,
     fontWeight: '800',
   },
   time: {
@@ -1976,7 +2206,7 @@ const styles = StyleSheet.create({
   },
   content: {
     fontSize: fontSize.md,
-    lineHeight: 22,
+    lineHeight: lineHeight.md,
   },
   // Long-press popup overlay
   popupOverlay: {
@@ -1992,11 +2222,11 @@ const styles = StyleSheet.create({
   },
   editInput: {
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     padding: spacing.sm,
     fontSize: fontSize.md,
-    minHeight: 36,
-    maxHeight: 120,
+    minHeight: size.iconButtonMd,
+    maxHeight: size.composerInputMaxHeight,
   },
   editActions: {
     flexDirection: 'row',
@@ -2005,8 +2235,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   editBtn: {
-    width: 30,
-    height: 30,
+    width: size.sectionCompactIcon,
+    height: size.sectionCompactIcon,
   },
   // Attachments
   imageAttachment: {
@@ -2015,8 +2245,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   attachmentImage: {
-    width: 250,
-    height: 180,
+    width: size.attachmentImageWidth,
+    height: size.panelStateMinHeight,
     borderRadius: radius.lg,
   },
   fileCard: {
@@ -2025,22 +2255,89 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.lg,
     marginTop: spacing.xs,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     gap: spacing.sm,
+  },
+  voiceAttachmentBlock: {
+    marginTop: spacing.xs,
+    maxWidth: size.dialogMaxWidth,
+  },
+  voiceBubble: {
+    minHeight: size.controlMd,
+    minWidth: size.metricMinWidth,
+    borderRadius: radius.lg,
+    borderWidth: border.hairline,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  voicePlayButton: {
+    width: size.controlSm,
+    height: size.controlSm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceWaveform: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    flex: 1,
+    minWidth: size.listItemLg,
+  },
+  voiceWaveformBar: {
+    width: size.dividerAccent,
+    borderRadius: radius.full,
+  },
+  voiceDuration: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    minWidth: size.iconBubble,
+  },
+  voiceUnreadDot: {
+    width: size.dotMd,
+    height: size.dotMd,
+    borderRadius: radius.full,
+    position: 'absolute',
+    top: spacing.tight,
+    right: spacing.tight,
+  },
+  voiceTranscriptBox: {
+    marginTop: spacing.xs,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  voiceTranscriptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xxs,
+  },
+  voiceTranscriptLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  voiceTranscriptText: {
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
   },
   taskCards: {
     marginTop: spacing.xs,
     gap: spacing.xs,
   },
   taskCard: {
-    borderWidth: 1,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     padding: spacing.sm,
     gap: spacing.xs,
   },
   serverAppCard: {
     flexDirection: 'row',
-    borderWidth: 1,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     padding: spacing.sm,
     gap: spacing.sm,
@@ -2048,20 +2345,20 @@ const styles = StyleSheet.create({
   serverAppIcon: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 36,
-    height: 36,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
     borderRadius: radius.md,
   },
   serverAppCardText: {
     flex: 1,
     minWidth: 0,
-    gap: 4,
+    gap: spacing.xs,
   },
   serverAppAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
+    gap: spacing.xs,
+    marginTop: spacing.xxs,
   },
   serverAppActionText: {
     fontSize: fontSize.xs,
@@ -2076,25 +2373,25 @@ const styles = StyleSheet.create({
   taskHeaderText: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: spacing.xxs,
   },
   taskTitle: {
     fontSize: fontSize.sm,
     fontWeight: '800',
-    lineHeight: 19,
+    lineHeight: lineHeight.sm,
   },
   taskStatus: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.sm,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    fontSize: 11,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    fontSize: fontSize.xs,
     fontWeight: '800',
     overflow: 'hidden',
   },
   taskBody: {
     fontSize: fontSize.sm,
-    lineHeight: 19,
+    lineHeight: lineHeight.sm,
   },
   taskAssignee: {
     fontSize: fontSize.xs,
@@ -2104,11 +2401,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   fileIconWrap: {
-    width: 40,
-    height: 40,
+    width: size.iconButtonLg,
+    height: size.iconButtonLg,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2124,10 +2421,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   fileExt: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
@@ -2135,11 +2432,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
   },
   walletRechargeCard: {
-    borderWidth: 1,
+    borderWidth: border.hairline,
     borderRadius: radius.xl,
     padding: spacing.md,
     marginTop: spacing.sm,
-    maxWidth: 360,
+    maxWidth: size.dialogMaxWidth,
     gap: spacing.sm,
   },
   walletRechargeHeader: {
@@ -2148,8 +2445,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   walletRechargeIcon: {
-    width: 40,
-    height: 40,
+    width: size.iconButtonLg,
+    height: size.iconButtonLg,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2164,8 +2461,8 @@ const styles = StyleSheet.create({
   },
   walletRechargeBody: {
     fontSize: fontSize.xs,
-    lineHeight: 18,
-    marginTop: 2,
+    lineHeight: lineHeight.xs,
+    marginTop: spacing.xxs,
   },
   walletRechargeStats: {
     flexDirection: 'row',
@@ -2178,13 +2475,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   walletRechargeStatLabel: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   walletRechargeStatValue: {
     fontSize: fontSize.sm,
     fontWeight: '900',
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   walletRechargeActions: {
     flexDirection: 'row',
@@ -2199,18 +2496,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.sm,
     marginTop: spacing.sm,
-    maxWidth: 360,
+    maxWidth: size.dialogMaxWidth,
   },
   paidFileIconWrap: {
-    width: 48,
-    height: 48,
+    width: size.controlLg,
+    height: size.controlLg,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   paidFilePreview: {
-    width: 48,
-    height: 48,
+    width: size.controlLg,
+    height: size.controlLg,
     borderRadius: radius.md,
   },
   paidFileInfo: {
@@ -2221,10 +2518,10 @@ const styles = StyleSheet.create({
   paidFileLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   paidFileLabel: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '900',
     textTransform: 'uppercase',
     flexShrink: 1,
@@ -2232,22 +2529,22 @@ const styles = StyleSheet.create({
   paidFileName: {
     fontSize: fontSize.sm,
     fontWeight: '800',
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
   paidFileMeta: {
     fontSize: fontSize.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   paidFileSummary: {
     fontSize: fontSize.xs,
-    lineHeight: 17,
-    marginTop: 4,
+    lineHeight: lineHeight.xs,
+    marginTop: spacing.xs,
   },
   paidFileErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
+    gap: spacing.xs,
+    marginTop: spacing.tight,
   },
   paidFileError: {
     flex: 1,
@@ -2258,38 +2555,38 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   paidFileActionCol: {
-    width: 96,
+    width: size.navSide,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: spacing.tight,
   },
   paidFileStatusIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
+    borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
   paidFileButton: {
     width: '100%',
-    minHeight: 32,
+    minHeight: size.iconButtonSm,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
   },
   paidFileLockedPill: {
     width: '100%',
-    minHeight: 32,
+    minHeight: size.iconButtonSm,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
   },
   paidFileLockedText: {
-    fontSize: 11,
+    fontSize: fontSize.xs,
     fontWeight: '900',
     textAlign: 'center',
   },
@@ -2300,7 +2597,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.sm,
     marginTop: spacing.sm,
-    maxWidth: 340,
+    maxWidth: size.commerceCardMaxWidth,
   },
   commerceBody: {
     flex: 1,
@@ -2310,13 +2607,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   commerceImage: {
-    width: 64,
-    height: 64,
+    width: size.avatarXl,
+    height: size.avatarXl,
     borderRadius: radius.md,
   },
   commerceImageFallback: {
-    width: 64,
-    height: 64,
+    width: size.avatarXl,
+    height: size.avatarXl,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2326,9 +2623,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   commerceShopName: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '900',
-    marginBottom: 3,
+    marginBottom: spacing.xxs,
   },
   commerceTitle: {
     fontSize: fontSize.sm,
@@ -2340,46 +2637,46 @@ const styles = StyleSheet.create({
   },
   commerceSummary: {
     fontSize: fontSize.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   commerceDivider: {
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderStyle: 'dashed',
   },
   commerceActionCol: {
-    width: 82,
+    width: size.actionTileMin,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
   },
   commercePriceWrap: {
     maxWidth: '100%',
-    minHeight: 30,
+    minHeight: size.sectionCompactIcon,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   commerceInvalidIcon: {
-    width: 32,
-    height: 32,
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   commerceInvalidPill: {
     width: '100%',
-    minHeight: 32,
+    minHeight: size.iconButtonSm,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: spacing.tight,
   },
   commerceInvalidText: {
-    fontSize: 11,
+    fontSize: fontSize.xs,
     fontWeight: '900',
     textAlign: 'center',
   },
@@ -2396,11 +2693,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.sm,
     marginTop: spacing.sm,
-    maxWidth: 340,
+    maxWidth: size.commerceCardMaxWidth,
   },
   oauthIconWrap: {
-    width: 40,
-    height: 40,
+    width: size.iconButtonLg,
+    height: size.iconButtonLg,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
@@ -2408,8 +2705,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   oauthIcon: {
-    width: 40,
-    height: 40,
+    width: size.iconButtonLg,
+    height: size.iconButtonLg,
   },
   oauthInfo: {
     flex: 1,
@@ -2418,36 +2715,36 @@ const styles = StyleSheet.create({
   oauthLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   oauthLabel: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   oauthLabelAppName: {
     flexShrink: 1,
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   oauthTitle: {
     fontSize: fontSize.sm,
     fontWeight: '700',
-    marginTop: 3,
+    marginTop: spacing.xxs,
   },
   oauthDescription: {
     fontSize: fontSize.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   oauthOrigin: {
     fontSize: fontSize.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   oauthModal: {
     flex: 1,
   },
   oauthModalHeader: {
-    minHeight: 58,
+    minHeight: size.tabBar,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2465,11 +2762,11 @@ const styles = StyleSheet.create({
   },
   oauthModalStatus: {
     fontSize: fontSize.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   oauthModalIconButton: {
-    width: 36,
-    height: 36,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
@@ -2495,36 +2792,36 @@ const styles = StyleSheet.create({
   reaction: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: spacing.xxs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: spacing.xxs,
     borderRadius: radius.full,
-    borderWidth: 1,
+    borderWidth: border.hairline,
   },
   reactionEmoji: {
-    fontSize: 14,
+    fontSize: fontSize.sm,
   },
   reactionCount: {
     fontSize: fontSize.xs,
     fontWeight: '600',
   },
   reactionAdd: {
-    width: 28,
-    height: 24,
+    width: size.controlXs,
+    height: size.avatarXs,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: border.hairline,
   },
   reactionAddText: {
-    fontSize: 14,
+    fontSize: fontSize.sm,
   },
   // Send status
   sendStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
+    gap: spacing.xs,
+    marginTop: spacing.xxs,
   },
   sendStatusText: {
     fontSize: fontSize.xs,
@@ -2532,19 +2829,19 @@ const styles = StyleSheet.create({
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.tight,
+    paddingVertical: spacing.xxs,
     borderRadius: radius.sm,
-    marginLeft: 4,
+    marginLeft: spacing.xs,
   },
   // Interactive block (Phase 2)
   interactive: {
-    marginTop: 6,
-    padding: 10,
+    marginTop: spacing.tight,
+    padding: spacing.md,
     borderRadius: radius.md,
-    borderWidth: 1,
-    gap: 8,
+    borderWidth: border.hairline,
+    gap: spacing.sm,
   },
   interactivePrompt: {
     fontSize: fontSize.sm,
@@ -2552,13 +2849,13 @@ const styles = StyleSheet.create({
   interactiveRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: spacing.tight,
   },
   interactiveButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.tight,
     borderRadius: radius.sm,
-    borderWidth: 1,
+    borderWidth: border.hairline,
   },
   interactiveError: {
     fontSize: fontSize.xs,
@@ -2784,12 +3081,12 @@ function InteractiveFormBody({
   }
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: spacing.sm }}>
       {(block.fields ?? []).map((f) => {
         const v = values[f.id] ?? ''
         const showError = touched && f.required && !v.trim()
         return (
-          <View key={f.id} style={{ gap: 4 }}>
+          <View key={f.id} style={{ gap: spacing.xs }}>
             <Text style={[styles.interactivePrompt, { color: colors.textSecondary }]}>
               {f.label}
               {f.required ? <Text style={{ color: colors.error }}> *</Text> : null}
@@ -2830,11 +3127,11 @@ function InteractiveFormBody({
                 multiline={f.kind === 'textarea'}
                 maxLength={f.maxLength}
                 style={{
-                  borderWidth: 1,
+                  borderWidth: border.hairline,
                   borderColor: colors.border,
                   borderRadius: radius.sm,
-                  paddingHorizontal: 8,
-                  paddingVertical: 6,
+                  paddingHorizontal: spacing.sm,
+                  paddingVertical: spacing.tight,
                   color: colors.text,
                   minHeight: f.kind === 'textarea' ? 60 : undefined,
                   textAlignVertical: f.kind === 'textarea' ? 'top' : 'center',

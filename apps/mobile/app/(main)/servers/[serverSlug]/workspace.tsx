@@ -55,7 +55,7 @@ import {
 } from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import { fontSize, iconSize, radius, size, spacing, useColors } from '../../../../src/theme'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -506,7 +506,7 @@ export default function WorkspaceScreen() {
               onPress={() => navigateToFolder(item.id, item.name)}
               style={styles.breadcrumb}
             >
-              {i > 0 && <ChevronRight size={12} color={colors.textMuted} />}
+              {i > 0 && <ChevronRight size={iconSize.xs} color={colors.textMuted} />}
               <Text
                 style={{
                   color: i === folderPath.length - 1 ? colors.text : colors.textMuted,
@@ -610,9 +610,11 @@ export default function WorkspaceScreen() {
         actionMode === 'create-file' ||
         actionMode === 'rename') && (
         <GlassHeader style={styles.inlineBar}>
-          {actionMode === 'create-folder' && <FolderPlus size={16} color={colors.primary} />}
-          {actionMode === 'create-file' && <FilePlus size={16} color={colors.primary} />}
-          {actionMode === 'rename' && <Pencil size={16} color={colors.primary} />}
+          {actionMode === 'create-folder' && (
+            <FolderPlus size={iconSize.md} color={colors.primary} />
+          )}
+          {actionMode === 'create-file' && <FilePlus size={iconSize.md} color={colors.primary} />}
+          {actionMode === 'rename' && <Pencil size={iconSize.md} color={colors.primary} />}
           <TextField
             containerStyle={styles.inlineField}
             value={inputValue}
@@ -698,7 +700,9 @@ export default function WorkspaceScreen() {
                 onLongPress={() => openNodeActions(item)}
                 right={
                   <View style={styles.nodeRight}>
-                    {item.kind === 'dir' && <ChevronRight size={16} color={colors.textMuted} />}
+                    {item.kind === 'dir' && (
+                      <ChevronRight size={iconSize.md} color={colors.textMuted} />
+                    )}
                     {server?.id && item.kind === 'file' && isImageFile(item) && (
                       <WorkspaceThumbnail serverId={server.id} node={item} />
                     )}
@@ -809,7 +813,7 @@ export default function WorkspaceScreen() {
               />
             ) : (
               <View style={styles.previewPlaceholder}>
-                <FileText size={48} color={colors.textMuted} />
+                <FileText size={iconSize.hero} color={colors.textMuted} />
                 <AppText tone="secondary" style={styles.previewTextInfo}>
                   {previewNode.mime ?? t('workspace.unknownType')}
                 </AppText>
@@ -879,12 +883,12 @@ const styles = StyleSheet.create({
   breadcrumb: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 2,
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.xxs,
   },
   toolbarActions: {
     flexDirection: 'row',
-    gap: 2,
+    gap: spacing.xxs,
   },
   toolBtn: { padding: spacing.xs },
   // Stats
@@ -911,20 +915,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   // List
-  list: { padding: spacing.sm, gap: 3 },
+  list: { padding: spacing.sm, gap: spacing.xxs },
   nodeRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
   thumbnail: {
-    width: 32,
-    height: 32,
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
     borderRadius: radius.sm,
   },
   moreBtn: {
-    width: 36,
-    height: 36,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
   },
   // Preview
   previewBody: {
@@ -933,7 +937,7 @@ const styles = StyleSheet.create({
   },
   previewImage: {
     width: '100%',
-    height: 300,
+    height: size.previewImageHeight,
     borderRadius: radius.lg,
   },
   previewPlaceholder: {

@@ -29,6 +29,29 @@ export interface Attachment {
   width?: number | null
   height?: number | null
   createdAt?: string
+  kind?: 'file' | 'image' | 'voice'
+  durationMs?: number | null
+  audioCodec?: string | null
+  audioContainer?: string | null
+  waveformPeaks?: number[] | null
+  waveformVersion?: number | null
+  transcript?: {
+    id: string
+    status: 'pending' | 'processing' | 'ready' | 'failed'
+    text: string | null
+    language: string | null
+    source: 'client' | 'server' | 'runtime'
+    provider?: string | null
+    confidence?: number | null
+    errorCode?: string | null
+    updatedAt?: string
+  } | null
+  playback?: {
+    played: boolean
+    completed: boolean
+    lastPositionMs: number
+    playedCount?: number
+  } | null
   /** Legacy field — prefer contentType */
   mimeType?: string
   /** Legacy field — prefer size */
@@ -192,6 +215,14 @@ export function normalizeAttachment(raw: Record<string, unknown>): Attachment {
     width: (raw.width as number | null) ?? null,
     height: (raw.height as number | null) ?? null,
     createdAt: raw.createdAt as string | undefined,
+    kind: raw.kind as Attachment['kind'],
+    durationMs: (raw.durationMs as number | null) ?? null,
+    audioCodec: (raw.audioCodec as string | null) ?? null,
+    audioContainer: (raw.audioContainer as string | null) ?? null,
+    waveformPeaks: (raw.waveformPeaks as number[] | null) ?? null,
+    waveformVersion: (raw.waveformVersion as number | null) ?? null,
+    transcript: (raw.transcript as Attachment['transcript']) ?? null,
+    playback: (raw.playback as Attachment['playback']) ?? null,
   }
 }
 

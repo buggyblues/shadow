@@ -3,6 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
+      "@shadowob/oauth": ["../../packages/oauth/src/index.ts"],
       "@/*": ["./src/*"]
     }
   },

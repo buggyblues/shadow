@@ -8,8 +8,18 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useChannelSort } from '../../hooks/use-channel-sort'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
+import { serverChannelHref } from '../../lib/routes'
 import { useChatStore } from '../../stores/chat.store'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  letterSpacing,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
 import { ChannelSortButton } from './channel-sort-button'
 
 interface ServerDetail {
@@ -117,7 +127,7 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
     updateLastAccessed(channel.id)
     setActiveChannel(channel.id)
     void requestMarkScopeRead(channel.id)
-    router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}`)
+    router.push(serverChannelHref(serverSlug, channel.id) as never)
   }
 
   useEffect(() => {
@@ -162,10 +172,10 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
           return (
             <Pressable
               key={ch.id}
-              style={[styles.channelItem, isActive && { backgroundColor: `${colors.primary}20` }]}
+              style={[styles.channelItem, isActive && { backgroundColor: colors.surfaceHover }]}
               onPress={() => handleChannelPress(ch)}
             >
-              <Icon size={18} color={isActive ? colors.primary : colors.textMuted} />
+              <Icon size={iconSize.lg} color={isActive ? colors.primary : colors.textMuted} />
               <Text
                 style={[
                   styles.channelName,
@@ -203,7 +213,7 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
           style={styles.navItem}
           onPress={() => router.push(`/(main)/servers/${serverSlug}`)}
         >
-          <Home size={18} color={colors.textSecondary} />
+          <Home size={iconSize.lg} color={colors.textSecondary} />
           <Text style={[styles.navLabel, { color: colors.textSecondary }]}>{t('server.home')}</Text>
         </Pressable>
 
@@ -212,7 +222,7 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
           style={styles.navItem}
           onPress={() => router.push(`/(main)/servers/${serverSlug}/shop`)}
         >
-          <ShoppingBag size={18} color={colors.textSecondary} />
+          <ShoppingBag size={iconSize.lg} color={colors.textSecondary} />
           <Text style={[styles.navLabel, { color: colors.textSecondary }]}>
             {t('docs.shopDoc', { defaultValue: 'Shop' })}
           </Text>
@@ -223,7 +233,7 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
           style={styles.navItem}
           onPress={() => router.push(`/(main)/servers/${serverSlug}/workspace`)}
         >
-          <FolderOpen size={18} color={colors.textSecondary} />
+          <FolderOpen size={iconSize.lg} color={colors.textSecondary} />
           <Text style={[styles.navLabel, { color: colors.textSecondary }]}>
             {t('docs.workspaceDoc', { defaultValue: 'Workspace' })}
           </Text>
@@ -240,16 +250,16 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
 
 const styles = StyleSheet.create({
   container: {
-    width: 240,
+    width: size.dropdownMaxHeight,
   },
   header: {
-    height: 52,
+    height: size.plusPanelIcon,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
+    borderBottomWidth: border.hairline,
   },
   serverName: {
     fontSize: fontSize.lg,
@@ -267,7 +277,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   navLabel: {
     fontSize: fontSize.md,
@@ -278,7 +288,7 @@ const styles = StyleSheet.create({
   groupLabel: {
     fontSize: fontSize.xs,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: letterSpacing.none,
     paddingHorizontal: spacing.sm,
     marginBottom: spacing.xs,
   },
@@ -289,22 +299,22 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   channelName: {
     fontSize: fontSize.md,
     flex: 1,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: size.dotMd,
+    height: size.dotMd,
+    borderRadius: radius.sm,
     marginLeft: spacing.xs,
   },
   headerUnreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: size.dotMd,
+    height: size.dotMd,
+    borderRadius: radius.sm,
     marginLeft: spacing.xs,
     marginRight: spacing.xs,
   },

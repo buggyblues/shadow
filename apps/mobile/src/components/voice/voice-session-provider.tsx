@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { Dimensions, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useVoiceChannel, type VoiceChannelController } from '../../hooks/use-voice-channel'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import { serverChannelHref } from '../../lib/routes'
+import { border, fontSize, iconSize, radius, size, spacing, useColors } from '../../theme'
 
 export interface VoiceChannelSummary {
   channelId: string
@@ -80,9 +81,9 @@ function FloatingVoiceCall() {
 
   if (!activeChannel) return null
   if (voice.status === 'idle') return null
-  const targetPath =
-    activeChannel.serverSlug &&
-    `/(main)/servers/${activeChannel.serverSlug}/channels/${activeChannel.channelId}`
+  const targetPath = activeChannel.serverSlug
+    ? serverChannelHref(activeChannel.serverSlug, activeChannel.channelId)
+    : null
   const hasSpeakingParticipant = voice.participants.some((participant) => participant.isSpeaking)
   if (activeChannel.serverSlug && pathname?.includes(`/servers/${activeChannel.serverSlug}`)) {
     return null
@@ -99,7 +100,6 @@ function FloatingVoiceCall() {
           {
             backgroundColor: colors.surface,
             borderColor: colors.border,
-            shadowColor: '#000',
           },
         ]}
       >
@@ -107,25 +107,28 @@ function FloatingVoiceCall() {
           {...panResponder.panHandlers}
           style={[styles.callHandle, { borderColor: colors.border }]}
         >
-          <GripVertical size={15} color={colors.textMuted} />
+          <GripVertical size={iconSize.sm} color={colors.textMuted} />
         </View>
-        <View style={[styles.wave, { backgroundColor: `${colors.primary}18` }]}>
+        <View style={[styles.wave, { backgroundColor: colors.inputBackground }]}>
           {[0.45, 0.85, 1, 0.6].map((weight) => (
             <View
               key={weight}
               style={[
                 styles.waveBar,
                 {
-                  backgroundColor: colors.primary,
-                  height: 9 + (hasSpeakingParticipant && !voice.isMuted ? 1 : 0.18) * weight * 20,
-                  opacity: voice.isMuted ? 0.35 : 1,
+                  height:
+                    size.audioBarBase +
+                    (hasSpeakingParticipant && !voice.isMuted ? 1 : 0.18) *
+                      weight *
+                      size.audioBarRange,
+                  backgroundColor: voice.isMuted ? colors.textMuted : colors.primary,
                 },
               ]}
             />
           ))}
         </View>
-        <View style={[styles.callIcon, { backgroundColor: `${colors.primary}22` }]}>
-          <Volume2 size={18} color={colors.primary} />
+        <View style={[styles.callIcon, { backgroundColor: colors.inputBackground }]}>
+          <Volume2 size={iconSize.lg} color={colors.primary} />
         </View>
         <View style={styles.callText}>
           <Text style={[styles.callTitle, { color: colors.text }]} numberOfLines={1}>
@@ -144,9 +147,9 @@ function FloatingVoiceCall() {
           style={[styles.iconButton, { backgroundColor: colors.background }]}
         >
           {voice.isMuted ? (
-            <MicOff size={16} color={colors.error} />
+            <MicOff size={iconSize.md} color={colors.error} />
           ) : (
-            <Mic size={16} color={colors.primary} />
+            <Mic size={iconSize.md} color={colors.primary} />
           )}
         </Pressable>
         <Pressable
@@ -155,9 +158,9 @@ function FloatingVoiceCall() {
             event.stopPropagation()
             void voice.leave()
           }}
-          style={[styles.iconButton, { backgroundColor: `${colors.error}18` }]}
+          style={[styles.iconButton, { backgroundColor: colors.inputBackground }]}
         >
-          <PhoneOff size={16} color={colors.error} />
+          <PhoneOff size={iconSize.md} color={colors.error} />
         </Pressable>
       </Pressable>
     </View>
@@ -170,45 +173,41 @@ const styles = StyleSheet.create({
     zIndex: 50,
   },
   floatingCall: {
-    minHeight: 58,
-    width: 324,
+    minHeight: size.tabBar,
+    width: size.floatingCallWidth,
     maxWidth: '100%',
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
   },
   callHandle: {
-    width: 30,
-    height: 42,
+    width: size.callHandleWidth,
+    height: size.callHandleHeight,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   wave: {
-    width: 34,
-    height: 34,
+    width: size.iconBubble,
+    height: size.iconBubble,
     borderRadius: radius.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: spacing.xxs,
   },
   waveBar: {
-    width: 3,
-    borderRadius: 999,
+    width: size.dividerAccent,
+    borderRadius: radius.full,
   },
   callIcon: {
-    width: 34,
-    height: 34,
+    width: size.iconBubble,
+    height: size.iconBubble,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -222,13 +221,13 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   callMeta: {
-    marginTop: 2,
+    marginTop: spacing.xxs,
     fontSize: fontSize.xs,
     fontWeight: '700',
   },
   iconButton: {
-    width: 34,
-    height: 34,
+    width: size.iconBubble,
+    height: size.iconBubble,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',

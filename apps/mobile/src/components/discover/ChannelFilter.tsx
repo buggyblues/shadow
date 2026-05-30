@@ -22,7 +22,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  letterSpacing,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -135,12 +145,15 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
         style={[
           styles.trigger,
           {
-            backgroundColor: hasActiveFilters || isOpen ? `${colors.primary}20` : colors.surface,
-            borderColor: hasActiveFilters || isOpen ? colors.primary : 'transparent',
+            backgroundColor: hasActiveFilters || isOpen ? colors.surfaceHover : colors.surface,
+            borderColor: hasActiveFilters || isOpen ? colors.primary : colors.border,
           },
         ]}
       >
-        <Filter size={14} color={hasActiveFilters || isOpen ? colors.primary : colors.textMuted} />
+        <Filter
+          size={iconSize.sm}
+          color={hasActiveFilters || isOpen ? colors.primary : colors.textMuted}
+        />
         <Text
           style={{
             color: hasActiveFilters || isOpen ? colors.primary : colors.textSecondary,
@@ -151,12 +164,14 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
           {t('discover.filter.title')}
         </Text>
         <ChevronDown
-          size={14}
+          size={iconSize.sm}
           color={hasActiveFilters || isOpen ? colors.primary : colors.textMuted}
         />
         {hasActiveFilters && (
           <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>!</Text>
+            <Text style={{ color: palette.white, fontSize: fontSize.micro, fontWeight: '700' }}>
+              !
+            </Text>
           </View>
         )}
       </TouchableOpacity>
@@ -187,7 +202,7 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
                 {t('discover.filter.title')}
               </Text>
               <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-                <X size={20} color={colors.textMuted} />
+                <X size={iconSize.xl} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -195,7 +210,7 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
             <View style={styles.content}>
               {/* Search */}
               <View style={[styles.searchBox, { backgroundColor: colors.inputBackground }]}>
-                <Search size={14} color={colors.textMuted} />
+                <Search size={iconSize.sm} color={colors.textMuted} />
                 <TextInput
                   style={[styles.searchInput, { color: colors.text }]}
                   value={tempFilters.search}
@@ -207,7 +222,7 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
                   <TouchableOpacity
                     onPress={() => setTempFilters((prev) => ({ ...prev, search: '' }))}
                   >
-                    <X size={14} color={colors.textMuted} />
+                    <X size={iconSize.sm} color={colors.textMuted} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -238,12 +253,12 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
                       styles.sortOption,
                       {
                         backgroundColor:
-                          tempFilters.sortBy === key ? `${colors.primary}20` : 'transparent',
+                          tempFilters.sortBy === key ? colors.surfaceHover : colors.surface,
                       },
                     ]}
                   >
                     <Icon
-                      size={14}
+                      size={iconSize.sm}
                       color={tempFilters.sortBy === key ? colors.primary : colors.textMuted}
                     />
                     <Text
@@ -255,7 +270,9 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
                     >
                       {t(label)}
                     </Text>
-                    {tempFilters.sortBy === key && <Check size={14} color={colors.primary} />}
+                    {tempFilters.sortBy === key && (
+                      <Check size={iconSize.sm} color={colors.primary} />
+                    )}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -279,11 +296,13 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
                           borderColor: tempFilters.showArchived ? colors.primary : colors.textMuted,
                           backgroundColor: tempFilters.showArchived
                             ? colors.primary
-                            : 'transparent',
+                            : colors.surface,
                         },
                       ]}
                     >
-                      {tempFilters.showArchived && <Check size={10} color="#fff" />}
+                      {tempFilters.showArchived && (
+                        <Check size={iconSize.micro} color={palette.white} />
+                      )}
                     </View>
                     <Text style={{ color: colors.text, fontSize: fontSize.sm }}>
                       {t('discover.filter.showArchived')}
@@ -307,7 +326,7 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
                 onPress={handleApply}
                 style={[styles.footerButton, { backgroundColor: colors.primary }]}
               >
-                <Text style={{ color: '#fff', fontSize: fontSize.sm, fontWeight: '600' }}>
+                <Text style={{ color: palette.white, fontSize: fontSize.sm, fontWeight: '600' }}>
                   {t('discover.filter.apply')}
                 </Text>
               </TouchableOpacity>
@@ -327,27 +346,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: border.hairline,
   },
   badge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: size.badgeSm,
+    height: size.badgeSm,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: palette.black,
   },
   backdrop: {
     flex: 1,
   },
   sheet: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: spacing.none,
+    left: spacing.none,
+    right: spacing.none,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     maxHeight: SCREEN_HEIGHT * 0.85,
@@ -357,9 +376,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   dragIndicator: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: size.iconButtonLg,
+    height: size.dotXs,
+    borderRadius: radius.xs,
   },
   header: {
     flexDirection: 'row',
@@ -367,7 +386,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: border.hairline,
   },
   headerTitle: {
     fontSize: fontSize.lg,
@@ -386,7 +405,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
-    height: 44,
+    height: size.controlMd,
   },
   searchInput: {
     flex: 1,
@@ -405,12 +424,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: letterSpacing.none,
   },
   sortOrderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: radius.sm,
@@ -435,10 +454,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
+    width: size.badgeLg,
+    height: size.badgeLg,
+    borderRadius: radius.sm,
+    borderWidth: border.active,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -446,7 +465,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     padding: spacing.lg,
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
   },
   footerButton: {
     flex: 1,

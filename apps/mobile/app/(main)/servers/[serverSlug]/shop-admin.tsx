@@ -21,7 +21,16 @@ import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../../src/components/common/price-display'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 interface ProductMedia {
   type?: 'image' | 'video'
@@ -82,6 +91,8 @@ export default function ShopAdminScreen() {
   const [newName, setNewName] = useState('')
   const [newPrice, setNewPrice] = useState('')
   const [newDesc, setNewDesc] = useState('')
+  const [newTags, setNewTags] = useState('')
+  const [globalPublic, setGlobalPublic] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<ProductTemplate>('ai_service')
   const [repeatable, setRepeatable] = useState(true)
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
@@ -109,6 +120,16 @@ export default function ShopAdminScreen() {
     mutationFn: () => {
       const template = PRODUCT_TEMPLATES.find((item) => item.key === selectedTemplate)
       const isPhysical = selectedTemplate === 'physical'
+      const baseTags =
+        selectedTemplate === 'badge_gift'
+          ? ['badge', 'gift']
+          : selectedTemplate === 'physical'
+            ? ['physical']
+            : selectedTemplate.split('_')
+      const customTags = newTags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
       const entitlementConfig = isPhysical
         ? undefined
         : {
@@ -128,12 +149,8 @@ export default function ShopAdminScreen() {
           basePrice: Number(newPrice),
           description: newDesc || t(`shop.productTemplates.${selectedTemplate}.promise`),
           summary: newDesc || t(`shop.productTemplates.${selectedTemplate}.summary`),
-          tags:
-            selectedTemplate === 'badge_gift'
-              ? ['badge', 'gift']
-              : selectedTemplate === 'physical'
-                ? ['physical']
-                : selectedTemplate.split('_'),
+          tags: [...new Set([...baseTags, ...customTags])],
+          globalPublic,
           entitlementConfig,
           media: coverUrl
             ? [{ type: 'image', url: coverUrl, thumbnailUrl: coverUrl, position: 0 }]
@@ -148,6 +165,8 @@ export default function ShopAdminScreen() {
       setNewName('')
       setNewPrice('')
       setNewDesc('')
+      setNewTags('')
+      setGlobalPublic(false)
       setSelectedTemplate('ai_service')
       setRepeatable(true)
       setCoverUrl(null)
@@ -205,6 +224,8 @@ export default function ShopAdminScreen() {
     setNewName('')
     setNewPrice('')
     setNewDesc('')
+    setNewTags('')
+    setGlobalPublic(false)
     setRepeatable(true)
     setCoverUrl(null)
     setCoverPreviewUrl(null)
@@ -223,8 +244,8 @@ export default function ShopAdminScreen() {
         style={[styles.addBtn, { backgroundColor: colors.primary }]}
         onPress={() => setShowCreate(true)}
       >
-        <Plus size={18} color="#fff" />
-        <Text style={{ color: '#fff', fontWeight: '700' }}>{t('shop.addProduct')}</Text>
+        <Plus size={iconSize.lg} color={palette.white} />
+        <Text style={{ color: palette.white, fontWeight: '700' }}>{t('shop.addProduct')}</Text>
       </Pressable>
 
       {products.length === 0 ? (
@@ -240,20 +261,20 @@ export default function ShopAdminScreen() {
                 {getProductImage(item) ? (
                   <Image source={{ uri: getProductImage(item)! }} style={styles.thumbImage} />
                 ) : (
-                  <Package size={22} color={colors.textMuted} />
+                  <Package size={iconSize['2xl']} color={colors.textMuted} />
                 )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
                 <Text style={{ color: colors.primary, fontWeight: '700' }}>
-                  <PriceCompact amount={item.basePrice ?? item.price ?? 0} size={14} />
+                  <PriceCompact amount={item.basePrice ?? item.price ?? 0} size={iconSize.sm} />
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
                   {item.status} · {item.stock != null ? `${t('shop.stock')}: ${item.stock}` : '∞'}
                 </Text>
               </View>
               <Pressable onPress={() => deleteMutation.mutate(item.id)} style={styles.iconBtn}>
-                <Trash2 size={18} color="#f23f43" />
+                <Trash2 size={iconSize.lg} color={palette.crimson} />
               </Pressable>
             </View>
           )}
@@ -278,13 +299,13 @@ export default function ShopAdminScreen() {
                     style={[
                       styles.templateChip,
                       {
-                        backgroundColor: active ? `${colors.primary}20` : colors.inputBackground,
+                        backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
                         borderColor: active ? colors.primary : colors.border,
                       },
                     ]}
                     onPress={() => setSelectedTemplate(template.key)}
                   >
-                    <Icon size={16} color={active ? colors.primary : colors.textMuted} />
+                    <Icon size={iconSize.md} color={active ? colors.primary : colors.textMuted} />
                     <Text
                       style={[
                         styles.templateText,
@@ -319,12 +340,12 @@ export default function ShopAdminScreen() {
                       setCoverPreviewUrl(null)
                     }}
                   >
-                    <X size={16} color={colors.text} />
+                    <X size={iconSize.md} color={colors.text} />
                   </Pressable>
                 </>
               ) : (
                 <View style={styles.coverPlaceholder}>
-                  <ImagePlus size={28} color={colors.primary} />
+                  <ImagePlus size={iconSize['4xl']} color={colors.primary} />
                   <Text style={[styles.coverTitle, { color: colors.text }]}>
                     {uploadingCover ? t('shop.uploadingCover') : t('shop.uploadCover')}
                   </Text>
@@ -365,6 +386,32 @@ export default function ShopAdminScreen() {
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
             />
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                  borderColor: colors.border,
+                  marginTop: spacing.sm,
+                },
+              ]}
+              value={newTags}
+              onChangeText={setNewTags}
+              placeholder={t('commerceMarketplace.productTagsPlaceholder')}
+              placeholderTextColor={colors.textMuted}
+            />
+            <View style={styles.repeatableRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.repeatableTitle, { color: colors.text }]}>
+                  {t('commerceMarketplace.globalPublic')}
+                </Text>
+                <Text style={[styles.repeatableHint, { color: colors.textMuted }]}>
+                  {t('commerceMarketplace.globalPublicHint')}
+                </Text>
+              </View>
+              <Switch value={globalPublic} onValueChange={setGlobalPublic} />
+            </View>
             {selectedTemplate !== 'physical' && (
               <View style={styles.repeatableRow}>
                 <View style={{ flex: 1 }}>
@@ -405,7 +452,9 @@ export default function ShopAdminScreen() {
                 onPress={() => createMutation.mutate()}
                 disabled={!newName.trim() || !newPrice.trim() || createMutation.isPending}
               >
-                <Text style={{ color: '#fff', fontWeight: '700' }}>{t('common.create')}</Text>
+                <Text style={{ color: palette.white, fontWeight: '700' }}>
+                  {t('common.create')}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -435,8 +484,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   thumb: {
-    width: 56,
-    height: 56,
+    width: size.navBar,
+    height: size.navBar,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -447,7 +496,7 @@ const styles = StyleSheet.create({
   iconBtn: { padding: spacing.sm },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: palette.black,
     justifyContent: 'center',
     padding: spacing.xl,
   },
@@ -465,7 +514,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
@@ -474,7 +523,7 @@ const styles = StyleSheet.create({
   coverPicker: {
     aspectRatio: 3 / 2,
     borderRadius: radius.xl,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     overflow: 'hidden',
     marginBottom: spacing.md,
   },
@@ -501,20 +550,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.sm,
     top: spacing.sm,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
   },
   input: {
-    height: 44,
+    height: size.controlMd,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     fontSize: fontSize.md,
-    borderWidth: 1,
+    borderWidth: border.hairline,
   },
-  textArea: { height: 80, paddingTop: spacing.md, textAlignVertical: 'top' },
+  textArea: { height: size.textareaMin, paddingTop: spacing.md, textAlignVertical: 'top' },
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

@@ -2,14 +2,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import {
+  BookOpen,
+  Bot,
   ChevronRight,
   Compass,
   Hash,
-  HelpCircle,
   Lock,
   MessageCircle,
   Plus,
-  Search,
+  QrCode,
+  Server,
   X,
 } from 'lucide-react-native'
 import { useEffect, useMemo, useState } from 'react'
@@ -22,13 +24,11 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  SectionList,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
-import Reanimated, { FadeIn, FadeInDown, FadeInRight } from 'react-native-reanimated'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import Reanimated, { FadeInDown, FadeInRight } from 'react-native-reanimated'
 import { Avatar } from '../../../src/components/common/avatar'
 import {
   ChannelCatSvg,
@@ -45,16 +45,29 @@ import {
   BackgroundSurface,
   Badge,
   Button,
-  CardPressable,
   GlassPanel,
   IconBubble,
   IconButton,
   ListHeader,
+  MobileNavigationBar,
+  SurfaceList,
+  SurfaceListItem,
   TextField,
 } from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  letterSpacing,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../src/theme'
 
 interface ServerEntry {
   server: {
@@ -72,26 +85,14 @@ interface ServerEntry {
   }
 }
 
-interface DiscoverServer {
-  id: string
-  name: string
-  slug: string | null
-  description: string | null
-  iconUrl: string | null
-  isPublic: boolean
-  inviteCode: string
-  memberCount: number
-}
-
 export default function ServersScreen() {
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const user = useAuthStore((s) => s.user)
-  const [search, setSearch] = useState('')
 
   const [showHelpTutorial, setShowHelpTutorial] = useState(false)
+  const [showCreateMenu, setShowCreateMenu] = useState(false)
   const [hideHelpIcon, setHideHelpIcon] = useState(false)
   const [dontShowAgain, setDontShowAgain] = useState(false)
   const [tutorialPageIndex, setTutorialPageIndex] = useState(0)
@@ -121,12 +122,6 @@ export default function ServersScreen() {
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
   })
 
-  // Fetch public servers for federated search
-  const { data: discoverServers = [] } = useQuery({
-    queryKey: ['discover-servers'],
-    queryFn: () => fetchApi<DiscoverServer[]>('/api/servers/discover'),
-  })
-
   const { data: pendingReceived = [] } = useQuery({
     queryKey: ['friends-pending'],
     queryFn: () => fetchApi<Array<{ friendshipId: string }>>('/api/friends/pending'),
@@ -153,39 +148,16 @@ export default function ServersScreen() {
     },
   })
 
-  // Merge local + discover servers when searching
-  const myServerIds = useMemo(() => new Set(servers.map((s) => s.server.id)), [servers])
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return servers
-    const q = search.toLowerCase()
-    return servers.filter(
-      (s) =>
-        s.server.name.toLowerCase().includes(q) || s.server.description?.toLowerCase().includes(q),
-    )
-  }, [servers, search])
-
-  // Public servers matching search but not already joined
-  const matchedPublicServers = useMemo(() => {
-    if (!search.trim()) return []
-    const q = search.toLowerCase()
-    return discoverServers.filter(
-      (s) =>
-        !myServerIds.has(s.id) &&
-        (s.name.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q)),
-    )
-  }, [discoverServers, search, myServerIds])
-
   // Group servers by role
   const sections = useMemo(() => {
-    const owned = filtered.filter((s) => s.member.role === 'owner')
-    const others = filtered.filter((s) => s.member.role !== 'owner')
+    const owned = servers.filter((s) => s.member.role === 'owner')
+    const others = servers.filter((s) => s.member.role !== 'owner')
     const result: { title: string; data: ServerEntry[] }[] = []
     if (owned.length > 0) result.push({ title: '我创建的', data: owned })
     if (others.length > 0) result.push({ title: '已加入', data: others })
-    if (result.length === 0 && filtered.length > 0) result.push({ title: '全部', data: filtered })
+    if (result.length === 0 && servers.length > 0) result.push({ title: '全部', data: servers })
     return result
-  }, [filtered])
+  }, [servers])
 
   const getRoleLabel = (role: string) => {
     switch (role) {
@@ -209,7 +181,7 @@ export default function ServersScreen() {
       title: '超萌可爱的界面下',
       desc: '隐藏着硬核的生产力工具！你可以在这里拥有自己的 AI 社区、店铺和工作区。',
       tags: ['产品定位', '超级社区', '协作空间'],
-      renderIcon: () => <HelpProductSvg size={88} color={colors.primary} />,
+      renderIcon: () => <HelpProductSvg size={size.illustrationLg} color={colors.primary} />,
     },
     {
       key: 'server',
@@ -230,108 +202,73 @@ export default function ServersScreen() {
       title: '什么是 Buddy？',
       desc: 'Buddy 是黑猫打工仔：能写代码、审方案、查资料，24 小时在线协作。',
       tags: ['多 Agent', '自动协作', '持续产出'],
-      renderIcon: () => <HelpBuddySvg size={88} color="#f59e0b" />,
+      renderIcon: () => <HelpBuddySvg size={size.illustrationLg} color={palette.warning} />,
     },
     {
       key: 'start',
       title: '开始奇妙之旅',
       desc: '点击右上角 + 创建服务器，接着建频道、邀请成员，再召唤 Buddy 开始协作。',
       tags: ['创建服务器', '搭建频道', '召唤 Buddy'],
-      renderIcon: () => <HelpStartSvg size={88} color="#3b82f6" />,
+      renderIcon: () => <HelpStartSvg size={size.illustrationLg} color={palette.indigo} />,
     },
   ]
+  const listSections: Array<{ title: string; data: ServerEntry[] }> = sections
 
   return (
     <BackgroundSurface>
-      {/* Navigation bar */}
-      <Reanimated.View
-        entering={FadeIn.duration(400)}
-        style={[styles.navBar, { paddingTop: insets.top + 8, backgroundColor: 'transparent' }]}
-      >
-        <Pressable
-          onPress={() => {
-            router.push('/(main)/dashboard' as never)
-          }}
-          hitSlop={8}
-        >
-          <Avatar
-            uri={user?.avatarUrl}
-            name={user?.displayName || user?.username || ''}
-            size={44}
-            userId={user?.id || ''}
-            status="online"
-            showStatus
-          />
-        </Pressable>
-        <View style={styles.navActions}>
-          {!hideHelpIcon && (
+      <MobileNavigationBar
+        title={t('server.home')}
+        left={
+          <Pressable
+            onPress={() => {
+              router.push('/(main)/dashboard' as never)
+            }}
+            hitSlop={spacing.sm}
+          >
+            <Avatar
+              uri={user?.avatarUrl}
+              name={user?.displayName || user?.username || ''}
+              size={size.controlLg}
+              userId={user?.id || ''}
+              status="online"
+              showStatus
+            />
+          </Pressable>
+        }
+        right={
+          <View style={styles.navActions}>
+            {!hideHelpIcon && (
+              <IconButton
+                icon={BookOpen}
+                variant="glass"
+                size="icon"
+                iconColor={colors.textSecondary}
+                onPress={() => setShowHelpTutorial(true)}
+                hitSlop={spacing.sm}
+                style={styles.navBtn}
+              />
+            )}
             <IconButton
-              icon={HelpCircle}
-              variant="glass"
+              variant="primary"
               size="icon"
-              onPress={() => setShowHelpTutorial(true)}
-              hitSlop={8}
+              icon={Plus}
+              iconSize={iconSize.xl}
+              onPress={() => setShowCreateMenu(true)}
               style={styles.navBtn}
             />
-          )}
-          <IconButton
-            variant="primary"
-            size="icon"
-            icon={Plus}
-            iconSize={20}
-            onPress={() => setShowCreateServer(true)}
-          />
-        </View>
-      </Reanimated.View>
+          </View>
+        }
+      />
 
-      {/* Search bar */}
-      <View style={[styles.searchWrap]}>
-        <TextField
-          value={search}
-          onChangeText={setSearch}
-          placeholder="搜索服务器..."
-          icon={Search}
-          style={styles.searchBox}
-          right={
-            search.length > 0 ? (
-              <Pressable onPress={() => setSearch('')} hitSlop={8}>
-                <X size={16} color={colors.textMuted} strokeWidth={2.5} />
-              </Pressable>
-            ) : null
-          }
-        />
-      </View>
-
-      {filtered.length === 0 && matchedPublicServers.length === 0 ? (
+      {servers.length === 0 ? (
         <EmptyState
           icon={MessageCircle}
-          title={search ? '没有找到匹配的服务器' : '暂无服务器'}
-          description={search ? undefined : '点击右上角 + 创建或加入一个服务器'}
+          title="暂无服务器"
+          description="点击右上角 + 创建或加入一个服务器"
         />
       ) : (
-        <SectionList
-          sections={[
-            ...sections,
-            ...(matchedPublicServers.length > 0
-              ? [
-                  {
-                    title: '🌐 公开服务器',
-                    data: matchedPublicServers.map((s) => ({
-                      server: {
-                        id: s.id,
-                        name: s.name,
-                        slug: s.slug,
-                        iconUrl: s.iconUrl,
-                        description: s.description,
-                      },
-                      member: { role: '_public' },
-                    })),
-                  },
-                ]
-              : []),
-          ]}
-          keyExtractor={(item) => item.server.id}
-          stickySectionHeadersEnabled={false}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -343,19 +280,18 @@ export default function ServersScreen() {
               tintColor={colors.textMuted}
             />
           }
-          contentContainerStyle={{ paddingBottom: 100 }}
-          ListHeaderComponent={
-            <View style={styles.quickEntryWrapper}>
-              <CardPressable
-                variant="glassPanel"
-                padded={false}
-                style={styles.quickEntryCard}
+          contentContainerStyle={styles.listContent}
+        >
+          <View style={styles.quickEntryWrapper}>
+            <SurfaceList style={styles.edgeList}>
+              <SurfaceListItem
                 onPress={() => router.push('/(main)/friends' as never)}
+                style={styles.quickEntryCard}
               >
                 <IconBubble
                   icon={MessageCircle}
                   tone="primary"
-                  size={20}
+                  size={iconSize.xl}
                   style={styles.actionBubbleGlow}
                 />
                 <View style={styles.quickEntryInfo}>
@@ -369,19 +305,18 @@ export default function ServersScreen() {
                     {pendingReceived.length}
                   </Badge>
                 )}
-                <ChevronRight size={16} color={colors.textMuted} />
-              </CardPressable>
+                <ChevronRight size={iconSize.md} color={colors.textMuted} />
+              </SurfaceListItem>
 
-              <CardPressable
-                variant="glassPanel"
-                padded={false}
-                style={styles.quickEntryCard}
+              <SurfaceListItem
+                last
                 onPress={() => router.push('/(main)/discover' as never)}
+                style={styles.quickEntryCard}
               >
                 <IconBubble
                   icon={Compass}
                   tone="accent"
-                  size={20}
+                  size={iconSize.xl}
                   style={styles.actionBubbleGlow}
                 />
                 <View style={styles.quickEntryInfo}>
@@ -390,78 +325,144 @@ export default function ServersScreen() {
                     发现公开服务器并快速加入
                   </AppText>
                 </View>
-                <ChevronRight size={16} color={colors.textMuted} />
-              </CardPressable>
-            </View>
-          }
-          renderSectionHeader={({ section }) => (
-            <ListHeader
-              title={section.title}
-              count={section.data.length}
-              style={styles.sectionHeader}
-            />
-          )}
-          renderItem={({ item, index }) => {
-            const isPublicResult = item.member.role === '_public'
-            const desc = isPublicResult
-              ? item.server.description || '公开服务器'
-              : item.server.description || getRoleLabel(item.member.role)
-            return (
-              <Reanimated.View entering={FadeInRight.delay(index * 40).springify()}>
-                <CardPressable
-                  variant="glassCard"
-                  padded={false}
-                  style={styles.serverCard}
-                  onPress={() => {
-                    if (isPublicResult) {
-                      router.push('/(main)/discover' as never)
-                    } else {
-                      router.push(`/(main)/servers/${item.server.slug ?? item.server.id}`)
-                    }
-                  }}
-                >
-                  <Avatar
-                    uri={item.server.iconUrl}
-                    name={item.server.name}
-                    size={48}
-                    userId={item.server.id}
-                    shape="server"
-                  />
-                  <View style={styles.serverInfo}>
-                    <View style={styles.serverTopRow}>
-                      <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
-                        {item.server.isPublic === false && (
-                          <Lock size={12} color={colors.textMuted} />
-                        )}
-                        {item.server.isPublic === false ? ' ' : ''}
-                        {item.server.name}
-                      </Text>
-                    </View>
-                    {!isPublicResult && (
-                      <View style={styles.serverMetaRow}>
-                        <Hash size={12} color={colors.textMuted} />
-                        <Text style={[styles.serverMeta, { color: colors.textMuted }]}>
-                          {item.server.channelCount ?? 0}
-                        </Text>
-                      </View>
-                    )}
-                    {isPublicResult && (
-                      <Text
-                        style={[styles.serverDesc, { color: colors.textMuted }]}
-                        numberOfLines={1}
+                <ChevronRight size={iconSize.md} color={colors.textMuted} />
+              </SurfaceListItem>
+            </SurfaceList>
+          </View>
+
+          {listSections.map((section) => (
+            <View key={section.title} style={styles.serverSection}>
+              <ListHeader
+                title={section.title}
+                count={section.data.length}
+                style={styles.sectionHeader}
+              />
+              <SurfaceList style={styles.serverList}>
+                {section.data.map((item, index) => {
+                  const isPublicResult = item.member.role === '_public'
+                  const desc = isPublicResult
+                    ? item.server.description || '公开服务器'
+                    : item.server.description || getRoleLabel(item.member.role)
+                  const isLast = index === section.data.length - 1
+                  return (
+                    <Reanimated.View
+                      key={item.server.id}
+                      entering={FadeInRight.delay(index * 40).springify()}
+                    >
+                      <SurfaceListItem
+                        last={isLast}
+                        style={styles.serverCard}
+                        onPress={() => {
+                          if (isPublicResult) {
+                            router.push('/(main)/discover' as never)
+                          } else {
+                            router.push(`/(main)/servers/${item.server.slug ?? item.server.id}`)
+                          }
+                        }}
                       >
-                        {desc}
-                      </Text>
-                    )}
-                  </View>
-                  <ChevronRight size={16} color={colors.textMuted} />
-                </CardPressable>
-              </Reanimated.View>
-            )
-          }}
-          SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
-        />
+                        <Avatar
+                          uri={item.server.iconUrl}
+                          name={item.server.name}
+                          size={size.controlLg}
+                          userId={item.server.id}
+                          shape="server"
+                        />
+                        <View style={styles.serverInfo}>
+                          <View style={styles.serverTopRow}>
+                            <Text
+                              style={[styles.serverName, { color: colors.text }]}
+                              numberOfLines={1}
+                            >
+                              {item.server.isPublic === false && (
+                                <Lock size={iconSize.xs} color={colors.textMuted} />
+                              )}
+                              {item.server.isPublic === false ? ' ' : ''}
+                              {item.server.name}
+                            </Text>
+                          </View>
+                          {!isPublicResult && (
+                            <View style={styles.serverMetaRow}>
+                              <Hash size={iconSize.xs} color={colors.textMuted} />
+                              <Text style={[styles.serverMeta, { color: colors.textMuted }]}>
+                                {item.server.channelCount ?? 0}
+                              </Text>
+                            </View>
+                          )}
+                          {isPublicResult && (
+                            <Text
+                              style={[styles.serverDesc, { color: colors.textMuted }]}
+                              numberOfLines={1}
+                            >
+                              {desc}
+                            </Text>
+                          )}
+                        </View>
+                        <ChevronRight size={iconSize.md} color={colors.textMuted} />
+                      </SurfaceListItem>
+                    </Reanimated.View>
+                  )
+                })}
+              </SurfaceList>
+            </View>
+          ))}
+        </ScrollView>
       )}
+
+      {showCreateMenu ? (
+        <View style={styles.popoverLayer} pointerEvents="box-none">
+          <Pressable style={styles.popoverDismiss} onPress={() => setShowCreateMenu(false)} />
+          <Reanimated.View
+            entering={FadeInDown.duration(160)}
+            style={[
+              styles.actionPopover,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <SurfaceList style={styles.edgeList}>
+              <SurfaceListItem
+                onPress={() => {
+                  setShowCreateMenu(false)
+                  setShowCreateServer(true)
+                }}
+                style={styles.menuItem}
+              >
+                <IconBubble icon={Server} tone="primary" size={iconSize.xl} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {t('home.createServerAction')}
+                </AppText>
+                <ChevronRight size={iconSize.md} color={colors.textMuted} />
+              </SurfaceListItem>
+              <SurfaceListItem
+                onPress={() => {
+                  setShowCreateMenu(false)
+                  router.push('/(main)/create-buddy' as never)
+                }}
+                style={styles.menuItem}
+              >
+                <IconBubble icon={Bot} tone="accent" size={iconSize.xl} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {t('home.createBuddyAction')}
+                </AppText>
+                <ChevronRight size={iconSize.md} color={colors.textMuted} />
+              </SurfaceListItem>
+              <SurfaceListItem
+                last
+                onPress={() => {
+                  setShowCreateMenu(false)
+                  router.push('/(main)/scan' as never)
+                }}
+                style={styles.menuItem}
+              >
+                <IconBubble icon={QrCode} tone="success" size={iconSize.xl} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {t('home.scanAction')}
+                </AppText>
+                <ChevronRight size={iconSize.md} color={colors.textMuted} />
+              </SurfaceListItem>
+            </SurfaceList>
+          </Reanimated.View>
+        </View>
+      ) : null}
 
       {/* Create Server Modal — Compact like channel creation */}
       <Modal
@@ -532,8 +533,8 @@ export default function ServersScreen() {
             <GlassPanel style={styles.tutorialContent}>
               <View style={styles.tutorialHeader}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>新手帮助指南</Text>
-                <Pressable onPress={handleCloseTutorial} hitSlop={8}>
-                  <X size={22} color={colors.textMuted} />
+                <Pressable onPress={handleCloseTutorial} hitSlop={spacing.sm}>
+                  <X size={iconSize['2xl']} color={colors.textMuted} />
                 </Pressable>
               </View>
 
@@ -548,8 +549,8 @@ export default function ServersScreen() {
                 style={{
                   width: tutorialInnerWidth,
                   height: tutorialInnerWidth,
-                  maxHeight: 280,
-                  borderRadius: 24,
+                  maxHeight: size.tutorialMaxHeight,
+                  borderRadius: radius['2xl'],
                   backgroundColor: colors.background,
                 }}
               >
@@ -566,7 +567,7 @@ export default function ServersScreen() {
                       {page.tags.map((tag) => (
                         <View
                           key={`${page.key}-${tag}`}
-                          style={[styles.tutorialTag, { backgroundColor: `${colors.primary}14` }]}
+                          style={[styles.tutorialTag, { backgroundColor: colors.inputBackground }]}
                         >
                           <Text style={[styles.tutorialTagText, { color: colors.primary }]}>
                             {tag}
@@ -585,8 +586,7 @@ export default function ServersScreen() {
                     style={[
                       styles.tutorialIndicatorDot,
                       {
-                        backgroundColor:
-                          idx === tutorialPageIndex ? colors.primary : `${colors.textMuted}40`,
+                        backgroundColor: idx === tutorialPageIndex ? colors.primary : colors.border,
                         width: idx === tutorialPageIndex ? 16 : 7,
                       },
                     ]}
@@ -615,66 +615,34 @@ export default function ServersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // Nav bar
-  navBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
   navActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
-  },
-  navPlusBubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
+    gap: spacing.sm,
   },
   navBtn: {
+    width: size.controlLg,
+    height: size.controlLg,
     borderRadius: radius.full,
   },
 
-  // Search
-  searchWrap: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
-    minHeight: 50,
-    gap: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: fontSize.md,
-    paddingVertical: 0,
+  listContent: {
+    paddingBottom: size.tabBar + spacing['4xl'],
   },
 
   quickEntryWrapper: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  edgeList: {
+    width: '100%',
   },
   quickEntryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.md,
-    borderRadius: radius['2xl'],
+    minHeight: size.listItemLg + spacing.xxs,
   },
   actionBubbleGlow: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.lg,
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius.xl,
   },
   quickEntryInfo: {
     flex: 1,
@@ -685,7 +653,7 @@ const styles = StyleSheet.create({
   },
   quickEntryDesc: {
     fontSize: fontSize.xs,
-    marginTop: 1,
+    marginTop: spacing.px,
   },
   // Section headers
   sectionHeader: {
@@ -693,14 +661,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    paddingTop: spacing.md,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.sm,
   },
   sectionTitle: {
     fontSize: fontSize.xs,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: letterSpacing.none,
   },
   sectionCount: {
     fontSize: fontSize.xs,
@@ -708,19 +676,20 @@ const styles = StyleSheet.create({
   },
 
   // Server list item
+  serverSection: {
+    paddingHorizontal: spacing.none,
+  },
+  serverList: {
+    marginBottom: spacing.xs,
+  },
   serverCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    gap: spacing.md,
-    borderRadius: radius['2xl'],
+    minHeight: size.avatarXl,
+    paddingVertical: spacing.sm,
   },
   serverInfo: {
     flex: 1,
     justifyContent: 'center',
-    gap: 2,
+    gap: spacing.xxs,
   },
   serverTopRow: {
     flexDirection: 'row',
@@ -729,21 +698,22 @@ const styles = StyleSheet.create({
   },
   serverName: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontWeight: '800',
     flex: 1,
   },
   serverDesc: {
     fontSize: fontSize.sm,
-    marginTop: 1,
+    marginTop: spacing.px,
   },
   serverMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    marginTop: 3,
+    gap: spacing.xxs,
+    marginTop: spacing.xxs,
   },
   serverMeta: {
     fontSize: fontSize.xs,
+    fontWeight: '700',
   },
   groupGap: {
     height: spacing.md,
@@ -760,10 +730,32 @@ const styles = StyleSheet.create({
   },
   modalShell: {
     width: '88%',
-    maxWidth: 430,
+    maxWidth: size.contentMaxWidth,
+  },
+  popoverLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+  },
+  popoverDismiss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  actionPopover: {
+    position: 'absolute',
+    top: size.navBar + spacing['5xl'],
+    right: spacing.lg,
+    width: size.floatingCallWidth,
+    borderWidth: border.hairline,
+    borderRadius: radius['2xl'],
+    overflow: 'hidden',
+  },
+  menuItem: {
+    minHeight: size.listItemLg,
+  },
+  menuLabel: {
+    flex: 1,
   },
   modalContent: {
-    borderRadius: 32, // Bubbly modal
+    borderRadius: radius['3xl'], // Bubbly modal
     padding: spacing.xl,
     gap: spacing.sm,
   },
@@ -783,7 +775,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   input: {
-    height: 48,
+    height: size.controlLg,
     borderRadius: radius.full,
     paddingHorizontal: spacing.lg,
     fontSize: fontSize.md,
@@ -799,8 +791,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   createBtn: {
-    height: 48,
-    borderRadius: 24,
+    height: size.controlLg,
+    borderRadius: radius['2xl'],
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.md,
@@ -809,7 +801,7 @@ const styles = StyleSheet.create({
     width: '85%',
   },
   tutorialContent: {
-    borderRadius: 32,
+    borderRadius: radius['3xl'],
     padding: spacing.xl,
     paddingBottom: spacing.lg,
     gap: spacing.sm,
@@ -834,7 +826,7 @@ const styles = StyleSheet.create({
   tutorialPageDesc: {
     fontSize: fontSize.sm,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: lineHeight.sm,
   },
   tutorialTagRow: {
     flexDirection: 'row',
@@ -844,8 +836,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   tutorialTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
   },
   tutorialTagText: {
@@ -856,11 +848,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: spacing.tight,
     marginTop: spacing.sm,
   },
   tutorialIndicatorDot: {
-    height: 7,
-    borderRadius: 99,
+    height: size.dotMd,
+    borderRadius: radius.full,
   },
 })

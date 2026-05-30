@@ -8,6 +8,7 @@ import {
   Mic,
   Paperclip,
   Plus,
+  Send,
   ShoppingBag,
   Smile,
   X,
@@ -28,7 +29,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import { border, fontSize, iconSize, palette, radius, size, spacing, useColors } from '../../theme'
 import type { Message } from '../../types/message'
 import { formatCommercePrice } from '../common/price-display'
 import {
@@ -291,13 +292,23 @@ interface ChatComposerProps {
   onInputChange: (text: string) => void
   onSend: () => void
   inputRef: React.RefObject<TextInput | null>
-  pendingFiles: Array<{ uri: string; name: string; type: string; size?: number }>
+  pendingFiles: Array<{
+    uri: string
+    name: string
+    type: string
+    size?: number
+    kind?: 'file' | 'image' | 'voice'
+    durationMs?: number
+    waveformPeaks?: number[]
+  }>
   onRemovePendingFile: (index: number) => void
   replyTo: Message | null
   onClearReply: () => void
   typingUsers: string[]
   isRecording?: boolean
   isHolding?: boolean
+  isVoiceMessageRecording?: boolean
+  voiceMessageRecordingMs?: number
   voiceTranscript?: string
   keyboardVisible?: boolean
   insetsBottom: number
@@ -306,6 +317,8 @@ interface ChatComposerProps {
   onToggleVoice?: () => void
   onVoicePressIn?: () => void
   onVoicePressOut?: () => void
+  onStartVoiceMessageRecording?: () => void
+  onFinishVoiceMessageRecording?: (cancel?: boolean) => void
   showAtButton?: boolean
   onPressAt?: () => void
   showEmojiPicker: boolean
@@ -342,18 +355,18 @@ function ImageViewerModal({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={[styles.imageViewerOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
+      <View style={[styles.imageViewerOverlay, { backgroundColor: palette.black }]}>
         <View style={styles.imageViewerHeader}>
           <IconButton
             icon={X}
             variant="ghost"
-            iconColor="#fff"
+            iconColor={palette.white}
             iconSize={24}
             style={styles.imageViewerCloseBtn}
             onPress={onClose}
           />
           <Text style={styles.imageViewerTitle}>{t('chat.imagePreview', '图片预览')}</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: size.iconButtonLg }} />
         </View>
         <Pressable style={styles.imageViewerContent} onPress={onClose}>
           <Image
@@ -364,7 +377,7 @@ function ImageViewerModal({
           />
         </Pressable>
         <View style={styles.imageViewerHint}>
-          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: fontSize.sm }}>
+          <Text style={{ color: palette.white, fontSize: fontSize.sm }}>
             {t('chat.tapToClose', '点击关闭')}
           </Text>
         </View>
@@ -372,6 +385,17 @@ function ImageViewerModal({
     </Modal>
   )
 }
+
+function formatVoiceDuration(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+const RECORDING_PREVIEW_PEAKS = [
+  22, 36, 18, 44, 72, 30, 86, 58, 28, 64, 46, 24, 52, 34, 26, 42, 28, 36, 24, 32, 26, 30,
+]
 
 export const ChatComposer = memo(function ChatComposer({
   inputText,
@@ -385,6 +409,8 @@ export const ChatComposer = memo(function ChatComposer({
   typingUsers,
   isRecording = false,
   isHolding = false,
+  isVoiceMessageRecording = false,
+  voiceMessageRecordingMs = 0,
   keyboardVisible: _keyboardVisible = false,
   insetsBottom,
   panelHeight = 320,
@@ -392,6 +418,8 @@ export const ChatComposer = memo(function ChatComposer({
   onToggleVoice,
   onVoicePressIn,
   onVoicePressOut,
+  onStartVoiceMessageRecording,
+  onFinishVoiceMessageRecording,
   showAtButton = false,
   onPressAt,
   showEmojiPicker,
@@ -516,8 +544,8 @@ export const ChatComposer = memo(function ChatComposer({
                 { backgroundColor: colors.inputBackground, borderColor: colors.border },
               ]}
             >
-              <View style={[styles.pendingProductIcon, { backgroundColor: `${colors.primary}18` }]}>
-                <ShoppingBag size={18} color={colors.primary} />
+              <View style={[styles.pendingProductIcon, { backgroundColor: colors.surfaceHover }]}>
+                <ShoppingBag size={iconSize.lg} color={colors.primary} />
               </View>
               <View style={styles.pendingProductText}>
                 <Text style={[styles.pendingProductName, { color: colors.text }]} numberOfLines={1}>
@@ -541,7 +569,38 @@ export const ChatComposer = memo(function ChatComposer({
           ))}
           {pendingFiles.map((file, idx) => (
             <View key={file.uri}>
-              {file.type.startsWith('image/') ? (
+              {file.kind === 'voice' ? (
+                <View
+                  style={[styles.pendingVoiceChip, { backgroundColor: colors.inputBackground }]}
+                >
+                  <Mic size={iconSize.sm} color={colors.primary} />
+                  <View style={styles.pendingVoiceWaveform}>
+                    {(file.waveformPeaks ?? []).slice(0, 24).map((peak, index) => (
+                      <View
+                        key={`${file.uri}-${index}`}
+                        style={[
+                          styles.pendingVoiceBar,
+                          {
+                            height: Math.max(5, Math.round(peak * 0.16)),
+                            backgroundColor: colors.primary,
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Text style={[styles.pendingFileName, { color: colors.textSecondary }]}>
+                    {formatVoiceDuration(file.durationMs ?? 0)}
+                  </Text>
+                  <IconButton
+                    icon={X}
+                    variant="ghost"
+                    iconColor={colors.textMuted}
+                    iconSize={14}
+                    style={styles.inlineRemoveBtn}
+                    onPress={() => onRemovePendingFile(idx)}
+                  />
+                </View>
+              ) : file.type.startsWith('image/') ? (
                 <Pressable
                   onPress={() => setViewingImageUri(file.uri)}
                   style={[styles.pendingImageChip, { backgroundColor: colors.inputBackground }]}
@@ -562,7 +621,7 @@ export const ChatComposer = memo(function ChatComposer({
                 </Pressable>
               ) : (
                 <View style={[styles.pendingFileChip, { backgroundColor: colors.inputBackground }]}>
-                  <Paperclip size={13} color={colors.textMuted} />
+                  <Paperclip size={iconSize.sm} color={colors.textMuted} />
                   <Text
                     style={[styles.pendingFileName, { color: colors.textSecondary }]}
                     numberOfLines={1}
@@ -620,88 +679,148 @@ export const ChatComposer = memo(function ChatComposer({
         </GlassHeader>
       )}
 
-      <View
-        style={[
-          styles.inputBar,
-          {
-            backgroundColor: colors.glassStrong,
-            borderTopColor: colors.glassLine,
-            paddingBottom: spacing.sm,
-            paddingTop: spacing.sm,
-          },
-        ]}
-      >
-        {showAtButton && onPressAt && (
-          <Button
-            variant="glass"
-            size="icon"
-            icon={AtSign}
-            iconColor={colors.textMuted}
+      {isVoiceMessageRecording && onFinishVoiceMessageRecording ? (
+        <View
+          style={[
+            styles.inputBar,
+            styles.voiceRecordingInputBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              paddingBottom: spacing.sm,
+              paddingTop: spacing.sm,
+            },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.voiceCancelRecording')}
+            onPress={() => onFinishVoiceMessageRecording(true)}
+            style={({ pressed }) => [
+              styles.voiceRecordingCancelButton,
+              { backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground },
+            ]}
+          >
+            <X size={iconSize.lg} color={colors.textMuted} />
+          </Pressable>
+          <View style={[styles.voiceRecordingPill, { backgroundColor: colors.inputBackground }]}>
+            <Mic size={iconSize.lg} color={colors.primary} />
+            <View style={styles.voiceRecordingWaveform}>
+              {RECORDING_PREVIEW_PEAKS.map((peak, index) => (
+                <View
+                  key={`recording-${index}`}
+                  style={[
+                    styles.voiceRecordingBar,
+                    {
+                      height: Math.max(6, Math.round(peak * 0.24)),
+                      backgroundColor: colors.primary,
+                      opacity:
+                        0.45 + ((index + Math.floor(voiceMessageRecordingMs / 220)) % 5) * 0.12,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            <Text style={[styles.voiceRecordingDuration, { color: colors.textSecondary }]}>
+              {formatVoiceDuration(voiceMessageRecordingMs)}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.voiceSendRecording')}
+            onPress={() => onFinishVoiceMessageRecording(false)}
+            style={({ pressed }) => [
+              styles.voiceRecordingSendButton,
+              { backgroundColor: pressed ? colors.primaryDark : colors.success },
+            ]}
+          >
+            <Send size={iconSize.lg} color={palette.foundation} />
+          </Pressable>
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.inputBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              paddingBottom: spacing.sm,
+              paddingTop: spacing.sm,
+            },
+          ]}
+        >
+          {showAtButton && onPressAt && (
+            <Button
+              variant="glass"
+              size="icon"
+              icon={AtSign}
+              iconColor={colors.textMuted}
+              iconSize={22}
+              onPress={onPressAt}
+            />
+          )}
+
+          <InputValley style={styles.inputWrapper}>
+            <TextInput
+              ref={inputRef}
+              style={[styles.textInput, { color: colors.text }]}
+              value={inputText}
+              onChangeText={onInputChange}
+              placeholder={t('chat.messagePlaceholder')}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              maxLength={4000}
+              blurOnSubmit={false}
+              submitBehavior="submit"
+              onSubmitEditing={onSend}
+              returnKeyType="send"
+              keyboardAppearance={colors.mode === 'dark' ? 'dark' : 'light'}
+            />
+            {canUseVoice && onVoicePressIn && onVoicePressOut ? (
+              <TypelessMicButton
+                isRecording={isRecording}
+                isHolding={isHolding}
+                onPressIn={onVoicePressIn}
+                onPressOut={onVoicePressOut}
+              />
+            ) : canUseVoice && onToggleVoice ? (
+              <IconButton
+                icon={Mic}
+                variant={isRecording ? 'primary' : 'ghost'}
+                iconColor={isRecording ? palette.foundation : colors.textMuted}
+                iconSize={18}
+                containerStyle={styles.inputMicBtnPosition}
+                style={styles.inputMicBtn}
+                onPress={onToggleVoice}
+              />
+            ) : null}
+          </InputValley>
+
+          <IconButton
+            icon={Plus}
+            variant={panelRequested ? 'primary' : 'glass'}
+            iconColor={panelRequested ? palette.foundation : colors.textMuted}
             iconSize={22}
-            onPress={onPressAt}
+            style={styles.actionBtn}
+            onPress={() => {
+              if (panelRequested) {
+                // Panel → keyboard: focus input, keyboardWillShow handles the rest
+                inputRef.current?.focus()
+              } else if (keyboardUpRef.current) {
+                // Keyboard → panel: tell hide-handler to keep slot height
+                panelIntentRef.current = true
+                setShowEmojiPicker(false)
+                setShowPlusMenu(true)
+                Keyboard.dismiss()
+              } else {
+                // Idle → panel
+                setShowEmojiPicker(false)
+                setShowPlusMenu(true)
+              }
+            }}
           />
-        )}
-
-        <InputValley style={styles.inputWrapper}>
-          <TextInput
-            ref={inputRef}
-            style={[styles.textInput, { color: colors.text }]}
-            value={inputText}
-            onChangeText={onInputChange}
-            placeholder={t('chat.messagePlaceholder')}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            maxLength={4000}
-            blurOnSubmit={false}
-            submitBehavior="submit"
-            onSubmitEditing={onSend}
-            returnKeyType="send"
-            keyboardAppearance={colors.mode === 'dark' ? 'dark' : 'light'}
-          />
-          {canUseVoice && onVoicePressIn && onVoicePressOut ? (
-            <TypelessMicButton
-              isRecording={isRecording}
-              isHolding={isHolding}
-              onPressIn={onVoicePressIn}
-              onPressOut={onVoicePressOut}
-            />
-          ) : canUseVoice && onToggleVoice ? (
-            <IconButton
-              icon={Mic}
-              variant={isRecording ? 'primary' : 'ghost'}
-              iconColor={isRecording ? '#050508' : colors.textMuted}
-              iconSize={18}
-              containerStyle={styles.inputMicBtnPosition}
-              style={styles.inputMicBtn}
-              onPress={onToggleVoice}
-            />
-          ) : null}
-        </InputValley>
-
-        <IconButton
-          icon={Plus}
-          variant={panelRequested ? 'primary' : 'glass'}
-          iconColor={panelRequested ? '#050508' : colors.textMuted}
-          iconSize={22}
-          style={styles.actionBtn}
-          onPress={() => {
-            if (panelRequested) {
-              // Panel → keyboard: focus input, keyboardWillShow handles the rest
-              inputRef.current?.focus()
-            } else if (keyboardUpRef.current) {
-              // Keyboard → panel: tell hide-handler to keep slot height
-              panelIntentRef.current = true
-              setShowEmojiPicker(false)
-              setShowPlusMenu(true)
-              Keyboard.dismiss()
-            } else {
-              // Idle → panel
-              setShowEmojiPicker(false)
-              setShowPlusMenu(true)
-            }
-          }}
-        />
-      </View>
+        </View>
+      )}
 
       {/* Bottom slot — always rendered; height tracks keyboard / panel / idle */}
       <Animated.View
@@ -736,7 +855,10 @@ export const ChatComposer = memo(function ChatComposer({
                     <Pressable
                       style={({ pressed }) => [
                         styles.emojiItem,
-                        pressed && { backgroundColor: colors.surfaceHover, borderRadius: 8 },
+                        pressed && {
+                          backgroundColor: colors.surfaceHover,
+                          borderRadius: radius.md,
+                        },
                       ]}
                       onPress={() => {
                         onInputChange(inputText + item)
@@ -759,7 +881,12 @@ export const ChatComposer = memo(function ChatComposer({
                   ]}
                   onPress={() => setShowEmojiPicker(true)}
                 >
-                  <IconBubble icon={Smile} tone="warning" size={28} style={styles.plusPanelIcon} />
+                  <IconBubble
+                    icon={Smile}
+                    tone="warning"
+                    size={iconSize['4xl']}
+                    style={styles.plusPanelIcon}
+                  />
                   <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                     {t('chat.emoji', '表情')}
                   </Text>
@@ -778,7 +905,7 @@ export const ChatComposer = memo(function ChatComposer({
                     <IconBubble
                       icon={ShoppingBag}
                       tone="primary"
-                      size={28}
+                      size={iconSize['4xl']}
                       style={styles.plusPanelIcon}
                     />
                     <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
@@ -800,11 +927,33 @@ export const ChatComposer = memo(function ChatComposer({
                     <IconBubble
                       icon={Camera}
                       tone="success"
-                      size={28}
+                      size={iconSize['4xl']}
                       style={styles.plusPanelIcon}
                     />
                     <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                       {t('chat.takePhoto', '拍摄')}
+                    </Text>
+                  </Pressable>
+                )}
+                {onStartVoiceMessageRecording && (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.plusPanelItem,
+                      pressed && styles.plusPanelPressed,
+                    ]}
+                    onPress={() => {
+                      setShowPlusMenu(false)
+                      onStartVoiceMessageRecording()
+                    }}
+                  >
+                    <IconBubble
+                      icon={Mic}
+                      tone="success"
+                      size={iconSize['4xl']}
+                      style={styles.plusPanelIcon}
+                    />
+                    <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
+                      {t('chat.voiceRecord')}
                     </Text>
                   </Pressable>
                 )}
@@ -821,7 +970,7 @@ export const ChatComposer = memo(function ChatComposer({
                   <IconBubble
                     icon={ImageIcon}
                     tone="primary"
-                    size={28}
+                    size={iconSize['4xl']}
                     style={styles.plusPanelIcon}
                   />
                   <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
@@ -838,7 +987,12 @@ export const ChatComposer = memo(function ChatComposer({
                     onPickFile()
                   }}
                 >
-                  <IconBubble icon={File} tone="warning" size={28} style={styles.plusPanelIcon} />
+                  <IconBubble
+                    icon={File}
+                    tone="warning"
+                    size={iconSize['4xl']}
+                    style={styles.plusPanelIcon}
+                  />
                   <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                     {t('chat.pickFile', '文件')}
                   </Text>
@@ -853,96 +1007,148 @@ export const ChatComposer = memo(function ChatComposer({
 })
 
 const styles = StyleSheet.create({
-  typingBar: { paddingHorizontal: spacing.md, paddingVertical: 6 },
+  typingBar: { paddingHorizontal: spacing.md, paddingVertical: spacing.tight },
   pendingFilesBar: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 6,
+    gap: spacing.tight,
   },
   pendingFileChip: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.md,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
-    maxWidth: 180,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
+    maxWidth: size.chipMaxWidth,
   },
   pendingFileName: { fontSize: fontSize.xs, flexShrink: 1 },
   pendingImageChip: { borderRadius: radius.md, overflow: 'hidden', position: 'relative' },
-  pendingImageThumb: { width: 80, height: 80, borderRadius: radius.md },
+  pendingImageThumb: { width: size.thumbnailMd, height: size.thumbnailMd, borderRadius: radius.md },
   pendingImageRemovePosition: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: spacing.xs,
+    right: spacing.xs,
   },
   pendingImageRemoveBtn: {
-    width: 24,
-    height: 24,
+    width: size.avatarXs,
+    height: size.avatarXs,
   },
-  inlineRemoveBtn: { width: 28, height: 28 },
+  inlineRemoveBtn: { width: size.controlXs, height: size.controlXs },
+  pendingVoiceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
+    maxWidth: size.commerceChipMaxWidth,
+  },
+  pendingVoiceWaveform: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    minWidth: size.voicePreviewWaveformMinWidth,
+  },
+  pendingVoiceBar: {
+    width: size.dividerAccent,
+    borderRadius: radius.full,
+  },
   pendingProductChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.lg,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    maxWidth: 260,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.tight,
+    maxWidth: size.commerceChipMaxWidth,
   },
   pendingProductIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: size.iconBubble,
+    height: size.iconBubble,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pendingProductText: { minWidth: 0, flex: 1 },
   pendingProductName: { fontSize: fontSize.sm, fontWeight: '700' },
-  pendingProductPrice: { fontSize: fontSize.xs, marginTop: 2 },
+  pendingProductPrice: { fontSize: fontSize.xs, marginTop: spacing.xxs },
   replyBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
     gap: spacing.sm,
   },
-  replyBarAccent: { width: 3, height: '100%', borderRadius: 2 },
+  replyBarAccent: { width: size.dividerAccent, height: '100%', borderRadius: radius.xs },
   replyBarContent: { flex: 1 },
   replyBarLabel: { fontSize: fontSize.xs, fontWeight: '600' },
   replyBarPreview: { fontSize: fontSize.xs },
-  voiceRecordingBar: {
+  voiceRecordingInputBar: {
+    alignItems: 'center',
+  },
+  voiceRecordingCancelButton: {
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceRecordingPill: {
+    flex: 1,
+    minHeight: size.controlLg,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    gap: 8,
+    gap: spacing.sm,
   },
-  voiceRecordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' },
-  voiceRecordingLabel: { fontSize: fontSize.xs, fontWeight: '600' },
-  voiceTranscript: { flex: 1, fontSize: fontSize.sm },
+  voiceRecordingWaveform: {
+    flex: 1,
+    minWidth: 0,
+    height: size.controlSm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+  },
+  voiceRecordingBar: {
+    width: size.dividerAccent,
+    borderRadius: radius.full,
+  },
+  voiceRecordingDuration: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    minWidth: size.iconTile,
+    textAlign: 'right',
+  },
+  voiceRecordingSendButton: {
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: spacing.sm,
-    paddingTop: 8,
-    gap: 8,
-    borderTopWidth: 1,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    borderTopWidth: border.hairline,
   },
   actionBtn: {
-    width: 46,
-    height: 46,
+    width: size.controlLg,
+    height: size.controlLg,
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 0,
+    marginBottom: spacing.none,
   },
   inputWrapper: {
     flex: 1,
@@ -950,40 +1156,44 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    minHeight: 46,
-    maxHeight: 120,
+    minHeight: size.controlLg,
+    maxHeight: size.composerInputMaxHeight,
     position: 'relative',
   },
   textInput: {
     flex: 1,
-    minHeight: 46,
-    maxHeight: 120,
+    minHeight: size.controlLg,
+    maxHeight: size.composerInputMaxHeight,
     paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? 12 : spacing.md,
+    paddingVertical: spacing.md,
     fontSize: fontSize.md,
-    paddingRight: 28,
+    paddingRight: spacing['3xl'],
   },
   inputMicBtn: {
-    width: 34,
-    height: 34,
+    width: size.iconBubble,
+    height: size.iconBubble,
   },
   inputMicBtnPosition: {
     position: 'absolute',
-    right: 4,
-    bottom: 6,
+    right: spacing.xs,
+    bottom: spacing.tight,
   },
-  plusPanel: { borderTopWidth: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md },
+  plusPanel: {
+    borderTopWidth: border.hairline,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
   plusPanelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   plusPanelItem: { alignItems: 'center', gap: spacing.xs, width: '22%', marginBottom: spacing.md },
-  plusPanelPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  plusPanelPressed: { transform: [{ scale: 0.98 }] },
   plusPanelIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+    width: size.plusPanelIconLg,
+    height: size.plusPanelIconLg,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plusPanelLabel: { fontSize: fontSize.sm, marginTop: 4 },
+  plusPanelLabel: { fontSize: fontSize.sm, marginTop: spacing.xs },
   emojiPanelContainer: { flex: 1 },
   emojiPanelHeader: {
     flexDirection: 'row',
@@ -993,10 +1203,15 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   emojiPanelTitle: { fontSize: fontSize.md, fontWeight: '600' },
-  emojiPanelClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  emojiPanelClose: {
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emojiList: { paddingHorizontal: spacing.sm },
   emojiItem: { width: '12.5%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
-  emojiText: { fontSize: 24 },
+  emojiText: { fontSize: fontSize['2xl'] },
   imageViewerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   imageViewerHeader: {
     flexDirection: 'row',
@@ -1007,8 +1222,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     width: '100%',
   },
-  imageViewerCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  imageViewerTitle: { color: '#fff', fontSize: fontSize.md, fontWeight: '600' },
+  imageViewerCloseBtn: {
+    width: size.iconButtonLg,
+    height: size.iconButtonLg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageViewerTitle: { color: palette.white, fontSize: fontSize.md, fontWeight: '600' },
   imageViewerContent: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
   imageViewerHint: { paddingBottom: spacing.xl, alignItems: 'center' },
 })

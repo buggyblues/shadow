@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import { border, fontSize, radius, size, spacing, useColors } from '../../theme'
 
 interface EmojiPickerProps {
   visible: boolean
@@ -425,9 +425,9 @@ export function EmojiPicker({ visible, onSelect, onClose }: EmojiPickerProps) {
               style={[
                 styles.categoryBtn,
                 activeCategory === cat.key && {
-                  backgroundColor: `${colors.primary}20`,
+                  backgroundColor: colors.surfaceHover,
                   borderBottomColor: colors.primary,
-                  borderBottomWidth: 2,
+                  borderBottomWidth: border.active,
                 },
               ]}
               onPress={() => setActiveCategory(cat.key)}
@@ -457,11 +457,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
-    borderTopWidth: 1,
-    maxHeight: 320,
+    borderTopWidth: border.hairline,
+    maxHeight: size.emojiPanelMaxHeight,
   },
   categoryBar: {
-    maxHeight: 44,
+    maxHeight: size.controlMd,
   },
   categoryContent: {
     paddingHorizontal: spacing.xs,
@@ -471,11 +471,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: radius.sm,
-    borderBottomWidth: 2,
+    borderBottomWidth: border.active,
     borderBottomColor: 'transparent',
   },
   categoryIcon: {
-    fontSize: 20,
+    fontSize: fontSize.xl,
   },
   grid: {
     flex: 1,

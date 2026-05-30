@@ -2,7 +2,7 @@ import { Check } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { changeLanguage, supportedLanguages } from '../../i18n'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import { fontSize, iconSize, radius, size, spacing, useColors } from '../../theme'
 
 interface LanguageSwitcherProps {
   visible?: boolean
@@ -24,7 +24,7 @@ export function LanguageSwitcher({ visible, onClose }: LanguageSwitcherProps) {
             onPress={() => changeLanguage(lang.code)}
           >
             <Text style={[styles.label, { color: colors.text }]}>{lang.label}</Text>
-            {i18n.language === lang.code && <Check size={16} color={colors.primary} />}
+            {i18n.language === lang.code && <Check size={iconSize.md} color={colors.primary} />}
           </Pressable>
         ))}
       </View>
@@ -49,7 +49,7 @@ export function LanguageSwitcher({ visible, onClose }: LanguageSwitcherProps) {
                 <Pressable
                   style={[
                     styles.item,
-                    { backgroundColor: isActive ? `${colors.primaryLight}20` : 'transparent' },
+                    { backgroundColor: isActive ? colors.surfaceHover : colors.surface },
                   ]}
                   onPress={() => {
                     changeLanguage(item.code)
@@ -58,7 +58,7 @@ export function LanguageSwitcher({ visible, onClose }: LanguageSwitcherProps) {
                 >
                   <Text style={styles.flag}>{item.flag}</Text>
                   <Text style={[styles.label, { color: colors.text }]}>{item.label}</Text>
-                  {isActive && <Check size={18} color={colors.primary} />}
+                  {isActive && <Check size={iconSize.lg} color={colors.primary} />}
                 </Pressable>
               )
             }}
@@ -81,9 +81,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: size.iconButtonMd,
+    height: size.dotXs,
+    borderRadius: radius.xs,
     alignSelf: 'center',
     marginTop: spacing.sm,
     marginBottom: spacing.lg,
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   flag: {
-    fontSize: 22,
+    fontSize: fontSize.xl,
   },
   label: {
     flex: 1,

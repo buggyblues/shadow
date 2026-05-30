@@ -1,37 +1,13 @@
-import {
-  type ConnectorPlan,
-  createConnectorPlans,
-  type ShadowConnectorTarget,
-} from '@shadowob/connector'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import * as Clipboard from 'expo-clipboard'
 import { useNavigation } from 'expo-router'
-import {
-  BookOpen,
-  Bot,
-  Check,
-  ChevronRight,
-  Copy,
-  Key,
-  Lock,
-  MessageSquare,
-  Monitor,
-  PlugZap,
-  Plus,
-  RefreshCw,
-  Share2,
-  Terminal,
-  Trash2,
-  X,
-} from 'lucide-react-native'
+import { Bot, ChevronRight, Lock, Plus, Share2, Trash2, X } from 'lucide-react-native'
 import { pinyin } from 'pinyin-pro'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -46,30 +22,39 @@ import { OnlineRank } from '../../src/components/common/online-rank'
 import {
   AppText,
   BackgroundSurface,
-  Badge,
   Button,
   CardPressable,
-  ChipButton,
   EmptyState,
   IconButton,
+  MobileNavigationBar,
   Spinner,
   SwitchRow,
   TextField,
+  ToolbarButton,
 } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
-import { fontSize, radius, spacing, useColors } from '../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  letterSpacing,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../src/theme'
 
 interface Agent {
   id: string
   name: string | null
-  token?: string
   status: string
   lastHeartbeat: string | null
   totalOnlineSeconds: number
   activeContractId?: string | null
   config?: {
-    lastToken?: string
     buddyMode?: 'private' | 'shareable'
     allowedServerIds?: string[]
     [key: string]: unknown
@@ -90,34 +75,6 @@ interface ServerEntry {
     id: string
     name: string
   }
-}
-
-interface ConnectorRuntimeInfo {
-  id: string
-  label: string
-  kind: 'openclaw' | 'cli'
-  status: 'available' | 'missing'
-  version?: string | null
-  command?: string | null
-  detectedAt?: string | null
-}
-
-interface ConnectorComputer {
-  id: string
-  name: string
-  status: 'pending' | 'online' | 'offline'
-  hostname?: string | null
-  os?: string | null
-  arch?: string | null
-  daemonVersion?: string | null
-  runtimes: ConnectorRuntimeInfo[]
-  lastSeenAt?: string | null
-}
-
-interface ConnectorBootstrapResult {
-  computer: ConnectorComputer
-  command: string
-  apiKey: string
 }
 
 function getBuddyMode(agent: Agent | null): BuddyMode {
@@ -162,164 +119,35 @@ function deriveBuddyUsername(name: string) {
   return username || 'buddy'
 }
 
-const connectorTargets: ShadowConnectorTarget[] = ['openclaw', 'hermes', 'cc-connect']
-const CONNECTOR_SERVER_URL = 'https://shadowob.com'
-
-function getConnectorLabel(
-  target: ShadowConnectorTarget,
-  t: ReturnType<typeof useTranslation>['t'],
-): string {
-  if (target === 'hermes') return t('agentMgmt.connectorHermes')
-  if (target === 'cc-connect') return t('agentMgmt.connectorCcConnect')
-  return t('agentMgmt.connectorOpenClaw')
-}
-
-function getConnectorIcon(target: ShadowConnectorTarget) {
-  if (target === 'hermes') return Bot
-  if (target === 'cc-connect') return PlugZap
-  return Terminal
-}
-
-function availableRuntimes(computer: ConnectorComputer | null | undefined) {
-  return (computer?.runtimes ?? [])
-    .filter((runtime) => runtime.status === 'available')
-    .sort((a, b) => a.label.localeCompare(b.label))
-}
-
 function BuddyAccessEditor({
   mode,
-  allowedServerIds,
-  servers,
   colors,
   t,
   onModeChange,
-  onAllowedServerIdsChange,
-  compactModeControl = false,
+  showTitle = true,
 }: {
   mode: BuddyMode
-  allowedServerIds: string[]
-  servers: ServerEntry[]
   colors: ReturnType<typeof useColors>
   t: ReturnType<typeof useTranslation>['t']
   onModeChange: (mode: BuddyMode) => void
-  onAllowedServerIdsChange: (ids: string[]) => void
-  compactModeControl?: boolean
+  showTitle?: boolean
 }) {
-  const toggleServer = (serverId: string) => {
-    onAllowedServerIdsChange(
-      allowedServerIds.includes(serverId)
-        ? allowedServerIds.filter((id) => id !== serverId)
-        : [...allowedServerIds, serverId],
-    )
-  }
-
   return (
     <View style={styles.accessBlock}>
-      <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
-        {t('agentMgmt.accessSection')}
-      </Text>
-      {compactModeControl ? (
-        <SwitchRow
-          icon={mode === 'shareable' ? Share2 : Lock}
-          title={mode === 'shareable' ? t('agentMgmt.modeShareable') : t('agentMgmt.modePrivate')}
-          subtitle={
-            mode === 'shareable' ? t('agentMgmt.modeShareableDesc') : t('agentMgmt.modePrivateDesc')
-          }
-          value={mode === 'shareable'}
-          onValueChange={(value) => onModeChange(value ? 'shareable' : 'private')}
-        />
-      ) : (
-        <View style={styles.modeRow}>
-          <CardPressable
-            variant="glassCard"
-            active={mode === 'private'}
-            padded={false}
-            style={[
-              styles.modeOption,
-              {
-                backgroundColor: mode === 'private' ? `${colors.primary}1A` : colors.glassSoft,
-              },
-            ]}
-            onPress={() => onModeChange('private')}
-          >
-            <Lock size={16} color={mode === 'private' ? colors.primary : colors.textMuted} />
-            <Text style={[styles.modeTitle, { color: colors.text }]}>
-              {t('agentMgmt.modePrivate')}
-            </Text>
-            <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
-              {t('agentMgmt.modePrivateDesc')}
-            </Text>
-          </CardPressable>
-          <CardPressable
-            variant="glassCard"
-            active={mode === 'shareable'}
-            padded={false}
-            style={[
-              styles.modeOption,
-              {
-                backgroundColor: mode === 'shareable' ? `${colors.primary}1A` : colors.glassSoft,
-              },
-            ]}
-            onPress={() => onModeChange('shareable')}
-          >
-            <Share2 size={16} color={mode === 'shareable' ? colors.primary : colors.textMuted} />
-            <Text style={[styles.modeTitle, { color: colors.text }]}>
-              {t('agentMgmt.modeShareable')}
-            </Text>
-            <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
-              {t('agentMgmt.modeShareableDesc')}
-            </Text>
-          </CardPressable>
-        </View>
-      )}
-      <View style={[styles.policyNote, { backgroundColor: colors.background }]}>
-        <Text style={[styles.policyTitle, { color: colors.text }]}>
-          {t('agentMgmt.defaultReplyPolicy')}
+      {showTitle && (
+        <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
+          {t('agentMgmt.accessSection')}
         </Text>
-        <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-          {t('agentMgmt.defaultReplyPolicyDesc')}
-        </Text>
-      </View>
-      {mode === 'private' && (
-        <View style={styles.serverList}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-            {t('agentMgmt.allowedServersLabel')}
-          </Text>
-          {servers.length === 0 ? (
-            <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
-              {t('agentMgmt.allowedServersEmpty')}
-            </Text>
-          ) : (
-            servers.map((entry) => (
-              <CardPressable
-                key={entry.server.id}
-                variant="glass"
-                active={allowedServerIds.includes(entry.server.id)}
-                padded={false}
-                style={styles.serverOption}
-                onPress={() => toggleServer(entry.server.id)}
-              >
-                <View
-                  style={[
-                    styles.checkbox,
-                    {
-                      borderColor: allowedServerIds.includes(entry.server.id)
-                        ? colors.primary
-                        : colors.border,
-                      backgroundColor: allowedServerIds.includes(entry.server.id)
-                        ? colors.primary
-                        : 'transparent',
-                    },
-                  ]}
-                />
-                <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
-                  {entry.server.name}
-                </Text>
-              </CardPressable>
-            ))
-          )}
-        </View>
       )}
+      <SwitchRow
+        icon={mode === 'shareable' ? Share2 : Lock}
+        title={mode === 'shareable' ? t('agentMgmt.modeShareable') : t('agentMgmt.modePrivate')}
+        subtitle={
+          mode === 'shareable' ? t('agentMgmt.modeShareableDesc') : t('agentMgmt.modePrivateDesc')
+        }
+        value={mode === 'shareable'}
+        onValueChange={(value) => onModeChange(value ? 'shareable' : 'private')}
+      />
     </View>
   )
 }
@@ -329,7 +157,6 @@ export default function BuddyManagementScreen() {
   const colors = useColors()
   const navigation = useNavigation()
   const queryClient = useQueryClient()
-  const serverUrl = CONNECTOR_SERVER_URL
 
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
@@ -337,15 +164,7 @@ export default function BuddyManagementScreen() {
   const [createUsernameTouched, setCreateUsernameTouched] = useState(false)
   const [createDescription, setCreateDescription] = useState('')
   const [createBuddyMode, setCreateBuddyMode] = useState<BuddyMode>('private')
-  const [createAllowedServerIds, setCreateAllowedServerIds] = useState<string[]>([])
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-  const [generatedToken, setGeneratedToken] = useState<string | null>(null)
-  const [configTab, setConfigTab] = useState<'manual' | 'chat'>('manual')
-  const [connectorTarget, setConnectorTarget] = useState<ShadowConnectorTarget>('openclaw')
-  const [selectedConnectorComputerId, setSelectedConnectorComputerId] = useState('')
-  const [selectedConnectorRuntimeId, setSelectedConnectorRuntimeId] = useState('')
-  const [connectorCommand, setConnectorCommand] = useState<string | null>(null)
-  const connectorBootstrapStartedRef = useRef(false)
 
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ['agents'],
@@ -355,22 +174,6 @@ export default function BuddyManagementScreen() {
     queryKey: ['servers', 'buddy-access'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
   })
-  const connectorComputersQuery = useQuery({
-    queryKey: ['connector-computers'],
-    queryFn: () => fetchApi<{ computers: ConnectorComputer[] }>('/api/connector/computers'),
-    enabled: showCreate,
-    refetchInterval: showCreate ? 5000 : false,
-  })
-
-  const connectorComputers = connectorComputersQuery.data?.computers ?? []
-  const selectedConnectorComputer =
-    connectorComputers.find((computer) => computer.id === selectedConnectorComputerId) ?? null
-  const selectedConnectorRuntime =
-    availableRuntimes(selectedConnectorComputer).find(
-      (runtime) => runtime.id === selectedConnectorRuntimeId,
-    ) ?? null
-  const canCreateConnectorBuddy =
-    selectedConnectorComputer?.status === 'online' && Boolean(selectedConnectorRuntime)
 
   useEffect(() => {
     navigation.setOptions({
@@ -390,11 +193,6 @@ export default function BuddyManagementScreen() {
     setCreateUsernameTouched(false)
     setCreateDescription('')
     setCreateBuddyMode('private')
-    setCreateAllowedServerIds([])
-    setSelectedConnectorComputerId('')
-    setSelectedConnectorRuntimeId('')
-    setConnectorCommand(null)
-    connectorBootstrapStartedRef.current = false
   }
 
   const handleCreateNameChange = (value: string) => {
@@ -414,60 +212,6 @@ export default function BuddyManagementScreen() {
     )
   }
 
-  const connectorBootstrapMutation = useMutation({
-    mutationFn: () =>
-      fetchApi<ConnectorBootstrapResult>('/api/connector/computers/bootstrap', {
-        method: 'POST',
-        body: JSON.stringify({
-          serverUrl,
-          name: t('agentMgmt.connectorDefaultComputerName'),
-        }),
-      }),
-    onSuccess: (result) => {
-      setConnectorCommand(result.command)
-      setSelectedConnectorComputerId(result.computer.id)
-      queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
-    },
-    onError: (err: Error) => {
-      showToast(err.message)
-    },
-  })
-
-  useEffect(() => {
-    if (
-      !showCreate ||
-      connectorComputersQuery.isLoading ||
-      connectorComputers.length > 0 ||
-      connectorCommand ||
-      connectorBootstrapStartedRef.current
-    ) {
-      return
-    }
-    connectorBootstrapStartedRef.current = true
-    connectorBootstrapMutation.mutate()
-  }, [
-    showCreate,
-    connectorComputersQuery.isLoading,
-    connectorComputers.length,
-    connectorCommand,
-    connectorBootstrapMutation,
-  ])
-
-  useEffect(() => {
-    if (!showCreate || selectedConnectorComputerId || connectorComputers.length === 0) return
-    const firstOnline =
-      connectorComputers.find((computer) => computer.status === 'online') ?? connectorComputers[0]
-    if (!firstOnline) return
-    setSelectedConnectorComputerId(firstOnline.id)
-  }, [showCreate, selectedConnectorComputerId, connectorComputers])
-
-  useEffect(() => {
-    if (!showCreate) return
-    const runtimes = availableRuntimes(selectedConnectorComputer)
-    if (runtimes.some((runtime) => runtime.id === selectedConnectorRuntimeId)) return
-    setSelectedConnectorRuntimeId(runtimes[0]?.id ?? '')
-  }, [showCreate, selectedConnectorComputer, selectedConnectorRuntimeId])
-
   const createMutation = useMutation({
     mutationFn: (data: {
       name: string
@@ -476,31 +220,24 @@ export default function BuddyManagementScreen() {
       buddyMode: BuddyMode
       allowedServerIds: string[]
     }) => {
-      if (!selectedConnectorComputerId || !selectedConnectorRuntimeId) {
-        throw new Error(t('agentMgmt.connectorNoRuntime'))
-      }
-      return fetchApi<{ agent: Agent; job: { id: string } | null }>(
-        `/api/connector/computers/${selectedConnectorComputerId}/buddies`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            runtimeId: selectedConnectorRuntimeId,
-            serverUrl,
-            name: data.name.trim(),
-            username: data.username.trim(),
-            description: data.description,
-            buddyMode: data.buddyMode,
-            allowedServerIds: data.allowedServerIds,
-          }),
-        },
-      ).then((result) => result.agent)
+      return fetchApi<Agent>('/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: data.name.trim(),
+          username: data.username.trim(),
+          description: data.description,
+          kernelType: 'openclaw',
+          config: {},
+          buddyMode: data.buddyMode,
+          allowedServerIds: data.allowedServerIds,
+        }),
+      })
     },
     onSuccess: (agent) => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
       resetCreateForm()
-      showToast(t('agentMgmt.connectorJobQueuedTitle'))
+      showToast(t('agentMgmt.createSuccess'))
       setSelectedAgent(agent)
-      setGeneratedToken(null)
     },
     onError: (err: Error) => {
       if (err.message?.toLowerCase().includes('username already taken')) {
@@ -518,22 +255,7 @@ export default function BuddyManagementScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
       setSelectedAgent(null)
-      setGeneratedToken(null)
       showToast(t('buddyMgmt.deleted', 'Buddy 已删除'))
-    },
-    onError: (err: Error) => showToast(err.message),
-  })
-
-  const regenTokenMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetchApi<{ token: string }>(`/api/agents/${id}/token`, { method: 'POST' }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] })
-      setGeneratedToken(data.token)
-      if (selectedAgent) {
-        setSelectedAgent({ ...selectedAgent, token: data.token })
-      }
-      showToast(t('buddyMgmt.tokenRegenerated', 'Token 已重新生成'))
     },
     onError: (err: Error) => showToast(err.message),
   })
@@ -555,17 +277,14 @@ export default function BuddyManagementScreen() {
     onError: (err: Error) => showToast(err.message),
   })
 
-  const copyToClipboard = async (text: string, message?: string) => {
-    await Clipboard.setStringAsync(text)
-    showToast(message || t('common.copied', '已复制'))
-  }
-
   const updateSelectedAccess = (buddyMode: BuddyMode, allowedServerIds: string[]) => {
     if (!selectedAgent) return
+    const privateAllowedServerIds =
+      allowedServerIds.length > 0 ? allowedServerIds : servers.map((entry) => entry.server.id)
     updateAccessMutation.mutate({
       agentId: selectedAgent.id,
       buddyMode,
-      allowedServerIds: buddyMode === 'private' ? allowedServerIds : [],
+      allowedServerIds: buddyMode === 'private' ? privateAllowedServerIds : [],
     })
   }
 
@@ -578,21 +297,20 @@ export default function BuddyManagementScreen() {
         style={styles.agentCard}
         onPress={() => {
           setSelectedAgent(agent)
-          setGeneratedToken(null)
-          setConfigTab('manual')
-          setConnectorTarget('openclaw')
         }}
       >
-        <Avatar uri={agent.botUser?.avatarUrl} name={name} size={44} userId={agent.botUser?.id} />
+        <Avatar
+          uri={agent.botUser?.avatarUrl}
+          name={name}
+          size={44}
+          userId={agent.botUser?.id}
+          status={online ? 'online' : 'offline'}
+          showStatus
+        />
         <View style={{ flex: 1, marginLeft: spacing.sm }}>
-          <View style={styles.row}>
-            <AppText variant="bodyStrong" style={styles.agentName}>
-              {name}
-            </AppText>
-            <Badge variant={online ? 'success' : 'neutral'} size="xs">
-              {online ? t('member.online') : t('member.offline')}
-            </Badge>
-          </View>
+          <AppText variant="bodyStrong" style={styles.agentName}>
+            {name}
+          </AppText>
           <View style={styles.row}>
             {agent.totalOnlineSeconds > 0 && (
               <AppText variant="label" tone="secondary">
@@ -607,21 +325,10 @@ export default function BuddyManagementScreen() {
             </AppText>
           </View>
         </View>
-        <ChevronRight size={20} color={colors.textMuted} />
+        <ChevronRight size={iconSize.xl} color={colors.textMuted} />
       </CardPressable>
     )
   }
-
-  // Get display token
-  const getDisplayToken = useCallback(() => {
-    if (!selectedAgent) return null
-    return (
-      generatedToken ??
-      selectedAgent.token ??
-      (selectedAgent.config?.lastToken as string | undefined) ??
-      null
-    )
-  }, [generatedToken, selectedAgent])
 
   return (
     <BackgroundSurface style={styles.container}>
@@ -650,7 +357,7 @@ export default function BuddyManagementScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingContainer}
         >
-          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+          <View style={[styles.modalOverlay, { backgroundColor: palette.black }]}>
             <Reanimated.View
               entering={FadeInUp.duration(300)}
               style={[
@@ -733,187 +440,12 @@ export default function BuddyManagementScreen() {
 
                 <BuddyAccessEditor
                   mode={createBuddyMode}
-                  allowedServerIds={createAllowedServerIds}
-                  servers={servers}
                   colors={colors}
                   t={t}
                   onModeChange={setCreateBuddyMode}
-                  onAllowedServerIdsChange={setCreateAllowedServerIds}
-                  compactModeControl
                 />
 
-                <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
-                  {t('agentMgmt.connectorRuntime')}
-                </Text>
-
-                <View
-                  style={[
-                    styles.connectorSetupPanel,
-                    { backgroundColor: colors.background, borderColor: colors.border },
-                  ]}
-                >
-                  <View style={styles.connectorSetupHeader}>
-                    <Monitor size={16} color={colors.primary} />
-                    <Text style={[styles.connectorSetupTitle, { color: colors.text }]}>
-                      {t('agentMgmt.connectorDaemonTitle')}
-                    </Text>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      icon={RefreshCw}
-                      iconColor={colors.primary}
-                      style={styles.copySmallBtn}
-                      onPress={() =>
-                        queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
-                      }
-                    >
-                      {t('common.refresh', 'Refresh')}
-                    </Button>
-                  </View>
-                  {(connectorComputers.length === 0 || connectorCommand) && (
-                    <>
-                      <Text style={[styles.connectorSetupDesc, { color: colors.textSecondary }]}>
-                        {t('agentMgmt.connectorDaemonDesc')}
-                      </Text>
-
-                      {connectorCommand ? (
-                        <View style={styles.configBlock}>
-                          <View style={styles.configBlockHeader}>
-                            <Text style={[styles.configBlockLabel, { color: colors.textMuted }]}>
-                              {t('agentMgmt.connectorCliTitle')}
-                            </Text>
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              icon={Copy}
-                              iconColor={colors.primary}
-                              style={styles.copySmallBtn}
-                              onPress={() => copyToClipboard(connectorCommand)}
-                            >
-                              {t('common.copy')}
-                            </Button>
-                          </View>
-                          <View
-                            style={[
-                              styles.codeBlock,
-                              { backgroundColor: colors.surface, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
-                              style={[styles.codeText, { color: colors.textSecondary }]}
-                              numberOfLines={4}
-                            >
-                              {connectorCommand}
-                            </Text>
-                          </View>
-                        </View>
-                      ) : (
-                        <Button
-                          variant="glass"
-                          size="sm"
-                          icon={Terminal}
-                          style={styles.connectorActionButton}
-                          onPress={() => {
-                            connectorBootstrapStartedRef.current = true
-                            connectorBootstrapMutation.mutate()
-                          }}
-                          disabled={connectorBootstrapMutation.isPending}
-                          loading={connectorBootstrapMutation.isPending}
-                        >
-                          {connectorBootstrapMutation.isPending
-                            ? t('agentMgmt.connectorCreating')
-                            : t('agentMgmt.connectorCreateConnection')}
-                        </Button>
-                      )}
-                    </>
-                  )}
-
-                  {connectorComputers.length > 0 && (
-                    <View style={styles.connectorOptionGroup}>
-                      <Text style={[styles.connectorGroupLabel, { color: colors.textMuted }]}>
-                        {t('agentMgmt.connectorComputer')}
-                      </Text>
-                      {connectorComputers.map((computer) => {
-                        const active = computer.id === selectedConnectorComputerId
-                        return (
-                          <CardPressable
-                            key={computer.id}
-                            variant="glass"
-                            active={active}
-                            padded={false}
-                            style={styles.connectorOption}
-                            onPress={() => setSelectedConnectorComputerId(computer.id)}
-                          >
-                            <Monitor size={16} color={active ? colors.primary : colors.textMuted} />
-                            <View style={styles.connectorOptionBody}>
-                              <Text style={[styles.connectorOptionTitle, { color: colors.text }]}>
-                                {computer.name}
-                              </Text>
-                              <Text
-                                style={[styles.connectorOptionMeta, { color: colors.textMuted }]}
-                                numberOfLines={1}
-                              >
-                                {computer.hostname ?? computer.id.slice(0, 8)}
-                              </Text>
-                            </View>
-                            <Badge
-                              variant={computer.status === 'online' ? 'success' : 'neutral'}
-                              size="xs"
-                            >
-                              {t(`agentMgmt.connectorStatus_${computer.status}`)}
-                            </Badge>
-                          </CardPressable>
-                        )
-                      })}
-                    </View>
-                  )}
-
-                  {selectedConnectorComputer && (
-                    <View style={styles.connectorOptionGroup}>
-                      <Text style={[styles.connectorGroupLabel, { color: colors.textMuted }]}>
-                        {t('agentMgmt.connectorRuntime')}
-                      </Text>
-                      {availableRuntimes(selectedConnectorComputer).length === 0 ? (
-                        <Text style={[styles.connectorSetupDesc, { color: colors.textMuted }]}>
-                          {t('agentMgmt.connectorNoRuntime')}
-                        </Text>
-                      ) : (
-                        availableRuntimes(selectedConnectorComputer).map((runtime) => {
-                          const active = runtime.id === selectedConnectorRuntimeId
-                          return (
-                            <CardPressable
-                              key={runtime.id}
-                              variant="glass"
-                              active={active}
-                              padded={false}
-                              style={styles.connectorOption}
-                              onPress={() => setSelectedConnectorRuntimeId(runtime.id)}
-                            >
-                              <Terminal
-                                size={16}
-                                color={active ? colors.primary : colors.textMuted}
-                              />
-                              <View style={styles.connectorOptionBody}>
-                                <Text style={[styles.connectorOptionTitle, { color: colors.text }]}>
-                                  {runtime.label}
-                                </Text>
-                                <Text
-                                  style={[styles.connectorOptionMeta, { color: colors.textMuted }]}
-                                  numberOfLines={1}
-                                >
-                                  {runtime.version ?? runtime.command ?? runtime.id}
-                                </Text>
-                              </View>
-                              {active && <Check size={16} color={colors.primary} />}
-                            </CardPressable>
-                          )
-                        })
-                      )}
-                    </View>
-                  )}
-                </View>
-
-                <View style={{ height: 72 }} />
+                <View style={styles.formSpacer} />
               </ScrollView>
 
               {/* Footer Buttons */}
@@ -942,14 +474,14 @@ export default function BuddyManagementScreen() {
                       username: createUsername,
                       description: createDescription.trim() || undefined,
                       buddyMode: createBuddyMode,
-                      allowedServerIds: createBuddyMode === 'private' ? createAllowedServerIds : [],
+                      allowedServerIds:
+                        createBuddyMode === 'private'
+                          ? servers.map((entry) => entry.server.id)
+                          : [],
                     })
                   }
                   disabled={
-                    !createName.trim() ||
-                    !createUsername.trim() ||
-                    !canCreateConnectorBuddy ||
-                    createMutation.isPending
+                    !createName.trim() || !createUsername.trim() || createMutation.isPending
                   }
                   loading={createMutation.isPending}
                 >
@@ -963,7 +495,7 @@ export default function BuddyManagementScreen() {
 
       {/* Agent Detail Modal */}
       <Modal visible={!!selectedAgent} transparent animationType="slide">
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+        <View style={[styles.modalOverlay, { backgroundColor: palette.black }]}>
           <Reanimated.View
             entering={FadeIn.duration(300)}
             style={[
@@ -973,9 +505,30 @@ export default function BuddyManagementScreen() {
           >
             {selectedAgent && (
               <>
-                {/* Header */}
-                <View style={styles.detailHeader}>
-                  <View style={styles.detailHeaderLeft}>
+                <MobileNavigationBar
+                  title={
+                    selectedAgent.botUser?.displayName ??
+                    selectedAgent.name ??
+                    selectedAgent.id.slice(0, 8)
+                  }
+                  right={
+                    <ToolbarButton
+                      icon={X}
+                      variant="ghost"
+                      iconColor={colors.textMuted}
+                      onPress={() => {
+                        setSelectedAgent(null)
+                      }}
+                    />
+                  }
+                />
+
+                <ScrollView
+                  style={styles.detailContent}
+                  contentContainerStyle={styles.detailContentInner}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.detailHero}>
                     <Avatar
                       uri={selectedAgent.botUser?.avatarUrl}
                       name={
@@ -983,10 +536,12 @@ export default function BuddyManagementScreen() {
                         selectedAgent.name ??
                         selectedAgent.id.slice(0, 8)
                       }
-                      size={48}
+                      size={iconSize.hero}
                       userId={selectedAgent.botUser?.id}
+                      status={isOnline(selectedAgent) ? 'online' : 'offline'}
+                      showStatus
                     />
-                    <View style={{ marginLeft: spacing.md }}>
+                    <View style={styles.detailHeroText}>
                       <Text style={[styles.detailName, { color: colors.text }]}>
                         {selectedAgent.botUser?.displayName ??
                           selectedAgent.name ??
@@ -999,24 +554,6 @@ export default function BuddyManagementScreen() {
                       )}
                     </View>
                   </View>
-                  <IconButton
-                    icon={X}
-                    variant="ghost"
-                    iconColor={colors.textMuted}
-                    iconSize={24}
-                    onPress={() => {
-                      setSelectedAgent(null)
-                      setGeneratedToken(null)
-                    }}
-                    style={styles.closeBtn}
-                  />
-                </View>
-
-                <ScrollView
-                  style={styles.detailContent}
-                  contentContainerStyle={styles.detailContentInner}
-                  showsVerticalScrollIndicator={false}
-                >
                   <View
                     style={[
                       styles.section,
@@ -1025,9 +562,9 @@ export default function BuddyManagementScreen() {
                   >
                     <View style={styles.sectionHeader}>
                       {getBuddyMode(selectedAgent) === 'shareable' ? (
-                        <Share2 size={16} color={colors.primary} />
+                        <Share2 size={iconSize.md} color={colors.primary} />
                       ) : (
-                        <Lock size={16} color={colors.primary} />
+                        <Lock size={iconSize.md} color={colors.primary} />
                       )}
                       <Text style={[styles.sectionTitle, { color: colors.text }]}>
                         {t('agentMgmt.accessSection')}
@@ -1035,364 +572,13 @@ export default function BuddyManagementScreen() {
                     </View>
                     <BuddyAccessEditor
                       mode={getBuddyMode(selectedAgent)}
-                      allowedServerIds={getAllowedServerIds(selectedAgent)}
-                      servers={servers}
                       colors={colors}
                       t={t}
+                      showTitle={false}
                       onModeChange={(mode) =>
                         updateSelectedAccess(mode, getAllowedServerIds(selectedAgent))
                       }
-                      onAllowedServerIdsChange={(ids) =>
-                        updateSelectedAccess(getBuddyMode(selectedAgent), ids)
-                      }
                     />
-                  </View>
-
-                  {/* Token Section */}
-                  <View
-                    style={[
-                      styles.section,
-                      { backgroundColor: colors.background, borderColor: colors.border },
-                    ]}
-                  >
-                    <View style={styles.sectionHeader}>
-                      <Key size={16} color={colors.primary} />
-                      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                        {t('buddyMgmt.tokenTitle', '连接配置')}
-                      </Text>
-                    </View>
-
-                    {(() => {
-                      const displayToken = getDisplayToken()
-                      if (displayToken) {
-                        const plans = createConnectorPlans({
-                          serverUrl,
-                          token: displayToken,
-                          projectName:
-                            selectedAgent.botUser?.username ??
-                            selectedAgent.name ??
-                            selectedAgent.id,
-                          workDir: '.',
-                        })
-                        const activePlan =
-                          plans.find((plan) => plan.target === connectorTarget) ??
-                          (plans[0] as ConnectorPlan)
-                        const openDocs = () => {
-                          const docsUrl = activePlan.docsUrl.startsWith('/')
-                            ? `${serverUrl}${activePlan.docsUrl}`
-                            : activePlan.docsUrl
-                          Linking.openURL(docsUrl).catch(() => undefined)
-                        }
-                        return (
-                          <View style={styles.tokenContainer}>
-                            {/* Token Display */}
-                            <View
-                              style={[
-                                styles.tokenBox,
-                                { backgroundColor: colors.surface, borderColor: colors.border },
-                              ]}
-                            >
-                              <Text
-                                style={[styles.tokenValue, { color: colors.text }]}
-                                numberOfLines={1}
-                                ellipsizeMode="middle"
-                              >
-                                {displayToken}
-                              </Text>
-                            </View>
-
-                            {/* Token Actions */}
-                            <View style={styles.tokenActions}>
-                              <Button
-                                variant="glass"
-                                size="sm"
-                                icon={Copy}
-                                containerStyle={styles.tokenActionCell}
-                                style={styles.tokenActionBtn}
-                                onPress={() => copyToClipboard(displayToken, t('common.copied'))}
-                              >
-                                {t('common.copy')}
-                              </Button>
-                              <Button
-                                variant="glass"
-                                size="sm"
-                                icon={RefreshCw}
-                                containerStyle={styles.tokenActionCell}
-                                style={styles.tokenActionBtn}
-                                onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
-                                disabled={regenTokenMutation.isPending}
-                                loading={regenTokenMutation.isPending}
-                              >
-                                {t('buddyMgmt.regenerate', '重新生成')}
-                              </Button>
-                            </View>
-
-                            <Text style={[styles.connectorGuideDesc, { color: colors.textMuted }]}>
-                              {t('agentMgmt.connectorLegacyGuideDesc')}
-                            </Text>
-
-                            <View style={styles.connectorTargets}>
-                              {connectorTargets.map((target) => {
-                                const Icon = getConnectorIcon(target)
-                                const active = target === connectorTarget
-                                return (
-                                  <ChipButton
-                                    key={target}
-                                    label={getConnectorLabel(target, t)}
-                                    icon={Icon}
-                                    active={active}
-                                    containerStyle={styles.connectorTargetCell}
-                                    style={styles.connectorTarget}
-                                    onPress={() => setConnectorTarget(target)}
-                                  />
-                                )
-                              })}
-                            </View>
-
-                            {/* Config Tabs */}
-                            <View style={styles.configTabs}>
-                              <ChipButton
-                                label={t('agentMgmt.setupManual')}
-                                icon={Terminal}
-                                active={configTab === 'manual'}
-                                containerStyle={styles.configTabCell}
-                                style={styles.configTab}
-                                onPress={() => setConfigTab('manual')}
-                              />
-                              <ChipButton
-                                label={t('agentMgmt.setupChat')}
-                                icon={MessageSquare}
-                                active={configTab === 'chat'}
-                                containerStyle={styles.configTabCell}
-                                style={styles.configTab}
-                                onPress={() => setConfigTab('chat')}
-                              />
-                            </View>
-
-                            {/* Config Content */}
-                            {configTab === 'manual' ? (
-                              <View style={styles.configContent}>
-                                <View style={styles.configBlock}>
-                                  <View style={styles.configBlockHeader}>
-                                    <Text
-                                      style={[styles.configBlockLabel, { color: colors.textMuted }]}
-                                    >
-                                      {t('agentMgmt.connectorCliTitle')}
-                                    </Text>
-                                    <Button
-                                      variant="ghost"
-                                      size="xs"
-                                      icon={Copy}
-                                      iconColor={colors.primary}
-                                      style={styles.copySmallBtn}
-                                      onPress={() => copyToClipboard(activePlan.connectCommand)}
-                                    >
-                                      {t('common.copy')}
-                                    </Button>
-                                  </View>
-                                  <View
-                                    style={[
-                                      styles.codeBlock,
-                                      {
-                                        backgroundColor: colors.surface,
-                                        borderColor: colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[styles.codeText, { color: colors.textSecondary }]}
-                                      numberOfLines={5}
-                                    >
-                                      {activePlan.connectCommand}
-                                    </Text>
-                                  </View>
-                                </View>
-
-                                {activePlan.commands.map((command, index) => (
-                                  <View
-                                    key={`${activePlan.target}-${command.label}`}
-                                    style={styles.configBlock}
-                                  >
-                                    <View style={styles.configBlockHeader}>
-                                      <Text
-                                        style={[
-                                          styles.configBlockLabel,
-                                          { color: colors.textMuted },
-                                        ]}
-                                      >
-                                        {index + 1}. {t('agentMgmt.connectorStepCommand')}
-                                      </Text>
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        icon={Copy}
-                                        iconColor={colors.primary}
-                                        style={styles.copySmallBtn}
-                                        onPress={() => copyToClipboard(command.command)}
-                                      >
-                                        {t('common.copy')}
-                                      </Button>
-                                    </View>
-                                    <View
-                                      style={[
-                                        styles.codeBlock,
-                                        {
-                                          backgroundColor: colors.surface,
-                                          borderColor: colors.border,
-                                        },
-                                      ]}
-                                    >
-                                      <Text
-                                        style={[styles.codeText, { color: colors.textSecondary }]}
-                                        numberOfLines={3}
-                                      >
-                                        {command.command}
-                                      </Text>
-                                    </View>
-                                  </View>
-                                ))}
-
-                                {activePlan.configBlocks.map((block) => (
-                                  <View
-                                    key={`${activePlan.target}-${block.label}`}
-                                    style={styles.configBlock}
-                                  >
-                                    <View style={styles.configBlockHeader}>
-                                      <Text
-                                        style={[
-                                          styles.configBlockLabel,
-                                          { color: colors.textMuted },
-                                        ]}
-                                      >
-                                        {block.label}
-                                      </Text>
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        icon={Copy}
-                                        iconColor={colors.primary}
-                                        style={styles.copySmallBtn}
-                                        onPress={() => copyToClipboard(block.content)}
-                                      >
-                                        {t('common.copy')}
-                                      </Button>
-                                    </View>
-                                    <View
-                                      style={[
-                                        styles.codeBlock,
-                                        {
-                                          backgroundColor: colors.surface,
-                                          borderColor: colors.border,
-                                        },
-                                      ]}
-                                    >
-                                      <Text
-                                        style={[styles.codeText, { color: colors.textSecondary }]}
-                                        numberOfLines={8}
-                                      >
-                                        {block.content}
-                                      </Text>
-                                    </View>
-                                  </View>
-                                ))}
-                              </View>
-                            ) : (
-                              <View style={styles.configContent}>
-                                <View style={styles.configBlock}>
-                                  <View style={styles.configBlockHeader}>
-                                    <Text
-                                      style={[styles.configBlockLabel, { color: colors.textMuted }]}
-                                    >
-                                      {t('agentMgmt.setupChat')}
-                                    </Text>
-                                    <Button
-                                      variant="ghost"
-                                      size="xs"
-                                      icon={Copy}
-                                      iconColor={colors.primary}
-                                      style={styles.copySmallBtn}
-                                      onPress={() => copyToClipboard(activePlan.aiPrompt)}
-                                    >
-                                      {t('common.copy')}
-                                    </Button>
-                                  </View>
-                                  <Text
-                                    style={[styles.aiPromptText, { color: colors.textSecondary }]}
-                                  >
-                                    {t('agentMgmt.setupChatDesc')}
-                                  </Text>
-                                  <View
-                                    style={[
-                                      styles.codeBlock,
-                                      {
-                                        backgroundColor: colors.surface,
-                                        borderColor: colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[styles.codeText, { color: colors.textSecondary }]}
-                                      numberOfLines={8}
-                                    >
-                                      {activePlan.aiPrompt}
-                                    </Text>
-                                  </View>
-                                </View>
-                              </View>
-                            )}
-
-                            <View style={styles.capabilityGrid}>
-                              {activePlan.capabilities.map((cap) => (
-                                <View
-                                  key={`${activePlan.target}-${cap}`}
-                                  style={[
-                                    styles.capabilityPill,
-                                    {
-                                      backgroundColor: colors.surface,
-                                      borderColor: colors.border,
-                                    },
-                                  ]}
-                                >
-                                  <Check size={12} color={colors.primary} />
-                                  <Text
-                                    style={[styles.capabilityText, { color: colors.textSecondary }]}
-                                    numberOfLines={1}
-                                  >
-                                    {t(`agentMgmt.connectorCap_${cap}`)}
-                                  </Text>
-                                </View>
-                              ))}
-                            </View>
-
-                            {/* Docs Link */}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              icon={BookOpen}
-                              style={styles.docsLink}
-                              onPress={openDocs}
-                            >
-                              {t('agentMgmt.openclawFullDocs')}
-                            </Button>
-                          </View>
-                        )
-                      }
-                      return (
-                        <Button
-                          variant="primary"
-                          size="md"
-                          icon={Key}
-                          style={styles.generateBtn}
-                          onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
-                          disabled={regenTokenMutation.isPending}
-                          loading={regenTokenMutation.isPending}
-                        >
-                          {regenTokenMutation.isPending
-                            ? t('buddyMgmt.generating', '生成中...')
-                            : t('buddyMgmt.generateToken', '生成 Token')}
-                        </Button>
-                      )
-                    })()}
                   </View>
 
                   {/* Info Section */}
@@ -1403,32 +589,13 @@ export default function BuddyManagementScreen() {
                     ]}
                   >
                     <View style={styles.sectionHeader}>
-                      <Bot size={16} color={colors.primary} />
+                      <Bot size={iconSize.md} color={colors.primary} />
                       <Text style={[styles.sectionTitle, { color: colors.text }]}>
                         {t('buddyMgmt.infoTitle', 'Buddy 信息')}
                       </Text>
                     </View>
 
                     <View style={styles.infoGrid}>
-                      <View style={styles.infoItem}>
-                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-                          {t('buddyMgmt.status', '状态')}
-                        </Text>
-                        <View style={styles.row}>
-                          <View
-                            style={[
-                              styles.statusDot,
-                              {
-                                backgroundColor: isOnline(selectedAgent) ? '#22c55e' : '#d1d5db',
-                              },
-                            ]}
-                          />
-                          <Text style={[styles.infoValue, { color: colors.text }]}>
-                            {isOnline(selectedAgent) ? '在线' : '离线'}
-                          </Text>
-                        </View>
-                      </View>
-
                       <View style={styles.infoItem}>
                         <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
                           {t('buddyMgmt.onlineTime', '在线时长')}
@@ -1488,7 +655,7 @@ export default function BuddyManagementScreen() {
                   </Button>
 
                   {/* Bottom Spacer */}
-                  <View style={{ height: 40 }} />
+                  <View style={{ height: size.iconButtonLg }} />
                 </ScrollView>
               </>
             )}
@@ -1511,11 +678,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.xl,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     padding: spacing.md,
   },
   agentName: { fontSize: fontSize.md, fontWeight: '700' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 
   // Keyboard avoiding
   keyboardAvoidingContainer: { flex: 1 },
@@ -1532,7 +699,7 @@ const styles = StyleSheet.create({
     width: '90%',
     maxHeight: '80%',
     borderRadius: radius.xl,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     overflow: 'hidden',
   },
   modalHeader: {
@@ -1544,14 +711,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   modalTitle: { fontSize: fontSize.xl, fontWeight: '700' },
-  closeBtn: { width: 36, height: 36 },
+  closeBtn: { width: size.iconButtonMd, height: size.iconButtonMd },
   createForm: { flex: 1 },
   createFormContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  formIntro: { fontSize: fontSize.sm, lineHeight: 21, marginBottom: spacing.lg },
+  formIntro: { fontSize: fontSize.sm, lineHeight: lineHeight.sm, marginBottom: spacing.lg },
   formSectionTitle: {
     fontSize: fontSize.xs,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: letterSpacing.none,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
   },
@@ -1559,62 +726,18 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: fontSize.sm, fontWeight: '600', marginBottom: spacing.xs },
   fieldHint: { fontSize: fontSize.xs, marginTop: spacing.xs },
   accessBlock: { gap: spacing.sm, marginBottom: spacing.md },
-  modeRow: { flexDirection: 'row', gap: spacing.sm },
-  modeOption: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: 6,
+  formSpacer: {
+    height: size.listItemLg,
   },
-  modeTitle: { fontSize: fontSize.sm, fontWeight: '800' },
-  modeDesc: { fontSize: fontSize.xs, lineHeight: 17 },
-  policyNote: { borderRadius: radius.lg, padding: spacing.md, gap: 4 },
-  policyTitle: { fontSize: fontSize.sm, fontWeight: '800' },
-  policyDesc: { fontSize: fontSize.xs, lineHeight: 18 },
-  serverList: { gap: spacing.xs },
-  serverOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8 },
-  checkbox: { width: 16, height: 16, borderRadius: 4, borderWidth: 1 },
-  serverName: { flex: 1, fontSize: fontSize.sm, fontWeight: '600' },
-  connectorSetupPanel: {
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  connectorSetupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  connectorSetupTitle: { flex: 1, fontSize: fontSize.sm, fontWeight: '800' },
-  connectorSetupDesc: { fontSize: fontSize.sm, lineHeight: 20 },
-  connectorActionButton: { alignSelf: 'flex-start' },
-  connectorOptionGroup: { gap: spacing.xs },
-  connectorGroupLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  connectorOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-  },
-  connectorOptionBody: { flex: 1 },
-  connectorOptionTitle: { fontSize: fontSize.sm, fontWeight: '800' },
-  connectorOptionMeta: { fontSize: fontSize.xs, marginTop: 2 },
   textArea: {
-    minHeight: 96,
+    minHeight: size.navSide,
     textAlignVertical: 'top',
   },
   modalFooter: {
     flexDirection: 'row',
     gap: spacing.sm,
     padding: spacing.lg,
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
   },
   footerButtonCell: {
     flex: 1,
@@ -1627,26 +750,25 @@ const styles = StyleSheet.create({
   detailModal: {
     width: '100%',
     height: '100%',
-    borderRadius: 0,
+    borderRadius: radius.none,
   },
-  detailHeader: {
+  detailHero: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
   },
-  detailHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  detailHeroText: { flex: 1, minWidth: 0 },
   detailName: { fontSize: fontSize.lg, fontWeight: '700' },
-  detailUsername: { fontSize: fontSize.sm, marginTop: 2 },
+  detailUsername: { fontSize: fontSize.sm, marginTop: spacing.xxs },
   detailContent: { flex: 1 },
   detailContentInner: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl * 2 },
 
   // Sections
   section: {
     borderRadius: radius.xl,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
@@ -1657,102 +779,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sectionTitle: { fontSize: fontSize.sm, fontWeight: '700' },
-
-  // Token
-  tokenContainer: { gap: spacing.md },
-  tokenBox: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-  },
-  tokenValue: { fontSize: fontSize.sm, fontFamily: 'monospace' },
-  tokenActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  connectorGuideDesc: {
-    fontSize: fontSize.sm,
-    lineHeight: 20,
-  },
-  connectorTargets: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  connectorTargetCell: {
-    flex: 1,
-  },
-  connectorTarget: {
-    minHeight: 48,
-    width: '100%',
-    paddingHorizontal: spacing.xs,
-  },
-  tokenActionCell: { flex: 1 },
-  tokenActionBtn: {
-    width: '100%',
-  },
-  generateBtn: {
-    width: '100%',
-  },
-
-  // Config Tabs
-  configTabs: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    borderRadius: radius.lg,
-    padding: spacing.xs,
-  },
-  configTabCell: {
-    flex: 1,
-  },
-  configTab: {
-    width: '100%',
-  },
-
-  // Config Content
-  configContent: { gap: spacing.md },
-  configBlock: { gap: spacing.xs },
-  configBlockHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  configBlockLabel: { fontSize: fontSize.xs, fontWeight: '700' },
-  copySmallBtn: {
-    minHeight: 28,
-    paddingHorizontal: spacing.sm,
-  },
-  codeBlock: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-  },
-  codeText: { fontSize: fontSize.xs, fontFamily: 'monospace' },
-  aiPromptText: { fontSize: fontSize.sm, lineHeight: 20 },
-  capabilityGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  capabilityPill: {
-    width: '48%',
-    minHeight: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.xs,
-  },
-  capabilityText: {
-    flex: 1,
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-
-  // Docs Link
-  docsLink: {
-    width: '100%',
-  },
 
   // Info Grid
   infoGrid: {
@@ -1766,7 +792,6 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: fontSize.xs, fontWeight: '700' },
   infoValue: { fontSize: fontSize.sm, fontWeight: '600' },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
 
   // Delete
   deleteBtn: {

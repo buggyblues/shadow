@@ -10,6 +10,7 @@ import {
   Search,
   Server,
   ShieldCheck,
+  ShoppingBag,
   Store,
   X,
 } from 'lucide-react-native'
@@ -17,19 +18,29 @@ import { type ReactNode, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import {
-  AppScreen,
+  BackgroundSurface,
   Badge,
   Button,
   EmptyState,
   GlassPanel,
   IconButton,
+  PageScroll,
   TextField,
 } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
-import { fontSize, radius, spacing, useColors } from '../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../src/theme'
 
-type HubSection = 'all' | 'buddies' | 'products' | 'shops' | 'communities'
+type HubSection = 'all' | 'buddies' | 'market' | 'shops' | 'communities'
 
 interface ServerEntry {
   server: { id: string; name: string; slug: string | null; iconUrl: string | null }
@@ -68,6 +79,7 @@ interface HubProduct {
   description: string | null
   type: 'physical' | 'entitlement' | string
   price: number
+  tags?: string[]
   imageUrl: string | null
   salesCount: number
   shop: {
@@ -117,13 +129,37 @@ interface DiscoverCommerceResponse {
   }
 }
 
+interface MarketplaceProductsResponse {
+  products: HubProduct[]
+  total: number
+  hasMore: boolean
+}
+
+interface MarketplaceCategory {
+  tag: string
+  title: string
+  productCount: number
+  salesCount: number
+  ratingCount: number
+  avgRating: number
+  score: number
+  href: string
+}
+
+interface MarketplaceCategoriesResponse {
+  categories: MarketplaceCategory[]
+  total: number
+}
+
 const HUB_SECTIONS: Array<{ key: HubSection; icon: LucideIcon }> = [
   { key: 'all', icon: Compass },
   { key: 'buddies', icon: Bot },
-  { key: 'products', icon: Package },
+  { key: 'market', icon: ShoppingBag },
   { key: 'shops', icon: Store },
   { key: 'communities', icon: Server },
 ]
+
+const CATEGORY_ICON_POOL: LucideIcon[] = [ShoppingBag, Package, Store, Compass]
 
 export default function DiscoverScreen() {
   const { t } = useTranslation()
@@ -132,6 +168,7 @@ export default function DiscoverScreen() {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeSection, setActiveSection] = useState<HubSection>('all')
+  const [selectedMarketplaceTag, setSelectedMarketplaceTag] = useState('')
   const normalizedSearch = searchQuery.trim()
   const effectiveSearch = normalizedSearch.length >= 2 ? normalizedSearch : ''
 
@@ -149,6 +186,27 @@ export default function DiscoverScreen() {
       ),
   })
 
+  const { data: marketplaceData, isLoading: isMarketplaceLoading } = useQuery({
+    queryKey: ['discover-marketplace-products', effectiveSearch, selectedMarketplaceTag],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: '24' })
+      if (effectiveSearch) params.set('q', effectiveSearch)
+      if (selectedMarketplaceTag) params.set('tag', selectedMarketplaceTag)
+      return fetchApi<MarketplaceProductsResponse>(`/api/discover/marketplace/products?${params}`)
+    },
+  })
+
+  const { data: marketplaceCategoriesData } = useQuery({
+    queryKey: ['discover-marketplace-categories', effectiveSearch],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: '12' })
+      if (effectiveSearch) params.set('q', effectiveSearch)
+      return fetchApi<MarketplaceCategoriesResponse>(
+        `/api/discover/marketplace/categories?${params}`,
+      )
+    },
+  })
+
   const hub = data ?? {
     buddies: [],
     products: [],
@@ -156,6 +214,17 @@ export default function DiscoverScreen() {
     communities: [],
     totals: { buddies: 0, products: 0, shops: 0, communities: 0 },
   }
+  const marketplaceProducts = marketplaceData?.products ?? []
+  const marketplaceCategories = useMemo(
+    () =>
+      selectedMarketplaceTag
+        ? ensureSelectedCategory(
+            marketplaceCategoriesData?.categories ?? categoriesFromProducts(marketplaceProducts),
+            selectedMarketplaceTag,
+          )
+        : (marketplaceCategoriesData?.categories ?? categoriesFromProducts(marketplaceProducts)),
+    [marketplaceCategoriesData?.categories, marketplaceProducts, selectedMarketplaceTag],
+  )
 
   const joinMutation = useMutation({
     mutationFn: ({ inviteCode }: { inviteCode: string }) =>
@@ -171,9 +240,10 @@ export default function DiscoverScreen() {
   })
 
   const counts = {
-    all: hub.buddies.length + hub.products.length + hub.shops.length + hub.communities.length,
+    all:
+      hub.buddies.length + marketplaceProducts.length + hub.shops.length + hub.communities.length,
     buddies: hub.totals.buddies,
-    products: hub.totals.products,
+    market: marketplaceData?.total ?? marketplaceProducts.length,
     shops: hub.totals.shops,
     communities: hub.totals.communities,
   }
@@ -202,26 +272,26 @@ export default function DiscoverScreen() {
   }
 
   return (
-    <AppScreen>
-      <ScrollView contentContainerStyle={styles.content}>
+    <BackgroundSurface style={styles.container}>
+      <PageScroll compact contentContainerStyle={styles.content}>
         <GlassPanel style={styles.hero}>
           <View style={styles.eyebrow}>
-            <Compass size={14} color={colors.primary} />
+            <ShoppingBag size={iconSize.sm} color={colors.primary} />
             <Text style={[styles.eyebrowText, { color: colors.primary }]}>
-              {t('discover.eyebrow')}
+              {t('discover.supermarket.eyebrow')}
             </Text>
           </View>
           <Text style={[styles.heroTitle, { color: colors.text }]}>
-            {t('discover.businessTitle')}
+            {t('discover.supermarket.title')}
           </Text>
           <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-            {t('discover.businessSubtitle')}
+            {t('discover.supermarket.subtitle')}
           </Text>
           <TextField
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={t('discover.searchPlaceholder')}
-            left={<Search size={18} color={colors.textMuted} />}
+            left={<Search size={iconSize.lg} color={colors.textMuted} />}
             right={
               searchQuery.length > 0 ? (
                 <IconButton
@@ -236,30 +306,15 @@ export default function DiscoverScreen() {
             }
             style={styles.searchBox}
           />
+          <MarketplaceCategoryChips
+            categories={marketplaceCategories}
+            selectedTag={selectedMarketplaceTag}
+            onSelect={(tag) => {
+              setSelectedMarketplaceTag(tag)
+              setActiveSection('market')
+            }}
+          />
         </GlassPanel>
-
-        <View style={styles.statsGrid}>
-          <HubStat
-            icon={Bot}
-            label={t('discover.sections.buddies')}
-            value={String(hub.totals.buddies)}
-          />
-          <HubStat
-            icon={Package}
-            label={t('discover.sections.products')}
-            value={String(hub.totals.products)}
-          />
-          <HubStat
-            icon={Store}
-            label={t('discover.sections.shops')}
-            value={String(hub.totals.shops)}
-          />
-          <HubStat
-            icon={Server}
-            label={t('discover.sections.communities')}
-            value={String(hub.totals.communities)}
-          />
-        </View>
 
         <ScrollView
           horizontal
@@ -277,7 +332,7 @@ export default function DiscoverScreen() {
                   styles.tab,
                   {
                     borderColor: active ? colors.primary : colors.border,
-                    backgroundColor: active ? `${colors.primary}18` : colors.inputBackground,
+                    backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
                   },
                 ]}
               >
@@ -300,7 +355,7 @@ export default function DiscoverScreen() {
           })}
         </ScrollView>
 
-        {isLoading ? (
+        {isLoading || isMarketplaceLoading ? (
           <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
@@ -324,14 +379,33 @@ export default function DiscoverScreen() {
               </HubLane>
             )}
 
-            {(activeSection === 'all' || activeSection === 'products') && (
-              <HubLane
-                title={t('discover.lanes.products')}
-                empty={t('discover.emptyLane.products')}
-              >
-                {hub.products.map((item) => (
-                  <ProductCard key={item.id} item={item} onOpen={() => openProduct(item)} />
-                ))}
+            {(activeSection === 'all' || activeSection === 'market') && (
+              <HubLane title={t('discover.lanes.market')} empty={t('discover.emptyLane.market')}>
+                <MarketplaceAisleCards
+                  categories={marketplaceCategories}
+                  selectedTag={selectedMarketplaceTag}
+                  onSelect={(tag) => {
+                    setSelectedMarketplaceTag(tag)
+                    setActiveSection('market')
+                  }}
+                />
+                <MarketplaceTagChips
+                  categories={marketplaceCategories}
+                  selectedTag={selectedMarketplaceTag}
+                  onSelect={(tag) => {
+                    setSelectedMarketplaceTag(tag)
+                    setActiveSection('market')
+                  }}
+                />
+                {marketplaceProducts.length === 0 ? (
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                    {t('discover.emptyLane.market')}
+                  </Text>
+                ) : (
+                  marketplaceProducts.map((item) => (
+                    <ProductCard key={item.id} item={item} onOpen={() => openProduct(item)} />
+                  ))
+                )}
               </HubLane>
             )}
 
@@ -362,21 +436,56 @@ export default function DiscoverScreen() {
             )}
           </View>
         )}
-      </ScrollView>
-    </AppScreen>
+      </PageScroll>
+    </BackgroundSurface>
   )
 }
 
-function HubStat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+function MarketplaceCategoryChips({
+  categories,
+  selectedTag,
+  onSelect,
+}: {
+  categories: MarketplaceCategory[]
+  selectedTag: string
+  onSelect: (tag: string) => void
+}) {
   const colors = useColors()
   return (
-    <GlassPanel style={styles.statCard}>
-      <Icon size={16} color={colors.primary} />
-      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: colors.textMuted }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </GlassPanel>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.heroCategories}
+    >
+      {categories.slice(0, 8).map((category, index) => {
+        const Icon = CATEGORY_ICON_POOL[index % CATEGORY_ICON_POOL.length] ?? ShoppingBag
+        const active = selectedTag === category.tag
+        return (
+          <Pressable
+            key={category.tag}
+            onPress={() => onSelect(category.tag)}
+            style={[
+              styles.heroCategory,
+              {
+                borderColor: active ? colors.primary : colors.border,
+                backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
+              },
+            ]}
+          >
+            <Icon size={14} color={active ? colors.primary : colors.textMuted} />
+            <Text
+              style={[
+                styles.heroCategoryText,
+                { color: active ? colors.primary : colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
+              {category.title}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </ScrollView>
   )
 }
 
@@ -403,6 +512,164 @@ function HubLane({
       </View>
     </GlassPanel>
   )
+}
+
+function MarketplaceAisleCards({
+  categories,
+  selectedTag,
+  onSelect,
+}: {
+  categories: MarketplaceCategory[]
+  selectedTag: string
+  onSelect: (tag: string) => void
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  if (categories.length === 0) return null
+  return (
+    <View style={styles.aisleCards}>
+      {categories.slice(0, 6).map((category, index) => {
+        const Icon = CATEGORY_ICON_POOL[index % CATEGORY_ICON_POOL.length] ?? ShoppingBag
+        const active = selectedTag === category.tag
+        return (
+          <Pressable
+            key={category.tag}
+            onPress={() => onSelect(category.tag)}
+            style={[
+              styles.aisleCard,
+              {
+                borderColor: active ? colors.primary : colors.border,
+                backgroundColor: active ? colors.surfaceHover : colors.surface,
+              },
+            ]}
+          >
+            <View style={[styles.aisleIcon, { backgroundColor: colors.surfaceHover }]}>
+              <Icon size={18} color={colors.primary} />
+            </View>
+            <View style={styles.aisleCopy}>
+              <Text style={[styles.aisleTitle, { color: colors.text }]} numberOfLines={1}>
+                {category.title}
+              </Text>
+              <Text style={[styles.aisleSubtitle, { color: colors.textMuted }]} numberOfLines={2}>
+                {t('discover.supermarket.categoryProductCount', {
+                  count: category.productCount,
+                })}
+              </Text>
+            </View>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+function MarketplaceTagChips({
+  categories,
+  selectedTag,
+  onSelect,
+}: {
+  categories: MarketplaceCategory[]
+  selectedTag: string
+  onSelect: (tag: string) => void
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.tagChips}
+    >
+      <Pressable
+        onPress={() => onSelect('')}
+        style={[
+          styles.tagChip,
+          {
+            borderColor: selectedTag ? colors.border : colors.primary,
+            backgroundColor: selectedTag ? colors.inputBackground : colors.surfaceHover,
+          },
+        ]}
+      >
+        <Text
+          style={[styles.tagChipText, { color: selectedTag ? colors.textMuted : colors.primary }]}
+        >
+          {t('discover.marketTags.all')}
+        </Text>
+      </Pressable>
+      {categories.map((category) => {
+        const active = selectedTag === category.tag
+        return (
+          <Pressable
+            key={category.tag}
+            onPress={() => onSelect(category.tag)}
+            style={[
+              styles.tagChip,
+              {
+                borderColor: active ? colors.primary : colors.border,
+                backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
+              },
+            ]}
+          >
+            <Text
+              style={[styles.tagChipText, { color: active ? colors.primary : colors.textMuted }]}
+            >
+              {category.title}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </ScrollView>
+  )
+}
+
+function categoriesFromProducts(products: HubProduct[]): MarketplaceCategory[] {
+  const categoryMap = new Map<
+    string,
+    { productCount: number; salesCount: number; ratingCount: number; avgRating: number }
+  >()
+  for (const product of products) {
+    const tags = [...new Set((product.tags ?? []).map((tag) => tag.trim()).filter(Boolean))]
+    for (const tag of tags) {
+      const current = categoryMap.get(tag) ?? {
+        productCount: 0,
+        salesCount: 0,
+        ratingCount: 0,
+        avgRating: 0,
+      }
+      current.productCount += 1
+      current.salesCount += product.salesCount
+      categoryMap.set(tag, current)
+    }
+  }
+  return [...categoryMap.entries()]
+    .map(([tag, value]) => ({
+      tag,
+      title: tag,
+      productCount: value.productCount,
+      salesCount: value.salesCount,
+      ratingCount: value.ratingCount,
+      avgRating: value.avgRating,
+      score: value.productCount * 100 + value.salesCount * 8,
+      href: `/app/shop/tags/${encodeURIComponent(tag)}`,
+    }))
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+}
+
+function ensureSelectedCategory(categories: MarketplaceCategory[], selectedTag: string) {
+  if (!selectedTag || categories.some((category) => category.tag === selectedTag)) return categories
+  return [
+    {
+      tag: selectedTag,
+      title: selectedTag,
+      productCount: 0,
+      salesCount: 0,
+      ratingCount: 0,
+      avgRating: 0,
+      score: 0,
+      href: `/app/shop/tags/${encodeURIComponent(selectedTag)}`,
+    },
+    ...categories,
+  ]
 }
 
 function BuddyCard({ item, onOpen }: { item: HubBuddy; onOpen: () => void }) {
@@ -573,7 +840,7 @@ function Avatar({
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.avatarImage} accessibilityLabel={label} />
       ) : (
-        <Icon size={20} color={colors.primary} />
+        <Icon size={iconSize.xl} color={colors.primary} />
       )}
     </View>
   )
@@ -590,7 +857,7 @@ function Visual({
 }) {
   const colors = useColors()
   return (
-    <View style={[styles.visual, { backgroundColor: `${colors.primary}14` }]}>
+    <View style={[styles.visual, { backgroundColor: colors.inputBackground }]}>
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.visualImage} accessibilityLabel={label} />
       ) : (
@@ -604,7 +871,7 @@ function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
   const colors = useColors()
   return (
     <View style={[styles.fact, { backgroundColor: colors.inputBackground }]}>
-      <Icon size={13} color={colors.primary} />
+      <Icon size={iconSize.sm} color={colors.primary} />
       <Text style={[styles.factText, { color: colors.textMuted }]}>{label}</Text>
       <Text style={[styles.factValue, { color: colors.text }]}>{value}</Text>
     </View>
@@ -612,12 +879,15 @@ function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   content: {
-    padding: spacing.md,
     gap: spacing.md,
   },
   hero: {
     gap: spacing.sm,
+    padding: spacing.md,
   },
   eyebrow: {
     alignSelf: 'flex-start',
@@ -633,45 +903,46 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   heroTitle: {
-    fontSize: fontSize['2xl'],
-    fontWeight: '900',
-  },
-  heroSubtitle: {
-    fontSize: fontSize.sm,
-    lineHeight: 20,
-  },
-  searchBox: {
-    marginTop: spacing.sm,
-  },
-  clearButton: {
-    width: 30,
-    height: 30,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  statCard: {
-    width: '48%',
-    gap: spacing.xs,
-  },
-  statValue: {
     fontSize: fontSize.lg,
     fontWeight: '900',
   },
-  statLabel: {
+  heroSubtitle: {
     fontSize: fontSize.xs,
-    fontWeight: '800',
+    lineHeight: lineHeight.xs,
+  },
+  searchBox: {
+    marginTop: spacing.xs,
+  },
+  heroCategories: {
+    gap: spacing.xs,
+    paddingRight: spacing.md,
+  },
+  heroCategory: {
+    height: size.controlSm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    borderWidth: border.hairline,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+  },
+  heroCategoryText: {
+    maxWidth: size.compactChipMaxWidth,
+    fontSize: fontSize.xs,
+    fontWeight: '900',
+  },
+  clearButton: {
+    width: size.sectionCompactIcon,
+    height: size.sectionCompactIcon,
   },
   tabs: {
     gap: spacing.sm,
     paddingRight: spacing.md,
   },
   tab: {
-    minWidth: 104,
-    height: 38,
-    borderWidth: 1,
+    minWidth: size.navSide,
+    height: size.iconBubble,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.sm,
     flexDirection: 'row',
@@ -695,25 +966,74 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   lane: {
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   laneTitle: {
     fontSize: fontSize.md,
     fontWeight: '900',
   },
   cardStack: {
-    gap: spacing.md,
+    gap: spacing.sm,
+  },
+  aisleCards: {
+    gap: spacing.sm,
+  },
+  aisleCard: {
+    minHeight: size.listItemLg,
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  aisleIcon: {
+    width: size.controlMd,
+    height: size.controlMd,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aisleCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  aisleTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '900',
+  },
+  aisleSubtitle: {
+    marginTop: spacing.xxs,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeight.xs,
+    fontWeight: '700',
+  },
+  tagChips: {
+    gap: spacing.xs,
+    paddingRight: spacing.md,
+  },
+  tagChip: {
+    height: size.controlSm,
+    borderWidth: border.hairline,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagChipText: {
+    fontSize: fontSize.xs,
+    fontWeight: '900',
   },
   emptyText: {
     fontSize: fontSize.sm,
     fontWeight: '700',
   },
   emptyPanel: {
-    minHeight: 220,
+    minHeight: size.mediaPlaceholderMinHeight,
     justifyContent: 'center',
   },
   itemCard: {
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   row: {
     flexDirection: 'row',
@@ -729,22 +1049,22 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   cardMeta: {
-    marginTop: 2,
+    marginTop: spacing.xxs,
     fontSize: fontSize.xs,
     fontWeight: '700',
   },
   description: {
     fontSize: fontSize.sm,
-    lineHeight: 20,
+    lineHeight: lineHeight.sm,
   },
   price: {
     fontSize: fontSize.lg,
     fontWeight: '900',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderWidth: 1,
+    width: size.controlMd,
+    height: size.controlMd,
+    borderWidth: border.hairline,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -755,7 +1075,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   visual: {
-    height: 118,
+    height: size.actionTileMin,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -773,10 +1093,10 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: radius.md,
     padding: spacing.sm,
-    gap: 3,
+    gap: spacing.xxs,
   },
   factText: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '800',
   },
   factValue: {

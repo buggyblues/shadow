@@ -36,18 +36,33 @@ import { OAuthAuthorizePage } from './pages/oauth-authorize'
 import { OAuthCallbackPage } from './pages/oauth-callback'
 import { PlayLaunchPage } from './pages/play-launch'
 import { RegisterPage } from './pages/register'
+import { ResetPasswordPage } from './pages/reset-password'
 import { ServerLayout } from './pages/server'
 import { ServerIndexView } from './pages/server-index-view'
 import { SettingsPage } from './pages/settings'
 import { ShopPageRoute } from './pages/shop'
 import { ShopAdminPageRoute } from './pages/shop-admin'
+import { ShopTagPage } from './pages/shop-tag'
 import { UserProfilePage } from './pages/user-profile'
 import { WorkspacePageRoute } from './pages/workspace'
 import './styles/globals.css'
 
 const CloudSaasApp = lazy(() =>
   import('@shadowob/cloud-ui/web-saas')
-    .then((m) => ({ default: m.CloudSaasApp }))
+    .then((m) => {
+      const fallback = (m as unknown as { default?: unknown }).default
+      const Component =
+        m.CloudSaasApp ??
+        (typeof fallback === 'function'
+          ? fallback
+          : (fallback as { CloudSaasApp?: typeof m.CloudSaasApp; default?: typeof m.CloudSaasApp })
+              ?.CloudSaasApp) ??
+        (fallback as { default?: typeof m.CloudSaasApp })?.default
+      if (!Component) {
+        throw new Error('Cloud SaaS app entry did not export a React component')
+      }
+      return { default: Component }
+    })
     .catch((error) => {
       if (reloadOnceForChunkError(error)) {
         return new Promise<never>(() => {})
@@ -217,6 +232,12 @@ const registerRoute = createRoute({
   path: '/register',
   component: RegisterPage,
   beforeLoad: redirectIfAuthenticatedRoute,
+})
+
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reset-password',
+  component: ResetPasswordPage,
 })
 
 const inviteRoute = createRoute({
@@ -527,6 +548,12 @@ const productDetailRoute = createRoute({
   component: ProductDetailPage,
 })
 
+const shopTagRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/shop/tags/$tag',
+  component: ShopTagPage,
+})
+
 const assetHomeRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/assets/$assetId',
@@ -576,6 +603,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   registerRoute,
+  resetPasswordRoute,
   inviteRoute,
   oauthCallbackRoute,
   oauthAuthorizeRoute,
@@ -610,6 +638,7 @@ const routeTree = rootRoute.addChildren([
     personalShopRoute,
     userShopRoute,
     productDetailRoute,
+    shopTagRoute,
     assetHomeRoute,
     purchaseOrderDetailRoute,
     cloudRoute,

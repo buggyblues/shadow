@@ -1,5 +1,6 @@
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, resolve } from 'node:path'
 import { MakerDMG } from '@electron-forge/maker-dmg'
 import { MakerSquirrel } from '@electron-forge/maker-squirrel'
 import { MakerZIP } from '@electron-forge/maker-zip'
@@ -14,12 +15,17 @@ const shouldSignAndNotarize = isMac && hasNotaryApiKey
 
 // Resolve icon path absolutely so it works regardless of cwd
 const iconPath = resolve(__dirname, 'assets', 'icon')
+const connectorPackagePath = resolve(__dirname, '../../packages/connector')
+const requireFromDesktop = createRequire(resolve(__dirname, 'package.json'))
 
-// Collect extraResource entries for OpenClaw bundles (created by scripts/bundle-openclaw.mjs)
 const extraResource: string[] = []
-if (existsSync('./build/openclaw')) extraResource.push('./build/openclaw')
-if (existsSync('./build/shadowob')) extraResource.push('./build/shadowob')
-if (existsSync('./build/openclaw-config')) extraResource.push('./build/openclaw-config')
+extraResource.push(
+  resolve(connectorPackagePath, 'dist'),
+  resolve(connectorPackagePath, 'skills'),
+  resolve(connectorPackagePath, 'hermes-shadowob-plugin'),
+  resolve(connectorPackagePath, 'package.json'),
+  resolve(connectorPackagePath, 'README.md'),
+)
 
 // macOS localization: lproj directories for display name per locale
 if (isMac) {
@@ -29,9 +35,49 @@ if (isMac) {
   )
 }
 
+function resolveDependencyDir(packageName: string) {
+  return dirname(requireFromDesktop.resolve(`${packageName}/package.json`))
+}
+
+function sherpaNativePackageName(platform: string, arch: string) {
+  const normalizedPlatform = platform === 'win32' ? 'win' : platform
+  if (normalizedPlatform === 'darwin' && (arch === 'arm64' || arch === 'x64')) {
+    return `sherpa-onnx-darwin-${arch}`
+  }
+  if (normalizedPlatform === 'linux' && (arch === 'arm64' || arch === 'x64')) {
+    return `sherpa-onnx-linux-${arch}`
+  }
+  if (normalizedPlatform === 'win' && (arch === 'x64' || arch === 'ia32')) {
+    return `sherpa-onnx-win-${arch}`
+  }
+  throw new Error(`Unsupported sherpa-onnx target: ${platform}-${arch}`)
+}
+
+function copyDependencyToBuild(buildPath: string, packageName: string) {
+  const source = resolveDependencyDir(packageName)
+  if (!existsSync(source)) {
+    throw new Error(`Missing dependency package for desktop voice: ${packageName}`)
+  }
+  const targetNodeModules = resolve(buildPath, 'node_modules')
+  mkdirSync(targetNodeModules, { recursive: true })
+  cpSync(source, resolve(targetNodeModules, packageName), {
+    dereference: true,
+    force: true,
+    recursive: true,
+  })
+}
+
 const config: ForgeConfig = {
+  hooks: {
+    packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {
+      copyDependencyToBuild(buildPath, 'sherpa-onnx-node')
+      copyDependencyToBuild(buildPath, sherpaNativePackageName(platform, arch))
+    },
+  },
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: '**/node_modules/sherpa-onnx-*/**/*',
+    },
     name: 'Shadow',
     executableName: isLinux ? 'shadow' : 'Shadow',
     icon: iconPath,
@@ -41,7 +87,17 @@ const config: ForgeConfig = {
     darwinDarkModeSupport: true,
     // Ensure icon is referenced in Info.plist
     extendInfo: {
-      CFBundleIconFile: 'icon.icns',
+      CFBundleIconFile: 'icon',
+      NSCameraUseContinuityCameraDeviceType: true,
+      NSCameraUsageDescription:
+        'Shadow uses camera access only when a community or runtime feature requests it.',
+      NSMicrophoneUsageDescription: 'Shadow uses microphone access for desktop pet voice input.',
+    },
+    extendHelperInfo: {
+      NSCameraUseContinuityCameraDeviceType: true,
+      NSCameraUsageDescription:
+        'Shadow uses camera access only when a community or runtime feature requests it.',
+      NSMicrophoneUsageDescription: 'Shadow uses microphone access for desktop pet voice input.',
     },
     ...(shouldSignAndNotarize
       ? {
@@ -71,8 +127,8 @@ const config: ForgeConfig = {
     ],
     extraResource,
     ignore: [
-      // Only include dist/, assets/, and package.json in the asar archive
-      /^\/(?!dist|assets|package\.json)/,
+      // Include the bundled app plus the native sherpa-onnx runtime used by local voice.
+      /^\/(?!dist|assets|package\.json|node_modules\/(?:sherpa-onnx-node|sherpa-onnx-(?:darwin-arm64|darwin-x64|linux-x64|linux-arm64|win-x64|win-ia32)))/,
     ],
   },
   rebuildConfig: {},

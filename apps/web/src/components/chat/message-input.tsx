@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   ListTodo,
   Loader2,
+  Mic,
   Plus,
   Search,
   Send,
@@ -56,12 +57,61 @@ interface MessageInputProps {
 interface PendingFile {
   file: File
   preview?: string
+  kind?: 'file' | 'image' | 'voice'
+  durationMs?: number
+  waveformPeaks?: number[]
+  waveformVersion?: number
+  transcriptText?: string
+  transcriptLanguage?: string
+  transcriptSource?: 'client' | 'runtime'
   /** If set, this file comes from workspace and already has a URL (skip re-upload) */
   workspaceUrl?: string
   workspaceName?: string
   workspaceMime?: string
   workspaceSize?: number
 }
+
+type BrowserSpeechRecognitionResult = {
+  isFinal: boolean
+  0?: {
+    transcript?: string
+  }
+}
+
+type BrowserSpeechRecognitionEvent = {
+  resultIndex?: number
+  results: ArrayLike<BrowserSpeechRecognitionResult>
+}
+
+type BrowserSpeechRecognitionErrorEvent = {
+  error?: string
+  message?: string
+}
+
+type BrowserSpeechRecognition = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null
+  onerror: ((event: BrowserSpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+  abort: () => void
+}
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition
+
+function getSpeechRecognitionConstructor(): BrowserSpeechRecognitionConstructor | null {
+  if (typeof window === 'undefined') return null
+  const speechWindow = window as typeof window & {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor
+  }
+  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null
+}
+
+type MessagesPage = { messages: Record<string, unknown>[]; hasMore: boolean }
 
 function getPendingFileKey(pf: PendingFile): string {
   return [
@@ -75,6 +125,66 @@ function getPendingFileKey(pf: PendingFile): string {
     .filter(Boolean)
     .join('::')
 }
+
+function pickVoiceMimeType() {
+  if (typeof MediaRecorder === 'undefined') return ''
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? ''
+}
+
+function voiceFileExtension(mimeType: string) {
+  if (mimeType.includes('mp4')) return 'm4a'
+  if (mimeType.includes('ogg')) return 'ogg'
+  return 'webm'
+}
+
+function fallbackWaveformPeaks(count = 48) {
+  return Array.from({ length: count }, (_, index) => {
+    const wave = Math.sin(index * 0.85) * 0.35 + Math.sin(index * 0.29) * 0.22
+    return Math.max(10, Math.min(100, Math.round(48 + wave * 70)))
+  })
+}
+
+async function buildWaveformPeaks(blob: Blob, count = 48) {
+  if (typeof window === 'undefined') return fallbackWaveformPeaks(count)
+  const AudioContextCtor =
+    window.AudioContext ??
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioContextCtor) return fallbackWaveformPeaks(count)
+  const audioContext = new AudioContextCtor()
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(await blob.arrayBuffer())
+    const samples = audioBuffer.getChannelData(0)
+    const samplesPerPeak = Math.max(1, Math.floor(samples.length / count))
+    const rawPeaks = Array.from({ length: count }, (_, index) => {
+      const start = index * samplesPerPeak
+      const end = Math.min(samples.length, start + samplesPerPeak)
+      let max = 0
+      for (let i = start; i < end; i += 1) {
+        max = Math.max(max, Math.abs(samples[i] ?? 0))
+      }
+      return max
+    })
+    const maxPeak = Math.max(...rawPeaks, 0.01)
+    return rawPeaks.map((peak) => Math.max(5, Math.min(100, Math.round((peak / maxPeak) * 100))))
+  } catch {
+    return fallbackWaveformPeaks(count)
+  } finally {
+    await audioContext.close().catch(() => undefined)
+  }
+}
+
+function formatVoiceDuration(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+const RECORDING_PREVIEW_PEAKS = [
+  22, 38, 18, 44, 72, 32, 86, 58, 30, 66, 48, 26, 54, 36, 24, 42, 28, 34, 30, 38, 26, 32, 28, 34,
+  26, 30, 24, 28,
+]
 
 interface SlashCommand {
   name: string
@@ -184,7 +294,7 @@ export function MessageInput({
   enableTaskCards = false,
   onMessageSent,
 }: MessageInputProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { activeServerId } = useChatStore()
   const queryClient = useQueryClient()
   const [content, setContent] = useState('')
@@ -203,6 +313,18 @@ export function MessageInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const voiceRecorderRef = useRef<MediaRecorder | null>(null)
+  const voiceStreamRef = useRef<MediaStream | null>(null)
+  const voiceChunksRef = useRef<BlobPart[]>([])
+  const voiceRecordingStartedAtRef = useRef(0)
+  const voiceRecordingCancelledRef = useRef(false)
+  const voiceMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const voiceSpeechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const voiceSpeechCapturingRef = useRef(false)
+  const voiceFinalTranscriptRef = useRef<string[]>([])
+  const voiceInterimTranscriptRef = useRef('')
+  const [voiceRecording, setVoiceRecording] = useState(false)
+  const [voiceRecordingMs, setVoiceRecordingMs] = useState(0)
   const [useCompactPlaceholder, setUseCompactPlaceholder] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia('(max-width: 420px)').matches,
   )
@@ -215,6 +337,31 @@ export function MessageInput({
     media.addEventListener('change', sync)
     return () => media.removeEventListener('change', sync)
   }, [])
+
+  useEffect(() => {
+    if (!voiceRecording) return
+    const timer = window.setInterval(() => {
+      setVoiceRecordingMs(Date.now() - voiceRecordingStartedAtRef.current)
+    }, 200)
+    return () => window.clearInterval(timer)
+  }, [voiceRecording])
+
+  useEffect(() => {
+    return () => {
+      voiceSpeechCapturingRef.current = false
+      voiceSpeechRecognitionRef.current?.abort()
+      voiceSpeechRecognitionRef.current = null
+      voiceRecorderRef.current?.stop()
+      voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
+      if (voiceMaxTimerRef.current) clearTimeout(voiceMaxTimerRef.current)
+    }
+  }, [])
+
+  const speechRecognitionLanguage =
+    i18n.language ||
+    (typeof navigator === 'undefined' ? '' : navigator.language) ||
+    (typeof document === 'undefined' ? '' : document.documentElement.lang) ||
+    'zh-CN'
 
   const composerChannelName = channelName ?? t('chat.channelFallback')
   const composerPlaceholder = threadId
@@ -438,6 +585,366 @@ export function MessageInput({
     setTaskDraft((current) => current || content)
   }, [content])
 
+  const stopVoiceTracks = useCallback(() => {
+    voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
+    voiceStreamRef.current = null
+    if (voiceMaxTimerRef.current) {
+      clearTimeout(voiceMaxTimerRef.current)
+      voiceMaxTimerRef.current = null
+    }
+  }, [])
+
+  const startVoiceTranscriptCapture = useCallback(() => {
+    voiceFinalTranscriptRef.current = []
+    voiceInterimTranscriptRef.current = ''
+    voiceSpeechCapturingRef.current = false
+
+    const SpeechRecognition = getSpeechRecognitionConstructor()
+    if (!SpeechRecognition) return
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = speechRecognitionLanguage
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.onresult = (event) => {
+      let interim = ''
+      const startIndex = event.resultIndex ?? 0
+      for (let index = startIndex; index < event.results.length; index += 1) {
+        const result = event.results[index]
+        if (!result) continue
+        const text = result[0]?.transcript?.trim()
+        if (!text) continue
+        if (result.isFinal) {
+          voiceFinalTranscriptRef.current.push(text)
+        } else {
+          interim = interim ? `${interim} ${text}` : text
+        }
+      }
+      voiceInterimTranscriptRef.current = interim
+    }
+    recognition.onerror = (event) => {
+      console.debug('[voice] speech recognition error', event.error, event.message)
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        voiceSpeechCapturingRef.current = false
+      }
+    }
+    recognition.onend = () => {
+      if (!voiceSpeechCapturingRef.current) {
+        if (voiceSpeechRecognitionRef.current === recognition) {
+          voiceSpeechRecognitionRef.current = null
+        }
+        return
+      }
+      if (voiceRecorderRef.current?.state === 'recording') {
+        try {
+          recognition.start()
+          return
+        } catch (error) {
+          console.debug('[voice] speech recognition restart failed', error)
+        }
+      }
+      if (voiceSpeechRecognitionRef.current === recognition) {
+        voiceSpeechRecognitionRef.current = null
+      }
+    }
+
+    try {
+      voiceSpeechCapturingRef.current = true
+      recognition.start()
+      voiceSpeechRecognitionRef.current = recognition
+    } catch {
+      voiceSpeechCapturingRef.current = false
+      voiceSpeechRecognitionRef.current = null
+    }
+  }, [speechRecognitionLanguage])
+
+  const readVoiceTranscript = useCallback(() => {
+    const transcript = [...voiceFinalTranscriptRef.current, voiceInterimTranscriptRef.current]
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    voiceFinalTranscriptRef.current = []
+    voiceInterimTranscriptRef.current = ''
+    return transcript || undefined
+  }, [])
+
+  const stopVoiceTranscriptCapture = useCallback(
+    async (waitForFinal = true) => {
+      voiceSpeechCapturingRef.current = false
+      const recognition = voiceSpeechRecognitionRef.current
+      voiceSpeechRecognitionRef.current = null
+      if (!recognition) return readVoiceTranscript()
+
+      if (!waitForFinal) {
+        recognition.onend = null
+        try {
+          recognition.abort()
+        } catch {}
+        return readVoiceTranscript()
+      }
+
+      return await new Promise<string | undefined>((resolve) => {
+        let settled = false
+        const finish = () => {
+          if (settled) return
+          settled = true
+          window.clearTimeout(timer)
+          recognition.onend = null
+          recognition.onerror = null
+          resolve(readVoiceTranscript())
+        }
+        const timer = window.setTimeout(finish, 1200)
+        recognition.onend = finish
+        recognition.onerror = (event) => {
+          console.debug('[voice] speech recognition stop error', event.error, event.message)
+          finish()
+        }
+        try {
+          recognition.stop()
+        } catch {
+          finish()
+        }
+      })
+    },
+    [readVoiceTranscript],
+  )
+
+  const abortVoiceTranscriptCapture = useCallback(() => {
+    const recognition = voiceSpeechRecognitionRef.current
+    voiceSpeechCapturingRef.current = false
+    voiceSpeechRecognitionRef.current = null
+    if (recognition) {
+      recognition.onend = null
+      try {
+        recognition.abort()
+      } catch {}
+    }
+    voiceFinalTranscriptRef.current = []
+    voiceInterimTranscriptRef.current = ''
+  }, [])
+
+  const stopVoiceRecording = useCallback(
+    (cancel = false) => {
+      const recorder = voiceRecorderRef.current
+      voiceRecordingCancelledRef.current = cancel
+      if (!recorder || recorder.state === 'inactive') {
+        setVoiceRecording(false)
+        abortVoiceTranscriptCapture()
+        stopVoiceTracks()
+        return
+      }
+      recorder.stop()
+    },
+    [abortVoiceTranscriptCapture, stopVoiceTracks],
+  )
+
+  const appendCreatedMessage = useCallback(
+    (created: Record<string, unknown>) => {
+      const createdId = typeof created.id === 'string' ? created.id : null
+      if (threadId) {
+        queryClient.setQueryData<Record<string, unknown>[]>(
+          ['thread-messages', threadId],
+          (old) => {
+            const messages = old ?? []
+            if (createdId && messages.some((message) => message.id === createdId)) {
+              return messages.map((message) => (message.id === createdId ? created : message))
+            }
+            return [...messages, created]
+          },
+        )
+        onMessageSent?.(created)
+        return
+      }
+
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
+        if (!old || old.pages.length === 0) return old
+        const firstPage = old.pages[0]
+        if (!firstPage) return old
+        if (createdId && firstPage.messages.some((message) => message.id === createdId)) {
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((message) =>
+                message.id === createdId ? created : message,
+              ),
+            })),
+          }
+        }
+        return {
+          ...old,
+          pages: [
+            {
+              ...firstPage,
+              messages: [...firstPage.messages, created],
+            },
+            ...old.pages.slice(1),
+          ],
+        }
+      })
+      onMessageSent?.(created)
+    },
+    [channelId, onMessageSent, queryClient, threadId],
+  )
+
+  const sendRecordedVoiceMessage = useCallback(
+    async (voice: PendingFile) => {
+      if (uploading) return
+      setUploading(true)
+      const savedReplyTo = replyToId
+      playSendSound()
+      try {
+        const formData = new FormData()
+        formData.append('file', voice.file)
+        formData.append('kind', 'voice')
+        if (voice.durationMs) formData.append('durationMs', String(voice.durationMs))
+        if (voice.waveformPeaks)
+          formData.append('waveformPeaks', JSON.stringify(voice.waveformPeaks))
+        if (voice.transcriptText) formData.append('transcriptText', voice.transcriptText)
+        if (voice.transcriptLanguage)
+          formData.append('transcriptLanguage', voice.transcriptLanguage)
+        if (voice.transcriptSource) formData.append('transcriptSource', voice.transcriptSource)
+
+        const uploaded = await fetchApi<{
+          url: string
+          size: number
+          kind?: 'file' | 'image' | 'voice'
+          durationMs?: number
+          waveformPeaks?: number[]
+        }>('/api/media/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const created = await fetchApi<Record<string, unknown>>(
+          threadId ? `/api/threads/${threadId}/messages` : `/api/channels/${channelId}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              content: '\u200B',
+              ...(savedReplyTo ? { replyToId: savedReplyTo } : {}),
+              attachments: [
+                {
+                  filename: voice.file.name,
+                  url: uploaded.url,
+                  contentType: voice.file.type || 'audio/webm',
+                  size: uploaded.size,
+                  kind: 'voice',
+                  durationMs: voice.durationMs ?? uploaded.durationMs,
+                  waveformPeaks: voice.waveformPeaks ?? uploaded.waveformPeaks,
+                  waveformVersion: voice.waveformVersion,
+                  transcriptText: voice.transcriptText,
+                  transcriptLanguage: voice.transcriptLanguage,
+                  transcriptSource: voice.transcriptSource,
+                },
+              ],
+            }),
+          },
+        )
+
+        appendCreatedMessage(created)
+        onClearReply?.()
+      } catch (error) {
+        console.error('Failed to send voice message:', error)
+        showToast(error instanceof Error ? error.message : t('chat.sendFailed'), 'error')
+      } finally {
+        setUploading(false)
+        requestAnimationFrame(() => textareaRef.current?.focus())
+      }
+    },
+    [appendCreatedMessage, channelId, onClearReply, replyToId, t, threadId, uploading],
+  )
+
+  const startVoiceRecording = useCallback(async () => {
+    setShowAttachMenu(false)
+    if (voiceRecording) {
+      stopVoiceRecording(false)
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      showToast(t('chat.voiceUnavailable'), 'error')
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = pickVoiceMimeType()
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      voiceStreamRef.current = stream
+      voiceRecorderRef.current = recorder
+      voiceChunksRef.current = []
+      voiceRecordingCancelledRef.current = false
+      voiceRecordingStartedAtRef.current = Date.now()
+      setVoiceRecordingMs(0)
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) voiceChunksRef.current.push(event.data)
+      }
+      recorder.onstop = async () => {
+        const durationMs = Date.now() - voiceRecordingStartedAtRef.current
+        const cancelled = voiceRecordingCancelledRef.current
+        const chunks = [...voiceChunksRef.current]
+        const transcriptTextPromise = stopVoiceTranscriptCapture(!cancelled)
+        voiceRecorderRef.current = null
+        voiceChunksRef.current = []
+        setVoiceRecording(false)
+        setVoiceRecordingMs(0)
+        stopVoiceTracks()
+        if (cancelled) {
+          await transcriptTextPromise
+          return
+        }
+        if (durationMs < 1000) {
+          showToast(t('chat.voiceTooShort'), 'error')
+          return
+        }
+        const type = chunks.find((chunk) => chunk instanceof Blob)?.type || mimeType || 'audio/webm'
+        const blob = new Blob(chunks, { type })
+        const [waveformPeaks, transcriptText] = await Promise.all([
+          buildWaveformPeaks(blob),
+          transcriptTextPromise,
+        ])
+        const extension = voiceFileExtension(type)
+        const file = new File([blob], `voice-${Date.now()}.${extension}`, { type })
+        void sendRecordedVoiceMessage({
+          file,
+          kind: 'voice',
+          durationMs: Math.min(60_000, durationMs),
+          waveformPeaks,
+          waveformVersion: 1,
+          transcriptText,
+          transcriptLanguage: transcriptText
+            ? speechRecognitionLanguage ||
+              (typeof document === 'undefined' ? '' : document.documentElement.lang) ||
+              undefined
+            : undefined,
+          transcriptSource: transcriptText ? 'client' : undefined,
+        })
+      }
+      startVoiceTranscriptCapture()
+      recorder.start()
+      setVoiceRecording(true)
+      voiceMaxTimerRef.current = setTimeout(() => stopVoiceRecording(false), 60_000)
+    } catch (error) {
+      stopVoiceTracks()
+      showToast(
+        error instanceof DOMException && error.name === 'NotAllowedError'
+          ? t('chat.voicePermissionDenied')
+          : t('chat.voiceUnavailable'),
+        'error',
+      )
+    }
+  }, [
+    sendRecordedVoiceMessage,
+    speechRecognitionLanguage,
+    startVoiceTranscriptCapture,
+    stopVoiceRecording,
+    stopVoiceTracks,
+    stopVoiceTranscriptCapture,
+    t,
+    voiceRecording,
+  ])
+
   const createTaskCard = useCallback(async () => {
     const input = taskDraftToInput(taskDraft)
     if (!input.title || creatingTask) return
@@ -574,7 +1081,6 @@ export function MessageInput({
     // Insert optimistic message immediately for text-only sends
     const currentUser = useAuthStore.getState().user
     const tempId = `temp-${Date.now()}`
-    type MessagesPage = { messages: Record<string, unknown>[]; hasMore: boolean }
     const threadMessagesKey = threadId ? (['thread-messages', threadId] as const) : null
 
     if ((text || selectedCommerceCards.length > 0) && pendingFiles.length === 0) {
@@ -652,6 +1158,13 @@ export function MessageInput({
           url: string
           contentType: string
           size: number
+          kind?: 'file' | 'image' | 'voice'
+          durationMs?: number
+          waveformPeaks?: number[]
+          waveformVersion?: number
+          transcriptText?: string
+          transcriptLanguage?: string
+          transcriptSource?: 'client' | 'runtime'
         }[] = []
         for (const pf of savedPendingFiles) {
           if (pf.workspaceUrl) {
@@ -664,7 +1177,19 @@ export function MessageInput({
           } else {
             const formData = new FormData()
             formData.append('file', pf.file)
-            const result = await fetchApi<{ url: string; size: number }>('/api/media/upload', {
+            if (pf.kind) formData.append('kind', pf.kind)
+            if (pf.durationMs) formData.append('durationMs', String(pf.durationMs))
+            if (pf.waveformPeaks) formData.append('waveformPeaks', JSON.stringify(pf.waveformPeaks))
+            if (pf.transcriptText) formData.append('transcriptText', pf.transcriptText)
+            if (pf.transcriptLanguage) formData.append('transcriptLanguage', pf.transcriptLanguage)
+            if (pf.transcriptSource) formData.append('transcriptSource', pf.transcriptSource)
+            const result = await fetchApi<{
+              url: string
+              size: number
+              kind?: 'file' | 'image' | 'voice'
+              durationMs?: number
+              waveformPeaks?: number[]
+            }>('/api/media/upload', {
               method: 'POST',
               body: formData,
             })
@@ -673,6 +1198,13 @@ export function MessageInput({
               url: result.url,
               contentType: pf.file.type || 'application/octet-stream',
               size: result.size,
+              kind: pf.kind ?? result.kind,
+              durationMs: pf.durationMs ?? result.durationMs,
+              waveformPeaks: pf.waveformPeaks ?? result.waveformPeaks,
+              waveformVersion: pf.waveformVersion,
+              transcriptText: pf.transcriptText,
+              transcriptLanguage: pf.transcriptLanguage,
+              transcriptSource: pf.transcriptSource,
             })
           }
         }
@@ -1298,7 +1830,25 @@ export function MessageInput({
           ))}
           {pendingFiles.map((pf, i) => (
             <div key={getPendingFileKey(pf)} className="relative group/file">
-              {pf.preview ? (
+              {pf.kind === 'voice' ? (
+                <div className="flex h-12 min-w-52 items-center gap-2 rounded-xl border border-border-subtle bg-bg-secondary/80 px-3">
+                  <Mic size={16} className="shrink-0 text-primary" />
+                  <div className="flex h-7 flex-1 items-center gap-[3px]">
+                    {(pf.waveformPeaks ?? fallbackWaveformPeaks(32))
+                      .slice(0, 32)
+                      .map((peak, index) => (
+                        <span
+                          key={`${pf.file.name}-${index}`}
+                          className="w-[3px] rounded-full bg-primary/70"
+                          style={{ height: `${Math.max(6, Math.round(peak * 0.22))}px` }}
+                        />
+                      ))}
+                  </div>
+                  <span className="text-xs font-bold text-text-muted">
+                    {formatVoiceDuration(pf.durationMs ?? 0)}
+                  </span>
+                </div>
+              ) : pf.preview ? (
                 <button
                   type="button"
                   onClick={() => setViewingImage(pf)}
@@ -1332,170 +1882,245 @@ export function MessageInput({
         </div>
       )}
 
-      <InputValley
-        className={cn(
-          'flex items-center gap-1.5 px-3 py-2 sm:gap-2 sm:px-4',
-          replyToId || pendingFiles.length > 0 || selectedCommerceCards.length > 0
-            ? 'rounded-b-[20px]'
-            : 'rounded-[20px]',
-        )}
-      >
-        <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn('h-8 w-8 sm:h-9 sm:w-9', showAttachMenu && 'bg-primary/10 text-primary')}
-            onClick={() => setShowAttachMenu((open) => !open)}
-            title={t('chat.addMenu')}
-            aria-label={t('chat.addMenu')}
-          >
-            <Plus size={18} />
-          </Button>
-          {showAttachMenu && (
-            <>
-              <button
-                type="button"
-                className="fixed inset-0 z-40 cursor-default"
-                aria-label={t('common.close')}
-                onClick={() => setShowAttachMenu(false)}
-              />
-              <div className="absolute bottom-11 left-0 z-50 w-[280px] rounded-2xl border border-border-subtle bg-bg-primary p-2 shadow-2xl">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                  onClick={() => openFileDialog()}
-                >
-                  <FileText size={18} className="text-primary" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold text-text-primary">
-                      {t('chat.uploadFile')}
-                    </span>
-                    <span className="block truncate text-xs text-text-muted">
-                      {t('chat.addMenuUploadFileDesc')}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                  onClick={() => openFileDialog('image/*')}
-                >
-                  <ImageIcon size={18} className="text-primary" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold text-text-primary">
-                      {t('chat.uploadImage')}
-                    </span>
-                    <span className="block truncate text-xs text-text-muted">
-                      {t('chat.addMenuUploadImageDesc')}
-                    </span>
-                  </span>
-                </button>
-                {activeServerId && (
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                    onClick={openWorkspacePicker}
-                  >
-                    <FolderOpen size={18} className="text-primary" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-text-primary">
-                        {t('chat.selectWorkspaceFile')}
-                      </span>
-                      <span className="block truncate text-xs text-text-muted">
-                        {t('chat.addMenuWorkspaceFileDesc')}
-                      </span>
-                    </span>
-                  </button>
-                )}
-                {enableTaskCards && (
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                    onClick={openTaskComposer}
-                  >
-                    <ListTodo size={18} className="text-primary" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-text-primary">
-                        {t('inbox.task.new')}
-                      </span>
-                      <span className="block truncate text-xs text-text-muted">
-                        {t('inbox.task.addMenuDesc')}
-                      </span>
-                    </span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                  onClick={() => {
-                    setShowAttachMenu(false)
-                    setShowProductPicker(true)
-                  }}
-                >
-                  <ShoppingBag size={18} className="text-primary" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold text-text-primary">
-                      {t('chat.productPicker')}
-                    </span>
-                    <span className="block truncate text-xs text-text-muted">
-                      {t('chat.addMenuProductDesc')}
-                    </span>
-                  </span>
-                </button>
-              </div>
-            </>
+      {voiceRecording ? (
+        <InputValley
+          className={cn(
+            'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 sm:px-4',
+            replyToId || pendingFiles.length > 0 || selectedCommerceCards.length > 0
+              ? 'rounded-b-[20px]'
+              : 'rounded-[24px]',
           )}
-        </div>
-
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder={composerPlaceholder}
-          rows={1}
-          wrap={content ? 'soft' : 'off'}
-          autoFocus
-          className="min-w-0 flex-1 overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary placeholder:text-text-muted outline-none resize-none max-h-[50vh] min-h-[24px] sm:py-[7px]"
-        />
-
-        <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 sm:h-9 sm:w-9"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            title={t('chat.addEmoji')}
-          >
-            <Smile size={18} />
-          </Button>
-          {showEmojiPicker && (
-            <EmojiPicker
-              onSelect={(emoji) => {
-                setContent((prev) => prev + emoji)
-                textareaRef.current?.focus()
-              }}
-              onClose={() => setShowEmojiPicker(false)}
-              position="top"
-            />
-          )}
-        </div>
-
-        <Button
-          size="icon"
-          className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
-          onClick={handleSend}
-          title={t('chat.sendMessage')}
-          aria-label={t('chat.sendMessage')}
-          disabled={
-            (!content.trim() && pendingFiles.length === 0 && selectedCommerceCards.length === 0) ||
-            uploading
-          }
         >
-          <Send size={16} className="text-white" />
-        </Button>
-      </InputValley>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-full text-text-muted hover:text-text-primary"
+            onClick={() => stopVoiceRecording(true)}
+            title={t('chat.voiceCancelRecording')}
+            aria-label={t('chat.voiceCancelRecording')}
+          >
+            <X size={18} />
+          </Button>
+          <div className="flex min-w-0 items-center gap-3 rounded-full bg-bg-deep/80 px-4 py-2 text-primary dark:bg-black/25">
+            <Mic size={18} className="shrink-0" />
+            <div
+              className="flex h-8 min-w-0 flex-1 items-center gap-[4px]"
+              aria-label={t('chat.voiceWaveform')}
+            >
+              {RECORDING_PREVIEW_PEAKS.map((peak, index) => (
+                <span
+                  key={`recording-${index}`}
+                  className="w-[4px] rounded-full bg-primary"
+                  style={{
+                    height: `${Math.max(6, Math.round(peak * 0.28))}px`,
+                    animation: 'voice-recording-pulse 980ms ease-in-out infinite',
+                    animationDelay: `${index * 34}ms`,
+                  }}
+                />
+              ))}
+            </div>
+            <span className="shrink-0 text-sm font-black tabular-nums text-text-secondary dark:text-white/75">
+              {formatVoiceDuration(voiceRecordingMs)}
+            </span>
+          </div>
+          <Button
+            variant="primary"
+            size="icon"
+            className="h-10 w-10 rounded-full bg-[#3DDC84] text-[#06140D] shadow-none hover:bg-[#34c978]"
+            onClick={() => stopVoiceRecording(false)}
+            title={t('chat.voiceSendRecording')}
+            aria-label={t('chat.voiceSendRecording')}
+          >
+            <Send size={17} />
+          </Button>
+        </InputValley>
+      ) : (
+        <InputValley
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-2 sm:gap-2 sm:px-4',
+            replyToId || pendingFiles.length > 0 || selectedCommerceCards.length > 0
+              ? 'rounded-b-[20px]'
+              : 'rounded-[20px]',
+          )}
+        >
+          <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'h-8 w-8 sm:h-9 sm:w-9',
+                showAttachMenu && 'bg-primary/10 text-primary',
+              )}
+              onClick={() => setShowAttachMenu((open) => !open)}
+              title={t('chat.addMenu')}
+              aria-label={t('chat.addMenu')}
+            >
+              <Plus size={18} />
+            </Button>
+            {showAttachMenu && (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-40 cursor-default"
+                  aria-label={t('common.close')}
+                  onClick={() => setShowAttachMenu(false)}
+                />
+                <div className="absolute bottom-11 left-0 z-50 w-[280px] rounded-2xl border border-border-subtle bg-bg-primary p-2 shadow-2xl">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+                    onClick={() => openFileDialog()}
+                  >
+                    <FileText size={18} className="text-primary" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-text-primary">
+                        {t('chat.uploadFile')}
+                      </span>
+                      <span className="block truncate text-xs text-text-muted">
+                        {t('chat.addMenuUploadFileDesc')}
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+                    onClick={() => openFileDialog('image/*')}
+                  >
+                    <ImageIcon size={18} className="text-primary" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-text-primary">
+                        {t('chat.uploadImage')}
+                      </span>
+                      <span className="block truncate text-xs text-text-muted">
+                        {t('chat.addMenuUploadImageDesc')}
+                      </span>
+                    </span>
+                  </button>
+                  {activeServerId && (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+                      onClick={openWorkspacePicker}
+                    >
+                      <FolderOpen size={18} className="text-primary" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-text-primary">
+                          {t('chat.selectWorkspaceFile')}
+                        </span>
+                        <span className="block truncate text-xs text-text-muted">
+                          {t('chat.addMenuWorkspaceFileDesc')}
+                        </span>
+                      </span>
+                    </button>
+                  )}
+                  {enableTaskCards && (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+                      onClick={openTaskComposer}
+                    >
+                      <ListTodo size={18} className="text-primary" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-text-primary">
+                          {t('inbox.task.new')}
+                        </span>
+                        <span className="block truncate text-xs text-text-muted">
+                          {t('inbox.task.addMenuDesc')}
+                        </span>
+                      </span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+                    onClick={() => {
+                      setShowAttachMenu(false)
+                      setShowProductPicker(true)
+                    }}
+                  >
+                    <ShoppingBag size={18} className="text-primary" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-text-primary">
+                        {t('chat.productPicker')}
+                      </span>
+                      <span className="block truncate text-xs text-text-muted">
+                        {t('chat.addMenuProductDesc')}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={composerPlaceholder}
+            rows={1}
+            wrap={content ? 'soft' : 'off'}
+            autoFocus
+            className="min-w-0 flex-1 overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary placeholder:text-text-muted outline-none resize-none max-h-[50vh] min-h-[24px] sm:py-[7px]"
+          />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'mb-[2px] h-8 w-8 shrink-0 self-end sm:mb-[3px] sm:h-9 sm:w-9',
+              voiceRecording && 'bg-danger/12 text-danger',
+            )}
+            onClick={() => void startVoiceRecording()}
+            title={voiceRecording ? t('chat.voiceStopRecording') : t('chat.voiceRecord')}
+            aria-label={voiceRecording ? t('chat.voiceStopRecording') : t('chat.voiceRecord')}
+            disabled={uploading}
+          >
+            <Mic size={18} />
+          </Button>
+
+          <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 sm:h-9 sm:w-9"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              title={t('chat.addEmoji')}
+            >
+              <Smile size={18} />
+            </Button>
+            {showEmojiPicker && (
+              <EmojiPicker
+                onSelect={(emoji) => {
+                  setContent((prev) => prev + emoji)
+                  textareaRef.current?.focus()
+                }}
+                onClose={() => setShowEmojiPicker(false)}
+                position="top"
+              />
+            )}
+          </div>
+
+          <Button
+            size="icon"
+            className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
+            onClick={handleSend}
+            title={t('chat.sendMessage')}
+            aria-label={t('chat.sendMessage')}
+            disabled={
+              (!content.trim() &&
+                pendingFiles.length === 0 &&
+                selectedCommerceCards.length === 0) ||
+              uploading ||
+              voiceRecording
+            }
+          >
+            <Send size={16} className="text-white" />
+          </Button>
+        </InputValley>
+      )}
 
       <input
         ref={fileInputRef}

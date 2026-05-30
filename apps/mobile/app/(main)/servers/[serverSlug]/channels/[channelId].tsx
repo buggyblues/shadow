@@ -6,6 +6,13 @@ import type {
 } from '@shadowob/shared'
 import { assignMentionRanges, canonicalMentionToken } from '@shadowob/shared'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio'
 import * as Clipboard from 'expo-clipboard'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
@@ -13,7 +20,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Bot,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Command as CommandIcon,
   Copy,
@@ -52,7 +58,6 @@ import { ChatComposer } from '../../../../../src/components/chat/chat-composer'
 import { MessageBubble } from '../../../../../src/components/chat/message-bubble'
 import { Avatar } from '../../../../../src/components/common/avatar'
 import { formatCommercePrice } from '../../../../../src/components/common/price-display'
-import { StatusBadge } from '../../../../../src/components/common/status-badge'
 import {
   AppText,
   BackgroundSurface,
@@ -64,8 +69,11 @@ import {
   GlassPanel,
   InputValley,
   MenuItem,
+  MobileBackButton,
+  MobileNavigationBar,
   Sheet,
   Spinner,
+  ToolbarButton,
 } from '../../../../../src/components/ui'
 import { VoiceChannelPanel } from '../../../../../src/components/voice/voice-channel-panel'
 import { useSocketEvent } from '../../../../../src/hooks/use-socket'
@@ -83,8 +91,19 @@ import {
 import { playReceiveSound, playSendSound } from '../../../../../src/lib/sounds'
 import { useAuthStore } from '../../../../../src/stores/auth.store'
 import { useChatStore } from '../../../../../src/stores/chat.store'
-import { fontSize, radius, spacing, useColors } from '../../../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../../src/theme'
 import type {
+  Attachment,
   Channel,
   MemberEvent,
   Message,
@@ -98,6 +117,51 @@ import { normalizeMessage } from '../../../../../src/types/message'
 const PAGE_SIZE = 50
 const TYPING_STATUS_TIMEOUT_MS = 3000
 const ACTIVITY_STATUS_TIMEOUT_MS = 120_000
+
+type PendingChatFile = {
+  uri: string
+  name: string
+  type: string
+  size?: number
+  kind?: 'file' | 'image' | 'voice'
+  durationMs?: number
+  waveformPeaks?: number[]
+  waveformVersion?: number
+  transcriptText?: string
+  transcriptLanguage?: string
+  transcriptSource?: 'client' | 'runtime'
+}
+
+type MessagesCache = {
+  pages: MessagesPage[]
+  pageParams: unknown[]
+}
+
+const MOBILE_VOICE_RECORDING_OPTIONS = {
+  ...RecordingPresets.HIGH_QUALITY,
+  isMeteringEnabled: true,
+  numberOfChannels: 1,
+  bitRate: 64_000,
+}
+
+function meteringToPeak(metering?: number) {
+  if (typeof metering !== 'number' || !Number.isFinite(metering)) return 12
+  return Math.max(5, Math.min(100, Math.round(((metering + 60) / 60) * 100)))
+}
+
+function normalizeMeteringPeaks(samples: number[], count = 48) {
+  if (samples.length === 0) {
+    return Array.from({ length: count }, (_, index) =>
+      Math.max(10, Math.min(100, Math.round(48 + Math.sin(index * 0.85) * 34))),
+    )
+  }
+  return Array.from({ length: count }, (_, index) => {
+    const start = Math.floor((index / count) * samples.length)
+    const end = Math.max(start + 1, Math.floor(((index + 1) / count) * samples.length))
+    const peak = Math.max(...samples.slice(start, end))
+    return Math.max(5, Math.min(100, peak))
+  })
+}
 
 interface NotificationEvent {
   referenceId?: string | null
@@ -227,9 +291,7 @@ export default function ChannelViewScreen() {
   const [activityUsers, setActivityUsers] = useState<
     { userId: string; username: string; activity: string }[]
   >([])
-  const [pendingFiles, setPendingFiles] = useState<
-    Array<{ uri: string; name: string; type: string; size?: number }>
-  >([])
+  const [pendingFiles, setPendingFiles] = useState<PendingChatFile[]>([])
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
   const [showProductPicker, setShowProductPicker] = useState(false)
   const [showScrollBottom, setShowScrollBottom] = useState(false)
@@ -258,15 +320,18 @@ export default function ChannelViewScreen() {
   const [threadInputText, setThreadInputText] = useState('')
   const [threadReplyTo, setThreadReplyTo] = useState<Message | null>(null)
   const [threadSending, setThreadSending] = useState(false)
-  const [threadPendingFiles, setThreadPendingFiles] = useState<
-    Array<{ uri: string; name: string; type: string; size?: number }>
-  >([])
+  const [threadPendingFiles, setThreadPendingFiles] = useState<PendingChatFile[]>([])
   const [showThreadEmojiPicker, setShowThreadEmojiPicker] = useState(false)
   const [showThreadPlusMenu, setShowThreadPlusMenu] = useState(false)
+  const [isVoiceMessageRecording, setIsVoiceMessageRecording] = useState(false)
   const searchInputRef = useRef<TextInput>(null)
   const inputRef = useRef<TextInput>(null)
   const threadInputRef = useRef<TextInput>(null)
   const threadListRef = useRef<FlatList<Message>>(null)
+  const voiceMessagePeaksRef = useRef<number[]>([])
+  const voiceMessageStartedAtRef = useRef(0)
+  const voiceMessageRecorder = useAudioRecorder(MOBILE_VOICE_RECORDING_OPTIONS)
+  const voiceMessageRecorderState = useAudioRecorderState(voiceMessageRecorder, 200)
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const showScrollBottomRef = useRef(false)
   const pendingShowScrollBottomRef = useRef(false)
@@ -333,6 +398,207 @@ export default function ChannelViewScreen() {
     },
     getCurrentText: () => inputText,
   })
+
+  const appendCreatedVoiceMessage = useCallback(
+    (raw: Record<string, unknown>) => {
+      if ((raw.channelId as string) !== channelId) return
+      const msg = normalizeMessage(raw)
+      queryClient.setQueryData<MessagesCache>(['messages', channelId], (old) => {
+        if (!old) return old
+        const firstPage = old.pages[0]
+        if (!firstPage) return old
+        if (firstPage.messages.some((message) => message.id === msg.id)) {
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((message) => (message.id === msg.id ? msg : message)),
+            })),
+          }
+        }
+        const optimisticIndex = firstPage.messages.findIndex(
+          (message) => message.id.startsWith('temp-') && message.authorId === msg.authorId,
+        )
+        if (msg.authorId === currentUser?.id && optimisticIndex >= 0) {
+          return {
+            ...old,
+            pages: [
+              {
+                ...firstPage,
+                messages: firstPage.messages.map((message, index) =>
+                  index === optimisticIndex ? msg : message,
+                ),
+              },
+              ...old.pages.slice(1),
+            ],
+          }
+        }
+        return {
+          ...old,
+          pages: [{ ...firstPage, messages: [...firstPage.messages, msg] }, ...old.pages.slice(1)],
+        }
+      })
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
+        }, 100)
+      })
+    },
+    [channelId, currentUser?.id, queryClient],
+  )
+
+  const sendRecordedVoiceMessage = useCallback(
+    async (file: PendingChatFile) => {
+      if (sending || !channelId) return
+      setSending(true)
+      const savedReplyTo = replyTo
+      playSendSound()
+      try {
+        const formData = new FormData()
+        formData.append('file', { uri: file.uri, name: file.name, type: file.type } as any)
+        formData.append('kind', 'voice')
+        if (file.durationMs) formData.append('durationMs', String(file.durationMs))
+        if (file.waveformPeaks) formData.append('waveformPeaks', JSON.stringify(file.waveformPeaks))
+
+        const uploaded = await fetchApi<{
+          url: string
+          size: number
+          kind?: 'file' | 'image' | 'voice'
+          durationMs?: number
+          waveformPeaks?: number[]
+        }>('/api/media/upload', {
+          method: 'POST',
+          body: formData,
+          headers: {},
+        })
+
+        const created = await fetchApi<Record<string, unknown>>(
+          `/api/channels/${channelId}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              content: '\u200B',
+              replyToId: savedReplyTo?.id,
+              attachments: [
+                {
+                  url: uploaded.url,
+                  filename: file.name,
+                  contentType: file.type,
+                  size: uploaded.size,
+                  kind: 'voice',
+                  durationMs: file.durationMs ?? uploaded.durationMs,
+                  waveformPeaks: file.waveformPeaks ?? uploaded.waveformPeaks,
+                  waveformVersion: file.waveformVersion,
+                },
+              ],
+            }),
+          },
+        )
+
+        appendCreatedVoiceMessage(created)
+        setReplyTo(null)
+        setTimeout(() => inputRef.current?.focus(), 50)
+      } catch (err) {
+        Alert.alert(t('common.error'), (err as Error).message || t('chat.sendFailed'))
+      } finally {
+        setSending(false)
+      }
+    },
+    [appendCreatedVoiceMessage, channelId, replyTo, sending, t],
+  )
+
+  const finishVoiceMessageRecording = useCallback(
+    async (cancel = false) => {
+      if (!isVoiceMessageRecording && !voiceMessageRecorderState.isRecording) return
+      try {
+        await voiceMessageRecorder.stop()
+      } catch {}
+      setIsVoiceMessageRecording(false)
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(
+        () => undefined,
+      )
+      if (cancel) return
+
+      const status = voiceMessageRecorder.getStatus()
+      const uri = voiceMessageRecorder.uri ?? status.url
+      const durationMs = Math.max(
+        status.durationMillis ?? 0,
+        Date.now() - voiceMessageStartedAtRef.current,
+      )
+      if (!uri) {
+        Alert.alert(t('common.error'), t('chat.voiceUnavailable'))
+        return
+      }
+      if (durationMs < 1000) {
+        Alert.alert(t('common.error'), t('chat.voiceTooShort'))
+        return
+      }
+      const waveformPeaks = normalizeMeteringPeaks(voiceMessagePeaksRef.current)
+      await sendRecordedVoiceMessage({
+        uri,
+        name: `voice_${Date.now()}.m4a`,
+        type: 'audio/mp4',
+        kind: 'voice',
+        durationMs: Math.min(60_000, durationMs),
+        waveformPeaks,
+        waveformVersion: 1,
+      })
+    },
+    [
+      isVoiceMessageRecording,
+      sendRecordedVoiceMessage,
+      t,
+      voiceMessageRecorder,
+      voiceMessageRecorderState.isRecording,
+    ],
+  )
+
+  const startVoiceMessageRecording = useCallback(async () => {
+    if (isVoiceMessageRecording || voiceMessageRecorderState.isRecording) {
+      await finishVoiceMessageRecording(false)
+      return
+    }
+    const permission = await requestRecordingPermissionsAsync()
+    if (!permission.granted) {
+      Alert.alert(t('common.error'), t('chat.voicePermissionDenied'))
+      return
+    }
+    try {
+      setShowPlusMenu(false)
+      Keyboard.dismiss()
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true })
+      voiceMessagePeaksRef.current = []
+      voiceMessageStartedAtRef.current = Date.now()
+      await voiceMessageRecorder.prepareToRecordAsync(MOBILE_VOICE_RECORDING_OPTIONS)
+      voiceMessageRecorder.record({ forDuration: 60 })
+      setIsVoiceMessageRecording(true)
+    } catch {
+      setIsVoiceMessageRecording(false)
+      Alert.alert(t('common.error'), t('chat.voiceUnavailable'))
+    }
+  }, [
+    finishVoiceMessageRecording,
+    isVoiceMessageRecording,
+    t,
+    voiceMessageRecorder,
+    voiceMessageRecorderState.isRecording,
+  ])
+
+  useEffect(() => {
+    if (!isVoiceMessageRecording) return
+    voiceMessagePeaksRef.current.push(meteringToPeak(voiceMessageRecorderState.metering))
+  }, [isVoiceMessageRecording, voiceMessageRecorderState.metering])
+
+  useEffect(() => {
+    if (!isVoiceMessageRecording) return
+    if (voiceMessageRecorderState.durationMillis >= 60_000) {
+      void finishVoiceMessageRecording(false)
+    }
+  }, [
+    finishVoiceMessageRecording,
+    isVoiceMessageRecording,
+    voiceMessageRecorderState.durationMillis,
+  ])
 
   const { data: bootstrap, isError: isBootstrapError } = useQuery({
     queryKey: ['channel-bootstrap', channelId],
@@ -602,14 +868,6 @@ export default function ChannelViewScreen() {
       })
       .slice(0, 12)
   }, [slashCommands, slashQuery])
-
-  const onlineMemberCount = useMemo(
-    () =>
-      channelMembers.filter(
-        (m) => m.user.status === 'online' || m.user.status === 'idle' || m.user.status === 'dnd',
-      ).length,
-    [channelMembers],
-  )
 
   // ---------- Search ----------
   const debouncedSearchQuery = useRef(searchQuery)
@@ -1152,6 +1410,94 @@ export default function ChannelViewScreen() {
   )
 
   useSocketEvent(
+    'voice:playback-updated',
+    useCallback(
+      (event: {
+        attachmentId: string
+        messageId: string
+        played: boolean
+        completed: boolean
+        lastPositionMs: number
+      }) => {
+        const updateMessage = (message: Message) =>
+          message.id === event.messageId
+            ? {
+                ...message,
+                attachments: message.attachments?.map((attachment) =>
+                  attachment.id === event.attachmentId
+                    ? {
+                        ...attachment,
+                        playback: {
+                          ...(attachment.playback ?? {}),
+                          played: event.played,
+                          completed: event.completed,
+                          lastPositionMs: event.lastPositionMs,
+                        },
+                      }
+                    : attachment,
+                ),
+              }
+            : message
+        if (activeThreadId) {
+          queryClient.setQueryData<Message[]>(['thread-messages', activeThreadId], (old) =>
+            (old ?? []).map(updateMessage),
+          )
+        }
+        queryClient.setQueryData<InfiniteData>(['messages', channelId], (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map(updateMessage),
+            })),
+          }
+        })
+      },
+      [activeThreadId, channelId, queryClient],
+    ),
+  )
+
+  useSocketEvent(
+    'voice:transcript-updated',
+    useCallback(
+      (event: {
+        attachmentId: string
+        messageId: string
+        transcript: Attachment['transcript']
+      }) => {
+        const updateMessage = (message: Message) =>
+          message.id === event.messageId
+            ? {
+                ...message,
+                attachments: message.attachments?.map((attachment) =>
+                  attachment.id === event.attachmentId
+                    ? { ...attachment, transcript: event.transcript }
+                    : attachment,
+                ),
+              }
+            : message
+        if (activeThreadId) {
+          queryClient.setQueryData<Message[]>(['thread-messages', activeThreadId], (old) =>
+            (old ?? []).map(updateMessage),
+          )
+        }
+        queryClient.setQueryData<InfiniteData>(['messages', channelId], (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map(updateMessage),
+            })),
+          }
+        })
+      },
+      [activeThreadId, channelId, queryClient],
+    ),
+  )
+
+  useSocketEvent(
     'message:deleted',
     useCallback(
       ({ id }: { id: string }) => {
@@ -1637,14 +1983,40 @@ export default function ChannelViewScreen() {
 
     try {
       let uploadedAttachments:
-        | Array<{ url: string; filename: string; contentType: string; size: number }>
+        | Array<{
+            url: string
+            filename: string
+            contentType: string
+            size: number
+            kind?: 'file' | 'image' | 'voice'
+            durationMs?: number
+            waveformPeaks?: number[]
+            waveformVersion?: number
+            transcriptText?: string
+            transcriptLanguage?: string
+            transcriptSource?: 'client' | 'runtime'
+          }>
         | undefined
       if (savedPendingFiles.length > 0) {
         uploadedAttachments = []
         for (const file of savedPendingFiles) {
           const formData = new FormData()
           formData.append('file', { uri: file.uri, name: file.name, type: file.type } as any)
-          const uploaded = await fetchApi<{ url: string; size: number }>('/api/media/upload', {
+          if (file.kind) formData.append('kind', file.kind)
+          if (file.durationMs) formData.append('durationMs', String(file.durationMs))
+          if (file.waveformPeaks)
+            formData.append('waveformPeaks', JSON.stringify(file.waveformPeaks))
+          if (file.transcriptText) formData.append('transcriptText', file.transcriptText)
+          if (file.transcriptLanguage)
+            formData.append('transcriptLanguage', file.transcriptLanguage)
+          if (file.transcriptSource) formData.append('transcriptSource', file.transcriptSource)
+          const uploaded = await fetchApi<{
+            url: string
+            size: number
+            kind?: 'file' | 'image' | 'voice'
+            durationMs?: number
+            waveformPeaks?: number[]
+          }>('/api/media/upload', {
             method: 'POST',
             body: formData,
             headers: {},
@@ -1654,6 +2026,13 @@ export default function ChannelViewScreen() {
             filename: file.name,
             contentType: file.type,
             size: uploaded.size,
+            kind: file.kind ?? uploaded.kind,
+            durationMs: file.durationMs ?? uploaded.durationMs,
+            waveformPeaks: file.waveformPeaks ?? uploaded.waveformPeaks,
+            waveformVersion: file.waveformVersion,
+            transcriptText: file.transcriptText,
+            transcriptLanguage: file.transcriptLanguage,
+            transcriptSource: file.transcriptSource,
           })
         }
       }
@@ -1822,11 +2201,30 @@ export default function ChannelViewScreen() {
         filename: string
         contentType: string
         size: number
+        kind?: 'file' | 'image' | 'voice'
+        durationMs?: number
+        waveformPeaks?: number[]
+        waveformVersion?: number
+        transcriptText?: string
+        transcriptLanguage?: string
+        transcriptSource?: 'client' | 'runtime'
       }> = []
       for (const file of savedFiles) {
         const formData = new FormData()
         formData.append('file', { uri: file.uri, name: file.name, type: file.type } as any)
-        const uploaded = await fetchApi<{ url: string; size: number }>('/api/media/upload', {
+        if (file.kind) formData.append('kind', file.kind)
+        if (file.durationMs) formData.append('durationMs', String(file.durationMs))
+        if (file.waveformPeaks) formData.append('waveformPeaks', JSON.stringify(file.waveformPeaks))
+        if (file.transcriptText) formData.append('transcriptText', file.transcriptText)
+        if (file.transcriptLanguage) formData.append('transcriptLanguage', file.transcriptLanguage)
+        if (file.transcriptSource) formData.append('transcriptSource', file.transcriptSource)
+        const uploaded = await fetchApi<{
+          url: string
+          size: number
+          kind?: 'file' | 'image' | 'voice'
+          durationMs?: number
+          waveformPeaks?: number[]
+        }>('/api/media/upload', {
           method: 'POST',
           body: formData,
           headers: {},
@@ -1836,6 +2234,13 @@ export default function ChannelViewScreen() {
           filename: file.name,
           contentType: file.type,
           size: uploaded.size,
+          kind: file.kind ?? uploaded.kind,
+          durationMs: file.durationMs ?? uploaded.durationMs,
+          waveformPeaks: file.waveformPeaks ?? uploaded.waveformPeaks,
+          waveformVersion: file.waveformVersion,
+          transcriptText: file.transcriptText,
+          transcriptLanguage: file.transcriptLanguage,
+          transcriptSource: file.transcriptSource,
         })
       }
 
@@ -2149,7 +2554,7 @@ export default function ChannelViewScreen() {
         <View
           style={
             highlightMessageId === item.data.id
-              ? { backgroundColor: `${colors.primary}15`, borderRadius: radius.md }
+              ? { backgroundColor: colors.surfaceHover, borderRadius: radius.md }
               : undefined
           }
         >
@@ -2227,25 +2632,13 @@ export default function ChannelViewScreen() {
     const isPending = access.joinRequestStatus === 'pending' || requestAccessMutation.isSuccess
     return (
       <BackgroundSurface style={styles.container}>
-        <GlassHeader style={[styles.customHeader, { paddingTop: insets.top }]}>
-          <Button
-            variant="ghost"
-            size="icon"
-            icon={ChevronLeft}
-            onPress={() => router.back()}
-            hitSlop={8}
-            iconColor={colors.text}
-            style={styles.headerBackBtn}
-          />
-          <View style={styles.headerTitleRow}>
-            <AppText variant="title" numberOfLines={1}>
-              # {gateChannel?.name ?? t('channel.privateChannel')}
-            </AppText>
-          </View>
-        </GlassHeader>
+        <MobileNavigationBar
+          title={`# ${gateChannel?.name ?? t('channel.privateChannel')}`}
+          left={<MobileBackButton onPress={() => router.back()} />}
+        />
         <GlassPanel style={styles.accessGate}>
-          <View style={[styles.accessGateIcon, { backgroundColor: `${colors.primary}18` }]}>
-            <Lock size={32} color={colors.primary} />
+          <View style={[styles.accessGateIcon, { backgroundColor: colors.inputBackground }]}>
+            <Lock size={iconSize['5xl']} color={colors.primary} />
           </View>
           <AppText variant="headline" style={styles.accessGateTitle}>
             # {gateChannel?.name ?? t('channel.privateChannel')}
@@ -2282,68 +2675,37 @@ export default function ChannelViewScreen() {
 
   return (
     <BackgroundSurface style={styles.container}>
-      {/* Custom header bar — left-aligned like Discord */}
-      <GlassHeader style={[styles.customHeader, { paddingTop: insets.top }]}>
-        <Button
-          variant="ghost"
-          size="icon"
-          icon={ChevronLeft}
-          onPress={() => router.back()}
-          hitSlop={8}
-          iconColor={colors.text}
-          style={styles.headerBackBtn}
-        />
-        <Pressable
-          onPress={() => {
-            if (serverSlug) {
-              router.push(
-                `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
-              )
-            } else {
-              setShowMemberList(true)
-            }
-          }}
-          style={styles.headerTitleRow}
-        >
-          <View style={styles.headerNameRow}>
-            <AppText variant="title" style={styles.headerChannel} numberOfLines={1}>
-              # {channel?.name ?? '...'}
-            </AppText>
-            <ChevronRight
-              size={16}
-              color={colors.textMuted}
-              strokeWidth={2.8}
-              style={styles.headerChevron}
+      <MobileNavigationBar
+        title={`# ${channel?.name ?? '...'}`}
+        left={<MobileBackButton onPress={() => router.back()} />}
+        right={
+          <>
+            <ToolbarButton
+              icon={Users}
+              iconColor={colors.textMuted}
+              onPress={() => {
+                if (serverSlug) {
+                  router.push(
+                    `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
+                  )
+                } else {
+                  setShowMemberList(true)
+                }
+              }}
+              variant="ghost"
             />
-          </View>
-          <View style={styles.headerOnlineRow}>
-            <View
-              style={[
-                styles.headerOnlineDot,
-                onlineMemberCount === 0 && { backgroundColor: colors.textMuted },
-              ]}
+            <ToolbarButton
+              icon={Search}
+              iconColor={colors.textMuted}
+              onPress={() => {
+                setShowSearchPanel(true)
+                setTimeout(() => searchInputRef.current?.focus(), 300)
+              }}
+              variant="ghost"
             />
-            <AppText variant="label" tone="secondary" style={styles.headerOnlineText}>
-              {onlineMemberCount}
-              {t('chat.onlineSuffix', '人在线')}
-            </AppText>
-          </View>
-        </Pressable>
-        <View style={styles.headerRight}>
-          <Button
-            variant="ghost"
-            size="icon"
-            icon={Search}
-            onPress={() => {
-              setShowSearchPanel(true)
-              setTimeout(() => searchInputRef.current?.focus(), 300)
-            }}
-            hitSlop={8}
-            iconColor={colors.textMuted}
-            style={styles.headerIconBtn}
-          />
-        </View>
-      </GlassHeader>
+          </>
+        }
+      />
 
       {isLoading ? (
         <View style={styles.loading}>
@@ -2426,7 +2788,7 @@ export default function ChannelViewScreen() {
           ]}
         >
           <View style={styles.suggestionHeader}>
-            <CommandIcon size={13} color={colors.primary} />
+            <CommandIcon size={iconSize.sm} color={colors.primary} />
             <Text style={[styles.suggestionHeaderText, { color: colors.textMuted }]}>
               {t('chat.slashCommands')}
             </Text>
@@ -2440,7 +2802,7 @@ export default function ChannelViewScreen() {
               ]}
               onPress={() => insertSlashCommand(command)}
             >
-              <View style={[styles.mentionIcon, { backgroundColor: `${colors.primary}18` }]}>
+              <View style={[styles.mentionIcon, { backgroundColor: colors.inputBackground }]}>
                 <CommandIcon size={15} color={colors.primary} />
               </View>
               <View style={styles.slashCommandBody}>
@@ -2454,7 +2816,7 @@ export default function ChannelViewScreen() {
                   {command.description || t('chat.slashCommandNoDescription')}
                 </Text>
               </View>
-              <View style={[styles.mentionBotBadge, { backgroundColor: `${colors.primary}20` }]}>
+              <View style={[styles.mentionBotBadge, { backgroundColor: colors.inputBackground }]}>
                 <Bot size={11} color={colors.primary} />
                 <Text style={[styles.mentionBotText, { color: colors.primary }]} numberOfLines={1}>
                   {command.botDisplayName ?? command.botUsername}
@@ -2486,11 +2848,11 @@ export default function ChannelViewScreen() {
                 <Avatar
                   uri={m.avatarUrl ?? null}
                   name={m.displayName || m.username || m.label}
-                  size={24}
+                  size={iconSize['3xl']}
                   userId={m.userId}
                 />
               ) : (
-                <View style={[styles.mentionIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <View style={[styles.mentionIcon, { backgroundColor: colors.inputBackground }]}>
                   {m.kind === 'channel' ? (
                     <Hash size={15} color={colors.primary} />
                   ) : (
@@ -2505,7 +2867,7 @@ export default function ChannelViewScreen() {
                 {m.description || m.token}
               </Text>
               {m.isBot && (
-                <View style={[styles.mentionBotBadge, { backgroundColor: `${colors.primary}20` }]}>
+                <View style={[styles.mentionBotBadge, { backgroundColor: colors.inputBackground }]}>
                   <Text style={[styles.mentionBotText, { color: colors.primary }]}>Buddy</Text>
                 </View>
               )}
@@ -2550,11 +2912,15 @@ export default function ChannelViewScreen() {
           typingUsers={typingUsers}
           isRecording={isRecording}
           isHolding={isHolding}
+          isVoiceMessageRecording={isVoiceMessageRecording}
+          voiceMessageRecordingMs={voiceMessageRecorderState.durationMillis}
           keyboardVisible={keyboardVisible}
           insetsBottom={insets.bottom}
           canUseVoice={speechSupported}
           onVoicePressIn={onVoicePressIn}
           onVoicePressOut={onVoicePressOut}
+          onStartVoiceMessageRecording={startVoiceMessageRecording}
+          onFinishVoiceMessageRecording={finishVoiceMessageRecording}
           showAtButton
           onPressAt={() => {
             setInputText((prev) => `${prev}@`)
@@ -2650,32 +3016,18 @@ export default function ChannelViewScreen() {
         }}
       >
         <BackgroundSurface style={styles.threadModal}>
-          <GlassHeader style={[styles.threadHeader, { paddingTop: insets.top }]}>
-            <Button
-              variant="ghost"
-              size="icon"
-              icon={ChevronLeft}
-              onPress={() => {
-                setActiveThread(null)
-                setActiveThreadParent(null)
-                setThreadReplyTo(null)
-              }}
-              hitSlop={8}
-              iconColor={colors.text}
-              style={styles.headerBackBtn}
-            />
-            <View style={styles.threadHeaderTitle}>
-              <View style={styles.threadHeaderNameRow}>
-                <MessageSquare size={16} color={colors.primary} />
-                <AppText variant="title" style={styles.threadHeaderName} numberOfLines={1}>
-                  {activeThread?.name ?? t('chat.thread')}
-                </AppText>
-              </View>
-              <AppText variant="label" tone="secondary" numberOfLines={1}>
-                # {channel?.name ?? t('chat.channelFallback')}
-              </AppText>
-            </View>
-          </GlassHeader>
+          <MobileNavigationBar
+            title={activeThread?.name ?? t('chat.thread')}
+            left={
+              <MobileBackButton
+                onPress={() => {
+                  setActiveThread(null)
+                  setActiveThreadParent(null)
+                  setThreadReplyTo(null)
+                }}
+              />
+            }
+          />
 
           {activeThreadParent && (
             <View style={[styles.threadSource, { borderBottomColor: colors.border }]}>
@@ -2699,7 +3051,7 @@ export default function ChannelViewScreen() {
             </View>
           ) : threadMessages.length === 0 ? (
             <View style={styles.threadEmpty}>
-              <MessageSquare size={28} color={colors.primary} />
+              <MessageSquare size={iconSize['4xl']} color={colors.primary} />
               <AppText variant="bodyStrong" tone="secondary">
                 {t('chat.threadEmpty')}
               </AppText>
@@ -2779,9 +3131,9 @@ export default function ChannelViewScreen() {
                       )
                     }}
                     hitSlop={8}
-                    style={[styles.sheetActionBtn, { backgroundColor: `${colors.primary}12` }]}
+                    style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
                   >
-                    <UserPlus size={16} color={colors.primary} />
+                    <UserPlus size={iconSize.md} color={colors.primary} />
                   </Pressable>
                 )}
                 <Pressable
@@ -2789,7 +3141,7 @@ export default function ChannelViewScreen() {
                   hitSlop={8}
                   style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
                 >
-                  <X size={16} color={colors.textSecondary} />
+                  <X size={iconSize.md} color={colors.textSecondary} />
                 </Pressable>
               </View>
             </View>
@@ -2807,7 +3159,7 @@ export default function ChannelViewScreen() {
                   <Pressable
                     style={({ pressed }) => [
                       styles.memberRow,
-                      { opacity: isOnline ? 1 : 0.5 },
+                      { backgroundColor: isOnline ? colors.surface : colors.background },
                       pressed && { backgroundColor: colors.surfaceHover },
                     ]}
                     onPress={() => {
@@ -2815,17 +3167,14 @@ export default function ChannelViewScreen() {
                       router.push(`/(main)/profile/${item.user.id}`)
                     }}
                   >
-                    <View style={styles.memberAvatarWrap}>
-                      <Avatar
-                        uri={item.user.avatarUrl}
-                        name={name}
-                        size={40}
-                        userId={item.user.id}
-                      />
-                      <View style={styles.memberStatusDot}>
-                        <StatusBadge status={item.user.status || 'offline'} size={12} />
-                      </View>
-                    </View>
+                    <Avatar
+                      uri={item.user.avatarUrl}
+                      name={name}
+                      size={iconSize['6xl']}
+                      userId={item.user.id}
+                      status={item.user.status || 'offline'}
+                      showStatus
+                    />
                     <View style={styles.memberInfo}>
                       <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                         {name}
@@ -2839,8 +3188,7 @@ export default function ChannelViewScreen() {
                         style={[
                           styles.memberRoleBadge,
                           {
-                            backgroundColor:
-                              item.role === 'owner' ? `${colors.warning}20` : `${colors.info}20`,
+                            backgroundColor: colors.inputBackground,
                           },
                         ]}
                       >
@@ -2858,7 +3206,10 @@ export default function ChannelViewScreen() {
                     )}
                     {item.user.isBot && (
                       <View
-                        style={[styles.memberRoleBadge, { backgroundColor: `${colors.primary}20` }]}
+                        style={[
+                          styles.memberRoleBadge,
+                          { backgroundColor: colors.inputBackground },
+                        ]}
                       >
                         <Text style={[styles.memberRoleText, { color: colors.primary }]}>
                           Buddy
@@ -2900,11 +3251,11 @@ export default function ChannelViewScreen() {
                 hitSlop={8}
                 style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
               >
-                <X size={16} color={colors.textSecondary} />
+                <X size={iconSize.md} color={colors.textSecondary} />
               </Pressable>
             </View>
             <View style={[styles.sheetSearchWrap, { backgroundColor: colors.inputBackground }]}>
-              <Search size={16} color={colors.textMuted} />
+              <Search size={iconSize.md} color={colors.textMuted} />
               <TextInput
                 style={[styles.inviteSearchInput, { color: colors.text }]}
                 value={inviteSearch}
@@ -2924,7 +3275,12 @@ export default function ChannelViewScreen() {
                   inviteMemberMutation.isPending && inviteMemberMutation.variables === item.user.id
                 return (
                   <View style={styles.memberRow}>
-                    <Avatar uri={item.user.avatarUrl} name={name} size={40} userId={item.user.id} />
+                    <Avatar
+                      uri={item.user.avatarUrl}
+                      name={name}
+                      size={iconSize['6xl']}
+                      userId={item.user.id}
+                    />
                     <View style={styles.memberInfo}>
                       <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                         {name}
@@ -2935,7 +3291,10 @@ export default function ChannelViewScreen() {
                     </View>
                     {item.user.isBot && (
                       <View
-                        style={[styles.memberRoleBadge, { backgroundColor: `${colors.primary}20` }]}
+                        style={[
+                          styles.memberRoleBadge,
+                          { backgroundColor: colors.inputBackground },
+                        ]}
                       >
                         <Text style={[styles.memberRoleText, { color: colors.primary }]}>
                           Buddy
@@ -2943,14 +3302,14 @@ export default function ChannelViewScreen() {
                       </View>
                     )}
                     <Pressable
-                      style={[styles.inviteBtn, { backgroundColor: `${colors.primary}12` }]}
+                      style={[styles.inviteBtn, { backgroundColor: colors.inputBackground }]}
                       onPress={() => inviteMemberMutation.mutate(item.user.id)}
                       disabled={isPending}
                     >
                       {isPending ? (
                         <ActivityIndicator size="small" color={colors.primary} />
                       ) : (
-                        <UserPlus size={16} color={colors.primary} />
+                        <UserPlus size={iconSize.md} color={colors.primary} />
                       )}
                     </Pressable>
                   </View>
@@ -2981,7 +3340,7 @@ export default function ChannelViewScreen() {
             style={[styles.searchHeader, { paddingTop: Platform.OS === 'ios' ? 12 : 0 }]}
           >
             <InputValley style={styles.searchInputRow} focused={searchQuery.length > 0}>
-              <Search size={18} color={colors.textMuted} />
+              <Search size={iconSize.lg} color={colors.textMuted} />
               <TextInput
                 ref={searchInputRef}
                 style={[styles.searchInput, { color: colors.text }]}
@@ -2998,7 +3357,7 @@ export default function ChannelViewScreen() {
               />
               {searchQuery.length > 0 && (
                 <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-                  <X size={16} color={colors.textMuted} />
+                  <X size={iconSize.md} color={colors.textMuted} />
                 </Pressable>
               )}
             </InputValley>
@@ -3014,13 +3373,13 @@ export default function ChannelViewScreen() {
                 styles.searchTab,
                 searchTab === 'messages' && {
                   borderBottomColor: colors.primary,
-                  borderBottomWidth: 2,
+                  borderBottomWidth: border.active,
                 },
               ]}
               onPress={() => setSearchTab('messages')}
             >
               <MessageSquare
-                size={14}
+                size={iconSize.sm}
                 color={searchTab === 'messages' ? colors.primary : colors.textMuted}
               />
               <Text
@@ -3037,13 +3396,13 @@ export default function ChannelViewScreen() {
                 styles.searchTab,
                 searchTab === 'members' && {
                   borderBottomColor: colors.primary,
-                  borderBottomWidth: 2,
+                  borderBottomWidth: border.active,
                 },
               ]}
               onPress={() => setSearchTab('members')}
             >
               <Users
-                size={14}
+                size={iconSize.sm}
                 color={searchTab === 'members' ? colors.primary : colors.textMuted}
               />
               <Text
@@ -3096,7 +3455,7 @@ export default function ChannelViewScreen() {
                         <Avatar
                           uri={m.user.avatarUrl}
                           name={m.user.displayName || m.user.username}
-                          size={28}
+                          size={iconSize['4xl']}
                           userId={m.user.id}
                         />
                       }
@@ -3137,7 +3496,7 @@ export default function ChannelViewScreen() {
                           <Avatar
                             uri={item.author?.avatarUrl ?? null}
                             name={authorName}
-                            size={24}
+                            size={iconSize['3xl']}
                             userId={item.authorId}
                           />
                           <Text
@@ -3159,7 +3518,7 @@ export default function ChannelViewScreen() {
                           style={{
                             color: colors.textSecondary,
                             fontSize: fontSize.sm,
-                            lineHeight: 20,
+                            lineHeight: lineHeight.sm,
                             marginTop: spacing.xs,
                           }}
                           numberOfLines={3}
@@ -3197,17 +3556,14 @@ export default function ChannelViewScreen() {
                       setSearchFromUser(item.user.id)
                     }}
                   >
-                    <View style={styles.memberAvatarWrap}>
-                      <Avatar
-                        uri={item.user.avatarUrl}
-                        name={name}
-                        size={36}
-                        userId={item.user.id}
-                      />
-                      <View style={styles.memberStatusDot}>
-                        <StatusBadge status={item.user.status || 'offline'} size={12} />
-                      </View>
-                    </View>
+                    <Avatar
+                      uri={item.user.avatarUrl}
+                      name={name}
+                      size={36}
+                      userId={item.user.id}
+                      status={item.user.status || 'offline'}
+                      showStatus
+                    />
                     <View style={styles.memberInfo}>
                       <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                         {name}
@@ -3218,7 +3574,10 @@ export default function ChannelViewScreen() {
                     </View>
                     {item.user.isBot && (
                       <View
-                        style={[styles.memberRoleBadge, { backgroundColor: `${colors.primary}20` }]}
+                        style={[
+                          styles.memberRoleBadge,
+                          { backgroundColor: colors.inputBackground },
+                        ]}
                       >
                         <Text style={[styles.memberRoleText, { color: colors.primary }]}>
                           Buddy
@@ -3240,89 +3599,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   threadModal: { flex: 1 },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  // Custom header (replaces native header for left-aligned Discord style)
-  customHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 56,
-    paddingHorizontal: spacing.md,
-  },
-  headerBackBtn: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs,
-  },
-  headerTitleRow: {
-    flex: 1,
-    flexDirection: 'column',
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  headerNameRow: {
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  headerChannel: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    lineHeight: 22,
-    flexShrink: 1,
-  },
-  headerChevron: {
-    opacity: 0.55,
-  },
-  headerOnlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  headerOnlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
-  },
-  headerOnlineText: {
-    fontSize: fontSize.xs,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing.xs,
-  },
-  headerIconBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  threadHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 56,
-    paddingHorizontal: spacing.md,
-  },
-  threadHeaderTitle: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-  },
-  threadHeaderNameRow: {
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  threadHeaderName: {
-    flexShrink: 1,
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    lineHeight: 22,
-  },
   threadSource: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: spacing.xs,
@@ -3353,15 +3629,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: size.avatarXl,
+    height: size.avatarXl,
+    borderRadius: radius['3xl'],
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   emptyTitle: { fontSize: fontSize.xl, fontWeight: '800', textAlign: 'center' },
-  emptyDescription: { fontSize: fontSize.sm, textAlign: 'center', lineHeight: 20 },
+  emptyDescription: { fontSize: fontSize.sm, textAlign: 'center', lineHeight: lineHeight.sm },
   messageList: {
     paddingHorizontal: spacing.xs,
     paddingTop: spacing.md,
@@ -3383,7 +3659,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
   },
-  systemEventLine: { flex: 1, height: 1 },
+  systemEventLine: { flex: 1, height: border.hairline },
   systemEventText: { fontSize: fontSize.xs, fontWeight: '500' },
   // New message divider
   newMessageDivider: {
@@ -3393,7 +3669,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
   },
-  dividerLine: { flex: 1, height: 1 },
+  dividerLine: { flex: 1, height: border.hairline },
   dividerText: { fontSize: fontSize.xs, fontWeight: '700' },
   // Date separator
   dateSeparator: {
@@ -3409,18 +3685,13 @@ const styles = StyleSheet.create({
   scrollBottomFab: {
     position: 'absolute',
     right: spacing.md,
-    bottom: 140,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    bottom: size.tabBar + spacing['6xl'] + spacing.xl,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    borderWidth: border.hairline,
   },
   // Activity
   activityBar: {
@@ -3428,18 +3699,17 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   activityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  pulseDot: { width: 8, height: 8, borderRadius: 4 },
+  pulseDot: { width: size.dotMd, height: size.dotMd, borderRadius: radius.sm },
   activityText: { fontSize: fontSize.xs },
   activityDots: {
     flexDirection: 'row',
-    gap: 3,
+    gap: spacing.xxs,
     marginLeft: 'auto',
   },
   activityDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    opacity: 0.7,
+    width: size.dotXs,
+    height: size.dotXs,
+    borderRadius: radius.xs,
   },
   // Typing
   typingBar: {
@@ -3449,8 +3719,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
     gap: spacing.sm,
   },
-  typingDots: { flexDirection: 'row', gap: 3 },
-  typingDot: { width: 4, height: 4, borderRadius: 2 },
+  typingDots: { flexDirection: 'row', gap: spacing.xxs },
+  typingDot: { width: size.dotXs, height: size.dotXs, borderRadius: radius.xs },
   // Pending files
   pendingFilesBar: {
     flexDirection: 'row',
@@ -3458,7 +3728,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     gap: spacing.xs,
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
   },
   pendingFileChip: {
     flexDirection: 'row',
@@ -3476,17 +3746,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
     gap: spacing.sm,
   },
-  replyBarAccent: { width: 3, height: '100%', borderRadius: 2, minHeight: 32 },
+  replyBarAccent: {
+    width: size.dividerAccent,
+    height: '100%',
+    borderRadius: radius.xs,
+    minHeight: size.iconButtonSm,
+  },
   replyBarContent: { flex: 1 },
   replyBarLabel: { fontSize: fontSize.xs, fontWeight: '700' },
-  replyBarPreview: { fontSize: fontSize.xs, marginTop: 1 },
+  replyBarPreview: { fontSize: fontSize.xs, marginTop: spacing.px },
   // @mention autocomplete
   mentionDropdown: {
-    borderTopWidth: 1,
-    maxHeight: 240,
+    borderTopWidth: border.hairline,
+    maxHeight: size.dropdownMaxHeight,
   },
   suggestionHeader: {
     flexDirection: 'row',
@@ -3509,8 +3784,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   mentionIcon: {
-    width: 24,
-    height: 24,
+    width: size.avatarXs,
+    height: size.avatarXs,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -3531,14 +3806,14 @@ const styles = StyleSheet.create({
   mentionBotBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    maxWidth: 120,
+    gap: spacing.xxs,
+    maxWidth: size.pillMaxWidth,
     paddingHorizontal: spacing.xs,
-    paddingVertical: 1,
+    paddingVertical: spacing.px,
     borderRadius: radius.sm,
   },
   mentionBotText: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   // Input bar
@@ -3546,69 +3821,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: spacing.sm,
-    paddingTop: 8,
-    gap: 8,
-    borderTopWidth: 1,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    borderTopWidth: border.hairline,
   },
   actionBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 0,
+    marginBottom: spacing.none,
   },
   inputWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
     borderRadius: radius.xl,
-    minHeight: 46,
-    maxHeight: 120,
+    minHeight: size.controlLg,
+    maxHeight: size.controlLg * 2 + spacing['2xl'],
     position: 'relative',
   },
   inputMicBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'absolute',
-    right: 4,
-    bottom: 6,
+    right: spacing.xs,
+    bottom: spacing.tight,
   },
   textInput: {
     flex: 1,
-    minHeight: 46,
-    maxHeight: 120,
+    minHeight: size.controlLg,
+    maxHeight: size.controlLg * 2 + spacing['2xl'],
     paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? 12 : spacing.md,
+    paddingVertical: spacing.md,
     fontSize: fontSize.md,
-    paddingRight: 28,
+    paddingRight: spacing['3xl'],
   },
   // Sheet-style modals
   sheetOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: palette.black,
   },
   sheetDismiss: {
     flex: 1,
   },
   sheetContainer: {
     maxHeight: '75%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     paddingBottom: spacing.xl,
   },
   sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: size.iconButtonMd,
+    height: size.dotXs,
+    borderRadius: radius.xs,
     alignSelf: 'center',
     marginTop: spacing.sm,
     marginBottom: spacing.xs,
-    opacity: 0.3,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -3627,14 +3901,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   sheetActionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
   },
   productPickerState: {
-    minHeight: 180,
+    minHeight: size.panelStateMinHeight,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
@@ -3653,15 +3927,19 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   productPickerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
   },
   productPickerInfo: { flex: 1, minWidth: 0 },
   productPickerName: { fontSize: fontSize.md, fontWeight: '700' },
-  productPickerSummary: { fontSize: fontSize.xs, marginTop: 3, lineHeight: 16 },
+  productPickerSummary: {
+    fontSize: fontSize.xs,
+    marginTop: spacing.xxs,
+    lineHeight: lineHeight.xs,
+  },
   productPickerPrice: { fontSize: fontSize.sm, fontWeight: '800' },
   sheetSearchWrap: {
     flexDirection: 'row',
@@ -3670,7 +3948,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
-    height: 40,
+    height: size.iconButtonLg,
     gap: spacing.sm,
   },
   sheetList: {
@@ -3684,17 +3962,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: radius.lg,
   },
-  memberAvatarWrap: {
-    position: 'relative',
-  },
-  memberStatusDot: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-  },
   memberInfo: {
     flex: 1,
-    gap: 2,
+    gap: spacing.xxs,
   },
   memberName: {
     fontSize: fontSize.md,
@@ -3702,11 +3972,11 @@ const styles = StyleSheet.create({
   },
   memberRoleBadge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: spacing.xxs,
     borderRadius: radius.md,
   },
   memberRoleText: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   memberEmpty: {
@@ -3716,12 +3986,12 @@ const styles = StyleSheet.create({
   inviteSearchInput: {
     flex: 1,
     fontSize: fontSize.sm,
-    paddingVertical: 0,
+    paddingVertical: spacing.none,
   },
   inviteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3730,14 +4000,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
     gap: spacing.sm,
   },
   voiceRecordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
+    width: size.dotMd,
+    height: size.dotMd,
+    borderRadius: radius.sm,
+    backgroundColor: palette.crimson,
   },
   voiceRecordingLabel: {
     fontSize: fontSize.xs,
@@ -3748,7 +4018,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
   },
   plusPanel: {
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
     paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
   },
@@ -3759,19 +4029,19 @@ const styles = StyleSheet.create({
   },
   plusPanelItem: {
     alignItems: 'center',
-    width: 64,
+    width: size.avatarXl,
     gap: spacing.xs,
   },
   plusPanelIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+    width: size.plusPanelIcon,
+    height: size.plusPanelIcon,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
   },
   plusPanelLabel: {
     fontSize: fontSize.xs,
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
   accessGate: {
     flex: 1,
@@ -3781,8 +4051,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   accessGateIcon: {
-    width: 72,
-    height: 72,
+    width: size.listItemLg,
+    height: size.listItemLg,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -3796,21 +4066,21 @@ const styles = StyleSheet.create({
   accessGateDesc: {
     marginTop: spacing.sm,
     fontSize: fontSize.md,
-    lineHeight: 22,
+    lineHeight: lineHeight.md,
     textAlign: 'center',
   },
   accessGateButton: {
     marginTop: spacing.xl,
-    minWidth: 190,
+    minWidth: size.actionMinWidth,
   },
   accessGateButtonText: {
-    color: '#050508',
+    color: palette.foundation,
     fontSize: fontSize.sm,
     fontWeight: '800',
   },
   selectionToolbar: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: 0,
+    borderBottomWidth: border.none,
     paddingTop: spacing.sm,
     paddingHorizontal: spacing.md,
   },
@@ -3830,17 +4100,17 @@ const styles = StyleSheet.create({
   },
   searchTabBar: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
+    borderBottomWidth: border.hairline,
     paddingHorizontal: spacing.md,
   },
   searchTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    marginBottom: -1,
-    borderBottomWidth: 2,
+    marginBottom: -border.hairline,
+    borderBottomWidth: border.active,
     borderBottomColor: 'transparent',
   },
   searchTabText: {
@@ -3853,13 +4123,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
-    minHeight: 44,
+    minHeight: size.controlMd,
     gap: spacing.sm,
   },
   searchInput: {
     flex: 1,
     fontSize: fontSize.md,
-    height: 40,
+    height: size.iconButtonLg,
   },
   searchFilters: {
     flexDirection: 'row',
@@ -3887,7 +4157,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.sm,
     borderRadius: radius.md,
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   searchResultCard: {
     padding: spacing.md,

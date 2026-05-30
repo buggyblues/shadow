@@ -4,6 +4,40 @@ import { io, type Socket } from 'socket.io-client'
 let socket: Socket | null = null
 const joinedChannels = new Set<string>()
 const joinedThreads = new Set<string>()
+const DESKTOP_SETTINGS_STORAGE_KEY = 'shadow:desktop-runtime-settings:v1'
+
+function getStoredDesktopServerBaseUrl(): string {
+  if (typeof window === 'undefined' || window.location.protocol !== 'app:') return ''
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(DESKTOP_SETTINGS_STORAGE_KEY) ?? '{}',
+    ) as Partial<{ serverBaseUrl: string }>
+    if (typeof parsed.serverBaseUrl === 'string') {
+      const url = new URL(parsed.serverBaseUrl)
+      if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin
+    }
+  } catch {
+    // Fall through to the default hosted origin.
+  }
+  return 'https://shadowob.com'
+}
+
+function getSocketOrigin(): string {
+  const configuredApiBase = import.meta.env.VITE_API_BASE
+  if (configuredApiBase) {
+    try {
+      return new URL(configuredApiBase, window.location.origin).origin
+    } catch {
+      // Fall through to protocol-aware defaults.
+    }
+  }
+  return getStoredDesktopServerBaseUrl() || window.location.origin
+}
+
+function getDisconnectUrl(): string {
+  const origin = getStoredDesktopServerBaseUrl()
+  return origin ? `${origin}/api/auth/disconnect` : '/api/auth/disconnect'
+}
 
 function rejoinRooms(s: Socket): void {
   for (const channelId of joinedChannels) {
@@ -16,7 +50,7 @@ function rejoinRooms(s: Socket): void {
 
 export function getSocket(): Socket {
   if (!socket) {
-    const nextSocket = io(window.location.origin, {
+    const nextSocket = io(getSocketOrigin(), {
       auth: (cb) => {
         cb({ token: localStorage.getItem('accessToken') })
       },
@@ -61,7 +95,7 @@ function handleBeforeUnload() {
     const token = localStorage.getItem('accessToken')
     if (token) {
       navigator.sendBeacon(
-        '/api/auth/disconnect',
+        getDisconnectUrl(),
         new Blob([JSON.stringify({ token })], { type: 'application/json' }),
       )
     }

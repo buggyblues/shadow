@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { HeaderButton, HeaderButtonGroup } from '../../../../src/components/common/header-button'
 import { fetchApi } from '../../../../src/lib/api'
 import { useChatStore } from '../../../../src/stores/chat.store'
-import { useColors } from '../../../../src/theme'
+import { iconSize, useColors } from '../../../../src/theme'
 
 export default function ServerLayout() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
@@ -39,7 +39,7 @@ export default function ServerLayout() {
         icon={ChevronLeft}
         onPress={() => router.back()}
         color={colors.text}
-        size={22}
+        size={iconSize['2xl']}
       />
     </HeaderButtonGroup>
   )
@@ -56,6 +56,7 @@ export default function ServerLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: server?.name ?? t('common.loading') }} />
+      <Stack.Screen name="detail" options={{ headerShown: false }} />
       <Stack.Screen name="channels/[channelId]" options={{ headerShown: false }} />
       <Stack.Screen name="shop" options={{ title: t('server.shop') }} />
       <Stack.Screen name="workspace" options={{ title: t('server.workspace') }} />

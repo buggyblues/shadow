@@ -1,16 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { Check, ChevronLeft, Inbox, UserPlus, X } from 'lucide-react-native'
+import { Check, Inbox, UserPlus, X } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import Reanimated, { FadeInRight } from 'react-native-reanimated'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../src/components/common/avatar'
 import { EmptyState } from '../../../src/components/common/empty-state'
+import { MobileBackButton, MobileNavigationBar } from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { showToast } from '../../../src/lib/toast'
-import { fontSize, radius, spacing, useColors } from '../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../src/theme'
 
 interface FriendUser {
   id: string
@@ -33,7 +42,6 @@ export default function NewFriendsScreen() {
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
   const [addUsername, setAddUsername] = useState('')
 
@@ -87,26 +95,10 @@ export default function NewFriendsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.navBar,
-          {
-            backgroundColor: colors.surface,
-            paddingTop: insets.top + 8,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <ChevronLeft size={22} color={colors.text} />
-        </Pressable>
-        <View style={styles.navTitleWrap}>
-          <Text style={[styles.navTitle, { color: colors.text }]}>
-            {t('friends.newFriends', '新的朋友')}
-          </Text>
-        </View>
-        <View style={styles.navSpacer} />
-      </View>
+      <MobileNavigationBar
+        title={t('friends.newFriends', '新的朋友')}
+        left={<MobileBackButton onPress={() => router.back()} />}
+      />
 
       <View style={[styles.addContainer, { backgroundColor: colors.background }]}>
         <Text style={[styles.addTitle, { color: colors.text }]}>
@@ -121,7 +113,7 @@ export default function NewFriendsScreen() {
             { backgroundColor: colors.inputBackground, borderColor: colors.border },
           ]}
         >
-          <UserPlus size={18} color={colors.textMuted} />
+          <UserPlus size={iconSize.lg} color={colors.textMuted} />
           <TextInput
             style={[styles.addInput, { color: colors.text }]}
             value={addUsername}
@@ -135,7 +127,7 @@ export default function NewFriendsScreen() {
             hitSlop={10}
             style={[
               styles.addBtn,
-              { backgroundColor: addUsername.trim() ? colors.primary : `${colors.primary}40` },
+              { backgroundColor: addUsername.trim() ? colors.primary : colors.inputBackground },
             ]}
             disabled={!addUsername.trim() || sendRequest.isPending}
             onPress={() => addUsername.trim() && sendRequest.mutate(addUsername.trim())}
@@ -180,16 +172,16 @@ export default function NewFriendsScreen() {
               {item.kind === 'received' && (
                 <View style={styles.rowActions}>
                   <Pressable
-                    style={[styles.iconBtn, { backgroundColor: '#23a55915' }]}
+                    style={[styles.iconBtn, { backgroundColor: palette.successSurface }]}
                     onPress={() => acceptRequest.mutate(item.friendshipId)}
                   >
-                    <Check size={16} color="#23a559" />
+                    <Check size={iconSize.md} color={palette.emerald} />
                   </Pressable>
                   <Pressable
-                    style={[styles.iconBtn, { backgroundColor: '#ef444415' }]}
+                    style={[styles.iconBtn, { backgroundColor: palette.dangerSurface }]}
                     onPress={() => rejectRequest.mutate(item.friendshipId)}
                   >
-                    <X size={16} color="#ef4444" />
+                    <X size={iconSize.md} color={palette.crimson} />
                   </Pressable>
                 </View>
               )}
@@ -206,41 +198,28 @@ export default function NewFriendsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  navBar: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-  },
-  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  navTitleWrap: { flexDirection: 'row', alignItems: 'center' },
-  navTitle: { fontSize: fontSize.lg, fontWeight: '800' },
-  navSpacer: { width: 32, height: 32 },
   addContainer: { padding: spacing.lg, gap: spacing.md },
   addTitle: { fontSize: fontSize.lg, fontWeight: '800' },
   addDesc: { fontSize: fontSize.sm },
   addInputRow: {
-    minHeight: 50,
+    minHeight: size.controlLg + spacing.xxs,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     paddingLeft: spacing.md,
     gap: spacing.sm,
     overflow: 'hidden',
   },
-  addInput: { flex: 1, fontSize: fontSize.md, paddingVertical: 12 },
+  addInput: { flex: 1, fontSize: fontSize.md, paddingVertical: spacing.md },
   addBtn: {
-    minWidth: 74,
+    minWidth: size.listItemLg + spacing.xxs,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
     paddingHorizontal: spacing.lg,
   },
-  addBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSize.sm },
+  addBtnText: { color: palette.white, fontWeight: '700', fontSize: fontSize.sm },
   sectionTitle: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
@@ -248,24 +227,24 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: '700',
   },
-  listContent: { paddingBottom: 120 },
+  listContent: { paddingBottom: size.tabBar + spacing['6xl'] },
   rowCard: {
-    minHeight: 70,
+    minHeight: size.listItemLg - spacing.xxs,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     gap: spacing.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: border.hairline,
   },
-  rowInfo: { flex: 1, gap: 2 },
+  rowInfo: { flex: 1, gap: spacing.xxs },
   rowName: { fontSize: fontSize.md, fontWeight: '700' },
   rowSub: { fontSize: fontSize.xs },
-  rowActions: { flexDirection: 'row', gap: 8 },
+  rowActions: { flexDirection: 'row', gap: spacing.sm },
   iconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },

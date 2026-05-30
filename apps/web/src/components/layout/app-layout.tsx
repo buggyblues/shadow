@@ -178,7 +178,8 @@ function AppLayoutInner() {
   }
 
   return (
-    <div className="relative flex h-dvh w-screen overflow-hidden bg-transparent p-3 gap-3">
+    <div className="desktop-app-shell relative flex h-dvh w-screen overflow-hidden bg-transparent p-3 gap-3">
+      <div className="desktop-window-drag-strip" aria-hidden="true" />
       {!isCloudRoute && (
         <>
           <DynamicBackground />

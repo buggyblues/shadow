@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { StyleSheet, View } from 'react-native'
 import { useChannelSort } from '../../hooks/use-channel-sort'
-import { spacing, useColors } from '../../theme'
+import { iconSize, spacing, useColors } from '../../theme'
 import { Button, MenuItem, Sheet } from '../ui'
 
 interface SortOption {
@@ -72,7 +72,7 @@ export function ChannelSortButton({ serverId }: ChannelSortButtonProps) {
               right={
                 isSelected ? (
                   <View style={styles.checkContainer}>
-                    <Check size={18} color={colors.primary} />
+                    <Check size={iconSize.lg} color={colors.primary} />
                   </View>
                 ) : null
               }

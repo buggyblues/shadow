@@ -7,6 +7,7 @@ export const updateShopSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
   logoUrl: z.string().nullable().optional(),
   bannerUrl: z.string().nullable().optional(),
+  visibility: z.enum(['private', 'login_required', 'public']).optional(),
   settings: z.record(z.unknown()).optional(),
 })
 
@@ -69,7 +70,8 @@ export const createProductSchema = z.object({
   summary: z.string().max(500).optional(),
   basePrice: z.number().int().min(0).optional().default(0),
   specNames: z.array(z.string()).optional().default([]),
-  tags: z.array(z.string()).optional().default([]),
+  tags: z.array(z.string().min(1).max(80)).max(20).optional().default([]),
+  globalPublic: z.boolean().optional(),
   categoryId: z.string().uuid().optional(),
   entitlementConfig: entitlementConfigListSchema.optional(),
   media: z.array(mediaItemSchema).optional(),

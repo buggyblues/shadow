@@ -41,7 +41,7 @@ export default function InviteScreen() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.replace(`/(auth)/register?code=${code}`)
+      router.replace(`/(auth)/login?inviteCode=${code}`)
       return
     }
     if (code) {

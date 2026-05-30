@@ -78,6 +78,14 @@ export interface ShadowBridgeEnqueueInboxTaskInput {
   task: ShadowServerAppInboxTaskOutbox
 }
 
+export interface ShadowBridgeOpenBuddyCreatorInput {
+  landing?: {
+    title?: string
+    description?: string
+    source?: string
+  }
+}
+
 export interface ShadowBridgeOptions {
   appKey: string
   targetOrigin?: string
@@ -89,8 +97,10 @@ type BridgeResponseType =
   | 'shadow.app.command.response'
   | 'shadow.app.inboxes.response'
   | 'shadow.app.inbox.enqueue.response'
+  | 'shadow.app.buddy.create.response'
 
 type ReactNativeBridgeWindow = Window & {
+  __shadowBridgeLaunchContexts?: Record<string, true>
   ReactNativeWebView?: {
     postMessage(message: string): void
   }
@@ -103,6 +113,8 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
   static readonly inboxesResponseType = 'shadow.app.inboxes.response'
   static readonly enqueueInboxTaskRequestType = 'shadow.app.inbox.enqueue.request'
   static readonly enqueueInboxTaskResponseType = 'shadow.app.inbox.enqueue.response'
+  static readonly openBuddyCreatorRequestType = 'shadow.app.buddy.create.request'
+  static readonly openBuddyCreatorResponseType = 'shadow.app.buddy.create.response'
 
   static inboxDeliveries(payload: unknown): ShadowServerAppInboxDelivery[] {
     return getShadowServerAppInboxDeliveries(payload)
@@ -128,6 +140,7 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
   private readonly targetOrigin: string
   private readonly timeoutMs: number
   private readonly win: ReactNativeBridgeWindow | null
+  private readonly hasLaunchContext: boolean
   private readonly pending = new Map<
     string,
     {
@@ -170,6 +183,7 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
     this.targetOrigin = options.targetOrigin ?? '*'
     this.timeoutMs = options.timeoutMs ?? 60000
     this.win = options.windowRef ?? (typeof window === 'undefined' ? null : window)
+    this.hasLaunchContext = this.resolveLaunchContext()
     this.win?.addEventListener('message', this.onMessage)
   }
 
@@ -183,8 +197,7 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
 
   isAvailable() {
     if (!this.win) return false
-    const hasLaunchToken = new URLSearchParams(this.win.location.search).has('shadow_launch')
-    return hasLaunchToken && (this.win.parent !== this.win || !!this.win.ReactNativeWebView)
+    return this.hasLaunchContext && (this.win.parent !== this.win || !!this.win.ReactNativeWebView)
   }
 
   command<TCommandName extends Extract<keyof TCommands, string>>(
@@ -226,6 +239,18 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
       ShadowBridge.enqueueInboxTaskResponseType,
       input,
       options.timeoutMs,
+    )
+  }
+
+  openBuddyCreator(
+    input: ShadowBridgeOpenBuddyCreatorInput = {},
+    options: { timeoutMs?: number } = {},
+  ) {
+    return this.request<{ opened: boolean; agent?: unknown }>(
+      ShadowBridge.openBuddyCreatorRequestType,
+      ShadowBridge.openBuddyCreatorResponseType,
+      input,
+      options.timeoutMs ?? 10 * 60 * 1000,
     )
   }
 
@@ -288,5 +313,27 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
       return
     }
     this.win.parent.postMessage(message, this.targetOrigin)
+  }
+
+  private resolveLaunchContext() {
+    if (!this.win) return false
+    const storageKey = `shadow.bridge.launch:${this.appKey}`
+    const memoryContexts = (this.win.__shadowBridgeLaunchContexts ??= {})
+    const hasLaunchToken = new URLSearchParams(this.win.location.search).has('shadow_launch')
+    if (hasLaunchToken) {
+      memoryContexts[this.appKey] = true
+      try {
+        this.win.sessionStorage?.setItem(storageKey, '1')
+      } catch {
+        // Some embedded contexts restrict sessionStorage; the launch URL is enough for this instance.
+      }
+      return true
+    }
+    if (memoryContexts[this.appKey]) return true
+    try {
+      return this.win.sessionStorage?.getItem(storageKey) === '1'
+    } catch {
+      return false
+    }
   }
 }

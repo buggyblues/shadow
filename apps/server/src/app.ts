@@ -41,6 +41,7 @@ import { createShopHandler } from './handlers/shop.handler'
 import { createStripeWebhookHandler } from './handlers/stripe-webhook.handler'
 import { createTaskCenterHandler } from './handlers/task-center.handler'
 import { createVoiceEnhanceHandler } from './handlers/voice-enhance.handler'
+import { createVoiceMessageHandler } from './handlers/voice-message.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
 import { logger } from './lib/logger'
 import {
@@ -185,6 +186,7 @@ export function createApp(container: AppContainer) {
   app.route('/api', createChannelHandler(container))
   app.route('/api', createBuddyInboxHandler(container))
   app.route('/api', createMentionHandler(container))
+  app.route('/api', createVoiceMessageHandler(container))
   app.route('/api', createMessageHandler(container))
   app.route('/api/search', createSearchHandler(container))
   app.route('/api/friends', createFriendshipHandler(container))

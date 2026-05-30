@@ -248,6 +248,14 @@ class ShadowAttachment:
     width: int | None = None
     height: int | None = None
     workspace_node_id: str | None = None
+    kind: str | None = None
+    duration_ms: int | None = None
+    audio_codec: str | None = None
+    audio_container: str | None = None
+    waveform_peaks: list[int] | None = None
+    waveform_version: int | None = None
+    transcript: dict | None = None
+    playback: dict | None = None
 
 
 @dataclass

@@ -105,7 +105,7 @@ interface Message {
   updatedAt?: string
   author?: Author
   reactions?: ReactionGroup[]
-  attachments?: { id: string; filename: string; url: string; contentType: string; size: number }[]
+  attachments?: Attachment[]
   metadata?: BubbleMessage['metadata']
   /** Optimistic send status — only set on client-side pending messages */
   sendStatus?: 'sending' | 'failed'
@@ -823,6 +823,74 @@ export function ChatArea({
       })
     }
   })
+
+  useSocketEvent(
+    'voice:playback-updated',
+    (event: {
+      attachmentId: string
+      messageId: string
+      played: boolean
+      completed: boolean
+      lastPositionMs: number
+    }) => {
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((message) =>
+              message.id === event.messageId
+                ? {
+                    ...message,
+                    attachments: message.attachments?.map((attachment) =>
+                      attachment.id === event.attachmentId
+                        ? {
+                            ...attachment,
+                            playback: {
+                              ...(attachment.playback ?? {}),
+                              played: event.played,
+                              completed: event.completed,
+                              lastPositionMs: event.lastPositionMs,
+                            },
+                          }
+                        : attachment,
+                    ),
+                  }
+                : message,
+            ),
+          })),
+        }
+      })
+    },
+  )
+
+  useSocketEvent(
+    'voice:transcript-updated',
+    (event: { attachmentId: string; messageId: string; transcript: Attachment['transcript'] }) => {
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((message) =>
+              message.id === event.messageId
+                ? {
+                    ...message,
+                    attachments: message.attachments?.map((attachment) =>
+                      attachment.id === event.attachmentId
+                        ? { ...attachment, transcript: event.transcript }
+                        : attachment,
+                    ),
+                  }
+                : message,
+            ),
+          })),
+        }
+      })
+    },
+  )
 
   // Listen for message deletes
   useSocketEvent('message:deleted', (data: { id: string; channelId: string }) => {

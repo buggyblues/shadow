@@ -1,8 +1,14 @@
+import * as Linking from 'expo-linking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import * as SecureStore from 'expo-secure-store'
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
-import { fetchApi } from '../src/lib/api'
+import {
+  completeOAuthCallback,
+  completeOAuthCallbackUrl,
+  isOAuthCallbackUrl,
+  normalizeOAuthCallbackParams,
+} from '../src/lib/oauth-callback'
 import { useAuthStore } from '../src/stores/auth.store'
 import { fontSize, spacing, useColors } from '../src/theme'
 
@@ -17,46 +23,39 @@ export default function OAuthCallbackScreen() {
     error?: string
   }>()
   const colors = useColors()
+  const { t } = useTranslation()
   const router = useRouter()
   const setAuth = useAuthStore((s) => s.setAuth)
+  const currentUrl = Linking.useURL()
 
   useEffect(() => {
     const handleCallback = async () => {
-      if (params.error) {
-        router.replace('/(auth)/login')
-        return
-      }
-
-      if (params.oauth === 'linked') {
-        router.replace('/(main)/settings/account')
-        return
-      }
-
-      const accessToken = params.accessToken ?? params.access_token
-      const refreshToken = params.refreshToken ?? params.refresh_token
-
-      if (accessToken && refreshToken) {
-        // Store tokens
-        await SecureStore.setItemAsync('accessToken', accessToken)
-        await SecureStore.setItemAsync('refreshToken', refreshToken)
-
-        // Fetch user info
-        try {
-          const user = await fetchApi<{
-            id: string
-            email: string
-            username: string
-            displayName: string | null
-            avatarUrl: string | null
-          }>('/api/auth/me', {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          })
-          setAuth(user, accessToken, refreshToken)
-          router.replace('/(main)')
-        } catch {
-          router.replace('/(auth)/login')
+      try {
+        const candidateUrls = [currentUrl, await Linking.getInitialURL()]
+        for (const url of candidateUrls) {
+          if (!url || !isOAuthCallbackUrl(url)) continue
+          const result = await completeOAuthCallbackUrl(url, setAuth)
+          if (result === 'authenticated') {
+            router.replace('/(main)')
+            return
+          }
+          if (result === 'linked') {
+            router.replace('/(main)/settings/account')
+            return
+          }
         }
-      } else {
+
+        const result = await completeOAuthCallback(normalizeOAuthCallbackParams(params), setAuth)
+        if (result === 'authenticated') {
+          router.replace('/(main)')
+          return
+        }
+        if (result === 'linked') {
+          router.replace('/(main)/settings/account')
+          return
+        }
+        router.replace('/(auth)/login')
+      } catch {
         router.replace('/(auth)/login')
       }
     }
@@ -69,6 +68,7 @@ export default function OAuthCallbackScreen() {
     params.refresh_token,
     params.oauth,
     params.error,
+    currentUrl,
     router.replace,
     setAuth,
   ])
@@ -76,7 +76,9 @@ export default function OAuthCallbackScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={[styles.text, { color: colors.textSecondary }]}>正在登录...</Text>
+      <Text style={[styles.text, { color: colors.textSecondary }]}>
+        {t('auth.oauthCallbackSigningIn')}
+      </Text>
     </View>
   )
 }

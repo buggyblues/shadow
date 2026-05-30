@@ -14,7 +14,7 @@ npx @shadowob/connector@latest --daemon \
   --api-key sk_machine_...
 ```
 
-The daemon connects this computer once, scans supported runtimes, sends heartbeats to Shadow, claims Buddy setup jobs, and configures the selected runtime. Supported runtime detection currently includes OpenClaw, Claude Code, Codex CLI, OpenCode, Gemini CLI, Cursor CLI, Kimi CLI, Copilot CLI, and Antigravity CLI.
+The daemon connects this computer once, scans supported runtimes, sends heartbeats to Shadow, claims Buddy setup jobs, and configures the selected runtime. Supported runtime detection currently includes OpenClaw, Hermes Agent, Claude Code, Codex CLI, OpenCode, Gemini CLI, Cursor CLI, Kimi CLI, Copilot CLI, and Antigravity CLI.
 
 Use `--once` to run one heartbeat/job pass for debugging, and `--poll-interval-ms` to tune the loop interval.
 
@@ -210,6 +210,6 @@ The tests cover plan generation, config merging for OpenClaw/Hermes/cc-connect, 
 
 ## Capability Coverage
 
-- OpenClaw: channel messages, DMs, threads, mentions, attachments/images, interactive components, slash commands, online status, typing/activity, reactions, edits/deletes, status checks, usage/cost telemetry, multi-Agent Buddy binding, Shadow CLI login/notifications, official skills, cron tasks.
-- Hermes Agent: channel messages, DMs, threads, attachments/images, interactive components, slash commands, online status, typing/activity, cron delivery, status checks, usage/cost telemetry, Shadow CLI login/notifications, official skills.
+- OpenClaw: channel messages, DMs, threads, mentions, attachments/images/voice messages, voice playback/transcript metadata, interactive components, slash commands, online status, typing/activity, reactions, edits/deletes, status checks, usage/cost telemetry, multi-Agent Buddy binding, Shadow CLI login/notifications, official skills, cron tasks.
+- Hermes Agent: channel messages, DMs, threads, attachments/images/voice messages, voice playback/transcript metadata, interactive components, slash commands, online status, typing/activity, cron delivery, status checks, usage/cost telemetry, Shadow CLI login/notifications, official skills.
 - cc-connect: channel messages, DMs, attachments/images, interactive components, slash commands, typing, streaming previews, forms, status checks, usage/cost telemetry, multi-Agent Buddy binding, Shadow CLI login/notifications.

@@ -327,6 +327,20 @@ export const sendMessageSchema = z.object({
         url: z.string(),
         contentType: z.string(),
         size: z.number(),
+        kind: z.enum(['file', 'image', 'voice']).optional(),
+        durationMs: z.number().int().min(0).max(60_000).nullable().optional(),
+        audioCodec: z.string().max(32).nullable().optional(),
+        audioContainer: z.string().max(32).nullable().optional(),
+        waveformPeaks: z
+          .array(z.number().int().min(0).max(100))
+          .min(32)
+          .max(96)
+          .nullable()
+          .optional(),
+        waveformVersion: z.number().int().min(1).max(100).nullable().optional(),
+        transcriptText: z.string().min(1).max(8000).optional(),
+        transcriptLanguage: z.string().min(2).max(32).nullable().optional(),
+        transcriptSource: z.enum(['client', 'runtime']).optional(),
       }),
     )
     .optional(),

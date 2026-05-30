@@ -24,7 +24,17 @@ import {
 } from 'react-native'
 import { fetchApi } from '../../lib/api'
 import { useAuthStore } from '../../stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
 import { Avatar } from '../common/avatar'
 
 interface Reaction {
@@ -192,10 +202,10 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
   )
 
   return (
-    <View style={[styles.container, { borderTopColor: `${colors.border}60` }]}>
+    <View style={[styles.container, { borderTopColor: colors.border }]}>
       {/* Header */}
       <View style={styles.header}>
-        <MessageSquare size={18} color={colors.textMuted} />
+        <MessageSquare size={iconSize.lg} color={colors.textMuted} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {t('profile.comments', '留言板')}
         </Text>
@@ -226,7 +236,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
             <Avatar
               uri={currentUser.avatarUrl}
               name={currentUser.displayName ?? currentUser.username}
-              size={32}
+              size={iconSize['5xl']}
               userId={currentUser.id}
             />
             <TextInput
@@ -251,7 +261,10 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
               {createCommentMutation.isPending ? (
                 <ActivityIndicator size="small" color={colors.textMuted} />
               ) : (
-                <Send size={18} color={newComment.trim() ? '#fff' : colors.textMuted} />
+                <Send
+                  size={iconSize.lg}
+                  color={newComment.trim() ? palette.white : colors.textMuted}
+                />
               )}
             </Pressable>
           </View>
@@ -323,7 +336,7 @@ function CommentItem({
   }, [comment.id, replyContent, onCreateReply])
 
   return (
-    <View style={[styles.commentItem, { borderBottomColor: `${colors.border}30` }]}>
+    <View style={[styles.commentItem, { borderBottomColor: colors.border }]}>
       <View style={styles.commentMain}>
         <Avatar
           uri={comment.author.avatarUrl}
@@ -339,7 +352,7 @@ function CommentItem({
                 {comment.author.displayName}
               </Text>
               {comment.author.isBot && (
-                <View style={[styles.botBadge, { backgroundColor: `${colors.primary}20` }]}>
+                <View style={[styles.botBadge, { backgroundColor: colors.inputBackground }]}>
                   <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
                 </View>
               )}
@@ -354,10 +367,15 @@ function CommentItem({
             {isOwner && (
               <View style={styles.menuContainer}>
                 <Pressable style={styles.menuBtn} onPress={() => setShowMenu(!showMenu)}>
-                  <MoreHorizontal size={18} color={colors.textMuted} />
+                  <MoreHorizontal size={iconSize.lg} color={colors.textMuted} />
                 </Pressable>
                 {showMenu && (
-                  <View style={[styles.menuDropdown, { backgroundColor: colors.surface }]}>
+                  <View
+                    style={[
+                      styles.menuDropdown,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                    ]}
+                  >
                     <Pressable
                       style={[styles.menuItem, { backgroundColor: colors.surfaceHover }]}
                       onPress={() => {
@@ -365,8 +383,8 @@ function CommentItem({
                         setShowMenu(false)
                       }}
                     >
-                      <Trash2 size={16} color="#ef4444" />
-                      <Text style={[styles.menuItemText, { color: '#ef4444' }]}>
+                      <Trash2 size={iconSize.md} color={palette.crimson} />
+                      <Text style={[styles.menuItemText, { color: palette.crimson }]}>
                         {t('common.delete', '删除')}
                       </Text>
                     </Pressable>
@@ -388,7 +406,7 @@ function CommentItem({
                 style={[styles.emojiBtn, { backgroundColor: colors.inputBackground }]}
                 onPress={() => setShowEmojiPicker(!showEmojiPicker)}
               >
-                <SmilePlus size={16} color={colors.textMuted} />
+                <SmilePlus size={iconSize.md} color={colors.textMuted} />
               </Pressable>
             )}
 
@@ -400,7 +418,7 @@ function CommentItem({
                   styles.reactionBtn,
                   {
                     backgroundColor: reaction.reacted
-                      ? `${colors.primary}20`
+                      ? colors.surfaceHover
                       : colors.inputBackground,
                   },
                 ]}
@@ -424,7 +442,7 @@ function CommentItem({
                 style={[styles.actionBtn, { backgroundColor: colors.inputBackground }]}
                 onPress={() => setShowReplyInput(!showReplyInput)}
               >
-                <Reply size={14} color={colors.textMuted} />
+                <Reply size={iconSize.sm} color={colors.textMuted} />
               </Pressable>
             )}
 
@@ -464,7 +482,7 @@ function CommentItem({
               <Avatar
                 uri={currentAvatarUrl}
                 name={currentDisplayName}
-                size={28}
+                size={iconSize['4xl']}
                 userId={currentUserId}
               />
               <View
@@ -485,12 +503,19 @@ function CommentItem({
                 <Pressable
                   style={[
                     styles.replySendBtn,
-                    { backgroundColor: replyContent.trim() ? colors.primary : 'transparent' },
+                    {
+                      backgroundColor: replyContent.trim()
+                        ? colors.primary
+                        : colors.inputBackground,
+                    },
                   ]}
                   onPress={handleReplySubmit}
                   disabled={!replyContent.trim() || isSubmitting}
                 >
-                  <Send size={16} color={replyContent.trim() ? '#fff' : colors.textMuted} />
+                  <Send
+                    size={iconSize.md}
+                    color={replyContent.trim() ? palette.white : colors.textMuted}
+                  />
                 </Pressable>
                 <Pressable
                   style={styles.replyCancelBtn}
@@ -499,7 +524,7 @@ function CommentItem({
                     setReplyContent('')
                   }}
                 >
-                  <X size={16} color={colors.textMuted} />
+                  <X size={iconSize.md} color={colors.textMuted} />
                 </Pressable>
               </View>
             </View>
@@ -544,7 +569,7 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
       <Avatar
         uri={reply.author.avatarUrl}
         name={reply.author.displayName}
-        size={24}
+        size={iconSize['3xl']}
         userId={reply.author.id}
       />
       <View style={styles.replyContent}>
@@ -554,7 +579,7 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
               {reply.author.displayName}
             </Text>
             {reply.author.isBot && (
-              <View style={[styles.botBadgeSmall, { backgroundColor: `${colors.primary}20` }]}>
+              <View style={[styles.botBadgeSmall, { backgroundColor: colors.inputBackground }]}>
                 <Text style={[styles.botBadgeSmallText, { color: colors.primary }]}>Buddy</Text>
               </View>
             )}
@@ -569,10 +594,15 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
           {isOwner && (
             <View style={styles.replyMenuContainer}>
               <Pressable onPress={() => setShowMenu(!showMenu)}>
-                <MoreHorizontal size={14} color={colors.textMuted} />
+                <MoreHorizontal size={iconSize.sm} color={colors.textMuted} />
               </Pressable>
               {showMenu && (
-                <View style={[styles.replyMenuDropdown, { backgroundColor: colors.surface }]}>
+                <View
+                  style={[
+                    styles.replyMenuDropdown,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                  ]}
+                >
                   <Pressable
                     style={[styles.menuItem, { backgroundColor: colors.surfaceHover }]}
                     onPress={() => {
@@ -580,8 +610,8 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
                       setShowMenu(false)
                     }}
                   >
-                    <Trash2 size={14} color="#ef4444" />
-                    <Text style={[styles.menuItemText, { color: '#ef4444' }]}>
+                    <Trash2 size={iconSize.sm} color={palette.crimson} />
+                    <Text style={[styles.menuItemText, { color: palette.crimson }]}>
                       {t('common.delete', '删除')}
                     </Text>
                   </Pressable>
@@ -603,7 +633,7 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
                   styles.reactionBtnSmall,
                   {
                     backgroundColor: reaction.reacted
-                      ? `${colors.primary}20`
+                      ? colors.surfaceHover
                       : colors.inputBackground,
                   },
                 ]}
@@ -631,7 +661,7 @@ const styles = StyleSheet.create({
   container: {
     marginTop: spacing.lg,
     paddingTop: spacing.lg,
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
   },
   header: {
     flexDirection: 'row',
@@ -680,14 +710,14 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: fontSize.md,
-    minHeight: 36,
-    maxHeight: 100,
+    minHeight: size.iconButtonMd,
+    maxHeight: size.commentInputMaxHeight,
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -702,7 +732,7 @@ const styles = StyleSheet.create({
   },
   commentItem: {
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: border.hairline,
   },
   commentMain: {
     flexDirection: 'row',
@@ -715,7 +745,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   commentHeaderLeft: {
     flexDirection: 'row',
@@ -729,13 +759,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   botBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: spacing.tight,
+    paddingVertical: spacing.px,
+    borderRadius: radius.xs,
     flexShrink: 0,
   },
   botBadgeText: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   timeAgo: {
@@ -744,7 +774,7 @@ const styles = StyleSheet.create({
   },
   commentText: {
     fontSize: fontSize.sm,
-    lineHeight: 20,
+    lineHeight: lineHeight.sm,
   },
   reactionsRow: {
     flexDirection: 'row',
@@ -755,7 +785,7 @@ const styles = StyleSheet.create({
   },
   emojiBtn: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
   },
   emojiBtnText: {
@@ -764,9 +794,9 @@ const styles = StyleSheet.create({
   reactionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
   },
   reactionEmoji: {
@@ -777,8 +807,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   actionBtn: {
-    width: 28,
-    height: 28,
+    width: size.controlXs,
+    height: size.controlXs,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -796,8 +826,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   emojiOption: {
-    width: 36,
-    height: 36,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
@@ -820,32 +850,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: border.hairline,
   },
   replyInput: {
     flex: 1,
     fontSize: fontSize.sm,
-    minHeight: 28,
-    maxHeight: 80,
+    minHeight: size.controlXs,
+    maxHeight: size.textareaMin,
     paddingVertical: spacing.xs,
   },
   replySendBtn: {
-    width: 28,
-    height: 28,
+    width: size.controlXs,
+    height: size.controlXs,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   replyCancelBtn: {
-    width: 28,
-    height: 28,
+    width: size.controlXs,
+    height: size.controlXs,
     alignItems: 'center',
     justifyContent: 'center',
   },
   repliesContainer: {
     marginTop: spacing.sm,
     paddingLeft: spacing.md,
-    borderLeftWidth: 2,
+    borderLeftWidth: border.active,
     gap: spacing.sm,
   },
   replyItem: {
@@ -871,12 +901,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   botBadgeSmall: {
-    paddingHorizontal: 4,
-    paddingVertical: 0,
-    borderRadius: 2,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.none,
+    borderRadius: radius.xs,
   },
   botBadgeSmallText: {
-    fontSize: 9,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   replyTime: {
@@ -884,7 +914,7 @@ const styles = StyleSheet.create({
   },
   replyTextContent: {
     fontSize: fontSize.sm,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   replyReactionsRow: {
     flexDirection: 'row',
@@ -894,16 +924,16 @@ const styles = StyleSheet.create({
   reactionBtnSmall: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.tight,
+    paddingVertical: spacing.xxs,
     borderRadius: radius.full,
   },
   reactionEmojiSmall: {
     fontSize: fontSize.sm,
   },
   reactionCountSmall: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '600',
   },
   menuContainer: {
@@ -915,16 +945,12 @@ const styles = StyleSheet.create({
   },
   menuDropdown: {
     position: 'absolute',
-    right: 0,
-    top: 28,
+    right: spacing.none,
+    top: spacing['3xl'],
     borderRadius: radius.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    minWidth: 80,
+    minWidth: size.thumbnailMd,
   },
   replyMenuContainer: {
     position: 'relative',
@@ -932,16 +958,12 @@ const styles = StyleSheet.create({
   },
   replyMenuDropdown: {
     position: 'absolute',
-    right: 0,
-    top: 18,
+    right: spacing.none,
+    top: spacing.xl,
     borderRadius: radius.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 5,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    minWidth: 70,
+    minWidth: size.listItemLg - spacing.xxs,
   },
   menuItem: {
     flexDirection: 'row',

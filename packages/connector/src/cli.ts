@@ -14,16 +14,35 @@ import {
   mergeOpenClawConfigContent,
 } from './config-writers.js'
 import { createConnectorPlan, type ShadowConnectorTarget } from './index.js'
+import {
+  CONNECTOR_RUNTIME_CATALOG,
+  type ConnectorRuntimeCatalogEntry,
+  type ConnectorRuntimeKind,
+  connectorRuntimeById,
+  connectorRuntimeInstallCommands,
+} from './runtime-catalog.js'
 
 interface CliOptions {
-  command: 'plan' | 'connect' | 'update' | 'doctor' | 'fix' | 'status' | 'scan' | 'daemon'
+  command:
+    | 'plan'
+    | 'connect'
+    | 'update'
+    | 'doctor'
+    | 'fix'
+    | 'status'
+    | 'scan'
+    | 'daemon'
+    | 'runtime-scan'
+    | 'runtime-install'
   target?: ShadowConnectorTarget
+  runtimeId?: string
   serverUrl: string
   token: string
   apiKey?: string
   openclawConfig?: string
   hermesHome?: string
   workDir?: string
+  workDirMapFile?: string
   projectName?: string
   agentType?: string
   json: boolean
@@ -36,7 +55,18 @@ interface CliOptions {
 }
 
 const TARGETS = new Set(['openclaw', 'hermes', 'cc-connect'])
-const COMMANDS = new Set(['plan', 'connect', 'update', 'doctor', 'fix', 'status', 'scan', 'daemon'])
+const COMMANDS = new Set([
+  'plan',
+  'connect',
+  'update',
+  'doctor',
+  'fix',
+  'status',
+  'scan',
+  'daemon',
+  'runtime-scan',
+  'runtime-install',
+])
 const ALL_TARGETS = ['openclaw', 'hermes', 'cc-connect'] as const
 const SHADOW_CLI_PACKAGE = '@shadowob/cli@latest'
 const SHADOW_CONNECTOR_PACKAGE = '@shadowob/connector@latest'
@@ -65,6 +95,8 @@ function usage(): string {
     '  shadowob-connector update --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
     '  shadowob-connector fix --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
     '  shadowob-connector scan [--target <openclaw|hermes|cc-connect>] [--server-url <url>] [--token <token>]',
+    '  shadowob-connector runtime-scan [--json]',
+    '  shadowob-connector runtime-install --runtime <runtime-id> [--dry-run]',
     '  shadowob-connector --daemon --server-url <url> --api-key <machine-key>',
     '  shadowob-connector daemon --server-url <url> --api-key <machine-key>',
     '  shadowob-connector doctor [--target <openclaw|hermes|cc-connect>]',
@@ -73,9 +105,11 @@ function usage(): string {
     'Options:',
     '  --server-url <url>      Shadow server URL, default https://shadowob.com',
     '  --api-key <key>         Connector daemon machine key',
+    '  --runtime <id>          Agent runtime id for runtime-install',
     '  --openclaw-config <path> OpenClaw JSON config, default $OPENCLAW_CONFIG or ~/.openclaw/openclaw.json',
     '  --hermes-home <path>    Hermes config directory, default $HERMES_HOME or ~/.hermes',
     '  --work-dir <path>       cc-connect project work directory',
+    '  --work-dir-map-file <path> Daemon-local JSON map for Buddy/runtime work directories',
     '  --project-name <name>   cc-connect project name',
     '  --agent-type <type>     cc-connect agent type, default codex',
     '  --json                  Print the full plan as JSON',
@@ -118,7 +152,9 @@ function parseArgs(args: string[]): CliOptions {
     command !== 'doctor' &&
     command !== 'status' &&
     command !== 'scan' &&
-    command !== 'daemon'
+    command !== 'daemon' &&
+    command !== 'runtime-scan' &&
+    command !== 'runtime-install'
   ) {
     throw new Error('Missing or invalid --target')
   }
@@ -132,12 +168,14 @@ function parseArgs(args: string[]): CliOptions {
   return {
     command,
     target,
+    runtimeId: readOption(optionArgs, '--runtime'),
     serverUrl: readOption(optionArgs, '--server-url') ?? 'https://shadowob.com',
     token: readOption(optionArgs, '--token') ?? '',
     apiKey: readOption(optionArgs, '--api-key'),
     openclawConfig: readOption(optionArgs, '--openclaw-config'),
     hermesHome: readOption(optionArgs, '--hermes-home'),
     workDir: readOption(optionArgs, '--work-dir'),
+    workDirMapFile: readOption(optionArgs, '--work-dir-map-file'),
     projectName: readOption(optionArgs, '--project-name'),
     agentType: readOption(optionArgs, '--agent-type'),
     json: hasFlag(optionArgs, '--json'),
@@ -180,6 +218,17 @@ function runShell(command: string, dryRun: boolean): void {
   const result = spawnSync(command, { shell: true, stdio: 'inherit' })
   if (result.status !== 0) {
     throw new Error(`Command failed with exit code ${result.status ?? 'unknown'}: ${command}`)
+  }
+}
+
+function runShellQuiet(command: string, dryRun: boolean): void {
+  if (dryRun) return
+  const result = spawnSync(command, { shell: true, encoding: 'utf8' })
+  if (result.status !== 0) {
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
+    throw new Error(
+      output || `Command failed with exit code ${result.status ?? 'unknown'}: ${command}`,
+    )
   }
 }
 
@@ -913,8 +962,6 @@ function printScan(options: CliOptions): void {
   }
 }
 
-type ConnectorRuntimeKind = 'openclaw' | 'cli'
-
 interface DaemonRuntime {
   id: string
   label: string
@@ -922,6 +969,10 @@ interface DaemonRuntime {
   status: 'available' | 'missing'
   version?: string | null
   command?: string | null
+  iconId?: string | null
+  installCommand?: string | null
+  installCommands?: string[]
+  helpUrl?: string | null
   detectedAt: string
 }
 
@@ -939,6 +990,62 @@ interface DaemonJob {
   }
 }
 
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const result: Record<string, string> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'string' && key.trim() && entry.trim()) result[key.trim()] = entry.trim()
+  }
+  return result
+}
+
+function readDaemonWorkDirMap(options: CliOptions): {
+  buddies: Record<string, string>
+  runtimes: Record<string, string>
+  defaultWorkDir: string
+} {
+  if (!options.workDirMapFile?.trim()) {
+    return { buddies: {}, runtimes: {}, defaultWorkDir: '' }
+  }
+  try {
+    const filePath = expandHome(options.workDirMapFile)
+    const root = JSON.parse(readFileSync(filePath, 'utf8')) as Record<string, unknown>
+    return {
+      buddies: stringRecord(root.buddies),
+      runtimes: stringRecord(root.runtimes),
+      defaultWorkDir: typeof root.default === 'string' ? root.default.trim() : '',
+    }
+  } catch {
+    return { buddies: {}, runtimes: {}, defaultWorkDir: '' }
+  }
+}
+
+function resolveDaemonWorkDir(job: DaemonJob, options: CliOptions): string {
+  const payload = job.payload
+  const workDirMap = readDaemonWorkDirMap(options)
+  const buddyKeys = [
+    job.agentId,
+    payload.buddy?.id,
+    payload.buddy?.username,
+    payload.buddy?.displayName,
+    payload.projectName,
+  ]
+    .map((value) => value?.trim())
+    .filter((value, index, values): value is string =>
+      Boolean(value && values.indexOf(value) === index),
+    )
+  const buddyWorkDir =
+    buddyKeys.map((key) => workDirMap.buddies[key]).find((value) => Boolean(value)) ?? ''
+  return (
+    buddyWorkDir ||
+    workDirMap.runtimes[payload.runtimeId] ||
+    workDirMap.defaultWorkDir ||
+    payload.workDir?.trim() ||
+    options.workDir?.trim() ||
+    '.'
+  )
+}
+
 function packageVersion(): string {
   try {
     const json = JSON.parse(readFileSync(resolve(packageRoot(), 'package.json'), 'utf8')) as {
@@ -950,11 +1057,32 @@ function packageVersion(): string {
   }
 }
 
-function commandVersion(command: string): { ok: boolean; version?: string | null } {
-  const result = spawnSync(command, ['--version'], { encoding: 'utf8' })
+function commandVersionWithArgs(
+  command: string,
+  args: string[] = ['--version'],
+): { ok: boolean; version?: string | null } {
+  const result = spawnSync(command, args, { encoding: 'utf8' })
   if (result.status !== 0) return { ok: false }
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
   return { ok: true, version: output.split(/\r?\n/)[0]?.slice(0, 120) || null }
+}
+
+function commandVersion(command: string): { ok: boolean; version?: string | null } {
+  const candidates = [['--version'], ['version'], ['-v']]
+  for (const args of candidates) {
+    const result = commandVersionWithArgs(command, args)
+    if (result.ok) return result
+  }
+  return { ok: false }
+}
+
+function commandVersionForRuntime(
+  command: string,
+  preferredArgs?: string[],
+): { ok: boolean; version?: string | null } {
+  if (!preferredArgs) return commandVersion(command)
+  const result = commandVersionWithArgs(command, preferredArgs)
+  return result.ok ? result : commandVersion(command)
 }
 
 function detectRuntime(input: {
@@ -962,36 +1090,121 @@ function detectRuntime(input: {
   label: string
   kind: ConnectorRuntimeKind
   command: string
+  commands?: string[]
+  iconId?: string
+  installCommand?: string | null
+  installCommands?: string[]
+  helpUrl?: string
+  versionArgs?: string[]
 }): DaemonRuntime {
-  const version = commandVersion(input.command)
+  const commands = input.commands ?? [input.command]
+  for (const command of commands) {
+    const version = commandVersionForRuntime(command, input.versionArgs)
+    if (!version.ok) continue
+    return {
+      id: input.id,
+      label: input.label,
+      kind: input.kind,
+      status: 'available',
+      version: version.version ?? null,
+      command,
+      iconId: input.iconId ?? input.id,
+      installCommand: input.installCommand ?? null,
+      installCommands: input.installCommands ?? [],
+      helpUrl: input.helpUrl ?? null,
+      detectedAt: new Date().toISOString(),
+    }
+  }
   return {
     id: input.id,
     label: input.label,
     kind: input.kind,
-    status: version.ok ? 'available' : 'missing',
-    version: version.version ?? null,
+    status: 'missing',
+    version: null,
     command: input.command,
+    iconId: input.iconId ?? input.id,
+    installCommand: input.installCommand ?? null,
+    installCommands: input.installCommands ?? [],
+    helpUrl: input.helpUrl ?? null,
     detectedAt: new Date().toISOString(),
   }
 }
 
+function detectCatalogRuntime(runtime: ConnectorRuntimeCatalogEntry): DaemonRuntime {
+  const installCommands = connectorRuntimeInstallCommands(runtime.id)
+  return detectRuntime({
+    id: runtime.id,
+    label: runtime.label,
+    kind: runtime.kind,
+    command: runtime.command,
+    commands: runtime.commands,
+    iconId: runtime.iconId,
+    installCommand: installCommands[0] ?? null,
+    installCommands,
+    helpUrl: runtime.install.helpUrl,
+    versionArgs: runtime.versionArgs,
+  })
+}
+
 function scanDaemonRuntimes(): DaemonRuntime[] {
-  return [
-    detectRuntime({ id: 'openclaw', label: 'OpenClaw', kind: 'openclaw', command: 'openclaw' }),
-    detectRuntime({ id: 'claude-code', label: 'Claude Code', kind: 'cli', command: 'claude' }),
-    detectRuntime({ id: 'codex', label: 'Codex CLI', kind: 'cli', command: 'codex' }),
-    detectRuntime({ id: 'opencode', label: 'OpenCode', kind: 'cli', command: 'opencode' }),
-    detectRuntime({ id: 'gemini', label: 'Gemini CLI', kind: 'cli', command: 'gemini' }),
-    detectRuntime({ id: 'cursor', label: 'Cursor CLI', kind: 'cli', command: 'cursor' }),
-    detectRuntime({ id: 'kimi', label: 'Kimi CLI', kind: 'cli', command: 'kimi' }),
-    detectRuntime({ id: 'copilot', label: 'Copilot CLI', kind: 'cli', command: 'copilot' }),
-    detectRuntime({
-      id: 'antigravity',
-      label: 'Antigravity CLI',
-      kind: 'cli',
-      command: 'antigravity',
-    }),
-  ]
+  return CONNECTOR_RUNTIME_CATALOG.map(detectCatalogRuntime)
+}
+
+function printRuntimeScan(options: CliOptions): void {
+  const runtimes = scanDaemonRuntimes()
+  if (options.json) {
+    console.log(JSON.stringify({ runtimes }, null, 2))
+    return
+  }
+
+  console.log('# Agent runtimes')
+  for (const runtime of runtimes) {
+    const marker = runtime.status === 'available' ? 'OK' : 'MISSING'
+    console.log(`[${marker}] ${runtime.label}${runtime.version ? ` - ${runtime.version}` : ''}`)
+    if (runtime.status === 'missing') {
+      if (runtime.installCommand) console.log(`       install: ${runtime.installCommand}`)
+      if (runtime.helpUrl) console.log(`       help: ${runtime.helpUrl}`)
+    }
+  }
+}
+
+function installRuntime(options: CliOptions): void {
+  const runtime = connectorRuntimeById(options.runtimeId)
+  if (!runtime) {
+    throw new Error(
+      `Missing or invalid --runtime. Supported runtimes: ${CONNECTOR_RUNTIME_CATALOG.map((item) => item.id).join(', ')}`,
+    )
+  }
+  const commands = connectorRuntimeInstallCommands(runtime.id)
+  if (commands.length === 0) {
+    throw new Error(
+      `No install command is available for ${runtime.label}. See ${runtime.install.helpUrl}`,
+    )
+  }
+  if (options.json) {
+    runShellQuiet(commands[0] as string, options.dryRun)
+  } else {
+    runShell(commands[0] as string, options.dryRun)
+  }
+  const detected = detectCatalogRuntime(runtime)
+  if (options.json) {
+    console.log(
+      JSON.stringify(
+        {
+          ok: detected.status === 'available' || options.dryRun,
+          runtimeId: runtime.id,
+          commands,
+          runtime: detected,
+        },
+        null,
+        2,
+      ),
+    )
+    return
+  }
+  console.log(
+    `${runtime.label}: ${detected.status === 'available' ? 'installed' : 'install command completed'}`,
+  )
 }
 
 function daemonHeaders(options: CliOptions): Record<string, string> {
@@ -1051,12 +1264,12 @@ function ccAgentTypeForRuntime(runtimeId: string): string {
   return map[runtimeId] ?? runtimeId
 }
 
-function startDetached(binaryPath: string, dryRun: boolean): void {
+function startDetached(binaryPath: string, args: string[], dryRun: boolean): void {
   if (dryRun) {
-    console.log(`[dry-run] start detached ${binaryPath}`)
+    console.log(`[dry-run] start detached ${[binaryPath, ...args].join(' ')}`)
     return
   }
-  const child = spawn(binaryPath, [], {
+  const child = spawn(binaryPath, args, {
     detached: true,
     stdio: 'ignore',
   })
@@ -1074,7 +1287,7 @@ async function applyDaemonJob(
   const payload = job.payload
   const runtimeId = payload.runtimeId
   const projectName = payload.projectName?.trim() || payload.buddy?.username || 'shadow-buddy'
-  const workDir = payload.workDir?.trim() || '.'
+  const workDir = resolveDaemonWorkDir(job, baseOptions)
 
   if (runtimeId === 'openclaw') {
     applyOpenClaw(
@@ -1092,6 +1305,21 @@ async function applyDaemonJob(
     return { runtimeId, target: 'openclaw' }
   }
 
+  if (runtimeId === 'hermes') {
+    applyHermes({
+      ...baseOptions,
+      target: 'hermes',
+      serverUrl: payload.serverUrl,
+      token: payload.token,
+      projectName,
+      workDir,
+      install: true,
+      start: false,
+    })
+    startDetached('hermes', ['gateway'], baseOptions.dryRun)
+    return { runtimeId, target: 'hermes' }
+  }
+
   await applyCcConnect({
     ...baseOptions,
     target: 'cc-connect',
@@ -1107,7 +1335,7 @@ async function applyDaemonJob(
     dryRun: baseOptions.dryRun,
     log: (message) => console.log(message),
   })
-  startDetached(installed.binaryPath ?? 'cc-connect', baseOptions.dryRun)
+  startDetached(installed.binaryPath ?? 'cc-connect', [], baseOptions.dryRun)
   return { runtimeId, target: 'cc-connect', agentType: ccAgentTypeForRuntime(runtimeId) }
 }
 
@@ -1318,6 +1546,10 @@ async function main(): Promise<void> {
     if (options.command === 'doctor' && !ok) process.exitCode = 1
   } else if (options.command === 'scan') {
     printScan(options)
+  } else if (options.command === 'runtime-scan') {
+    printRuntimeScan(options)
+  } else if (options.command === 'runtime-install') {
+    installRuntime(options)
   } else {
     printPlan(options)
   }

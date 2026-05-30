@@ -7,9 +7,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { EnrichedMarkdownText, type MarkdownStyle } from 'react-native-enriched-markdown'
+import { serverChannelHref } from '../../lib/routes'
 import { showToast } from '../../lib/toast'
 import type { ColorTokens } from '../../theme'
-import { useColors } from '../../theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
 
 // ----- Code block parsing -----
 
@@ -85,9 +96,9 @@ function CodeBlock({
         <Text style={[codeStyles.language, { color: colors.textMuted }]}>{language || 'code'}</Text>
         <Pressable onPress={handleCopy} hitSlop={8} style={codeStyles.copyBtn}>
           {copied ? (
-            <Check size={14} color={colors.success} />
+            <Check size={iconSize.sm} color={colors.success} />
           ) : (
-            <Copy size={14} color={colors.textMuted} />
+            <Copy size={iconSize.sm} color={colors.textMuted} />
           )}
         </Pressable>
       </View>
@@ -102,33 +113,33 @@ function CodeBlock({
 
 const codeStyles = StyleSheet.create({
   container: {
-    borderRadius: 8,
+    borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    marginVertical: 4,
+    marginVertical: spacing.xs,
     overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.tight,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   language: {
-    fontSize: 12,
+    fontSize: fontSize.xs,
     fontWeight: '500',
   },
   copyBtn: {
-    padding: 4,
+    padding: spacing.xs,
   },
   scrollView: {
-    padding: 12,
+    padding: spacing.md,
   },
   code: {
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.xs,
   },
 })
 
@@ -181,52 +192,52 @@ export function MarkdownRenderer({
     () => ({
       paragraph: {
         color: colors.text,
-        fontSize: 15,
-        lineHeight: 22,
-        marginTop: 0,
-        marginBottom: 2,
+        fontSize: fontSize.md,
+        lineHeight: lineHeight.md,
+        marginTop: spacing.none,
+        marginBottom: spacing.xxs,
       },
       h1: {
         color: colors.text,
-        fontSize: 22,
+        fontSize: fontSize.xl,
         fontWeight: '700',
-        marginTop: 8,
-        marginBottom: 4,
+        marginTop: spacing.sm,
+        marginBottom: spacing.xs,
       },
       h2: {
         color: colors.text,
-        fontSize: 20,
+        fontSize: fontSize.xl,
         fontWeight: '700',
-        marginTop: 6,
-        marginBottom: 4,
+        marginTop: spacing.tight,
+        marginBottom: spacing.xs,
       },
       h3: {
         color: colors.text,
-        fontSize: 18,
+        fontSize: fontSize.lg,
         fontWeight: '600',
-        marginTop: 5,
-        marginBottom: 3,
+        marginTop: spacing.xs,
+        marginBottom: spacing.xxs,
       },
       h4: {
         color: colors.text,
-        fontSize: 16,
+        fontSize: fontSize.md,
         fontWeight: '600',
-        marginTop: 4,
-        marginBottom: 2,
+        marginTop: spacing.xs,
+        marginBottom: spacing.xxs,
       },
       h5: {
         color: colors.text,
-        fontSize: 15,
+        fontSize: fontSize.md,
         fontWeight: '600',
-        marginTop: 3,
-        marginBottom: 2,
+        marginTop: spacing.xxs,
+        marginBottom: spacing.xxs,
       },
       h6: {
         color: colors.text,
-        fontSize: 14,
+        fontSize: fontSize.sm,
         fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 2,
+        marginTop: spacing.xxs,
+        marginBottom: spacing.xxs,
       },
       strong: { fontWeight: 'bold' },
       em: { fontStyle: 'italic' },
@@ -235,73 +246,73 @@ export function MarkdownRenderer({
       blockquote: {
         color: colors.text,
         borderColor: colors.primary,
-        borderWidth: 3,
-        gapWidth: 10,
-        backgroundColor: `${colors.primary}08`,
-        marginTop: 4,
-        marginBottom: 4,
+        borderWidth: border.active,
+        gapWidth: spacing.md,
+        backgroundColor: colors.inputBackground,
+        marginTop: spacing.xs,
+        marginBottom: spacing.xs,
       },
       code: {
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-        fontSize: 13,
+        fontSize: fontSize.sm,
         backgroundColor: colors.surface,
         color: colors.primary,
         borderColor: colors.border,
       },
       codeBlock: {
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-        fontSize: 13,
+        fontSize: fontSize.sm,
         backgroundColor: colors.surface,
         color: colors.text,
-        padding: 12,
-        borderRadius: 8,
+        padding: spacing.md,
+        borderRadius: radius.md,
         borderColor: colors.border,
         borderWidth: StyleSheet.hairlineWidth,
-        marginTop: 4,
-        marginBottom: 4,
-        lineHeight: 18,
+        marginTop: spacing.xs,
+        marginBottom: spacing.xs,
+        lineHeight: lineHeight.xs,
       },
       list: {
         color: colors.text,
-        fontSize: 15,
-        lineHeight: 22,
-        marginTop: 2,
-        marginBottom: 2,
+        fontSize: fontSize.md,
+        lineHeight: lineHeight.md,
+        marginTop: spacing.xxs,
+        marginBottom: spacing.xxs,
         bulletColor: colors.textMuted,
         markerColor: colors.textMuted,
       },
       taskList: {
         checkedColor: colors.primary,
         borderColor: colors.textMuted,
-        checkmarkColor: '#FFFFFF',
+        checkmarkColor: palette.white,
         checkedStrikethrough: true,
         checkedTextColor: colors.textMuted,
       },
       table: {
-        fontSize: 13,
+        fontSize: fontSize.sm,
         color: colors.text,
         borderColor: colors.border,
-        borderRadius: 6,
+        borderRadius: radius.sm,
         headerBackgroundColor: colors.surface,
         headerTextColor: colors.text,
         headerFontFamily: Platform.OS === 'ios' ? 'System-Bold' : 'sans-serif-medium',
-        rowEvenBackgroundColor: 'transparent',
-        rowOddBackgroundColor: `${colors.surface}80`,
+        rowEvenBackgroundColor: colors.background,
+        rowOddBackgroundColor: colors.inputBackground,
         cellPaddingHorizontal: 8,
         cellPaddingVertical: 6,
-        marginTop: 4,
-        marginBottom: 4,
+        marginTop: spacing.xs,
+        marginBottom: spacing.xs,
       },
       thematicBreak: {
         color: colors.border,
-        height: 1,
-        marginTop: 8,
-        marginBottom: 8,
+        height: border.hairline,
+        marginTop: spacing.sm,
+        marginBottom: spacing.sm,
       },
       image: {
-        borderRadius: 8,
-        marginTop: 4,
-        marginBottom: 4,
+        borderRadius: radius.md,
+        marginTop: spacing.xs,
+        marginBottom: spacing.xs,
       },
     }),
     [colors],
@@ -318,7 +329,7 @@ export function MarkdownRenderer({
         const path = url.replace('shadow-channel://', '')
         const [serverIdOrSlug, channelId] = path.split('/')
         if (serverIdOrSlug && channelId) {
-          router.push(`/(main)/servers/${serverIdOrSlug}/channels/${channelId}` as never)
+          router.push(serverChannelHref(serverIdOrSlug, channelId) as never)
         }
         return
       }

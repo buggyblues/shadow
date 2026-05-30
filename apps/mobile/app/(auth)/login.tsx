@@ -1,5 +1,8 @@
-import { Link, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import * as AppleAuthentication from 'expo-apple-authentication'
+import { useRouter } from 'expo-router'
+import { ChevronLeft, Github, KeyRound, Mail, ShieldCheck } from 'lucide-react-native'
+import type { ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ActivityIndicator,
@@ -8,102 +11,172 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path, SvgXml } from 'react-native-svg'
-import { Button, GlassCard, SegmentedControl, Separator, TextField } from '../../src/components/ui'
+import { AppText, Button, Separator, TextField } from '../../src/components/ui'
 import { useOAuth } from '../../src/hooks/use-oauth'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { useAuthStore } from '../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../src/theme'
+import {
+  border,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../src/theme'
 
 const SHADOW_LOGO_XML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
   <defs>
     <radialGradient id="catBody" cx="50%" cy="35%" r="70%">
-      <stop offset="0%" stop-color="#5a5a5e" />
-      <stop offset="50%" stop-color="#3d3d40" />
-      <stop offset="100%" stop-color="#18181a" />
+      <stop offset="0%" stop-color="${palette.neutral600}" />
+      <stop offset="50%" stop-color="${palette.neutral700}" />
+      <stop offset="100%" stop-color="${palette.surface}" />
     </radialGradient>
-
     <radialGradient id="eyeYellow" cx="35%" cy="35%" r="65%">
-      <stop offset="0%" stop-color="#ffffcc" />
-      <stop offset="35%" stop-color="#f8e71c" />
-      <stop offset="100%" stop-color="#b3a100" />
+      <stop offset="0%" stop-color="${palette.accentSurface}" />
+      <stop offset="35%" stop-color="${palette.yellow}" />
+      <stop offset="100%" stop-color="${palette.yellowDark}" />
     </radialGradient>
-
     <radialGradient id="eyeCyan" cx="35%" cy="35%" r="65%">
-      <stop offset="0%" stop-color="#ccffff" />
-      <stop offset="35%" stop-color="#00f3ff" />
-      <stop offset="100%" stop-color="#0099aa" />
+      <stop offset="0%" stop-color="${palette.cyanSoft}" />
+      <stop offset="35%" stop-color="${palette.cyan}" />
+      <stop offset="100%" stop-color="${palette.cyanDark}" />
     </radialGradient>
   </defs>
-
   <g id="cat" transform="translate(0, -2)">
-    <path d="M 22,47 Q 15,24 28,24 Q 34,24 40,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M 78,47 Q 85,24 72,24 Q 66,24 60,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-    <ellipse cx="50" cy="62" rx="38" ry="26" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" />
-    <ellipse cx="50" cy="61" rx="35" ry="23" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" />
-    <circle cx="32" cy="57" r="6.5" fill="url(#eyeYellow)" stroke="#1a1a1c" stroke-width="1.5" />
-    <circle cx="30" cy="54.5" r="2.2" fill="#ffffff" />
-    <circle cx="34" cy="60" r="1.2" fill="#ffffff" opacity="0.6" />
-    <circle cx="68" cy="57" r="6.5" fill="url(#eyeCyan)" stroke="#1a1a1c" stroke-width="1.5" />
-    <circle cx="66" cy="54.5" r="2.2" fill="#ffffff" />
-    <circle cx="70" cy="60" r="1.2" fill="#ffffff" opacity="0.6" />
-    <ellipse cx="50" cy="64" rx="4" ry="2.5" fill="#3a2a26" />
-    <ellipse cx="49.5" cy="63.2" rx="1.5" ry="0.8" fill="#8c7772" />
-    <path d="M 40,69 Q 45,74.5 50,69" fill="none" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" />
-    <path d="M 50,69 Q 55,74.5 60,69" fill="none" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" />
+    <path d="M 22,47 Q 15,24 28,24 Q 34,24 40,40" fill="url(#catBody)" stroke="${palette.foundation}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 78,47 Q 85,24 72,24 Q 66,24 60,40" fill="url(#catBody)" stroke="${palette.foundation}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <ellipse cx="50" cy="62" rx="38" ry="26" fill="url(#catBody)" stroke="${palette.foundation}" stroke-width="2.5" />
+    <ellipse cx="50" cy="61" rx="35" ry="23" fill="none" stroke="${palette.neutral800}" stroke-width="1.5" />
+    <circle cx="32" cy="57" r="6.5" fill="url(#eyeYellow)" stroke="${palette.foundation}" stroke-width="1.5" />
+    <circle cx="30" cy="54.5" r="2.2" fill="${palette.white}" />
+    <circle cx="34" cy="60" r="1.2" fill="${palette.white}" />
+    <circle cx="68" cy="57" r="6.5" fill="url(#eyeCyan)" stroke="${palette.foundation}" stroke-width="1.5" />
+    <circle cx="66" cy="54.5" r="2.2" fill="${palette.white}" />
+    <circle cx="70" cy="60" r="1.2" fill="${palette.white}" />
+    <ellipse cx="50" cy="64" rx="4" ry="2.5" fill="${palette.neutral700}" />
+    <ellipse cx="49.5" cy="63.2" rx="1.5" ry="0.8" fill="${palette.neutral400}" />
+    <path d="M 40,69 Q 45,74.5 50,69" fill="none" stroke="${palette.foundation}" stroke-width="2.5" stroke-linecap="round" />
+    <path d="M 50,69 Q 55,74.5 60,69" fill="none" stroke="${palette.foundation}" stroke-width="2.5" stroke-linecap="round" />
   </g>
 </svg>`
 
+type AuthSession = {
+  user: {
+    id: string
+    email: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  }
+  accessToken: string
+  refreshToken: string
+}
+
 function GoogleIcon() {
   return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" accessibilityLabel="Google">
+    <Svg width={iconSize.lg} height={iconSize.lg} viewBox="0 0 24 24" accessibilityLabel="Google">
       <Path
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-        fill="#4285F4"
+        fill={palette.googleBlue}
       />
       <Path
         d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-        fill="#34A853"
+        fill={palette.googleGreen}
       />
       <Path
         d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-        fill="#FBBC05"
+        fill={palette.googleYellow}
       />
       <Path
         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-        fill="#EA4335"
+        fill={palette.googleRed}
       />
     </Svg>
   )
 }
 
-function GitHubIcon() {
+function AppleIcon({ color }: { color: string }) {
   return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="#fff" accessibilityLabel="GitHub">
-      <Path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+    <Svg width={iconSize.lg} height={iconSize.lg} viewBox="0 0 24 24" accessibilityLabel="Apple">
+      <Path
+        fill={color}
+        d="M16.37 12.58c-.02-2.16 1.77-3.2 1.85-3.25-1.01-1.48-2.58-1.68-3.13-1.7-1.33-.14-2.59.78-3.26.78-.68 0-1.72-.76-2.83-.74-1.45.02-2.79.84-3.54 2.14-1.51 2.62-.39 6.49 1.09 8.61.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.81-.7 1.31 0 1.69.7 2.84.68 1.17-.02 1.92-1.06 2.64-2.1.83-1.21 1.17-2.38 1.19-2.44-.03-.01-2.35-.9-2.37-3.45ZM14.21 6.23c.6-.72 1-1.73.89-2.73-.86.04-1.9.57-2.52 1.29-.55.64-1.04 1.66-.91 2.64.96.07 1.94-.49 2.54-1.2Z"
+      />
     </Svg>
+  )
+}
+
+function AuthProviderButton({
+  label,
+  icon,
+  onPress,
+  loading,
+  disabled,
+  dark = false,
+}: {
+  label: string
+  icon: ReactNode
+  onPress: () => void
+  loading?: boolean
+  disabled?: boolean
+  dark?: boolean
+}) {
+  const colors = useColors()
+  const foreground = dark ? palette.white : colors.text
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled || loading}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.providerButton,
+        {
+          backgroundColor: dark ? palette.black : pressed ? colors.surfaceHover : colors.surface,
+          borderColor: dark ? palette.black : colors.border,
+        },
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={foreground} />
+      ) : (
+        <>
+          {icon}
+          <AppText variant="bodyStrong" style={{ color: foreground }}>
+            {label}
+          </AppText>
+        </>
+      )}
+    </Pressable>
   )
 }
 
 export default function LoginScreen() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const colors = useColors()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const setAuth = useAuthStore((s) => s.setAuth)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const { signInWithGoogle, signInWithGitHub, isLoading: oauthLoading } = useOAuth()
+  const logoTapCountRef = useRef(0)
+  const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [mode, setMode] = useState<'email-code' | 'password'>('email-code')
+  const [step, setStep] = useState<'choose' | 'code' | 'password'>('choose')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
-  const [codeSent, setCodeSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [codeLoading, setCodeLoading] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
+  const [appleLoading, setAppleLoading] = useState(false)
+  const [appleAvailable, setAppleAvailable] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -111,26 +184,52 @@ export default function LoginScreen() {
     }
   }, [isAuthenticated, router])
 
-  const handleLogin = async () => {
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return
+    AppleAuthentication.isAvailableAsync()
+      .then(setAppleAvailable)
+      .catch(() => setAppleAvailable(false))
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (logoTapTimerRef.current) {
+        clearTimeout(logoTapTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleLogoPress = () => {
+    if (logoTapTimerRef.current) {
+      clearTimeout(logoTapTimerRef.current)
+    }
+
+    logoTapCountRef.current += 1
+    if (logoTapCountRef.current >= 10) {
+      logoTapCountRef.current = 0
+      router.push('/(auth)/server' as never)
+      return
+    }
+
+    logoTapTimerRef.current = setTimeout(() => {
+      logoTapCountRef.current = 0
+    }, 1200)
+  }
+
+  const applySession = (session: AuthSession) => {
+    setAuth(session.user, session.accessToken, session.refreshToken)
+    router.replace('/(main)')
+  }
+
+  const handlePasswordLogin = async () => {
     if (!email.trim() || !password.trim()) return
     setLoading(true)
     try {
-      const data = await fetchApi<{
-        user: {
-          id: string
-          email: string
-          username: string
-          displayName: string | null
-          avatarUrl: string | null
-        }
-        accessToken: string
-        refreshToken: string
-      }>('/api/auth/login', {
+      const data = await fetchApi<AuthSession>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email: email.trim(), password }),
       })
-      setAuth(data.user, data.accessToken, data.refreshToken)
-      router.replace('/(main)')
+      applySession(data)
     } catch (err) {
       showToast((err as Error).message || t('auth.loginFailed'), 'error')
     } finally {
@@ -144,9 +243,10 @@ export default function LoginScreen() {
     try {
       await fetchApi('/api/auth/email/start', {
         method: 'POST',
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), locale: i18n.language }),
       })
-      setCodeSent(true)
+      setCode('')
+      setStep('code')
       showToast(t('auth.emailCodeSent'), 'success')
     } catch (err) {
       showToast((err as Error).message || t('auth.loginFailed'), 'error')
@@ -159,26 +259,68 @@ export default function LoginScreen() {
     if (!email.trim() || !code.trim()) return
     setLoading(true)
     try {
-      const data = await fetchApi<{
-        user: {
-          id: string
-          email: string
-          username: string
-          displayName: string | null
-          avatarUrl: string | null
-        }
-        accessToken: string
-        refreshToken: string
-      }>('/api/auth/email/verify', {
+      const data = await fetchApi<AuthSession>('/api/auth/email/verify', {
         method: 'POST',
         body: JSON.stringify({ email: email.trim(), code: code.trim() }),
       })
-      setAuth(data.user, data.accessToken, data.refreshToken)
-      router.replace('/(main)')
+      applySession(data)
     } catch (err) {
       showToast((err as Error).message || t('auth.loginFailed'), 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePasswordReset = async () => {
+    if (!email.trim()) {
+      showToast(t('auth.passwordResetEmailRequired'), 'error')
+      return
+    }
+    setResetLoading(true)
+    try {
+      await fetchApi('/api/auth/password-reset/start', {
+        method: 'POST',
+        body: JSON.stringify({ email: email.trim(), locale: i18n.language }),
+      })
+      showToast(t('auth.passwordResetSent'), 'success')
+    } catch (err) {
+      showToast((err as Error).message || t('auth.passwordResetFailed'), 'error')
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const handleAppleLogin = async () => {
+    if (!appleAvailable) {
+      showToast(t('auth.appleLoginUnavailable'), 'error')
+      return
+    }
+    setAppleLoading(true)
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      })
+      if (!credential.identityToken) {
+        throw new Error(t('auth.appleIdentityMissing'))
+      }
+      const data = await fetchApi<AuthSession>('/api/auth/oauth/apple/mobile', {
+        method: 'POST',
+        body: JSON.stringify({
+          identityToken: credential.identityToken,
+          email: credential.email,
+          fullName: credential.fullName,
+        }),
+      })
+      applySession(data)
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'ERR_REQUEST_CANCELED') {
+        showToast((err as Error).message || t('auth.oauthFailed'), 'error')
+      }
+    } finally {
+      setAppleLoading(false)
     }
   }
 
@@ -198,300 +340,322 @@ export default function LoginScreen() {
     }
   }
 
-  const isButtonDisabled = loading || oauthLoading
+  const busy = loading || codeLoading || oauthLoading || appleLoading || resetLoading
+  const showBack = step !== 'choose'
+  const subtitle =
+    step === 'code'
+      ? t('auth.checkEmailMessage')
+      : step === 'password'
+        ? t('auth.passwordLoginSubtitle')
+        : ''
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={[styles.keyboardView, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <GlassCard padded={false} style={styles.card}>
-          <View style={styles.header}>
-            <SvgXml xml={SHADOW_LOGO_XML} width={56} height={56} />
-            <Text style={[styles.productName, { color: colors.text }]}>
-              {t('auth.brandName', 'ShadowOwnBuddy')}
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              {t('auth.brandSlogan', 'The super community for super individuals.')}
-            </Text>
-          </View>
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          { paddingBottom: insets.bottom + spacing['4xl'] },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.shell}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('auth.brandName')}
+            onPress={handleLogoPress}
+            style={styles.brandBlock}
+          >
+            <SvgXml xml={SHADOW_LOGO_XML} width={iconSize.hero} height={iconSize.hero} />
+          </Pressable>
 
-          <SegmentedControl
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'email-code', label: t('auth.emailCodeTab') },
-              { value: 'password', label: t('auth.passwordLoginTab') },
-            ]}
-          />
+          <View style={styles.panel}>
+            <View style={styles.stepHeader}>
+              {showBack ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('auth.back')}
+                  onPress={() => setStep('choose')}
+                  style={({ pressed }) => [
+                    styles.backButton,
+                    { backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground },
+                  ]}
+                >
+                  <ChevronLeft size={iconSize.xl} color={colors.text} strokeWidth={2.5} />
+                </Pressable>
+              ) : null}
+              <View style={styles.stepTitleWrap}>
+                <AppText variant="headline" style={styles.stepTitle}>
+                  {step === 'code'
+                    ? t('auth.checkEmailTitle')
+                    : step === 'password'
+                      ? t('auth.passwordLoginTab')
+                      : t('auth.loginTitle')}
+                </AppText>
+                {subtitle ? (
+                  <AppText variant="body" tone="secondary" style={styles.stepSubtitle}>
+                    {subtitle}
+                  </AppText>
+                ) : null}
+              </View>
+            </View>
 
-          <View style={styles.form}>
-            <TextField
-              label={`${t('auth.emailLabel')} *`}
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@shadowob.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+            {step === 'choose' ? (
+              <View style={styles.sectionStack}>
+                <View style={styles.providerStack}>
+                  {appleAvailable ? (
+                    <AuthProviderButton
+                      label={t('auth.continueWithApple')}
+                      icon={<AppleIcon color={palette.white} />}
+                      onPress={handleAppleLogin}
+                      loading={appleLoading}
+                      disabled={busy}
+                      dark
+                    />
+                  ) : null}
+                  <AuthProviderButton
+                    label={t('auth.continueWithGoogle')}
+                    icon={<GoogleIcon />}
+                    onPress={handleGoogleLogin}
+                    loading={oauthLoading}
+                    disabled={busy}
+                  />
+                  <AuthProviderButton
+                    label={t('auth.continueWithGitHub')}
+                    icon={<Github size={iconSize.lg} color={colors.text} strokeWidth={2.3} />}
+                    onPress={handleGitHubLogin}
+                    loading={oauthLoading}
+                    disabled={busy}
+                  />
+                </View>
 
-            {mode === 'password' ? (
-              <>
-                <TextField
-                  label={`${t('auth.passwordLabel')} *`}
-                  style={styles.input}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="••••••••"
-                  secureTextEntry
-                />
-              </>
-            ) : (
-              <>
-                <View style={styles.codeRow}>
+                <View style={styles.dividerRow}>
+                  <Separator style={styles.divider} />
+                  <AppText variant="label" tone="secondary">
+                    {t('auth.orContinueWith')}
+                  </AppText>
+                  <Separator style={styles.divider} />
+                </View>
+
+                <View style={styles.form}>
                   <TextField
-                    label={`${t('auth.emailCodeLabel')} *`}
-                    containerStyle={styles.codeInput}
-                    style={styles.input}
+                    icon={Mail}
+                    label={t('auth.emailLabel')}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder={t('auth.emailPlaceholder')}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="email"
+                  />
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onPress={handleSendCode}
+                    disabled={busy || !email.trim()}
+                    loading={codeLoading}
+                  >
+                    {codeLoading ? t('auth.sendingEmailCode') : t('auth.continueEmail')}
+                  </Button>
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setStep('password')}
+                  style={styles.switchButton}
+                >
+                  <AppText variant="label" tone="secondary">
+                    {t('auth.switchToPassword')}
+                  </AppText>
+                </Pressable>
+              </View>
+            ) : step === 'code' ? (
+              <View style={styles.sectionStack}>
+                <View style={styles.form}>
+                  <TextField
+                    icon={ShieldCheck}
+                    label={t('auth.emailCodeLabel')}
                     value={code}
                     onChangeText={setCode}
                     placeholder={t('auth.emailCodePlaceholder')}
                     keyboardType="number-pad"
                     autoCapitalize="none"
+                    autoComplete="sms-otp"
                   />
                   <Button
-                    variant="glass"
-                    size="sm"
-                    onPress={handleSendCode}
-                    disabled={codeLoading}
-                    loading={codeLoading}
-                    style={styles.codeButton}
+                    variant="primary"
+                    size="lg"
+                    onPress={handleVerifyCode}
+                    disabled={busy || !code.trim()}
+                    loading={loading}
                   >
-                    {t('auth.sendEmailCode')}
+                    {loading ? t('auth.verifyingEmailCode') : t('auth.verifyEmailCode')}
                   </Button>
                 </View>
-                {codeSent ? (
-                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                    {t('auth.emailCodeSent')}
-                  </Text>
-                ) : null}
-              </>
+                <Button
+                  variant="glass"
+                  size="md"
+                  onPress={handleSendCode}
+                  disabled={busy || !email.trim()}
+                  loading={codeLoading}
+                >
+                  {codeLoading ? t('auth.sendingEmailCode') : t('auth.resendEmailCode')}
+                </Button>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setStep('password')}
+                  style={styles.switchButton}
+                >
+                  <AppText variant="label" tone="secondary">
+                    {t('auth.switchToPassword')}
+                  </AppText>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.sectionStack}>
+                <View style={styles.form}>
+                  <TextField
+                    icon={Mail}
+                    label={t('auth.emailOrUsernameLabel')}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder={t('auth.emailOrUsernamePlaceholder')}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="username"
+                  />
+                  <TextField
+                    icon={KeyRound}
+                    label={t('auth.passwordLabel')}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder={t('auth.passwordPlaceholder')}
+                    secureTextEntry
+                    autoComplete="current-password"
+                  />
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onPress={handlePasswordLogin}
+                    disabled={busy || !email.trim() || !password.trim()}
+                    loading={loading}
+                  >
+                    {loading ? t('auth.loginLoading') : t('auth.loginSubmit')}
+                  </Button>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={handlePasswordReset}
+                  style={styles.switchButton}
+                  disabled={resetLoading}
+                >
+                  <AppText variant="label" tone="secondary">
+                    {resetLoading ? t('auth.passwordResetSending') : t('auth.forgotPassword')}
+                  </AppText>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setStep('choose')}
+                  style={styles.secondarySwitchButton}
+                >
+                  <AppText variant="label" tone="secondary">
+                    {t('auth.switchToEmailCode')}
+                  </AppText>
+                </Pressable>
+              </View>
             )}
-
-            <Button
-              variant="primary"
-              size="lg"
-              onPress={mode === 'password' ? handleLogin : handleVerifyCode}
-              disabled={isButtonDisabled}
-              loading={loading}
-            >
-              {mode === 'password' ? t('auth.loginSubmit') : t('auth.verifyEmailCode')}
-            </Button>
           </View>
-
-          <View style={styles.dividerContainer}>
-            <Separator style={styles.divider} />
-            <Text style={[styles.dividerText, { color: colors.textMuted }]}>
-              {t('auth.orContinueWith', 'OR')}
-            </Text>
-            <Separator style={styles.divider} />
-          </View>
-
-          <View style={styles.oauthContainer}>
-            <Pressable
-              style={[
-                styles.oauthButton,
-                styles.googleButton,
-                { opacity: isButtonDisabled ? 0.6 : 1 },
-              ]}
-              onPress={handleGoogleLogin}
-              disabled={isButtonDisabled}
-            >
-              {oauthLoading ? (
-                <ActivityIndicator size="small" color="#333" />
-              ) : (
-                <>
-                  <GoogleIcon />
-                  <Text style={styles.googleButtonText}>
-                    {t('auth.continueWithGoogle', 'Continue with Google')}
-                  </Text>
-                </>
-              )}
-            </Pressable>
-
-            <Pressable
-              style={[
-                styles.oauthButton,
-                styles.githubButton,
-                { opacity: isButtonDisabled ? 0.6 : 1 },
-              ]}
-              onPress={handleGitHubLogin}
-              disabled={isButtonDisabled}
-            >
-              {oauthLoading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <GitHubIcon />
-                  <Text style={styles.githubButtonText}>
-                    {t('auth.continueWithGitHub', 'Continue with GitHub')}
-                  </Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={{ color: colors.textSecondary }}>{t('auth.noAccount')} </Text>
-            <Link href="/(auth)/register" style={{ color: '#00a8fc', fontWeight: '600' }}>
-              {t('auth.registerLink')}
-            </Link>
-          </View>
-        </GlassCard>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
+  keyboardView: {
+    flex: 1,
+  },
   container: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing['4xl'],
   },
-  card: {
+  shell: {
     width: '100%',
-    maxWidth: 480,
-    borderRadius: radius.md,
+    maxWidth: size.authCardMaxWidth,
     alignSelf: 'center',
-    padding: spacing.xl,
+    gap: spacing['2xl'],
   },
-  header: {
+  brandBlock: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
   },
-  productName: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-    marginTop: spacing.sm,
+  panel: {
+    gap: spacing.xl,
   },
-  subtitle: {
-    fontSize: fontSize.sm,
+  stepHeader: {
+    minHeight: size.avatarXl,
+    justifyContent: 'center',
+  },
+  backButton: {
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  stepTitleWrap: {
+    gap: spacing.xs,
+  },
+  stepTitle: {
     textAlign: 'center',
   },
-  form: {
+  stepSubtitle: {
+    lineHeight: lineHeight.md,
+    textAlign: 'center',
+  },
+  sectionStack: {
+    gap: spacing.lg,
+  },
+  providerStack: {
     gap: spacing.sm,
   },
-  segmented: {
+  providerButton: {
+    minHeight: size.controlLg,
+    borderRadius: radius.xl,
+    borderWidth: border.hairline,
     flexDirection: 'row',
-    borderRadius: radius.lg,
-    padding: 4,
-    marginBottom: spacing.lg,
-  },
-  segment: {
-    flex: 1,
-    height: 40,
-    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  segmentText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-  },
-  label: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    marginTop: spacing.sm,
-    textTransform: 'uppercase',
-  },
-  input: {
-    height: 48,
-    borderRadius: radius.sm,
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
   },
-  codeRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  codeInput: {
-    flex: 1,
-  },
-  codeButton: {
-    minWidth: 112,
-    height: 48,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  codeButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-  },
-  button: {
-    height: 48,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  dividerContainer: {
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing.xl,
+    gap: spacing.md,
   },
   divider: {
     flex: 1,
-    height: 1,
   },
-  dividerText: {
-    marginHorizontal: spacing.md,
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+  form: {
+    gap: spacing.md,
   },
-  oauthContainer: {
-    gap: spacing.sm,
+  switchButton: {
+    alignSelf: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  oauthButton: {
-    height: 48,
-    borderRadius: radius.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  googleButton: {
-    backgroundColor: '#ffffff',
-  },
-  googleButtonText: {
-    color: '#333333',
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  githubButton: {
-    backgroundColor: '#24292f',
-  },
-  githubButtonText: {
-    color: '#ffffff',
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: spacing['2xl'],
+  secondarySwitchButton: {
+    alignSelf: 'center',
+    marginTop: -spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
 })

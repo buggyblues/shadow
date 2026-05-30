@@ -139,6 +139,20 @@ export const shadowMessageToolSchemaProperties = {
   filename: optionalSchema(stringSchema('Attachment filename when buffer is used.')),
   contentType: optionalSchema(stringSchema('Attachment MIME type when buffer is used.')),
   mimeType: optionalSchema(stringSchema('Alias for contentType.')),
+  attachmentKind: optionalSchema(
+    enumSchema(['file', 'image', 'voice'], 'Use voice when sending a Shadow voice message.'),
+  ),
+  durationMs: optionalSchema(numberSchema('Voice message duration in milliseconds.')),
+  waveformPeaks: optionalSchema(
+    arraySchema(numberSchema('Voice waveform peak from 0 to 100.'), {
+      minItems: 32,
+      maxItems: 96,
+    }),
+  ),
+  transcript: optionalSchema(stringSchema('Optional transcript text for a voice message.')),
+  transcriptLanguage: optionalSchema(
+    stringSchema('Optional BCP-47 transcript language, e.g. zh-CN.'),
+  ),
   caption: optionalSchema(stringSchema('Optional text sent with an attachment.')),
   commerceOfferId: optionalSchema(
     stringSchema('Shadow CommerceOfferId to attach as a purchasable product card.'),

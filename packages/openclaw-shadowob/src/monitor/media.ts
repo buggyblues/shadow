@@ -10,11 +10,27 @@ export type ShadowInboundMediaContext = {
   fields: Record<string, unknown>
 }
 
+type VoiceCapableAttachment = NonNullable<ShadowMessage['attachments']>[number] & {
+  kind?: string
+  durationMs?: number | null
+  waveformPeaks?: number[] | null
+  transcript?: {
+    text?: string | null
+    status?: string | null
+  } | null
+}
+
 function isShadowResolvableMediaUrl(url: string) {
   if (url.startsWith('/')) {
-    return url.includes('/uploads/') || url.startsWith('/api/media/signed/')
+    return (
+      url.includes('/uploads/') || url.includes('/voice/') || url.startsWith('/api/media/signed/')
+    )
   }
   return url.startsWith('http')
+}
+
+function visibleMessageText(text: string) {
+  return text.replace(/\u200B/gu, '').trim()
 }
 
 function inferMimeType(filename: string, headerType?: string) {
@@ -43,7 +59,16 @@ export async function resolveShadowInboundMediaContext(params: {
   runtime: ShadowRuntimeLogger
 }): Promise<ShadowInboundMediaContext> {
   const { account, message, rawBody, runtime } = params
-  const attachmentUrls = (message.attachments ?? []).map((a) => a.url).filter(Boolean)
+  const attachments = (message.attachments ?? []) as VoiceCapableAttachment[]
+  const attachmentUrls = attachments.map((a) => a.url).filter(Boolean)
+  const voiceAttachment = attachments.find(
+    (attachment) =>
+      attachment.kind === 'voice' || String(attachment.contentType ?? '').startsWith('audio/'),
+  )
+  const voiceTranscript =
+    voiceAttachment?.transcript?.status === 'ready' && voiceAttachment.transcript.text?.trim()
+      ? voiceAttachment.transcript.text.trim()
+      : ''
   const markdownMediaRegex = /!?\[[^\]]*\]\(([^)]+)\)/g
   const markdownUrls: string[] = []
   for (const mdMatch of rawBody.matchAll(markdownMediaRegex)) {
@@ -93,15 +118,35 @@ export async function resolveShadowInboundMediaContext(params: {
     }
   }
 
-  if (localMediaPaths.length === 0) {
-    return { cleanBody: rawBody, fields: {} }
-  }
+  const bodyWithoutMedia = rawBody
+    .replace(
+      /!?\[[^\]]*\]\((?:[^)]*\/uploads\/[^)]+|[^)]*\/voice\/[^)]+|[^)]*\/api\/media\/signed\/[^)]+)\)/g,
+      '',
+    )
+    .replace(/\u200B/gu, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
 
   const cleanBody =
-    rawBody
-      .replace(/!?\[[^\]]*\]\((?:[^)]*\/uploads\/[^)]+|[^)]*\/api\/media\/signed\/[^)]+)\)/g, '')
-      .replace(/\n{2,}/g, '\n')
-      .trim() || '[Media attached]'
+    bodyWithoutMedia ||
+    (voiceTranscript && !visibleMessageText(rawBody) ? voiceTranscript : '') ||
+    voiceTranscript ||
+    '[Media attached]'
+
+  const voiceFields = voiceAttachment
+    ? {
+        VoiceMessage: true,
+        VoiceAttachmentId: voiceAttachment.id,
+        VoiceDurationMs: voiceAttachment.durationMs ?? null,
+        VoiceWaveformPeaks: voiceAttachment.waveformPeaks ?? null,
+        VoiceTranscript: voiceAttachment.transcript?.text ?? null,
+        VoiceTranscriptStatus: voiceAttachment.transcript?.status ?? null,
+      }
+    : {}
+
+  if (localMediaPaths.length === 0) {
+    return { cleanBody, fields: voiceFields }
+  }
 
   return {
     cleanBody,
@@ -112,6 +157,7 @@ export async function resolveShadowInboundMediaContext(params: {
       MediaUrls: resolvedMediaUrls,
       MediaType: localMediaTypes[0],
       MediaTypes: localMediaTypes,
+      ...voiceFields,
     },
   }
 }

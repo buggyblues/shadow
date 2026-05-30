@@ -16,6 +16,7 @@ WORKDIR /workspace
 
 # Layer 1: Workspace manifests + lockfile (cached unless dependencies change)
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY patches/ patches/
 COPY apps/admin/package.json ./apps/admin/
 COPY apps/cloud/package.json ./apps/cloud/
 COPY apps/cloud/packages/ui/package.json ./apps/cloud/packages/ui/

@@ -46,3 +46,5 @@ export function CloudSaasApp() {
     </QueryClientProvider>
   )
 }
+
+export default CloudSaasApp

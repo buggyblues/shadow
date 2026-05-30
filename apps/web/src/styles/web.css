@@ -121,6 +121,18 @@
   animation: online-pulse 2s infinite;
 }
 
+@keyframes voice-recording-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.72);
+    opacity: 0.62;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
 /* ─── Mobile safe areas ─── */
 @media (max-width: 767px) {
   .mobile-safe-bottom {

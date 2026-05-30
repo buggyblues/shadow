@@ -18,7 +18,15 @@ import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { AppSwitch } from '../../../../src/components/ui'
 import { fetchApi } from '../../../../src/lib/api'
 import { useAuthStore } from '../../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import {
+  fontSize,
+  iconSize,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 interface Member {
   id?: string
@@ -192,8 +200,10 @@ export default function MembersScreen() {
   ].filter((s) => s.data.length > 0)
 
   const roleBadge = (role: string) => {
-    if (role === 'owner') return <Crown size={12} color="#eab308" style={{ marginLeft: 4 }} />
-    if (role === 'admin') return <Shield size={12} color="#3b82f6" style={{ marginLeft: 4 }} />
+    if (role === 'owner')
+      return <Crown size={iconSize.xs} color={palette.yellow} style={{ marginLeft: spacing.xs }} />
+    if (role === 'admin')
+      return <Shield size={iconSize.xs} color={palette.indigo} style={{ marginLeft: spacing.xs }} />
     return null
   }
 
@@ -217,12 +227,12 @@ export default function MembersScreen() {
               ]}
             >
               <View style={[styles.inviteIcon, { backgroundColor: colors.primary }]}>
-                <UserPlus size={18} color="#fff" />
+                <UserPlus size={iconSize.lg} color={palette.white} />
               </View>
               <Text style={[styles.inviteLabel, { color: colors.text }]}>
                 {t('members.inviteMembers', '邀请成员')}
               </Text>
-              <ChevronRight size={18} color={colors.textMuted} />
+              <ChevronRight size={iconSize.lg} color={colors.textMuted} />
             </Pressable>
           </>
         }
@@ -253,7 +263,7 @@ export default function MembersScreen() {
             <Avatar
               uri={item.user.avatarUrl}
               name={item.user.displayName || item.user.username}
-              size={40}
+              size={iconSize['6xl']}
               userId={item.user.id}
               status={item.user.status ?? 'offline'}
               showStatus
@@ -273,8 +283,8 @@ export default function MembersScreen() {
                 </Text>
                 {roleBadge(item.role)}
                 {item.user.isBot && (
-                  <View style={[styles.botBadge, { backgroundColor: `${colors.primary}20` }]}>
-                    <Bot size={10} color={colors.primary} />
+                  <View style={[styles.botBadge, { backgroundColor: colors.inputBackground }]}>
+                    <Bot size={iconSize.micro} color={colors.primary} />
                     <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
                   </View>
                 )}
@@ -301,7 +311,7 @@ export default function MembersScreen() {
           >
             <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              <MessageSquare size={16} color={colors.primary} />{' '}
+              <MessageSquare size={iconSize.md} color={colors.primary} />{' '}
               {t('member.replyPolicy', '回复策略')}
             </Text>
             <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>
@@ -324,7 +334,7 @@ export default function MembersScreen() {
                   {t('member.policyReplyAllDesc', 'Buddy 会回复频道中的所有消息')}
                 </Text>
               </View>
-              {currentMode === 'replyAll' && <Check size={18} color="#23a559" />}
+              {currentMode === 'replyAll' && <Check size={iconSize.lg} color={palette.emerald} />}
             </Pressable>
 
             {/* Mention Only */}
@@ -343,7 +353,9 @@ export default function MembersScreen() {
                   {t('member.policyMentionOnlyDesc', '仅在被 @ 时回复')}
                 </Text>
               </View>
-              {currentMode === 'mentionOnly' && <Check size={18} color="#23a559" />}
+              {currentMode === 'mentionOnly' && (
+                <Check size={iconSize.lg} color={palette.emerald} />
+              )}
             </Pressable>
 
             {/* Custom */}
@@ -353,14 +365,14 @@ export default function MembersScreen() {
             >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  <Settings size={14} color={colors.primary} />{' '}
+                  <Settings size={iconSize.sm} color={colors.primary} />{' '}
                   {t('member.policyCustom', '自定义策略')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
                   {t('member.policyCustomDesc', '配置 Buddy 互动、智能回复等高级选项')}
                 </Text>
               </View>
-              {currentMode === 'custom' && <Check size={18} color="#23a559" />}
+              {currentMode === 'custom' && <Check size={iconSize.lg} color={palette.emerald} />}
             </Pressable>
 
             {/* Disabled */}
@@ -379,7 +391,7 @@ export default function MembersScreen() {
                   {t('member.policyDisabledDesc', 'Buddy 将不会在此频道回复任何消息')}
                 </Text>
               </View>
-              {currentMode === 'disabled' && <Check size={18} color={colors.error} />}
+              {currentMode === 'disabled' && <Check size={iconSize.lg} color={colors.error} />}
             </Pressable>
 
             <Pressable
@@ -408,7 +420,7 @@ export default function MembersScreen() {
           >
             <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              <Settings size={16} color={colors.primary} />{' '}
+              <Settings size={iconSize.md} color={colors.primary} />{' '}
               {t('member.policyCustomTitle', '自定义回复策略')}
             </Text>
             <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>
@@ -482,7 +494,7 @@ export default function MembersScreen() {
               style={[styles.sheetSave, { backgroundColor: colors.primary }]}
               onPress={saveCustomPolicy}
             >
-              <Text style={[styles.sheetSaveText, { color: '#fff' }]}>
+              <Text style={[styles.sheetSaveText, { color: palette.white }]}>
                 {t('member.policySave', '保存策略')}
               </Text>
             </Pressable>
@@ -516,9 +528,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   inviteIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: size.iconButtonLg,
+    height: size.iconButtonLg,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -541,7 +553,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   nameRow: {
     flexDirection: 'row',
@@ -555,21 +567,21 @@ const styles = StyleSheet.create({
   botBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    marginLeft: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    gap: spacing.xxs,
+    marginLeft: spacing.tight,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.px,
     borderRadius: radius.sm,
   },
   botBadgeText: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '600',
   },
   // Policy sheet
   sheetOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: palette.black,
   },
   sheetContent: {
     borderTopLeftRadius: radius.xl,
@@ -578,9 +590,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['3xl'],
   },
   sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: size.iconButtonMd,
+    height: size.dotXs,
+    borderRadius: radius.xs,
     alignSelf: 'center',
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -610,7 +622,7 @@ const styles = StyleSheet.create({
   },
   policyDesc: {
     fontSize: fontSize.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   sheetCancel: {
     alignItems: 'center',
@@ -648,8 +660,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   stepperBtn: {
-    width: 36,
-    height: 36,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -661,7 +673,7 @@ const styles = StyleSheet.create({
   stepperValue: {
     fontSize: fontSize.lg,
     fontWeight: '700',
-    minWidth: 24,
+    minWidth: size.avatarXs,
     textAlign: 'center',
   },
 })

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
 import { type ShadowServerAppActorRef, ShadowServerAppOutbox } from '@shadowob/sdk'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
@@ -6,15 +6,19 @@ import { BATTLE_MAPS, battleResultReasonLabel, runBattle } from './game.js'
 import {
   type MatchRecord,
   type OwnerKind,
+  type ReplayComment,
   SKILL_TYPES,
   type SkillType,
   type TankProfile,
   type WarbuddyActorRef,
+  type WarbuddyPlayMode,
+  type WarbuddyRoom,
   type WarbuddyState,
+  type WarbuddyTeam,
 } from './types.js'
 
 const now = () => new Date().toISOString()
-const id = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`
+const id = (prefix: string) => `${prefix}_${randomUUID()}`
 
 export const DEFAULT_TANK_CODE = `function aligned(a, b) {
   return a && b && (a[0] === b[0] || a[1] === b[1]);
@@ -35,10 +39,7 @@ function ahead(me) {
 }
 
 function turnTo(me, direction) {
-  var current = DIRS.indexOf(me.tank.direction);
-  var wanted = DIRS.indexOf(direction);
-  var clockwise = (wanted - current + 4) % 4;
-  me.turn(clockwise === 3 ? "left" : "right");
+  me.tank.aim(direction);
 }
 
 function directionTo(me, target) {
@@ -51,12 +52,12 @@ function directionTo(me, target) {
 }
 
 function advance(me, game) {
-  if (open(game, ahead(me))) me.go();
-  else me.turn("right");
+  if (open(game, ahead(me))) me.tank.drive();
+  else me.tank.aim("right");
 }
 
 function turnToward(me, target, game) {
-  if (!target) return me.turn("right");
+  if (!target) return me.tank.aim("right");
   var direction = directionTo(me, target);
   if (direction === me.tank.direction) advance(me, game);
   else turnTo(me, direction);
@@ -64,11 +65,15 @@ function turnToward(me, target, game) {
 
 function onIdle(me, enemy, game) {
   if (enemy.tank && aligned(me.tank.position, enemy.tank.position) && !enemy.status.shielded) {
-    me.fire();
+    me.tank.fire();
     return;
   }
   if (me.skill.remainingCooldownFrames === 0 && me.skill.type === "shield" && enemy.bullet) {
-    me.shield();
+    me.tank.shield();
+    return;
+  }
+  if (game.flag) {
+    turnToward(me, game.flag, game);
     return;
   }
   if (game.star) {
@@ -77,6 +82,8 @@ function onIdle(me, enemy, game) {
   }
   advance(me, game);
 }`
+
+export const SYSTEM_STRATEGY_CODE = ''
 
 const BRAWLER_CODE = `function aligned(a, b) {
   return a && b && (a[0] === b[0] || a[1] === b[1]);
@@ -97,10 +104,7 @@ function ahead(me) {
 }
 
 function turnTo(me, direction) {
-  var current = DIRS.indexOf(me.tank.direction);
-  var wanted = DIRS.indexOf(direction);
-  var clockwise = (wanted - current + 4) % 4;
-  me.turn(clockwise === 3 ? "left" : "right");
+  me.tank.aim(direction);
 }
 
 function directionTo(me, target) {
@@ -113,18 +117,18 @@ function directionTo(me, target) {
 }
 
 function advance(me, game) {
-  if (open(game, ahead(me))) me.go();
-  else me.turn("right");
+  if (open(game, ahead(me))) me.tank.drive();
+  else me.tank.aim("right");
 }
 
 function onIdle(me, enemy, game) {
   if (me.skill.remainingCooldownFrames === 0 && me.skill.type === "overload" && enemy.tank) {
-    me.overload();
+    me.tank.overload();
     return;
   }
   if (enemy.tank) {
     var direction = directionTo(me, enemy.tank.position);
-    if (aligned(me.tank.position, enemy.tank.position) && direction === me.tank.direction) me.fire();
+    if (aligned(me.tank.position, enemy.tank.position) && direction === me.tank.direction) me.tank.fire();
     else if (direction === me.tank.direction) advance(me, game);
     else turnTo(me, direction);
     return;
@@ -148,10 +152,7 @@ const STAR_HUNTER_CODE = `function onIdle(me, enemy, game) {
   }
 
   function turnTo(direction) {
-    var current = dirs.indexOf(me.tank.direction);
-    var wanted = dirs.indexOf(direction);
-    var clockwise = (wanted - current + 4) % 4;
-    me.turn(clockwise === 3 ? "left" : "right");
+    me.tank.aim(direction);
   }
 
   function directionTo(target) {
@@ -164,24 +165,24 @@ const STAR_HUNTER_CODE = `function onIdle(me, enemy, game) {
   }
 
   if (enemy.tank && (me.tank.position[0] === enemy.tank.position[0] || me.tank.position[1] === enemy.tank.position[1]) && directionTo(enemy.tank.position) === me.tank.direction && !enemy.status.shielded) {
-    me.fire();
+    me.tank.fire();
     return;
   }
-  if (me.skill.remainingCooldownFrames === 0 && me.skill.type === "boost" && game.star) {
-    me.boost();
+  if (me.skill.remainingCooldownFrames === 0 && me.skill.type === "boost" && (game.flag || game.star)) {
+    me.tank.boost();
     return;
   }
-  var target = game.star || (enemy.tank && enemy.tank.position);
+  var target = game.flag || game.star || (enemy.tank && enemy.tank.position);
   if (!target) {
-    me.turn("right");
+    me.tank.aim("right");
     return;
   }
   var direction = directionTo(target);
   if (direction !== me.tank.direction) turnTo(direction);
   else if (open(ahead())) {
-    me.go();
+    me.tank.drive();
   } else {
-    me.turn("right");
+    me.tank.aim("right");
   }
 }`
 
@@ -234,6 +235,7 @@ function demoOwner(): WarbuddyActorRef {
 
 function createTank(input: {
   id: string
+  teamId?: string | null
   name: string
   appearance: string
   skillType: SkillType
@@ -245,6 +247,7 @@ function createTank(input: {
   const timestamp = now()
   return {
     id: input.id,
+    teamId: input.teamId ?? null,
     name: input.name,
     appearance: input.appearance,
     skillType: input.skillType,
@@ -269,13 +272,14 @@ function createTank(input: {
 function defaultState(): WarbuddyState {
   const owner = demoOwner()
   return {
+    teams: [],
     tanks: [
       createTank({
         id: 'nova-scout',
         name: 'Nova Scout',
         appearance: 'compact red scout with a fast turret',
         skillType: 'shield',
-        code: DEFAULT_TANK_CODE,
+        code: SYSTEM_STRATEGY_CODE,
         ownerKind: 'demo',
         owner,
         rankScore: 1210,
@@ -285,7 +289,7 @@ function defaultState(): WarbuddyState {
         name: 'Azure Hunter',
         appearance: 'blue pressure tank with a bright barrel',
         skillType: 'overload',
-        code: BRAWLER_CODE,
+        code: SYSTEM_STRATEGY_CODE,
         ownerKind: 'demo',
         owner,
         rankScore: 1260,
@@ -295,15 +299,24 @@ function defaultState(): WarbuddyState {
         name: 'Crimson Bastion',
         appearance: 'heavy objective tank with bright side armor',
         skillType: 'boost',
-        code: STAR_HUNTER_CODE,
+        code: SYSTEM_STRATEGY_CODE,
         ownerKind: 'demo',
         owner,
         rankScore: 1240,
       }),
     ],
     matches: [],
+    rooms: [],
+    replayComments: [],
+    readStates: [],
     updatedAt: now(),
   }
+}
+
+const DEMO_TANK_CODE_BY_ID: Record<string, string> = {
+  'nova-scout': SYSTEM_STRATEGY_CODE,
+  'azure-hunter': SYSTEM_STRATEGY_CODE,
+  'crimson-bastion': SYSTEM_STRATEGY_CODE,
 }
 
 function dataFilePath() {
@@ -327,8 +340,12 @@ const store = createShadowServerAppJsonStore<WarbuddyState>({
   normalize: (value) => ({
     ...defaultState(),
     ...value,
+    teams: Array.isArray(value.teams) ? value.teams.map(normalizeTeam) : [],
     tanks: value.tanks.map(normalizeTank),
     matches: value.matches.map((match) => ({ ...match, status: 'settled' })),
+    rooms: Array.isArray(value.rooms) ? value.rooms.map(normalizeRoom) : [],
+    replayComments: Array.isArray(value.replayComments) ? value.replayComments : [],
+    readStates: Array.isArray(value.readStates) ? value.readStates : [],
   }),
 })
 
@@ -341,12 +358,36 @@ function persist() {
 
 function normalizeTank(tank: TankProfile): TankProfile {
   const skillType = SKILL_TYPES.includes(tank.skillType) ? tank.skillType : 'shield'
+  const code =
+    (tank.ownerKind === 'demo' ? DEMO_TANK_CODE_BY_ID[tank.id] : undefined) ??
+    tank.code ??
+    SYSTEM_STRATEGY_CODE
   return {
     ...tank,
+    teamId: tank.teamId ?? null,
     skillType,
-    codeHash: tank.codeHash || hashCode(tank.code || DEFAULT_TANK_CODE),
+    code,
+    codeHash: code === tank.code ? tank.codeHash || hashCode(code) : hashCode(code),
     rankScore: Number.isFinite(tank.rankScore) ? tank.rankScore : 1200,
     excitementScore: Number.isFinite(tank.excitementScore) ? tank.excitementScore : 0,
+  }
+}
+
+function normalizeTeam(team: WarbuddyTeam): WarbuddyTeam {
+  return {
+    ...team,
+    color: normalizeTeamColor(team.color),
+    description: team.description ?? '',
+    strategyBuddyAgentIds: uniqueStrings(team.strategyBuddyAgentIds ?? []),
+  }
+}
+
+function normalizeRoom(room: WarbuddyRoom): WarbuddyRoom {
+  return {
+    ...room,
+    status: room.status ?? 'waiting',
+    mode: room.mode ?? 'coop',
+    participants: Array.isArray(room.participants) ? room.participants : [],
   }
 }
 
@@ -361,6 +402,74 @@ export function listMaps() {
     name: map.name,
     raw: map.raw,
   }))
+}
+
+export function listTeams(actor?: ShadowServerAppActorRef) {
+  const actorId = actor ? actorStableId(actor) : null
+  return {
+    teams: structuredClone(state.teams),
+    mine: actorId
+      ? (state.teams.find((team) => actorStableIdFromRef(team.owner) === actorId) ?? null)
+      : null,
+  }
+}
+
+export function getActorTeam(actor: ShadowServerAppActorRef) {
+  const actorId = actorStableId(actor)
+  return state.teams.find((team) => actorStableIdFromRef(team.owner) === actorId) ?? null
+}
+
+export function createTeam(
+  actor: ShadowServerAppActorRef,
+  input: { name: string; description?: string; color?: string },
+) {
+  const existing = getActorTeam(actor)
+  const timestamp = now()
+  const owner = actorToOwner(actor)
+  if (existing) {
+    existing.name = input.name.trim() || existing.name
+    existing.description = input.description?.trim() ?? existing.description
+    existing.color = normalizeTeamColor(input.color ?? existing.color)
+    existing.updatedAt = timestamp
+    const tank = getTank(existing.tankId)
+    if (tank) {
+      tank.name = `${existing.name} Tank`
+      tank.appearance = `${existing.color} combined-arms squad tank`
+      tank.teamId = existing.id
+      tank.updatedAt = timestamp
+    }
+    persist()
+    return { team: structuredClone(existing), tank: tank ? redactTank(tank) : null }
+  }
+
+  const teamId = id('team')
+  const tank = createTank({
+    id: id('squad_tank'),
+    teamId,
+    name: `${input.name.trim() || owner.displayName} Tank`,
+    appearance: `${normalizeTeamColor(input.color)} combined-arms squad tank`,
+    skillType: 'shield',
+    code: SYSTEM_STRATEGY_CODE,
+    ownerKind: actorKind(actor),
+    owner,
+  })
+  tank.notes = 'System AI controls this squad until a Buddy writes strategy code.'
+  tank.submittedBy = owner.displayName
+  const team: WarbuddyTeam = {
+    id: teamId,
+    name: input.name.trim() || `${owner.displayName}'s Squad`,
+    description: input.description?.trim() || 'Fresh WarBuddy squad.',
+    color: normalizeTeamColor(input.color),
+    owner,
+    tankId: tank.id,
+    strategyBuddyAgentIds: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+  state.teams.push(team)
+  state.tanks.push(tank)
+  persist()
+  return { team: structuredClone(team), tank: redactTank(tank) }
 }
 
 export function listTanks(
@@ -421,7 +530,7 @@ export function saveTankCode(
   if (!SKILL_TYPES.includes(skillType)) throw new Error('invalid_skill')
 
   if (existing) {
-    if (existing.ownerKind !== ownerKind || existing.owner.id !== owner.id) {
+    if (!canActorWriteTank(actor, existing)) {
       throw Object.assign(new Error('tank_not_owned_by_actor'), { status: 403 })
     }
     existing.name = input.name?.trim() || existing.name
@@ -439,6 +548,7 @@ export function saveTankCode(
 
   const tank = createTank({
     id: input.tankId?.trim() || id(ownerKind === 'buddy' ? 'buddy_tank' : 'tank'),
+    teamId: getActorTeam(actor)?.id ?? null,
     name: input.name?.trim() || `${owner.displayName}'s Tank`,
     appearance: input.appearance?.trim() || 'server-forged tank with a readable silhouette',
     skillType,
@@ -526,9 +636,13 @@ export function recordChallenge(input: {
   return structuredClone(match)
 }
 
-export function listMatches(input: { tankId?: string; limit?: number; offset?: number } = {}) {
+export function listMatches(
+  input: { tankId?: string; limit?: number; offset?: number } = {},
+  actor?: ShadowServerAppActorRef,
+) {
   const limit = Math.min(Math.max(input.limit ?? 30, 1), 100)
   const offset = Math.max(input.offset ?? 0, 0)
+  const actorId = actor ? actorStableId(actor) : null
   return state.matches
     .filter((match) => {
       if (!input.tankId) return true
@@ -538,7 +652,7 @@ export function listMatches(input: { tankId?: string; limit?: number; offset?: n
       )
     })
     .slice(offset, offset + limit)
-    .map(compactMatch)
+    .map((match) => compactMatch(match, actorId))
 }
 
 export function getMatchView(input: {
@@ -596,6 +710,66 @@ export function getMatchView(input: {
   }
 }
 
+export function markMatchRead(actor: ShadowServerAppActorRef, input: { matchId: string }) {
+  const match = findMatch(input.matchId)
+  if (!match) throw Object.assign(new Error('match_not_found'), { status: 404 })
+  const actorId = actorStableId(actor)
+  const existing = state.readStates.find(
+    (item) => item.matchId === match.id && item.actorId === actorId,
+  )
+  if (existing) existing.readAt = now()
+  else state.readStates.push({ matchId: match.id, actorId, readAt: now() })
+  persist()
+  return { match: compactMatch(match, actorId) }
+}
+
+export function addReplayComment(
+  actor: ShadowServerAppActorRef,
+  input: {
+    matchId: string
+    frame: number
+    rect?: Partial<ReplayComment['rect']>
+    body: string
+  },
+) {
+  const match = findMatch(input.matchId)
+  if (!match) throw Object.assign(new Error('match_not_found'), { status: 404 })
+  const body = input.body.trim()
+  if (!body) throw Object.assign(new Error('comment_body_required'), { status: 400 })
+  const frame = clampInt(input.frame, 0, Math.max(0, match.replay.frames.length - 1))
+  const comment: ReplayComment = {
+    id: id('comment'),
+    matchId: match.id,
+    frame,
+    rect: {
+      x: clampRatio(input.rect?.x ?? 0.2),
+      y: clampRatio(input.rect?.y ?? 0.2),
+      width: clampRatio(input.rect?.width ?? 0.3),
+      height: clampRatio(input.rect?.height ?? 0.2),
+    },
+    body,
+    author: actorToOwner(actor),
+    createdAt: now(),
+  }
+  state.replayComments.push(comment)
+  persist()
+  return { comment: structuredClone(comment), comments: replayComments(match.id) }
+}
+
+export function replayReviewBrief(input: { matchId: string }) {
+  const match = findMatch(input.matchId)
+  if (!match) throw Object.assign(new Error('match_not_found'), { status: 404 })
+  const comments = replayComments(match.id)
+  return {
+    match: compactMatch(match),
+    comments,
+    summary: comments
+      .map((comment) => `Frame ${comment.frame}: ${comment.body}`)
+      .join('\n')
+      .trim(),
+  }
+}
+
 export function leaderboard(
   input: { sort?: 'rating' | 'wins' | 'win_rate' | 'excitement'; limit?: number } = {},
 ) {
@@ -621,21 +795,103 @@ export function leaderboard(
   }))
 }
 
+export function listRooms() {
+  const cutoff = Date.now() - 1000 * 60 * 60 * 6
+  return {
+    rooms: state.rooms
+      .filter((room) => Date.parse(room.updatedAt) >= cutoff || room.status === 'live')
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+  }
+}
+
+export function getRoomByCode(code: string) {
+  const normalized = code.trim().toUpperCase()
+  const room = state.rooms.find((item) => item.code.toUpperCase() === normalized)
+  return room ? structuredClone(room) : null
+}
+
+export function createRoom(
+  actor: ShadowServerAppActorRef,
+  input: { name?: string; mapId?: string; mode?: WarbuddyPlayMode; teamId?: string },
+) {
+  const team = requireActorTeam(actor, input.teamId)
+  const timestamp = now()
+  const participant = roomParticipant(actor, team.id, input.mode ?? 'coop')
+  const room: WarbuddyRoom = {
+    id: id('room'),
+    code: uniqueRoomCode(),
+    name: input.name?.trim() || `${team.name} Live Room`,
+    mode: input.mode ?? 'coop',
+    status: 'waiting',
+    mapId: input.mapId?.trim() || 'random',
+    hostTeamId: team.id,
+    guestTeamId: null,
+    participants: [participant],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+  state.rooms.unshift(room)
+  state.rooms = state.rooms.slice(0, 80)
+  persist()
+  return { room: structuredClone(room), team: structuredClone(team) }
+}
+
+export function joinRoom(
+  actor: ShadowServerAppActorRef,
+  input: { code: string; mode?: WarbuddyPlayMode; teamId?: string },
+) {
+  const team = requireActorTeam(actor, input.teamId)
+  const room = state.rooms.find(
+    (item) => item.code.toUpperCase() === input.code.trim().toUpperCase(),
+  )
+  if (!room) throw Object.assign(new Error('room_not_found'), { status: 404 })
+  const participant = roomParticipant(actor, team.id, input.mode ?? room.mode)
+  room.participants = [
+    ...room.participants.filter((item) => item.actorId !== participant.actorId),
+    participant,
+  ].slice(-8)
+  if (team.id !== room.hostTeamId) room.guestTeamId = team.id
+  room.status = room.guestTeamId ? 'live' : room.status
+  room.updatedAt = now()
+  persist()
+  return { room: structuredClone(room), team: structuredClone(team) }
+}
+
 export function buildBattleBrief(input: {
+  actor?: ShadowServerAppActorRef
+  teamId?: string
   targets: Array<{ agentId?: string; assigneeLabel?: string }>
   mapId?: string
   opponentHint?: string
   notes?: string
 }) {
+  const team =
+    input.actor && actorKind(input.actor) !== 'local'
+      ? requireActorTeam(input.actor, input.teamId)
+      : input.teamId
+        ? (state.teams.find((item) => item.id === input.teamId) ?? null)
+        : input.actor
+          ? getActorTeam(input.actor)
+          : null
   const outbox = new ShadowServerAppOutbox()
+  const briefNonce = randomUUID()
+  if (team) authorizeStrategyBuddies(team, input.targets)
   for (const target of input.targets) {
     const label = target.assigneeLabel?.trim() || target.agentId || 'Buddy'
     outbox.enqueueInboxTask({
       title: 'Enter the WarBuddy arena',
       body: [
         'You are invited to fight in Shadow WarBuddy Arena.',
-        'Workflow: call tanks.get or tanks.list, publish your onIdle brain with tanks.saveCode, run matches.simulate, then use matches.challenge when ready.',
-        'Runtime: positions are [x, y]; map values are x wall, m dirt, o grass, . open. Use me.go(), me.turn("left"/"right"), me.fire(), me.speak(), and your skill function.',
+        team
+          ? `Squad: ${team.name}. Color: ${team.color}. Brief: ${team.description || 'No description.'}`
+          : null,
+        team
+          ? `Assigned squad id: ${team.id}. Assigned tank id: ${team.tankId}. You are authorized to update this tank with tanks.saveCode({ tankId: "${team.tankId}", code, notes }).`
+          : null,
+        'Workflow: inspect the assigned squad with teams.list and tanks.get, submit strategy updates with tanks.saveCode, run matches.simulate, then use matches.challenge when ready.',
+        'Mission: compete with combined arms. Your tank provides fire support while your engineer captures pickups, plants delayed bombs, and contests flags.',
+        'Runtime: positions are [x, y]; map values are x wall, m dirt, o grass, w water, . open. Use me.tank.drive(targetX,targetY) or me.engineer.move(targetX,targetY) for built-in pathing, drive/move(direction) for a cardinal step, small vectors like drive(1,0) for one-step motion, plus me.tank.aim(angle|direction), me.tank.fire(), me.tank.speak(text), me.engineer.speak(text), me.engineer.bomb(), and your tank skill function on me.tank.',
+        'Rules: grass hides units from enemy perception, water blocks tanks but not engineers, bombs chain-detonate, and the first side to three flags wins.',
         input.mapId ? `Preferred map: ${input.mapId}.` : null,
         input.opponentHint ? `Opponent hint: ${input.opponentHint}.` : null,
         input.notes ? `Coach notes: ${input.notes}` : null,
@@ -645,19 +901,53 @@ export function buildBattleBrief(input: {
       priority: 'normal',
       agentId: target.agentId,
       assigneeLabel: label,
-      idempotencyKey: `warbuddy:brief:${target.agentId ?? label}:${input.mapId ?? 'random'}`,
+      idempotencyKey: `warbuddy:brief:${briefNonce}:${target.agentId ?? label}:${input.mapId ?? 'random'}`,
+      required: true,
       resource: {
         kind: 'warbuddy_arena',
         id: input.mapId ?? 'random',
         label: 'WarBuddy Arena',
       },
       data: {
+        teamId: team?.id,
+        tankId: team?.tankId,
         mapId: input.mapId ?? 'random',
         opponentHint: input.opponentHint,
       },
     })
   }
   return outbox.attachTo({ ok: true, briefed: input.targets.length })
+}
+
+function authorizeStrategyBuddies(
+  team: WarbuddyTeam,
+  targets: Array<{ agentId?: string; assigneeLabel?: string }>,
+) {
+  const agentIds = uniqueStrings(targets.map((target) => target.agentId))
+  if (agentIds.length === 0) return
+  const next = uniqueStrings([...(team.strategyBuddyAgentIds ?? []), ...agentIds])
+  if (next.length === (team.strategyBuddyAgentIds ?? []).length) return
+  team.strategyBuddyAgentIds = next
+  team.updatedAt = now()
+  persist()
+}
+
+function canActorWriteTank(actor: ShadowServerAppActorRef, tank: TankProfile) {
+  const owner = actorToOwner(actor)
+  const ownerKind = actorKind(actor)
+  if (
+    tank.ownerKind === ownerKind &&
+    actorStableIdFromRef(tank.owner) === actorStableIdFromRef(owner)
+  ) {
+    return true
+  }
+  if (actor.ownerId && tank.owner.userId && actor.ownerId === tank.owner.userId) {
+    return true
+  }
+  const buddyAgentId = actor.buddyAgentId?.trim()
+  if (!buddyAgentId || !tank.teamId) return false
+  const team = state.teams.find((item) => item.id === tank.teamId)
+  return Boolean(team?.strategyBuddyAgentIds?.includes(buddyAgentId))
 }
 
 function temporaryCandidateTank(input: {
@@ -689,7 +979,26 @@ function matchParticipant(tank: TankProfile) {
   }
 }
 
-function compactMatch(match: MatchRecord) {
+function findMatch(matchId: string) {
+  return state.matches.find((item) => item.id === matchId || item.urlId === matchId) ?? null
+}
+
+function replayComments(matchId: string) {
+  return structuredClone(
+    state.replayComments
+      .filter((comment) => comment.matchId === matchId)
+      .sort((a, b) => a.frame - b.frame || Date.parse(a.createdAt) - Date.parse(b.createdAt)),
+  )
+}
+
+function compactMatch(match: MatchRecord, actorId?: string | null) {
+  const commentsCount = state.replayComments.filter(
+    (comment) => comment.matchId === match.id,
+  ).length
+  const readAt = actorId
+    ? state.readStates.find((item) => item.matchId === match.id && item.actorId === actorId)?.readAt
+    : null
+  const unread = actorId ? !readAt || Date.parse(readAt) < Date.parse(match.createdAt) : false
   return {
     id: match.id,
     urlId: match.urlId,
@@ -705,12 +1014,16 @@ function compactMatch(match: MatchRecord) {
     excitementScore: match.excitementScore,
     participants: match.participants,
     framesTotal: match.replay.summary.framesTotal,
+    commentsCount,
+    unread,
+    readAt,
   }
 }
 
 function redactTank(tank: TankProfile) {
   return {
     id: tank.id,
+    teamId: tank.teamId ?? null,
     name: tank.name,
     appearance: tank.appearance,
     skillType: tank.skillType,
@@ -785,4 +1098,62 @@ function expectedScore(a: number, b: number) {
 function winRate(tank: TankProfile) {
   const total = tank.wins + tank.losses + tank.draws
   return total === 0 ? 0 : Math.round((tank.wins / total) * 1000) / 10
+}
+
+function requireActorTeam(actor: ShadowServerAppActorRef, teamId?: string) {
+  const team = teamId ? state.teams.find((item) => item.id === teamId) : getActorTeam(actor)
+  if (!team) throw Object.assign(new Error('team_required'), { status: 400 })
+  if (actorStableIdFromRef(team.owner) !== actorStableId(actor)) {
+    throw Object.assign(new Error('team_not_owned_by_actor'), { status: 403 })
+  }
+  return team
+}
+
+function roomParticipant(actor: ShadowServerAppActorRef, teamId: string, mode: WarbuddyPlayMode) {
+  const normalizedMode: WarbuddyPlayMode =
+    mode === 'auto' || mode === 'manual' || mode === 'coop' ? mode : 'coop'
+  return {
+    actorId: actorStableId(actor),
+    displayName: actor.displayName,
+    teamId,
+    mode: normalizedMode,
+    joinedAt: now(),
+  }
+}
+
+function uniqueRoomCode() {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const code = Math.random().toString(36).slice(2, 8).toUpperCase()
+    if (!state.rooms.some((room) => room.code === code)) return code
+  }
+  return Math.random().toString(36).slice(2, 10).toUpperCase()
+}
+
+function actorStableId(actor: ShadowServerAppActorRef) {
+  return actor.buddyAgentId ?? actor.userId ?? actor.id
+}
+
+function actorStableIdFromRef(actor: WarbuddyActorRef) {
+  return actor.buddyAgentId ?? actor.userId ?? actor.id
+}
+
+function normalizeTeamColor(color: string | undefined) {
+  const value = color?.trim() || '#2f80ed'
+  return /^#[0-9a-f]{6}$/iu.test(value) ? value.toLowerCase() : '#2f80ed'
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return [
+    ...new Set(values.map((value) => value?.trim()).filter((value): value is string => !!value)),
+  ]
+}
+
+function clampInt(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min
+  return Math.max(min, Math.min(max, Math.trunc(value)))
+}
+
+function clampRatio(value: number) {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(1, value))
 }

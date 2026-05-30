@@ -3,7 +3,7 @@ import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, Link2, Plus, Trash2, UserPlus, X } from 'lucide-react-native'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../src/components/common/price-display'
@@ -13,12 +13,13 @@ import {
   BackgroundSurface,
   Button,
   EmptyState,
-  GlassPanel,
   IconButton,
+  PageScroll,
+  Section,
   TextField,
 } from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
-import { radius, spacing, useColors } from '../../../src/theme'
+import { border, iconSize, letterSpacing, size, spacing, useColors } from '../../../src/theme'
 
 export default function InviteSettingsScreen() {
   const { t } = useTranslation()
@@ -94,8 +95,8 @@ export default function InviteSettingsScreen() {
   return (
     <BackgroundSurface style={styles.container}>
       <SettingsHeader title={t('settings.tabInvite')} />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <GlassPanel style={styles.referralBanner}>
+      <PageScroll compact>
+        <Section padded cardStyle={styles.referralBanner}>
           <AppText variant="bodyStrong">
             {referralSummary?.campaignText ?? t('settings.inviteDefaultCampaign')}
           </AppText>
@@ -117,7 +118,7 @@ export default function InviteSettingsScreen() {
               </AppText>
             </View>
           </View>
-        </GlassPanel>
+        </Section>
 
         <Button
           variant={showForm ? 'glass' : 'primary'}
@@ -129,7 +130,7 @@ export default function InviteSettingsScreen() {
         </Button>
 
         {showForm ? (
-          <GlassPanel style={styles.formCard}>
+          <Section padded cardStyle={styles.formCard}>
             <TextField
               value={note}
               onChangeText={setNote}
@@ -144,7 +145,7 @@ export default function InviteSettingsScreen() {
             >
               {t('settings.inviteGenerate')}
             </Button>
-          </GlassPanel>
+          </Section>
         ) : null}
 
         {loading ? (
@@ -152,7 +153,7 @@ export default function InviteSettingsScreen() {
         ) : codes.length === 0 ? (
           <EmptyState icon={Link2} title={t('settings.inviteEmpty')} style={styles.emptyState} />
         ) : (
-          <GlassPanel padded={false} style={styles.card}>
+          <Section title={t('settings.tabInvite')}>
             {codes.map((code, index) => {
               const isUsed = !!code.usedBy
               const isActive = code.isActive && !isUsed
@@ -161,8 +162,11 @@ export default function InviteSettingsScreen() {
                   key={code.id}
                   style={[
                     styles.codeRow,
-                    { borderBottomColor: colors.glassLine, opacity: isActive ? 1 : 0.55 },
-                    index === codes.length - 1 && { borderBottomWidth: 0 },
+                    {
+                      borderBottomColor: colors.border,
+                      backgroundColor: isActive ? colors.surface : colors.background,
+                    },
+                    index === codes.length - 1 && { borderBottomWidth: border.none },
                   ]}
                 >
                   <View style={styles.codeInfo}>
@@ -180,7 +184,7 @@ export default function InviteSettingsScreen() {
                           uri={code.usedByUser.avatarUrl}
                           name={code.usedByUser.displayName || code.usedByUser.username}
                           userId={code.usedByUser.id}
-                          size={22}
+                          size={iconSize['2xl']}
                         />
                         <AppText variant="label" tone="secondary" style={styles.usedByText}>
                           {t('settings.inviteUsedBy')}:{' '}
@@ -239,17 +243,15 @@ export default function InviteSettingsScreen() {
                 </View>
               )
             })}
-          </GlassPanel>
+          </Section>
         )}
-      </ScrollView>
+      </PageScroll>
     </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { flex: 1 },
-  content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   referralBanner: {
     gap: spacing.lg,
   },
@@ -257,7 +259,6 @@ const styles = StyleSheet.create({
   referralStat: { alignItems: 'center', flex: 1 },
   formCard: { gap: spacing.md },
   emptyState: { paddingVertical: spacing.xl * 2 },
-  card: { borderRadius: radius['2xl'], overflow: 'hidden' },
   codeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
   codeInfo: { flex: 1, minWidth: 0 },
   codeText: {
     fontFamily: 'monospace',
-    letterSpacing: 1.2,
+    letterSpacing: letterSpacing.none,
   },
   usedByRow: {
     flexDirection: 'row',
@@ -279,5 +280,5 @@ const styles = StyleSheet.create({
   },
   usedByText: { flex: 1, minWidth: 0 },
   iconRow: { flexDirection: 'row', gap: spacing.xs },
-  iconBtn: { width: 34, height: 34 },
+  iconBtn: { width: size.iconBubble, height: size.iconBubble },
 })

@@ -1,4 +1,3 @@
-import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
 import { Tabs } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
@@ -8,7 +7,16 @@ import { useUnreadCount } from '../../../src/hooks/use-unread-count'
 import { getImageUrl } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { useUIStore } from '../../../src/stores/ui.store'
-import { useColors } from '../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../src/theme'
 
 export default function TabsLayout() {
   const colors = useColors()
@@ -20,49 +28,44 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        headerStyle: { backgroundColor: colors.surface },
+        headerShown: false,
         headerTintColor: colors.text,
         headerTitleStyle: { fontWeight: '700' },
         tabBarShowLabel: true,
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: fontSize.micro,
           fontWeight: '700',
-          marginBottom: 2,
+          marginBottom: spacing.xxs,
         },
         tabBarStyle: {
           position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 58 + insets.bottom,
-          backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.85)' : `${colors.surface}EE`,
+          bottom: spacing.none,
+          left: spacing.none,
+          right: spacing.none,
+          height: size.tabBar + insets.bottom,
+          backgroundColor: theme === 'light' ? palette.white : colors.surface,
           borderTopWidth: StyleSheet.hairlineWidth,
-          borderWidth: 0,
+          borderWidth: border.none,
           borderColor: colors.border,
-          elevation: 0,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: theme === 'light' ? 0.08 : 0.16,
-          shadowRadius: 10,
-          paddingBottom: Math.max(insets.bottom, 6),
-          paddingTop: 4,
-          paddingHorizontal: 0,
+          paddingBottom: Math.max(insets.bottom, spacing.tight),
+          paddingTop: spacing.xs,
+          paddingHorizontal: spacing.none,
         },
         tabBarBackground: () => (
-          <View style={StyleSheet.absoluteFill}>
-            <BlurView
-              tint={theme === 'light' ? 'light' : 'dark'}
-              intensity={80}
-              style={StyleSheet.absoluteFill}
-            />
-          </View>
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: theme === 'light' ? palette.white : colors.surface,
+              },
+            ]}
+          />
         ),
         tabBarIconStyle: {
-          marginTop: -2,
+          marginTop: -spacing.xxs,
         },
         tabBarItemStyle: {
-          paddingVertical: 2,
+          paddingVertical: spacing.xxs,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
@@ -74,7 +77,7 @@ export default function TabsLayout() {
           headerShown: false,
           title: '主页',
           tabBarIcon: ({ color, focused }) => (
-            <TabHomeSvg size={26} color={color} focused={focused} />
+            <TabHomeSvg size={iconSize['4xl']} color={color} focused={focused} />
           ),
         }}
       />
@@ -86,27 +89,34 @@ export default function TabsLayout() {
             const hasUnread = unreadCount > 0
             return (
               <View
-                style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+                style={{
+                  width: size.controlXs,
+                  height: size.controlXs,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                <TabBellSvg size={26} color={color} focused={focused} />
+                <TabBellSvg size={iconSize['4xl']} color={color} focused={focused} />
                 {hasUnread && (
                   <View
                     style={{
                       position: 'absolute',
-                      top: -4,
-                      right: -8,
-                      minWidth: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      paddingHorizontal: 4,
+                      top: -spacing.xs,
+                      right: -spacing.sm,
+                      minWidth: size.badgeSm,
+                      height: size.badgeSm,
+                      borderRadius: radius.md,
+                      paddingHorizontal: spacing.xs,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: '#ef4444',
-                      borderWidth: 1,
-                      borderColor: theme === 'light' ? '#fff' : colors.surface,
+                      backgroundColor: palette.crimson,
+                      borderWidth: border.hairline,
+                      borderColor: theme === 'light' ? palette.white : colors.surface,
                     }}
                   >
-                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
+                    <Text
+                      style={{ color: palette.white, fontSize: fontSize.micro, fontWeight: '800' }}
+                    >
                       {unreadCount > 99 ? '99+' : unreadCount}
                     </Text>
                   </View>
@@ -126,24 +136,24 @@ export default function TabsLayout() {
               return (
                 <View
                   style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: 13,
-                    borderWidth: 1.5,
-                    borderColor: focused ? colors.primary : 'transparent',
+                    width: size.controlXs,
+                    height: size.controlXs,
+                    borderRadius: radius.full,
+                    borderWidth: border.active,
+                    borderColor: focused ? colors.primary : colors.surface,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
                   <Image
                     source={{ uri }}
-                    style={{ width: 24, height: 24, borderRadius: 12 }}
+                    style={{ width: size.avatarXs, height: size.avatarXs, borderRadius: radius.lg }}
                     contentFit="cover"
                   />
                 </View>
               )
             }
-            return <TabMeSvg size={26} color={color} focused={focused} />
+            return <TabMeSvg size={iconSize['4xl']} color={color} focused={focused} />
           },
         }}
       />

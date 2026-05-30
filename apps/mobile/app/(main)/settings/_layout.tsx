@@ -18,6 +18,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="buddy" />
       <Stack.Screen name="account" />
       <Stack.Screen name="invite" />
+      <Stack.Screen name="server" />
     </Stack>
   )
 }

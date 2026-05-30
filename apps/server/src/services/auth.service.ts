@@ -1,4 +1,4 @@
-import { createHash, randomInt, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { compare, hash } from 'bcryptjs'
 import nodemailer from 'nodemailer'
 import { Resend } from 'resend'
@@ -17,6 +17,8 @@ import type {
   EmailLoginStartInput,
   EmailLoginVerifyInput,
   LoginInput,
+  PasswordResetCompleteInput,
+  PasswordResetStartInput,
   RegisterInput,
 } from '../validators/auth.schema'
 import type { MembershipService } from './membership.service'
@@ -24,9 +26,14 @@ import type { TaskCenterService } from './task-center.service'
 
 const EMAIL_OTP_TTL_SECONDS = 10 * 60
 const EMAIL_OTP_MAX_ATTEMPTS = 5
+const PASSWORD_RESET_TTL_SECONDS = 30 * 60
 const fallbackOtpStore = new Map<
   string,
   { hash: string; expiresAt: number; attempts: number; code: string }
+>()
+const fallbackPasswordResetStore = new Map<
+  string,
+  { userId: string; email: string; expiresAt: number }
 >()
 
 export type AuthDeviceInfo = UserSessionDevice
@@ -49,6 +56,10 @@ function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
 }
 
+function passwordResetKey(tokenHash: string) {
+  return `auth:password-reset:${tokenHash}`
+}
+
 function envValue(...keys: string[]) {
   for (const key of keys) {
     const value = process.env[key]?.trim()
@@ -63,19 +74,104 @@ function envFlag(...keys: string[]) {
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function authEmailLayout(input: {
+  title: string
+  intro: string
+  actionHtml: string
+  note: string
+  footer: string
+}) {
+  return `<!doctype html>
+<html>
+  <body style="margin:0;background:#f6f8fb;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;border-collapse:collapse;background:#ffffff;border:1px solid #e5edf4;border-radius:28px;overflow:hidden;">
+            <tr>
+              <td style="padding:34px 34px 26px;">
+                <div style="font-size:13px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#00a6b3;">Shadow</div>
+                <h1 style="margin:18px 0 10px;font-size:28px;line-height:1.2;color:#0f172a;">${input.title}</h1>
+                <p style="margin:0;color:#526176;font-size:16px;line-height:1.65;">${input.intro}</p>
+                <div style="padding:28px 0 22px;">${input.actionHtml}</div>
+                <p style="margin:0;color:#526176;font-size:14px;line-height:1.6;">${input.note}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="border-top:1px solid #e5edf4;padding:18px 34px;color:#7b8798;font-size:12px;line-height:1.6;background:#fbfdff;">${input.footer}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`
+}
+
 function emailOtpContent(code: string, locale?: string) {
   const isZh = locale?.toLowerCase().startsWith('zh')
   if (isZh) {
     return {
       subject: '虾豆登录验证码',
       text: `您的虾豆登录验证码是 ${code}，10 分钟内有效。若非您本人操作，请忽略此邮件。`,
-      html: `<p>您的虾豆登录验证码是 <strong>${code}</strong>，10 分钟内有效。</p><p>若非您本人操作，请忽略此邮件。</p>`,
+      html: authEmailLayout({
+        title: '登录虾豆',
+        intro: '输入下面的一次性验证码即可继续登录。未注册邮箱会自动创建账号。',
+        actionHtml: `<div style="display:inline-block;border-radius:20px;background:#f1fbfc;border:1px solid #c5f4f7;padding:18px 26px;font-size:34px;font-weight:900;letter-spacing:.24em;color:#009aa8;">${code}</div>`,
+        note: '验证码 10 分钟内有效。若非您本人操作，请忽略此邮件。',
+        footer: '这封邮件由虾豆账号安全系统发送，请勿回复。',
+      }),
     }
   }
   return {
     subject: 'Your Shadow login code',
     text: `Your Shadow login code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.`,
-    html: `<p>Your Shadow login code is <strong>${code}</strong>. It expires in 10 minutes.</p><p>If you did not request this, ignore this email.</p>`,
+    html: authEmailLayout({
+      title: 'Sign in to Shadow',
+      intro: 'Enter this one-time code to continue. New email addresses are created automatically.',
+      actionHtml: `<div style="display:inline-block;border-radius:20px;background:#f1fbfc;border:1px solid #c5f4f7;padding:18px 26px;font-size:34px;font-weight:900;letter-spacing:.24em;color:#009aa8;">${code}</div>`,
+      note: 'This code expires in 10 minutes. If you did not request it, ignore this email.',
+      footer: 'This email was sent by Shadow account security. Please do not reply.',
+    }),
+  }
+}
+
+function passwordResetContent(resetUrl: string, locale?: string) {
+  const safeUrl = escapeHtml(resetUrl)
+  const isZh = locale?.toLowerCase().startsWith('zh')
+  if (isZh) {
+    return {
+      subject: '重设您的虾豆密码',
+      text: `请打开以下链接重设您的虾豆密码：${resetUrl}。链接 30 分钟内有效，且只能使用一次。若非您本人操作，请忽略此邮件。`,
+      html: authEmailLayout({
+        title: '重设密码',
+        intro: '点击按钮打开安全页面，输入新的密码完成重设。',
+        actionHtml: `<a href="${safeUrl}" style="display:inline-block;border-radius:999px;background:#00d9e6;color:#071014;text-decoration:none;font-size:16px;font-weight:900;padding:15px 24px;">重设密码</a>`,
+        note: `链接 30 分钟内有效，且只能使用一次。按钮无法打开时，请复制此链接：<br><span style="word-break:break-all;color:#009aa8;">${safeUrl}</span>`,
+        footer: '如果您没有请求重设密码，可以安全忽略此邮件；您的密码不会被更改。',
+      }),
+    }
+  }
+  return {
+    subject: 'Reset your Shadow password',
+    text: `Open this link to reset your Shadow password: ${resetUrl}. The link expires in 30 minutes and can only be used once. If you did not request this, ignore this email.`,
+    html: authEmailLayout({
+      title: 'Reset your password',
+      intro: 'Open the secure page below and enter a new password to finish the reset.',
+      actionHtml: `<a href="${safeUrl}" style="display:inline-block;border-radius:999px;background:#00d9e6;color:#071014;text-decoration:none;font-size:16px;font-weight:900;padding:15px 24px;">Reset password</a>`,
+      note: `This link expires in 30 minutes and can only be used once. If the button does not open, copy this link:<br><span style="word-break:break-all;color:#009aa8;">${safeUrl}</span>`,
+      footer:
+        'If you did not request a password reset, you can ignore this email. Your password will not change.',
+    }),
   }
 }
 
@@ -289,6 +385,98 @@ export class AuthService {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     }
+  }
+
+  async startPasswordReset(input: PasswordResetStartInput) {
+    const email = normalizeEmail(input.email)
+    const user = await this.deps.userDao.findByEmail(email)
+
+    if (!user) {
+      return { ok: true, expiresIn: PASSWORD_RESET_TTL_SECONDS }
+    }
+
+    const token = randomBytes(32).toString('base64url')
+    const tokenHash = hashToken(token)
+    const payload = {
+      userId: user.id,
+      email,
+      expiresAt: Date.now() + PASSWORD_RESET_TTL_SECONDS * 1000,
+    }
+
+    await this.writePasswordResetToken(tokenHash, payload)
+
+    try {
+      await this.deliverPasswordResetEmail(email, this.buildPasswordResetUrl(token), input.locale)
+    } catch (err) {
+      await this.clearPasswordResetToken(tokenHash)
+      logger.warn({ err, email }, 'Password reset email delivery failed')
+      return { ok: true, expiresIn: PASSWORD_RESET_TTL_SECONDS }
+    }
+
+    return {
+      ok: true,
+      expiresIn: PASSWORD_RESET_TTL_SECONDS,
+      ...(process.env.NODE_ENV !== 'production' ? { devToken: token } : {}),
+    }
+  }
+
+  async completePasswordReset(
+    input: PasswordResetCompleteInput,
+    meta?: { ipAddress?: string; userAgent?: string },
+  ) {
+    const tokenHash = hashToken(input.token.trim())
+    const stored = await this.readPasswordResetToken(tokenHash)
+    if (!stored) {
+      throw Object.assign(new Error('Password reset link is invalid or expired'), {
+        status: 400,
+        code: 'PASSWORD_RESET_TOKEN_INVALID',
+      })
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      await this.clearPasswordResetToken(tokenHash)
+      await this.deps.passwordChangeLogDao.create({
+        userId: stored.userId,
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+        success: false,
+        failureReason: 'Expired password reset token',
+      })
+      throw Object.assign(new Error('Password reset link is invalid or expired'), {
+        status: 400,
+        code: 'PASSWORD_RESET_TOKEN_INVALID',
+      })
+    }
+
+    const user = await this.deps.userDao.findById(stored.userId)
+    if (!user || normalizeEmail(user.email) !== stored.email) {
+      await this.clearPasswordResetToken(tokenHash)
+      await this.deps.passwordChangeLogDao.create({
+        userId: stored.userId,
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+        success: false,
+        failureReason: 'Password reset user mismatch',
+      })
+      throw Object.assign(new Error('Password reset link is invalid or expired'), {
+        status: 400,
+        code: 'PASSWORD_RESET_TOKEN_INVALID',
+      })
+    }
+
+    await this.clearPasswordResetToken(tokenHash)
+
+    const newPasswordHash = await hash(input.newPassword, 12)
+    await this.deps.userDao.update(user.id, { passwordHash: newPasswordHash })
+    await this.deps.userSessionDao.revokeAllByUserId(user.id)
+    await this.deps.passwordChangeLogDao.create({
+      userId: user.id,
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+      success: true,
+    })
+
+    return { success: true }
   }
 
   async refresh(refreshToken: string, device?: AuthDeviceInfo) {
@@ -522,16 +710,101 @@ export class AuthService {
     }
   }
 
+  private buildPasswordResetUrl(token: string) {
+    const explicitUrl = envValue('PASSWORD_RESET_URL')
+    if (explicitUrl) {
+      const url = new URL(explicitUrl)
+      url.searchParams.set('token', token)
+      return url.toString()
+    }
+
+    const rawBase =
+      envValue(
+        'PASSWORD_RESET_BASE_URL',
+        'WEB_APP_URL',
+        'WEB_ORIGIN',
+        'APP_ORIGIN',
+        'OAUTH_BASE_URL',
+      ) ??
+      (process.env.NODE_ENV === 'production' ? 'https://shadowob.com' : 'http://localhost:3000')
+    const url = new URL(rawBase)
+    const basePath = url.pathname.replace(/\/+$/, '')
+    url.pathname = `${basePath.endsWith('/app') ? basePath : '/app'}/reset-password`
+    url.search = ''
+    url.hash = ''
+    url.searchParams.set('token', token)
+    return url.toString()
+  }
+
+  private async readPasswordResetToken(tokenHash: string) {
+    const key = passwordResetKey(tokenHash)
+    const redis = await getRedisClient()
+    const raw = redis
+      ? await redis.get(key)
+      : JSON.stringify(fallbackPasswordResetStore.get(key) ?? null)
+    if (!raw) return null
+    return JSON.parse(raw) as { userId: string; email: string; expiresAt: number } | null
+  }
+
+  private async writePasswordResetToken(
+    tokenHash: string,
+    payload: { userId: string; email: string; expiresAt: number },
+  ) {
+    const key = passwordResetKey(tokenHash)
+    const redis = await getRedisClient()
+    if (redis) {
+      await redis.set(key, JSON.stringify(payload), { EX: PASSWORD_RESET_TTL_SECONDS })
+    } else {
+      fallbackPasswordResetStore.set(key, payload)
+    }
+  }
+
+  private async clearPasswordResetToken(tokenHash: string) {
+    const key = passwordResetKey(tokenHash)
+    const redis = await getRedisClient()
+    if (redis) {
+      await redis.del(key)
+    } else {
+      fallbackPasswordResetStore.delete(key)
+    }
+  }
+
   private async deliverEmailOtp(email: string, code: string, locale?: string) {
+    await this.deliverAuthEmail({
+      email,
+      content: emailOtpContent(code, locale),
+      webhookPayload: { type: 'email_login', to: email, code, locale },
+      failureMessage: 'Failed to send verification email',
+      failureLog: 'Failed to send email verification code',
+    })
+  }
+
+  private async deliverPasswordResetEmail(email: string, resetUrl: string, locale?: string) {
+    await this.deliverAuthEmail({
+      email,
+      content: passwordResetContent(resetUrl, locale),
+      webhookPayload: { type: 'password_reset', to: email, resetUrl, locale },
+      failureMessage: 'Failed to send password reset email',
+      failureLog: 'Failed to send password reset email',
+    })
+  }
+
+  private async deliverAuthEmail(input: {
+    email: string
+    content: { subject: string; text: string; html: string }
+    webhookPayload: Record<string, unknown>
+    failureMessage: string
+    failureLog: string
+  }) {
     const webhookUrl = process.env.EMAIL_OTP_WEBHOOK_URL
     if (webhookUrl) {
       const res = await this.deps.safeHttpClient.fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: email, code, locale }),
+        body: JSON.stringify(input.webhookPayload),
       })
       if (!res.ok) {
-        throw Object.assign(new Error('Failed to send verification email'), {
+        throw Object.assign(new Error(input.failureMessage), {
           status: 502,
           code: 'EMAIL_SEND_FAILED',
         })
@@ -542,22 +815,21 @@ export class AuthService {
     const resendApiKey = envValue('RESEND_API_KEY', 'EMAIL_RESEND_API_KEY')
     const resendFrom = envValue('RESEND_FROM', 'EMAIL_RESEND_FROM')
     if (resendApiKey && resendFrom) {
-      const content = emailOtpContent(code, locale)
       const resend = new Resend(resendApiKey)
       try {
         const result = await resend.emails.send({
           from: resendFrom,
-          to: email,
-          subject: content.subject,
-          text: content.text,
-          html: content.html,
+          to: input.email,
+          subject: input.content.subject,
+          text: input.content.text,
+          html: input.content.html,
         })
         if (result.error) {
           throw result.error
         }
       } catch (err) {
-        logger.error({ err, email }, 'Failed to send email verification code via Resend')
-        throw Object.assign(new Error('Failed to send verification email'), {
+        logger.error({ err, email: input.email }, `${input.failureLog} via Resend`)
+        throw Object.assign(new Error(input.failureMessage), {
           status: 502,
           code: 'EMAIL_SEND_FAILED',
         })
@@ -578,19 +850,18 @@ export class AuthService {
         secure,
         auth: smtpUser && smtpPassword ? { user: smtpUser, pass: smtpPassword } : undefined,
       })
-      const content = emailOtpContent(code, locale)
 
       try {
         await transporter.sendMail({
           from: smtpFrom,
-          to: email,
-          subject: content.subject,
-          text: content.text,
-          html: content.html,
+          to: input.email,
+          subject: input.content.subject,
+          text: input.content.text,
+          html: input.content.html,
         })
       } catch (err) {
-        logger.error({ err, email }, 'Failed to send email verification code via SMTP')
-        throw Object.assign(new Error('Failed to send verification email'), {
+        logger.error({ err, email: input.email }, `${input.failureLog} via SMTP`)
+        throw Object.assign(new Error(input.failureMessage), {
           status: 502,
           code: 'EMAIL_SEND_FAILED',
         })
@@ -605,6 +876,9 @@ export class AuthService {
       })
     }
 
-    logger.warn({ email, code }, 'Email delivery not configured; logging email verification code')
+    logger.warn(
+      { email: input.email, subject: input.content.subject },
+      'Email delivery not configured; logging auth email request',
+    )
   }
 }

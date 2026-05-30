@@ -311,6 +311,25 @@ export function attachmentsEqual(prev?: Attachment[], next?: Attachment[]): bool
     if (prevAttachment.contentType !== nextAttachment.contentType) return false
     if (prevAttachment.size !== nextAttachment.size) return false
     if (prevAttachment.paidFileId !== nextAttachment.paidFileId) return false
+    if (prevAttachment.kind !== nextAttachment.kind) return false
+    if (prevAttachment.durationMs !== nextAttachment.durationMs) return false
+    if (prevAttachment.waveformVersion !== nextAttachment.waveformVersion) return false
+    if (
+      !numberArraysEqual(
+        prevAttachment.waveformPeaks ?? undefined,
+        nextAttachment.waveformPeaks ?? undefined,
+      )
+    ) {
+      return false
+    }
+    if (prevAttachment.transcript?.status !== nextAttachment.transcript?.status) return false
+    if (prevAttachment.transcript?.text !== nextAttachment.transcript?.text) return false
+    if (prevAttachment.playback?.played !== nextAttachment.playback?.played) return false
+    if (prevAttachment.playback?.completed !== nextAttachment.playback?.completed) return false
+    if (prevAttachment.playback?.lastPositionMs !== nextAttachment.playback?.lastPositionMs) {
+      return false
+    }
+    if (prevAttachment.playback?.playedCount !== nextAttachment.playback?.playedCount) return false
   }
   return true
 }
@@ -326,6 +345,16 @@ function retryMessageEqual(prev: Message, next: Message): boolean {
 }
 
 function stringArraysEqual(prev?: string[], next?: string[]): boolean {
+  if (prev?.length !== next?.length) return false
+  if (!prev && !next) return true
+  if (!prev || !next) return false
+  for (let i = 0; i < prev.length; i++) {
+    if (prev[i] !== next[i]) return false
+  }
+  return true
+}
+
+function numberArraysEqual(prev?: number[], next?: number[]): boolean {
   if (prev?.length !== next?.length) return false
   if (!prev && !next) return true
   if (!prev || !next) return false

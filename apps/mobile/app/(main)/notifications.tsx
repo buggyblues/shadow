@@ -3,16 +3,25 @@ import { useRouter } from 'expo-router'
 import { AtSign, Bell, Check, CheckCheck, Inbox, MessageCircle, User, X } from 'lucide-react-native'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import Reanimated, { FadeInUp } from 'react-native-reanimated'
 import { Avatar } from '../../src/components/common/avatar'
 import { EmptyState } from '../../src/components/common/empty-state'
 import { LoadingScreen } from '../../src/components/common/loading-screen'
-import { BackgroundSurface, Button, ButtonGroup, CardPressable } from '../../src/components/ui'
+import {
+  BackgroundSurface,
+  Button,
+  ButtonGroup,
+  IconButton,
+  MobileNavigationBar,
+  SurfaceList,
+  SurfaceListItem,
+} from '../../src/components/ui'
 import { useSocketEvent } from '../../src/hooks/use-socket'
 import { fetchApi } from '../../src/lib/api'
+import { serverChannelHref } from '../../src/lib/routes'
 import { showToast } from '../../src/lib/toast'
-import { fontSize, spacing, useColors } from '../../src/theme'
+import { fontSize, iconSize, lineHeight, radius, size, spacing, useColors } from '../../src/theme'
 
 interface Notification {
   id: string
@@ -284,9 +293,7 @@ export default function NotificationsScreen() {
           `/api/servers/${channel.serverId}`,
         )
         router.push(
-          `/(main)/servers/${server.slug ?? channel.serverId}/channels/${channel.id}${
-            messageId ? `?msg=${messageId}` : ''
-          }` as never,
+          serverChannelHref(server.slug ?? channel.serverId, channel.id, { messageId }) as never,
         )
       }
 
@@ -340,204 +347,208 @@ export default function NotificationsScreen() {
   const getNotifIcon = (type: string, color: string) => {
     switch (type) {
       case 'mention':
-        return <AtSign size={22} color={color} strokeWidth={2.5} />
+        return <AtSign size={iconSize['2xl']} color={color} strokeWidth={2.5} />
       case 'reply':
-        return <MessageCircle size={22} color={color} strokeWidth={2.5} />
+        return <MessageCircle size={iconSize['2xl']} color={color} strokeWidth={2.5} />
       case 'dm':
-        return <User size={22} color={color} strokeWidth={2.5} />
+        return <User size={iconSize['2xl']} color={color} strokeWidth={2.5} />
       default:
-        return <Bell size={22} color={color} strokeWidth={2.5} />
+        return <Bell size={iconSize['2xl']} color={color} strokeWidth={2.5} />
     }
   }
 
   return (
     <BackgroundSurface>
-      <View style={[styles.container]}>
-        {/* Mark all read header */}
-        {unreadCount > 0 && (
-          <Button
-            variant="outline"
-            size="md"
-            icon={CheckCheck}
-            containerStyle={styles.markAllBtn}
-            style={styles.markAllInner}
-            onPress={() => markAllRead.mutate()}
-            loading={markAllRead.isPending}
-          >
-            {t('notification.markAllRead', '全部标为已读')}
-          </Button>
-        )}
-
-        <FlatList
-          data={notifications}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <EmptyState
-              icon={Inbox}
-              title={t('notification.empty', '暂无通知')}
-              description={t('notification.emptyDesc', '还没有收到任何新消息')}
+      <MobileNavigationBar
+        title={t('settings.tabNotification')}
+        right={
+          unreadCount > 0 ? (
+            <IconButton
+              icon={CheckCheck}
+              variant="glass"
+              size="icon"
+              onPress={() => markAllRead.mutate()}
+              loading={markAllRead.isPending}
+              accessibilityLabel={t('notification.markAllRead', '全部标为已读')}
             />
-          }
-          renderItem={({ item, index }) => {
-            const display = getNotificationDisplay(item, t)
-            const serverAppApprovalAction = getServerAppApprovalAction(item)
-            return (
-              <Reanimated.View entering={FadeInUp.delay(index * 40).springify()}>
-                <CardPressable
-                  variant="glassCard"
-                  active={!item.isRead}
-                  style={styles.notifCard}
-                  onPress={() => handlePress(item)}
-                >
-                  <View style={styles.notifContent}>
-                    {item.senderAvatarUrl ? (
-                      <Avatar
-                        uri={item.senderAvatarUrl}
-                        name={display.title}
-                        size={44}
-                        userId={item.senderId ?? ''}
-                      />
-                    ) : (
-                      <View
-                        style={[
-                          styles.iconBubble,
-                          {
-                            backgroundColor: item.isRead
-                              ? colors.inputBackground
-                              : `${colors.primary}20`,
-                          },
-                        ]}
-                      >
-                        {getNotifIcon(item.type, item.isRead ? colors.textMuted : colors.primary)}
+          ) : null
+        }
+      />
+      <View style={[styles.container]}>
+        {notifications.length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title={t('notification.empty', '暂无通知')}
+            description={t('notification.emptyDesc', '还没有收到任何新消息')}
+          />
+        ) : (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+            <SurfaceList style={styles.notificationList}>
+              {notifications.map((item, index) => {
+                const display = getNotificationDisplay(item, t)
+                const serverAppApprovalAction = getServerAppApprovalAction(item)
+                return (
+                  <Reanimated.View key={item.id} entering={FadeInUp.delay(index * 40).springify()}>
+                    <SurfaceListItem
+                      last={index === notifications.length - 1}
+                      style={styles.notifCard}
+                      onPress={() => handlePress(item)}
+                    >
+                      <View style={styles.notifContent}>
+                        {item.senderAvatarUrl ? (
+                          <Avatar
+                            uri={item.senderAvatarUrl}
+                            name={display.title}
+                            size={44}
+                            userId={item.senderId ?? ''}
+                          />
+                        ) : (
+                          <View
+                            style={[
+                              styles.iconBubble,
+                              {
+                                backgroundColor: item.isRead
+                                  ? colors.inputBackground
+                                  : colors.surfaceHover,
+                              },
+                            ]}
+                          >
+                            {getNotifIcon(
+                              item.type,
+                              item.isRead ? colors.textMuted : colors.primary,
+                            )}
+                          </View>
+                        )}
+
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.notifTitle,
+                              { color: colors.text, fontWeight: item.isRead ? '600' : '800' },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {display.title}
+                          </Text>
+                          {display.body && (
+                            <Text
+                              style={[styles.notifBody, { color: colors.textSecondary }]}
+                              numberOfLines={2}
+                            >
+                              {display.body}
+                            </Text>
+                          )}
+                          {item.referenceType === 'channel_join_request' && item.referenceId && (
+                            <ButtonGroup style={styles.requestActions}>
+                              <Button
+                                disabled={reviewJoinRequest.isPending}
+                                variant="glass"
+                                size="xs"
+                                icon={Check}
+                                iconColor={colors.success}
+                                textStyle={[styles.requestActionText, { color: colors.success }]}
+                                containerStyle={styles.requestActionCell}
+                                style={styles.requestAction}
+                                onPress={() =>
+                                  reviewJoinRequest.mutate({
+                                    requestId: item.referenceId!,
+                                    status: 'approved',
+                                  })
+                                }
+                              >
+                                {t('channel.approveAccess', '同意')}
+                              </Button>
+                              <Button
+                                disabled={reviewJoinRequest.isPending}
+                                variant="danger"
+                                size="xs"
+                                icon={X}
+                                containerStyle={styles.requestActionCell}
+                                style={styles.requestAction}
+                                onPress={() =>
+                                  reviewJoinRequest.mutate({
+                                    requestId: item.referenceId!,
+                                    status: 'rejected',
+                                  })
+                                }
+                              >
+                                {t('channel.rejectAccess', '拒绝')}
+                              </Button>
+                            </ButtonGroup>
+                          )}
+                          {item.referenceType === 'server_join_request' && item.referenceId && (
+                            <ButtonGroup style={styles.requestActions}>
+                              <Button
+                                disabled={reviewServerJoinRequest.isPending}
+                                variant="glass"
+                                size="xs"
+                                icon={Check}
+                                iconColor={colors.success}
+                                textStyle={[styles.requestActionText, { color: colors.success }]}
+                                containerStyle={styles.requestActionCell}
+                                style={styles.requestAction}
+                                onPress={() =>
+                                  reviewServerJoinRequest.mutate({
+                                    requestId: item.referenceId!,
+                                    status: 'approved',
+                                  })
+                                }
+                              >
+                                {t('server.approveAccess', '同意')}
+                              </Button>
+                              <Button
+                                disabled={reviewServerJoinRequest.isPending}
+                                variant="danger"
+                                size="xs"
+                                icon={X}
+                                containerStyle={styles.requestActionCell}
+                                style={styles.requestAction}
+                                onPress={() =>
+                                  reviewServerJoinRequest.mutate({
+                                    requestId: item.referenceId!,
+                                    status: 'rejected',
+                                  })
+                                }
+                              >
+                                {t('server.rejectAccess', '拒绝')}
+                              </Button>
+                            </ButtonGroup>
+                          )}
+                          {serverAppApprovalAction && !item.isRead && (
+                            <ButtonGroup style={styles.requestActions}>
+                              <Button
+                                disabled={approveServerAppCommand.isPending}
+                                variant="glass"
+                                size="xs"
+                                icon={Check}
+                                iconColor={colors.success}
+                                textStyle={[styles.requestActionText, { color: colors.success }]}
+                                containerStyle={styles.requestActionCell}
+                                style={styles.requestAction}
+                                onPress={() =>
+                                  approveServerAppCommand.mutate(serverAppApprovalAction)
+                                }
+                              >
+                                {t('serverApps.commandApprovalConfirm')}
+                              </Button>
+                            </ButtonGroup>
+                          )}
+                          <Text style={[styles.notifTime, { color: colors.textMuted }]}>
+                            {formatTimeAgo(item.createdAt, t)}
+                          </Text>
+                        </View>
+
+                        {!item.isRead && (
+                          <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
+                        )}
                       </View>
-                    )}
-
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          styles.notifTitle,
-                          { color: colors.text, fontWeight: item.isRead ? '600' : '800' },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {display.title}
-                      </Text>
-                      {display.body && (
-                        <Text
-                          style={[styles.notifBody, { color: colors.textSecondary }]}
-                          numberOfLines={2}
-                        >
-                          {display.body}
-                        </Text>
-                      )}
-                      {item.referenceType === 'channel_join_request' && item.referenceId && (
-                        <ButtonGroup style={styles.requestActions}>
-                          <Button
-                            disabled={reviewJoinRequest.isPending}
-                            variant="glass"
-                            size="xs"
-                            icon={Check}
-                            iconColor={colors.success}
-                            textStyle={[styles.requestActionText, { color: colors.success }]}
-                            containerStyle={styles.requestActionCell}
-                            style={styles.requestAction}
-                            onPress={() =>
-                              reviewJoinRequest.mutate({
-                                requestId: item.referenceId!,
-                                status: 'approved',
-                              })
-                            }
-                          >
-                            {t('channel.approveAccess', '同意')}
-                          </Button>
-                          <Button
-                            disabled={reviewJoinRequest.isPending}
-                            variant="danger"
-                            size="xs"
-                            icon={X}
-                            containerStyle={styles.requestActionCell}
-                            style={styles.requestAction}
-                            onPress={() =>
-                              reviewJoinRequest.mutate({
-                                requestId: item.referenceId!,
-                                status: 'rejected',
-                              })
-                            }
-                          >
-                            {t('channel.rejectAccess', '拒绝')}
-                          </Button>
-                        </ButtonGroup>
-                      )}
-                      {item.referenceType === 'server_join_request' && item.referenceId && (
-                        <ButtonGroup style={styles.requestActions}>
-                          <Button
-                            disabled={reviewServerJoinRequest.isPending}
-                            variant="glass"
-                            size="xs"
-                            icon={Check}
-                            iconColor={colors.success}
-                            textStyle={[styles.requestActionText, { color: colors.success }]}
-                            containerStyle={styles.requestActionCell}
-                            style={styles.requestAction}
-                            onPress={() =>
-                              reviewServerJoinRequest.mutate({
-                                requestId: item.referenceId!,
-                                status: 'approved',
-                              })
-                            }
-                          >
-                            {t('server.approveAccess', '同意')}
-                          </Button>
-                          <Button
-                            disabled={reviewServerJoinRequest.isPending}
-                            variant="danger"
-                            size="xs"
-                            icon={X}
-                            containerStyle={styles.requestActionCell}
-                            style={styles.requestAction}
-                            onPress={() =>
-                              reviewServerJoinRequest.mutate({
-                                requestId: item.referenceId!,
-                                status: 'rejected',
-                              })
-                            }
-                          >
-                            {t('server.rejectAccess', '拒绝')}
-                          </Button>
-                        </ButtonGroup>
-                      )}
-                      {serverAppApprovalAction && !item.isRead && (
-                        <ButtonGroup style={styles.requestActions}>
-                          <Button
-                            disabled={approveServerAppCommand.isPending}
-                            variant="glass"
-                            size="xs"
-                            icon={Check}
-                            iconColor={colors.success}
-                            textStyle={[styles.requestActionText, { color: colors.success }]}
-                            containerStyle={styles.requestActionCell}
-                            style={styles.requestAction}
-                            onPress={() => approveServerAppCommand.mutate(serverAppApprovalAction)}
-                          >
-                            {t('serverApps.commandApprovalConfirm')}
-                          </Button>
-                        </ButtonGroup>
-                      )}
-                      <Text style={[styles.notifTime, { color: colors.textMuted }]}>
-                        {formatTimeAgo(item.createdAt, t)}
-                      </Text>
-                    </View>
-
-                    {!item.isRead && (
-                      <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
-                    )}
-                  </View>
-                </CardPressable>
-              </Reanimated.View>
-            )
-          }}
-        />
+                    </SurfaceListItem>
+                  </Reanimated.View>
+                )
+              })}
+            </SurfaceList>
+          </ScrollView>
+        )}
       </View>
     </BackgroundSurface>
   )
@@ -556,18 +567,15 @@ function formatTimeAgo(dateStr: string, t: (key: string, fallback: string) => st
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { paddingBottom: 120, paddingTop: spacing.md },
-  markAllBtn: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-    alignSelf: 'stretch',
+  list: {
+    paddingBottom: size.tabBar + spacing['6xl'],
+    paddingTop: spacing.none,
   },
-  markAllInner: {
-    width: '100%',
+  notificationList: {
+    marginBottom: spacing.sm,
   },
   notifCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    minHeight: size.navSide,
   },
   notifContent: {
     flexDirection: 'row',
@@ -575,25 +583,26 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   iconBubble: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   unreadDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginTop: 8,
+    width: size.dotLg,
+    height: size.dotLg,
+    borderRadius: radius.sm,
+    marginTop: spacing.sm,
   },
   notifTitle: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.lg,
+    fontWeight: '800',
   },
   notifBody: {
     fontSize: fontSize.sm,
-    marginTop: 4,
-    lineHeight: 20,
+    marginTop: spacing.xs,
+    lineHeight: lineHeight.sm,
   },
   notifTime: {
     fontSize: fontSize.xs,
@@ -607,7 +616,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   requestAction: {
-    minHeight: 34,
+    minHeight: size.iconBubble,
     width: '100%',
   },
   requestActionText: {

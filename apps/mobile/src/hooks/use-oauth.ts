@@ -1,8 +1,8 @@
 import * as Linking from 'expo-linking'
-import * as SecureStore from 'expo-secure-store'
 import * as WebBrowser from 'expo-web-browser'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchApi } from '../lib/api'
+import { completeOAuthCallbackUrl, isOAuthCallbackUrl } from '../lib/oauth-callback'
+import { getApiBaseUrl } from '../lib/server-url'
 import { useAuthStore } from '../stores/auth.store'
 
 interface UseOAuthReturn {
@@ -28,42 +28,11 @@ export function useOAuth(): UseOAuthReturn {
 
   const completeAuthByUrl = useCallback(
     async (url: string) => {
-      if (!url.includes('oauth-callback')) return
-
-      const parsedUrl = Linking.parse(url)
-      const { access_token, refresh_token, accessToken, refreshToken, error } =
-        parsedUrl.queryParams as {
-          access_token?: string
-          refresh_token?: string
-          accessToken?: string
-          refreshToken?: string
-          error?: string
-        }
-
-      if (error) {
-        throw new Error(`OAuth error: ${error}`)
-      }
-
-      const nextAccessToken = access_token ?? accessToken
-      const nextRefreshToken = refresh_token ?? refreshToken
-      if (!nextAccessToken || !nextRefreshToken) {
+      if (!isOAuthCallbackUrl(url)) return
+      const result = await completeOAuthCallbackUrl(url, setAuth)
+      if (result === 'missing') {
         throw new Error('Missing OAuth tokens in callback URL')
       }
-
-      await SecureStore.setItemAsync('accessToken', nextAccessToken)
-      await SecureStore.setItemAsync('refreshToken', nextRefreshToken)
-
-      const user = await fetchApi<{
-        id: string
-        email: string
-        username: string
-        displayName: string | null
-        avatarUrl: string | null
-      }>('/api/auth/me', {
-        headers: { Authorization: `Bearer ${nextAccessToken}` },
-      })
-
-      setAuth(user, nextAccessToken, nextRefreshToken)
     },
     [setAuth],
   )
@@ -106,8 +75,7 @@ export function useOAuth(): UseOAuthReturn {
     async (provider: 'google' | 'github') => {
       setIsLoading(true)
       try {
-        // Get the API base URL
-        const apiBase = process.env.EXPO_PUBLIC_API_BASE ?? 'https://shadowob.com'
+        const apiBase = await getApiBaseUrl()
 
         // Works in Expo Go (exp://.../--/oauth-callback) and standalone builds (shadow://oauth-callback)
         const callbackUrl = Linking.createURL('oauth-callback')

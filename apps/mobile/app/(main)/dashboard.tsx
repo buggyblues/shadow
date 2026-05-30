@@ -4,7 +4,6 @@ import type { LucideIcon } from 'lucide-react-native'
 import {
   Bot,
   Calendar,
-  ChevronLeft,
   ChevronRight,
   Clock,
   Coins,
@@ -18,15 +17,24 @@ import {
 } from 'lucide-react-native'
 import { useEffect } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import Reanimated, { FadeInDown } from 'react-native-reanimated'
 import { Avatar } from '../../src/components/common/avatar'
 import { LoadingScreen } from '../../src/components/common/loading-screen'
 import { PriceCompact } from '../../src/components/common/price-display'
 import { ShrimpCoinIcon } from '../../src/components/common/shrimp-coin'
+import { MobileBackButton, MobileNavigationBar } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { useAuthStore } from '../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../src/theme'
 
 interface DashboardData {
   serversOwned: number
@@ -45,7 +53,6 @@ export default function DashboardScreen() {
   const colors = useColors()
   const router = useRouter()
   const navigation = useNavigation()
-  const insets = useSafeAreaInsets()
   const user = useAuthStore((s) => s.user)
 
   useEffect(() => {
@@ -70,56 +77,49 @@ export default function DashboardScreen() {
     color: string
     isShrimpCoin?: boolean
   }[] = [
-    { label: '创建服务器', value: data?.serversOwned ?? 0, Icon: Home, color: '#5865F2' },
-    { label: '加入服务器', value: data?.serversJoined ?? 0, Icon: Globe, color: '#3B82F6' },
-    { label: 'Buddy 数量', value: data?.buddyCount ?? 0, Icon: Bot, color: '#00C8D6' },
+    { label: '创建服务器', value: data?.serversOwned ?? 0, Icon: Home, color: palette.indigo },
+    { label: '加入服务器', value: data?.serversJoined ?? 0, Icon: Globe, color: palette.indigo },
+    { label: 'Buddy 数量', value: data?.buddyCount ?? 0, Icon: Bot, color: palette.cyan },
     {
       label: 'Buddy 在线',
       value: `${data?.buddyOnlineHours ?? 0}h`,
       Icon: Clock,
-      color: '#10B981',
+      color: palette.emerald,
     },
     {
       label: '虾币余额',
       value: data?.walletBalance ?? 0,
       Icon: Coins,
-      color: '#F43F5E',
+      color: palette.crimson,
       isShrimpCoin: true,
     },
     {
       label: '任务完成',
       value: `${data?.tasksCompleted ?? 0}/${data?.tasksTotal ?? 0}`,
       Icon: Target,
-      color: '#ED4245',
+      color: palette.crimson,
     },
-    { label: '邀请好友', value: data?.referralCount ?? 0, Icon: Heart, color: '#EB459E' },
-    { label: '邀请奖励', value: data?.referralRewards ?? 0, Icon: Gift, color: '#23A559' },
+    { label: '邀请好友', value: data?.referralCount ?? 0, Icon: Heart, color: palette.crimson },
+    { label: '邀请奖励', value: data?.referralRewards ?? 0, Icon: Gift, color: palette.emerald },
   ]
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Custom header */}
-      <Reanimated.View
-        entering={FadeIn.duration(300)}
-        style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface }]}
-      >
-        <Pressable onPress={() => router.back()} hitSlop={8}>
-          <ChevronLeft size={24} color={colors.text} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>个人看板</Text>
-        <View style={{ width: 24 }} />
-      </Reanimated.View>
+      <MobileNavigationBar
+        title="个人看板"
+        left={<MobileBackButton onPress={() => router.back()} />}
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile hero */}
         <Reanimated.View entering={FadeInDown.delay(100).springify()}>
           <View style={[styles.heroCard, { backgroundColor: colors.surface }]}>
-            <View style={[styles.heroBanner, { backgroundColor: `${colors.primary}20` }]} />
+            <View style={[styles.heroBanner, { backgroundColor: colors.inputBackground }]} />
             <View style={styles.heroBody}>
               <Avatar
                 uri={user.avatarUrl}
                 name={user.displayName || user.username || ''}
-                size={64}
+                size={iconSize.hero}
                 userId={user.id || ''}
               />
               <View style={styles.heroInfo}>
@@ -130,8 +130,8 @@ export default function DashboardScreen() {
               </View>
             </View>
             {/* Days active badge */}
-            <View style={[styles.daysBadge, { backgroundColor: `${colors.primary}12` }]}>
-              <Calendar size={16} color={colors.primary} />
+            <View style={[styles.daysBadge, { backgroundColor: colors.inputBackground }]}>
+              <Calendar size={iconSize.md} color={colors.primary} />
               <Text style={[styles.daysText, { color: colors.primary }]}>
                 已活跃 {memberDays} 天
               </Text>
@@ -148,15 +148,17 @@ export default function DashboardScreen() {
               style={{ width: '48%' }}
             >
               <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-                <View style={[styles.statIconWrap, { backgroundColor: `${stat.color}15` }]}>
+                <View style={[styles.statIconWrap, { backgroundColor: colors.inputBackground }]}>
                   {stat.isShrimpCoin ? (
-                    <ShrimpCoinIcon size={22} color={stat.color} />
+                    <ShrimpCoinIcon size={iconSize['2xl']} color={stat.color} />
                   ) : (
-                    <stat.Icon size={22} color={stat.color} />
+                    <stat.Icon size={iconSize['2xl']} color={stat.color} />
                   )}
                 </View>
                 {stat.isShrimpCoin ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                  <View
+                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm }}
+                  >
                     <PriceCompact amount={Number(stat.value)} size={fontSize.lg} />
                   </View>
                 ) : (
@@ -173,8 +175,8 @@ export default function DashboardScreen() {
           <View style={[styles.levelCard, { backgroundColor: colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>成长等级</Text>
             <View style={styles.levelRow}>
-              <View style={[styles.levelBadge, { backgroundColor: `${colors.primary}15` }]}>
-                <Star size={24} color={colors.primary} />
+              <View style={[styles.levelBadge, { backgroundColor: colors.inputBackground }]}>
+                <Star size={iconSize['3xl']} color={colors.primary} />
                 <Text style={[styles.levelNum, { color: colors.primary }]}>
                   Lv.{Math.min(Math.floor((data?.tasksCompleted ?? 0) / 2) + 1, 99)}
                 </Text>
@@ -183,7 +185,7 @@ export default function DashboardScreen() {
                 <Text style={[styles.levelHint, { color: colors.textSecondary }]}>
                   完成任务和邀请好友可以提升等级
                 </Text>
-                <View style={[styles.progressBg, { backgroundColor: `${colors.primary}15` }]}>
+                <View style={[styles.progressBg, { backgroundColor: colors.inputBackground }]}>
                   <View
                     style={[
                       styles.progressFill,
@@ -208,25 +210,25 @@ export default function DashboardScreen() {
                 {
                   label: '任务中心',
                   Icon: Target,
-                  color: '#ED4245',
+                  color: palette.crimson,
                   route: '/(main)/settings/tasks',
                 },
                 {
                   label: '邀请好友',
                   Icon: Heart,
-                  color: '#EB459E',
+                  color: palette.crimson,
                   route: '/(main)/settings/invite',
                 },
                 {
                   label: 'Buddy 管理',
                   Icon: Bot,
-                  color: '#00C8D6',
+                  color: palette.cyan,
                   route: '/(main)/settings/buddy',
                 },
                 {
                   label: '钱包明细',
                   Icon: Wallet,
-                  color: '#F0B132',
+                  color: palette.yellow,
                   route: '/(main)/settings/tasks',
                 },
               ] as const
@@ -236,20 +238,20 @@ export default function DashboardScreen() {
                 style={({ pressed }) => [
                   styles.linkRow,
                   { borderBottomColor: colors.border },
-                  idx === 3 && { borderBottomWidth: 0 },
-                  pressed && { opacity: 0.6 },
+                  idx === 3 && { borderBottomWidth: border.none },
+                  pressed && { backgroundColor: colors.surfaceHover },
                 ]}
                 onPress={() => router.push(link.route as never)}
               >
-                <link.Icon size={16} color={link.color} />
+                <link.Icon size={iconSize.md} color={link.color} />
                 <Text style={[styles.linkLabel, { color: colors.text }]}>{link.label}</Text>
-                <ChevronRight size={14} color={colors.textMuted} />
+                <ChevronRight size={iconSize.sm} color={colors.textMuted} />
               </Pressable>
             ))}
           </View>
         </Reanimated.View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: size.iconButtonLg }} />
       </ScrollView>
     </View>
   )
@@ -257,17 +259,6 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '800',
-  },
   content: {
     padding: spacing.md,
     gap: spacing.md,
@@ -278,14 +269,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   heroBanner: {
-    height: 48,
+    height: size.controlLg,
   },
   heroBody: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.lg,
-    marginTop: -20,
+    marginTop: -spacing.xl,
   },
   heroInfo: {
     flex: 1,
@@ -296,7 +287,7 @@ const styles = StyleSheet.create({
   },
   heroSub: {
     fontSize: fontSize.sm,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   daysBadge: {
     flexDirection: 'row',
@@ -326,9 +317,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   statIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: size.controlMd,
+    height: size.controlMd,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
@@ -356,16 +347,16 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   levelBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: size.avatarXl,
+    height: size.avatarXl,
+    borderRadius: radius['3xl'],
     alignItems: 'center',
     justifyContent: 'center',
   },
   levelNum: {
     fontSize: fontSize.xs,
     fontWeight: '800',
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   levelInfo: {
     flex: 1,
@@ -375,13 +366,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
   },
   progressBg: {
-    height: 8,
-    borderRadius: 4,
+    height: size.dotMd,
+    borderRadius: radius.sm,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: radius.sm,
   },
   linksCard: {
     padding: spacing.lg,
@@ -391,7 +382,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: 14,
+    paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   linkLabel: {

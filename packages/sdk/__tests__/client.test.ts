@@ -607,6 +607,12 @@ describe('ShadowClient', () => {
 
       await client.startEmailLogin({ email: 'test@example.com', locale: 'en' })
       await client.verifyEmailLogin({ email: 'test@example.com', code: '123456' })
+      await client.startPasswordReset({ email: 'test@example.com', locale: 'en' })
+      await client.completePasswordReset({
+        token: 'reset-token',
+        newPassword: 'new-password-123',
+        confirmPassword: 'new-password-123',
+      })
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.example.com/api/auth/email/start',
@@ -620,6 +626,24 @@ describe('ShadowClient', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ email: 'test@example.com', code: '123456' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/auth/password-reset/start',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ email: 'test@example.com', locale: 'en' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/auth/password-reset/complete',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            token: 'reset-token',
+            newPassword: 'new-password-123',
+            confirmPassword: 'new-password-123',
+          }),
         }),
       )
     })

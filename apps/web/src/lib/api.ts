@@ -59,6 +59,7 @@ function isAuthEntryEndpoint(path: string) {
     path.endsWith('/auth/login') ||
     path.endsWith('/auth/register') ||
     path.includes('/auth/email/') ||
+    path.includes('/auth/password-reset/') ||
     path.endsWith('/auth/google/id-token')
   )
 }
@@ -175,7 +176,7 @@ export async function fetchApiResponse(path: string, options?: RequestInit): Pro
     headers,
   })
 
-  // Auto-refresh on 401 (skip for login/register endpoints only)
+  // Auto-refresh on 401 (skip auth entry endpoints)
   if (response.status === 401 && !isAuthEntryEndpoint(path)) {
     if (!isRefreshing) {
       isRefreshing = true

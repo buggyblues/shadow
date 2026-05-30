@@ -1062,6 +1062,9 @@ export function PersonalShopPage({
   const [shopLogoPreviewUrl, setShopLogoPreviewUrl] = useState('')
   const [shopBannerUrl, setShopBannerUrl] = useState('')
   const [shopBannerPreviewUrl, setShopBannerPreviewUrl] = useState('')
+  const [shopVisibility, setShopVisibility] = useState<'private' | 'login_required' | 'public'>(
+    'login_required',
+  )
   const [shopMediaUploading, setShopMediaUploading] = useState<'logo' | 'banner' | null>(null)
   const [name, setName] = useState('')
   const [summary, setSummary] = useState('')
@@ -1079,6 +1082,8 @@ export function PersonalShopPage({
   const [productImageUrl, setProductImageUrl] = useState('')
   const [productImagePreviewUrl, setProductImagePreviewUrl] = useState('')
   const [productImageUploading, setProductImageUploading] = useState(false)
+  const [productTags, setProductTags] = useState('')
+  const [productGlobalPublic, setProductGlobalPublic] = useState(false)
   const [paidFileServerId, setPaidFileServerId] = useState('')
   const [paidFileNode, setPaidFileNode] = useState<WorkspaceNode | null>(null)
   const [paidFileUploading, setPaidFileUploading] = useState(false)
@@ -1136,6 +1141,11 @@ export function PersonalShopPage({
     setShopLogoPreviewUrl(shop.logoUrl ?? '')
     setShopBannerUrl(shop.bannerUrl ?? '')
     setShopBannerPreviewUrl(shop.bannerUrl ?? '')
+    setShopVisibility(
+      shop.visibility === 'public' || shop.visibility === 'private'
+        ? shop.visibility
+        : 'login_required',
+    )
   }, [shop])
 
   useEffect(() => {
@@ -1185,6 +1195,8 @@ export function PersonalShopPage({
     setAssetDescription('')
     setProductImageUrl('')
     setProductImagePreviewUrl('')
+    setProductTags('')
+    setProductGlobalPublic(false)
     setPaidFileNode(null)
   }
 
@@ -1215,6 +1227,8 @@ export function PersonalShopPage({
     setAssetDescription(config?.privilegeDescription ?? product.summary ?? '')
     setProductImageUrl(coverUrl)
     setProductImagePreviewUrl(coverUrl)
+    setProductTags(product.tags?.join(', ') ?? '')
+    setProductGlobalPublic(product.globalPublic === true)
     setPaidFileNode(null)
     setShopSheet('product')
   }
@@ -1253,6 +1267,7 @@ export function PersonalShopPage({
           description: shopDescription.trim() || null,
           logoUrl: shopLogoUrl.trim() || null,
           bannerUrl: shopBannerUrl.trim() || null,
+          visibility: shopVisibility,
         }),
       })
     },
@@ -1297,6 +1312,17 @@ export function PersonalShopPage({
         }
       }
 
+      const baseTags = selectedPreset?.assetType
+        ? [selectedPreset.assetType]
+        : deliveryPreset === 'paid_file'
+          ? ['paid_file']
+          : deliveryPreset === 'service'
+            ? ['service']
+            : []
+      const customTags = productTags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
       const productPayload = {
         name: name.trim(),
         slug: editingProduct?.slug ?? toProductSlug(name),
@@ -1307,13 +1333,8 @@ export function PersonalShopPage({
         media: coverUrl
           ? [{ type: 'image', url: coverUrl, thumbnailUrl: coverUrl, position: 0 }]
           : undefined,
-        tags: selectedPreset?.assetType
-          ? [selectedPreset.assetType]
-          : deliveryPreset === 'paid_file'
-            ? ['paid_file']
-            : deliveryPreset === 'service'
-              ? ['service']
-              : [],
+        tags: [...new Set([...baseTags, ...customTags])],
+        globalPublic: productGlobalPublic,
         basePrice: Math.round(numericPrice),
         entitlementConfig: {
           resourceType: assetDefinitionId ? 'community_asset' : resourceType.trim() || 'service',
@@ -1921,6 +1942,24 @@ export function PersonalShopPage({
                   onChange={(e) => setShopDescription(e.target.value)}
                 />
               </label>
+              <label className="flex items-start gap-3 rounded-2xl border border-border-subtle bg-bg-primary/35 p-3">
+                <input
+                  type="checkbox"
+                  checked={shopVisibility === 'public'}
+                  onChange={(event) =>
+                    setShopVisibility(event.target.checked ? 'public' : 'login_required')
+                  }
+                  className="mt-1 h-4 w-4 rounded border-border-subtle bg-bg-secondary text-primary"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-text-primary">
+                    {t('commerceMarketplace.publicPersonalShop')}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-text-muted">
+                    {t('commerceMarketplace.publicPersonalShopHint')}
+                  </span>
+                </span>
+              </label>
             </div>
           </CommerceDrawer>
 
@@ -2042,6 +2081,32 @@ export function PersonalShopPage({
                     onChange={(e) => setSummary(e.target.value)}
                     placeholder={t('commerce.productSummary')}
                   />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-black uppercase tracking-[0.12em] text-text-muted">
+                    {t('commerceMarketplace.productTags')}
+                  </span>
+                  <Input
+                    value={productTags}
+                    onChange={(e) => setProductTags(e.target.value)}
+                    placeholder={t('commerceMarketplace.productTagsPlaceholder')}
+                  />
+                </label>
+                <label className="flex items-start gap-3 rounded-2xl border border-border-subtle bg-bg-primary/35 p-3">
+                  <input
+                    type="checkbox"
+                    checked={productGlobalPublic}
+                    onChange={(event) => setProductGlobalPublic(event.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-border-subtle bg-bg-secondary text-primary"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black text-text-primary">
+                      {t('commerceMarketplace.globalPublic')}
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-text-muted">
+                      {t('commerceMarketplace.globalPublicHint')}
+                    </span>
+                  </span>
                 </label>
               </ProductFormSection>
 

@@ -64,6 +64,7 @@ describe('AuthService', () => {
     findByUsername: vi.fn(),
     findById: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
     updateStatus: vi.fn(),
   } as unknown as Mocked<UserDao>
 
@@ -93,6 +94,7 @@ describe('AuthService', () => {
     findById: vi.fn(),
     create: vi.fn(),
     updateRefreshTokenHash: vi.fn(),
+    revokeAllByUserId: vi.fn(),
   } as unknown as Mocked<UserSessionDao>
 
   let service: AuthService
@@ -103,6 +105,7 @@ describe('AuthService', () => {
     mockUserDao.findByUsername.mockResolvedValue(null)
     mockUserDao.findById.mockResolvedValue(mockUser)
     mockUserDao.create.mockResolvedValue(mockUser)
+    mockUserDao.update.mockResolvedValue(mockUser)
     mockUserDao.updateStatus.mockResolvedValue(mockUser)
     mockInviteCodeDao.findAvailable.mockResolvedValue(mockInviteCode)
     mockInviteCodeDao.findByUsedBy.mockResolvedValue(null)
@@ -246,6 +249,58 @@ describe('AuthService', () => {
       const result = await service.refresh('mock-refresh-token')
 
       expect(result).toHaveProperty('accessToken', 'mock-access-token')
+    })
+  })
+
+  describe('password reset', () => {
+    it('does not reveal whether an email exists', async () => {
+      mockUserDao.findByEmail.mockResolvedValue(null)
+
+      const result = await service.startPasswordReset({ email: 'missing@test.com', locale: 'en' })
+
+      expect(result.ok).toBe(true)
+      expect(mockUserSessionDao.revokeAllByUserId).not.toHaveBeenCalled()
+    })
+
+    it('sets a new password from a valid reset token and revokes sessions', async () => {
+      mockUserDao.findByEmail.mockResolvedValue(mockUser)
+
+      const reset = await service.startPasswordReset({ email: mockUser.email, locale: 'en' })
+
+      expect(reset.ok).toBe(true)
+      expect(reset.devToken).toBeTruthy()
+
+      await service.completePasswordReset(
+        {
+          token: reset.devToken!,
+          newPassword: 'new-password-123',
+          confirmPassword: 'new-password-123',
+        },
+        { ipAddress: '127.0.0.1', userAgent: 'vitest' },
+      )
+
+      expect(mockUserDao.update).toHaveBeenCalledWith(mockUser.id, {
+        passwordHash: '$2a$12$mockhash',
+      })
+      expect(mockUserSessionDao.revokeAllByUserId).toHaveBeenCalledWith(mockUser.id)
+      expect(mockPasswordChangeLogDao.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: mockUser.id,
+          success: true,
+          ipAddress: '127.0.0.1',
+          userAgent: 'vitest',
+        }),
+      )
+    })
+
+    it('rejects invalid reset tokens', async () => {
+      await expect(
+        service.completePasswordReset({
+          token: 'invalid-reset-token-value-that-is-long-enough',
+          newPassword: 'new-password-123',
+          confirmPassword: 'new-password-123',
+        }),
+      ).rejects.toThrow('Password reset link is invalid or expired')
     })
   })
 })

@@ -3,16 +3,19 @@ import {
   buildShadowServerAppInboxTaskRequest,
   ShadowBridge,
   type ShadowBridgeEnqueueInboxTaskInput,
+  type ShadowBridgeOpenBuddyCreatorInput,
 } from '@shadowob/sdk/bridge'
-import { useLocalSearchParams, useNavigation } from 'expo-router'
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native'
 import WebView from 'react-native-webview'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
+import { OAuthAuthorizationSheet } from '../../src/components/oauth/oauth-authorization-sheet'
+import { useShadowOAuthAuthorization } from '../../src/hooks/use-shadow-oauth-authorization'
 import { ApiError, fetchApi } from '../../src/lib/api'
-import { useColors } from '../../src/theme'
+import { fontSize, palette, spacing, useColors } from '../../src/theme'
 
 interface AppCommandApproval {
   appName: string
@@ -38,6 +41,8 @@ interface BridgeInboxesRequest {
 
 type BridgeInboxEnqueueRequest = { requestId: string } & ShadowBridgeEnqueueInboxTaskInput
 
+type BridgeOpenBuddyCreatorRequest = { requestId: string } & ShadowBridgeOpenBuddyCreatorInput
+
 export default function WebViewPreviewScreen() {
   const { url, title, serverSlug, appKey } = useLocalSearchParams<{
     url: string
@@ -48,6 +53,7 @@ export default function WebViewPreviewScreen() {
   const { t } = useTranslation()
   const colors = useColors()
   const navigation = useNavigation()
+  const router = useRouter()
   const webViewRef = useRef<WebView>(null)
 
   const [loading, setLoading] = useState(true)
@@ -57,6 +63,15 @@ export default function WebViewPreviewScreen() {
   const [pageTitle, setPageTitle] = useState(title ?? '')
 
   const decodedUrl = url ? decodeURIComponent(url) : ''
+
+  const navigateWebView = useCallback((targetUrl: string) => {
+    setCurrentUrl(targetUrl)
+    webViewRef.current?.injectJavaScript(
+      `window.location.assign(${JSON.stringify(targetUrl)}); true;`,
+    )
+  }, [])
+
+  const oauthAuthorization = useShadowOAuthAuthorization({ onRedirect: navigateWebView })
 
   const postBridgeResponse = useCallback(
     (
@@ -141,6 +156,24 @@ export default function WebViewPreviewScreen() {
       }
     },
     [appKey, postBridgeResponse, serverSlug, title],
+  )
+
+  const callBridgeOpenBuddyCreator = useCallback(
+    (request: BridgeOpenBuddyCreatorRequest) => {
+      const params = new URLSearchParams()
+      if (request.landing?.title) params.set('landingTitle', request.landing.title)
+      if (request.landing?.description) {
+        params.set('landingDescription', request.landing.description)
+      }
+      const suffix = params.size > 0 ? `?${params.toString()}` : ''
+      router.push(`/(main)/create-buddy${suffix}` as never)
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { opened: true, agent: null } },
+        ShadowBridge.openBuddyCreatorResponseType,
+      )
+    },
+    [postBridgeResponse, router],
   )
 
   const approveAndRetry = useCallback(
@@ -262,6 +295,17 @@ export default function WebViewPreviewScreen() {
         })
         return
       }
+      if (message.type === ShadowBridge.openBuddyCreatorRequestType) {
+        if (typeof message.requestId !== 'string') return
+        callBridgeOpenBuddyCreator({
+          requestId: message.requestId,
+          landing:
+            message.landing && typeof message.landing === 'object'
+              ? (message.landing as BridgeOpenBuddyCreatorRequest['landing'])
+              : undefined,
+        })
+        return
+      }
       if (message.type !== ShadowBridge.commandRequestType) return
       if (typeof message.requestId !== 'string' || typeof message.commandName !== 'string') return
       void callBridgeCommand({
@@ -271,7 +315,13 @@ export default function WebViewPreviewScreen() {
         channelId: typeof message.channelId === 'string' ? message.channelId : undefined,
       })
     },
-    [appKey, callBridgeCommand, callBridgeInboxes, callBridgeInboxEnqueue],
+    [
+      appKey,
+      callBridgeCommand,
+      callBridgeInboxes,
+      callBridgeInboxEnqueue,
+      callBridgeOpenBuddyCreator,
+    ],
   )
 
   const handleGoBack = useCallback(() => {
@@ -371,6 +421,12 @@ export default function WebViewPreviewScreen() {
         onLoadEnd={() => setLoading(false)}
         onMessage={handleWebViewMessage}
         onNavigationStateChange={onNavigationStateChange}
+        onOpenWindow={(event) => {
+          const targetUrl = event.nativeEvent.targetUrl
+          if (!targetUrl) return
+          if (oauthAuthorization.intercept(targetUrl)) return
+          Linking.openURL(targetUrl).catch(() => undefined)
+        }}
         startInLoadingState
         renderLoading={() => (
           <View style={styles.loadingOverlay}>
@@ -379,9 +435,13 @@ export default function WebViewPreviewScreen() {
         )}
         // Security settings
         javaScriptEnabled={true}
+        javaScriptCanOpenWindowsAutomatically={true}
         domStorageEnabled={true}
         // Allow navigation within the webview
         onShouldStartLoadWithRequest={(request) => {
+          if (oauthAuthorization.intercept(request.url)) {
+            return false
+          }
           // Allow internal navigation
           if (request.url.startsWith('http://') || request.url.startsWith('https://')) {
             return true
@@ -393,6 +453,12 @@ export default function WebViewPreviewScreen() {
           }
           return true
         }}
+      />
+      <OAuthAuthorizationSheet
+        state={oauthAuthorization}
+        onApprove={oauthAuthorization.approve}
+        onDeny={oauthAuthorization.deny}
+        t={t}
       />
       {loading && (
         <View style={styles.loadingOverlay}>
@@ -414,16 +480,16 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: palette.black,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing['3xl'],
   },
   errorText: {
-    fontSize: 16,
+    fontSize: fontSize.md,
     textAlign: 'center',
   },
 })

@@ -2,8 +2,17 @@ import Constants from 'expo-constants'
 import { router } from 'expo-router'
 import * as SecureStore from 'expo-secure-store'
 import { queryClient } from './query-client'
+import { getApiBaseUrl, getCachedApiBaseUrl } from './server-url'
 
-export const API_BASE = Constants.expoConfig?.extra?.apiBase ?? 'https://shadowob.com'
+export {
+  API_BASE,
+  DEFAULT_API_BASE_URL,
+  getApiBaseUrl,
+  getCachedApiBaseUrl,
+  normalizeApiBaseUrl,
+  resetApiBaseUrl,
+  setApiBaseUrl,
+} from './server-url'
 
 export class ApiError extends Error {
   status: number
@@ -38,7 +47,7 @@ export function getImageUrl(path: string | null | undefined): string | null {
   if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) {
     return path
   }
-  return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
+  return `${getCachedApiBaseUrl()}${path.startsWith('/') ? '' : '/'}${path}`
 }
 
 let isRefreshing = false
@@ -58,7 +67,8 @@ async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = await SecureStore.getItemAsync('refreshToken')
   if (!refreshToken) return null
   try {
-    const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+    const apiBase = await getApiBaseUrl()
+    const res = await fetch(`${apiBase}/api/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,6 +87,7 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 export async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const apiBase = await getApiBaseUrl()
   const token = await SecureStore.getItemAsync('accessToken')
   const isFormData = options?.body instanceof FormData
   const headers: Record<string, string> = {
@@ -86,7 +97,7 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
     ...((options?.headers as Record<string, string>) ?? {}),
   }
 
-  let response = await fetch(`${API_BASE}${path}`, {
+  let response = await fetch(`${apiBase}${path}`, {
     ...options,
     headers,
   })
@@ -103,7 +114,7 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
     const newToken = await refreshPromise
     if (newToken) {
       headers.Authorization = `Bearer ${newToken}`
-      response = await fetch(`${API_BASE}${path}`, {
+      response = await fetch(`${apiBase}${path}`, {
         ...options,
         headers,
       })

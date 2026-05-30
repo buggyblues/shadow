@@ -2,13 +2,19 @@ import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { Bot, ChevronRight } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { StyleSheet } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
-import { AppScreen, AppText, GlassCard, ListRow } from '../../../src/components/ui'
+import {
+  BackgroundSurface,
+  EmptyState,
+  MenuItem,
+  PageScroll,
+  Section,
+} from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
-import { fontSize, spacing, useColors } from '../../../src/theme'
+import { iconSize, spacing, useColors } from '../../../src/theme'
 
 export default function BuddySettingsScreen() {
   const { t } = useTranslation()
@@ -43,28 +49,27 @@ export default function BuddySettingsScreen() {
   if (isLoading) return <LoadingScreen />
 
   return (
-    <AppScreen>
+    <BackgroundSurface style={styles.container}>
       <SettingsHeader title={t('settings.tabBuddy')} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        <GlassCard padded={false}>
-          <ListRow
+      <PageScroll compact>
+        <Section>
+          <MenuItem
             icon={Bot}
             title={t('common.manage', '管理 Buddy')}
             onPress={() => router.push('/(main)/buddy-management')}
-            right={<ChevronRight size={16} color={colors.textMuted} />}
+            right={<ChevronRight size={iconSize.md} color={colors.textMuted} />}
           />
-        </GlassCard>
+        </Section>
 
         {agents.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Bot size={40} color={colors.textMuted} />
-            <AppText variant="label" tone="secondary" style={styles.emptyText}>
-              {t('agentMgmt.noAgents', '暂无 Buddy')}
-            </AppText>
-          </View>
+          <EmptyState
+            icon={Bot}
+            title={t('agentMgmt.noAgents', '暂无 Buddy')}
+            style={styles.emptyState}
+          />
         ) : (
-          <GlassCard padded={false}>
-            {agents.map((agent, idx) => {
+          <Section title={t('settings.tabBuddy')}>
+            {agents.map((agent) => {
               const name =
                 agent.botUser?.displayName ??
                 agent.botUser?.username ??
@@ -72,72 +77,41 @@ export default function BuddySettingsScreen() {
                 agent.id.slice(0, 8)
               const online = isAgentOnline(agent)
               return (
-                <Pressable
+                <MenuItem
                   key={agent.id}
-                  style={[
-                    styles.row,
-                    { borderBottomColor: colors.border },
-                    idx === agents.length - 1 && { borderBottomWidth: 0 },
-                  ]}
-                  onPress={() => router.push('/(main)/buddy-management')}
-                >
-                  <Avatar
-                    uri={agent.botUser?.avatarUrl}
-                    userId={agent.botUser?.id}
-                    name={name}
-                    size={40}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <AppText variant="bodyStrong">{name}</AppText>
-                    <AppText variant="label" tone="secondary">
-                      @{agent.botUser?.username ?? 'buddy'}
-                    </AppText>
-                  </View>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: online ? `${colors.success}20` : colors.glassSoft },
-                    ]}
-                  >
-                    <AppText
-                      variant="label"
-                      style={[
-                        styles.statusText,
-                        { color: online ? colors.success : colors.textMuted },
-                      ]}
-                    >
-                      {online ? t('member.online', '在线') : agent.status}
-                    </AppText>
-                  </View>
-                </Pressable>
+                  left={
+                    <Avatar
+                      uri={agent.botUser?.avatarUrl}
+                      userId={agent.botUser?.id}
+                      name={name}
+                      size={iconSize['6xl']}
+                      status={online ? 'online' : 'offline'}
+                      showStatus
+                    />
+                  }
+                  title={name}
+                  subtitle={`@${agent.botUser?.username ?? 'buddy'}`}
+                  onPress={
+                    agent.botUser?.id
+                      ? () => router.push(`/(main)/profile/${agent.botUser?.id}` as never)
+                      : undefined
+                  }
+                  right={
+                    agent.botUser?.id ? (
+                      <ChevronRight size={iconSize.md} color={colors.textMuted} />
+                    ) : null
+                  }
+                />
               )
             })}
-          </GlassCard>
+          </Section>
         )}
-      </ScrollView>
-    </AppScreen>
+      </PageScroll>
+    </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
+  container: { flex: 1 },
   emptyState: { alignItems: 'center', paddingVertical: spacing.xl * 2 },
-  emptyText: { marginTop: spacing.sm },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 99,
-  },
-  statusText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
 })

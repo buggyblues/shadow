@@ -1,6 +1,6 @@
 import { View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
-import { useColors } from '../../theme'
+import { palette, useColors } from '../../theme'
 
 interface ShrimpCoinIconProps {
   size?: number
@@ -9,7 +9,7 @@ interface ShrimpCoinIconProps {
 
 export function ShrimpCoinIcon({ size = 16, color }: ShrimpCoinIconProps) {
   const colors = useColors()
-  const iconColor = color || colors.shrimpCoin || '#F43F5E' // rose-500
+  const iconColor = color || colors.shrimpCoin || palette.crimson // rose-500
 
   return (
     <View style={{ width: size, height: size }}>

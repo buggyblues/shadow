@@ -19,7 +19,17 @@ import {
 import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  letterSpacing,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 interface FriendUser {
   id: string
@@ -188,11 +198,11 @@ export default function ServerInviteScreen() {
               }}
             >
               {copiedId === 'server-link' ? (
-                <Check size={14} color="#fff" />
+                <Check size={iconSize.sm} color={palette.white} />
               ) : (
-                <Copy size={14} color="#fff" />
+                <Copy size={iconSize.sm} color={palette.white} />
               )}
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
+              <Text style={{ color: palette.white, fontWeight: '700', fontSize: fontSize.sm }}>
                 {copiedId === 'server-link'
                   ? t('common.copied', '已复制')
                   : t('common.copy', '复制')}
@@ -201,7 +211,11 @@ export default function ServerInviteScreen() {
             <Pressable
               style={[
                 styles.serverInviteBtn,
-                { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surface,
+                  borderWidth: border.hairline,
+                  borderColor: colors.border,
+                },
               ]}
               onPress={async () => {
                 const inviteLink = `https://shadowob.com/app/invite/${server.inviteCode ?? ''}`
@@ -214,7 +228,7 @@ export default function ServerInviteScreen() {
                 )
               }}
             >
-              <Share2 size={14} color={colors.text} />
+              <Share2 size={iconSize.sm} color={colors.text} />
               <Text style={{ color: colors.text, fontWeight: '700', fontSize: fontSize.sm }}>
                 {t('common.share', '分享')}
               </Text>
@@ -227,7 +241,7 @@ export default function ServerInviteScreen() {
       {invitableFriends.length > 0 && (
         <View style={{ marginBottom: spacing.md }}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            <UserPlus size={14} color={colors.textSecondary} />{' '}
+            <UserPlus size={iconSize.sm} color={colors.textSecondary} />{' '}
             {t('members.inviteFriendsAndBuddies', '邀请好友 / Buddy')}
           </Text>
           <View
@@ -262,18 +276,18 @@ export default function ServerInviteScreen() {
                     onPress={() => inviteMutation.mutate(f.user.id)}
                   >
                     {isPending ? (
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color={palette.white} />
                     ) : invited ? (
-                      <Check size={14} color={colors.textSecondary} />
+                      <Check size={iconSize.sm} color={colors.textSecondary} />
                     ) : (
-                      <Send size={14} color="#fff" />
+                      <Send size={iconSize.sm} color={palette.white} />
                     )}
                     <Text
                       style={{
-                        color: invited ? colors.textSecondary : '#fff',
+                        color: invited ? colors.textSecondary : palette.white,
                         fontWeight: '600',
                         fontSize: fontSize.sm,
-                        marginLeft: 4,
+                        marginLeft: spacing.xs,
                       }}
                     >
                       {invited ? t('members.invited', '已邀请') : t('members.invite', '邀请')}
@@ -296,8 +310,12 @@ export default function ServerInviteScreen() {
         style={[styles.createBtn, { backgroundColor: colors.primary }]}
         onPress={() => setShowForm(!showForm)}
       >
-        {showForm ? <X size={14} color="#fff" /> : <Plus size={14} color="#fff" />}
-        <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.md }}>
+        {showForm ? (
+          <X size={iconSize.sm} color={palette.white} />
+        ) : (
+          <Plus size={iconSize.sm} color={palette.white} />
+        )}
+        <Text style={{ color: palette.white, fontWeight: '700', fontSize: fontSize.md }}>
           {showForm ? t('common.cancel') : t('members.inviteCreate', '生成邀请码')}
         </Text>
       </Pressable>
@@ -319,14 +337,11 @@ export default function ServerInviteScreen() {
             placeholderTextColor={colors.textMuted}
           />
           <Pressable
-            style={[
-              styles.generateBtn,
-              { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1 },
-            ]}
+            style={[styles.generateBtn, { backgroundColor: colors.primary }]}
             onPress={handleCreate}
             disabled={creating}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
+            <Text style={{ color: palette.white, fontWeight: '700', fontSize: fontSize.sm }}>
               {creating ? t('common.loading') : t('settings.inviteGenerate', '生成')}
             </Text>
           </Pressable>
@@ -338,7 +353,7 @@ export default function ServerInviteScreen() {
         <LoadingScreen />
       ) : codes.length === 0 ? (
         <View style={styles.emptyState}>
-          <Link2 size={40} color={colors.textMuted} />
+          <Link2 size={iconSize['6xl']} color={colors.textMuted} />
           <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm }}>
             {t('members.inviteEmpty', '暂无邀请码，点击上方按钮生成')}
           </Text>
@@ -353,8 +368,11 @@ export default function ServerInviteScreen() {
                 key={code.id}
                 style={[
                   styles.codeRow,
-                  { borderBottomColor: colors.border, opacity: isActive ? 1 : 0.5 },
-                  idx === codes.length - 1 && { borderBottomWidth: 0 },
+                  {
+                    borderBottomColor: colors.border,
+                    backgroundColor: isActive ? colors.surface : colors.background,
+                  },
+                  idx === codes.length - 1 && { borderBottomWidth: border.none },
                 ]}
               >
                 <View style={{ flex: 1 }}>
@@ -363,25 +381,37 @@ export default function ServerInviteScreen() {
                       fontFamily: 'monospace',
                       fontWeight: '700',
                       color: colors.text,
-                      letterSpacing: 1.5,
+                      letterSpacing: letterSpacing.none,
                       fontSize: fontSize.sm,
                     }}
                   >
                     {code.code}
                   </Text>
                   {code.note && (
-                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.textMuted,
+                        fontSize: fontSize.xs,
+                        marginTop: spacing.px,
+                      }}
+                    >
                       {code.note}
                     </Text>
                   )}
                   {isUsed && code.usedByUser && (
-                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.textMuted,
+                        fontSize: fontSize.xs,
+                        marginTop: spacing.px,
+                      }}
+                    >
                       {t('settings.inviteUsedBy', '已使用')}:{' '}
                       {code.usedByUser.displayName || code.usedByUser.username}
                     </Text>
                   )}
                 </View>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+                <View style={{ flexDirection: 'row', gap: spacing.tight }}>
                   {isActive && (
                     <>
                       <Pressable
@@ -389,22 +419,22 @@ export default function ServerInviteScreen() {
                         style={styles.iconBtn}
                       >
                         {copiedId === code.id ? (
-                          <Check size={16} color="#23a559" />
+                          <Check size={iconSize.md} color={palette.emerald} />
                         ) : (
-                          <Copy size={16} color={colors.textMuted} />
+                          <Copy size={iconSize.md} color={colors.textMuted} />
                         )}
                       </Pressable>
                       <Pressable onPress={() => handleShare(code.code)} style={styles.iconBtn}>
-                        <Share2 size={16} color={colors.textMuted} />
+                        <Share2 size={iconSize.md} color={colors.textMuted} />
                       </Pressable>
                       <Pressable onPress={() => handleDeactivate(code.id)} style={styles.iconBtn}>
-                        <X size={16} color={colors.textMuted} />
+                        <X size={iconSize.md} color={colors.textMuted} />
                       </Pressable>
                     </>
                   )}
                   {!isActive && (
                     <Pressable onPress={() => handleDelete(code.id)} style={styles.iconBtn}>
-                      <Trash2 size={16} color={colors.error} />
+                      <Trash2 size={iconSize.md} color={colors.error} />
                     </Pressable>
                   )}
                 </View>
@@ -436,7 +466,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   input: {
-    borderWidth: 1,
+    borderWidth: border.hairline,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -460,20 +490,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: border.hairline,
     gap: spacing.sm,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   serverInviteCard: {
     padding: spacing.lg,
     borderRadius: radius.xl,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     marginBottom: spacing.lg,
     gap: spacing.md,
   },
@@ -506,7 +536,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: letterSpacing.none,
     marginBottom: spacing.sm,
   },
   friendRow: {
@@ -527,6 +557,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.md,
-    gap: 4,
+    gap: spacing.xs,
   },
 })

@@ -66,16 +66,6 @@ export interface ShadowHomePlayCatalogItem {
   }
 }
 
-export interface ShadowPlayServerTemplate {
-  slug: string
-  name: string
-  description: string
-  channels: Array<{
-    name: string
-    topic: string
-  }>
-}
-
 const playCover = (id: string) => `/home-assets/plays/${id}.jpg`
 const playTemplate = (id: string) => ({
   template: {
@@ -121,46 +111,6 @@ export function getPlayBuddyUsername(templateSlug: string) {
 
 export function getPlayBuddyEmail(templateSlug: string) {
   return `${getPlayBuddyUsername(templateSlug)}@shadowob.bot`
-}
-
-export const SHADOW_PLAY_SERVER_TEMPLATE: ShadowPlayServerTemplate = {
-  slug: 'shadow-plays',
-  name: 'Shadow Plays',
-  description: 'Default public community space for launchable homepage plays.',
-  channels: [
-    {
-      name: 'general',
-      topic: 'General discussion for new players and Shadow community members.',
-    },
-    {
-      name: 'world-pulse',
-      topic: 'A public room for real-time global events and daily signal.',
-    },
-    {
-      name: 'financial-freedom',
-      topic: 'A public room for lightweight financial freedom simulations and planning prompts.',
-    },
-    {
-      name: 'ai-werewolf',
-      topic: 'A public room for AI-hosted social deduction sessions.',
-    },
-    {
-      name: 'code-arena',
-      topic: 'A public room for coding challenges and real-time battles.',
-    },
-    {
-      name: 'brain-fix',
-      topic: 'A calm public room for one-minute focus resets and reflection.',
-    },
-    {
-      name: 'gitstory',
-      topic: 'A public room for turning software history into stories and retrospectives.',
-    },
-    {
-      name: 'gstack',
-      topic: 'A public room for founder strategy, product stress tests, and launch planning.',
-    },
-  ],
 }
 
 function cloudPlay(

@@ -55,6 +55,15 @@ POST /api/auth/email/verify
 
 邮箱验证码会登录已有用户，或创建一个普通游客账号。
 
+### 邮件重设密码
+
+```
+POST /api/auth/password-reset/start
+POST /api/auth/password-reset/complete
+```
+
+重设密码请求不会暴露邮箱是否存在。重设链接只能使用一次，30 分钟后过期；密码更新后会撤销已有会话。
+
 ### 登录
 
 ```

@@ -34,10 +34,17 @@ import {
   type BuddyListItemData,
 } from '../../../../src/components/common/buddy-list-item'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
-import { StatusBadge } from '../../../../src/components/common/status-badge'
 import { fetchApi } from '../../../../src/lib/api'
 import { useAuthStore } from '../../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import {
+  fontSize,
+  iconSize,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 type OnlineStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
@@ -662,8 +669,10 @@ export default function ChannelMembersScreen() {
   ].filter((s) => s.data.length > 0)
 
   const roleBadge = (role: string) => {
-    if (role === 'owner') return <Crown size={12} color="#eab308" style={{ marginLeft: 4 }} />
-    if (role === 'admin') return <Shield size={12} color="#3b82f6" style={{ marginLeft: 4 }} />
+    if (role === 'owner')
+      return <Crown size={iconSize.xs} color={palette.yellow} style={{ marginLeft: spacing.xs }} />
+    if (role === 'admin')
+      return <Shield size={iconSize.xs} color={palette.indigo} style={{ marginLeft: spacing.xs }} />
     return null
   }
 
@@ -690,12 +699,12 @@ export default function ChannelMembersScreen() {
               ]}
             >
               <View style={[styles.inviteIcon, { backgroundColor: colors.primary }]}>
-                <UserPlus size={18} color="#fff" />
+                <UserPlus size={iconSize.lg} color={palette.white} />
               </View>
               <Text style={[styles.inviteLabel, { color: colors.text }]}>
                 {t('members.addToChannel', '添加成员到频道')}
               </Text>
-              <ChevronRight size={18} color={colors.textMuted} />
+              <ChevronRight size={iconSize.lg} color={colors.textMuted} />
             </Pressable>
           </>
         }
@@ -723,17 +732,14 @@ export default function ChannelMembersScreen() {
               if (canManagePolicy(item)) setPolicySheet(item)
             }}
           >
-            <View style={{ position: 'relative' }}>
-              <Avatar
-                uri={item.user.avatarUrl}
-                name={item.user.displayName || item.user.username}
-                size={40}
-                userId={item.user.id}
-              />
-              <View style={{ position: 'absolute', bottom: -1, right: -1 }}>
-                <StatusBadge status={item.user.status ?? 'offline'} size={12} />
-              </View>
-            </View>
+            <Avatar
+              uri={item.user.avatarUrl}
+              name={item.user.displayName || item.user.username}
+              size={iconSize['6xl']}
+              userId={item.user.id}
+              status={item.user.status ?? 'offline'}
+              showStatus
+            />
             <View style={{ flex: 1 }}>
               <View style={styles.nameRow}>
                 <Text
@@ -744,8 +750,8 @@ export default function ChannelMembersScreen() {
                 </Text>
                 {roleBadge(item.role)}
                 {item.user.isBot && (
-                  <View style={[styles.botBadge, { backgroundColor: `${colors.primary}20` }]}>
-                    <Bot size={10} color={colors.primary} />
+                  <View style={[styles.botBadge, { backgroundColor: colors.inputBackground }]}>
+                    <Bot size={iconSize.micro} color={colors.primary} />
                     <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
                   </View>
                 )}
@@ -759,9 +765,11 @@ export default function ChannelMembersScreen() {
               <Pressable
                 onPress={() => removeMember.mutate(item.userId)}
                 hitSlop={8}
-                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                })}
               >
-                <MinusCircle size={18} color={colors.textMuted} />
+                <MinusCircle size={iconSize.lg} color={colors.textMuted} />
               </Pressable>
             )}
           </Pressable>
@@ -791,9 +799,11 @@ export default function ChannelMembersScreen() {
             <Pressable
               onPress={() => setShowInviteSheet(false)}
               hitSlop={8}
-              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+              })}
             >
-              <X size={22} color={colors.textMuted} />
+              <X size={iconSize['2xl']} color={colors.textMuted} />
             </Pressable>
           </View>
 
@@ -809,9 +819,11 @@ export default function ChannelMembersScreen() {
                 <Pressable
                   onPress={copyInviteCode}
                   disabled={!inviteLink}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                  })}
                 >
-                  <Copy size={16} color={inviteLink ? colors.primary : colors.textMuted} />
+                  <Copy size={iconSize.md} color={inviteLink ? colors.primary : colors.textMuted} />
                 </Pressable>
               </View>
             </>
@@ -834,7 +846,7 @@ export default function ChannelMembersScreen() {
               ]}
             >
               <UserPlus
-                size={14}
+                size={iconSize.sm}
                 color={inviteMode === 'members' ? colors.primary : colors.textMuted}
               />
               <Text
@@ -854,7 +866,7 @@ export default function ChannelMembersScreen() {
                 {
                   backgroundColor:
                     inviteMode === 'buddies'
-                      ? `${colors.primary}12`
+                      ? colors.surfaceHover
                       : pressed
                         ? colors.surfaceHover
                         : colors.surface,
@@ -862,7 +874,7 @@ export default function ChannelMembersScreen() {
               ]}
             >
               <PawPrint
-                size={14}
+                size={iconSize.sm}
                 color={inviteMode === 'buddies' ? colors.primary : colors.textMuted}
               />
               <Text
@@ -884,7 +896,7 @@ export default function ChannelMembersScreen() {
           ) : null}
 
           <View style={[styles.inviteSearchRow, { backgroundColor: colors.inputBackground }]}>
-            <Search size={16} color={colors.textMuted} />
+            <Search size={iconSize.md} color={colors.textMuted} />
             <TextInput
               style={[styles.inviteSearchInput, { color: colors.text }]}
               value={inviteSearch}
@@ -899,7 +911,7 @@ export default function ChannelMembersScreen() {
             />
             {inviteSearch.length > 0 && (
               <Pressable onPress={() => setInviteSearch('')} hitSlop={8}>
-                <X size={14} color={colors.textMuted} />
+                <X size={iconSize.sm} color={colors.textMuted} />
               </Pressable>
             )}
           </View>
@@ -958,7 +970,7 @@ export default function ChannelMembersScreen() {
                     })}
                   </Text>
                   <ChevronRight
-                    size={16}
+                    size={iconSize.md}
                     color={colors.textMuted}
                     style={{ transform: [{ rotate: showOfflineBuddies ? '-90deg' : '90deg' }] }}
                   />
@@ -981,10 +993,8 @@ export default function ChannelMembersScreen() {
                 style={({ pressed }) => [
                   styles.inviteSubmitButton,
                   {
-                    backgroundColor: colors.primary,
-                    opacity: isBottomActionDisabled || isSubmitting ? 0.5 : 1,
+                    backgroundColor: pressed ? colors.primaryDark : colors.primary,
                   },
-                  { opacity: pressed ? 0.8 : 1 },
                 ]}
                 disabled={isBottomActionDisabled || isSubmitting}
                 onPress={handleInviteSubmit}
@@ -1014,7 +1024,7 @@ export default function ChannelMembersScreen() {
           >
             <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              <MessageSquare size={16} color={colors.primary} />{' '}
+              <MessageSquare size={iconSize.md} color={colors.primary} />{' '}
               {t('member.replyPolicy', '回复策略')}
             </Text>
             <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>
@@ -1033,7 +1043,7 @@ export default function ChannelMembersScreen() {
                   {t('member.policyReplyAllDesc', 'Buddy 会回复频道中的所有消息')}
                 </Text>
               </View>
-              {currentMode === 'replyAll' && <Check size={18} color="#23a559" />}
+              {currentMode === 'replyAll' && <Check size={iconSize.lg} color={palette.emerald} />}
             </Pressable>
 
             <Pressable
@@ -1048,7 +1058,9 @@ export default function ChannelMembersScreen() {
                   {t('member.policyMentionOnlyDesc', '仅在被 @ 时回复')}
                 </Text>
               </View>
-              {currentMode === 'mentionOnly' && <Check size={18} color="#23a559" />}
+              {currentMode === 'mentionOnly' && (
+                <Check size={iconSize.lg} color={palette.emerald} />
+              )}
             </Pressable>
 
             <Pressable
@@ -1063,7 +1075,7 @@ export default function ChannelMembersScreen() {
                   {t('member.policyDisabledDesc', 'Buddy 将不会在此频道回复任何消息')}
                 </Text>
               </View>
-              {currentMode === 'disabled' && <Check size={18} color={colors.error} />}
+              {currentMode === 'disabled' && <Check size={iconSize.lg} color={colors.error} />}
             </Pressable>
 
             <Pressable
@@ -1095,9 +1107,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   inviteIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: size.iconButtonLg,
+    height: size.iconButtonLg,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1120,7 +1132,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
   },
   nameRow: {
     flexDirection: 'row',
@@ -1134,14 +1146,14 @@ const styles = StyleSheet.create({
   botBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    marginLeft: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    gap: spacing.xxs,
+    marginLeft: spacing.tight,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.px,
     borderRadius: radius.sm,
   },
   botBadgeText: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '600',
   },
   // Invite panel
@@ -1172,14 +1184,14 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    height: 40,
+    height: size.iconButtonLg,
     borderRadius: radius.lg,
     gap: spacing.sm,
   },
   inviteSearchInput: {
     flex: 1,
     fontSize: fontSize.md,
-    height: 40,
+    height: size.iconButtonLg,
   },
   inviteLinkRow: {
     flexDirection: 'row',
@@ -1190,7 +1202,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${'#000'}20`,
+    borderColor: palette.lineLight,
   },
   inviteLink: {
     flex: 1,
@@ -1202,7 +1214,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     padding: spacing.xs,
     borderRadius: radius.md,
-    backgroundColor: `${'#000'}10`,
+    backgroundColor: palette.neutral100,
     gap: spacing.xs,
   },
   inviteTab: {
@@ -1244,7 +1256,7 @@ const styles = StyleSheet.create({
   },
   inviteBottomBar: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: `${'#000'}20`,
+    borderColor: palette.lineLight,
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -1275,7 +1287,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   inviteSubmitText: {
-    color: '#fff',
+    color: palette.white,
     fontSize: fontSize.sm,
     fontWeight: '600',
   },
@@ -1283,7 +1295,7 @@ const styles = StyleSheet.create({
   sheetOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: palette.black,
   },
   sheetContent: {
     borderTopLeftRadius: radius.xl,
@@ -1292,9 +1304,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['3xl'],
   },
   sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: size.iconButtonMd,
+    height: size.dotXs,
+    borderRadius: radius.xs,
     alignSelf: 'center',
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -1324,7 +1336,7 @@ const styles = StyleSheet.create({
   },
   policyDesc: {
     fontSize: fontSize.xs,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   sheetCancel: {
     marginTop: spacing.md,

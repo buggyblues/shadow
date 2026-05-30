@@ -49,6 +49,7 @@ const createOfferSchema = z.object({
     .min(1)
     .max(2)
     .optional(),
+  visibility: z.enum(['private', 'login_required', 'public']).optional(),
   priceOverride: z.number().int().min(0).nullable().optional(),
   sellerBuddyUserId: z.string().uuid().nullable().optional(),
   status: z.enum(['draft', 'active', 'paused', 'archived']).optional(),
@@ -100,6 +101,7 @@ const createPersonalShopSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
   logoUrl: z.string().nullable().optional(),
   bannerUrl: z.string().nullable().optional(),
+  visibility: z.enum(['private', 'login_required', 'public']).optional(),
 })
 
 const cancelEntitlementSchema = z.object({
@@ -142,6 +144,17 @@ function resolveProductMedia<T extends { media?: ProductMediaResponse[] | null }
         : item.thumbnailUrl
       return { ...item, url, thumbnailUrl }
     }),
+  }
+}
+
+async function resolveProductWithVisibility<
+  T extends { id: string; media?: ProductMediaResponse[] | null },
+>(container: AppContainer, product: T) {
+  const commerceOfferService = container.resolve('commerceOfferService')
+  const offer = await commerceOfferService.getLatestOfferForProduct(product.id)
+  return {
+    ...resolveProductMedia(container, product),
+    globalPublic: offer?.visibility === 'public',
   }
 }
 
@@ -487,7 +500,7 @@ export function createShopHandler(container: AppContainer) {
         .catch(() => null)
       if (!shop) throw apiError('PRODUCT_NOT_FOUND', 404)
     }
-    return c.json(resolveProductMedia(container, product))
+    return c.json(await resolveProductWithVisibility(container, product))
   })
 
   h.get('/commerce/products/:productId/context', async (c) => {
@@ -508,7 +521,7 @@ export function createShopHandler(container: AppContainer) {
         .catch(() => null)
       if (!shop) throw apiError('PRODUCT_NOT_FOUND', 404)
     }
-    return c.json(resolveProductMedia(container, product))
+    return c.json(await resolveProductWithVisibility(container, product))
   })
 
   h.post('/shops/:shopId/products', zValidator('json', createProductSchema), async (c) => {
@@ -517,12 +530,19 @@ export function createShopHandler(container: AppContainer) {
     const productService = container.resolve('productService')
     const commerceOfferService = container.resolve('commerceOfferService')
     const shop = await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
-    const product = await productService.createProduct(shop.id, c.req.valid('json'))
+    const { globalPublic, ...productInput } = c.req.valid('json')
+    const product = await productService.createProduct(shop.id, productInput)
     await commerceOfferService.ensureDefaultOfferForProduct({
       productId: product.id,
       sellerUserId: user.userId,
     })
-    return c.json(resolveProductMedia(container, product), 201)
+    if (typeof globalPublic === 'boolean') {
+      await commerceOfferService.setDefaultOfferVisibilityForProduct(
+        product.id,
+        globalPublic ? 'public' : 'login_required',
+      )
+    }
+    return c.json(await resolveProductWithVisibility(container, product), 201)
   })
 
   h.put(
@@ -532,11 +552,19 @@ export function createShopHandler(container: AppContainer) {
       const user = c.get('user')
       const shopScopeService = container.resolve('shopScopeService')
       const productService = container.resolve('productService')
+      const commerceOfferService = container.resolve('commerceOfferService')
       const shop = await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
       const product = await productService.getProductById(c.req.param('productId'))
       if (product.shopId !== shop.id) throw apiError('PRODUCT_SHOP_MISMATCH', 400)
-      const updated = await productService.updateProduct(product.id, c.req.valid('json'))
-      return c.json(resolveProductMedia(container, updated))
+      const { globalPublic, ...productInput } = c.req.valid('json')
+      const updated = await productService.updateProduct(product.id, productInput)
+      if (typeof globalPublic === 'boolean') {
+        await commerceOfferService.setDefaultOfferVisibilityForProduct(
+          updated.id,
+          globalPublic ? 'public' : 'login_required',
+        )
+      }
+      return c.json(await resolveProductWithVisibility(container, updated))
     },
   )
 
@@ -829,6 +857,7 @@ export function createShopHandler(container: AppContainer) {
         sellerUserId: user.userId,
         sellerBuddyUserId: input.sellerBuddyUserId,
         allowedSurfaces: input.allowedSurfaces,
+        visibility: input.visibility,
         priceOverride: input.priceOverride,
         status: input.status,
         metadata: input.metadata,
@@ -1206,7 +1235,7 @@ export function createShopHandler(container: AppContainer) {
       ctx: createActorContext(c.get('actor'), { route: c.req.path }),
       productId: c.req.param('productId'),
     })
-    return c.json(resolveProductMedia(container, product))
+    return c.json(await resolveProductWithVisibility(container, product))
   })
 
   h.post('/servers/:serverId/shop/products', zValidator('json', createProductSchema), async (c) => {
@@ -1218,7 +1247,7 @@ export function createShopHandler(container: AppContainer) {
       userId: user.userId,
       data: c.req.valid('json'),
     })
-    return c.json(resolveProductMedia(container, product), 201)
+    return c.json(await resolveProductWithVisibility(container, product), 201)
   })
 
   h.put(
@@ -1232,7 +1261,7 @@ export function createShopHandler(container: AppContainer) {
         productId: c.req.param('productId'),
         data: c.req.valid('json'),
       })
-      return c.json(resolveProductMedia(container, product))
+      return c.json(await resolveProductWithVisibility(container, product))
     },
   )
 

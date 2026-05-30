@@ -145,6 +145,26 @@ const { accessToken, refreshToken, user } = await client.verifyEmailLogin({
 
 ---
 
+## Password reset by email
+
+```
+POST /api/auth/password-reset/start
+POST /api/auth/password-reset/complete
+```
+
+`start` always returns the same success shape so callers cannot discover whether an email address is registered. The reset email contains a single-use link to `/app/reset-password`; the token expires after 30 minutes and is stored server-side only as a hash. Completing the reset updates the password and revokes existing sessions.
+
+```ts
+await client.startPasswordReset({ email: 'alice@example.com' })
+await client.completePasswordReset({
+  token: 'token-from-email-link',
+  newPassword: 'new-secure-password',
+  confirmPassword: 'new-secure-password',
+})
+```
+
+---
+
 ## Login
 
 ```
@@ -288,15 +308,17 @@ PUT /api/auth/password
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `currentPassword` | string | Yes | Current password |
+| `oldPassword` | string | Yes | Current password |
 | `newPassword` | string | Yes | New password |
+| `confirmPassword` | string | No | New password confirmation |
 
 :::code-group
 
 ```ts [TypeScript]
 await client.changePassword({
-  currentPassword: 'old-pass',
+  oldPassword: 'old-pass',
   newPassword: 'new-pass',
+  confirmPassword: 'new-pass',
 })
 ```
 

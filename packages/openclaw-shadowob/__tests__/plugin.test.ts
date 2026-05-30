@@ -1048,7 +1048,7 @@ describe('Plugin Entry Point', () => {
       })
       expect(uploadMediaFromUrl).toHaveBeenCalledWith(
         '/home/openclaw/.openclaw/workspace/demo/report.txt',
-        'file-msg-1',
+        { messageId: 'file-msg-1' },
       )
       expect(result?.details).toMatchObject({
         ok: true,
@@ -1102,7 +1102,7 @@ describe('Plugin Entry Point', () => {
       })
       expect(uploadMediaFromUrl).toHaveBeenCalledWith(
         '/home/openclaw/.openclaw/workspace/demo/report.md',
-        'send-media-msg-1',
+        { messageId: 'send-media-msg-1' },
       )
       expect(result?.details).toMatchObject({
         ok: true,

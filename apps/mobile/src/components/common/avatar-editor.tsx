@@ -1,13 +1,13 @@
-import { generateRandomCatConfig, getCatAvatarByUserId, renderCatSvg } from '@shadowob/shared'
-import { Image } from 'expo-image'
+import { generateRandomCatConfig, renderCatSvg } from '@shadowob/shared'
 import * as ImagePicker from 'expo-image-picker'
 import { Dices, Upload } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { fetchApi, getImageUrl } from '../../lib/api'
+import { StyleSheet, View } from 'react-native'
+import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import { border, radius, spacing, useColors } from '../../theme'
+import { Button } from '../ui'
 
 interface AvatarEditorProps {
   value: string | null | undefined
@@ -15,20 +15,14 @@ interface AvatarEditorProps {
   onChange: (url: string) => void
 }
 
-export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
+export function AvatarEditor({ onChange }: AvatarEditorProps) {
   const { t } = useTranslation()
   const colors = useColors()
   const [uploading, setUploading] = useState(false)
-  const [tab, setTab] = useState<'preset' | 'upload'>('preset')
-  const [uploadedPreview, setUploadedPreview] = useState<string | null>(null)
-
-  const resolvedSrc =
-    uploadedPreview || getImageUrl(value) || (userId ? getCatAvatarByUserId(userId) : null)
 
   const handleRandomize = () => {
     const config = generateRandomCatConfig()
     const svgDataUri = renderCatSvg(config)
-    setUploadedPreview(null)
     onChange(svgDataUri)
   }
 
@@ -56,7 +50,6 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
         method: 'POST',
         body: formData,
       })
-      setUploadedPreview(data.signedUrl ?? data.url)
       onChange(data.url)
       showToast(t('common.avatarUploaded'))
     } catch (err) {
@@ -70,123 +63,39 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
     <View
       style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
-      {/* Preview */}
-      <View style={styles.previewRow}>
-        {resolvedSrc ? (
-          <Image
-            source={{ uri: resolvedSrc }}
-            style={[styles.preview, { backgroundColor: colors.inputBackground }]}
-            contentFit="cover"
-            transition={200}
-          />
-        ) : (
-          <View style={[styles.preview, { backgroundColor: colors.inputBackground }]} />
-        )}
-      </View>
-
-      {/* Tab bar */}
-      <View style={styles.tabBar}>
-        <Pressable
-          style={[
-            styles.tab,
-            tab === 'preset' && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
-          ]}
-          onPress={() => setTab('preset')}
-        >
-          <Text
-            style={{
-              color: tab === 'preset' ? colors.primary : colors.textMuted,
-              fontSize: fontSize.sm,
-              fontWeight: '600',
-            }}
-          >
-            随机生成
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[
-            styles.tab,
-            tab === 'upload' && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
-          ]}
-          onPress={() => setTab('upload')}
-        >
-          <Text
-            style={{
-              color: tab === 'upload' ? colors.primary : colors.textMuted,
-              fontSize: fontSize.sm,
-              fontWeight: '600',
-            }}
-          >
-            上传图片
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Content */}
-      {tab === 'preset' ? (
-        <Pressable
-          style={[styles.actionBtn, { backgroundColor: colors.primary }]}
-          onPress={handleRandomize}
-        >
-          <Dices size={18} color="#fff" />
-          <Text style={styles.actionBtnText}>随机生成头像</Text>
-        </Pressable>
-      ) : (
-        <Pressable
-          style={[
-            styles.actionBtn,
-            { backgroundColor: colors.primary, opacity: uploading ? 0.6 : 1 },
-          ]}
-          onPress={handleUpload}
-          disabled={uploading}
-        >
-          {uploading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Upload size={18} color="#fff" />
-              <Text style={styles.actionBtnText}>选择图片</Text>
-            </>
-          )}
-        </Pressable>
-      )}
+      <Button
+        variant="glass"
+        size="sm"
+        icon={Dices}
+        containerStyle={styles.actionCell}
+        onPress={handleRandomize}
+      >
+        {t('agentMgmt.presetAvatar')}
+      </Button>
+      <Button
+        variant="glass"
+        size="sm"
+        icon={Upload}
+        containerStyle={styles.actionCell}
+        loading={uploading}
+        onPress={handleUpload}
+        disabled={uploading}
+      >
+        {t('agentMgmt.uploadAvatar')}
+      </Button>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
+    flexDirection: 'row',
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     padding: spacing.md,
     gap: spacing.md,
   },
-  previewRow: {
-    alignItems: 'center',
-  },
-  preview: {
-    width: 80,
-    height: 80,
-    borderRadius: 16,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  tab: {
-    paddingBottom: spacing.xs,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-  },
-  actionBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: fontSize.sm,
+  actionCell: {
+    flex: 1,
   },
 })

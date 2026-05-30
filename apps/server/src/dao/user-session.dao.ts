@@ -78,4 +78,11 @@ export class UserSessionDao {
       .returning()
     return result[0] ?? null
   }
+
+  async revokeAllByUserId(userId: string) {
+    await this.db
+      .update(userSessions)
+      .set({ revokedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
+  }
 }

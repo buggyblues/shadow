@@ -301,6 +301,12 @@ export class MessageDao {
     width?: number
     height?: number
     workspaceNodeId?: string | null
+    kind?: 'file' | 'image' | 'voice'
+    durationMs?: number | null
+    audioCodec?: string | null
+    audioContainer?: string | null
+    waveformPeaks?: number[] | null
+    waveformVersion?: number | null
   }) {
     const result = await this.db.insert(attachments).values(data).returning()
     return result[0]

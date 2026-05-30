@@ -1,17 +1,8 @@
 import { Mic } from 'lucide-react-native'
 import { memo, useEffect } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated'
-import { useColors } from '../../theme'
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
+import { iconSize, palette, radius, size, spacing, useColors } from '../../theme'
 
 interface TypelessMicButtonProps {
   isRecording: boolean
@@ -32,57 +23,23 @@ export const TypelessMicButton = memo(function TypelessMicButton({
 
   // Animation values
   const scale = useSharedValue(1)
-  const pulseScale = useSharedValue(1)
-  const pulseOpacity = useSharedValue(0)
 
   // Update animations based on recording state (must not write shared values in render)
   useEffect(() => {
     if (isHolding) {
       scale.value = withSpring(1.15, { damping: 10, stiffness: 200 })
-      pulseScale.value = withRepeat(
-        withSequence(
-          withTiming(1.5, { duration: 600, easing: Easing.out(Easing.ease) }),
-          withTiming(1.5, { duration: 200 }),
-        ),
-        -1,
-        false,
-      )
-      pulseOpacity.value = withRepeat(
-        withSequence(
-          withTiming(0.6, { duration: 600, easing: Easing.out(Easing.ease) }),
-          withTiming(0, { duration: 200 }),
-        ),
-        -1,
-        false,
-      )
       return
     }
 
-    cancelAnimation(pulseScale)
-    cancelAnimation(pulseOpacity)
     scale.value = withSpring(1, { damping: 15, stiffness: 300 })
-    pulseScale.value = withTiming(1, { duration: 120 })
-    pulseOpacity.value = withTiming(0, { duration: 120 })
-  }, [isHolding, pulseOpacity, pulseScale, scale])
+  }, [isHolding, scale])
 
   const buttonAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }))
 
-  const pulseAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-    opacity: pulseOpacity.value,
-  }))
-
   return (
     <View style={styles.container}>
-      {/* Pulse ring animation */}
-      {isRecording && (
-        <Animated.View
-          style={[styles.pulseRing, pulseAnimatedStyle, { backgroundColor: colors.error }]}
-        />
-      )}
-
       {/* Main button */}
       <AnimatedPressable
         style={[
@@ -97,34 +54,38 @@ export const TypelessMicButton = memo(function TypelessMicButton({
         delayLongPress={0}
         hitSlop={12}
       >
-        <Mic size={22} color={isHolding ? '#fff' : colors.textMuted} />
+        <Mic size={iconSize['2xl']} color={isHolding ? palette.white : colors.textMuted} />
       </AnimatedPressable>
 
-      {/* Recording indicator dot - removed to avoid duplication with pulse animation */}
+      {isRecording ? (
+        <View style={[styles.recordingDot, { backgroundColor: colors.error }]} />
+      ) : null}
     </View>
   )
 })
 
 const styles = StyleSheet.create({
   container: {
-    width: 46,
-    height: 46,
+    width: size.controlLg,
+    height: size.controlLg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   button: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: size.controlMd,
+    height: size.controlMd,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
   },
-  pulseRing: {
+  recordingDot: {
     position: 'absolute',
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    zIndex: 1,
+    right: spacing.xs,
+    top: spacing.xs,
+    width: size.audioBarBase,
+    height: size.audioBarBase,
+    borderRadius: radius.sm,
+    zIndex: 3,
   },
 })

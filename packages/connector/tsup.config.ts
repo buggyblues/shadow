@@ -13,6 +13,11 @@ export default defineConfig([
     format: ['esm'],
     dts: true,
     clean: false,
+    platform: 'node',
+    banner: {
+      js: "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);",
+    },
+    noExternal: ['dotenv', 'smol-toml', 'yaml'],
     outDir: 'dist',
   },
 ])

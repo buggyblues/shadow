@@ -145,6 +145,26 @@ const { accessToken, refreshToken, user } = await client.verifyEmailLogin({
 
 ---
 
+## 邮件重设密码
+
+```
+POST /api/auth/password-reset/start
+POST /api/auth/password-reset/complete
+```
+
+`start` 始终返回相同的成功结构，调用方无法判断邮箱是否已注册。重设邮件会包含一个跳转到 `/app/reset-password` 的一次性链接；token 30 分钟后过期，服务端只保存哈希。完成重设后会更新密码并撤销已有会话。
+
+```ts
+await client.startPasswordReset({ email: 'alice@example.com' })
+await client.completePasswordReset({
+  token: 'token-from-email-link',
+  newPassword: 'new-secure-password',
+  confirmPassword: 'new-secure-password',
+})
+```
+
+---
+
 ## 登录
 
 ```

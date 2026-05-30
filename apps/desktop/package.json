@@ -3,7 +3,7 @@
   "productName": "Shadow",
   "version": "0.2.1",
   "private": true,
-  "description": "Shadow Desktop - Native desktop client",
+  "description": "Shadow Desktop - Pet and community client",
   "author": "ShadowOB Team",
   "main": "dist/main/index.js",
   "scripts": {
@@ -24,10 +24,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@shadowob/cloud-ui": "workspace:*",
     "@shadowob/shared": "workspace:*",
     "@shadowob/ui": "workspace:*",
     "@tanstack/react-query": "^5.80.7",
     "@tanstack/react-router": "^1.168.2",
+    "sherpa-onnx-node": "1.13.2",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
@@ -49,7 +51,6 @@
     "electron": "41.0.3",
     "i18next": "^25.8.14",
     "lucide-react": "^0.577.0",
-    "openclaw": "^2026.5.7",
     "playwright": "^1.59.0",
     "postcss": "^8.5.6",
     "postcss-loader": "^8.1.1",

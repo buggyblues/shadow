@@ -9,6 +9,7 @@ WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
 COPY .npmrc ./
+COPY patches/ patches/
 COPY packages/shared/package.json packages/shared/
 COPY packages/shared/tsup.config.ts packages/shared/
 COPY packages/sdk/package.json packages/sdk/
@@ -50,6 +51,7 @@ WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
 COPY .npmrc ./
+COPY patches/ patches/
 COPY packages/shared/package.json packages/shared/
 COPY packages/sdk/package.json packages/sdk/
 COPY packages/ui/package.json packages/ui/

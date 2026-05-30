@@ -11,6 +11,7 @@ POST /api/channels/:channelId/messages
 | `content` | string | 是 | 消息内容 |
 | `threadId` | string | 否 | 线程回复的线程 ID |
 | `replyToId` | string | 否 | 被回复的消息 ID |
+| `attachments[]` | array | 否 | 预上传附件。语音附件使用 `kind`、`durationMs`、`waveformPeaks` 和可选转文字字段。 |
 | `metadata.interactive` | object | 否 | 客户端渲染的交互块（`form`、`buttons`、`select` 或 `approval`） |
 | `metadata.commerceCards` | array | 否 | 商品卡片。可信 Buddy 工具可以发送最小 Offer 引用，例如 `{ "kind": "offer", "offerId": "..." }`；服务端会在落库前重建商品、价格、店铺、交付承诺和权益快照。 |
 

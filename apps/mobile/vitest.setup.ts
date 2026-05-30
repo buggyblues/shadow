@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { spacing } from './src/theme'
 
 // Mock react-native modules not available in jsdom
 vi.mock('react-native', () => {
@@ -33,6 +34,10 @@ vi.mock('react-native', () => {
     AppState: {
       currentState: 'active',
       addEventListener: vi.fn(() => ({ remove: vi.fn() })),
+    },
+    Appearance: {
+      getColorScheme: vi.fn(() => 'light'),
+      addChangeListener: vi.fn(() => ({ remove: vi.fn() })),
     },
     StatusBar: {
       setBarStyle: vi.fn(),
@@ -236,9 +241,14 @@ vi.mock('react-native-safe-area-context', () => ({
   __esModule: true,
   SafeAreaProvider: ({ children }: { children: unknown }) => children,
   SafeAreaView: 'SafeAreaView',
-  useSafeAreaInsets: vi.fn(() => ({ top: 44, bottom: 34, left: 0, right: 0 })),
+  useSafeAreaInsets: vi.fn(() => ({
+    top: 44,
+    bottom: 34,
+    left: spacing.none,
+    right: spacing.none,
+  })),
   initialWindowMetrics: {
     frame: { x: 0, y: 0, width: 375, height: 812 },
-    insets: { top: 44, bottom: 34, left: 0, right: 0 },
+    insets: { top: 44, bottom: 34, left: spacing.none, right: spacing.none },
   },
 }))
