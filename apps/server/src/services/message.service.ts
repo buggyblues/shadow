@@ -15,6 +15,7 @@ import type {
   UpdateThreadInput,
 } from '../validators/message.schema'
 import { parseBuddyInboxAgentId } from './buddy-inbox-protocol'
+import type { VoiceMessageService } from './voice-message.service'
 import type { WorkspaceService } from './workspace.service'
 
 type MessageWithMetadata = {
@@ -69,6 +70,32 @@ function isActiveTaskCard(card: TaskMessageCardMetadata) {
   return card.status === 'queued' || card.status === 'claimed' || card.status === 'running'
 }
 
+function isVoiceRecordingLike(attachment: {
+  filename?: string
+  contentType: string
+  durationMs?: number | null
+  waveformPeaks?: number[] | null
+}) {
+  return (
+    attachment.contentType.startsWith('audio/') &&
+    (typeof attachment.durationMs === 'number' ||
+      Boolean(attachment.waveformPeaks?.length) ||
+      /^voice[-_]\d+/i.test(attachment.filename ?? ''))
+  )
+}
+
+function inferAttachmentKind(attachment: {
+  filename?: string
+  contentType: string
+  kind?: 'file' | 'image' | 'voice'
+  durationMs?: number | null
+  waveformPeaks?: number[] | null
+}): 'file' | 'image' | 'voice' {
+  if (attachment.kind === 'voice' || isVoiceRecordingLike(attachment)) return 'voice'
+  if (attachment.kind === 'image' || attachment.contentType.startsWith('image/')) return 'image'
+  return 'file'
+}
+
 export class MessageService {
   constructor(
     private deps: {
@@ -78,6 +105,7 @@ export class MessageService {
       agentDao: AgentDao
       agentDashboardDao: AgentDashboardDao
       workspaceService?: WorkspaceService
+      voiceMessageService?: VoiceMessageService
       io?: SocketIOServer
       logger?: Logger
     },
@@ -125,36 +153,75 @@ export class MessageService {
   async createAttachmentForMessage(
     messageId: string,
     channelId: string,
-    attachment: { filename: string; url: string; contentType: string; size: number },
+    attachment: {
+      filename: string
+      url: string
+      contentType: string
+      size: number
+      kind?: 'file' | 'image' | 'voice'
+      durationMs?: number | null
+      audioCodec?: string | null
+      audioContainer?: string | null
+      waveformPeaks?: number[] | null
+      waveformVersion?: number | null
+    },
   ) {
     const workspaceNodeId = await this.createWorkspaceNodeForAttachment(
       channelId,
       messageId,
       attachment,
     )
-    return this.deps.messageDao.createAttachment({
+    const created = await this.deps.messageDao.createAttachment({
       messageId,
       filename: attachment.filename,
       url: attachment.url,
       contentType: attachment.contentType,
       size: attachment.size,
+      kind: inferAttachmentKind(attachment),
+      durationMs: attachment.durationMs,
+      audioCodec: attachment.audioCodec,
+      audioContainer: attachment.audioContainer,
+      waveformPeaks: attachment.waveformPeaks,
+      waveformVersion: attachment.waveformVersion,
       workspaceNodeId,
     })
+    if (!created) {
+      throw Object.assign(new Error('Failed to create attachment'), { status: 500 })
+    }
+    return created
   }
 
   async getByChannelId(channelId: string, limit?: number, cursor?: string, viewerUserId?: string) {
     const result = await this.deps.messageDao.findByChannelId(channelId, limit, cursor)
     if (!viewerUserId) return result
+    const messagesWithInteractiveState = await this.attachInteractiveStates(
+      result.messages,
+      viewerUserId,
+    )
     return {
       ...result,
-      messages: await this.attachInteractiveStates(result.messages, viewerUserId),
+      messages:
+        (await this.deps.voiceMessageService?.enrichMessagesForViewer(
+          messagesWithInteractiveState,
+          viewerUserId,
+        )) ?? messagesWithInteractiveState,
     }
   }
 
   async getById(id: string, viewerUserId?: string) {
     const message = await this.deps.messageDao.findById(id)
     if (!message || !viewerUserId) return message
-    return (await this.attachInteractiveStates([message], viewerUserId))[0] ?? message
+    const attachments = await this.deps.messageDao.getAttachments(id)
+    const [messageWithInteractiveState] = await this.attachInteractiveStates(
+      [{ ...message, attachments }],
+      viewerUserId,
+    )
+    const [messageWithVoiceState] =
+      (await this.deps.voiceMessageService?.enrichMessagesForViewer(
+        messageWithInteractiveState ? [messageWithInteractiveState] : [],
+        viewerUserId,
+      )) ?? []
+    return messageWithVoiceState ?? messageWithInteractiveState ?? message
   }
 
   async getInteractiveSubmission(sourceMessageId: string, blockId: string, userId: string) {
@@ -256,7 +323,26 @@ export class MessageService {
     // Create attachment records if provided (pre-uploaded files)
     if (input.attachments && input.attachments.length > 0) {
       for (const att of input.attachments) {
-        await this.createAttachmentForMessage(message.id, channelId, att)
+        const attachmentKind = inferAttachmentKind(att)
+        const createdAttachment = await this.createAttachmentForMessage(message.id, channelId, att)
+        if (attachmentKind === 'voice' && this.deps.voiceMessageService) {
+          if (att.transcriptText) {
+            await this.deps.voiceMessageService.upsertTranscript({
+              attachmentId: createdAttachment.id,
+              userId: authorId,
+              source: att.transcriptSource ?? 'client',
+              text: att.transcriptText,
+              language: att.transcriptLanguage,
+            })
+          } else if (this.deps.voiceMessageService.hasServerTranscriptProvider()) {
+            await this.deps.voiceMessageService.requestServerTranscript({
+              attachmentId: createdAttachment.id,
+              userId: authorId,
+              language: att.transcriptLanguage,
+              waitForResult: true,
+            })
+          }
+        }
       }
     }
 
@@ -300,7 +386,7 @@ export class MessageService {
       content: input.content,
     })
 
-    return {
+    const responseMessage = {
       ...message,
       author: user
         ? {
@@ -314,6 +400,10 @@ export class MessageService {
         : null,
       attachments: messageAttachments,
     }
+    const [enrichedResponseMessage] =
+      (await this.deps.voiceMessageService?.enrichMessagesForViewer([responseMessage], authorId)) ??
+      []
+    return enrichedResponseMessage ?? responseMessage
   }
 
   private async completeInboxTaskFromBuddyReply(input: {
@@ -589,8 +679,21 @@ export class MessageService {
     }
   }
 
-  async getThreadMessages(threadId: string, limit?: number, cursor?: string) {
-    return this.deps.messageDao.findByThreadId(threadId, limit, cursor)
+  async getThreadMessages(
+    threadId: string,
+    limit?: number,
+    cursor?: string,
+    viewerUserId?: string,
+  ) {
+    const messages = await this.deps.messageDao.findByThreadId(threadId, limit, cursor)
+    if (!viewerUserId) return messages
+    const messagesWithInteractiveState = await this.attachInteractiveStates(messages, viewerUserId)
+    return (
+      (await this.deps.voiceMessageService?.enrichMessagesForViewer(
+        messagesWithInteractiveState,
+        viewerUserId,
+      )) ?? messagesWithInteractiveState
+    )
   }
 
   // Pins

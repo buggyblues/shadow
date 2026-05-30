@@ -3,6 +3,7 @@ import {
   buildShadowServerAppInboxTaskRequest,
   ShadowBridge,
   type ShadowBridgeEnqueueInboxTaskInput,
+  type ShadowBridgeOpenBuddyCreatorInput,
 } from '@shadowob/sdk/bridge'
 import {
   Button,
@@ -20,6 +21,8 @@ import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { AppWindow, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { QuickCreateBuddyModal } from '../components/buddy-management/quick-create-buddy-modal'
+import type { Agent } from '../components/buddy-management/types'
 import { ApiError, fetchApi } from '../lib/api'
 import { type RouteSearch, withCopilotChannelSearch } from '../lib/copilot-route'
 import { leaveChannel } from '../lib/socket'
@@ -82,6 +85,10 @@ interface BridgeInboxesRequest {
 }
 
 interface BridgeInboxEnqueueRequest extends ShadowBridgeEnqueueInboxTaskInput {
+  requestId: string
+}
+
+interface BridgeOpenBuddyCreatorRequest extends ShadowBridgeOpenBuddyCreatorInput {
   requestId: string
 }
 
@@ -156,6 +163,8 @@ export function ServerAppsPageRoute({
   } | null>(null)
   const [iframeSrc, setIframeSrc] = useState<string | null>(null)
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null)
+  const [buddyCreatorRequest, setBuddyCreatorRequest] =
+    useState<BridgeOpenBuddyCreatorRequest | null>(null)
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
   const { serverSlug, appKey } = useParams({ strict: false }) as {
     serverSlug: string
@@ -373,6 +382,10 @@ export function ServerAppsPageRoute({
     [activeApp, navigate, postBridgeResponse, routeSearch, serverSlug],
   )
 
+  const callBridgeOpenBuddyCreator = useCallback((request: BridgeOpenBuddyCreatorRequest) => {
+    setBuddyCreatorRequest(request)
+  }, [])
+
   const callBridgeCommand = useCallback(
     async (request: BridgeRequest) => {
       if (!serverSlug || !activeApp?.appKey) return
@@ -448,6 +461,14 @@ export function ServerAppsPageRoute({
         })
         return
       }
+      if (data.type === ShadowBridge.openBuddyCreatorRequestType) {
+        if (typeof data.requestId !== 'string') return
+        callBridgeOpenBuddyCreator({
+          requestId: data.requestId,
+          landing: getRecord(data.landing) as BridgeOpenBuddyCreatorRequest['landing'],
+        })
+        return
+      }
       if (data.type !== ShadowBridge.commandRequestType) return
       if (typeof data.requestId !== 'string' || typeof data.commandName !== 'string') return
       void callBridgeCommand({
@@ -460,7 +481,13 @@ export function ServerAppsPageRoute({
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [activeApp, callBridgeCommand, callBridgeInboxes, callBridgeInboxEnqueue])
+  }, [
+    activeApp,
+    callBridgeCommand,
+    callBridgeInboxes,
+    callBridgeInboxEnqueue,
+    callBridgeOpenBuddyCreator,
+  ])
 
   const closeApproval = () => {
     if (pendingApproval) {
@@ -496,6 +523,28 @@ export function ServerAppsPageRoute({
     } finally {
       setApprovalSubmitting(false)
     }
+  }
+
+  const closeBuddyCreator = () => {
+    if (buddyCreatorRequest) {
+      postBridgeResponse(
+        buddyCreatorRequest.requestId,
+        { ok: false, error: t('common.cancel') },
+        ShadowBridge.openBuddyCreatorResponseType,
+      )
+    }
+    setBuddyCreatorRequest(null)
+  }
+
+  const handleBuddyCreated = (agent: Agent) => {
+    if (buddyCreatorRequest) {
+      postBridgeResponse(
+        buddyCreatorRequest.requestId,
+        { ok: true, result: { opened: true, agent } },
+        ShadowBridge.openBuddyCreatorResponseType,
+      )
+    }
+    setBuddyCreatorRequest(null)
   }
 
   if (active && (isLoading || (!appKey && apps.length > 0))) {
@@ -594,6 +643,15 @@ export function ServerAppsPageRoute({
           </ModalFooter>
         </ModalContent>
       </Modal>
+      <QuickCreateBuddyModal
+        open={!!buddyCreatorRequest}
+        onClose={closeBuddyCreator}
+        onSuccess={handleBuddyCreated}
+        landing={{
+          title: buddyCreatorRequest?.landing?.title,
+          description: buddyCreatorRequest?.landing?.description,
+        }}
+      />
     </GlassPanel>
   )
 }

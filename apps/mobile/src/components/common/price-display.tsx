@@ -1,5 +1,5 @@
 import { Text, type TextStyle, View } from 'react-native'
-import { fontSize, useColors } from '../../theme'
+import { fontSize, letterSpacing, palette, spacing, useColors } from '../../theme'
 import { ShrimpCoinIcon } from './shrimp-coin'
 
 export function formatCommercePrice(
@@ -49,7 +49,7 @@ export function PriceDisplay({
   const { icon, font, lineHeight } = sizeMap[size]
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xxs }}>
       <ShrimpCoinIcon size={icon} />
       <Text
         style={[
@@ -57,8 +57,8 @@ export function PriceDisplay({
             fontSize: font,
             lineHeight,
             fontWeight: '900',
-            color: colors.shrimpCoin || '#F43F5E',
-            letterSpacing: -0.5,
+            color: colors.shrimpCoin || palette.crimson,
+            letterSpacing: letterSpacing.none,
           },
           style,
         ]}
@@ -71,7 +71,7 @@ export function PriceDisplay({
             fontSize: font * 0.85,
             lineHeight,
             color: colors.textMuted,
-            marginLeft: 2,
+            marginLeft: spacing.xxs,
           }}
         >
           {unit}
@@ -86,13 +86,13 @@ export function PriceCompact({ amount, size = 14 }: { amount: number; size?: num
   const colors = useColors()
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xxs }}>
       <ShrimpCoinIcon size={size} />
       <Text
         style={{
           fontSize: size,
           fontWeight: '700',
-          color: colors.shrimpCoin || '#F43F5E',
+          color: colors.shrimpCoin || palette.crimson,
         }}
       >
         {amount.toLocaleString()}

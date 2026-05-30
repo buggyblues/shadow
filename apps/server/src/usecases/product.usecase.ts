@@ -20,6 +20,7 @@ type ProductData = {
   basePrice?: number
   specNames?: string[]
   tags?: string[]
+  globalPublic?: boolean
   entitlementConfig?: EntitlementConfigInput
   categoryId?: string
   media?: Array<{ type?: string; url: string; thumbnailUrl?: string; position?: number }>
@@ -112,11 +113,18 @@ export class ProductUseCase {
         const serverId = await this.resolveServerId(input.identifier)
         await this.deps.accessService.requireServerAdmin(input.ctx.actor, serverId)
         const shop = await this.getOrCreateServerShop(serverId)
-        const product = await this.deps.productService.createProduct(shop.id, input.data)
+        const { globalPublic, ...productData } = input.data
+        const product = await this.deps.productService.createProduct(shop.id, productData)
         await this.deps.commerceOfferService.ensureDefaultOfferForProduct({
           productId: product.id,
           sellerUserId: input.userId,
         })
+        if (typeof globalPublic === 'boolean') {
+          await this.deps.commerceOfferService.setDefaultOfferVisibilityForProduct(
+            product.id,
+            globalPublic ? 'public' : 'login_required',
+          )
+        }
         return product
       },
     })
@@ -135,7 +143,19 @@ export class ProductUseCase {
         const serverId = await this.resolveServerId(input.identifier)
         await this.deps.accessService.requireServerAdmin(input.ctx.actor, serverId)
         const shop = await this.getOrCreateServerShop(serverId)
-        return this.deps.productService.updateProductInShop(shop.id, input.productId, input.data)
+        const { globalPublic, ...productData } = input.data
+        const product = await this.deps.productService.updateProductInShop(
+          shop.id,
+          input.productId,
+          productData,
+        )
+        if (typeof globalPublic === 'boolean') {
+          await this.deps.commerceOfferService.setDefaultOfferVisibilityForProduct(
+            product.id,
+            globalPublic ? 'public' : 'login_required',
+          )
+        }
+        return product
       },
     })
   }

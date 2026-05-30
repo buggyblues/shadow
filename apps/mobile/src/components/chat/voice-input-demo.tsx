@@ -4,7 +4,17 @@ import { useState } from 'react'
 
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useVoiceInput } from '../../hooks/use-voice-input'
-import { fontSize, spacing, useColors } from '../../theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
 import { TypelessMicButton } from './typeless-mic-button'
 
 /**
@@ -47,9 +57,18 @@ export function VoiceInputDemo() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Status Banner */}
-      <View style={[styles.banner, { backgroundColor: isMock ? '#f59e0b20' : '#22c55e20' }]}>
+      <View
+        style={[
+          styles.banner,
+          { backgroundColor: isMock ? palette.warningSurface : palette.successSurface },
+        ]}
+      >
         <View style={styles.bannerIcon}>
-          {isMock ? <Wand2 size={20} color="#f59e0b" /> : <Mic size={20} color="#22c55e" />}
+          {isMock ? (
+            <Wand2 size={iconSize.xl} color={palette.warning} />
+          ) : (
+            <Mic size={iconSize.xl} color={palette.emerald} />
+          )}
         </View>
         <View style={styles.bannerContent}>
           <Text style={[styles.bannerTitle, { color: colors.text }]}>
@@ -160,14 +179,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
-    borderRadius: 12,
+    borderRadius: radius.lg,
     marginBottom: spacing.lg,
   },
   bannerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#ffffff40',
+    width: size.iconButtonLg,
+    height: size.iconButtonLg,
+    borderRadius: radius.xl,
+    backgroundColor: palette.white,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -181,7 +200,7 @@ const styles = StyleSheet.create({
   },
   bannerSubtitle: {
     fontSize: fontSize.sm,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   demoSection: {
     marginBottom: spacing.lg,
@@ -206,8 +225,8 @@ const styles = StyleSheet.create({
   },
   inputPreview: {
     padding: spacing.md,
-    borderRadius: 12,
-    minHeight: 80,
+    borderRadius: radius.lg,
+    minHeight: size.textareaMin,
   },
   inputLabel: {
     fontSize: fontSize.xs,
@@ -215,7 +234,7 @@ const styles = StyleSheet.create({
   },
   inputText: {
     fontSize: fontSize.md,
-    lineHeight: 22,
+    lineHeight: lineHeight.md,
   },
   samplesSection: {
     marginBottom: spacing.lg,
@@ -226,7 +245,7 @@ const styles = StyleSheet.create({
   sampleItem: {
     fontSize: fontSize.sm,
     marginBottom: spacing.xs,
-    lineHeight: 20,
+    lineHeight: lineHeight.sm,
   },
   logsSection: {
     flex: 1,
@@ -235,8 +254,8 @@ const styles = StyleSheet.create({
   logsContainer: {
     flex: 1,
     padding: spacing.sm,
-    borderRadius: 8,
-    maxHeight: 150,
+    borderRadius: radius.md,
+    maxHeight: size.profileHeroMinHeight - size.thumbnailMd,
   },
   emptyLogs: {
     fontSize: fontSize.sm,
@@ -245,14 +264,14 @@ const styles = StyleSheet.create({
   },
   logItem: {
     fontSize: fontSize.xs,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     fontFamily: 'monospace',
   },
   instructions: {
     padding: spacing.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderRadius: radius.md,
+    borderWidth: border.hairline,
+    borderColor: palette.neutral200,
   },
   instructionTitle: {
     fontSize: fontSize.md,
@@ -261,6 +280,6 @@ const styles = StyleSheet.create({
   },
   instructionText: {
     fontSize: fontSize.sm,
-    lineHeight: 20,
+    lineHeight: lineHeight.sm,
   },
 })

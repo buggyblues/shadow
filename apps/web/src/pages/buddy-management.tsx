@@ -47,6 +47,8 @@ import {
   type BuddyMode,
   type ConnectorComputer,
   type ConnectorRuntimeInfo,
+  connectorComputerDisplayName,
+  connectorRuntimeDisplayDetail,
   getAgentBuddyMode,
   type TokenResponse,
 } from '../components/buddy-management/types'
@@ -495,7 +497,7 @@ function CreateBuddyFlowPanel({
             </div>
           )}
 
-          {connectorRuntimeOptions.length > 0 && (
+          {connectorComputers.some((computer) => computer.runtimes.length > 0) && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
@@ -514,31 +516,38 @@ function CreateBuddyFlowPanel({
                 </Button>
               </div>
               {connectorComputers.map((computer) => {
-                const runtimes = availableRuntimes(computer).sort(
+                const runtimes = [...computer.runtimes].sort(
                   (a, b) => runtimeSortKey(a) - runtimeSortKey(b) || a.label.localeCompare(b.label),
                 )
                 if (runtimes.length === 0) return null
                 return (
                   <div key={computer.id} className="space-y-2">
-                    <div className="text-xs font-black text-text-secondary">{computer.name}</div>
+                    <div className="text-xs font-black text-text-secondary">
+                      {connectorComputerDisplayName(computer)}
+                    </div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {runtimes.map((runtime) => {
                         const optionKey = `${computer.id}:${runtime.id}`
                         const selected = selectedConnectorRuntimeOption?.key === optionKey
+                        const available = runtime.status === 'available'
                         return (
                           <button
                             key={optionKey}
                             type="button"
+                            disabled={!available}
                             onClick={() => {
+                              if (!available) return
                               setSelectedConnectorComputerId(computer.id)
                               setSelectedConnectorRuntimeId(runtime.id)
                               setConnectorSelectionConfirmed(false)
                             }}
                             className={cn(
                               'rounded-2xl border px-4 py-3 text-left transition',
-                              selected
-                                ? 'border-primary/50 bg-primary/10'
-                                : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
+                              !available
+                                ? 'border-border-subtle bg-bg-tertiary/20 opacity-75'
+                                : selected
+                                  ? 'border-primary/50 bg-primary/10'
+                                  : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
                             )}
                           >
                             <div className="flex items-center gap-3">
@@ -553,8 +562,15 @@ function CreateBuddyFlowPanel({
                                 <span className="block truncate text-sm font-black text-text-primary">
                                   {runtime.label}
                                 </span>
-                                <span className="mt-0.5 block truncate text-xs text-text-muted">
-                                  {runtime.version ?? runtime.command ?? runtime.id}
+                                <span
+                                  className={cn(
+                                    'mt-0.5 block text-xs text-text-muted',
+                                    available ? 'truncate' : 'leading-5',
+                                  )}
+                                >
+                                  {available
+                                    ? connectorRuntimeDisplayDetail(computer, runtime)
+                                    : t('agentMgmt.runtimeMissing')}
                                 </span>
                               </span>
                             </div>

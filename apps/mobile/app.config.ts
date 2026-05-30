@@ -13,7 +13,7 @@ const config: ExpoConfig = {
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
-    backgroundColor: '#1E1F22',
+    backgroundColor: '#050508',
   },
   ios: {
     supportsTablet: true,
@@ -24,13 +24,14 @@ const config: ExpoConfig = {
       NSSpeechRecognitionUsageDescription:
         'This app uses speech recognition to convert voice to text for chat input.',
       NSMicrophoneUsageDescription: 'This app uses the microphone for voice input in chat.',
+      NSCameraUsageDescription: 'This app uses the camera to scan Shadow QR codes.',
     },
   },
   android: {
-    permissions: ['RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS'],
+    permissions: ['RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS', 'CAMERA'],
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#1E1F22',
+      backgroundColor: '#050508',
     },
     package: 'com.shadowob.mobile',
     intentFilters: [
@@ -49,8 +50,12 @@ const config: ExpoConfig = {
     'expo-image-picker',
     'expo-document-picker',
     'expo-web-browser',
+    'expo-apple-authentication',
+    'expo-localization',
     'expo-speech-recognition',
+    'expo-audio',
     'expo-asset',
+    'expo-camera',
   ],
   extra: {
     eas: {

@@ -19,9 +19,16 @@ import {
   type CloudBuddyRuntimeId,
   CreateAgentDialog,
   RuntimeIcon,
+  RuntimeInstallHelpButton,
 } from './agent-dialogs'
 import { ConfigCodeBlock } from './config-code-block'
-import type { Agent, ConnectorComputer, ConnectorRuntimeInfo } from './types'
+import {
+  type Agent,
+  type ConnectorComputer,
+  type ConnectorRuntimeInfo,
+  connectorComputerDisplayName,
+  connectorRuntimeDisplayDetail,
+} from './types'
 
 type QuickBuddyStep = 'basic' | 'advanced'
 type CreateBuddyTarget = 'local' | 'cloud'
@@ -68,10 +75,6 @@ const CLOUD_BUDDY_RUNTIME_OPTIONS: Array<{
   },
 ]
 
-function availableRuntimes(computer: ConnectorComputer | null | undefined) {
-  return (computer?.runtimes ?? []).filter((runtime) => runtime.status === 'available')
-}
-
 function runtimeSortKey(runtime: ConnectorRuntimeInfo) {
   const priority: Record<string, number> = {
     openclaw: 0,
@@ -88,10 +91,15 @@ export function QuickCreateBuddyModal({
   open,
   onClose,
   onSuccess,
+  landing,
 }: {
   open: boolean
   onClose: () => void
   onSuccess: (agent: Agent) => void | Promise<void>
+  landing?: {
+    title?: string
+    description?: string
+  }
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -139,7 +147,7 @@ export function QuickCreateBuddyModal({
     () =>
       connectorComputers
         .flatMap((computer) =>
-          availableRuntimes(computer).map((runtime) => ({
+          computer.runtimes.map((runtime) => ({
             key: `${computer.id}:${runtime.id}`,
             computer,
             runtime,
@@ -152,13 +160,16 @@ export function QuickCreateBuddyModal({
         ),
     [connectorComputers],
   )
+  const availableConnectorRuntimeOptions = connectorRuntimeOptions.filter(
+    (option) => option.runtime.status === 'available',
+  )
   const selectedConnectorRuntimeOption =
-    connectorRuntimeOptions.find(
+    availableConnectorRuntimeOptions.find(
       (option) =>
         option.computer.id === selectedConnectorComputerId &&
         option.runtime.id === selectedConnectorRuntimeId,
     ) ??
-    connectorRuntimeOptions[0] ??
+    availableConnectorRuntimeOptions[0] ??
     null
   const selectedConnectorComputer = selectedConnectorRuntimeOption?.computer ?? null
   const selectedConnectorRuntime = selectedConnectorRuntimeOption?.runtime ?? null
@@ -196,7 +207,7 @@ export function QuickCreateBuddyModal({
   useEffect(() => {
     if (!open || createBuddyTarget !== 'local' || connectorData === undefined) return
     if (
-      connectorRuntimeOptions.length > 0 ||
+      availableConnectorRuntimeOptions.length > 0 ||
       connectorCommand ||
       connectorBootstrap.isPending ||
       connectorBootstrapStartedRef.current
@@ -209,14 +220,14 @@ export function QuickCreateBuddyModal({
     connectorBootstrap,
     connectorCommand,
     connectorData,
-    connectorRuntimeOptions.length,
+    availableConnectorRuntimeOptions.length,
     createBuddyTarget,
     open,
   ])
 
   useEffect(() => {
     if (!open || createBuddyTarget !== 'local') return
-    if (!connectorRuntimeOptionKeys) {
+    if (!availableConnectorRuntimeOptions.length) {
       if (selectedConnectorComputerId) setSelectedConnectorComputerId(null)
       if (selectedConnectorRuntimeId) setSelectedConnectorRuntimeId(null)
       return
@@ -229,6 +240,7 @@ export function QuickCreateBuddyModal({
       setSelectedConnectorRuntimeId(selectedConnectorRuntimeOption.runtime.id)
     }
   }, [
+    availableConnectorRuntimeOptions.length,
     connectorRuntimeOptionKeys,
     createBuddyTarget,
     selectedConnectorComputerId,
@@ -300,6 +312,18 @@ export function QuickCreateBuddyModal({
         ) : (
           <>
             <ModalBody className="min-h-0 space-y-5 overflow-y-auto py-5">
+              {landing?.title || landing?.description ? (
+                <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-4">
+                  {landing.title ? (
+                    <div className="text-sm font-black text-text-primary">{landing.title}</div>
+                  ) : null}
+                  {landing.description ? (
+                    <div className="mt-1 text-xs leading-5 text-text-muted">
+                      {landing.description}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div
                 role="tablist"
                 aria-label={t('agentMgmt.createRunTarget')}
@@ -365,7 +389,7 @@ export function QuickCreateBuddyModal({
                     </div>
                   )}
 
-                  {connectorRuntimeOptions.length > 0 && (
+                  {connectorComputers.some((computer) => computer.runtimes.length > 0) && (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
@@ -387,7 +411,7 @@ export function QuickCreateBuddyModal({
                         </Button>
                       </div>
                       {connectorComputers.map((computer) => {
-                        const runtimes = availableRuntimes(computer).sort(
+                        const runtimes = [...computer.runtimes].sort(
                           (a, b) =>
                             runtimeSortKey(a) - runtimeSortKey(b) || a.label.localeCompare(b.label),
                         )
@@ -395,46 +419,62 @@ export function QuickCreateBuddyModal({
                         return (
                           <div key={computer.id} className="space-y-2">
                             <div className="text-xs font-black text-text-secondary">
-                              {computer.name}
+                              {connectorComputerDisplayName(computer)}
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2">
                               {runtimes.map((runtime) => {
                                 const optionKey = `${computer.id}:${runtime.id}`
                                 const selected = selectedConnectorRuntimeOption?.key === optionKey
+                                const available = runtime.status === 'available'
                                 return (
-                                  <button
+                                  <div
                                     key={optionKey}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedConnectorComputerId(computer.id)
-                                      setSelectedConnectorRuntimeId(runtime.id)
-                                      setConnectorSelectionConfirmed(false)
-                                    }}
                                     className={cn(
-                                      'rounded-2xl border px-4 py-3 text-left transition',
-                                      selected
-                                        ? 'border-primary/50 bg-primary/10'
-                                        : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
+                                      'relative rounded-2xl border transition',
+                                      !available
+                                        ? 'border-border-subtle bg-bg-tertiary/20 opacity-75'
+                                        : selected
+                                          ? 'border-primary/50 bg-primary/10'
+                                          : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
                                     )}
                                   >
-                                    <div className="flex items-center gap-3">
-                                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
-                                        <RuntimeIcon
-                                          runtimeId={runtime.id}
-                                          label={runtime.label}
-                                          className="h-5 w-5"
-                                        />
-                                      </span>
-                                      <span className="min-w-0">
-                                        <span className="block truncate text-sm font-black text-text-primary">
-                                          {runtime.label}
+                                    <button
+                                      type="button"
+                                      disabled={!available}
+                                      onClick={() => {
+                                        if (!available) return
+                                        setSelectedConnectorComputerId(computer.id)
+                                        setSelectedConnectorRuntimeId(runtime.id)
+                                        setConnectorSelectionConfirmed(false)
+                                      }}
+                                      className="w-full px-4 py-3 text-left disabled:cursor-not-allowed"
+                                    >
+                                      <div className="flex items-center gap-3 pr-8">
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
+                                          <RuntimeIcon
+                                            runtimeId={runtime.id}
+                                            label={runtime.label}
+                                            className="h-5 w-5"
+                                          />
                                         </span>
-                                        <span className="mt-0.5 block truncate text-xs text-text-muted">
-                                          {runtime.version ?? runtime.command ?? runtime.id}
+                                        <span className="min-w-0">
+                                          <span className="block truncate text-sm font-black text-text-primary">
+                                            {runtime.label}
+                                          </span>
+                                          <span className="mt-0.5 block truncate text-xs text-text-muted">
+                                            {available
+                                              ? connectorRuntimeDisplayDetail(computer, runtime)
+                                              : t('agentMgmt.runtimeMissing')}
+                                          </span>
                                         </span>
+                                      </div>
+                                    </button>
+                                    {!available ? (
+                                      <span className="absolute right-3 top-3">
+                                        <RuntimeInstallHelpButton runtimeId={runtime.id} t={t} />
                                       </span>
-                                    </div>
-                                  </button>
+                                    ) : null}
+                                  </div>
                                 )
                               })}
                             </div>

@@ -12,6 +12,10 @@ POST /api/media/upload
 |------|------|------|------|
 | `file` | File | 是 | 要上传的文件 |
 | `messageId` | string | 否 | 将附件关联到频道消息 |
+| `kind` | `file` / `image` / `voice` | 否 | 语音消息传 `voice` |
+| `durationMs` | number | 语音必填 | 语音时长，1-60 秒 |
+| `waveformPeaks` | JSON number array | 否 | 32-96 个波形峰值，`0..100` |
+| `transcriptText` | string | 否 | 可选的用户可见语音转文字 |
 
 **响应：**
 
@@ -24,6 +28,8 @@ POST /api/media/upload
   "size": 102400
 }
 ```
+
+语音上传会保存为私有 `/shadow/voice/...` contentRef，播放时仍必须通过签名媒体 URL 交付。
 
 :::code-group
 

@@ -11,7 +11,7 @@ export const SKILL_TYPES = [
 
 export type SkillType = (typeof SKILL_TYPES)[number]
 export type Direction = 'up' | 'right' | 'down' | 'left'
-export type Tile = 'x' | 'm' | 'o' | '.'
+export type Tile = 'x' | 'm' | 'o' | 'w' | '.'
 export type OwnerKind = 'local' | 'user' | 'buddy' | 'demo'
 
 export interface WarbuddyActorRef {
@@ -26,6 +26,7 @@ export interface WarbuddyActorRef {
 
 export interface TankProfile {
   id: string
+  teamId?: string | null
   name: string
   appearance: string
   skillType: SkillType
@@ -67,6 +68,8 @@ export interface RuntimeTankState {
   headingDegrees?: number
   crashed: boolean
   stars: number
+  shotgunLevel: number
+  armor: number
   skillType: SkillType
   status: {
     shielded: boolean
@@ -79,7 +82,9 @@ export interface RuntimeTankState {
     fireLocked: boolean
     actionSpeed: number
     canActThisFrame: boolean
+    powered?: boolean
   }
+  death?: UnitDeathState | null
 }
 
 export interface BattleBulletState {
@@ -100,10 +105,14 @@ export interface RuntimeEngineerState {
   headingDegrees?: number
   alive: boolean
   bombRange: number
+  maxBombs: number
   status: {
     cloaked: boolean
     fireLocked: boolean
+    swimming: boolean
+    powered?: boolean
   }
+  death?: UnitDeathState | null
 }
 
 export interface BattleBombState {
@@ -121,6 +130,37 @@ export interface BattleExplosionState {
   remainingFrames: number
 }
 
+export type UnitKind = 'tank' | 'engineer'
+export type UnitDeathCause = 'bullet' | 'bomb' | 'crush' | 'runtime'
+
+export interface UnitDeathState {
+  cause: UnitDeathCause
+  by?: number | null
+  frame?: number
+  detail?: string
+}
+
+export interface BattleSpeechState {
+  id: string
+  owner: number
+  unitKind: UnitKind
+  unitName: string
+  text: string
+  position: [number, number]
+  remainingFrames: number
+}
+
+export interface BattleScoreboardState {
+  sides: Array<{
+    owner: number
+    flags: number
+    tankAlive: boolean
+    engineerAlive: boolean
+    kills: number
+    losses: number
+  }>
+}
+
 export interface BattleFrameState {
   tanks: RuntimeTankState[]
   engineers: RuntimeEngineerState[]
@@ -128,11 +168,16 @@ export interface BattleFrameState {
   bombs: BattleBombState[]
   explosions: BattleExplosionState[]
   star: [number, number] | null
+  flag: [number, number] | null
+  flagScores: [number, number]
+  bulletClashes: number
+  speeches?: BattleSpeechState[]
+  scoreboard?: BattleScoreboardState
   map: Tile[][]
 }
 
 export interface BattleEvent {
-  type: 'star' | 'tank' | 'bullet' | 'skill' | 'speech' | 'runtime' | 'game'
+  type: 'star' | 'flag' | 'tank' | 'bullet' | 'skill' | 'speech' | 'runtime' | 'game'
   action: string
   by?: number
   tank?: string
@@ -177,7 +222,7 @@ export interface BattleReplay {
   summary: BattleSummary
 }
 
-export type BattleResultReason = 'hit' | 'crashed' | 'stars' | 'runtime' | 'draw'
+export type BattleResultReason = 'hit' | 'crashed' | 'stars' | 'flags' | 'runtime' | 'draw'
 
 export interface BattleSummary {
   framesTotal: number
@@ -196,6 +241,7 @@ export interface BattleSummary {
       stars: number
       skillUsed: number
       crashes: number
+      deaths?: Record<string, UnitDeathState | null>
       runtimeMs: number
       diagnosis: string
     }
@@ -221,6 +267,27 @@ export interface MatchRecord {
   replay: BattleReplay
 }
 
+export interface ReplayComment {
+  id: string
+  matchId: string
+  frame: number
+  rect: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+  body: string
+  author: WarbuddyActorRef
+  createdAt: string
+}
+
+export interface MatchReadState {
+  matchId: string
+  actorId: string
+  readAt: string
+}
+
 export interface MatchParticipant {
   tankId: string
   tankName: string
@@ -230,8 +297,47 @@ export interface MatchParticipant {
   skillType: SkillType
 }
 
+export type WarbuddyPlayMode = 'auto' | 'manual' | 'coop'
+export type WarbuddyRoomStatus = 'waiting' | 'live' | 'settled'
+
+export interface WarbuddyTeam {
+  id: string
+  name: string
+  description: string
+  color: string
+  owner: WarbuddyActorRef
+  tankId: string
+  strategyBuddyAgentIds?: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WarbuddyRoom {
+  id: string
+  code: string
+  name: string
+  mode: WarbuddyPlayMode
+  status: WarbuddyRoomStatus
+  mapId: string
+  hostTeamId: string
+  guestTeamId?: string | null
+  participants: Array<{
+    actorId: string
+    displayName: string
+    teamId?: string | null
+    mode: WarbuddyPlayMode
+    joinedAt: string
+  }>
+  createdAt: string
+  updatedAt: string
+}
+
 export interface WarbuddyState {
+  teams: WarbuddyTeam[]
   tanks: TankProfile[]
   matches: MatchRecord[]
+  rooms: WarbuddyRoom[]
+  replayComments: ReplayComment[]
+  readStates: MatchReadState[]
   updatedAt: string
 }

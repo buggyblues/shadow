@@ -238,6 +238,29 @@ export interface ShadowAttachment {
   width?: number | null
   height?: number | null
   workspaceNodeId?: string | null
+  kind?: 'file' | 'image' | 'voice'
+  durationMs?: number | null
+  audioCodec?: string | null
+  audioContainer?: string | null
+  waveformPeaks?: number[] | null
+  waveformVersion?: number | null
+  transcript?: {
+    id: string
+    status: 'pending' | 'processing' | 'ready' | 'failed'
+    text: string | null
+    language: string | null
+    source: 'client' | 'server' | 'runtime'
+    provider?: string | null
+    confidence?: number | null
+    errorCode?: string | null
+    updatedAt?: string
+  } | null
+  playback?: {
+    played: boolean
+    completed: boolean
+    lastPositionMs: number
+    playedCount?: number
+  } | null
 }
 
 export interface ShadowSignedMediaUrl {
@@ -1604,6 +1627,7 @@ export interface ShadowProduct {
   status: string
   specNames?: string[]
   tags?: string[]
+  globalPublic?: boolean
   salesCount?: number
   avgRating?: number
   ratingCount?: number
@@ -1613,6 +1637,55 @@ export interface ShadowProduct {
   skus?: ShadowProductSku[]
   images?: string[]
   createdAt: string
+}
+
+export interface ShadowMarketplaceProduct extends ShadowProduct {
+  price: number
+  imageUrl?: string | null
+  shop: {
+    id: string
+    name: string
+    scopeKind: 'server' | 'user' | string
+    logoUrl?: string | null
+    bannerUrl?: string | null
+    server?: { id: string; name: string; slug?: string | null; iconUrl?: string | null } | null
+    owner?: {
+      id: string
+      username: string
+      displayName?: string | null
+      avatarUrl?: string | null
+    } | null
+  }
+  links?: {
+    product?: string | null
+    shop?: string | null
+    server?: string | null
+    providerProfile?: string | null
+  }
+}
+
+export interface ShadowMarketplaceProductsResponse {
+  products: ShadowMarketplaceProduct[]
+  total: number
+  hasMore: boolean
+  filters?: { q?: string | null; tags?: string[]; scope?: string | null }
+}
+
+export interface ShadowMarketplaceCategory {
+  tag: string
+  title: string
+  productCount: number
+  salesCount: number
+  ratingCount: number
+  avgRating: number
+  score: number
+  href: string
+}
+
+export interface ShadowMarketplaceCategoriesResponse {
+  categories: ShadowMarketplaceCategory[]
+  total: number
+  filters?: { q?: string | null }
 }
 
 export interface ShadowCartItem {

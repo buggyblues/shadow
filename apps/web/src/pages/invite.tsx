@@ -82,13 +82,6 @@ export function InvitePage() {
           >
             {t('auth.loginSubmit')}
           </Button>
-          <Button
-            variant="glass"
-            className="w-full mt-3"
-            onClick={() => navigate({ to: '/register', search: { redirect: `/invite/${code}` } })}
-          >
-            {t('auth.registerSubmit')}
-          </Button>
         </Card>
       </div>
     )

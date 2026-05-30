@@ -22,11 +22,46 @@
       "processedSheet": "effects/processed/sheet-transparent.png"
     },
     "engineer": {
-      "rawImage": "engineer-v1/raw.png",
-      "prompt": "engineer-v1/prompt.txt",
+      "rawImage": "engineer-v3/raw.png",
+      "prompt": "engineer-v3/prompt.txt",
       "rows": 2,
       "cols": 2,
-      "processedSheet": "engineer-v1/processed/sheet-transparent.png"
+      "processedSheet": "engineer-v3/processed/sheet-transparent.png"
+    },
+    "engineerSwim": {
+      "rawImage": "engineer-swim-v1/raw.png",
+      "prompt": "engineer-swim-v1/prompt.txt",
+      "rows": 2,
+      "cols": 2,
+      "processedSheet": "engineer-swim-v1/processed/sheet-transparent.png"
+    },
+    "bomb": {
+      "rawImage": "bomb-v1/raw.png",
+      "prompt": "bomb-v1/prompt.txt",
+      "rows": 2,
+      "cols": 2,
+      "processedSheet": "bomb-v1/processed/sheet-transparent.png"
+    },
+    "explosion": {
+      "rawImage": "explosion-v1/raw.png",
+      "prompt": "explosion-v1/prompt.txt",
+      "rows": 2,
+      "cols": 2,
+      "processedSheet": "explosion-v1/processed/sheet-transparent.png"
+    },
+    "flag": {
+      "rawImage": "flag-v1/raw.png",
+      "prompt": "flag-v1/prompt.txt",
+      "rows": 2,
+      "cols": 2,
+      "processedSheet": "flag-v1/processed/sheet-transparent.png"
+    },
+    "water": {
+      "rawImage": "water-v1/raw.png",
+      "prompt": "water-v1/prompt.txt",
+      "rows": 2,
+      "cols": 2,
+      "processedSheet": "water-v1/processed/sheet-transparent.png"
     }
   },
   "frames": {
@@ -42,13 +77,55 @@
       "star-v2/processed/star-3.png",
       "star-v2/processed/star-4.png"
     ],
-    "redTankBase": "tank-grass-star/processed/anim-10.png",
-    "blueTankBase": "tank-grass-star/processed/anim-14.png",
-    "engineerWalk": [
-      "engineer-v1/processed/engineer-1.png",
-      "engineer-v1/processed/engineer-2.png",
-      "engineer-v1/processed/engineer-3.png",
-      "engineer-v1/processed/engineer-4.png"
+    "redTankBase": "team-units/processed/tank-red.png",
+    "blueTankBase": "team-units/processed/tank-blue.png",
+    "redEngineerWalk": [
+      "team-units/processed/engineer-red-1.png",
+      "team-units/processed/engineer-red-2.png",
+      "team-units/processed/engineer-red-3.png",
+      "team-units/processed/engineer-red-4.png"
+    ],
+    "blueEngineerWalk": [
+      "team-units/processed/engineer-blue-1.png",
+      "team-units/processed/engineer-blue-2.png",
+      "team-units/processed/engineer-blue-3.png",
+      "team-units/processed/engineer-blue-4.png"
+    ],
+    "redEngineerSwim": [
+      "team-units/processed/engineer-swim-red-1.png",
+      "team-units/processed/engineer-swim-red-2.png",
+      "team-units/processed/engineer-swim-red-3.png",
+      "team-units/processed/engineer-swim-red-4.png"
+    ],
+    "blueEngineerSwim": [
+      "team-units/processed/engineer-swim-blue-1.png",
+      "team-units/processed/engineer-swim-blue-2.png",
+      "team-units/processed/engineer-swim-blue-3.png",
+      "team-units/processed/engineer-swim-blue-4.png"
+    ],
+    "bombFuse": [
+      "bomb-v1/processed/bomb-1.png",
+      "bomb-v1/processed/bomb-2.png",
+      "bomb-v1/processed/bomb-3.png",
+      "bomb-v1/processed/bomb-4.png"
+    ],
+    "bombExplosion": [
+      "explosion-v1/processed/explosion-1.png",
+      "explosion-v1/processed/explosion-2.png",
+      "explosion-v1/processed/explosion-3.png",
+      "explosion-v1/processed/explosion-4.png"
+    ],
+    "flagWave": [
+      "flag-v1/processed/flag-1.png",
+      "flag-v1/processed/flag-2.png",
+      "flag-v1/processed/flag-3.png",
+      "flag-v1/processed/flag-4.png"
+    ],
+    "waterShimmer": [
+      "water-v1/processed/water-1.png",
+      "water-v1/processed/water-2.png",
+      "water-v1/processed/water-3.png",
+      "water-v1/processed/water-4.png"
     ],
     "tankDeath": [
       "effects/processed/fx-5.png",

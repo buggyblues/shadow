@@ -6,6 +6,13 @@ import { pluginReact } from '@rsbuild/plugin-react'
 const cloudUiSrc = path.resolve(__dirname, '../cloud/packages/ui/src')
 const devApiTarget = process.env.SHADOW_DEV_API_BASE ?? 'http://127.0.0.1:3002'
 
+function handleDevProxyError(error: NodeJS.ErrnoException) {
+  if (error.code === 'EPIPE' || error.code === 'ECONNRESET') {
+    return
+  }
+  console.error('[dev proxy] request failed:', error)
+}
+
 export default defineConfig({
   plugins: [pluginReact()],
   source: {
@@ -44,6 +51,8 @@ export default defineConfig({
       '/socket.io': {
         target: devApiTarget,
         ws: true,
+        changeOrigin: true,
+        onError: handleDevProxyError,
       },
       '/shadow': {
         target: devApiTarget,

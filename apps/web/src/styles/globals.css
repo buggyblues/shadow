@@ -5,3 +5,33 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @source "../../../../packages/views/src/**/*.{ts,tsx,js,jsx}";
+
+.desktop-window-drag-strip {
+  display: none;
+}
+
+html.desktop-app .desktop-window-drag-strip {
+  -webkit-app-region: drag;
+  display: block;
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1000;
+  height: 36px;
+}
+
+html.desktop-app .desktop-app-shell {
+  padding-top: 42px;
+}
+
+html.desktop-app button,
+html.desktop-app a,
+html.desktop-app input,
+html.desktop-app textarea,
+html.desktop-app select,
+html.desktop-app [role="button"],
+html.desktop-app [role="tab"],
+html.desktop-app [data-no-drag] {
+  -webkit-app-region: no-drag;
+}

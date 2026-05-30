@@ -3,29 +3,37 @@ import * as Clipboard from 'expo-clipboard'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import { Camera, ChevronLeft, Copy, LogOut, Save, Share2, Trash2 } from 'lucide-react-native'
+import { Camera, Copy, LogOut, Save, Share2, Trash2 } from 'lucide-react-native'
 import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
-import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ActivityIndicator, Alert, Pressable, Share, StyleSheet, View } from 'react-native'
 import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
-import { AppSwitch, BackgroundSurface } from '../../../../src/components/ui'
+import { SettingsHeader } from '../../../../src/components/common/settings-header'
+import {
+  AppText,
+  BackgroundSurface,
+  Button,
+  IconButton,
+  KeyValueRow,
+  MenuItem,
+  PageScroll,
+  Section,
+  SwitchRow,
+  TextField,
+} from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import {
+  fontSize,
+  iconSize,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 interface ServerData {
   id: string
@@ -47,7 +55,6 @@ export default function ServerSettingsScreen() {
   const navigation = useNavigation()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
-  const insets = useSafeAreaInsets()
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false })
@@ -68,20 +75,17 @@ export default function ServerSettingsScreen() {
   const [saving, setSaving] = useState(false)
   const [uploadingIcon, setUploadingIcon] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
-
-  // Track if there are unsaved changes (excluding images which are saved immediately)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   React.useEffect(() => {
-    if (server) {
-      setName(server.name)
-      setSlug(server.slug ?? '')
-      setDescription(server.description ?? '')
-      setIconUrl(server.iconUrl)
-      setBannerUrl(server.bannerUrl)
-      setIsPublic(server.isPublic ?? false)
-      setHasUnsavedChanges(false)
-    }
+    if (!server) return
+    setName(server.name)
+    setSlug(server.slug ?? '')
+    setDescription(server.description ?? '')
+    setIconUrl(server.iconUrl)
+    setBannerUrl(server.bannerUrl)
+    setIsPublic(server.isPublic ?? false)
+    setHasUnsavedChanges(false)
   }, [server])
 
   const isOwner = server?.ownerId === user?.id
@@ -92,32 +96,22 @@ export default function ServerSettingsScreen() {
     await Share.share({
       message: t('settings.inviteMessage', {
         serverName: server.name,
-        defaultValue: `Join "{{serverName}}" on Shadow! ${inviteLink}`,
+        inviteLink,
       }),
     })
   }, [server, t])
 
-  // Save image immediately after upload
   const saveImageImmediately = async (field: 'iconUrl' | 'bannerUrl', url: string) => {
     if (!server) return
-
     try {
       await fetchApi(`/api/servers/${server.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ [field]: url }),
       })
-
-      // Update local state
-      if (field === 'iconUrl') {
-        setIconUrl(url)
-      } else {
-        setBannerUrl(url)
-      }
-
-      // Invalidate queries to refresh data
+      if (field === 'iconUrl') setIconUrl(url)
+      else setBannerUrl(url)
       queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-
       showToast(t('common.saveSuccess'), 'success')
     } catch (err) {
       showToast((err as Error).message, 'error')
@@ -149,8 +143,6 @@ export default function ServerSettingsScreen() {
         method: 'POST',
         body: formData,
       })
-
-      // Save immediately after upload
       await saveImageImmediately(field, data.url)
     } catch (err) {
       showToast((err as Error).message, 'error')
@@ -163,17 +155,13 @@ export default function ServerSettingsScreen() {
     if (!server) return
     setSaving(true)
     try {
+      const trimmedSlug = slug.trim()
       const payload: Record<string, unknown> = {
-        name,
-        description: description || undefined,
+        name: name.trim(),
+        description: description.trim() || undefined,
         isPublic,
       }
-
-      // Only include slug if it's changed and valid
-      const trimmedSlug = slug.trim()
-      if (trimmedSlug && trimmedSlug !== server.slug) {
-        payload.slug = trimmedSlug
-      }
+      if (trimmedSlug && trimmedSlug !== server.slug) payload.slug = trimmedSlug
 
       await fetchApi(`/api/servers/${server.id}`, {
         method: 'PATCH',
@@ -185,7 +173,6 @@ export default function ServerSettingsScreen() {
       setHasUnsavedChanges(false)
       showToast(t('common.saveSuccess'), 'success')
 
-      // Navigate to new slug if it changed
       if (trimmedSlug && trimmedSlug !== serverSlug) {
         router.replace(`/servers/${trimmedSlug}/server-settings`)
       }
@@ -196,7 +183,6 @@ export default function ServerSettingsScreen() {
     }
   }
 
-  // Track changes for unsaved indicator
   const checkForChanges = useCallback(() => {
     if (!server) return false
     return (
@@ -230,7 +216,7 @@ export default function ServerSettingsScreen() {
   })
 
   const handleLeave = () => {
-    Alert.alert(t('server.leaveTitle'), t('server.leaveConfirm'), [
+    Alert.alert(t('server.leaveTitle'), t('server.leaveConfirm', { name: server?.name ?? '' }), [
       { text: t('common.cancel'), style: 'cancel' },
       { text: t('server.leave'), style: 'destructive', onPress: () => leaveMutation.mutate() },
     ])
@@ -243,496 +229,218 @@ export default function ServerSettingsScreen() {
     ])
   }
 
+  const copyInviteCode = async () => {
+    if (!server) return
+    await Clipboard.setStringAsync(server.inviteCode)
+    showToast(t('common.copied'), 'success')
+  }
+
   if (isLoading || !server) return <LoadingScreen />
 
   return (
     <BackgroundSurface style={styles.container}>
-      {/* Custom header */}
-      <Reanimated.View
-        entering={FadeIn.duration(300)}
-        style={[
-          styles.customHeader,
-          {
-            backgroundColor: colors.glassStrong,
-            borderBottomColor: colors.glassLine,
-            paddingTop: insets.top,
-            shadowColor: colors.mode === 'dark' ? '#000000' : '#64748B',
-          },
-        ]}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={8}
-          style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.5 }]}
-        >
-          <ChevronLeft size={26} color={colors.text} />
-        </Pressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-            服务器设置
-          </Text>
-          {hasUnsavedChanges && isOwner && (
-            <Text style={[styles.unsavedBadge, { color: colors.textMuted }]}>未保存</Text>
-          )}
-        </View>
-        {isOwner ? (
-          <Pressable
-            onPress={handleSave}
-            disabled={saving || !hasUnsavedChanges}
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.headerBtn,
-              pressed && { opacity: 0.5 },
-              !hasUnsavedChanges && { opacity: 0.4 },
-            ]}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Save size={22} color={colors.primary} />
-            )}
-          </Pressable>
-        ) : (
-          <View style={styles.headerBtn} />
-        )}
-      </Reanimated.View>
+      <SettingsHeader
+        title={t('channel.serverSettings')}
+        right={
+          isOwner ? (
+            <IconButton
+              icon={Save}
+              variant="ghost"
+              iconColor={colors.primary}
+              disabled={saving || !hasUnsavedChanges}
+              loading={saving}
+              onPress={handleSave}
+            />
+          ) : null
+        }
+      />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Banner + Icon Hero Area */}
-        <Reanimated.View entering={FadeInDown.delay(100).springify()} style={styles.heroSection}>
-          {isOwner ? (
+      <PageScroll compact>
+        <Section>
+          <View style={styles.identityRow}>
             <Pressable
-              onPress={() => pickAndUploadImage([3, 1], setUploadingBanner, 'bannerUrl')}
-              style={[styles.bannerWrap, { backgroundColor: colors.inputBackground }]}
+              disabled={!isOwner || uploadingIcon}
+              onPress={() => pickAndUploadImage([1, 1], setUploadingIcon, 'iconUrl')}
+              style={styles.avatarAction}
             >
-              {bannerUrl ? (
-                <Image
-                  source={{ uri: getImageUrl(bannerUrl) ?? undefined }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                />
+              <Avatar
+                uri={iconUrl}
+                name={name || server.name}
+                size={iconSize.hero}
+                userId={server.id}
+              />
+              {isOwner ? (
+                <View style={[styles.avatarEdit, { backgroundColor: colors.primary }]}>
+                  {uploadingIcon ? (
+                    <ActivityIndicator size="small" color={palette.white} />
+                  ) : (
+                    <Camera size={iconSize.sm} color={palette.white} />
+                  )}
+                </View>
               ) : null}
-              <View style={styles.bannerOverlay}>
-                {uploadingBanner ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Camera size={18} color="#fff" />
-                    <Text style={styles.bannerOverlayText}>
-                      {bannerUrl ? '更换横幅' : '添加横幅'}
-                    </Text>
-                  </>
-                )}
-              </View>
             </Pressable>
-          ) : bannerUrl ? (
-            <View style={[styles.bannerWrap, { backgroundColor: colors.inputBackground }]}>
+            <View style={styles.identityText}>
+              <AppText variant="title" style={styles.serverName} numberOfLines={1}>
+                {server.name}
+              </AppText>
+              <AppText variant="label" tone="secondary" numberOfLines={1}>
+                {server.slug ? `@${server.slug}` : server.id.slice(0, 8)}
+              </AppText>
+            </View>
+          </View>
+
+          {bannerUrl ? (
+            <View style={styles.bannerPreview}>
               <Image
                 source={{ uri: getImageUrl(bannerUrl) ?? undefined }}
                 style={StyleSheet.absoluteFill}
                 contentFit="cover"
               />
             </View>
-          ) : (
-            <View style={[styles.bannerWrap, { backgroundColor: `${colors.primary}15` }]} />
-          )}
+          ) : null}
 
-          {/* Avatar overlay */}
-          <View style={styles.avatarSection}>
-            {isOwner ? (
-              <Pressable
-                onPress={() => pickAndUploadImage([1, 1], setUploadingIcon, 'iconUrl')}
-                style={styles.avatarWrap}
-              >
-                <View style={[styles.avatarBorder, { borderColor: colors.background }]}>
-                  <Avatar uri={iconUrl} name={name} size={72} userId={server.id} />
-                </View>
-                <View style={styles.avatarOverlay}>
-                  {uploadingIcon ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Camera size={14} color="#fff" />
-                  )}
-                </View>
-              </Pressable>
-            ) : (
-              <View style={[styles.avatarBorder, { borderColor: colors.background }]}>
-                <Avatar uri={iconUrl} name={name} size={72} userId={server.id} />
-              </View>
-            )}
-            <View style={styles.nameMeta}>
-              <Text style={[styles.serverDisplayName, { color: colors.text }]} numberOfLines={1}>
-                {server.name}
-              </Text>
-              <Text style={[styles.slugText, { color: colors.textMuted }]}>
-                {server.slug ? `@${server.slug}` : `ID: ${server.id.slice(0, 8)}`}
-              </Text>
-            </View>
-          </View>
-        </Reanimated.View>
+          {isOwner ? (
+            <Button
+              variant="glass"
+              size="sm"
+              icon={Camera}
+              style={styles.bannerButton}
+              disabled={uploadingBanner}
+              loading={uploadingBanner}
+              onPress={() => pickAndUploadImage([3, 1], setUploadingBanner, 'bannerUrl')}
+            >
+              {bannerUrl ? t('server.changeBanner') : t('server.addBanner')}
+            </Button>
+          ) : null}
+        </Section>
 
-        {/* Edit Section */}
-        {isOwner && (
-          <Reanimated.View
-            entering={FadeInDown.delay(200).springify()}
-            style={[
-              styles.section,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>基本信息</Text>
-            <View style={styles.fieldRow}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>名称</Text>
-              <TextInput
-                style={[
-                  styles.fieldInput,
-                  { color: colors.text, borderBottomColor: colors.border },
-                ]}
+        {isOwner ? (
+          <Section title={t('server.serverInfo')}>
+            <View style={styles.formStack}>
+              <TextField
+                label={t('server.nameLabel')}
+                placeholder={t('server.namePlaceholder')}
                 value={name}
                 onChangeText={setName}
-                placeholder="服务器名称"
-                placeholderTextColor={colors.textMuted}
+                maxLength={64}
               />
-            </View>
-            <View style={styles.fieldRow}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>别名 (Slug)</Text>
-              <TextInput
-                style={[
-                  styles.fieldInput,
-                  { color: colors.text, borderBottomColor: colors.border },
-                ]}
+              <TextField
+                label={t('channel.serverSlug')}
+                placeholder={t('channel.slugPlaceholder')}
                 value={slug}
                 onChangeText={setSlug}
-                placeholder="自定义 URL 别名 (可选)"
-                placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
-                设置后可通过 /servers/{'{'}slug{'}'} 访问
-              </Text>
-            </View>
-            <View style={styles.fieldRow}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>描述</Text>
-              <TextInput
-                style={[
-                  styles.fieldInput,
-                  styles.descInput,
-                  { color: colors.text, borderBottomColor: colors.border },
-                ]}
+              <TextField
+                label={t('server.descriptionLabel')}
+                placeholder={t('server.descriptionPlaceholder')}
                 value={description}
                 onChangeText={setDescription}
                 multiline
-                placeholder="添加服务器描述..."
-                placeholderTextColor={colors.textMuted}
+                maxLength={500}
+                inputStyle={styles.descriptionInput}
               />
             </View>
-          </Reanimated.View>
-        )}
+          </Section>
+        ) : null}
 
-        {/* Visibility Toggle */}
-        {isOwner && (
-          <Reanimated.View
-            entering={FadeInDown.delay(300).springify()}
-            style={[
-              styles.section,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Pressable style={styles.settingRow} onPress={() => setIsPublic(!isPublic)}>
-              <View style={styles.settingInfo}>
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  {t('server.publicServer')}
-                </Text>
-                <Text style={[styles.settingHint, { color: colors.textMuted }]}>
-                  {t('server.publicServerDesc')}
-                </Text>
-              </View>
-              <AppSwitch value={isPublic} onValueChange={setIsPublic} />
-            </Pressable>
-          </Reanimated.View>
-        )}
+        {isOwner ? (
+          <Section>
+            <SwitchRow
+              icon={Share2}
+              title={t('server.publicServer')}
+              subtitle={t('server.publicServerDesc')}
+              value={isPublic}
+              onValueChange={setIsPublic}
+            />
+          </Section>
+        ) : null}
 
-        {/* Server Info */}
-        <Reanimated.View
-          entering={FadeInDown.delay(400).springify()}
-          style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        >
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>服务器信息</Text>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>服务器 ID</Text>
-            <Text style={[styles.infoValue, { color: colors.textMuted }]}>
-              {server.id.slice(0, 12)}...
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>别名</Text>
-            <Text
-              style={[styles.infoValue, { color: server.slug ? colors.text : colors.textMuted }]}
-            >
-              {server.slug || '未设置'}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>可见性</Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              {server.isPublic ? '公开' : '私密'}
-            </Text>
-          </View>
-          <Pressable
-            style={styles.infoRow}
-            onPress={() => {
-              Clipboard.setStringAsync(server.inviteCode)
-              showToast('已复制邀请码', 'success')
-            }}
-          >
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>邀请码</Text>
-            <View style={styles.inviteCodeRow}>
-              <Text style={[styles.codeText, { color: colors.primary }]}>{server.inviteCode}</Text>
-              <Copy size={14} color={colors.textMuted} />
-            </View>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.infoRow, pressed && { opacity: 0.6 }]}
-            onPress={handleShareInvite}
-          >
-            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-              {t('settings.shareInvite', '分享邀请链接')}
-            </Text>
-            <Share2 size={16} color={colors.primary} />
-          </Pressable>
-        </Reanimated.View>
+        <Section title={t('channel.inviteCode')}>
+          <KeyValueRow
+            label={t('channel.inviteCode')}
+            value={
+              <Pressable style={styles.inviteCodeRow} onPress={copyInviteCode}>
+                <AppText variant="bodyStrong" tone="primary" numberOfLines={1}>
+                  {server.inviteCode}
+                </AppText>
+                <Copy size={15} color={colors.textMuted} />
+              </Pressable>
+            }
+          />
+          <MenuItem icon={Share2} title={t('settings.shareInvite')} onPress={handleShareInvite} />
+        </Section>
 
-        {/* Actions */}
-        <Reanimated.View
-          entering={FadeInDown.delay(500).springify()}
-          style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        >
-          {!isOwner && (
-            <Pressable
-              style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}
-              onPress={handleLeave}
-            >
-              <LogOut size={18} color="#f23f43" />
-              <Text style={styles.dangerText}>退出服务器</Text>
-            </Pressable>
-          )}
-          {isOwner && (
-            <Pressable
-              style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}
+        <Section>
+          {isOwner ? (
+            <MenuItem
+              icon={Trash2}
+              tone="danger"
+              title={t('server.delete')}
               onPress={handleDeleteServer}
-            >
-              <Trash2 size={18} color="#f23f43" />
-              <Text style={styles.dangerText}>删除服务器</Text>
-            </Pressable>
+            />
+          ) : (
+            <MenuItem icon={LogOut} tone="danger" title={t('server.leave')} onPress={handleLeave} />
           )}
-        </Reanimated.View>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+        </Section>
+      </PageScroll>
     </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-
-  // Custom header
-  customHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    elevation: 4,
-  },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  headerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-  },
-  unsavedBadge: {
-    fontSize: fontSize.xs,
-    fontWeight: '500',
-  },
-
-  content: { paddingBottom: spacing['3xl'] },
-
-  // Hero
-  heroSection: {
-    marginBottom: spacing.lg,
-  },
-  bannerWrap: {
-    height: 140,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  bannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  bannerOverlayText: {
-    color: '#fff',
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  avatarSection: {
+  identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginTop: -36,
+    padding: spacing.lg,
   },
-  avatarWrap: {
+  avatarAction: {
     position: 'relative',
   },
-  avatarBorder: {
-    borderRadius: 40,
-    borderWidth: 3,
-  },
-  avatarOverlay: {
+  avatarEdit: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    right: -spacing.xxs,
+    bottom: -spacing.xxs,
+    width: size.avatarXs,
+    height: size.avatarXs,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nameMeta: {
+  identityText: {
     flex: 1,
-    marginTop: 36,
-    gap: 2,
+    gap: spacing.xxs,
   },
-  serverDisplayName: {
+  serverName: {
     fontSize: fontSize.xl,
     fontWeight: '800',
   },
-  slugText: {
-    fontSize: fontSize.xs,
-  },
-
-  // Sections
-  section: {
+  bannerPreview: {
+    height: size.navSide - spacing.xs,
     marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    borderRadius: radius.xl,
-    borderWidth: 1,
+    marginBottom: spacing.md,
+    borderRadius: radius.lg,
     overflow: 'hidden',
   },
-  sectionLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
+  bannerButton: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
-
-  // Form fields
-  fieldRow: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  fieldLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  fieldHint: {
-    fontSize: fontSize.xs,
-    marginTop: 2,
-  },
-  fieldInput: {
-    fontSize: fontSize.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  descInput: {
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-
-  // Settings
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  formStack: {
+    gap: spacing.md,
     padding: spacing.lg,
   },
-  settingInfo: {
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  settingLabel: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  settingHint: {
-    fontSize: fontSize.xs,
-    marginTop: 2,
-  },
-
-  // Info rows
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  infoValue: {
-    fontSize: fontSize.sm,
-    fontFamily: 'monospace',
+  descriptionInput: {
+    minHeight: size.listItemLg + spacing.xxs,
+    textAlignVertical: 'top',
   },
   inviteCodeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  codeText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
-
-  // Actions
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  dangerText: {
-    color: '#f23f43',
-    fontSize: fontSize.md,
-    fontWeight: '700',
+    maxWidth: size.compactChipMaxWidth,
   },
 })

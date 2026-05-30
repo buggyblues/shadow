@@ -551,7 +551,7 @@ export function createMessageHandler(container: AppContainer) {
     const thread = await messageService.getThread(id)
     const access = await getChannelAccess(container, thread.channelId, user.userId)
     if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
-    const messages = await messageService.getThreadMessages(id, limit, cursor)
+    const messages = await messageService.getThreadMessages(id, limit, cursor, user.userId)
     return c.json(messages)
   })
 

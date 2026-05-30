@@ -3,9 +3,11 @@ import { FileCard } from '../file-card'
 import { isImageType, resolveAttachmentMediaUrl } from './media'
 import { attachmentsEqual } from './pure'
 import type { Attachment } from './types'
+import { VoiceMessageView } from './voice-message'
 
 interface AttachmentViewProps {
   attachment: Attachment
+  isOwn?: boolean
   onPreviewFile?: (attachment: Attachment) => void
   onSaveToWorkspace?: (attachment: Attachment) => void
   onImageContextMenu: (event: MouseEvent, attachment: Attachment) => void
@@ -14,6 +16,7 @@ interface AttachmentViewProps {
 
 function AttachmentViewBase({
   attachment,
+  isOwn = false,
   onPreviewFile,
   onSaveToWorkspace,
   onImageContextMenu,
@@ -22,8 +25,15 @@ function AttachmentViewBase({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const isImage = isImageType(attachment.contentType)
+  const isVoice =
+    attachment.kind === 'voice' ||
+    (attachment.contentType.startsWith('audio/') &&
+      (typeof attachment.durationMs === 'number' ||
+        Boolean(attachment.waveformPeaks?.length) ||
+        /^voice[-_]\d+/i.test(attachment.filename)))
 
   useEffect(() => {
+    if (isVoice) return
     let cancelled = false
     const disposition = isImage ? 'inline' : 'attachment'
     resolveAttachmentMediaUrl(attachment.id, disposition, isImage ? 'preview' : undefined)
@@ -42,7 +52,7 @@ function AttachmentViewBase({
     return () => {
       cancelled = true
     }
-  }, [attachment.id, isImage])
+  }, [attachment.id, isImage, isVoice])
 
   const resolveDownload = useCallback(async () => {
     const resolved = await resolveAttachmentMediaUrl(attachment.id, 'attachment')
@@ -54,6 +64,10 @@ function AttachmentViewBase({
     const resolved = await resolveAttachmentMediaUrl(attachment.id, 'inline')
     return resolved.url
   }, [attachment.id])
+
+  if (isVoice) {
+    return <VoiceMessageView attachment={attachment} isOwn={isOwn} />
+  }
 
   if (isImage) {
     const href = previewUrl ?? '#'
@@ -105,6 +119,7 @@ function AttachmentViewBase({
 }
 
 export const AttachmentView = memo(AttachmentViewBase, (prev, next) => {
+  if (prev.isOwn !== next.isOwn) return false
   if (prev.onPreviewFile !== next.onPreviewFile) return false
   if (prev.onSaveToWorkspace !== next.onSaveToWorkspace) return false
   if (prev.onImageContextMenu !== next.onImageContextMenu) return false

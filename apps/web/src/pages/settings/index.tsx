@@ -1,16 +1,7 @@
 import { cn, GlassHeader, GlassPanel } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate, useSearch } from '@tanstack/react-router'
-import {
-  Bot,
-  MessageCircle,
-  Monitor,
-  PawPrint,
-  Settings,
-  Store,
-  Target,
-  Wallet,
-} from 'lucide-react'
+import { Bot, MessageCircle, PawPrint, Settings, Store, Target, Wallet } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../../components/common/avatar'
@@ -338,24 +329,6 @@ export function SettingsPage() {
               </button>
             )
           })}
-
-          {/* Desktop Settings Link */}
-          {'desktopAPI' in window && (
-            <div className="mt-4 pt-4 border-t border-border-subtle">
-              <button
-                type="button"
-                onClick={() => navigate({ to: '/desktop-settings' })}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary transition-all duration-300 group"
-              >
-                <Monitor
-                  size={18}
-                  className="shrink-0 text-text-muted group-hover:text-primary transition-colors"
-                  strokeWidth={2.2}
-                />
-                <span className="truncate">{t('desktop.settingsTitle', '桌面端设置')}</span>
-              </button>
-            </div>
-          )}
         </nav>
       </GlassPanel>
 

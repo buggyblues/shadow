@@ -1,7 +1,7 @@
 import { type ChildProcess, fork } from 'node:child_process'
-import { resolve } from 'node:path'
+import { existsSync, readdirSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { app, ipcMain } from 'electron'
-import { resolveElectronNodeBinary } from './openclaw/service/paths'
 
 interface ManagedProcess {
   process: ChildProcess
@@ -11,6 +11,35 @@ interface ManagedProcess {
 
 const managedProcesses = new Map<string, ManagedProcess>()
 let processIdCounter = 0
+
+export function resolveElectronNodeBinary(): string {
+  if (process.platform !== 'darwin') return process.execPath
+
+  const contentsDir = dirname(dirname(app.getPath('exe')))
+  const frameworksDir = join(contentsDir, 'Frameworks')
+
+  for (const name of [`${app.getName()} Helper`, 'Shadow Helper', 'Electron Helper']) {
+    const helper = join(frameworksDir, `${name}.app`, 'Contents', 'MacOS', name)
+    if (existsSync(helper)) return helper
+  }
+
+  if (existsSync(frameworksDir)) {
+    try {
+      const entry = readdirSync(frameworksDir).find(
+        (item) => item.endsWith(' Helper.app') && !item.includes('('),
+      )
+      if (entry) {
+        const name = entry.replace('.app', '')
+        const helper = join(frameworksDir, entry, 'Contents', 'MacOS', name)
+        if (existsSync(helper)) return helper
+      }
+    } catch {
+      // Best effort fallback below.
+    }
+  }
+
+  return process.execPath
+}
 
 export function setupProcessManager(): void {
   ipcMain.handle(

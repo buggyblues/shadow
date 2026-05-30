@@ -3,18 +3,34 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Clock, Package, QrCode, ShoppingBag, Star, User, X } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import QRCode from 'react-native-qrcode-svg'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../src/components/common/price-display'
-import { StatusBadge } from '../../../src/components/common/status-badge'
 import { ProfileCommentSection } from '../../../src/components/profile/ProfileCommentSection'
-import { AppText, BackgroundSurface, Button, GlassPanel } from '../../../src/components/ui'
+import {
+  AppText,
+  BackgroundSurface,
+  Button,
+  GlassPanel,
+  PageScroll,
+} from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { showToast } from '../../../src/lib/toast'
 import { useAuthStore } from '../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  letterSpacing,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../src/theme'
 
 interface UserProfile {
   id: string
@@ -163,83 +179,72 @@ export default function UserProfileScreen() {
             ? t('member.activityPreparing')
             : currentActivity
 
-  const statusColors: Record<string, string> = {
-    online: colors.statusOnline,
-    idle: colors.statusIdle,
-    dnd: colors.statusDnd,
-    offline: colors.statusOffline,
-  }
-
   return (
     <BackgroundSurface style={styles.container}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Header area */}
-        <View style={[styles.header, { backgroundColor: `${colors.primary}15` }]}>
-          <View style={styles.avatarWrap}>
+      <PageScroll contentContainerStyle={styles.content}>
+        <GlassPanel style={styles.profileCard}>
+          <View style={styles.profileHero}>
             <Avatar
               uri={profile.avatarUrl}
               name={profile.displayName || profile.username}
-              size={80}
+              size={86}
               userId={profile.id}
+              status={profile.status ?? 'offline'}
+              showStatus
             />
-            <View style={{ position: 'absolute', bottom: 0, right: 0 }}>
-              <StatusBadge status={profile.status ?? 'offline'} size={16} />
+            <View style={styles.profileIdentity}>
+              <View style={styles.nameRow}>
+                <AppText variant="headline" style={styles.displayName} numberOfLines={2}>
+                  {profile.displayName || profile.username}
+                </AppText>
+                {profile.isBot && (
+                  <View style={[styles.botBadge, { backgroundColor: colors.inputBackground }]}>
+                    <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
+                  </View>
+                )}
+              </View>
+              <AppText variant="label" tone="secondary" style={styles.username}>
+                @{profile.username}
+              </AppText>
+              {profile.bio ? (
+                <Text style={[styles.bio, { color: colors.textSecondary }]} numberOfLines={3}>
+                  {profile.bio}
+                </Text>
+              ) : null}
             </View>
           </View>
-        </View>
 
-        {/* Info */}
-        <GlassPanel style={styles.infoCard}>
-          <View style={styles.nameRow}>
-            <AppText variant="headline" style={styles.displayName}>
-              {profile.displayName || profile.username}
-            </AppText>
-            {profile.isBot && (
-              <View style={[styles.botBadge, { backgroundColor: `${colors.primary}20` }]}>
-                <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
-              </View>
-            )}
-          </View>
-          <AppText variant="label" tone="secondary" style={styles.username}>
-            @{profile.username}
-          </AppText>
-
-          {/* Business Card Button - Show for both users and bots */}
-          <Button variant="primary" size="md" icon={QrCode} onPress={() => setShowQrCard(true)}>
-            {t('profile.viewBusinessCard', '查看名片')}
-          </Button>
-
-          {!isSelf && !profile.isBot && (
+          <View style={styles.actionRow}>
             <Button
-              variant={isFriend || isRequestSent ? 'glass' : 'primary'}
+              variant="primary"
               size="md"
-              disabled={addFriendDisabled}
-              loading={sendFriendRequest.isPending}
-              onPress={() => sendFriendRequest.mutate()}
+              icon={QrCode}
+              style={styles.profileAction}
+              onPress={() => setShowQrCard(true)}
             >
-              {isFriend
-                ? t('friends.alreadyFriend', '已是好友')
-                : isRequestSent
-                  ? t('friends.requestPending', '等待对方接受')
-                  : t('friends.addFriend', '添加好友')}
+              {t('profile.viewBusinessCard', '查看名片')}
             </Button>
-          )}
 
-          {/* Status */}
-          <View style={styles.statusRow}>
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: statusColors[profile.status ?? 'offline'] },
-              ]}
-            />
-            <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-              {t(`member.${profile.status ?? 'offline'}`, profile.status ?? 'offline')}
-            </Text>
+            {!isSelf && !profile.isBot && (
+              <Button
+                variant={isFriend || isRequestSent ? 'glass' : 'primary'}
+                size="md"
+                style={styles.profileAction}
+                disabled={addFriendDisabled}
+                loading={sendFriendRequest.isPending}
+                onPress={() => sendFriendRequest.mutate()}
+              >
+                {isFriend
+                  ? t('friends.alreadyFriend', '已是好友')
+                  : isRequestSent
+                    ? t('friends.requestPending', '等待对方接受')
+                    : t('friends.addFriend', '添加好友')}
+              </Button>
+            )}
           </View>
 
           {profile.isBot && currentActivityLabel ? (
-            <View style={[styles.activityPill, { backgroundColor: `${colors.primary}18` }]}>
+            <View style={[styles.activityPill, { backgroundColor: colors.inputBackground }]}>
               <View style={[styles.activityDot, { backgroundColor: colors.primary }]} />
               <Text style={[styles.activityText, { color: colors.primary }]}>
                 {t('member.buddyWorkStatus', {
@@ -250,212 +255,217 @@ export default function UserProfileScreen() {
             </View>
           ) : null}
 
-          {profile.bio && (
-            <Text style={[styles.bio, { color: colors.textSecondary }]}>{profile.bio}</Text>
-          )}
+          {profile.isBot && profile.agent ? (
+            <View style={[styles.profileMetaGroup, { borderTopColor: colors.border }]}>
+              {profile.agent.totalOnlineSeconds > 0 ? (
+                <View style={styles.infoRow}>
+                  <Clock size={iconSize.sm} color={colors.textMuted} />
+                  <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
+                    {t('profile.totalOnline', '累计在线')}{' '}
+                    {formatDuration(profile.agent.totalOnlineSeconds)}
+                  </Text>
+                </View>
+              ) : null}
 
-          {/* Bot-specific: online duration */}
-          {profile.isBot && profile.agent && profile.agent.totalOnlineSeconds > 0 && (
-            <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
-              <View style={styles.infoRow}>
-                <Clock size={14} color={colors.textMuted} />
-                <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-                  {t('profile.totalOnline', '累计在线')}{' '}
-                  {formatDuration(profile.agent.totalOnlineSeconds)}
+              {profile.agent.config?.description ? (
+                <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
+                  {profile.agent.config.description}
                 </Text>
-              </View>
-            </View>
-          )}
+              ) : null}
 
-          {/* Bot-specific: description */}
-          {profile.isBot && profile.agent?.config?.description && (
-            <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
-              <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
-                {t('profile.description', '描述')}
-              </Text>
-              <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
-                {profile.agent.config.description}
-              </Text>
-            </View>
-          )}
-
-          {/* Bot-specific: owner link */}
-          {profile.isBot && profile.agent && (
-            <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
-              <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
-                {t('profile.owner', '主人')}
-              </Text>
               <Pressable
                 style={({ pressed }) => [
                   styles.ownerCard,
-                  { backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground },
+                  {
+                    backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground,
+                    borderColor: colors.border,
+                  },
                 ]}
                 onPress={() => router.push(`/(main)/profile/${profile.agent!.ownerId}`)}
               >
                 <Avatar
                   uri={profile.ownerProfile?.avatarUrl ?? null}
                   name={profile.ownerProfile?.displayName ?? 'Owner'}
-                  size={36}
+                  size={38}
                   userId={profile.agent.ownerId}
                 />
                 <View style={styles.ownerInfo}>
-                  <Text style={[styles.ownerName, { color: colors.primary }]}>
+                  <Text style={[styles.ownerLabel, { color: colors.textMuted }]}>
+                    {t('profile.owner', '主人')}
+                  </Text>
+                  <Text style={[styles.ownerName, { color: colors.text }]} numberOfLines={1}>
                     {profile.ownerProfile?.displayName ??
                       t('member.viewOwnerProfile', '查看主人主页')}
                   </Text>
-                  {profile.ownerProfile?.username && (
+                  {profile.ownerProfile?.username ? (
                     <Text style={[styles.ownerUsername, { color: colors.textMuted }]}>
                       @{profile.ownerProfile.username}
                     </Text>
-                  )}
+                  ) : null}
                 </View>
               </Pressable>
             </View>
-          )}
+          ) : null}
+        </GlassPanel>
 
-          {profile.isBot && (
-            <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
+        {profile.isBot && (
+          <GlassPanel style={styles.assetPanel}>
+            <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
                 {t('profile.agentAsset')}
               </Text>
               <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
                 {t('profile.agentAssetHint')}
               </Text>
-              <View style={styles.assetStatsGrid}>
-                <View style={[styles.assetStat, { backgroundColor: colors.inputBackground }]}>
-                  <ShoppingBag size={15} color={colors.primary} />
-                  <Text style={[styles.assetStatValue, { color: colors.text }]}>
-                    {assetProducts.length}
-                  </Text>
-                  <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
-                    {t('profile.availableServices')}
-                  </Text>
-                </View>
-                <View style={[styles.assetStat, { backgroundColor: colors.inputBackground }]}>
-                  <Package size={15} color={colors.primary} />
-                  <Text style={[styles.assetStatValue, { color: colors.text }]}>{assetSales}</Text>
-                  <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
-                    {t('profile.deliveryRecords')}
-                  </Text>
-                </View>
-                <View style={[styles.assetStat, { backgroundColor: colors.inputBackground }]}>
-                  <Star size={15} color={colors.primary} />
-                  <Text style={[styles.assetStatValue, { color: colors.text }]}>
-                    {ratedProducts.length > 0 ? assetRating.toFixed(1) : '-'}
-                  </Text>
-                  <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
-                    {t('profile.creditRating')}
-                  </Text>
-                </View>
-              </View>
-              {assetProducts.length === 0 ? (
-                <Text style={[styles.emptyServices, { color: colors.textMuted }]}>
-                  {t('profile.noAssetServices')}
-                </Text>
-              ) : (
-                <View style={styles.serviceList}>
-                  {assetProducts.slice(0, 3).map((product) => (
-                    <View
-                      key={product.id}
-                      style={[styles.serviceCard, { backgroundColor: colors.inputBackground }]}
-                    >
-                      <View style={styles.serviceInfo}>
-                        <Text
-                          style={[styles.serviceName, { color: colors.text }]}
-                          numberOfLines={1}
-                        >
-                          {product.name}
-                        </Text>
-                        <Text
-                          style={[styles.serviceSummary, { color: colors.textMuted }]}
-                          numberOfLines={2}
-                        >
-                          {product.summary || t('profile.serviceShelfFallback')}
-                        </Text>
-                      </View>
-                      <View style={styles.servicePrice}>
-                        <PriceCompact amount={product.basePrice ?? product.price ?? 0} size={13} />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
             </View>
-          )}
+            <View style={styles.assetStatsGrid}>
+              <View
+                style={[
+                  styles.assetStat,
+                  { backgroundColor: colors.inputBackground, borderColor: colors.border },
+                ]}
+              >
+                <ShoppingBag size={15} color={colors.primary} />
+                <Text style={[styles.assetStatValue, { color: colors.text }]}>
+                  {assetProducts.length}
+                </Text>
+                <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
+                  {t('profile.availableServices')}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.assetStat,
+                  { backgroundColor: colors.inputBackground, borderColor: colors.border },
+                ]}
+              >
+                <Package size={15} color={colors.primary} />
+                <Text style={[styles.assetStatValue, { color: colors.text }]}>{assetSales}</Text>
+                <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
+                  {t('profile.deliveryRecords')}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.assetStat,
+                  { backgroundColor: colors.inputBackground, borderColor: colors.border },
+                ]}
+              >
+                <Star size={15} color={colors.primary} />
+                <Text style={[styles.assetStatValue, { color: colors.text }]}>
+                  {ratedProducts.length > 0 ? assetRating.toFixed(1) : '-'}
+                </Text>
+                <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
+                  {t('profile.creditRating')}
+                </Text>
+              </View>
+            </View>
+            {assetProducts.length === 0 ? (
+              <Text style={[styles.emptyServices, { color: colors.textMuted }]}>
+                {t('profile.noAssetServices')}
+              </Text>
+            ) : (
+              <View style={styles.serviceList}>
+                {assetProducts.slice(0, 3).map((product) => (
+                  <View
+                    key={product.id}
+                    style={[
+                      styles.serviceCard,
+                      { backgroundColor: colors.inputBackground, borderColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.serviceInfo}>
+                      <Text style={[styles.serviceName, { color: colors.text }]} numberOfLines={1}>
+                        {product.name}
+                      </Text>
+                      <Text
+                        style={[styles.serviceSummary, { color: colors.textMuted }]}
+                        numberOfLines={2}
+                      >
+                        {product.summary || t('profile.serviceShelfFallback')}
+                      </Text>
+                    </View>
+                    <View style={styles.servicePrice}>
+                      <PriceCompact
+                        amount={product.basePrice ?? product.price ?? 0}
+                        size={iconSize.sm}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </GlassPanel>
+        )}
 
-          {/* Regular user: owned agents */}
-          {!profile.isBot && profile.ownedAgents?.length > 0 && (
-            <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
+        {!profile.isBot && profile.ownedAgents?.length > 0 && (
+          <GlassPanel style={styles.assetPanel}>
+            <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
                 {t('profile.ownedBuddies', '拥有的 Buddy')} ({profile.ownedAgents.length})
               </Text>
+            </View>
+            <View style={styles.serviceList}>
               {profile.ownedAgents.map((agent) => (
                 <Pressable
                   key={agent.id}
                   style={({ pressed }) => [
                     styles.agentCard,
-                    { backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground },
+                    {
+                      backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground,
+                      borderColor: colors.border,
+                    },
                   ]}
                   onPress={() => router.push(`/(main)/profile/${agent.userId}`)}
                 >
-                  <View style={styles.agentAvatarWrap}>
-                    <Avatar
-                      uri={agent.botUser?.avatarUrl ?? null}
-                      name={agent.botUser?.displayName ?? 'Buddy'}
-                      size={36}
-                      userId={agent.userId}
-                    />
-                    <View
-                      style={[
-                        styles.agentStatusDot,
-                        {
-                          backgroundColor: agent.status === 'running' ? '#22c55e' : '#6b7280',
-                          borderColor: colors.inputBackground,
-                        },
-                      ]}
-                    />
-                  </View>
+                  <Avatar
+                    uri={agent.botUser?.avatarUrl ?? null}
+                    name={agent.botUser?.displayName ?? 'Buddy'}
+                    size={38}
+                    userId={agent.userId}
+                    status={agent.status === 'running' ? 'online' : 'offline'}
+                    showStatus
+                  />
                   <View style={styles.agentInfo}>
                     <View style={styles.agentNameRow}>
                       <Text style={[styles.agentName, { color: colors.text }]} numberOfLines={1}>
                         {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy'}
                       </Text>
                       <View
-                        style={[styles.botBadgeSmall, { backgroundColor: `${colors.primary}20` }]}
+                        style={[styles.botBadgeSmall, { backgroundColor: colors.inputBackground }]}
                       >
                         <Text style={[styles.botBadgeSmallText, { color: colors.primary }]}>
                           Buddy
                         </Text>
                       </View>
                     </View>
-                    {agent.totalOnlineSeconds > 0 && (
+                    {agent.totalOnlineSeconds > 0 ? (
                       <Text style={[styles.agentOnline, { color: colors.textMuted }]}>
                         {t('profile.online', '在线')} {formatDuration(agent.totalOnlineSeconds)}
                       </Text>
-                    )}
+                    ) : null}
                   </View>
                 </Pressable>
               ))}
             </View>
-          )}
+          </GlassPanel>
+        )}
 
-          {profile.createdAt && (
-            <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
-              <View style={styles.infoRow}>
-                <User size={14} color={colors.textMuted} />
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                  {t('profile.memberSince')}: {new Date(profile.createdAt).toLocaleDateString()}
-                </Text>
-              </View>
+        {profile.createdAt ? (
+          <GlassPanel style={styles.metaPanel}>
+            <View style={styles.infoRow}>
+              <User size={iconSize.sm} color={colors.textMuted} />
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                {t('profile.memberSince')}: {new Date(profile.createdAt).toLocaleDateString()}
+              </Text>
             </View>
-          )}
+          </GlassPanel>
+        ) : null}
 
-          {/* Comment Section */}
-          <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
-            <ProfileCommentSection profileUserId={profile.id} />
-          </View>
+        <GlassPanel style={styles.commentsCard}>
+          <ProfileCommentSection profileUserId={profile.id} />
         </GlassPanel>
-      </ScrollView>
+      </PageScroll>
 
       {/* QR Code Business Card Modal */}
       <Modal
@@ -470,13 +480,13 @@ export default function UserProfileScreen() {
             onPress={(e) => e.stopPropagation()}
           >
             <Pressable style={styles.qrClose} onPress={() => setShowQrCard(false)}>
-              <X size={20} color={colors.textMuted} />
+              <X size={iconSize.xl} color={colors.textMuted} />
             </Pressable>
 
             <Avatar
               uri={profile.avatarUrl}
               name={profile.displayName || profile.username}
-              size={64}
+              size={iconSize.hero}
               userId={profile.id}
             />
             <Text style={[styles.qrName, { color: colors.text }]}>
@@ -486,12 +496,12 @@ export default function UserProfileScreen() {
               @{profile.username}
             </Text>
 
-            <View style={[styles.qrCodeWrap, { backgroundColor: '#fff' }]}>
+            <View style={[styles.qrCodeWrap, { backgroundColor: palette.white }]}>
               <QRCode
-                value={`shadow://user/${profile.username}`}
+                value={`shadow://user/${profile.id}`}
                 size={180}
-                backgroundColor="#fff"
-                color="#000"
+                backgroundColor={palette.white}
+                color={palette.black}
               />
             </View>
 
@@ -507,35 +517,39 @@ export default function UserProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingBottom: spacing['2xl'] },
-  header: {
-    height: 120,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 0,
+  content: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing['2xl'],
+    gap: spacing.md,
   },
-  avatarWrap: {
-    marginBottom: -40,
+  profileCard: {
+    gap: spacing.lg,
+    padding: spacing.lg,
   },
-  infoCard: {
-    marginTop: 48,
-    marginHorizontal: spacing.lg,
-    padding: spacing.xl,
-    borderRadius: radius.xl,
+  profileHero: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+  },
+  profileIdentity: {
+    flex: 1,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   displayName: {
-    fontSize: fontSize.xl,
-    fontWeight: '800',
+    flexShrink: 1,
+    fontSize: fontSize['2xl'],
+    fontWeight: '900',
+    lineHeight: lineHeight.lg,
   },
   botBadge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: spacing.xxs,
     borderRadius: radius.sm,
   },
   botBadgeText: {
@@ -544,36 +558,31 @@ const styles = StyleSheet.create({
   },
   username: {
     fontSize: fontSize.md,
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
-  statusRow: {
+  actionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: spacing.sm,
-    marginTop: spacing.md,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  statusText: {
-    fontSize: fontSize.sm,
+  profileAction: {
+    flexGrow: 1,
+    minWidth: size.profileHeroMinHeight - size.thumbnailMd,
   },
   activityPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
     marginTop: spacing.sm,
   },
   activityDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: size.dotMd,
+    height: size.dotMd,
+    borderRadius: radius.sm,
   },
   activityText: {
     fontSize: fontSize.xs,
@@ -581,21 +590,32 @@ const styles = StyleSheet.create({
   },
   bio: {
     fontSize: fontSize.sm,
-    marginTop: spacing.md,
-    textAlign: 'center',
+    lineHeight: lineHeight.sm,
+    marginTop: spacing.sm,
   },
-  sectionDivider: {
-    marginTop: spacing.lg,
+  profileMetaGroup: {
+    gap: spacing.md,
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    width: '100%',
+    borderTopWidth: border.hairline,
+  },
+  assetPanel: {
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  metaPanel: {
+    padding: spacing.md,
+  },
+  commentsCard: {
+    padding: spacing.lg,
+  },
+  sectionHeader: {
+    gap: spacing.xs,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
+    letterSpacing: letterSpacing.none,
   },
   infoRow: {
     flexDirection: 'row',
@@ -607,18 +627,20 @@ const styles = StyleSheet.create({
   },
   descriptionText: {
     fontSize: fontSize.sm,
-    lineHeight: 20,
+    lineHeight: lineHeight.sm,
   },
   assetStatsGrid: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
   },
   assetStat: {
     flex: 1,
+    minHeight: size.navSide - spacing.xs,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     padding: spacing.sm,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   assetStatValue: {
     marginTop: spacing.xs,
@@ -626,8 +648,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   assetStatLabel: {
-    marginTop: 2,
-    fontSize: 10,
+    marginTop: spacing.xxs,
+    fontSize: fontSize.micro,
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -638,14 +660,14 @@ const styles = StyleSheet.create({
   },
   serviceList: {
     gap: spacing.sm,
-    marginTop: spacing.md,
   },
   serviceCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
-    padding: spacing.sm,
+    padding: spacing.md,
   },
   serviceInfo: {
     flex: 1,
@@ -655,9 +677,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   serviceSummary: {
-    marginTop: 2,
-    fontSize: 11,
-    lineHeight: 16,
+    marginTop: spacing.xxs,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeight.xs,
   },
   servicePrice: {
     alignItems: 'flex-end',
@@ -665,40 +687,36 @@ const styles = StyleSheet.create({
   ownerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.sm,
-    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: border.hairline,
+    borderRadius: radius.xl,
     gap: spacing.md,
   },
   ownerInfo: {
     flex: 1,
   },
+  ownerLabel: {
+    fontSize: fontSize.micro,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: letterSpacing.none,
+  },
   ownerName: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
+    marginTop: spacing.xxs,
+    fontSize: fontSize.md,
+    fontWeight: '900',
   },
   ownerUsername: {
     fontSize: fontSize.xs,
-    marginTop: 1,
+    marginTop: spacing.px,
   },
   agentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.sm,
-    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: border.hairline,
+    borderRadius: radius.xl,
     gap: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  agentAvatarWrap: {
-    position: 'relative',
-  },
-  agentStatusDot: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
   },
   agentInfo: {
     flex: 1,
@@ -714,26 +732,26 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   botBadgeSmall: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: spacing.tight,
+    paddingVertical: spacing.px,
+    borderRadius: radius.xs,
   },
   botBadgeSmallText: {
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   agentOnline: {
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: fontSize.xs,
+    marginTop: spacing.xxs,
   },
   qrOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: palette.black,
     justifyContent: 'center',
     alignItems: 'center',
   },
   qrCard: {
-    width: 300,
+    width: size.previewImageHeight,
     borderRadius: radius.xl,
     padding: spacing.xl,
     alignItems: 'center',
@@ -751,7 +769,7 @@ const styles = StyleSheet.create({
   },
   qrUsername: {
     fontSize: fontSize.sm,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   qrCodeWrap: {
     padding: spacing.md,

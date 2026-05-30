@@ -1,16 +1,55 @@
 import {
   ShadowBridge,
   type ShadowBridgeBuddyInbox,
+  type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
-import type { BattleReplay, MatchRecord, SkillType, TankProfile } from '../types.js'
+import type {
+  BattleReplay,
+  MatchRecord,
+  ReplayComment,
+  SkillType,
+  TankProfile,
+  WarbuddyPlayMode,
+  WarbuddyRoom,
+  WarbuddyTeam,
+} from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
 const bridge = new ShadowBridge({ appKey: 'shadow-warbuddy' })
 
 export type TankSummary = TankProfile & { winRate?: number; rank?: number }
-export type MatchSummary = Omit<MatchRecord, 'replay'>
+export type MatchSummary = Omit<MatchRecord, 'replay'> & {
+  commentsCount?: number
+  unread?: boolean
+  readAt?: string | null
+}
 export type BuddyInbox = ShadowBridgeBuddyInbox
+export interface OAuthSession {
+  configured: boolean
+  authenticated: boolean
+  profile: {
+    id: string
+    username?: string | null
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+  authorizeUrl: string | null
+}
+
+export function bridgeAvailable() {
+  return bridge.isAvailable()
+}
+
+export async function getOAuthSession(): Promise<OAuthSession> {
+  const params = new URLSearchParams({
+    return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    popup: '1',
+  })
+  const res = await fetch(`/api/oauth/session?${params.toString()}`)
+  if (!res.ok) throw new Error('OAuth session check failed')
+  return (await res.json()) as OAuthSession
+}
 
 async function command<T>(commandName: string, input: unknown): Promise<T> {
   if (bridge.isAvailable()) return bridge.command(commandName, input) as Promise<T>
@@ -32,16 +71,12 @@ export function listTanks(input: { query?: string; ownerKind?: string; limit?: n
   }>('tanks.list', input)
 }
 
-export function saveTankCode(input: {
-  tankId?: string
-  name?: string
-  appearance?: string
-  skillType?: SkillType
-  code: string
-  notes?: string
-  submittedBy?: string
-}) {
-  return command<{ tank: TankProfile }>('tanks.saveCode', input)
+export function listTeams() {
+  return command<{ teams: WarbuddyTeam[]; mine: WarbuddyTeam | null }>('teams.list', {})
+}
+
+export function createTeam(input: { name: string; description?: string; color?: string }) {
+  return command<{ team: WarbuddyTeam; tank: TankSummary | null }>('teams.create', input)
 }
 
 export function simulate(input: {
@@ -83,8 +118,45 @@ export function getMatch(input: {
   return command<{ match: MatchRecord } & Record<string, unknown>>('matches.get', input)
 }
 
+export function markMatchRead(input: { matchId: string }) {
+  return command<{ match: MatchSummary }>('matches.markRead', input)
+}
+
+export function addReplayComment(input: {
+  matchId: string
+  frame: number
+  body: string
+  rect?: { x: number; y: number; width: number; height: number }
+}) {
+  return command<{ comment: ReplayComment; comments: ReplayComment[] }>('replay.comment', input)
+}
+
+export function replayReviewBrief(input: { matchId: string }) {
+  return command<{ match: MatchSummary; comments: ReplayComment[]; summary: string }>(
+    'replay.reviewBrief',
+    input,
+  )
+}
+
 export function leaderboard(input: { sort?: string; limit?: number } = {}) {
   return command<{ leaderboard: TankSummary[] }>('leaderboard.get', input)
+}
+
+export function listRooms() {
+  return command<{ rooms: WarbuddyRoom[] }>('rooms.list', {})
+}
+
+export function createRoom(input: {
+  name?: string
+  mapId?: string
+  mode?: WarbuddyPlayMode
+  teamId?: string
+}) {
+  return command<{ room: WarbuddyRoom; team: WarbuddyTeam }>('rooms.create', input)
+}
+
+export function joinRoom(input: { code: string; mode?: WarbuddyPlayMode; teamId?: string }) {
+  return command<{ room: WarbuddyRoom; team: WarbuddyTeam }>('rooms.join', input)
 }
 
 export async function inboxes(): Promise<{ inboxes: BuddyInbox[] }> {
@@ -94,8 +166,24 @@ export async function inboxes(): Promise<{ inboxes: BuddyInbox[] }> {
   return (await res.json()) as { inboxes: BuddyInbox[] }
 }
 
+export function openBuddyCreator(input: ShadowBridgeOpenBuddyCreatorInput = {}) {
+  if (!bridge.isAvailable()) {
+    return Promise.resolve({ opened: false, agent: null })
+  }
+  return bridge.openBuddyCreator(input)
+}
+
+export function inboxDeliveryResults(payload?: unknown) {
+  return ShadowBridge.inboxDeliveries(payload)
+}
+
+export function inboxDeliveryErrors(payload?: unknown) {
+  return ShadowBridge.inboxErrors(payload)
+}
+
 export function briefBuddies(input: {
   targets: Array<{ agentId?: string; assigneeLabel?: string }>
+  teamId?: string
   mapId?: string
   opponentHint?: string
   notes?: string

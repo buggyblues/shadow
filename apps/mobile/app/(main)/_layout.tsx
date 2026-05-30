@@ -15,7 +15,7 @@ import {
 import { connectSocket, disconnectSocket, getSocket } from '../../src/lib/socket'
 import { useAuthStore } from '../../src/stores/auth.store'
 import { useChatStore } from '../../src/stores/chat.store'
-import { useColors } from '../../src/theme'
+import { iconSize, useColors } from '../../src/theme'
 
 export default function MainLayout() {
   const colors = useColors()
@@ -123,7 +123,7 @@ export default function MainLayout() {
         icon={ChevronLeft}
         onPress={() => router.back()}
         color={colors.text}
-        size={22}
+        size={iconSize['2xl']}
       />
     </HeaderButtonGroup>
   )
@@ -148,8 +148,14 @@ export default function MainLayout() {
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="dashboard" options={{ headerShown: false }} />
         <Stack.Screen name="create-server" options={{ headerShown: true, title: '', headerLeft }} />
+        <Stack.Screen name="create-buddy" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="scan" options={{ headerShown: false }} />
         <Stack.Screen
           name="buddy-management"
+          options={{ headerShown: true, title: '', headerLeft }}
+        />
+        <Stack.Screen
+          name="webview-preview"
           options={{ headerShown: true, title: '', headerLeft }}
         />
         <Stack.Screen
@@ -157,7 +163,10 @@ export default function MainLayout() {
           options={{ headerShown: true, title: '', headerLeft }}
         />
         <Stack.Screen name="media-preview" options={{ headerShown: true, title: '', headerLeft }} />
-        <Stack.Screen name="discover" options={{ headerShown: true, title: '', headerLeft }} />
+        <Stack.Screen
+          name="discover"
+          options={{ headerShown: true, title: t('discover.title'), headerLeft }}
+        />
         <Stack.Screen
           name="notifications"
           options={{ headerShown: true, title: '通知', headerLeft }}

@@ -1,16 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Search, UserPlus, X } from 'lucide-react-native'
+import { ChevronRight, Search, UserPlus, X } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import Reanimated, { FadeInRight } from 'react-native-reanimated'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../src/components/common/avatar'
-import { AppScreen, CardPressable, EmptyState, Indicator, TextField } from '../../src/components/ui'
+import {
+  AppScreen,
+  CardPressable,
+  EmptyState,
+  MobileBackButton,
+  MobileNavigationBar,
+  TextField,
+} from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
-import { fontSize, radius, spacing, useColors } from '../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../src/theme'
 
 interface FriendUser {
   id: string
@@ -33,7 +48,6 @@ export default function FriendsScreen() {
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -118,26 +132,10 @@ export default function FriendsScreen() {
 
   return (
     <AppScreen>
-      <View
-        style={[
-          styles.navBar,
-          {
-            backgroundColor: colors.surface,
-            paddingTop: insets.top + 8,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <ChevronLeft size={22} color={colors.text} />
-        </Pressable>
-        <View style={styles.navTitleWrap}>
-          <Text style={[styles.navTitle, { color: colors.text }]}>
-            {t('friends.title', '好友')}
-          </Text>
-        </View>
-        <View style={styles.navSpacer} />
-      </View>
+      <MobileNavigationBar
+        title={t('friends.title', '好友')}
+        left={<MobileBackButton onPress={() => router.back()} />}
+      />
 
       <CardPressable
         variant="glassPanel"
@@ -158,7 +156,7 @@ export default function FriendsScreen() {
               <Text style={styles.tabBadgeText}>{pendingReceived.length}</Text>
             </View>
           )}
-          <ChevronRight size={16} color={colors.textMuted} />
+          <ChevronRight size={iconSize.md} color={colors.textMuted} />
         </View>
       </CardPressable>
 
@@ -167,11 +165,11 @@ export default function FriendsScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder={t('friends.searchPlaceholder', '搜索好友...')}
-          left={<Search size={16} color={colors.textMuted} />}
+          left={<Search size={iconSize.md} color={colors.textMuted} />}
           right={
             searchQuery.length > 0 ? (
               <Pressable onPress={() => setSearchQuery('')} hitSlop={10}>
-                <X size={16} color={colors.textMuted} />
+                <X size={iconSize.md} color={colors.textMuted} />
               </Pressable>
             ) : null
           }
@@ -200,19 +198,14 @@ export default function FriendsScreen() {
                 setMenuTarget(item)
               }}
             >
-              <View style={styles.avatarWrap}>
-                <Avatar
-                  uri={item.user.avatarUrl}
-                  name={item.user.displayName || item.user.username}
-                  size={46}
-                  userId={item.user.id}
-                />
-                <Indicator
-                  status={item.user.status}
-                  size="md"
-                  style={[styles.statusDot, { borderColor: colors.surface }]}
-                />
-              </View>
+              <Avatar
+                uri={item.user.avatarUrl}
+                name={item.user.displayName || item.user.username}
+                size={46}
+                userId={item.user.id}
+                status={item.user.status}
+                showStatus
+              />
               <View style={styles.rowInfo}>
                 <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
                   {item.user.displayName ?? item.user.username}
@@ -221,7 +214,7 @@ export default function FriendsScreen() {
                   @{item.user.username}
                 </Text>
               </View>
-              <ChevronRight size={16} color={colors.textMuted} />
+              <ChevronRight size={iconSize.md} color={colors.textMuted} />
             </CardPressable>
           </Reanimated.View>
         )}
@@ -273,7 +266,7 @@ export default function FriendsScreen() {
                   if (target) removeFriend.mutate(target.friendshipId)
                 }}
               >
-                <Text style={[styles.sheetActionText, { color: '#ef4444' }]}>
+                <Text style={[styles.sheetActionText, { color: palette.crimson }]}>
                   {t('common.delete', '删除')}
                 </Text>
               </Pressable>
@@ -293,73 +286,54 @@ export default function FriendsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  navBar: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-  },
-  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  navTitleWrap: { flexDirection: 'row', alignItems: 'center' },
-  navTitle: { fontSize: fontSize.lg, fontWeight: '800' },
-  navSpacer: { width: 32, height: 32 },
   utilityRow: {
     margin: spacing.md,
-    marginBottom: 0,
-    minHeight: 64,
+    marginBottom: spacing.none,
+    minHeight: size.avatarXl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  utilityLeft: { gap: 3 },
+  utilityLeft: { gap: spacing.xxs },
   utilityTitle: { fontSize: fontSize.md, fontWeight: '700' },
   utilityDesc: { fontSize: fontSize.xs },
   utilityRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   tabBadge: {
-    backgroundColor: '#ed4245',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    backgroundColor: palette.crimson,
+    borderRadius: radius.md,
+    minWidth: size.badgeSm,
+    height: size.badgeSm,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
   },
-  tabBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  tabBadgeText: { color: palette.white, fontSize: fontSize.micro, fontWeight: '700' },
   searchWrap: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   searchBox: {},
-  listContent: { paddingHorizontal: spacing.md, paddingBottom: 120, gap: spacing.sm },
+  listContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: size.tabBar + spacing['6xl'],
+    gap: spacing.sm,
+  },
   rowCard: {
-    minHeight: 70,
+    minHeight: size.listItemLg - spacing.xxs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
-  avatarWrap: { position: 'relative' },
-  statusDot: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2.5,
-  },
-  rowInfo: { flex: 1, gap: 2 },
+  rowInfo: { flex: 1, gap: spacing.xxs },
   rowName: { fontSize: fontSize.md, fontWeight: '700' },
   rowSub: { fontSize: fontSize.xs },
   sheetOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: palette.black,
     justifyContent: 'flex-end',
   },
   sheetPanel: {
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    borderWidth: 1,
-    borderBottomWidth: 0,
+    borderWidth: border.hairline,
+    borderBottomWidth: border.none,
     paddingBottom: spacing.lg,
   },
   sheetTitle: {
@@ -370,7 +344,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sheetAction: {
-    minHeight: 54,
+    minHeight: size.navBar,
     paddingHorizontal: spacing.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',

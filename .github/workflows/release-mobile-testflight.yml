@@ -1,0 +1,161 @@
+name: release-mobile-testflight
+
+on:
+  workflow_run:
+    workflows: [post-merge-validation]
+    types: [completed]
+  schedule:
+    # 09:00 Asia/Shanghai. This catches changes that were skipped after the
+    # daily release already happened.
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish even if today already has a TestFlight release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobile-testflight-release
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Detect releasable mobile changes
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    outputs:
+      should_release: ${{ steps.gate.outputs.should_release }}
+      tag: ${{ steps.gate.outputs.tag }}
+      base: ${{ steps.gate.outputs.base }}
+      head_sha: ${{ steps.gate.outputs.head_sha }}
+      changed_files: ${{ steps.gate.outputs.changed_files }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Decide whether to publish
+        id: gate
+        shell: bash
+        env:
+          FORCE: ${{ inputs.force || 'false' }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags
+
+          today="$(TZ=Asia/Shanghai date +%Y%m%d)"
+          daily_tag="mobile-testflight-${today}"
+          tag="$daily_tag"
+          force="${FORCE:-false}"
+          head_sha="$(git rev-parse HEAD)"
+
+          if [ "$force" != "true" ] && git rev-parse -q --verify "refs/tags/${daily_tag}" >/dev/null; then
+            {
+              echo "should_release=false"
+              echo "tag=${daily_tag}"
+              echo "base="
+              echo "head_sha=${head_sha}"
+              echo "changed_files="
+            } >> "$GITHUB_OUTPUT"
+            echo "Mobile TestFlight release already exists for ${today}: ${daily_tag}"
+            exit 0
+          fi
+
+          if [ "$force" = "true" ] && git rev-parse -q --verify "refs/tags/${daily_tag}" >/dev/null; then
+            tag="${daily_tag}-${GITHUB_RUN_NUMBER}"
+          fi
+
+          base="$(git tag --list 'mobile-testflight-*' --sort=-creatordate | head -n 1 || true)"
+          if [ -n "$base" ]; then
+            range="${base}..HEAD"
+          elif git rev-parse -q --verify HEAD^ >/dev/null; then
+            range="HEAD^..HEAD"
+          else
+            range="HEAD"
+          fi
+
+          changed="$(
+            git diff --name-only "$range" -- \
+              apps/mobile \
+              packages/connector \
+              packages/sdk \
+              packages/shared \
+              packages/ui \
+              package.json \
+              pnpm-lock.yaml \
+              pnpm-workspace.yaml \
+            | sed '/^$/d'
+          )"
+
+          if [ -z "$changed" ] && [ "$force" != "true" ]; then
+            should_release=false
+            echo "No mobile-relevant changes since ${base:-previous commit}."
+          else
+            should_release=true
+          fi
+
+          {
+            echo "should_release=${should_release}"
+            echo "tag=${tag}"
+            echo "base=${base}"
+            echo "head_sha=${head_sha}"
+            echo "changed_files<<EOF"
+            echo "$changed"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  publish-testflight:
+    name: Build and submit iOS app to TestFlight
+    runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.should_release == 'true'
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate mobile app
+        run: pnpm mobile:verify:ios
+
+      - name: Build and auto-submit to TestFlight
+        working-directory: apps/mobile
+        run: |
+          pnpm dlx eas-cli@^15.0.0 build \
+            --platform ios \
+            --profile production \
+            --auto-submit \
+            --non-interactive \
+            --message "Mobile TestFlight ${{ needs.gate.outputs.tag }} ${{ needs.gate.outputs.head_sha }}"
+
+      - name: Mark daily mobile TestFlight release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ needs.gate.outputs.tag }}" -m "Mobile TestFlight ${{ needs.gate.outputs.tag }}"
+          git push origin "${{ needs.gate.outputs.tag }}"

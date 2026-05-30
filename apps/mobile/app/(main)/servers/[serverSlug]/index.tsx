@@ -7,7 +7,6 @@ import {
   ArrowUpDown,
   Check,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Clock,
   Copy,
@@ -27,32 +26,52 @@ import {
   Volume2,
   X,
 } from 'lucide-react-native'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import {
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 import Reanimated, { FadeInDown } from 'react-native-reanimated'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChannelCatSvg } from '../../../../src/components/common/cat-svg'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import {
   AppText,
   BackgroundSurface,
-  Badge,
   Button,
   ChannelRow,
   Dialog,
-  GlassHeader,
   GlassPanel,
   MenuItem,
+  MobileBackButton,
+  MobileNavigationBar,
+  MobileTabBar,
   Sheet,
   TextField,
+  ToolbarButton,
 } from '../../../../src/components/ui'
 import { useChannelSort } from '../../../../src/hooks/use-channel-sort'
 import { API_BASE, fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { setLastChannel } from '../../../../src/lib/last-channel'
+import { serverChannelHref } from '../../../../src/lib/routes'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
-import { spacing, useColors } from '../../../../src/theme'
+import {
+  fontSize,
+  iconSize,
+  letterSpacing,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,17 +96,6 @@ interface Server {
   description: string | null
   isPublic?: boolean
   memberCount?: number
-}
-
-interface Member {
-  user: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-    isBot?: boolean
-  }
-  role: string
 }
 
 interface ServerAppIntegration {
@@ -121,6 +129,8 @@ interface BuddyInboxEntry {
   canManage: boolean
 }
 
+type ServerTab = 'channels' | 'inbox' | 'apps'
+
 function withLaunchParams(entry: string, launch: LaunchContext) {
   const url = new URL(entry)
   url.searchParams.set('shadow_launch', launch.launchToken)
@@ -133,6 +143,21 @@ function withLaunchParams(entry: string, launch: LaunchContext) {
   return url.toString()
 }
 
+function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
+  const colors = useColors()
+  const imageUrl = iconUrl ? getImageUrl(iconUrl) : null
+
+  return (
+    <View style={[styles.serverAppIcon, { backgroundColor: colors.inputBackground }]}>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.serverAppIconImage} contentFit="cover" />
+      ) : (
+        <AppWindow size={iconSize.md} color={colors.primary} strokeWidth={2.5} />
+      )}
+    </View>
+  )
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ServerHomeScreen() {
@@ -143,17 +168,18 @@ export default function ServerHomeScreen() {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const navigation = useNavigation()
-  const insets = useSafeAreaInsets()
+  const { width: tabPageWidth } = useWindowDimensions()
+  const tabScrollRef = useRef<ScrollView>(null)
 
   // State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
+  const [activeTab, setActiveTab] = useState<ServerTab>('channels')
   const [showSearch, setShowSearch] = useState(false)
   const [channelSearch, setChannelSearch] = useState('')
   const [contextChannel, setContextChannel] = useState<ServerChannel | null>(null)
   const [editingChannel, setEditingChannel] = useState<ServerChannel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
   const [showSortModal, setShowSortModal] = useState(false)
-  const [isInboxCollapsed, setInboxCollapsed] = useState(true)
 
   // ── Queries ─────────────────────────────────────
 
@@ -215,13 +241,7 @@ export default function ServerHomeScreen() {
     enabled: !!server?.id,
   })
 
-  const { data: memberData } = useQuery({
-    queryKey: ['members', server?.id],
-    queryFn: () => fetchApi<Member[]>(`/api/servers/${server!.id}/members`),
-    enabled: !!server?.id,
-  })
-
-  const { data: serverApps = [], isLoading: isAppsLoading } = useQuery({
+  const { data: serverApps = [] } = useQuery({
     queryKey: ['server-apps', serverSlug],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
     enabled: !!serverSlug && isServerMember,
@@ -247,7 +267,7 @@ export default function ServerHomeScreen() {
       queryClient.invalidateQueries({ queryKey: ['server-inboxes', server?.id] })
       refetchInboxes()
       if (server) setLastChannel(server.id, channel.id)
-      router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}` as never)
+      router.push(serverChannelHref(serverSlug, channel.id) as never)
     },
     onError: (err: Error) => showToast(err?.message || t('common.error'), 'error'),
   })
@@ -279,12 +299,6 @@ export default function ServerHomeScreen() {
     onError: (err: Error) => showToast(err?.message || t('common.error'), 'error'),
   })
 
-  const members = memberData ?? []
-
-  const onlineCount = members.filter(
-    (m) => m.user && ((m as { user: { status?: string } }).user.status ?? 'offline') !== 'offline',
-  ).length
-  const _totalMemberCount = server?.memberCount ?? members.length
   const isOwner = currentUser?.id === server?.ownerId
 
   // Set navigation header
@@ -374,6 +388,37 @@ export default function ServerHomeScreen() {
       .filter((g) => g.channels.length > 0)
   }, [grouped, channelSearch])
 
+  const serverTabs = useMemo(() => {
+    const tabs: Array<{ value: ServerTab; label: string; icon: typeof Hash }> = [
+      { value: 'channels', label: t('server.channels'), icon: Hash },
+    ]
+    if (inboxes.length > 0) {
+      tabs.push({ value: 'inbox', label: t('inbox.title'), icon: InboxIcon })
+    }
+    if (serverApps.length > 0) {
+      tabs.push({ value: 'apps', label: t('server.apps'), icon: AppWindow })
+    }
+    return tabs
+  }, [inboxes.length, serverApps.length, t])
+
+  useEffect(() => {
+    if (!serverTabs.some((tab) => tab.value === activeTab)) {
+      setActiveTab('channels')
+      tabScrollRef.current?.scrollTo({ x: 0, animated: false })
+    }
+  }, [activeTab, serverTabs])
+
+  const handleTabChange = (tab: ServerTab, index: number) => {
+    setActiveTab(tab)
+    tabScrollRef.current?.scrollTo({ x: tabPageWidth * index, animated: true })
+  }
+
+  const handleTabScrollEnd = (offsetX: number) => {
+    const index = Math.max(0, Math.min(serverTabs.length - 1, Math.round(offsetX / tabPageWidth)))
+    const nextTab = serverTabs[index]
+    if (nextTab) setActiveTab(nextTab.value)
+  }
+
   // ── Nav items ──────────────────────────────────
 
   const _channelTypeLabel = (type: 'text' | 'voice' | 'announcement') => {
@@ -398,13 +443,13 @@ export default function ServerHomeScreen() {
       (serverAccess.joinRequestStatus === 'pending' || requestServerAccessMutation.isSuccess)
     return (
       <BackgroundSurface>
-        <View style={[styles.accessGateContainer, { paddingTop: insets.top }]}>
+        <View style={styles.accessGateContainer}>
           <GlassPanel style={styles.accessGateCard}>
-            <View style={[styles.accessGateIcon, { backgroundColor: `${colors.primary}18` }]}>
+            <View style={[styles.accessGateIcon, { backgroundColor: colors.inputBackground }]}>
               {isPending ? (
-                <Clock size={32} color={colors.primary} />
+                <Clock size={iconSize['5xl']} color={colors.primary} />
               ) : (
-                <Lock size={32} color={colors.primary} />
+                <Lock size={iconSize['5xl']} color={colors.primary} />
               )}
             </View>
             <AppText variant="headline" style={styles.accessGateTitle}>
@@ -438,79 +483,27 @@ export default function ServerHomeScreen() {
 
   return (
     <BackgroundSurface>
-      {/* Custom navigation header bar */}
-      <GlassHeader style={[styles.customHeader, { paddingTop: insets.top }]}>
-        <Button
-          variant="ghost"
-          size="icon"
-          icon={ChevronLeft}
-          onPress={() => router.back()}
-          hitSlop={8}
-          iconColor={colors.text}
-          style={styles.headerBackBtn}
-        />
-
-        <Pressable
-          onPress={() => router.push(`/(main)/servers/${serverSlug}/detail` as never)}
-          style={styles.headerTitleRow}
-        >
-          {server?.iconUrl ? (
-            <Image
-              source={{ uri: getImageUrl(server.iconUrl)! }}
-              style={styles.headerServerIcon}
-              contentFit="cover"
-            />
-          ) : (
-            <View
-              style={[
-                styles.headerServerIcon,
-                { backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-              ]}
-            >
-              <Text style={[styles.headerInitial, { color: colors.background }]}>
-                {server?.name?.[0] ?? '?'}
-              </Text>
-            </View>
-          )}
-          <View style={styles.headerTextCol}>
-            <View style={styles.headerNameRow}>
-              <AppText variant="title" style={styles.headerServerName} numberOfLines={1}>
-                {server?.name ?? '...'}
-              </AppText>
-              <ChevronRight
-                size={16}
-                color={colors.textMuted}
-                strokeWidth={2.8}
-                style={styles.headerChevron}
-              />
-            </View>
-            <View style={styles.headerOnlineRow}>
-              <View style={[styles.headerOnlineDot, { backgroundColor: colors.success }]} />
-              <AppText variant="label" tone="secondary" style={styles.headerOnlineText}>
-                {onlineCount} {t('server.membersOnline')}
-              </AppText>
-            </View>
-          </View>
-        </Pressable>
-
-        <View style={styles.headerRight}>
-          {isOwner && (
-            <Button
-              variant="ghost"
-              size="icon"
+      <MobileNavigationBar
+        title={server?.name ?? '...'}
+        left={<MobileBackButton onPress={() => router.back()} />}
+        right={
+          isOwner ? (
+            <ToolbarButton
               icon={Settings}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/server-settings` as never)}
-              hitSlop={8}
               iconColor={colors.text}
-              style={styles.headerIconBtn}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/server-settings` as never)}
+              variant="ghost"
             />
-          )}
-        </View>
-      </GlassHeader>
+          ) : null
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: spacing.md, paddingBottom: 100 }}
+        contentContainerStyle={{
+          paddingTop: spacing.none,
+          paddingBottom: size.tabBar + spacing['4xl'],
+        }}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -519,233 +512,229 @@ export default function ServerHomeScreen() {
           />
         }
       >
-        {/* ── Channels Header ─────────────────────────── */}
-        <View style={styles.channelsControls}>
-          <AppText variant="title" style={styles.cuteSectionLabel}>
-            {t('server.channels')}
-          </AppText>
-          <View style={styles.channelsActions}>
-            <View style={styles.actionButtonWrap}>
-              <Button
-                variant={hasCustomSort ? 'primary' : 'glass'}
-                size="icon"
-                icon={ArrowUpDown}
-                iconColor={hasCustomSort ? '#050508' : colors.text}
-                iconSize={18}
-                onPress={() => setShowSortModal(true)}
-              />
-              {hasCustomSort && <View style={[styles.sortBadge, { backgroundColor: '#fff' }]} />}
-            </View>
-            <Button
-              variant="glass"
-              size="icon"
-              icon={Search}
-              iconColor={colors.text}
-              iconSize={18}
-              onPress={() => setShowSearch(!showSearch)}
-            />
-            {isOwner && (
-              <Button
-                variant="primary"
-                size="icon"
-                icon={Plus}
-                iconSize={18}
-                onPress={() => router.push(`/(main)/servers/${serverSlug}/create-channel` as never)}
-              />
-            )}
-          </View>
-        </View>
+        <MobileTabBar value={activeTab} options={serverTabs} onChange={handleTabChange} />
 
-        {showSearch && (
-          <TextField
-            value={channelSearch}
-            onChangeText={setChannelSearch}
-            placeholder={t('server.searchChannels')}
-            icon={Search}
-            autoFocus
-            containerStyle={styles.channelSearchContainer}
-            style={styles.channelSearchWrap}
-            right={
-              channelSearch.length > 0 ? (
-                <Pressable onPress={() => setChannelSearch('')} hitSlop={12}>
-                  <X size={16} color={colors.textMuted} strokeWidth={2.5} />
-                </Pressable>
-              ) : null
-            }
-          />
-        )}
-
-        {inboxes.length > 0 && (
-          <View style={styles.inboxSection}>
-            <Pressable
-              style={styles.inboxHeader}
-              onPress={() => setInboxCollapsed((collapsed) => !collapsed)}
-            >
-              <AppText variant="title" style={styles.cuteSectionLabel}>
-                {t('inbox.title')}
-              </AppText>
-              <View style={styles.inboxHeaderRight}>
-                <AppText style={[styles.inboxCount, { color: colors.textMuted }]}>
-                  {inboxes.length}
-                </AppText>
-                <ChevronDown
-                  size={16}
-                  color={colors.textMuted}
-                  strokeWidth={3}
-                  style={{
-                    transform: [{ rotate: isInboxCollapsed ? '-90deg' : '0deg' }],
-                  }}
-                />
-              </View>
-            </Pressable>
-            {!isInboxCollapsed && (
-              <GlassPanel style={styles.inboxPanel}>
-                {inboxes.map((entry) => {
-                  const label =
-                    entry.agent.user.displayName ?? entry.agent.user.username ?? entry.agent.id
-                  return (
-                    <MenuItem
-                      key={entry.agent.id}
-                      icon={InboxIcon}
-                      title={label}
-                      subtitle={
-                        entry.channel
-                          ? t('inbox.channelReady')
-                          : entry.canManage
-                            ? t('inbox.createInbox')
-                            : t('inbox.noAccess')
-                      }
-                      tone={entry.channel ? 'primary' : 'muted'}
-                      disabled={!entry.channel && !entry.canManage}
-                      right={<ChevronRight size={16} color={colors.textMuted} strokeWidth={2.6} />}
-                      onPress={() => ensureInboxMutation.mutate(entry)}
-                    />
-                  )
-                })}
-              </GlassPanel>
-            )}
-          </View>
-        )}
-
-        {/* ── Channel Bubbles ─────────────────────────── */}
-        <View style={styles.channelsList}>
-          {filteredGroups.map((group, groupIndex) => (
-            <Reanimated.View
-              key={group.category?.id ?? 'uncategorized'}
-              entering={FadeInDown.delay(500 + groupIndex * 100).springify()}
-            >
-              <GlassPanel style={styles.categoryBubble}>
-                {group.category && (
-                  <Pressable
-                    style={styles.categoryRow}
-                    onPress={() => toggleCategory(group.category!.id)}
-                  >
-                    <View style={styles.categoryHeaderLeft}>
-                      <ChevronDown
-                        size={14}
-                        color={colors.text}
-                        strokeWidth={3}
-                        style={{
-                          transform: [
-                            {
-                              rotate: collapsedCategories.has(group.category.id)
-                                ? '-90deg'
-                                : '0deg',
-                            },
-                          ],
-                        }}
+        <ScrollView
+          ref={tabScrollRef}
+          horizontal
+          pagingEnabled
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={(event) => handleTabScrollEnd(event.nativeEvent.contentOffset.x)}
+        >
+          {serverTabs.map((tab) => (
+            <View key={tab.value} style={[styles.tabPage, { width: tabPageWidth }]}>
+              {tab.value === 'channels' ? (
+                <View style={styles.tabSection}>
+                  <View style={styles.channelToolbar}>
+                    <View style={styles.channelsActions}>
+                      <View style={styles.actionButtonWrap}>
+                        <Button
+                          variant={hasCustomSort ? 'primary' : 'glass'}
+                          size="icon"
+                          icon={ArrowUpDown}
+                          iconColor={hasCustomSort ? palette.foundation : colors.text}
+                          iconSize={iconSize.lg}
+                          onPress={() => setShowSortModal(true)}
+                        />
+                        {hasCustomSort && (
+                          <View style={[styles.sortBadge, { backgroundColor: palette.white }]} />
+                        )}
+                      </View>
+                      <Button
+                        variant="glass"
+                        size="icon"
+                        icon={Search}
+                        iconColor={colors.text}
+                        iconSize={iconSize.lg}
+                        onPress={() => setShowSearch(!showSearch)}
                       />
-                      <AppText variant="label" style={styles.categoryName}>
-                        {group.category.name}
-                      </AppText>
+                      {isOwner && (
+                        <Button
+                          variant="primary"
+                          size="icon"
+                          icon={Plus}
+                          iconSize={iconSize.lg}
+                          onPress={() =>
+                            router.push(`/(main)/servers/${serverSlug}/create-channel` as never)
+                          }
+                        />
+                      )}
                     </View>
-                    <Badge variant="neutral" size="xs">
-                      {group.channels.length}
-                    </Badge>
-                  </Pressable>
-                )}
-                {!(group.category && collapsedCategories.has(group.category.id)) && (
-                  <View style={styles.channelsContainer}>
-                    {group.channels.map((channel) => (
-                      <ChannelRow
-                        key={channel.id}
-                        title={channel.name}
-                        icon={channelIcon(channel.type)}
-                        tone={channel.isPrivate ? 'muted' : 'primary'}
+                  </View>
+
+                  {showSearch && (
+                    <TextField
+                      value={channelSearch}
+                      onChangeText={setChannelSearch}
+                      placeholder={t('server.searchChannels')}
+                      icon={Search}
+                      autoFocus
+                      containerStyle={styles.channelSearchContainer}
+                      style={styles.channelSearchWrap}
+                      right={
+                        channelSearch.length > 0 ? (
+                          <Pressable onPress={() => setChannelSearch('')} hitSlop={spacing.md}>
+                            <X size={iconSize.md} color={colors.textMuted} strokeWidth={2.5} />
+                          </Pressable>
+                        ) : null
+                      }
+                    />
+                  )}
+
+                  <View style={styles.channelsList}>
+                    {filteredGroups.map((group, groupIndex) => (
+                      <Reanimated.View
+                        key={group.category?.id ?? 'uncategorized'}
+                        entering={FadeInDown.delay(500 + groupIndex * 100).springify()}
+                      >
+                        <View style={styles.categoryBubble}>
+                          {group.category && (
+                            <Pressable
+                              style={styles.categoryRow}
+                              onPress={() => toggleCategory(group.category!.id)}
+                            >
+                              <View style={styles.categoryHeaderLeft}>
+                                <ChevronDown
+                                  size={iconSize.sm}
+                                  color={colors.text}
+                                  strokeWidth={3}
+                                  style={{
+                                    transform: [
+                                      {
+                                        rotate: collapsedCategories.has(group.category.id)
+                                          ? '-90deg'
+                                          : '0deg',
+                                      },
+                                    ],
+                                  }}
+                                />
+                                <AppText variant="label" style={styles.categoryName}>
+                                  {group.category.name}
+                                </AppText>
+                              </View>
+                            </Pressable>
+                          )}
+                          {!(group.category && collapsedCategories.has(group.category.id)) && (
+                            <View style={styles.channelsContainer}>
+                              {group.channels.map((channel) => (
+                                <ChannelRow
+                                  key={channel.id}
+                                  title={channel.name}
+                                  icon={channelIcon(channel.type)}
+                                  tone={channel.isPrivate ? 'muted' : 'primary'}
+                                  right={
+                                    channel.isPrivate ? (
+                                      <Lock
+                                        size={iconSize.sm}
+                                        color={colors.textMuted}
+                                        strokeWidth={2.5}
+                                      />
+                                    ) : null
+                                  }
+                                  onPress={() => {
+                                    updateLastAccessed(channel.id)
+                                    if (server) setLastChannel(server.id, channel.id)
+                                    router.push(serverChannelHref(serverSlug, channel.id) as never)
+                                  }}
+                                  onLongPress={() => setContextChannel(channel)}
+                                  flat
+                                />
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      </Reanimated.View>
+                    ))}
+
+                    {channels.length === 0 && (
+                      <Reanimated.View entering={FadeInDown.delay(500).springify()}>
+                        <GlassPanel style={styles.emptyChannels}>
+                          <ChannelCatSvg width={80} height={80} />
+                          <AppText tone="secondary" style={styles.emptyText}>
+                            {t('server.noChannels')}
+                          </AppText>
+                          {isOwner && (
+                            <Button
+                              variant="primary"
+                              size="md"
+                              icon={Plus}
+                              onPress={() =>
+                                router.push(`/(main)/servers/${serverSlug}/create-channel` as never)
+                              }
+                            >
+                              {t('server.createChannel')}
+                            </Button>
+                          )}
+                        </GlassPanel>
+                      </Reanimated.View>
+                    )}
+                  </View>
+                </View>
+              ) : null}
+
+              {tab.value === 'inbox' ? (
+                <View style={styles.tabSection}>
+                  <GlassPanel style={styles.inboxPanel}>
+                    {inboxes.map((entry) => {
+                      const label =
+                        entry.agent.user.displayName ?? entry.agent.user.username ?? entry.agent.id
+                      return (
+                        <MenuItem
+                          key={entry.agent.id}
+                          icon={InboxIcon}
+                          title={label}
+                          subtitle={
+                            entry.channel
+                              ? t('inbox.channelReady')
+                              : entry.canManage
+                                ? t('inbox.createInbox')
+                                : t('inbox.noAccess')
+                          }
+                          tone={entry.channel ? 'primary' : 'muted'}
+                          disabled={!entry.channel && !entry.canManage}
+                          right={
+                            <ChevronRight
+                              size={iconSize.md}
+                              color={colors.textMuted}
+                              strokeWidth={2.6}
+                            />
+                          }
+                          onPress={() => ensureInboxMutation.mutate(entry)}
+                        />
+                      )
+                    })}
+                  </GlassPanel>
+                </View>
+              ) : null}
+
+              {tab.value === 'apps' ? (
+                <View style={styles.tabSection}>
+                  <GlassPanel style={styles.appsPanel}>
+                    {serverApps.map((app) => (
+                      <MenuItem
+                        key={app.id}
+                        left={<ServerAppIcon iconUrl={app.iconUrl} />}
+                        title={app.name}
+                        tone="primary"
+                        disabled={launchAppMutation.isPending || !app.iframeEntry}
                         right={
-                          channel.isPrivate ? (
-                            <Lock size={14} color={colors.textMuted} strokeWidth={2.5} />
-                          ) : null
+                          <ChevronRight
+                            size={iconSize.md}
+                            color={colors.textMuted}
+                            strokeWidth={2.6}
+                          />
                         }
-                        onPress={() => {
-                          updateLastAccessed(channel.id)
-                          if (server) setLastChannel(server.id, channel.id)
-                          router.push(
-                            `/(main)/servers/${serverSlug}/channels/${channel.id}` as never,
-                          )
-                        }}
-                        onLongPress={() => setContextChannel(channel)}
-                        flat
+                        onPress={() => launchAppMutation.mutate(app)}
                       />
                     ))}
-                  </View>
-                )}
-              </GlassPanel>
-            </Reanimated.View>
+                  </GlassPanel>
+                </View>
+              ) : null}
+            </View>
           ))}
-
-          {channels.length === 0 && (
-            <Reanimated.View entering={FadeInDown.delay(500).springify()}>
-              <GlassPanel style={styles.emptyChannels}>
-                <ChannelCatSvg width={80} height={80} />
-                <AppText tone="secondary" style={styles.emptyText}>
-                  {t('server.noChannels')}
-                </AppText>
-                {isOwner && (
-                  <Button
-                    variant="primary"
-                    size="md"
-                    icon={Plus}
-                    onPress={() =>
-                      router.push(`/(main)/servers/${serverSlug}/create-channel` as never)
-                    }
-                  >
-                    {t('server.createChannel')}
-                  </Button>
-                )}
-              </GlassPanel>
-            </Reanimated.View>
-          )}
-        </View>
-
-        <View style={styles.appsSection}>
-          <AppText variant="title" style={styles.cuteSectionLabel}>
-            {t('server.apps')}
-          </AppText>
-          <GlassPanel style={styles.appsPanel}>
-            {serverApps.length > 0 ? (
-              serverApps.map((app) => (
-                <MenuItem
-                  key={app.id}
-                  icon={AppWindow}
-                  title={app.name}
-                  subtitle={app.description ?? app.appKey}
-                  tone="primary"
-                  disabled={launchAppMutation.isPending || !app.iframeEntry}
-                  right={<ChevronRight size={16} color={colors.textMuted} strokeWidth={2.6} />}
-                  onPress={() => launchAppMutation.mutate(app)}
-                />
-              ))
-            ) : (
-              <View style={styles.emptyApps}>
-                <AppWindow size={22} color={colors.textMuted} />
-                <AppText tone="secondary" style={styles.emptyAppsText}>
-                  {isAppsLoading ? t('common.loading') : t('apps.noApps')}
-                </AppText>
-              </View>
-            )}
-          </GlassPanel>
-        </View>
+        </ScrollView>
       </ScrollView>
 
       <Sheet
@@ -895,7 +884,7 @@ export default function ServerHomeScreen() {
                 icon={option.icon}
                 title={option.label}
                 tone={isSelected ? 'primary' : 'muted'}
-                right={isSelected ? <Check size={16} color={colors.primary} /> : undefined}
+                right={isSelected ? <Check size={iconSize.md} color={colors.primary} /> : undefined}
                 onPress={() => {
                   setSortBy(option.value)
                   setShowSortModal(false)
@@ -915,156 +904,63 @@ export default function ServerHomeScreen() {
 // ── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  customHeader: {
+  tabPage: {
+    paddingBottom: spacing.xl,
+  },
+  tabSection: {
+    gap: spacing.sm,
+  },
+  channelToolbar: {
+    minHeight: size.controlLg,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.sm,
-    zIndex: 100,
-  },
-  headerBackBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 4,
-  },
-  headerServerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
-    borderWidth: 2,
-  },
-  headerInitial: { fontSize: 16, fontWeight: '800' },
-  headerTextCol: {
-    flex: 1,
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  headerNameRow: {
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  headerServerName: {
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 20,
-    flexShrink: 1,
-  },
-  headerChevron: {
-    opacity: 0.55,
-  },
-  headerOnlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerOnlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 4,
-  },
-  headerOnlineText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 4,
-  },
-  headerIconBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Channels Controls
-  channelsControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  cuteSectionLabel: {
-    fontSize: 22,
-    fontWeight: '900',
   },
   channelsActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   actionButtonWrap: {
     position: 'relative',
   },
   // Search
   channelSearchContainer: {
-    marginHorizontal: spacing.md,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
   channelSearchWrap: {
-    height: 48,
-    borderRadius: 24,
+    height: size.controlLg,
+    borderRadius: radius['2xl'],
   },
 
   // Channels List
   channelsList: {
-    paddingHorizontal: spacing.md,
-    gap: spacing.md,
-  },
-  inboxSection: {
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-  },
-  inboxPanel: {
-    padding: spacing.xs,
-  },
-  inboxHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  inboxHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  inboxCount: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  appsSection: {
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.xl,
-    gap: spacing.sm,
-  },
-  appsPanel: {
-    padding: spacing.xs,
-  },
-  emptyApps: {
-    minHeight: 76,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
     gap: spacing.xs,
   },
-  emptyAppsText: {
-    fontSize: 13,
-    fontWeight: '700',
+  inboxPanel: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.xs,
+  },
+  appsPanel: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.xs,
+  },
+  serverAppIcon: {
+    width: size.iconBubble,
+    height: size.iconBubble,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  serverAppIconImage: {
+    width: '100%',
+    height: '100%',
   },
   categoryBubble: {
-    padding: spacing.sm,
-    paddingTop: spacing.md,
+    gap: spacing.xs,
   },
   categoryRow: {
     flexDirection: 'row',
@@ -1076,13 +972,13 @@ const styles = StyleSheet.create({
   categoryHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.tight,
   },
   categoryName: {
-    fontSize: 14,
+    fontSize: fontSize.sm,
     fontWeight: '900',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: letterSpacing.none,
   },
   channelsContainer: {
     gap: spacing.sm,
@@ -1091,11 +987,11 @@ const styles = StyleSheet.create({
   // Empty State
   emptyChannels: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: spacing['4xl'],
     gap: spacing.md,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: fontSize.md,
     fontWeight: '700',
   },
   editAction: {
@@ -1110,27 +1006,27 @@ const styles = StyleSheet.create({
   },
   accessGateCard: {
     width: '100%',
-    maxWidth: 420,
-    borderRadius: 28,
+    maxWidth: size.contentMaxWidth,
+    borderRadius: radius['3xl'],
     padding: spacing.xl,
     alignItems: 'center',
     gap: spacing.md,
   },
   accessGateIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
+    width: size.listItemLg,
+    height: size.listItemLg,
+    borderRadius: radius['2xl'],
     alignItems: 'center',
     justifyContent: 'center',
   },
   accessGateTitle: {
-    fontSize: 22,
+    fontSize: fontSize.xl,
     fontWeight: '900',
     textAlign: 'center',
   },
   accessGateDesc: {
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.md,
     textAlign: 'center',
   },
   accessGateButton: {
@@ -1142,10 +1038,10 @@ const styles = StyleSheet.create({
   },
   sortBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    top: spacing.xs,
+    right: spacing.xs,
+    width: size.dotSm,
+    height: size.dotSm,
+    borderRadius: radius.xs,
   },
 })

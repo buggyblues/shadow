@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { fetchApi } from '../../lib/api'
-import { fontSize, radius, spacing, useColors } from '../../theme'
+import { fontSize, iconSize, letterSpacing, radius, spacing, useColors } from '../../theme'
 import { Avatar } from '../common/avatar'
 
 interface Member {
@@ -38,7 +38,7 @@ export function MemberList({ serverId }: { serverId: string }) {
         <Avatar
           uri={item.user.avatarUrl}
           name={name}
-          size={32}
+          size={iconSize['5xl']}
           userId={item.user.id}
           status={item.user.status || 'offline'}
           showStatus
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   groupLabel: {
     fontSize: fontSize.xs,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: letterSpacing.none,
     textTransform: 'uppercase',
   },
   memberItem: {

@@ -4,6 +4,19 @@ import {
   CC_CONNECT_FORK_SHORT_REF,
 } from './cc-connect-fork.js'
 
+export {
+  CONNECTOR_RUNTIME_CATALOG,
+  type ConnectorRuntimeCatalogEntry,
+  type ConnectorRuntimeId,
+  type ConnectorRuntimeInstallSpec,
+  type ConnectorRuntimeKind,
+  type ConnectorRuntimePlatform,
+  connectorRuntimeById,
+  connectorRuntimeCatalog,
+  connectorRuntimeInstallCommand,
+  connectorRuntimeInstallCommands,
+} from './runtime-catalog.js'
+
 export type ShadowConnectorTarget = 'openclaw' | 'hermes' | 'cc-connect'
 
 export interface ShadowConnectorInput {

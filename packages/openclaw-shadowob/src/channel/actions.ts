@@ -10,7 +10,14 @@ import {
 import { sendShadowMessage } from './send.js'
 import { buildShadowMessageToolSchemaProperties } from './typebox-schema.js'
 
-const SHADOW_DISCOVERED_ACTIONS = ['send', 'upload-file', 'react', 'edit', 'delete'] as const
+const SHADOW_DISCOVERED_ACTIONS = [
+  'send',
+  'upload-file',
+  'send-voice',
+  'react',
+  'edit',
+  'delete',
+] as const
 
 const SHADOW_HANDLED_ACTIONS = [...SHADOW_DISCOVERED_ACTIONS, 'get-connection-status'] as const
 
@@ -24,6 +31,16 @@ type DescribeMessageTool = NonNullable<
 >
 type DescribeMessageToolContext = Parameters<DescribeMessageTool>[0]
 type DescribeMessageToolResult = ReturnType<DescribeMessageTool>
+type ShadowAttachmentKind = 'file' | 'image' | 'voice'
+type ShadowUploadOptions = {
+  messageId: string
+  kind?: ShadowAttachmentKind
+  durationMs?: number
+  waveformPeaks?: number[]
+  transcriptText?: string
+  transcriptLanguage?: string
+  transcriptSource?: 'runtime'
+}
 
 function textResult(value: Record<string, unknown>): ShadowActionResult {
   return {
@@ -69,6 +86,46 @@ function readCommerceOfferId(params: Record<string, unknown>) {
   return firstString(params.commerceOfferId, params.offerId)
 }
 
+function readNumber(params: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = params[key]
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+  return undefined
+}
+
+function readWaveformPeaks(params: Record<string, unknown>) {
+  const value = params.waveformPeaks ?? params.waveform_peaks
+  if (Array.isArray(value)) {
+    const peaks = value.map((item) => Number(item))
+    return peaks.every((item) => Number.isInteger(item) && item >= 0 && item <= 100)
+      ? peaks
+      : undefined
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value)
+      if (!Array.isArray(parsed)) return undefined
+      const peaks = parsed.map((item) => Number(item))
+      return peaks.every((item) => Number.isInteger(item) && item >= 0 && item <= 100)
+        ? peaks
+        : undefined
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+function readAttachmentKind(params: Record<string, unknown>): ShadowAttachmentKind | undefined {
+  const kind = firstString(params.attachmentKind, params.kind)
+  return kind === 'voice' || kind === 'image' || kind === 'file' ? kind : undefined
+}
+
 function buildSendMetadata(params: {
   interactiveBlock?: Record<string, unknown>
   commerceOfferId?: string
@@ -92,18 +149,38 @@ async function uploadShadowAttachment(params: {
   const uploadTarget = params.messageId
   const base64Buffer = firstString(params.actionParams.buffer)
   const mediaUrl = readAttachmentSource(params.actionParams)
+  const kind = readAttachmentKind(params.actionParams)
+  const durationMs = readNumber(params.actionParams, 'durationMs', 'duration_ms')
+  const waveformPeaks = readWaveformPeaks(params.actionParams)
+  const transcriptText = firstString(
+    params.actionParams.transcript,
+    params.actionParams.transcriptText,
+  )
+  const transcriptLanguage = firstString(
+    params.actionParams.transcriptLanguage,
+    params.actionParams.transcript_language,
+  )
+  const uploadOptions: ShadowUploadOptions = { messageId: uploadTarget }
+  if (kind) uploadOptions.kind = kind
+  if (typeof durationMs === 'number') uploadOptions.durationMs = durationMs
+  if (waveformPeaks) uploadOptions.waveformPeaks = waveformPeaks
+  if (transcriptText) {
+    uploadOptions.transcriptText = transcriptText
+    uploadOptions.transcriptSource = 'runtime'
+  }
+  if (transcriptLanguage) uploadOptions.transcriptLanguage = transcriptLanguage
 
   if (base64Buffer) {
     const raw = base64Buffer.includes(',') ? (base64Buffer.split(',')[1] ?? '') : base64Buffer
     if (!raw) throw new Error('Invalid base64 attachment payload')
     const bytes = Buffer.from(raw, 'base64')
     const blob = new Blob([Uint8Array.from(bytes)], { type: contentType })
-    await params.client.uploadMedia(blob, filename, contentType, uploadTarget)
+    await params.client.uploadMedia(blob, filename, contentType, uploadOptions)
     return { filename, contentType, source: 'buffer' as const }
   }
 
   if (mediaUrl) {
-    await params.client.uploadMediaFromUrl(mediaUrl, uploadTarget)
+    await params.client.uploadMediaFromUrl(mediaUrl, uploadOptions)
     return { filename, contentType, source: 'media' as const, mediaUrl }
   }
 
@@ -136,12 +213,14 @@ export const shadowMessageActions = {
           'fileUrl',
           'buffer',
         ],
+        'send-voice': ['media', 'mediaUrl', 'url', 'path', 'filePath', 'file', 'fileUrl', 'buffer'],
       },
     } as unknown as DescribeMessageToolResult
   },
 
   messageActionTargetAliases: {
     'upload-file': { aliases: ['recipient', 'to', 'channelId'] },
+    'send-voice': { aliases: ['recipient', 'to', 'channelId'] },
   } as Record<string, { aliases: string[] }>,
 
   supportsAction: ({ action }: { action: string }): boolean =>
@@ -212,7 +291,7 @@ export const shadowMessageActions = {
       }
     }
 
-    if (action === 'upload-file') {
+    if (action === 'upload-file' || action === 'send-voice') {
       try {
         const client = new ShadowClient(account.serverUrl, account.token)
         const to = readMessageTarget(params)
@@ -223,26 +302,40 @@ export const shadowMessageActions = {
             error: 'upload-file requires buffer, media, path, or filePath',
           })
         }
-        const text = firstString(params.message, params.content, params.text, params.caption) ?? ''
+        const attachmentParams =
+          action === 'send-voice' ? { ...params, kind: 'voice', attachmentKind: 'voice' } : params
+        if (action === 'send-voice') {
+          if (readNumber(attachmentParams, 'durationMs', 'duration_ms') === undefined) {
+            return textResult({ ok: false, error: 'send-voice requires durationMs' })
+          }
+        }
+        const text =
+          firstString(
+            attachmentParams.message,
+            attachmentParams.content,
+            attachmentParams.text,
+            attachmentParams.caption,
+          ) ?? ''
         const message = await sendShadowMessage({
           client,
           to,
           content: text || '\u200B',
-          threadId: params.threadId as string | undefined,
+          threadId: attachmentParams.threadId as string | undefined,
           replyToId:
-            (params.replyTo as string | undefined) ?? (params.replyToId as string | undefined),
+            (attachmentParams.replyTo as string | undefined) ??
+            (attachmentParams.replyToId as string | undefined),
         })
         const attachment = await uploadShadowAttachment({
           client,
           to,
           messageId: message.id,
-          actionParams: params,
+          actionParams: attachmentParams,
         })
 
         return textResult({
           ok: true,
           action: requestedAction,
-          canonicalAction: 'upload-file',
+          canonicalAction: action,
           messageId: message.id,
           filename: attachment.filename,
         })

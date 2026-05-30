@@ -1,3 +1,8 @@
+import {
+  connectorRuntimeInstallCommands,
+  connectorRuntimeInstallCommand as sharedConnectorRuntimeInstallCommand,
+} from '@shadowob/connector'
+
 export interface Agent {
   id: string
   userId: string
@@ -60,6 +65,10 @@ export interface ConnectorRuntimeInfo {
   status: 'available' | 'missing'
   version?: string | null
   command?: string | null
+  iconId?: string | null
+  installCommand?: string | null
+  installCommands?: string[]
+  helpUrl?: string | null
   detectedAt?: string | null
 }
 
@@ -75,4 +84,37 @@ export interface ConnectorComputer {
   lastSeenAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export function connectorComputerDetail(computer: ConnectorComputer): string {
+  const platform = [computer.os, computer.arch].filter(Boolean).join(' ')
+  return [computer.hostname, platform].filter(Boolean).join(' / ')
+}
+
+export function connectorComputerDisplayName(computer: ConnectorComputer): string {
+  const detail = connectorComputerDetail(computer)
+  const name = computer.name.trim()
+  const isGenericDesktopName = ['shadow', 'shadow desktop'].includes(name.toLowerCase())
+  if (!detail) return computer.name
+  if (name && !isGenericDesktopName && computer.name !== computer.hostname) {
+    return `${name} - ${detail}`
+  }
+  return detail
+}
+
+export function connectorRuntimeDisplayDetail(
+  computer: ConnectorComputer,
+  runtime: ConnectorRuntimeInfo,
+): string {
+  return [connectorComputerDetail(computer), runtime.version ?? runtime.command ?? runtime.id]
+    .filter(Boolean)
+    .join(' - ')
+}
+
+export function connectorRuntimeInstallCommand(runtimeId: string): string | null {
+  return sharedConnectorRuntimeInstallCommand(runtimeId)
+}
+
+export function connectorRuntimeInstallCommandList(runtimeId: string): string[] {
+  return connectorRuntimeInstallCommands(runtimeId)
 }

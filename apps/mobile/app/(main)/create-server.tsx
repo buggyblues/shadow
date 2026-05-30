@@ -14,7 +14,7 @@ import {
 } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
-import { spacing } from '../../src/theme'
+import { size, spacing } from '../../src/theme'
 
 export default function CreateServerScreen() {
   const { t } = useTranslation()
@@ -114,12 +114,12 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   textArea: {
-    minHeight: 110,
+    minHeight: size.textareaLg,
     alignItems: 'flex-start',
     paddingVertical: spacing.sm,
   },
   textAreaInput: {
-    minHeight: 88,
+    minHeight: size.textareaInputLg,
     textAlignVertical: 'top',
   },
   switchRow: {

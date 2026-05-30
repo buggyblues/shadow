@@ -48,13 +48,16 @@
         "CVE-2024-22363",
         "CVE-2026-4926"
       ]
+    },
+    "patchedDependencies": {
+      "plist@3.1.0": "patches/plist@3.1.0.patch"
     }
   },
   "scripts": {
     "dev": "pnpm dev:prepare && pnpm dev:infra && pnpm -r --parallel --filter @shadowob/server --filter @shadowob/web --filter @shadowob/admin dev",
     "dev:prepare": "node scripts/ensure-dev-builds.mjs",
     "dev:infra": "docker compose up -d postgres redis minio && docker compose stop server web admin",
-    "dev:infra:frontend": "docker compose up -d postgres redis minio server --build && docker compose stop web admin",
+    "dev:infra:frontend": "node scripts/dev-infra-frontend.mjs",
     "dev:infra:down": "docker compose stop postgres redis minio",
     "dev:backend": "pnpm dev:prepare && pnpm dev:infra && pnpm -r --parallel --filter @shadowob/server --filter @shadowob/cloud dev:backend",
     "dev:frontend": "pnpm dev:prepare && pnpm dev:infra:frontend && pnpm -r --parallel --filter @shadowob/web --filter @shadowob/admin --filter @shadowob/cloud --filter @shadowob/website dev:frontend",
@@ -62,6 +65,7 @@
     "dev:cloud-dashboard": "pnpm --filter @shadowob/cloud console:dev",
     "cloud:serve": "pnpm --filter @shadowob/cloud exec shadow-cloud serve",
     "mobile:check": "pnpm -C apps/mobile check",
+    "mobile:style:check": "pnpm -C apps/mobile style:check",
     "mobile:bundle": "pnpm -C apps/mobile bundle",
     "mobile:verify:ios": "pnpm -C apps/mobile verify:ios",
     "mobile:verify": "pnpm -C apps/mobile verify",
@@ -79,6 +83,7 @@
     "check:exports": "node scripts/check-exports-consistency.mjs",
     "check:audit": "node scripts/check-npm-audit.mjs",
     "check:dashboard-style": "node scripts/check-dashboard-style.mjs",
+    "check:mobile-style": "node scripts/check-mobile-style.mjs",
     "check:dashboard-i18n": "node scripts/check-dashboard-i18n.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:space-migration": "node scripts/check-space-migration.mjs scan",
@@ -86,8 +91,8 @@
     "check:space-migration:update-baseline": "node scripts/check-space-migration.mjs scan --update-baseline",
     "check:security-pr": "node scripts/check-security-pr.mjs",
     "refactor:space-migration": "node scripts/check-space-migration.mjs refactor --dry-run",
-    "check:pre-push": "pnpm check:migrations && node scripts/pre-push-checks.mjs && pnpm check:security-pr && pnpm check:dashboard-style && pnpm check:dashboard-i18n",
-    "check:all": "pnpm check:migrations && pnpm check:sdk-versions && pnpm check:workspace-deps && pnpm check:exports && pnpm check:i18n && pnpm check:security-pr && pnpm check:dashboard-style && pnpm check:dashboard-i18n && pnpm check:pre-push",
+    "check:pre-push": "pnpm check:migrations && node scripts/pre-push-checks.mjs && pnpm check:security-pr && pnpm check:dashboard-style && pnpm check:dashboard-i18n && pnpm check:mobile-style",
+    "check:all": "pnpm check:migrations && pnpm check:sdk-versions && pnpm check:workspace-deps && pnpm check:exports && pnpm check:i18n && pnpm check:security-pr && pnpm check:dashboard-style && pnpm check:dashboard-i18n && pnpm check:mobile-style && pnpm check:pre-push",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

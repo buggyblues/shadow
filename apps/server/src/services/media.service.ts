@@ -78,7 +78,9 @@ function parseSignedMediaContentRef(value: string): string | null {
       base64UrlDecode(encoded).toString('utf8'),
     ) as Partial<MediaTokenPayload>
     const key = payload.sourceKey ?? payload.key
-    if (!payload.bucket || !key || !key.startsWith('uploads/')) return null
+    if (!payload.bucket || !key || (!key.startsWith('uploads/') && !key.startsWith('voice/'))) {
+      return null
+    }
     return `/${payload.bucket}/${key}`
   } catch {
     return null
@@ -86,7 +88,7 @@ function parseSignedMediaContentRef(value: string): string | null {
 }
 
 function isUploadedContentRef(value: string): boolean {
-  return /^\/[^/]+\/uploads\/.+/.test(value)
+  return /^\/[^/]+\/(?:uploads|voice)\/.+/.test(value)
 }
 
 function isActiveContent(contentType: string): boolean {
@@ -193,6 +195,7 @@ export class MediaService {
     file: Buffer,
     filename: string,
     contentType: string,
+    options?: { kind?: 'voice' | 'file' | 'image' },
   ): Promise<{ url: string; size: number }> {
     if (!this.minioClient) {
       throw Object.assign(new Error('File storage not available'), { status: 503 })
@@ -200,7 +203,8 @@ export class MediaService {
 
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     const ext = extname(filename) || ''
-    const key = `uploads/${randomUUID()}${ext}`
+    const prefix = options?.kind === 'voice' ? 'voice' : 'uploads'
+    const key = `${prefix}/${randomUUID()}${ext}`
 
     await this.minioClient.putObject(bucketName, key, file, file.length, {
       'Content-Type': contentType,
@@ -578,7 +582,7 @@ export class MediaService {
     ).catch(() => null)
   }
 
-  /** Retrieve file content from MinIO by its contentRef (e.g. /shadow/uploads/...) */
+  /** Retrieve file content from MinIO by its contentRef (e.g. /shadow/uploads/... or /shadow/voice/...) */
   async getFileBuffer(contentRef: string): Promise<Buffer | null> {
     if (!this.minioClient) return null
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'

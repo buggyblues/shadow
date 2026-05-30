@@ -170,7 +170,13 @@ describe('server app helpers', () => {
     expect(getShadowServerAppInboxDeliveries(result)).toEqual([
       { agentId: 'agent-1', channelId: 'channel-1', messageId: 'message-1' },
     ])
+    expect(getShadowServerAppInboxDeliveries(result.shadow)).toEqual([
+      { agentId: 'agent-1', channelId: 'channel-1', messageId: 'message-1' },
+    ])
     expect(getShadowServerAppInboxErrors(result)).toEqual([
+      { title: 'Skipped optional task', error: 'not found' },
+    ])
+    expect(getShadowServerAppInboxErrors(result.shadow)).toEqual([
       { title: 'Skipped optional task', error: 'not found' },
     ])
     expect(result.shadow?.outbox?.channelMessages).toHaveLength(1)

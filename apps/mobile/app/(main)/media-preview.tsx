@@ -30,12 +30,24 @@ import {
 } from 'react-native'
 import WebView from 'react-native-webview'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
-import { getImageUrl } from '../../src/lib/api'
+import { API_BASE, getImageUrl } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { useAuthStore } from '../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../src/theme'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+const CSS_FULL_WIDTH = '100%'
+const CSS_MAX_CONTENT = 'max-content'
 
 // File extension to language mapping for syntax highlighting
 const EXT_LANG_MAP: Record<string, string> = {
@@ -130,6 +142,14 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function shouldAttachAuthHeaders(targetUrl: string): boolean {
+  try {
+    return new URL(targetUrl, API_BASE).origin === new URL(API_BASE).origin
+  } catch {
+    return false
+  }
+}
+
 export default function MediaPreviewScreen() {
   const { url, filename, contentType } = useLocalSearchParams<{
     url: string
@@ -154,7 +174,8 @@ export default function MediaPreviewScreen() {
   const ct = contentType ?? 'application/octet-stream'
   const mode = useMemo(() => detectPreviewMode(ct, fname), [ct, fname])
 
-  const getAuthHeaders = useCallback((): Record<string, string> => {
+  const getAuthHeaders = useCallback((targetUrl: string): Record<string, string> => {
+    if (!shouldAttachAuthHeaders(targetUrl)) return {}
     const token = useAuthStore.getState().accessToken
     return token ? { Authorization: `Bearer ${token}` } : {}
   }, [])
@@ -162,7 +183,7 @@ export default function MediaPreviewScreen() {
   const mediaSource = useMemo(
     () => ({
       uri: localPreviewUri ?? resolvedUrl,
-      headers: localPreviewUri ? undefined : getAuthHeaders(),
+      headers: localPreviewUri ? undefined : getAuthHeaders(resolvedUrl),
     }),
     [localPreviewUri, resolvedUrl, getAuthHeaders],
   )
@@ -178,7 +199,7 @@ export default function MediaPreviewScreen() {
   const downloadWithAuth = useCallback(
     async (targetUrl: string, localPath: string) => {
       return FileSystem.downloadAsync(targetUrl, localPath, {
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(targetUrl),
       })
     },
     [getAuthHeaders],
@@ -244,6 +265,7 @@ export default function MediaPreviewScreen() {
 
   useEffect(() => {
     let cancelled = false
+    setImageError(false)
     if (mode !== 'image' && mode !== 'pdf') {
       setLocalPreviewUri(null)
       return
@@ -260,7 +282,6 @@ export default function MediaPreviewScreen() {
         console.error('Preview preload failed:', err)
         if (!cancelled) {
           setLocalPreviewUri(null)
-          setImageError(true)
           setLoading(false)
         }
       })
@@ -283,7 +304,7 @@ export default function MediaPreviewScreen() {
       mode === 'csv'
     ) {
       setLoading(true)
-      fetch(resolvedUrl, { headers: getAuthHeaders() })
+      fetch(resolvedUrl, { headers: getAuthHeaders(resolvedUrl) })
         .then((res) => res.text())
         .then((text) => {
           setTextContent(text)
@@ -300,7 +321,7 @@ export default function MediaPreviewScreen() {
   useEffect(() => {
     if (mode !== 'zip') return
     setLoading(true)
-    fetch(resolvedUrl, { headers: getAuthHeaders() })
+    fetch(resolvedUrl, { headers: getAuthHeaders(resolvedUrl) })
       .then((res) => res.arrayBuffer())
       .then((buf) => JSZip.loadAsync(buf))
       .then((zip) => {
@@ -348,7 +369,7 @@ export default function MediaPreviewScreen() {
   const renderContent = () => {
     if (mode === 'image') {
       return (
-        <View style={[styles.container, { backgroundColor: '#000' }]}>
+        <View style={[styles.container, { backgroundColor: palette.black }]}>
           <Pressable onLongPress={handleSaveImage} delayLongPress={500}>
             <ScrollView
               style={styles.scrollContainer}
@@ -364,7 +385,10 @@ export default function MediaPreviewScreen() {
                 style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.8 }}
                 contentFit="contain"
                 transition={200}
-                onLoad={() => setLoading(false)}
+                onLoad={() => {
+                  setLoading(false)
+                  setImageError(false)
+                }}
                 onError={() => {
                   setLoading(false)
                   setImageError(true)
@@ -374,13 +398,13 @@ export default function MediaPreviewScreen() {
           </Pressable>
           {loading && (
             <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#fff" />
+              <ActivityIndicator size="large" color={palette.white} />
             </View>
           )}
           {imageError && (
             <View style={styles.loadingOverlay}>
-              <FileText size={48} color="#999" />
-              <Text style={{ color: '#999', marginTop: spacing.sm }}>
+              <FileText size={iconSize.hero} color={palette.neutral400} />
+              <Text style={{ color: palette.neutral400, marginTop: spacing.sm }}>
                 {t('chat.imageLoadFailed', 'Failed to load image')}
               </Text>
             </View>
@@ -424,15 +448,15 @@ export default function MediaPreviewScreen() {
       const ext = getFileExtension(fname)
       const lang = EXT_LANG_MAP[ext] ?? 'plaintext'
       const isDark =
-        colors.background === '#000' ||
+        colors.background === palette.black ||
         colors.background.startsWith('#1') ||
         colors.background.startsWith('#0')
       const htmlContent = `<!DOCTYPE html><html><head>
       <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=3">
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${isDark ? 'github-dark' : 'github'}.min.css">
       <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-      <style>body{margin:0;padding:12px;background:${colors.background};overflow-x:auto}
-      pre{margin:0;font-size:13px;line-height:1.5}code{font-family:'SF Mono',Menlo,monospace}</style>
+      <style>body{margin:${spacing.none}px;padding:${spacing.md}px;background:${colors.background};overflow-x:auto}
+      pre{margin:${spacing.none}px;font-size:${fontSize.xs}px;line-height:${lineHeight.xs}px}code{font-family:'SF Mono',Menlo,monospace}</style>
       </head><body><pre><code class="language-${lang}">${escapeHtml(textContent)}</code></pre>
       <script>hljs.highlightAll()</script></body></html>`
       return (
@@ -459,7 +483,7 @@ export default function MediaPreviewScreen() {
         )
       }
       const isDark =
-        colors.background === '#000' ||
+        colors.background === palette.black ||
         colors.background.startsWith('#1') ||
         colors.background.startsWith('#0')
       const htmlContent = `<!DOCTYPE html><html><head>
@@ -467,13 +491,13 @@ export default function MediaPreviewScreen() {
       <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${isDark ? 'github-dark' : 'github'}.min.css">
       <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-      <style>body{margin:0;padding:16px;background:${colors.background};color:${colors.text};font-family:-apple-system,system-ui,sans-serif;font-size:15px;line-height:1.6}
-      pre{background:${isDark ? '#161b22' : '#f6f8fa'};padding:12px;border-radius:6px;overflow-x:auto}
-      code{font-family:'SF Mono',Menlo,monospace;font-size:13px}
-      img{max-width:100%;border-radius:8px}
-      table{border-collapse:collapse;width:100%}th,td{border:1px solid ${colors.border};padding:8px}
-      blockquote{border-left:3px solid ${colors.primary};margin:0;padding-left:12px;color:${colors.textSecondary}}
-      a{color:${colors.primary}}h1,h2,h3{margin-top:1.2em;margin-bottom:0.4em}</style>
+	      <style>body{margin:${spacing.none}px;padding:${spacing.lg}px;background:${colors.background};color:${colors.text};font-family:-apple-system,system-ui,sans-serif;font-size:${fontSize.md}px;line-height:${lineHeight.md}px}
+	      pre{background:${isDark ? palette.surface : palette.neutral50};padding:${spacing.md}px;border-radius:${radius.sm}px;overflow-x:auto}
+	      code{font-family:'SF Mono',Menlo,monospace;font-size:${fontSize.sm}px}
+	      img{max-width:${CSS_FULL_WIDTH};border-radius:${radius.md}px}
+	      table{border-collapse:collapse;width:${CSS_FULL_WIDTH}}th,td{border:${border.hairline}px solid ${colors.border};padding:${spacing.sm}px}
+	      blockquote{border-left:${border.active}px solid ${colors.primary};margin:${spacing.none}px;padding-left:${spacing.md}px;color:${colors.textSecondary}}
+	      a{color:${colors.primary}}h1,h2,h3{margin-top:${spacing.lg}px;margin-bottom:${spacing.sm}px}</style>
       </head><body><div id="c"></div>
       <script>
         marked.setOptions({highlight:(code,lang)=>{try{return hljs.highlight(code,{language:lang||'plaintext'}).value}catch{return code}}});
@@ -527,12 +551,12 @@ export default function MediaPreviewScreen() {
       const isDark = colors.background.startsWith('#0') || colors.background.startsWith('#1')
       const tableHtml = `<!DOCTYPE html><html><head>
       <meta name="viewport" content="width=device-width,initial-scale=1">
-      <style>body{margin:0;padding:8px;background:${colors.background};overflow-x:auto}
-      table{border-collapse:collapse;width:max-content;min-width:100%;font-family:-apple-system,system-ui,sans-serif;font-size:13px}
-      th{background:${isDark ? '#1e293b' : '#f1f5f9'};color:${colors.text};position:sticky;top:0;font-weight:600;text-align:left}
-      td{color:${colors.text}}
-      th,td{border:1px solid ${colors.border};padding:6px 10px;white-space:nowrap}
-      tr:nth-child(even){background:${isDark ? '#111827' : '#f8fafc'}}</style>
+	      <style>body{margin:${spacing.none}px;padding:${spacing.sm}px;background:${colors.background};overflow-x:auto}
+	      table{border-collapse:collapse;width:${CSS_MAX_CONTENT};min-width:${CSS_FULL_WIDTH};font-family:-apple-system,system-ui,sans-serif;font-size:${fontSize.sm}px}
+	      th{background:${isDark ? palette.neutral800 : palette.neutral100};color:${colors.text};position:sticky;top:${spacing.none}px;font-weight:600;text-align:left}
+	      td{color:${colors.text}}
+	      th,td{border:${border.hairline}px solid ${colors.border};padding:${spacing.tight}px ${spacing.md}px;white-space:nowrap}
+      tr:nth-child(even){background:${isDark ? palette.neutral900 : palette.neutral50}}</style>
       </head><body><table>${rows
         .map(
           (row, i) =>
@@ -561,7 +585,7 @@ export default function MediaPreviewScreen() {
         return (
           <View style={[styles.container, { backgroundColor: colors.background }]}>
             <View style={styles.filePreview}>
-              <FileText size={48} color={colors.textMuted} />
+              <FileText size={iconSize.hero} color={colors.textMuted} />
               <Text style={[styles.fileTitle, { color: colors.text }]}>{fname}</Text>
               <Text style={[styles.fileType, { color: colors.textMuted }]}>
                 {t('chat.zipParseFailed', 'Cannot read zip contents')}
@@ -570,7 +594,7 @@ export default function MediaPreviewScreen() {
                 style={[styles.downloadBtn, { backgroundColor: colors.primary }]}
                 onPress={handleShare}
               >
-                <Share2 size={18} color="#fff" />
+                <Share2 size={iconSize.lg} color={palette.white} />
                 <Text style={styles.downloadBtnText}>{t('chat.downloadFile')}</Text>
               </Pressable>
             </View>
@@ -594,9 +618,9 @@ export default function MediaPreviewScreen() {
             {zipEntries.map((entry) => (
               <View key={entry.name} style={[styles.zipRow, { borderBottomColor: colors.border }]}>
                 {entry.isDir ? (
-                  <Folder size={16} color={colors.primary} />
+                  <Folder size={iconSize.md} color={colors.primary} />
                 ) : (
-                  <FileText size={16} color={colors.textMuted} />
+                  <FileText size={iconSize.md} color={colors.textMuted} />
                 )}
                 <Text
                   style={[styles.zipName, { color: colors.text }]}
@@ -632,14 +656,14 @@ export default function MediaPreviewScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.filePreview}>
-          <FileText size={48} color={colors.textMuted} />
+          <FileText size={iconSize.hero} color={colors.textMuted} />
           <Text style={[styles.fileTitle, { color: colors.text }]}>{fname}</Text>
           <Text style={[styles.fileType, { color: colors.textMuted }]}>{ct}</Text>
           <Pressable
             style={[styles.downloadBtn, { backgroundColor: colors.primary }]}
             onPress={handleShare}
           >
-            <Share2 size={18} color="#fff" />
+            <Share2 size={iconSize.lg} color={palette.white} />
             <Text style={styles.downloadBtnText}>{t('chat.downloadFile')}</Text>
           </Pressable>
         </View>
@@ -664,50 +688,62 @@ export default function MediaPreviewScreen() {
             </Text>
             {mode === 'image' && (
               <Pressable
-                style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  { backgroundColor: pressed ? colors.surfaceHover : colors.surface },
+                ]}
                 onPress={() => {
                   setShowMenu(false)
                   handleSaveImage()
                 }}
               >
-                <Save size={18} color={colors.text} />
+                <Save size={iconSize.lg} color={colors.text} />
                 <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                   {t('chat.saveToLibrary', 'Save to Library')}
                 </Text>
               </Pressable>
             )}
             <Pressable
-              style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [
+                styles.menuItem,
+                { backgroundColor: pressed ? colors.surfaceHover : colors.surface },
+              ]}
               onPress={() => {
                 setShowMenu(false)
                 handleDownload()
               }}
             >
-              <Download size={18} color={colors.text} />
+              <Download size={iconSize.lg} color={colors.text} />
               <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                 {t('chat.download', 'Download')}
               </Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [
+                styles.menuItem,
+                { backgroundColor: pressed ? colors.surfaceHover : colors.surface },
+              ]}
               onPress={() => {
                 setShowMenu(false)
                 handleShare()
               }}
             >
-              <Share2 size={18} color={colors.text} />
+              <Share2 size={iconSize.lg} color={colors.text} />
               <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                 {t('common.share', 'Share')}
               </Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [
+                styles.menuItem,
+                { backgroundColor: pressed ? colors.surfaceHover : colors.surface },
+              ]}
               onPress={() => {
                 setShowMenu(false)
                 handleCopyLink()
               }}
             >
-              <Copy size={18} color={colors.text} />
+              <Copy size={iconSize.lg} color={colors.text} />
               <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                 {t('chat.copyLink', 'Copy Link')}
               </Text>
@@ -715,7 +751,7 @@ export default function MediaPreviewScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.menuCancel,
-                { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
+                { backgroundColor: pressed ? colors.surfaceHover : colors.background },
               ]}
               onPress={() => setShowMenu(false)}
             >
@@ -748,8 +784,8 @@ const styles = StyleSheet.create({
   textContent: { padding: spacing.md },
   monoText: {
     fontFamily: 'Menlo',
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
   },
   filePreview: {
     flex: 1,
@@ -776,7 +812,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   downloadBtnText: {
-    color: '#fff',
+    color: palette.white,
     fontSize: fontSize.md,
     fontWeight: '600',
   },
@@ -802,21 +838,21 @@ const styles = StyleSheet.create({
   },
   zipSize: {
     fontSize: fontSize.xs,
-    minWidth: 50,
+    minWidth: size.controlLg + spacing.xxs,
     textAlign: 'right',
   },
   // Menu modal styles
   menuOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: palette.black,
     justifyContent: 'flex-end',
   },
   menuSheet: {
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     padding: spacing.md,
-    paddingBottom: 34,
-    gap: 4,
+    paddingBottom: spacing['3xl'] + spacing.xxs,
+    gap: spacing.xs,
   },
   menuTitle: {
     fontSize: fontSize.sm,
@@ -828,7 +864,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: 14,
+    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
   },
@@ -838,7 +874,7 @@ const styles = StyleSheet.create({
   },
   menuCancel: {
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: spacing.lg,
     borderRadius: radius.md,
     marginTop: spacing.sm,
   },

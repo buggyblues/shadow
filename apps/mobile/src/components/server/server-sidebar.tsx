@@ -8,7 +8,7 @@ import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
-import { radius, spacing, useColors } from '../../theme'
+import { border, iconSize, radius, size, spacing, useColors } from '../../theme'
 import { Avatar } from '../common/avatar'
 
 interface Server {
@@ -167,7 +167,7 @@ export function ServerSidebar() {
           return (
             <Pressable
               key={server.id}
-              style={[styles.serverItem, isActive && { backgroundColor: `${colors.primary}30` }]}
+              style={[styles.serverItem, isActive && { backgroundColor: colors.surfaceHover }]}
               onPress={() => {
                 setActiveServer(server.id)
                 void markServerRead(server.id)
@@ -205,7 +205,7 @@ export function ServerSidebar() {
           return (
             <Pressable
               key={channel.id}
-              style={[styles.serverItem, isActive && { backgroundColor: `${colors.primary}30` }]}
+              style={[styles.serverItem, isActive && { backgroundColor: colors.surfaceHover }]}
               onPress={() => {
                 setActiveServer(null)
                 setActiveChannel(channel.id)
@@ -247,7 +247,7 @@ export function ServerSidebar() {
           style={[styles.actionItem, { backgroundColor: colors.surface }]}
           onPress={openAddMenu}
         >
-          <Plus size={22} color={colors.success} />
+          <Plus size={iconSize['2xl']} color={colors.success} />
         </Pressable>
 
         {/* Discover */}
@@ -255,7 +255,7 @@ export function ServerSidebar() {
           style={[styles.actionItem, { backgroundColor: colors.surface }]}
           onPress={() => router.push('/(main)/discover')}
         >
-          <Compass size={22} color={colors.primary} />
+          <Compass size={iconSize['2xl']} color={colors.primary} />
         </Pressable>
       </ScrollView>
 
@@ -274,7 +274,7 @@ export function ServerSidebar() {
 
 const styles = StyleSheet.create({
   container: {
-    width: 68,
+    width: size.settingsRowMinHeight,
     alignItems: 'center',
     paddingTop: spacing.sm,
   },
@@ -283,8 +283,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   serverItem: {
-    width: 48,
-    height: 48,
+    width: size.controlLg,
+    height: size.controlLg,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -293,40 +293,40 @@ const styles = StyleSheet.create({
   },
   activeIndicator: {
     position: 'absolute',
-    left: -8,
-    width: 4,
-    height: 24,
-    borderRadius: 2,
+    left: -spacing.sm,
+    width: size.dotXs,
+    height: size.avatarXs,
+    borderRadius: radius.xs,
   },
   unreadDot: {
     position: 'absolute',
-    right: -1,
-    bottom: -1,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
+    right: -border.hairline,
+    bottom: -border.hairline,
+    width: size.dotLg,
+    height: size.dotLg,
+    borderRadius: radius.sm,
+    borderWidth: border.active,
   },
   dmUnreadDot: {
     position: 'absolute',
-    right: -1,
-    top: -1,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
+    right: -border.hairline,
+    top: -border.hairline,
+    width: size.dotLg,
+    height: size.dotLg,
+    borderRadius: radius.sm,
+    borderWidth: border.active,
   },
   divider: {
-    height: 2,
-    width: 32,
+    height: spacing.xxs,
+    width: size.iconButtonSm,
     alignSelf: 'center',
-    borderRadius: 1,
+    borderRadius: radius.xs,
     marginVertical: spacing.sm,
   },
   actionItem: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius['2xl'],
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,

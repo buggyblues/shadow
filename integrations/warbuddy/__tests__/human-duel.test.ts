@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  actionsForRole,
+  companionActionsForRole,
   createHumanDuel,
   decideAgentActions,
   heldKeysToDuelActions,
@@ -13,6 +15,11 @@ const SMART_MAP = ['xxxxxxx', 'xB...xx', 'xxx.x.x', 'x...A.x', 'x.....x', 'xxxxx
 const SIGHT_MAP = ['xxxxxxx', 'xB...Ax', 'x.....x', 'x.....x', 'xxxxxxx'].join('|')
 const GRASS_MAP = ['xxxxxxx', 'xB.o..x', 'x....Ax', 'x.....x', 'xxxxxxx'].join('|')
 const WALL_SLIDE_MAP = ['xxxxxxx', 'xB....x', 'x....Ax', 'x.....x', 'xxxxxxx'].join('|')
+const WATER_MAP = ['xxxxxxx', 'xB....x', 'x..w..x', 'x..A..x', 'x.....x', 'xxxxxxx'].join('|')
+const RADIUS_PATH_MAP = ['xxxxxxx', 'xB....x', 'x..x..x', 'x..A..x', 'x.....x', 'xxxxxxx'].join('|')
+const SOFT_TERRAIN_MAP = ['xxxxxxx', 'xB....x', 'x.m...x', 'x..A..x', 'x.....x', 'xxxxxxx'].join(
+  '|',
+)
 
 describe('human duel controls', () => {
   it('maps keyboard input to live tank actions', () => {
@@ -31,6 +38,45 @@ describe('human duel controls', () => {
     ])
   })
 
+  it('filters live inputs by chosen human role and supplies companion actions', () => {
+    const duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    const mixed = [
+      { type: 'drive', x: 1, y: 0 },
+      { type: 'fire' },
+      { type: 'engineerDrive', x: 0, y: 1 },
+      { type: 'engineerBomb' },
+    ] as const
+
+    expect(actionsForRole([...mixed], 'tank')).toEqual([
+      { type: 'drive', x: 1, y: 0 },
+      { type: 'fire' },
+    ])
+    expect(actionsForRole([...mixed], 'engineer')).toEqual([
+      { type: 'engineerDrive', x: 0, y: 1 },
+      { type: 'engineerBomb' },
+    ])
+    const companionEngineerActions = companionActionsForRole(duel, 0, 'tank')
+    const companionTankActions = companionActionsForRole(duel, 0, 'engineer')
+    expect(companionEngineerActions.length).toBeGreaterThan(0)
+    expect(companionEngineerActions.every((action) => action.type.startsWith('engineer'))).toBe(
+      true,
+    )
+    expect(companionTankActions.length).toBeGreaterThan(0)
+    expect(companionTankActions.every((action) => !action.type.startsWith('engineer'))).toBe(true)
+  })
+
   it('moves the human tank continuously in all four keyboard directions', () => {
     const duel = createHumanDuel({
       mapId: 'test',
@@ -42,7 +88,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'boost',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
       },
     })
 
@@ -75,7 +121,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'boost',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
       },
     })
 
@@ -103,7 +149,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'boost',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
       },
     })
 
@@ -129,22 +175,25 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'shield',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: '',
       },
     })
     duel = { ...duel, star: [4.5, 1.5] as [number, number] }
 
     for (let i = 0; i < 55 && duel.star; i += 1) {
       duel = stepHumanDuel(duel, [], await decideAgentActions(duel))
+      duel = { ...duel, flag: null }
     }
 
     expect(duel.star).toBeNull()
     expect(
-      (duel.state.tanks[1]?.stars ?? 0) > 0 || (duel.state.engineers[1]?.bombRange ?? 0) > 2,
+      (duel.state.tanks[1]?.stars ?? 0) > 0 ||
+        (duel.state.engineers[1]?.maxBombs ?? 0) > 1 ||
+        (duel.state.engineers[1]?.bombRange ?? 0) > 2,
     ).toBe(true)
   })
 
-  it('lets the engineer move, collect stars for bomb range, and plant delayed bombs', () => {
+  it('lets the engineer move, upgrade bomb count then range, and plant delayed bombs', () => {
     let duel = createHumanDuel({
       mapId: 'test',
       mapName: 'Test Map',
@@ -155,13 +204,19 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'boost',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
       },
     })
     const start = duel.state.engineers[0]!.position
 
     duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
     expect(duel.state.engineers[0]!.position[0]).toBeGreaterThan(start[0])
+
+    duel = { ...duel, star: [...duel.engineers[0].position] as [number, number] }
+    duel = stepHumanDuel(duel, [], [])
+    expect(duel.state.engineers[0]!.maxBombs).toBe(2)
+    expect(duel.state.engineers[0]!.bombRange).toBe(2)
+    expect(duel.star).toBeNull()
 
     duel = { ...duel, star: [...duel.engineers[0].position] as [number, number] }
     duel = stepHumanDuel(duel, [], [])
@@ -172,9 +227,58 @@ describe('human duel controls', () => {
     expect(duel.state.bombs).toHaveLength(1)
     expect(duel.state.bombs[0]?.range).toBe(3)
 
-    for (let i = 0; i < 30; i += 1) duel = stepHumanDuel(duel, [], [])
+    for (let i = 0; i < 30; i += 1) {
+      duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+    }
     duel = stepHumanDuel(duel, [{ type: 'engineerBomb' }], [])
-    expect(duel.state.bombs).toHaveLength(1)
+    expect(duel.state.bombs).toHaveLength(2)
+  })
+
+  it('upgrades tanks with shotgun first and armor second', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+
+    duel = { ...duel, star: [...duel.tanks[0].position] as [number, number] }
+    duel = stepHumanDuel(duel, [], [])
+    expect(duel.state.tanks[0]!.shotgunLevel).toBe(1)
+    expect(duel.state.tanks[0]!.armor).toBe(1)
+
+    duel = { ...duel, star: [...duel.tanks[0].position] as [number, number] }
+    duel = stepHumanDuel(duel, [], [])
+    expect(duel.state.tanks[0]!.armor).toBe(2)
+
+    duel = stepHumanDuel(duel, [{ type: 'fire' }], [])
+    const shotgunBullets = duel.state.bullets.filter((bullet) => bullet.owner === 0)
+    expect(shotgunBullets).toHaveLength(3)
+    expect(
+      shotgunBullets.map((bullet) => Math.round(bullet.headingDegrees ?? 0)).sort((a, b) => a - b),
+    ).toEqual([0, 45, 315])
+
+    duel.bullets = [
+      {
+        id: 'armor-test-shell',
+        owner: 1,
+        position: [duel.tanks[0].position[0] - 0.4, duel.tanks[0].position[1]],
+        heading: 0,
+        direction: 'right',
+        alive: true,
+        age: 0,
+      },
+    ]
+    duel = stepHumanDuel(duel, [], [])
+    expect(duel.state.tanks[0]!.armor).toBe(1)
+    expect(duel.state.tanks[0]!.crashed).toBe(false)
   })
 
   it('allows tanks to crush enemy engineers without hurting friendly engineers', () => {
@@ -188,7 +292,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'boost',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
       },
     })
     duel.engineers[0].position = [...duel.tanks[0].position]
@@ -211,7 +315,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'boost',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
       },
     })
     duel.tanks[0].position = [1.5, 1.5]
@@ -230,6 +334,343 @@ describe('human duel controls', () => {
     expect(duel.result.winner).toBe('human')
   })
 
+  it('lets shells cancel out and lets tank shells kill enemy engineers', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    duel.bullets = [
+      {
+        id: 'human-shell',
+        owner: 0,
+        position: [2.95, 2.5],
+        heading: 0,
+        direction: 'right',
+        alive: true,
+        age: 0,
+      },
+      {
+        id: 'agent-shell',
+        owner: 1,
+        position: [3.45, 2.5],
+        heading: 180,
+        direction: 'left',
+        alive: true,
+        age: 0,
+      },
+    ]
+
+    duel = stepHumanDuel(duel, [], [])
+
+    expect(duel.state.bullets).toHaveLength(0)
+    expect(duel.state.bulletClashes).toBe(1)
+
+    duel.bullets = [
+      {
+        id: 'engineer-shot',
+        owner: 0,
+        position: [2.95, 2.5],
+        heading: 0,
+        direction: 'right',
+        alive: true,
+        age: 0,
+      },
+    ]
+    duel.engineers[1].position = [3.2, 2.5]
+
+    duel = stepHumanDuel(duel, [], [])
+
+    expect(duel.state.engineers[1]!.alive).toBe(false)
+    expect(duel.state.bullets).toHaveLength(0)
+  })
+
+  it('uses swept bullet collision for grazing engineer hits and records the death cause', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    duel.bullets = [
+      {
+        id: 'grazing-shell',
+        owner: 0,
+        position: [2.0, 2.5],
+        heading: 0,
+        direction: 'right',
+        alive: true,
+        age: 0,
+      },
+    ]
+    duel.engineers[1].position = [2.06, 2.89]
+
+    duel = stepHumanDuel(duel, [], [])
+
+    expect(duel.state.engineers[1]!.alive).toBe(false)
+    expect(duel.state.engineers[1]!.death?.cause).toBe('bullet')
+    expect(duel.state.engineers[1]!.death?.by).toBe(0)
+  })
+
+  it('delays pickup drops and exposes speech, power highlights, and scoreboard state', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+
+    for (let i = 0; i < 80; i += 1) duel = stepHumanDuel(duel, [], [])
+    expect(duel.state.star).toBeNull()
+    expect(duel.state.flag).toBeNull()
+
+    duel = { ...duel, star: [...duel.tanks[0].position] as [number, number] }
+    duel = stepHumanDuel(
+      duel,
+      [
+        { type: 'tankSpeak', text: 'push left' },
+        { type: 'engineerSpeak', text: 'covering' },
+      ],
+      [],
+    )
+
+    expect(duel.state.speeches?.map((speech) => speech.text)).toEqual(
+      expect.arrayContaining(['push left', 'covering']),
+    )
+    expect(duel.state.tanks[0]!.status.powered).toBe(true)
+    expect(duel.state.scoreboard?.sides[0]).toMatchObject({
+      owner: 0,
+      flags: 0,
+      tankAlive: true,
+      engineerAlive: true,
+    })
+  })
+
+  it('makes the fallback tank attack visible enemy engineers', async () => {
+    const duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel.tanks[1].position = [1.5, 1.5]
+    duel.tanks[1].heading = 0
+    duel.tanks[0].position = [5.5, 4.5]
+    duel.map[5]![4] = 'o'
+    duel.engineers[0].position = [4.5, 1.5]
+
+    const actions = await decideAgentActions(duel)
+
+    expect(actions).toContainEqual({ type: 'fire' })
+  })
+
+  it('lets shells trigger bombs, chain bombs, and burn grass', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    duel.tanks[0].position = [1.5, 1.5]
+    duel.tanks[1].position = [5.5, 4.5]
+    duel.engineers[0].position = [1.5, 4.5]
+    duel.engineers[1].position = [5.5, 1.5]
+    duel.map[4]![2] = 'o'
+    duel.bombs = [
+      { id: 'first-bomb', owner: 0, position: [2.5, 2.5], range: 2, remainingFrames: 50 },
+      { id: 'chain-bomb', owner: 1, position: [3.5, 2.5], range: 2, remainingFrames: 50 },
+    ]
+    duel.bullets = [
+      {
+        id: 'trigger-shell',
+        owner: 0,
+        position: [1.9, 2.5],
+        heading: 0,
+        direction: 'right',
+        alive: true,
+        age: 0,
+      },
+    ]
+
+    duel = stepHumanDuel(duel, [], [])
+
+    expect(duel.state.bombs).toHaveLength(0)
+    expect(duel.state.explosions).toHaveLength(2)
+    expect(duel.state.map[4]![2]).toBe('.')
+  })
+
+  it('blocks engineers on bombs while tanks trigger bombs by rolling over them', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    duel.engineers[0].position = [3.5, 3.5]
+    duel.bombs = [
+      { id: 'blocking-bomb', owner: 1, position: [4.5, 3.5], range: 1, remainingFrames: 50 },
+    ]
+
+    for (let i = 0; i < 20; i += 1) {
+      duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+    }
+
+    expect(duel.state.engineers[0]!.position[0]).toBeLessThan(4)
+
+    duel.tanks[0].position = [3.25, 3.5]
+    duel.tanks[1].position = [5.5, 1.5]
+    for (let i = 0; i < 14 && duel.bombs.length > 0; i += 1) {
+      duel = stepHumanDuel(duel, [{ type: 'move', direction: 'right' }], [])
+    }
+
+    expect(duel.state.bombs).toHaveLength(0)
+    expect(duel.state.explosions.length).toBeGreaterThan(0)
+  })
+
+  it('applies bomb damage to the whole covered tile, including the edge', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    duel.tanks[1].position = [3.92, 3.92]
+    duel.engineers[1].position = [5.5, 1.5]
+    duel.bombs = [{ id: 'edge-bomb', owner: 0, position: [3.5, 3.5], range: 1, remainingFrames: 1 }]
+
+    duel = stepHumanDuel(duel, [], [])
+
+    expect(duel.state.tanks[1]!.crashed).toBe(true)
+  })
+
+  it('ends the live duel when a side captures three flags', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+
+    for (let i = 0; i < 3; i += 1) {
+      duel = { ...duel, flag: [...duel.tanks[0].position] as [number, number] }
+      duel = stepHumanDuel(duel, [], [])
+    }
+
+    expect(duel.state.flagScores).toEqual([3, 0])
+    expect(duel.status).toBe('settled')
+    expect(duel.result).toEqual({ winner: 'human', reason: 'flags' })
+  })
+
+  it('blocks water for tanks while engineers and shells can cross it', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Water Map',
+      mapRaw: WATER_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+
+    for (let i = 0; i < 20; i += 1) {
+      duel = stepHumanDuel(duel, [{ type: 'move', direction: 'up' }], [])
+    }
+    expect(duel.state.tanks[0]!.position[1]).toBeGreaterThan(3.25)
+
+    duel.engineers[0].position = [2.5, 2.5]
+    for (let i = 0; i < 9; i += 1) {
+      duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+    }
+    expect(duel.state.engineers[0]!.position[0]).toBeGreaterThan(3.25)
+    expect(duel.state.engineers[0]!.status.swimming).toBe(true)
+
+    duel = stepHumanDuel(duel, [{ type: 'engineerBomb' }], [])
+    expect(duel.state.bombs).toHaveLength(0)
+
+    for (let i = 0; i < 12; i += 1) {
+      duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+    }
+    expect(duel.state.engineers[0]!.position[0]).toBeGreaterThan(4.25)
+    expect(duel.state.engineers[0]!.status.swimming).toBe(false)
+
+    duel.tanks[0].position = [1.5, 1.5]
+    duel.tanks[1].position = [5.5, 4.5]
+    duel.bullets = [
+      {
+        id: 'water-shell',
+        owner: 0,
+        position: [2.9, 2.5],
+        heading: 0,
+        direction: 'right',
+        alive: true,
+        age: 0,
+      },
+    ]
+    for (let i = 0; i < 3; i += 1) duel = stepHumanDuel(duel, [], [])
+    expect(duel.state.bullets[0]?.position[0]).toBeGreaterThan(3.4)
+  })
+
   it('lets the fallback agent fire when it has a clear shot', async () => {
     const duel = createHumanDuel({
       mapId: 'test',
@@ -241,7 +682,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'shield',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: '',
       },
     })
     const ready = structuredClone(duel)
@@ -263,7 +704,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'shield',
-        code: 'function onIdle(me) { me.fire(); }',
+        code: '',
       },
     })
     const hidden = structuredClone(duel)
@@ -290,7 +731,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'shield',
-        code: 'function onIdle(me, enemy) { if (enemy.status && enemy.status.cloaked) me.fire(); }',
+        code: 'function onIdle(me, enemy) { if (enemy.status && enemy.status.cloaked) me.tank.fire(); }',
       },
     })
     const hidden = structuredClone(duel)
@@ -299,6 +740,174 @@ describe('human duel controls', () => {
     hidden.tanks[1].direction = 'right'
 
     await expect(decideAgentActions(hidden)).resolves.not.toEqual([{ type: 'fire' }])
+  })
+
+  it('keeps the practice system AI moving both tank and engineer when no Buddy strategy exists', async () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel = { ...duel, flag: [2.5, 1.5] as [number, number] }
+    const tankStart = duel.state.tanks[1]!.position
+    const engineerStart = duel.state.engineers[1]!.position
+
+    for (let i = 0; i < 80; i += 1) {
+      duel = stepHumanDuel(duel, [], await decideAgentActions(duel))
+    }
+
+    expect(
+      Math.hypot(
+        duel.state.tanks[1]!.position[0] - tankStart[0],
+        duel.state.tanks[1]!.position[1] - tankStart[1],
+      ),
+    ).toBeGreaterThan(0.5)
+    expect(
+      Math.hypot(
+        duel.state.engineers[1]!.position[0] - engineerStart[0],
+        duel.state.engineers[1]!.position[1] - engineerStart[1],
+      ),
+    ).toBeGreaterThan(0.5)
+    expect(duel.state.flagScores[1]).toBeGreaterThan(0)
+  })
+
+  it('does not mix system fallback into a Buddy strategy in practice mode', async () => {
+    const duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    const actions = await decideAgentActions({
+      ...duel,
+      flag: [2.5, 1.5] as [number, number],
+    })
+
+    expect(actions).toEqual([])
+  })
+
+  it('drives the practice system tank out of bomb blast lanes', async () => {
+    const duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel.tanks[1].position = [1.5, 1.5]
+    duel.bombs = [
+      { id: 'lane-bomb', owner: 0, position: [2.5, 1.5], range: 2, remainingFrames: 30 },
+    ]
+    duel.star = [5.5, 1.5]
+
+    const actions = await decideAgentActions(duel)
+    const drive = actions.find((action) => action.type === 'drive')
+
+    expect(drive).toEqual(expect.objectContaining({ type: 'drive' }))
+    expect(drive?.type === 'drive' ? drive.y : 0).toBeGreaterThan(0)
+  })
+
+  it('uses radius-aware A* routing instead of driving into a wall corner', async () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: RADIUS_PATH_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'shield',
+        code: '',
+      },
+    })
+    duel = { ...duel, flag: [5.5, 2.5] as [number, number] }
+
+    const actions = await decideAgentActions(duel)
+    const drive = actions.find((action) => action.type === 'drive')
+
+    expect(drive).toEqual(expect.objectContaining({ type: 'drive' }))
+    expect(drive?.type === 'drive' ? drive.x : 0).toBeGreaterThan(0.8)
+    expect(drive?.type === 'drive' ? Math.abs(drive.y) : 1).toBeLessThan(0.1)
+
+    for (let i = 0; i < 150 && duel.state.flagScores[1] === 0; i += 1) {
+      duel = stepHumanDuel(duel, [], await decideAgentActions(duel))
+    }
+
+    expect(duel.state.flagScores[1]).toBeGreaterThan(0)
+  })
+
+  it('recenters before following an A* waypoint that would scrape a wall corner', async () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: RADIUS_PATH_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'shield',
+        code: '',
+      },
+    })
+    duel.tanks[1].position = [2.67, 1.77]
+    duel = { ...duel, flag: [5.5, 2.5] as [number, number] }
+    const start = [...duel.tanks[1].position] as [number, number]
+
+    const actions = await decideAgentActions(duel)
+    const drive = actions.find((action) => action.type === 'drive')
+
+    expect(drive).toEqual(expect.objectContaining({ type: 'drive' }))
+    expect(drive?.type === 'drive' ? drive.x : 0).toBeLessThan(0)
+    expect(drive?.type === 'drive' ? drive.y : 0).toBeLessThan(0)
+
+    const next = stepHumanDuel(duel, [], actions)
+    expect(next.state.tanks[1]!.crashed).toBe(false)
+    expect(next.state.tanks[1]!.position[0]).toBeLessThan(start[0])
+    expect(next.state.tanks[1]!.position[1]).toBeLessThan(start[1])
+  })
+
+  it('lets the practice engineer plant bombs to open soft terrain', async () => {
+    const duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: SOFT_TERRAIN_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel.tanks[1].position = [5.5, 4.5]
+    duel.engineers[1].position = [1.5, 2.5]
+    duel.map[2]![2] = 'm'
+
+    expect(await decideAgentActions(duel)).toContainEqual({ type: 'engineerBomb' })
   })
 
   it('aligns the tank heading to the wall-parallel slide direction', () => {
@@ -312,7 +921,7 @@ describe('human duel controls', () => {
         id: 'agent',
         name: 'Agent',
         skillType: 'shield',
-        code: 'function onIdle(me) { me.turn("right"); }',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
       },
     })
     duel.tanks[0].position = [5.65, 2.5]

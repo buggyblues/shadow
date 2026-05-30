@@ -57,6 +57,15 @@ POST /api/auth/email/verify
 
 Email code verification signs in an existing user or creates a visitor account.
 
+### Password reset by email
+
+```
+POST /api/auth/password-reset/start
+POST /api/auth/password-reset/complete
+```
+
+Password reset requests do not reveal whether the email exists. Reset links are single-use, expire after 30 minutes, and revoke existing sessions after the password is updated.
+
 ### Login
 
 ```

@@ -4,6 +4,7 @@ import type { AppContainer } from '../container'
 import * as schema from '../db/schema'
 import { authMiddleware } from '../middleware/auth.middleware'
 import type { MediaVariant } from '../services/media.service'
+import { marketplaceTagsFromQuery, recommendMarketplaceCategories } from './discover-marketplace'
 
 function resolveMediaUrl(
   mediaService: {
@@ -57,6 +58,31 @@ function calculateHeatScore(params: {
   score = score * (1 + timeDecay)
 
   return Math.round(score)
+}
+
+function marketplaceScopeCondition() {
+  return or(
+    and(eq(schema.shops.scopeKind, 'server'), eq(schema.servers.isPublic, true)),
+    and(eq(schema.shops.scopeKind, 'user'), eq(schema.shops.visibility, 'public')),
+  )
+}
+
+function marketplacePublicProductConditions() {
+  return [
+    eq(schema.products.status, 'active'),
+    eq(schema.shops.status, 'active'),
+    eq(schema.commerceOffers.status, 'active'),
+    eq(schema.commerceOffers.visibility, 'public'),
+    marketplaceScopeCondition()!,
+  ]
+}
+
+function marketplaceTagConditions(tags: string[]) {
+  const normalized = [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
+  if (normalized.length === 0) return undefined
+  return or(
+    ...normalized.map((tag) => sql`${schema.products.tags} @> ${JSON.stringify([tag])}::jsonb`),
+  )
 }
 
 export function createDiscoverHandler(container: AppContainer) {
@@ -314,12 +340,16 @@ export function createDiscoverHandler(container: AppContainer) {
     const productConditions = [
       eq(schema.products.status, 'active'),
       eq(schema.shops.status, 'active'),
+      eq(schema.commerceOffers.status, 'active'),
+      eq(schema.commerceOffers.visibility, 'public'),
+      marketplaceScopeCondition()!,
     ]
     if (like) {
       productConditions.push(
         or(
           ilike(schema.products.name, like),
           ilike(schema.products.summary, like),
+          sql`${schema.products.tags}::text ILIKE ${like}`,
           ilike(schema.shops.name, like),
         )!,
       )
@@ -342,14 +372,22 @@ export function createDiscoverHandler(container: AppContainer) {
         },
       })
       .from(schema.products)
+      .innerJoin(schema.commerceOffers, eq(schema.commerceOffers.productId, schema.products.id))
       .innerJoin(schema.shops, eq(schema.products.shopId, schema.shops.id))
       .leftJoin(schema.servers, eq(schema.shops.serverId, schema.servers.id))
       .leftJoin(schema.users, eq(schema.shops.ownerUserId, schema.users.id))
       .where(and(...productConditions))
+      .groupBy(schema.products.id, schema.shops.id, schema.servers.id, schema.users.id)
       .orderBy(desc(schema.products.salesCount), desc(schema.products.updatedAt))
       .limit(limit)
 
-    const shopConditions = [eq(schema.shops.status, 'active'), eq(schema.products.status, 'active')]
+    const shopConditions = [
+      eq(schema.shops.status, 'active'),
+      eq(schema.products.status, 'active'),
+      eq(schema.commerceOffers.status, 'active'),
+      eq(schema.commerceOffers.visibility, 'public'),
+      marketplaceScopeCondition()!,
+    ]
     if (like) {
       shopConditions.push(
         or(
@@ -376,15 +414,16 @@ export function createDiscoverHandler(container: AppContainer) {
           displayName: schema.users.displayName,
           avatarUrl: schema.users.avatarUrl,
         },
-        productCount: sql<number>`count(${schema.products.id})::int`,
+        productCount: sql<number>`count(distinct ${schema.products.id})::int`,
       })
       .from(schema.shops)
       .innerJoin(schema.products, eq(schema.products.shopId, schema.shops.id))
+      .innerJoin(schema.commerceOffers, eq(schema.commerceOffers.productId, schema.products.id))
       .leftJoin(schema.servers, eq(schema.shops.serverId, schema.servers.id))
       .leftJoin(schema.users, eq(schema.shops.ownerUserId, schema.users.id))
       .where(and(...shopConditions))
       .groupBy(schema.shops.id, schema.servers.id, schema.users.id)
-      .orderBy(desc(sql`count(${schema.products.id})`), desc(schema.shops.updatedAt))
+      .orderBy(desc(sql`count(distinct ${schema.products.id})`), desc(schema.shops.updatedAt))
       .limit(limit)
 
     const communityConditions = [eq(schema.servers.isPublic, true)]
@@ -421,6 +460,9 @@ export function createDiscoverHandler(container: AppContainer) {
         billingMode: row.product.billingMode,
         price: row.product.basePrice,
         currency: row.product.currency,
+        tags: row.product.tags ?? [],
+        entitlementConfig: row.product.entitlementConfig ?? null,
+        globalPublic: true,
         salesCount: row.product.salesCount,
         ratingCount: row.product.ratingCount,
         avgRating: row.product.avgRating,
@@ -531,6 +573,232 @@ export function createDiscoverHandler(container: AppContainer) {
         shops: shopRows.length,
         communities: communityRows.length,
       },
+    })
+  })
+
+  /**
+   * GET /api/discover/marketplace/products
+   * Unified public marketplace product listing.
+   * Security: actor=user via authMiddleware; resource=marketplace.products; action=read;
+   * data class=public commerce discovery metadata. Only active public offers from public server
+   * shops or public personal shops are returned.
+   */
+  handler.get('/marketplace/products', authMiddleware, async (c) => {
+    const db = container.resolve('db')
+    const mediaService = container.resolve('mediaService')
+    const productMediaDao = container.resolve('productMediaDao')
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? '24'), 1), 72)
+    const offset = Math.max(Number(c.req.query('offset') ?? '0'), 0)
+    const rawQuery = c.req.query('q')?.trim()
+    const keyword = rawQuery && rawQuery.length >= 2 ? rawQuery : undefined
+    const like = keyword ? `%${keyword}%` : undefined
+    const scope = c.req.query('scope')
+    const tags = marketplaceTagsFromQuery(c.req.query('category'), c.req.query('tag'))
+
+    const productConditions = marketplacePublicProductConditions()
+    if (scope === 'server') productConditions.push(eq(schema.shops.scopeKind, 'server'))
+    if (scope === 'user') productConditions.push(eq(schema.shops.scopeKind, 'user'))
+    const tagCondition = marketplaceTagConditions(tags)
+    if (tagCondition) productConditions.push(tagCondition)
+    if (like) {
+      productConditions.push(
+        or(
+          ilike(schema.products.name, like),
+          ilike(schema.products.summary, like),
+          ilike(schema.products.description, like),
+          sql`${schema.products.tags}::text ILIKE ${like}`,
+          ilike(schema.shops.name, like),
+          ilike(schema.servers.name, like),
+          ilike(schema.users.username, like),
+          ilike(schema.users.displayName, like),
+        )!,
+      )
+    }
+
+    const baseQuery = db
+      .select({
+        product: schema.products,
+        shop: schema.shops,
+        server: {
+          id: schema.servers.id,
+          name: schema.servers.name,
+          slug: schema.servers.slug,
+          iconUrl: schema.servers.iconUrl,
+        },
+        owner: {
+          id: schema.users.id,
+          username: schema.users.username,
+          displayName: schema.users.displayName,
+          avatarUrl: schema.users.avatarUrl,
+        },
+      })
+      .from(schema.products)
+      .innerJoin(schema.commerceOffers, eq(schema.commerceOffers.productId, schema.products.id))
+      .innerJoin(schema.shops, eq(schema.products.shopId, schema.shops.id))
+      .leftJoin(schema.servers, eq(schema.shops.serverId, schema.servers.id))
+      .leftJoin(schema.users, eq(schema.shops.ownerUserId, schema.users.id))
+      .where(and(...productConditions))
+      .groupBy(schema.products.id, schema.shops.id, schema.servers.id, schema.users.id)
+      .orderBy(
+        desc(schema.products.salesCount),
+        desc(schema.products.ratingCount),
+        desc(schema.products.updatedAt),
+      )
+      .limit(limit)
+      .offset(offset)
+
+    const [productRows, totalRows] = await Promise.all([
+      baseQuery,
+      db
+        .select({ count: sql<number>`count(distinct ${schema.products.id})::int` })
+        .from(schema.products)
+        .innerJoin(schema.commerceOffers, eq(schema.commerceOffers.productId, schema.products.id))
+        .innerJoin(schema.shops, eq(schema.products.shopId, schema.shops.id))
+        .leftJoin(schema.servers, eq(schema.shops.serverId, schema.servers.id))
+        .leftJoin(schema.users, eq(schema.shops.ownerUserId, schema.users.id))
+        .where(and(...productConditions)),
+    ])
+
+    const products = []
+    for (const row of productRows) {
+      const media = await productMediaDao.findByProductId(row.product.id)
+      const imageUrl = resolvePreviewImage(
+        mediaService,
+        media[0]?.thumbnailUrl ?? media[0]?.url ?? null,
+      )
+      products.push({
+        id: row.product.id,
+        name: row.product.name,
+        summary: row.product.summary,
+        description: row.product.description,
+        type: row.product.type,
+        billingMode: row.product.billingMode,
+        price: row.product.basePrice,
+        basePrice: row.product.basePrice,
+        currency: row.product.currency,
+        tags: row.product.tags ?? [],
+        entitlementConfig: row.product.entitlementConfig ?? null,
+        globalPublic: true,
+        salesCount: row.product.salesCount,
+        ratingCount: row.product.ratingCount,
+        avgRating: row.product.avgRating,
+        imageUrl,
+        media: media.map((item) => ({
+          ...item,
+          url: resolvePreviewImage(mediaService, item.url),
+          thumbnailUrl: resolvePreviewImage(mediaService, item.thumbnailUrl ?? item.url),
+        })),
+        shop: {
+          id: row.shop.id,
+          name: row.shop.name,
+          scopeKind: row.shop.scopeKind,
+          logoUrl: resolvePreviewImage(mediaService, row.shop.logoUrl),
+          bannerUrl: resolvePreviewImage(mediaService, row.shop.bannerUrl),
+          server: row.server?.id
+            ? {
+                id: row.server.id,
+                name: row.server.name,
+                slug: row.server.slug,
+                iconUrl: resolvePreviewImage(mediaService, row.server.iconUrl),
+              }
+            : null,
+          owner: row.owner?.id
+            ? {
+                id: row.owner.id,
+                username: row.owner.username,
+                displayName: row.owner.displayName,
+                avatarUrl: resolvePreviewImage(mediaService, row.owner.avatarUrl),
+              }
+            : null,
+        },
+        links: {
+          product: `/app/shop/products/${row.product.id}`,
+          shop: row.server?.id
+            ? `/app/servers/${row.server.slug ?? row.server.id}/shop`
+            : row.owner?.id
+              ? `/app/shop/users/${row.owner.id}?view=buyer`
+              : null,
+          server: row.server?.id ? `/app/servers/${row.server.slug ?? row.server.id}` : null,
+          providerProfile: row.owner?.id ? `/app/profile/${row.owner.id}` : null,
+        },
+      })
+    }
+
+    const total = totalRows[0]?.count ?? products.length
+    return c.json({
+      products,
+      total,
+      hasMore: offset + products.length < total,
+      filters: { q: keyword ?? null, tags, scope: scope ?? null },
+    })
+  })
+
+  /**
+   * GET /api/discover/marketplace/categories
+   * Smart marketplace category recommendations derived from public product tags.
+   * Security: actor=user via authMiddleware; resource=marketplace.categories; action=read;
+   * data class=public commerce discovery metadata.
+   */
+  handler.get('/marketplace/categories', authMiddleware, async (c) => {
+    const db = container.resolve('db')
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? '12'), 1), 24)
+    const rawQuery = c.req.query('q')?.trim()
+    const keyword = rawQuery && rawQuery.length >= 2 ? rawQuery : undefined
+    const like = keyword ? `%${keyword}%` : undefined
+    const conditions = marketplacePublicProductConditions()
+
+    if (like) {
+      conditions.push(
+        or(
+          ilike(schema.products.name, like),
+          ilike(schema.products.summary, like),
+          ilike(schema.products.description, like),
+          sql`${schema.products.tags}::text ILIKE ${like}`,
+          ilike(schema.shops.name, like),
+          ilike(schema.servers.name, like),
+          ilike(schema.users.username, like),
+          ilike(schema.users.displayName, like),
+        )!,
+      )
+    }
+
+    const rows = await db
+      .select({
+        productId: schema.products.id,
+        tags: schema.products.tags,
+        salesCount: schema.products.salesCount,
+        ratingCount: schema.products.ratingCount,
+        avgRating: schema.products.avgRating,
+        updatedAt: schema.products.updatedAt,
+      })
+      .from(schema.products)
+      .innerJoin(schema.commerceOffers, eq(schema.commerceOffers.productId, schema.products.id))
+      .innerJoin(schema.shops, eq(schema.products.shopId, schema.shops.id))
+      .leftJoin(schema.servers, eq(schema.shops.serverId, schema.servers.id))
+      .leftJoin(schema.users, eq(schema.shops.ownerUserId, schema.users.id))
+      .where(and(...conditions))
+      .groupBy(
+        schema.products.id,
+        schema.products.tags,
+        schema.products.salesCount,
+        schema.products.ratingCount,
+        schema.products.avgRating,
+        schema.products.updatedAt,
+      )
+      .orderBy(
+        desc(schema.products.salesCount),
+        desc(schema.products.ratingCount),
+        desc(schema.products.updatedAt),
+      )
+      .limit(300)
+
+    const recommendedCategories = recommendMarketplaceCategories(rows)
+    const categories = recommendedCategories.slice(0, limit)
+
+    return c.json({
+      categories,
+      total: recommendedCategories.length,
+      filters: { q: keyword ?? null },
     })
   })
 

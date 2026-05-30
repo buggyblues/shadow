@@ -12,6 +12,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "development": "./src/index.ts",
+      "react-native": "./src/index.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs",
       "default": "./dist/index.js"

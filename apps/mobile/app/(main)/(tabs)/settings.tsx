@@ -4,37 +4,35 @@ import {
   Bell,
   Bot,
   ChevronRight,
-  Compass,
+  Globe2,
   Link2,
   LogOut,
   Paintbrush,
-  QrCode,
   Shield,
   Target,
   User,
 } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
-import { Alert, ScrollView, StyleSheet, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { ShrimpCoinIcon } from '../../../src/components/common/shrimp-coin'
 import {
-  ActionTile,
   AppText,
   BackgroundSurface,
   Badge,
   Button,
-  CardPressable,
-  GlassPanel,
-  MenuItem,
-  Separator,
+  IconBubble,
+  MobileNavigationBar,
+  PageScroll,
+  SurfaceList,
+  SurfaceListItem,
   type Tone,
 } from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { disconnectSocket } from '../../../src/lib/socket'
 import { useAuthStore } from '../../../src/stores/auth.store'
-import { radius, spacing, useColors } from '../../../src/theme'
+import { border, iconSize, radius, size, spacing, useColors } from '../../../src/theme'
 
 type SectionItem = {
   key: string
@@ -48,7 +46,6 @@ export default function SettingsScreen() {
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const { user, logout } = useAuthStore()
 
   const { data: wallet } = useQuery({
@@ -117,6 +114,13 @@ export default function SettingsScreen() {
 
   const accountSettings: SectionItem[] = [
     {
+      key: 'server',
+      icon: Globe2,
+      label: t('settings.serverUrlTitle'),
+      tone: 'primary',
+      route: '/(main)/settings/server',
+    },
+    {
       key: 'account',
       icon: Shield,
       label: t('settings.tabAccount'),
@@ -134,199 +138,189 @@ export default function SettingsScreen() {
 
   const renderGroup = (title: string, items: SectionItem[]) => (
     <View style={styles.group}>
-      <AppText variant="label" tone="secondary" style={styles.groupTitle}>
+      <AppText variant="bodyStrong" style={styles.groupTitle}>
         {title}
       </AppText>
-      <GlassPanel padded={false} style={styles.sectionGroup}>
+      <SurfaceList style={styles.groupList}>
         {items.map((item, index) => {
-          const isLast = index === items.length - 1
+          const Icon = item.icon
           return (
-            <View key={item.key}>
-              <MenuItem
-                icon={item.icon}
-                title={item.label}
+            <SurfaceListItem
+              key={item.key}
+              last={index === items.length - 1}
+              onPress={() => router.push(item.route as never)}
+              style={styles.groupRow}
+            >
+              <IconBubble
+                icon={Icon}
                 tone={item.tone}
-                right={<ChevronRight size={16} color={colors.textMuted} strokeWidth={2.5} />}
-                onPress={() => router.push(item.route as never)}
+                size={iconSize.lg}
+                style={styles.groupRowIcon}
               />
-              {!isLast ? <Separator style={styles.separator} /> : null}
-            </View>
+              <AppText variant="bodyStrong" style={styles.groupRowLabel} numberOfLines={1}>
+                {item.label}
+              </AppText>
+              <ChevronRight size={iconSize.lg} color={colors.textMuted} strokeWidth={2.5} />
+            </SurfaceListItem>
           )
         })}
-      </GlassPanel>
+      </SurfaceList>
     </View>
   )
 
   return (
     <BackgroundSurface>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 96 }]}
-      >
-        <CardPressable
-          variant="glassPanel"
-          padded={false}
-          style={styles.profileCard}
+      <MobileNavigationBar title={t('nav.me')} />
+      <PageScroll compact edgeToEdge contentContainerStyle={styles.scrollContent}>
+        <Pressable
           onPress={() => router.push('/(main)/settings/profile' as never)}
+          style={({ pressed }) => [
+            styles.profileHeader,
+            {
+              backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+              borderBottomColor: colors.border,
+            },
+          ]}
         >
-          <View style={[styles.profileBanner, { backgroundColor: `${colors.primary}20` }]} />
           <View style={styles.profileBody}>
-            <View style={styles.profileAvatarRow}>
+            <View style={styles.profileMainRow}>
               <Avatar
                 uri={user.avatarUrl}
                 name={user.displayName || user.username}
-                size={68}
+                size={size.avatarXl}
                 userId={user.id}
                 status="online"
                 showStatus
               />
-              <Badge variant="primary" size="md">
-                {t('settings.tabProfile')}
-              </Badge>
-            </View>
-            <AppText variant="headline" style={styles.profileName} numberOfLines={1}>
-              {user.displayName || user.username}
-            </AppText>
-            <AppText variant="label" tone="secondary" numberOfLines={1}>
-              @{user.username}
-            </AppText>
-
-            <View style={styles.profileStatsRow}>
-              {wallet ? (
-                <View
-                  style={[
-                    styles.profileStat,
-                    {
-                      backgroundColor: `${colors.shrimpCoin}18`,
-                      borderColor: `${colors.shrimpCoin}35`,
-                    },
-                  ]}
-                >
-                  <ShrimpCoinIcon size={16} color={colors.shrimpCoin} />
-                  <AppText variant="label" style={{ color: colors.shrimpCoin }}>
-                    {wallet.balance}
+              <View style={styles.profileInfo}>
+                <View style={styles.profileTitleRow}>
+                  <AppText variant="headline" style={styles.profileName} numberOfLines={1}>
+                    {user.displayName || user.username}
                   </AppText>
+                  <Badge variant="primary" size="md">
+                    {t('settings.tabProfile')}
+                  </Badge>
                 </View>
-              ) : null}
-              <View
-                style={[
-                  styles.profileStat,
-                  { backgroundColor: colors.glassSoft, borderColor: colors.glassLine },
-                ]}
-              >
                 <AppText variant="label" tone="secondary" numberOfLines={1}>
-                  {user.email}
+                  @{user.username}
                 </AppText>
+
+                <View style={styles.profileStatsRow}>
+                  {wallet ? (
+                    <View
+                      style={[
+                        styles.profileStat,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.cardBorder,
+                        },
+                      ]}
+                    >
+                      <ShrimpCoinIcon size={iconSize.md} color={colors.shrimpCoin} />
+                      <AppText variant="label" style={{ color: colors.shrimpCoin }}>
+                        {wallet.balance}
+                      </AppText>
+                    </View>
+                  ) : null}
+                  <View
+                    style={[
+                      styles.profileStat,
+                      { backgroundColor: colors.inputBackground, borderColor: colors.border },
+                    ]}
+                  >
+                    <AppText variant="label" tone="secondary" numberOfLines={1}>
+                      {user.email}
+                    </AppText>
+                  </View>
+                </View>
               </View>
             </View>
           </View>
-        </CardPressable>
-
-        <View style={styles.quickActionRow}>
-          <ActionTile
-            icon={Compass}
-            label={t('guide.discoverTitle')}
-            tone="primary"
-            onPress={() => router.push('/(main)/discover' as never)}
-          />
-          <ActionTile
-            icon={Bot}
-            label={t('settings.tabBuddy')}
-            tone="primary"
-            onPress={() => router.push('/(main)/settings/buddy' as never)}
-          />
-          <ActionTile
-            icon={Target}
-            label={t('settings.tabTasks')}
-            tone="danger"
-            onPress={() => router.push('/(main)/settings/tasks' as never)}
-          />
-          <ActionTile
-            icon={QrCode}
-            label={t('settings.qrCard')}
-            tone="success"
-            onPress={() => router.push(`/(main)/profile/${user.id}` as never)}
-          />
-        </View>
+        </Pressable>
 
         {renderGroup(t('settings.tabProfile').toUpperCase(), userSettings)}
         {renderGroup(t('settings.activityGroup'), activitySettings)}
         {renderGroup(t('settings.tabAccount').toUpperCase(), accountSettings)}
 
-        <GlassPanel style={styles.logoutPanel}>
+        <View style={styles.logoutPanel}>
           <Button variant="danger" size="lg" icon={LogOut} onPress={handleLogout}>
             {t('settings.logout')}
           </Button>
-        </GlassPanel>
-      </ScrollView>
+        </View>
+      </PageScroll>
     </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingTop: spacing.md,
-    gap: spacing.lg,
+    gap: spacing.none,
   },
-  profileCard: {
-    marginHorizontal: spacing.md,
-    borderRadius: radius['3xl'],
-  },
-  profileBanner: {
-    height: 68,
+  profileHeader: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   profileBody: {
-    padding: spacing.lg,
-    paddingTop: 0,
-    marginTop: -28,
+    minHeight: size.listItemLg + spacing['3xl'],
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+    justifyContent: 'center',
   },
-  profileAvatarRow: {
+  profileMainRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: spacing.md,
   },
+  profileInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  profileTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   profileName: {
-    marginTop: spacing.md,
+    flexShrink: 1,
   },
   profileStatsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     flexWrap: 'wrap',
   },
   profileStat: {
-    minHeight: 30,
+    minHeight: size.sectionCompactIcon,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     maxWidth: '100%',
   },
-  quickActionRow: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-  },
   group: {
-    gap: spacing.sm,
+    paddingTop: spacing.xl,
   },
   groupTitle: {
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
     paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.sm,
   },
-  sectionGroup: {
-    marginHorizontal: spacing.md,
-    borderRadius: radius['2xl'],
-    overflow: 'hidden',
+  groupList: {
+    width: '100%',
   },
-  separator: {
-    marginLeft: 62,
+  groupRow: {
+    minHeight: size.settingsRowMinHeight,
+  },
+  groupRowIcon: {
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius.xl,
+  },
+  groupRowLabel: {
+    flex: 1,
   },
   logoutPanel: {
-    marginHorizontal: spacing.md,
-    padding: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
   },
 })

@@ -2,7 +2,7 @@ import { getCatAvatarByUserId } from '@shadowob/shared'
 import { Image } from 'expo-image'
 import { StyleSheet, Text, View } from 'react-native'
 import { getImageUrl } from '../../lib/api'
-import { useColors } from '../../theme'
+import { border, palette, radius, spacing, useColors } from '../../theme'
 
 interface AvatarProps {
   uri: string | null | undefined
@@ -30,7 +30,7 @@ export function Avatar({
   const src = resolvedUri || getCatAvatarByUserId(fallbackSeed)
   const dotSize = Math.max(10, Math.round(size * 0.28))
   const statusColor = getStatusColor(colors, status)
-  const borderRadius = shape === 'server' ? Math.max(12, Math.round(size * 0.28)) : size / 2
+  const borderRadius = shape === 'server' ? radius['2lg'] : size / 2
 
   const initials = (name || '?').slice(0, 2).toUpperCase()
   return (
@@ -41,10 +41,8 @@ export function Avatar({
           width: size,
           height: size,
           borderRadius,
-          backgroundColor: colors.inputBackground,
-          borderColor:
-            colors.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)',
-          shadowColor: colors.mode === 'dark' ? '#000000' : '#64748B',
+          backgroundColor: shape === 'server' ? colors.surface : colors.inputBackground,
+          borderColor: shape === 'server' ? colors.primary : colors.border,
         },
       ]}
     >
@@ -57,7 +55,9 @@ export function Avatar({
         />
       ) : (
         <View style={[styles.fallback, { backgroundColor: colors.primary, borderRadius }]}>
-          <Text style={[styles.initials, { fontSize: size * 0.4, color: '#fff' }]}>{initials}</Text>
+          <Text style={[styles.initials, { fontSize: size * 0.4, color: palette.white }]}>
+            {initials}
+          </Text>
         </View>
       )}
       {showStatus ? (
@@ -89,11 +89,7 @@ const styles = StyleSheet.create({
   shell: {
     position: 'relative',
     overflow: 'visible',
-    borderWidth: 2,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 14,
-    elevation: 3,
+    borderWidth: border.active,
   },
   image: {
     width: '100%',
@@ -110,8 +106,8 @@ const styles = StyleSheet.create({
   },
   statusDot: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
-    borderWidth: 2.5,
+    right: -spacing.xxs,
+    bottom: -spacing.xxs,
+    borderWidth: border.active,
   },
 })

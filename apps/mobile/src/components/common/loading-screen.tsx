@@ -1,4 +1,5 @@
 import { StyleSheet, View } from 'react-native'
+import { spacing } from '../../theme'
 import { AppScreen, AppText, Spinner } from '../ui'
 
 interface LoadingScreenProps {
@@ -27,6 +28,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   text: {
-    marginTop: 12,
+    marginTop: spacing.md,
   },
 })

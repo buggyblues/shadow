@@ -446,6 +446,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
     product?.billingMode || 'one_time',
   )
   const [tags, setTags] = useState(product?.tags?.join(', ') || '')
+  const [globalPublic, setGlobalPublic] = useState(product?.globalPublic === true)
   const [categoryId, setCategoryId] = useState(product?.categoryId || '')
   const [selectedTemplate, setSelectedTemplate] = useState<ProductTemplate>(
     inferProductTemplate(product),
@@ -499,6 +500,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
     setBasePrice(source.basePrice?.toString() || '0')
     setBillingMode(source.billingMode || 'one_time')
     setTags(source.tags?.join(', ') || '')
+    setGlobalPublic(source.globalPublic === true)
     setSelectedTemplate(inferProductTemplate(source))
     setCategoryId(source.categoryId || '')
     setMediaUrls(source.media?.map((m) => m.url) || [])
@@ -656,6 +658,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
           .split(',')
           .map((t) => t.trim())
           .filter(Boolean),
+        globalPublic,
         categoryId: categoryId || undefined,
         media: mediaUrls.map((url, i) => ({ url, type: 'image', position: i })),
         specNames: specNames
@@ -930,6 +933,23 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               </div>
             </FormField>
           </div>
+
+          <label className="mb-5 flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-tertiary/45 p-3">
+            <input
+              type="checkbox"
+              checked={globalPublic}
+              onChange={(event) => setGlobalPublic(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-border-subtle bg-bg-secondary text-primary"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-black text-text-primary">
+                {t('commerceMarketplace.globalPublic')}
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-text-muted">
+                {t('commerceMarketplace.globalPublicHint')}
+              </span>
+            </span>
+          </label>
 
           <FormField label="商品简介" className="mb-5">
             <input

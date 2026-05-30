@@ -1,25 +1,25 @@
 import { Save } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
 import { AvatarEditor } from '../../../src/components/common/avatar-editor'
 import { LanguageSwitcher } from '../../../src/components/common/language-switcher'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
 import {
-  AppText,
   BackgroundSurface,
-  GlassPanel,
   IconButton,
+  PageScroll,
+  Section,
+  StatusNotice,
   TextField,
 } from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
-import { spacing, useColors } from '../../../src/theme'
+import { spacing } from '../../../src/theme'
 
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation()
-  const colors = useColors()
   const { user, setUser } = useAuthStore()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? '')
@@ -53,6 +53,10 @@ export default function ProfileSettingsScreen() {
   }
 
   if (!user) return null
+  const messageTone =
+    message.includes('成功') || message.includes('success') || message.includes('Success')
+      ? 'success'
+      : 'danger'
 
   return (
     <BackgroundSurface style={styles.container}>
@@ -69,12 +73,8 @@ export default function ProfileSettingsScreen() {
           />
         }
       />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        {/* Avatar */}
-        <GlassPanel style={styles.card}>
-          <AppText variant="label" tone="secondary" style={styles.label}>
-            {t('settings.avatarLabel')}
-          </AppText>
+      <PageScroll compact>
+        <Section title={t('settings.avatarLabel')} padded cardStyle={styles.card}>
           <View style={styles.avatarRow}>
             <Avatar
               uri={avatarUrl || user.avatarUrl}
@@ -88,55 +88,35 @@ export default function ProfileSettingsScreen() {
             userId={user.id}
             onChange={setAvatarUrl}
           />
-        </GlassPanel>
+        </Section>
 
-        {/* Display name */}
-        <GlassPanel style={styles.card}>
+        <Section title={t('settings.displayNameLabel')} padded cardStyle={styles.card}>
           <TextField
-            label={t('settings.displayNameLabel')}
             value={displayName}
             onChangeText={setDisplayName}
             placeholder={user.username}
           />
-        </GlassPanel>
+        </Section>
 
-        {/* Language */}
-        <GlassPanel style={styles.card}>
-          <AppText variant="label" tone="secondary" style={styles.label}>
-            {t('settings.languageLabel')}
-          </AppText>
+        <Section title={t('settings.languageLabel')} padded cardStyle={styles.card}>
           <LanguageSwitcher />
-        </GlassPanel>
+        </Section>
 
         {message ? (
-          <AppText
-            variant="label"
-            style={{
-              color:
-                message.includes('成功') ||
-                message.includes('success') ||
-                message.includes('Success')
-                  ? colors.success
-                  : colors.error,
-              marginTop: spacing.sm,
-              textAlign: 'center',
-            }}
-          >
+          <StatusNotice tone={messageTone} style={styles.notice}>
             {message}
-          </AppText>
+          </StatusNotice>
         ) : null}
-      </ScrollView>
+      </PageScroll>
     </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   card: { gap: spacing.md },
   avatarRow: { alignItems: 'center', marginBottom: spacing.md },
-  label: {
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  notice: {
+    marginTop: spacing.xs,
   },
 })

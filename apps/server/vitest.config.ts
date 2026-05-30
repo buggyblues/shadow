@@ -7,7 +7,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     testTimeout: 30_000,
-    include: ['__tests__/**/*.{test,spec}.{ts,tsx}'],
+    include: ['__tests__/**/*.{test,spec}.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}'],
     exclude: [...configDefaults.exclude],
   },
 })

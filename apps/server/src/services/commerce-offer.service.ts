@@ -105,6 +105,16 @@ export class CommerceOfferService {
     })
   }
 
+  async setDefaultOfferVisibilityForProduct(productId: string, visibility: string) {
+    const offer = await this.ensureDefaultOfferForProduct({ productId })
+    const [updated] = await this.db
+      .update(commerceOffers)
+      .set({ visibility, updatedAt: new Date() })
+      .where(eq(commerceOffers.id, offer.id))
+      .returning()
+    return updated ?? offer
+  }
+
   async ensureDefaultOffersForShop(shopId: string, opts?: { keyword?: string; limit?: number }) {
     const productList = await this.deps.productService.getProducts(shopId, {
       status: 'active',

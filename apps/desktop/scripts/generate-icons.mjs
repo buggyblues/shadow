@@ -9,7 +9,6 @@ import sharp from 'sharp'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const assetsDir = join(__dirname, '..', 'assets')
 const iconSvg = readFileSync(join(assetsDir, 'icon.svg'))
-const traySvg = readFileSync(join(assetsDir, 'trayTemplate.svg'))
 
 // Apple HIG: macOS icon content should occupy ~80% of the canvas.
 // At 1024×1024 the visible shape is 824×824, centered with 100px padding.
@@ -83,14 +82,91 @@ async function generateAppIcons() {
 }
 
 async function generateTrayIcons() {
-  // macOS tray: 16x16 @1x, 32x32 @2x (template image)
-  await sharp(traySvg).resize(16, 16).png().toFile(join(assetsDir, 'trayTemplate.png'))
-  await sharp(traySvg).resize(32, 32).png().toFile(join(assetsDir, 'trayTemplate@2x.png'))
-  console.log('✓ trayTemplate.png + @2x (macOS menu bar)')
+  const states = [
+    { state: 'idle', macBase: 'trayTemplate', winBase: 'tray', badge: 'none' },
+    { state: 'active', macBase: 'trayTemplateActive', winBase: 'trayActive', badge: 'active' },
+    {
+      state: 'attention',
+      macBase: 'trayTemplateAttention',
+      winBase: 'trayAttention',
+      badge: 'attention',
+    },
+  ]
 
-  // Windows tray: 16x16 colored icon from main icon
-  await sharp(iconSvg).resize(16, 16).png().toFile(join(assetsDir, 'tray.png'))
-  console.log('✓ tray.png (Windows taskbar)')
+  for (const entry of states) {
+    const macSvg = Buffer.from(createMacTraySvg(entry.badge))
+    await sharp(macSvg)
+      .resize(18, 18)
+      .png()
+      .toFile(join(assetsDir, `${entry.macBase}.png`))
+    await sharp(macSvg)
+      .resize(36, 36)
+      .png()
+      .toFile(join(assetsDir, `${entry.macBase}@2x.png`))
+
+    const winSvg = Buffer.from(createWindowsTraySvg(entry.badge))
+    await sharp(winSvg)
+      .resize(16, 16)
+      .png()
+      .toFile(join(assetsDir, `${entry.winBase}.png`))
+    await sharp(winSvg)
+      .resize(32, 32)
+      .png()
+      .toFile(join(assetsDir, `${entry.winBase}@2x.png`))
+  }
+
+  console.log('✓ tray icons (macOS template + Windows color, idle/active/attention)')
+}
+
+function createMacTraySvg(_badge) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <g transform="translate(0,-4) scale(1.18) translate(-7.6,-3)">
+    <path d="M22,47 Q15,24 28,24 Q34,24 40,40" fill="black"/>
+    <path d="M78,47 Q85,24 72,24 Q66,24 60,40" fill="black"/>
+    <ellipse cx="50" cy="62" rx="38" ry="26" fill="black"/>
+  </g>
+</svg>`
+}
+
+function createWindowsTraySvg(badge) {
+  const badgeColor = badge === 'active' ? '#22c55e' : badge === 'attention' ? '#f59e0b' : '#7a7d85'
+  const badgeShape =
+    badge === 'none'
+      ? ''
+      : `<circle cx="78" cy="78" r="15" fill="${badgeColor}" stroke="#0b0b0d" stroke-width="5"/>
+        ${
+          badge === 'attention'
+            ? '<rect x="75" y="67" width="6" height="14" rx="3" fill="#1b1200"/><circle cx="78" cy="86" r="3" fill="#1b1200"/>'
+            : ''
+        }`
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <radialGradient id="catBody" cx="50%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#5a5a5e"/>
+      <stop offset="50%" stop-color="#3d3d40"/>
+      <stop offset="100%" stop-color="#18181a"/>
+    </radialGradient>
+    <radialGradient id="eyeYellow" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffffcc"/>
+      <stop offset="35%" stop-color="#f8e71c"/>
+      <stop offset="100%" stop-color="#b3a100"/>
+    </radialGradient>
+    <radialGradient id="eyeCyan" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ccffff"/>
+      <stop offset="35%" stop-color="#00f3ff"/>
+      <stop offset="100%" stop-color="#0099aa"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(0,-3)">
+    <path d="M22,47 Q15,24 28,24 Q34,24 40,40" fill="url(#catBody)" stroke="#0b0b0d" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M78,47 Q85,24 72,24 Q66,24 60,40" fill="url(#catBody)" stroke="#0b0b0d" stroke-width="5" stroke-linejoin="round"/>
+    <ellipse cx="50" cy="62" rx="38" ry="26" fill="url(#catBody)" stroke="#0b0b0d" stroke-width="5"/>
+    <circle cx="33" cy="58" r="6" fill="url(#eyeYellow)" stroke="#0b0b0d" stroke-width="2"/>
+    <circle cx="67" cy="58" r="6" fill="url(#eyeCyan)" stroke="#0b0b0d" stroke-width="2"/>
+  </g>
+  ${badgeShape}
+</svg>`
 }
 
 // Build ICO file format (multi-resolution PNG container)

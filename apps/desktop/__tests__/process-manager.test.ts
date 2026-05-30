@@ -26,6 +26,10 @@ const mockIpcHandlers = new Map<string, (...args: any[]) => any>()
 vi.mock('electron', () => ({
   app: {
     getAppPath: vi.fn(() => '/app'),
+    getName: vi.fn(() => 'Shadow'),
+    getPath: vi.fn((name: string) =>
+      name === 'exe' ? '/Applications/Shadow.app/Contents/MacOS/Shadow' : '/tmp/shadow',
+    ),
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (...args: any[]) => any) => {

@@ -3,7 +3,6 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
   Bot,
   Check,
-  ChevronLeft,
   CircleAlert,
   Hash,
   Layers3,
@@ -34,11 +33,24 @@ import {
   CardPressable,
   ChipButton,
   IconButton,
+  MobileBackButton,
+  MobileNavigationBar,
   TextField,
 } from '../../../../src/components/ui'
 import { fetchApi } from '../../../../src/lib/api'
+import { serverChannelHref } from '../../../../src/lib/routes'
 import { showToast } from '../../../../src/lib/toast'
-import { radius, spacing, useColors } from '../../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  letterSpacing,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 interface Category {
   id: string
@@ -98,8 +110,8 @@ export default function CreateChannelScreen() {
   const colors = useColors()
   const router = useRouter()
   const navigation = useNavigation()
-  const queryClient = useQueryClient()
   const insets = useSafeAreaInsets()
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false })
@@ -352,7 +364,7 @@ export default function CreateChannelScreen() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['channels', server?.id] })
-      router.replace(`/(main)/servers/${serverSlug}/channels/${data.id}` as never)
+      router.replace(serverChannelHref(serverSlug, data.id) as never)
     },
     onError: (err: Error) => showToast(err.message || t('common.error'), 'error'),
   })
@@ -391,43 +403,22 @@ export default function CreateChannelScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <View
-        style={[
-          styles.header,
-          { backgroundColor: colors.surface, paddingTop: insets.top + spacing.md },
-        ]}
-      >
-        <IconButton
-          icon={ChevronLeft}
-          variant="ghost"
-          iconColor={colors.text}
-          iconSize={26}
-          style={styles.headerBtn}
-          onPress={handleBack}
-        />
-        <View
-          style={{
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingLeft: spacing['4xl'],
-          }}
-        >
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            {t('server.createChannel')}
-          </Text>
-        </View>
-        <Button
-          onPress={handleCreate}
-          disabled={createChannelMutation.isPending}
-          loading={createChannelMutation.isPending}
-          variant="primary"
-          size="sm"
-          style={styles.headerCreateBtn}
-        >
-          {createButtonLabel}
-        </Button>
-      </View>
+      <MobileNavigationBar
+        title={t('server.createChannel')}
+        left={<MobileBackButton onPress={handleBack} />}
+        right={
+          <Button
+            onPress={handleCreate}
+            disabled={createChannelMutation.isPending}
+            loading={createChannelMutation.isPending}
+            variant="primary"
+            size="sm"
+            style={styles.headerCreateBtn}
+          >
+            {createButtonLabel}
+          </Button>
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -522,14 +513,19 @@ export default function CreateChannelScreen() {
                     padded={false}
                     style={styles.selectedChip}
                   >
-                    <Avatar uri={item.avatarUrl} name={item.name} size={24} userId={item.userId} />
+                    <Avatar
+                      uri={item.avatarUrl}
+                      name={item.name}
+                      size={iconSize['3xl']}
+                      userId={item.userId}
+                    />
                     <Text
                       style={[styles.selectedChipText, { color: colors.text }]}
                       numberOfLines={1}
                     >
                       {item.name}
                     </Text>
-                    <X size={12} color={colors.textMuted} />
+                    <X size={iconSize.xs} color={colors.textMuted} />
                   </CardPressable>
                 ))}
               </ScrollView>
@@ -545,7 +541,7 @@ export default function CreateChannelScreen() {
               value={memberSearch}
               onChangeText={setMemberSearch}
               placeholder={t('members.searchMembers', '搜索成员')}
-              left={<Search size={16} color={colors.textMuted} />}
+              left={<Search size={iconSize.md} color={colors.textMuted} />}
               right={
                 memberSearch.length > 0 ? (
                   <IconButton
@@ -642,7 +638,7 @@ export default function CreateChannelScreen() {
                 (activeTab === 'members' && selectableMembers.length === 0) ||
                 (activeTab === 'myAgents' && selectableMyAgents.length === 0)) && (
                 <View style={styles.emptyStateWrap}>
-                  <CircleAlert size={18} color={colors.textMuted} />
+                  <CircleAlert size={iconSize.lg} color={colors.textMuted} />
                   <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                     {activeTab === 'bots'
                       ? t('members.noServerBuddies', '暂无服务器 Buddy')
@@ -687,7 +683,7 @@ function SelectableRow({
       style={[
         styles.memberRow,
         {
-          backgroundColor: selected ? `${colors.primary}0D` : colors.glassSoft,
+          backgroundColor: selected ? colors.surfaceHover : colors.inputBackground,
         },
       ]}
       onPress={onPress}
@@ -706,12 +702,12 @@ function SelectableRow({
         style={[
           styles.checkbox,
           {
-            backgroundColor: selected ? colors.primary : 'transparent',
+            backgroundColor: selected ? colors.primary : colors.surface,
             borderColor: selected ? colors.primary : colors.border,
           },
         ]}
       >
-        {selected && <Check size={14} color="#fff" />}
+        {selected && <Check size={iconSize.sm} color={palette.white} />}
       </View>
     </CardPressable>
   )
@@ -719,37 +715,20 @@ function SelectableRow({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  headerBtn: {
-    width: 44,
-    height: 44,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
   headerCreateBtn: {
-    minWidth: 84,
-    height: 38,
+    minWidth: size.navSide - spacing.md,
+    height: size.controlSm,
   },
   nameField: {
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
   },
   inputFrame: {
-    minHeight: 52,
-    borderRadius: 18,
+    minHeight: size.plusPanelIcon,
+    borderRadius: radius.xl,
   },
   inputText: {
-    fontSize: 16,
+    fontSize: fontSize.md,
     fontWeight: '600',
   },
   section: {
@@ -757,11 +736,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
   },
   label: {
-    fontSize: 14,
+    fontSize: fontSize.sm,
     fontWeight: '800',
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
-    letterSpacing: 0.5,
+    letterSpacing: letterSpacing.none,
   },
   typeAndPrivacyRow: {
     flexDirection: 'row',
@@ -773,7 +752,7 @@ const styles = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   typeChip: {
-    minHeight: 36,
+    minHeight: size.iconButtonMd,
   },
   categoryRow: {
     flexDirection: 'row',
@@ -781,26 +760,26 @@ const styles = StyleSheet.create({
     paddingRight: spacing.lg,
   },
   categoryChip: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
   },
   privateToggleCompact: {
     flexShrink: 0,
   },
   selectionSection: {
     borderRadius: radius.xl,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     padding: spacing.md,
   },
   memberSearchField: {
     marginBottom: spacing.md,
   },
   searchFrame: {
-    minHeight: 48,
-    borderRadius: 16,
+    minHeight: size.controlLg,
+    borderRadius: radius['2lg'],
   },
   clearButton: {
-    width: 28,
-    height: 28,
+    width: size.controlXs,
+    height: size.controlXs,
   },
   tabRow: {
     flexDirection: 'row',
@@ -809,14 +788,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   tab: {
-    minHeight: 36,
+    minHeight: size.iconButtonMd,
   },
   selectedSection: {
     marginBottom: spacing.md,
     marginHorizontal: -spacing.md,
   },
   selectedLabel: {
-    fontSize: 12,
+    fontSize: fontSize.xs,
     fontWeight: '700',
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.md,
@@ -829,16 +808,16 @@ const styles = StyleSheet.create({
   selectedChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingLeft: 4,
-    paddingRight: 10,
-    paddingVertical: 4,
-    maxWidth: 160,
+    gap: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: border.hairline,
+    paddingLeft: spacing.xs,
+    paddingRight: spacing.md,
+    paddingVertical: spacing.xs,
+    maxWidth: size.compactChipMaxWidth,
   },
   selectedChipText: {
-    fontSize: 13,
+    fontSize: fontSize.sm,
     fontWeight: '600',
     flexShrink: 1,
   },
@@ -848,11 +827,11 @@ const styles = StyleSheet.create({
   emptyStateWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
     paddingVertical: spacing.xl,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: fontSize.sm,
     textAlign: 'center',
   },
   memberRow: {
@@ -861,26 +840,26 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: 18,
-    borderWidth: 1,
+    borderRadius: radius.xl,
+    borderWidth: border.hairline,
   },
   memberInfo: {
     flex: 1,
     minWidth: 0,
   },
   memberName: {
-    fontSize: 16,
+    fontSize: fontSize.md,
     fontWeight: '700',
   },
   memberMeta: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: fontSize.xs,
+    marginTop: spacing.xxs,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
+    width: size.checkbox,
+    height: size.checkbox,
+    borderRadius: radius.lg,
+    borderWidth: border.active,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -11,6 +11,7 @@ POST /api/channels/:channelId/messages
 | `content` | string | Yes | Message content |
 | `threadId` | string | No | Thread ID for thread replies |
 | `replyToId` | string | No | Message ID being replied to |
+| `attachments[]` | array | No | Pre-uploaded attachments. Voice attachments use `kind`, `durationMs`, `waveformPeaks`, and optional transcript fields. |
 | `metadata.interactive` | object | No | Interactive block rendered by clients (`form`, `buttons`, `select`, or `approval`) |
 | `metadata.commerceCards` | array | No | Commerce cards. Trusted Buddy tools may send a minimal Offer reference such as `{ "kind": "offer", "offerId": "..." }`; the server rebuilds the product, price, shop, delivery promise, and entitlement snapshot before storing the message. |
 

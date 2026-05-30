@@ -1,32 +1,30 @@
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import { LinearGradient } from 'expo-linear-gradient'
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import {
-  ChevronLeft,
-  MessageSquare,
-  Share,
-  ShoppingBag,
-  UserPlus,
-  Users,
-} from 'lucide-react-native'
-import { useEffect } from 'react'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import { MessageSquare, Share, ShoppingBag, UserPlus, Users } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
-import { ActionTile, BackgroundSurface, Button, IconButton } from '../../../../src/components/ui'
+import { SettingsHeader } from '../../../../src/components/common/settings-header'
+import { ActionTile, BackgroundSurface, Button } from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
-import { spacing, useColors } from '../../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 export default function ServerDetailScreen() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
-  const navigation = useNavigation()
-  const insets = useSafeAreaInsets()
 
   const { data: server, isLoading } = useQuery({
     queryKey: ['server', serverSlug],
@@ -46,16 +44,11 @@ export default function ServerDetailScreen() {
     enabled: !!serverSlug,
   })
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    })
-  }, [navigation])
-
   if (isLoading || !server) return <LoadingScreen />
 
   return (
     <BackgroundSurface style={styles.container}>
+      <SettingsHeader title={server.name} />
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         {/* Banner */}
         <View style={styles.bannerContainer}>
@@ -66,21 +59,8 @@ export default function ServerDetailScreen() {
               contentFit="cover"
             />
           ) : (
-            <LinearGradient
-              colors={['#00f3ff', '#ff7da5', '#f8e71c']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.bannerImage}
-            />
+            <View style={[styles.bannerImage, { backgroundColor: colors.inputBackground }]} />
           )}
-
-          {/* Floating Back Button */}
-          <IconButton
-            icon={ChevronLeft}
-            variant="glass"
-            onPress={() => router.back()}
-            containerStyle={[styles.backBtn, { top: insets.top + spacing.sm }]}
-          />
         </View>
 
         {/* Server Info */}
@@ -103,9 +83,9 @@ export default function ServerDetailScreen() {
           <Text style={[styles.serverName, { color: colors.text }]}>{server.name}</Text>
 
           <View style={styles.statsRow}>
-            <Users size={16} color={colors.textSecondary} />
+            <Users size={iconSize.md} color={colors.textSecondary} />
             <Text style={[styles.statsText, { color: colors.textSecondary }]}>
-              {server.memberCount} {t('server.membersTotal', 'Members')}
+              {t('server.membersTotal', { memberCount: server.memberCount ?? 0 })}
             </Text>
           </View>
 
@@ -154,37 +134,32 @@ const styles = StyleSheet.create({
   },
   bannerContainer: {
     position: 'relative',
-    height: 240,
+    height: size.dropdownMaxHeight,
     width: '100%',
   },
   bannerImage: {
     width: '100%',
     height: '100%',
   },
-  backBtn: {
-    position: 'absolute',
-    left: spacing.md,
-    zIndex: 10,
-  },
   infoCard: {
     marginHorizontal: spacing.xl,
-    marginTop: -54,
-    paddingTop: 64,
+    marginTop: -(size.avatarXl - spacing.sm),
+    paddingTop: spacing['6xl'],
     alignItems: 'center',
   },
   serverIconWrap: {
     position: 'absolute',
-    top: -48,
+    top: -size.controlLg,
     zIndex: 5,
-    width: 96,
-    height: 96,
+    width: size.avatarXl + spacing['3xl'],
+    height: size.avatarXl + spacing['3xl'],
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderRadius: 31,
+    borderWidth: border.active,
+    borderRadius: radius['3xl'],
   },
   serverName: {
-    fontSize: 28,
+    fontSize: fontSize['2xl'],
     fontWeight: '900',
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -192,16 +167,16 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.tight,
     marginBottom: spacing.lg,
   },
   statsText: {
-    fontSize: 14,
+    fontSize: fontSize.sm,
     fontWeight: '600',
   },
   description: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: fontSize.md,
+    lineHeight: lineHeight.md,
     textAlign: 'center',
     marginBottom: spacing.xl,
   },

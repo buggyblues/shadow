@@ -71,6 +71,10 @@ _SLASH_COMMAND_RE = re.compile(r"^/([a-zA-Z][a-zA-Z0-9._-]{0,63})(?:\s+([\s\S]*)
 _TERMINAL_TASK_STATUSES = {"completed", "failed", "canceled", "transferred"}
 
 
+def _visible_text(text: str) -> str:
+    return text.replace("\u200b", "").strip()
+
+
 def _extra(config: Any) -> dict[str, Any]:
     value = getattr(config, "extra", None)
     return value if isinstance(value, dict) else {}
@@ -217,6 +221,36 @@ def _parse_json_list(value: Any) -> list[dict[str, Any]]:
         if isinstance(parsed, dict) and isinstance(parsed.get("commands"), list):
             return [item for item in parsed["commands"] if isinstance(item, dict)]
     return []
+
+
+def _parse_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(float(str(value)))
+        return parsed if parsed >= 0 else None
+    except Exception:
+        return None
+
+
+def _parse_waveform_peaks(value: Any) -> list[int] | None:
+    if value in (None, ""):
+        return None
+    raw = value
+    if isinstance(value, str):
+        try:
+            raw = json.loads(value)
+        except Exception:
+            return None
+    if not isinstance(raw, list):
+        return None
+    peaks: list[int] = []
+    for item in raw:
+        parsed = _parse_int(item)
+        if parsed is None or parsed < 0 or parsed > 100:
+            return None
+        peaks.append(parsed)
+    return peaks if 32 <= len(peaks) <= 96 else None
 
 
 def _normalize_slash_command_name(value: Any) -> str | None:
@@ -849,7 +883,19 @@ class ShadowOBAdapter(BasePlatformAdapter):
         metadata: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> SendResult:
-        return await self._send_file(chat_id, audio_path, caption=caption, reply_to=reply_to, metadata=metadata)
+        return await self._send_file(
+            chat_id,
+            audio_path,
+            caption=caption,
+            reply_to=reply_to,
+            metadata=metadata,
+            attachment_kind="voice",
+            duration_ms=_parse_int(kwargs.get("duration_ms") or kwargs.get("durationMs")),
+            waveform_peaks=_parse_waveform_peaks(kwargs.get("waveform_peaks") or kwargs.get("waveformPeaks")),
+            transcript_text=kwargs.get("transcript") or kwargs.get("transcript_text"),
+            transcript_language=kwargs.get("transcript_language") or kwargs.get("transcriptLanguage"),
+            transcript_source="runtime",
+        )
 
     async def send_image(
         self,
@@ -937,6 +983,12 @@ class ShadowOBAdapter(BasePlatformAdapter):
         caption: str | None = None,
         reply_to: str | None = None,
         metadata: dict[str, Any] | None = None,
+        attachment_kind: str | None = None,
+        duration_ms: int | None = None,
+        waveform_peaks: list[int] | None = None,
+        transcript_text: str | None = None,
+        transcript_language: str | None = None,
+        transcript_source: str | None = None,
     ) -> SendResult:
         if self.client is None:
             return SendResult(success=False, error="Shadow client is not initialized", retryable=True)
@@ -949,7 +1001,16 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 reply_to_id=_metadata_reply_to(metadata, reply_to),
                 metadata=_metadata_payload(metadata),
             )
-            await self.client.upload_media_from_path(path, message_id=str(msg.get("id")))
+            await self.client.upload_media_from_path(
+                path,
+                message_id=str(msg.get("id")),
+                kind=attachment_kind,
+                duration_ms=duration_ms,
+                waveform_peaks=waveform_peaks,
+                transcript_text=str(transcript_text) if transcript_text else None,
+                transcript_language=str(transcript_language) if transcript_language else None,
+                transcript_source=transcript_source,
+            )
             return SendResult(success=True, message_id=str(msg.get("id") or ""), raw_response=msg)
         except Exception as exc:
             return SendResult(success=False, error=str(exc), retryable=self._is_retryable(exc))
@@ -1570,7 +1631,15 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 return
             text = _format_task_card_prompt(text, task_card, message_id=message_id)
 
-        media_paths, media_types, message_type = await self._resolve_inbound_media(message)
+        media_paths, media_types, message_type, media_metadata = await self._resolve_inbound_media(message)
+        voice_metadata = media_metadata.get("voice") if isinstance(media_metadata, dict) else None
+        voice_transcript = (
+            voice_metadata.get("transcript")
+            if isinstance(voice_metadata, dict) and voice_metadata.get("transcript_status") == "ready"
+            else None
+        )
+        if voice_transcript and not _visible_text(text):
+            text = str(voice_transcript)
         reply_to_id = _message_reply_to_id(message)
         reply_to_text = await self._fetch_reply_text(reply_to_id) if reply_to_id else None
 
@@ -1598,7 +1667,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
             text=text or ("[Media attached]" if media_paths else ""),
             message_type=message_type,
             source=source_obj,
-            raw_message={"shadow": message, "source": source},
+            raw_message={"shadow": message, "source": source, "media": media_metadata},
             message_id=message_id,
             media_urls=media_paths,
             media_types=media_types,
@@ -1655,15 +1724,40 @@ class ShadowOBAdapter(BasePlatformAdapter):
         except Exception:
             return None
 
-    async def _resolve_inbound_media(self, message: dict[str, Any]) -> tuple[list[str], list[str], Any]:
+    def _voice_attachment_metadata(self, attachment: dict[str, Any], path: str | None = None) -> dict[str, Any]:
+        transcript = attachment.get("transcript")
+        return {
+            "voice": True,
+            "attachment_id": attachment.get("id") or attachment.get("attachmentId") or attachment.get("attachment_id"),
+            "path": path,
+            "duration_ms": attachment.get("durationMs") or attachment.get("duration_ms"),
+            "waveform_peaks": attachment.get("waveformPeaks") or attachment.get("waveform_peaks"),
+            "transcript": transcript.get("text") if isinstance(transcript, dict) else None,
+            "transcript_status": transcript.get("status") if isinstance(transcript, dict) else None,
+        }
+
+    async def _resolve_inbound_media(self, message: dict[str, Any]) -> tuple[list[str], list[str], Any, dict[str, Any]]:
         attachments = message.get("attachments") or []
         if not isinstance(attachments, list) or not attachments:
-            return [], [], MessageType.TEXT
+            return [], [], MessageType.TEXT, {}
         if not self._download_media or self.client is None:
-            return [str(a.get("url")) for a in attachments if isinstance(a, dict) and a.get("url")], [str(a.get("contentType") or a.get("content_type") or "application/octet-stream") for a in attachments if isinstance(a, dict)], MessageType.DOCUMENT
+            urls = [str(a.get("url")) for a in attachments if isinstance(a, dict) and a.get("url")]
+            types = [str(a.get("contentType") or a.get("content_type") or "application/octet-stream") for a in attachments if isinstance(a, dict)]
+            voice_attachment = next(
+                (
+                    a
+                    for a in attachments
+                    if isinstance(a, dict)
+                    and (a.get("kind") == "voice" or str(a.get("contentType") or a.get("content_type") or "").startswith("audio/"))
+                ),
+                None,
+            )
+            metadata = {"voice": self._voice_attachment_metadata(voice_attachment)} if voice_attachment else {}
+            return urls, types, MessageType.DOCUMENT, metadata
 
         paths: list[str] = []
         types: list[str] = []
+        voice_metadata: dict[str, Any] | None = None
         dominant = MessageType.DOCUMENT
         for attachment in attachments:
             if not isinstance(attachment, dict):
@@ -1686,11 +1780,15 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 paths.append(local_path)
                 types.append(content_type)
                 dominant = self._message_type_for_content_type(content_type, filename)
+                if attachment.get("kind") == "voice" or content_type.startswith(_AUDIO_CT_PREFIXES):
+                    voice_metadata = self._voice_attachment_metadata(attachment, local_path)
             except Exception as exc:
                 logger.warning("[Shadow] failed to cache inbound attachment %s: %s", url, exc)
                 paths.append(str(url))
                 types.append(content_type)
-        return paths, types, dominant
+                if attachment.get("kind") == "voice" or content_type.startswith(_AUDIO_CT_PREFIXES):
+                    voice_metadata = self._voice_attachment_metadata(attachment, str(url))
+        return paths, types, dominant, {"voice": voice_metadata} if voice_metadata else {}
 
     def _cache_downloaded_media(self, data: bytes, filename: str, content_type: str) -> str:
         suffix = Path(filename).suffix or self._extension_for_content_type(content_type)

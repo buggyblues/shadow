@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert } from 'react-native'
+import { isNativeVoiceModuleError, loadAgoraRuntime } from '../lib/agora'
 import { getSocket } from '../lib/socket'
 
 export interface VoiceParticipant {
@@ -192,7 +192,10 @@ export function useVoiceChannel(channelId: string | null) {
     setStatus('connecting')
     setError(null)
     try {
-      const agora = await import('react-native-agora')
+      const agora = await loadAgoraRuntime()
+      if (!agora) {
+        throw new Error('VOICE_NATIVE_UNAVAILABLE')
+      }
       const result = await socketCall<VoiceJoinResult>('voice:join', {
         channelId,
         clientId: clientIdRef.current,
@@ -204,6 +207,7 @@ export function useVoiceChannel(channelId: string | null) {
       applyState(result.state)
       const engine = agora.createAgoraRtcEngine()
       engineRef.current = engine
+      const remoteVideoState = agora.RemoteVideoState ?? {}
       engine.initialize({ appId: result.credentials.appId })
       engine.registerEventHandler({
         onJoinChannelSuccess: () => setStatus('connected'),
@@ -218,13 +222,13 @@ export function useVoiceChannel(channelId: string | null) {
           setRemoteVideoUids((prev) => (prev.includes(remoteUid) ? prev : [...prev, remoteUid]))
         },
         onRemoteVideoStateChanged: (_connection: unknown, remoteUid: number, state: number) => {
-          if (state === agora.RemoteVideoState.RemoteVideoStateDecoding) {
+          if (state === remoteVideoState.RemoteVideoStateDecoding) {
             setRemoteVideoUids((prev) => (prev.includes(remoteUid) ? prev : [...prev, remoteUid]))
             return
           }
           if (
-            state === agora.RemoteVideoState.RemoteVideoStateStopped ||
-            state === agora.RemoteVideoState.RemoteVideoStateFailed
+            state === remoteVideoState.RemoteVideoStateStopped ||
+            state === remoteVideoState.RemoteVideoStateFailed
           ) {
             setRemoteVideoUids((prev) => prev.filter((uid) => uid !== remoteUid))
           }
@@ -259,8 +263,8 @@ export function useVoiceChannel(channelId: string | null) {
         result.credentials.agoraChannelName,
         result.credentials.uid,
         {
-          channelProfile: agora.ChannelProfileType.ChannelProfileCommunication,
-          clientRoleType: agora.ClientRoleType.ClientRoleBroadcaster,
+          channelProfile: agora.ChannelProfileType?.ChannelProfileCommunication,
+          clientRoleType: agora.ClientRoleType?.ClientRoleBroadcaster,
           publishMicrophoneTrack: true,
           autoSubscribeAudio: true,
           autoSubscribeVideo: true,
@@ -271,10 +275,13 @@ export function useVoiceChannel(channelId: string | null) {
         socket.emit('voice:heartbeat', { channelId, clientId: clientIdRef.current })
       }, 30_000)
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('voice.joinFailed')
+      const message = isNativeVoiceModuleError(err)
+        ? t('voice.nativeModuleUnavailable')
+        : err instanceof Error
+          ? err.message
+          : t('voice.joinFailed')
       setError(message)
       setStatus('error')
-      Alert.alert(t('common.error'), message)
     }
   }, [
     applyState,
@@ -302,6 +309,7 @@ export function useVoiceChannel(channelId: string | null) {
     }
     engineRef.current = null
     credentialsRef.current = null
+    setError(null)
     setRemoteVideoUids([])
     setParticipants([])
     if (activeChannelId) {

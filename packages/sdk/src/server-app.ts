@@ -328,6 +328,9 @@ export function buildShadowServerAppInboxDelivery(
 }
 
 function shadowFromPayload(payload: Record<string, unknown>): ShadowServerAppResultShadow | null {
+  if (payload.protocol === SHADOW_SERVER_APP_PROTOCOL) {
+    return payload as unknown as ShadowServerAppResultShadow
+  }
   const shadow = isProtocolRecord(payload.shadow) ? payload.shadow : null
   if (shadow?.protocol === SHADOW_SERVER_APP_PROTOCOL) {
     return shadow as unknown as ShadowServerAppResultShadow

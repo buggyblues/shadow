@@ -1,6 +1,7 @@
 import type {
   ShadowAddAgentsToServerResult,
   ShadowAgentUsageSnapshotInput,
+  ShadowAttachment,
   ShadowAuthResponse,
   ShadowBuddyInboxAdmissionPendingActionResult,
   ShadowBuddyInboxAdmissionPendingResult,
@@ -50,6 +51,8 @@ import type {
   ShadowInteractiveState,
   ShadowInviteCode,
   ShadowListing,
+  ShadowMarketplaceCategoriesResponse,
+  ShadowMarketplaceProductsResponse,
   ShadowMediaVariant,
   ShadowMember,
   ShadowMembership,
@@ -284,6 +287,28 @@ export class ShadowClient {
     displayName?: string
   }): Promise<ShadowAuthResponse> {
     return this.request('/api/auth/email/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async startPasswordReset(data: { email: string; locale?: string }): Promise<{
+    ok: true
+    expiresIn: number
+    devToken?: string
+  }> {
+    return this.request('/api/auth/password-reset/start', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async completePasswordReset(data: {
+    token: string
+    newPassword: string
+    confirmPassword: string
+  }): Promise<{ ok: boolean }> {
+    return this.request('/api/auth/password-reset/complete', {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -1591,8 +1616,25 @@ export class ShadowClient {
     file: Blob | ArrayBuffer,
     filename: string,
     contentType: string,
-    messageId?: string | { messageId?: string },
-  ): Promise<{ url: string; key: string; size: number }> {
+    messageId?:
+      | string
+      | {
+          messageId?: string
+          kind?: 'file' | 'image' | 'voice'
+          durationMs?: number
+          waveformPeaks?: number[]
+          transcriptText?: string
+          transcriptLanguage?: string
+          transcriptSource?: 'client' | 'runtime'
+        },
+  ): Promise<{
+    url: string
+    key: string
+    size: number
+    kind?: 'file' | 'image' | 'voice'
+    durationMs?: number | null
+    waveformPeaks?: number[] | null
+  }> {
     const formData = new FormData()
     const blob = file instanceof Blob ? file : new Blob([file], { type: contentType })
     formData.append('file', blob, filename)
@@ -1600,6 +1642,19 @@ export class ShadowClient {
       formData.append('messageId', messageId)
     } else if (messageId) {
       if (messageId.messageId) formData.append('messageId', messageId.messageId)
+      if (messageId.kind) formData.append('kind', messageId.kind)
+      if (typeof messageId.durationMs === 'number') {
+        formData.append('durationMs', String(messageId.durationMs))
+      }
+      if (messageId.waveformPeaks) {
+        formData.append('waveformPeaks', JSON.stringify(messageId.waveformPeaks))
+      }
+      if (messageId.transcriptText) formData.append('transcriptText', messageId.transcriptText)
+      if (messageId.transcriptLanguage) {
+        formData.append('transcriptLanguage', messageId.transcriptLanguage)
+      }
+      if (messageId.transcriptSource)
+        formData.append('transcriptSource', messageId.transcriptSource)
     }
 
     const url = `${this.baseUrl}/api/media/upload`
@@ -1614,7 +1669,81 @@ export class ShadowClient {
       const body = await res.text().catch(() => '')
       throw new Error(`Shadow API POST /api/media/upload failed (${res.status}): ${body}`)
     }
-    return res.json() as Promise<{ url: string; key: string; size: number }>
+    return res.json() as Promise<{
+      url: string
+      key: string
+      size: number
+      kind?: 'file' | 'image' | 'voice'
+      durationMs?: number | null
+      waveformPeaks?: number[] | null
+    }>
+  }
+
+  async sendVoiceMessage(
+    channelId: string,
+    file: Blob | ArrayBuffer,
+    filename: string,
+    contentType: string,
+    opts: {
+      durationMs: number
+      threadId?: string
+      replyToId?: string
+      waveformPeaks?: number[]
+      transcriptText?: string
+      transcriptLanguage?: string
+      transcriptSource?: 'client' | 'runtime'
+    },
+  ): Promise<ShadowMessage> {
+    const message = await this.sendMessage(channelId, '\u200B', {
+      threadId: opts.threadId,
+      replyToId: opts.replyToId,
+    })
+    await this.uploadMedia(file, filename, contentType, {
+      messageId: message.id,
+      kind: 'voice',
+      durationMs: opts.durationMs,
+      waveformPeaks: opts.waveformPeaks,
+      transcriptText: opts.transcriptText,
+      transcriptLanguage: opts.transcriptLanguage,
+      transcriptSource: opts.transcriptSource,
+    })
+    return this.getMessage(message.id)
+  }
+
+  async markVoicePlayed(
+    attachmentId: string,
+    input?: { positionMs?: number; completed?: boolean },
+  ): Promise<{
+    ok: true
+    playback: { played: boolean; completed: boolean; lastPositionMs: number }
+  }> {
+    return this.request(`/api/attachments/${attachmentId}/voice-playback`, {
+      method: 'PUT',
+      body: JSON.stringify(input ?? {}),
+    })
+  }
+
+  async requestVoiceTranscript(
+    attachmentId: string,
+    input?: { language?: string | null },
+  ): Promise<{ ok: true; transcript: NonNullable<ShadowAttachment['transcript']> }> {
+    return this.request(`/api/attachments/${attachmentId}/transcript`, {
+      method: 'POST',
+      body: JSON.stringify({
+        mode: 'server',
+        ...(input?.language ? { language: input.language } : {}),
+      }),
+    })
+  }
+
+  async updateVoiceTranscript(
+    attachmentId: string,
+    input: { text: string; language?: string | null; source?: 'client' | 'runtime' },
+  ): Promise<{ ok: true; transcript: NonNullable<ShadowAttachment['transcript']> }> {
+    return this.request(`/api/attachments/${attachmentId}/transcript`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
   }
 
   async resolveAttachmentMediaUrl(
@@ -1648,7 +1777,17 @@ export class ShadowClient {
    */
   async uploadMediaFromUrl(
     mediaUrl: string,
-    messageId?: string | { messageId?: string },
+    messageId?:
+      | string
+      | {
+          messageId?: string
+          kind?: 'file' | 'image' | 'voice'
+          durationMs?: number
+          waveformPeaks?: number[]
+          transcriptText?: string
+          transcriptLanguage?: string
+          transcriptSource?: 'client' | 'runtime'
+        },
   ): Promise<{ url: string; key: string; size: number }> {
     // Dynamic imports for Node.js fs/path/os
     // @ts-ignore - Dynamic import types may not resolve in Alpine Docker builds
@@ -2033,12 +2172,19 @@ export class ShadowClient {
   }
 
   async changePassword(data: {
-    currentPassword: string
+    currentPassword?: string
+    oldPassword?: string
     newPassword: string
+    confirmPassword?: string
   }): Promise<{ ok: boolean }> {
+    const oldPassword = data.oldPassword ?? data.currentPassword
     return this.request('/api/auth/password', {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        oldPassword,
+        newPassword: data.newPassword,
+        confirmPassword: data.confirmPassword ?? data.newPassword,
+      }),
     })
   }
 
@@ -2049,7 +2195,23 @@ export class ShadowClient {
   async loginWithGoogleIdToken(idToken: string): Promise<ShadowAuthResponse> {
     return this.request('/api/auth/google/id-token', {
       method: 'POST',
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify({ credential: idToken }),
+    })
+  }
+
+  async loginWithAppleIdentityToken(data: {
+    identityToken: string
+    email?: string | null
+    fullName?: {
+      givenName?: string | null
+      familyName?: string | null
+      middleName?: string | null
+      nickname?: string | null
+    } | null
+  }): Promise<ShadowAuthResponse> {
+    return this.request('/api/auth/oauth/apple/mobile', {
+      method: 'POST',
+      body: JSON.stringify(data),
     })
   }
 
@@ -3317,6 +3479,36 @@ export class ShadowClient {
     if (params?.limit) qs.set('limit', String(params.limit))
     const suffix = qs.toString()
     return this.request(`/api/discover/business${suffix ? `?${suffix}` : ''}`)
+  }
+
+  async discoverMarketplaceProducts(params?: {
+    q?: string
+    tag?: string
+    category?: string
+    scope?: 'server' | 'user'
+    limit?: number
+    offset?: number
+  }): Promise<ShadowMarketplaceProductsResponse> {
+    const qs = new URLSearchParams()
+    if (params?.q) qs.set('q', params.q)
+    if (params?.tag) qs.set('tag', params.tag)
+    if (params?.category) qs.set('category', params.category)
+    if (params?.scope) qs.set('scope', params.scope)
+    if (params?.limit) qs.set('limit', String(params.limit))
+    if (params?.offset) qs.set('offset', String(params.offset))
+    const suffix = qs.toString()
+    return this.request(`/api/discover/marketplace/products${suffix ? `?${suffix}` : ''}`)
+  }
+
+  async discoverMarketplaceCategories(params?: {
+    q?: string
+    limit?: number
+  }): Promise<ShadowMarketplaceCategoriesResponse> {
+    const qs = new URLSearchParams()
+    if (params?.q) qs.set('q', params.q)
+    if (params?.limit) qs.set('limit', String(params.limit))
+    const suffix = qs.toString()
+    return this.request(`/api/discover/marketplace/categories${suffix ? `?${suffix}` : ''}`)
   }
 
   async discoverBusinessHub(params?: {

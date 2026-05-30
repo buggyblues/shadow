@@ -17,7 +17,7 @@ jobs:
   update-release-notes:
     name: Update release notes from changelog
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'release' }}
+    if: ${{ github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'desktop-test-') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -55,6 +55,7 @@ jobs:
   build-macos-notarized:
     name: macOS ${{ matrix.arch }} notarized
     runs-on: ${{ matrix.runner }}
+    if: ${{ github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'desktop-test-') }}
     environment: ShadowOB Mac
     strategy:
       fail-fast: false
@@ -141,6 +142,7 @@ jobs:
   build-cross-platform:
     name: ${{ matrix.platform }} build
     runs-on: ${{ matrix.runner }}
+    if: ${{ github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'desktop-test-') }}
     strategy:
       fail-fast: false
       matrix:

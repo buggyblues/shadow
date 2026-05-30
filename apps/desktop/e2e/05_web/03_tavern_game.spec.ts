@@ -282,7 +282,7 @@ test.describe
         )
         expect(tavernServer.id).toBeTruthy()
 
-        // ── Phase 5: Create NPC Agents via Agent API (real OpenClaw connection) ──
+        // ── Phase 5: Create NPC Agents via Agent API (local test connection) ──
 
         for (const npc of TAVERN_NPCS) {
           // Create agent using owner's JWT (not OAuth token)
@@ -297,7 +297,7 @@ test.describe
               name: npc.name,
               username:
                 npc.name.split(' · ')[1]?.toLowerCase().replace(/\s+/g, '_') ?? `npc_${Date.now()}`,
-              kernelType: 'openclaw',
+              kernelType: 'custom',
               buddyMode: 'shareable',
             },
           })

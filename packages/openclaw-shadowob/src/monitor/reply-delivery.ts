@@ -162,7 +162,7 @@ export async function deliverShadowReply(params: {
           await withDeliveryRetry({
             label: 'reply-media',
             runtime,
-            operation: () => client.uploadMediaFromUrl(mediaUrl, messageId),
+            operation: () => client.uploadMediaFromUrl(mediaUrl, { messageId }),
           })
           runtime.log?.('[reply] Media uploaded successfully')
         } catch (err) {

@@ -8,16 +8,45 @@ import { getRedisClient, presenceKeys } from '../lib/redis'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { createRateLimitMiddleware } from '../middleware/rate-limit.middleware'
 import {
+  appleMobileLoginSchema,
   changePasswordSchema,
   emailLoginStartSchema,
   emailLoginVerifySchema,
   googleIdTokenSchema,
   loginSchema,
+  passwordResetCompleteSchema,
+  passwordResetStartSchema,
   registerSchema,
 } from '../validators/auth.schema'
 import { forceDisconnectUser } from '../ws/presence.gateway'
 
 const OAUTH_REDIRECT_BASE = process.env.OAUTH_BASE_URL ?? 'http://localhost:3000'
+
+function isMobileOAuthRedirect(redirect: string) {
+  try {
+    const url = new URL(redirect)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return url.hostname === 'oauth-callback' || url.pathname.includes('oauth-callback')
+    }
+    return url.pathname === '/oauth-callback'
+  } catch {
+    return false
+  }
+}
+
+function appendOAuthTokensToRedirect(redirect: string, accessToken: string, refreshToken: string) {
+  try {
+    const callbackUrl = new URL(redirect)
+    callbackUrl.searchParams.set('access_token', accessToken)
+    callbackUrl.searchParams.set('refresh_token', refreshToken)
+    return callbackUrl.toString()
+  } catch {
+    const separator = redirect.includes('?') ? '&' : '?'
+    return `${redirect}${separator}access_token=${encodeURIComponent(
+      accessToken,
+    )}&refresh_token=${encodeURIComponent(refreshToken)}`
+  }
+}
 
 async function resolveLiveUserStatus(
   userId: string,
@@ -65,6 +94,11 @@ export function createAuthHandler(container: AppContainer) {
   })
   const emailCodeRateLimit = createRateLimitMiddleware({
     namespace: 'auth-email-code',
+    windowMs: 10 * 60_000,
+    limit: 5,
+  })
+  const passwordResetRateLimit = createRateLimitMiddleware({
+    namespace: 'auth-password-reset',
     windowMs: 10 * 60_000,
     limit: 5,
   })
@@ -149,6 +183,36 @@ export function createAuthHandler(container: AppContainer) {
     },
   )
 
+  // POST /api/auth/password-reset/start — send a one-time password reset link
+  authHandler.post(
+    '/password-reset/start',
+    passwordResetRateLimit,
+    zValidator('json', passwordResetStartSchema),
+    async (c) => {
+      const authService = container.resolve('authService')
+      const input = c.req.valid('json')
+      const result = await authService.startPasswordReset(input)
+      return c.json(result)
+    },
+  )
+
+  // POST /api/auth/password-reset/complete — verify reset link and set a new password
+  authHandler.post(
+    '/password-reset/complete',
+    authEntryRateLimit,
+    zValidator('json', passwordResetCompleteSchema),
+    async (c) => {
+      const authService = container.resolve('authService')
+      const input = c.req.valid('json')
+      const device = requestDeviceInfo(c)
+      await authService.completePasswordReset(input, {
+        ipAddress: device.ipAddress ?? undefined,
+        userAgent: device.userAgent ?? undefined,
+      })
+      return c.json({ ok: true })
+    },
+  )
+
   // POST /api/auth/google/id-token — Google One Tap credential login
   authHandler.post(
     '/google/id-token',
@@ -159,6 +223,23 @@ export function createAuthHandler(container: AppContainer) {
       const { credential } = c.req.valid('json')
       const result = await externalOAuthService.handleGoogleIdToken(
         credential,
+        requestDeviceInfo(c),
+      )
+      return c.json(result)
+    },
+  )
+
+  // POST /api/auth/oauth/apple/mobile — native Sign in with Apple for iOS clients
+  authHandler.post(
+    '/oauth/apple/mobile',
+    authEntryRateLimit,
+    zValidator('json', appleMobileLoginSchema),
+    async (c) => {
+      const externalOAuthService = container.resolve('externalOAuthService')
+      const { identityToken, email, fullName } = c.req.valid('json')
+      const result = await externalOAuthService.handleAppleIdentityToken(
+        identityToken,
+        { email, fullName },
         requestDeviceInfo(c),
       )
       return c.json(result)
@@ -375,16 +456,11 @@ export function createAuthHandler(container: AppContainer) {
         )
       }
 
-      // Check if this is a mobile OAuth flow (redirect starts with custom scheme like shadow://)
-      if (
-        result.redirect.startsWith('shadow://') ||
-        result.redirect.startsWith('com.shadowob.mobile://')
-      ) {
-        // Mobile: redirect with tokens as query params for deep linking
-        const callbackUrl = `${result.redirect}?access_token=${encodeURIComponent(
-          result.accessToken,
-        )}&refresh_token=${encodeURIComponent(result.refreshToken)}`
-        return c.redirect(callbackUrl)
+      // Mobile: redirect with tokens as query params for deep linking.
+      if (isMobileOAuthRedirect(result.redirect)) {
+        return c.redirect(
+          appendOAuthTokensToRedirect(result.redirect, result.accessToken, result.refreshToken),
+        )
       }
 
       // Web: redirect to frontend callback page with tokens in hash

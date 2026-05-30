@@ -215,7 +215,7 @@ async function sendMediaToShadow(params: {
 
   for (const mediaUrl of mediaUrls) {
     try {
-      await params.client.uploadMediaFromUrl(mediaUrl, sent.message.id)
+      await params.client.uploadMediaFromUrl(mediaUrl, { messageId: sent.message.id })
     } catch (err) {
       const fallback = await sendTextChunks({
         client: params.client,

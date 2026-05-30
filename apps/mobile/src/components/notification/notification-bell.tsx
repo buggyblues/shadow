@@ -1,7 +1,7 @@
 import { Bell } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useUnreadCount } from '../../hooks/use-unread-count'
-import { spacing, useColors } from '../../theme'
+import { fontSize, iconSize, palette, radius, size, spacing, useColors } from '../../theme'
 
 interface NotificationBellProps {
   onPress?: () => void
@@ -13,7 +13,7 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
 
   return (
     <Pressable style={styles.container} onPress={onPress}>
-      <Bell size={22} color={colors.text} />
+      <Bell size={iconSize['2xl']} color={colors.text} />
       {count > 0 && (
         <View style={[styles.badge, { backgroundColor: colors.error }]}>
           <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
@@ -30,18 +30,18 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    top: spacing.none,
+    right: spacing.none,
+    minWidth: size.badgeSm,
+    height: size.badgeSm,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
   },
   badgeText: {
-    color: '#fff',
-    fontSize: 10,
+    color: palette.white,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
 })

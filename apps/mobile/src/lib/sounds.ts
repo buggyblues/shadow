@@ -2,9 +2,11 @@ import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-aud
 
 let sendSound: AudioPlayer | null = null
 let receiveSound: AudioPlayer | null = null
+let scanSound: AudioPlayer | null = null
 
 const SEND_FREQUENCY = 800 // Hz
 const RECEIVE_FREQUENCY = 600 // Hz
+const SCAN_FREQUENCY = 1040 // Hz
 
 async function ensureSounds() {
   if (!sendSound) {
@@ -15,6 +17,10 @@ async function ensureSounds() {
   if (!receiveSound) {
     receiveSound = createAudioPlayer(generateToneDataUri(RECEIVE_FREQUENCY, 0.12))
     receiveSound.volume = 0.2
+  }
+  if (!scanSound) {
+    scanSound = createAudioPlayer(generateToneDataUri(SCAN_FREQUENCY, 0.1))
+    scanSound.volume = 0.28
   }
 }
 
@@ -84,6 +90,19 @@ export async function playReceiveSound() {
     if (receiveSound) {
       await receiveSound.seekTo(0)
       receiveSound.play()
+    }
+  } catch {
+    // Sound playback is non-critical
+  }
+}
+
+export async function playScanSound() {
+  try {
+    await setAudioModeAsync({ playsInSilentMode: false })
+    await ensureSounds()
+    if (scanSound) {
+      await scanSound.seekTo(0)
+      scanSound.play()
     }
   } catch {
     // Sound playback is non-critical

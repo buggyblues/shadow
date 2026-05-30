@@ -192,6 +192,28 @@ class ShadowClient:
             payload["displayName"] = display_name
         return self._post("/api/auth/email/verify", json=payload)
 
+    def start_password_reset(self, *, email: str, locale: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"email": email}
+        if locale:
+            payload["locale"] = locale
+        return self._post("/api/auth/password-reset/start", json=payload)
+
+    def complete_password_reset(
+        self,
+        *,
+        token: str,
+        new_password: str,
+        confirm_password: str,
+    ) -> dict[str, Any]:
+        return self._post(
+            "/api/auth/password-reset/complete",
+            json={
+                "token": token,
+                "newPassword": new_password,
+                "confirmPassword": confirm_password,
+            },
+        )
+
     def refresh_token(self, refresh_token: str) -> dict[str, Any]:
         return self._post("/api/auth/refresh", json={"refreshToken": refresh_token})
 
@@ -2401,6 +2423,42 @@ class ShadowClient:
             params["limit"] = limit
         return self._get("/api/discover/business", params=params or None)
 
+    def discover_marketplace_products(
+        self,
+        q: str | None = None,
+        tag: str | None = None,
+        category: str | None = None,
+        scope: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if q:
+            params["q"] = q
+        if tag:
+            params["tag"] = tag
+        if category:
+            params["category"] = category
+        if scope:
+            params["scope"] = scope
+        if limit:
+            params["limit"] = limit
+        if offset:
+            params["offset"] = offset
+        return self._get("/api/discover/marketplace/products", params=params or None)
+
+    def discover_marketplace_categories(
+        self,
+        q: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if q:
+            params["q"] = q
+        if limit:
+            params["limit"] = limit
+        return self._get("/api/discover/marketplace/categories", params=params or None)
+
     def discover_business_hub(
         self,
         q: str | None = None,
@@ -2522,15 +2580,36 @@ class ShadowClient:
     # ── Auth (extended) ──────────────────────────────────────────────────
 
     def change_password(
-        self, current_password: str, new_password: str
+        self,
+        current_password: str,
+        new_password: str,
+        confirm_password: str | None = None,
     ) -> dict[str, Any]:
         return self._put(
             "/api/auth/password",
-            json={"currentPassword": current_password, "newPassword": new_password},
+            json={
+                "oldPassword": current_password,
+                "newPassword": new_password,
+                "confirmPassword": confirm_password or new_password,
+            },
         )
 
     def get_dashboard(self) -> dict[str, Any]:
         return self._get("/api/auth/dashboard")
 
     def login_with_google_id_token(self, id_token: str) -> dict[str, Any]:
-        return self._post("/api/auth/google/id-token", json={"idToken": id_token})
+        return self._post("/api/auth/google/id-token", json={"credential": id_token})
+
+    def login_with_apple_identity_token(
+        self,
+        *,
+        identity_token: str,
+        email: str | None = None,
+        full_name: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"identityToken": identity_token}
+        if email is not None:
+            payload["email"] = email
+        if full_name is not None:
+            payload["fullName"] = full_name
+        return self._post("/api/auth/oauth/apple/mobile", json=payload)

@@ -12,6 +12,10 @@ Upload a file attachment. Uses multipart form data.
 |-------|------|----------|-------------|
 | `file` | File | Yes | The file to upload |
 | `messageId` | string | No | Link attachment to a message |
+| `kind` | `file` / `image` / `voice` | No | Use `voice` for voice messages |
+| `durationMs` | number | For voice | Voice duration, 1-60 seconds |
+| `waveformPeaks` | JSON number array | No | 32-96 waveform peak values, `0..100` |
+| `transcriptText` | string | No | Optional visible voice transcript |
 
 **Response:**
 
@@ -24,6 +28,9 @@ Upload a file attachment. Uses multipart form data.
   "size": 102400
 }
 ```
+
+Voice uploads are stored as private `/shadow/voice/...` content references and are still delivered
+through signed media URLs.
 
 :::code-group
 

@@ -1,5 +1,6 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, createPublicKey, randomUUID, timingSafeEqual } from 'node:crypto'
 import { hash } from 'bcryptjs'
+import jwt from 'jsonwebtoken'
 import type { OAuthAccountDao } from '../dao/oauth-account.dao'
 import type { UserDao } from '../dao/user.dao'
 import type { UserSessionDao, UserSessionDevice } from '../dao/user-session.dao'
@@ -17,6 +18,24 @@ interface OAuthProfile {
   avatarUrl?: string
 }
 
+type AppleFullName = {
+  givenName?: string | null
+  familyName?: string | null
+  middleName?: string | null
+  nickname?: string | null
+}
+
+type AppleIdentityPayload = jwt.JwtPayload & {
+  sub?: string
+  email?: string
+  email_verified?: boolean | string
+}
+
+type AppleJwk = JsonWebKey & {
+  kid?: string
+  alg?: string
+}
+
 interface ProviderConfig {
   clientId: string
   clientSecret: string
@@ -29,6 +48,8 @@ interface ProviderConfig {
 
 const OAUTH_BASE_URL = process.env.OAUTH_BASE_URL ?? 'http://localhost:3000'
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+const APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys'
+const APPLE_ISSUER = 'https://appleid.apple.com'
 
 type OAuthStatePayload = {
   redirect?: string
@@ -85,6 +106,37 @@ function decodeState(state?: string): OAuthStatePayload {
 
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
+}
+
+function configuredAppleAudiences() {
+  const values = [
+    process.env.APPLE_CLIENT_IDS,
+    process.env.APPLE_CLIENT_ID,
+    process.env.APPLE_BUNDLE_ID,
+    process.env.IOS_BUNDLE_IDENTIFIER,
+    'com.shadowob.mobile',
+  ]
+  return Array.from(
+    new Set(
+      values
+        .flatMap((value) => value?.split(',') ?? [])
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+function formatAppleDisplayName(fullName?: AppleFullName | null) {
+  if (!fullName) return undefined
+  const name = [fullName.givenName, fullName.middleName, fullName.familyName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' ')
+  return name || fullName.nickname?.trim() || undefined
+}
+
+function isAppleEmailVerified(value: AppleIdentityPayload['email_verified']) {
+  return value === true || value === 'true'
 }
 
 function getProviderConfig(provider: string): ProviderConfig {
@@ -303,23 +355,38 @@ export class ExternalOAuthService {
     })
     if (isNew) await this.deps.taskCenterService.grantWelcomeReward(user.id)
 
-    const sessionId = randomUUID()
-    const jwtPayload: JwtPayload = {
-      userId: user.id,
-      email: user.email,
-      username: user.username,
-      sessionId,
+    const { accessToken, refreshToken } = await this.issueSession(user, device)
+    return {
+      user: await this.serializeUser(user),
+      accessToken,
+      refreshToken,
     }
-    const accessToken = signAccessToken(jwtPayload)
-    const refreshToken = signRefreshToken(jwtPayload)
-    await this.deps.userSessionDao.create({
-      id: sessionId,
-      userId: user.id,
-      refreshTokenHash: hashToken(refreshToken),
-      deviceName: device?.deviceName,
-      userAgent: device?.userAgent,
-      ipAddress: device?.ipAddress,
+  }
+
+  async handleAppleIdentityToken(
+    identityToken: string,
+    profile: { email?: string | null; fullName?: AppleFullName | null } = {},
+    device?: UserSessionDevice,
+  ): Promise<{ accessToken: string; refreshToken: string; user: unknown }> {
+    const tokenInfo = await this.verifyAppleIdentityToken(identityToken)
+    if (!tokenInfo.sub) {
+      throw Object.assign(new Error('Invalid Apple credential'), { status: 401 })
+    }
+
+    const email = tokenInfo.email ?? profile.email ?? ''
+    if (tokenInfo.email && !isAppleEmailVerified(tokenInfo.email_verified)) {
+      throw Object.assign(new Error('Apple email is not verified'), { status: 401 })
+    }
+
+    const { user, isNew } = await this.findOrCreateUser({
+      provider: 'apple',
+      providerAccountId: tokenInfo.sub,
+      email,
+      displayName: formatAppleDisplayName(profile.fullName),
     })
+    if (isNew) await this.deps.taskCenterService.grantWelcomeReward(user.id)
+
+    const { accessToken, refreshToken } = await this.issueSession(user, device)
     return {
       user: await this.serializeUser(user),
       accessToken,
@@ -376,6 +443,38 @@ export class ExternalOAuthService {
     }
 
     throw Object.assign(new Error('Unknown provider'), { status: 400 })
+  }
+
+  private async verifyAppleIdentityToken(identityToken: string): Promise<AppleIdentityPayload> {
+    const decoded = jwt.decode(identityToken, { complete: true })
+    const header = decoded && typeof decoded === 'object' ? decoded.header : null
+    const kid = typeof header?.kid === 'string' ? header.kid : undefined
+    if (!kid) {
+      throw Object.assign(new Error('Invalid Apple credential'), { status: 401 })
+    }
+
+    const response = await this.deps.safeHttpClient.fetch(
+      APPLE_KEYS_URL,
+      {},
+      { maxRedirects: 0, maxBytes: 16 * 1024 },
+    )
+    if (!response.ok) {
+      throw Object.assign(new Error('Failed to fetch Apple public keys'), { status: 502 })
+    }
+
+    const data = (await response.json()) as { keys?: AppleJwk[] }
+    const jwk = data.keys?.find((key) => key.kid === kid)
+    if (!jwk) {
+      throw Object.assign(new Error('Apple public key not found'), { status: 401 })
+    }
+
+    const publicKey = createPublicKey({ key: jwk, format: 'jwk' })
+    const audience = configuredAppleAudiences()
+    return jwt.verify(identityToken, publicKey, {
+      algorithms: ['RS256'],
+      audience: audience.length === 1 ? audience[0] : (audience as [string, ...string[]]),
+      issuer: APPLE_ISSUER,
+    }) as AppleIdentityPayload
   }
 
   private async fetchGitHubEmail(accessToken: string): Promise<string | null> {
@@ -488,6 +587,34 @@ export class ExternalOAuthService {
       avatarUrl: user.avatarUrl,
       membership: await this.deps.membershipService.getMembership(user.id),
     }
+  }
+
+  private async issueSession(
+    user: {
+      id: string
+      email: string
+      username: string
+    },
+    device?: UserSessionDevice,
+  ) {
+    const sessionId = randomUUID()
+    const jwtPayload: JwtPayload = {
+      userId: user.id,
+      email: user.email,
+      username: user.username,
+      sessionId,
+    }
+    const accessToken = signAccessToken(jwtPayload)
+    const refreshToken = signRefreshToken(jwtPayload)
+    await this.deps.userSessionDao.create({
+      id: sessionId,
+      userId: user.id,
+      refreshTokenHash: hashToken(refreshToken),
+      deviceName: device?.deviceName,
+      userAgent: device?.userAgent,
+      ipAddress: device?.ipAddress,
+    })
+    return { accessToken, refreshToken }
   }
 
   async listLinkedAccounts(userId: string) {

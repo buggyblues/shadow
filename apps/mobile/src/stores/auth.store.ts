@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store'
 import { create } from 'zustand'
 import { queryClient } from '../lib/query-client'
+import { getApiBaseUrl } from '../lib/server-url'
 import { useChatStore } from './chat.store'
 
 interface User {
@@ -61,6 +62,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) => set({ user }),
 
   loadPersistedToken: async () => {
+    await getApiBaseUrl()
     const token = await SecureStore.getItemAsync('accessToken')
     set({
       accessToken: token,

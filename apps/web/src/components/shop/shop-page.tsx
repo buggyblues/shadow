@@ -66,6 +66,7 @@ export interface Product {
   currency: string
   specNames: string[]
   tags: string[]
+  globalPublic?: boolean
   salesCount: number
   avgRating: number
   ratingCount: number
@@ -112,6 +113,7 @@ export interface Shop {
   description?: string
   logoUrl?: string
   bannerUrl?: string
+  visibility?: 'private' | 'login_required' | 'public' | string
   status: string
   settings: Record<string, unknown>
 }

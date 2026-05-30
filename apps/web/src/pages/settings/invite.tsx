@@ -80,8 +80,8 @@ export function InviteSettings({ embedded = false }: { embedded?: boolean } = {}
   })
 
   const copyCode = async (code: string, id: string) => {
-    const registerUrl = `${window.location.origin}/app/register?code=${code}`
-    const success = await copyToClipboardSilent(registerUrl)
+    const inviteUrl = `${window.location.origin}/app/invite/${code}`
+    const success = await copyToClipboardSilent(inviteUrl)
     if (success) {
       setCopiedId(id)
       setTimeout(() => setCopiedId(null), 2000)

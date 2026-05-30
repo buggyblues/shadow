@@ -1,4 +1,5 @@
 import { app, Menu, shell } from 'electron'
+import { desktopText } from './i18n'
 
 export function createAppMenu(): void {
   const isMac = process.platform === 'darwin'
@@ -23,7 +24,7 @@ export function createAppMenu(): void {
         ]
       : []),
     {
-      label: 'Edit',
+      label: desktopText('edit'),
       submenu: [
         { role: 'undo' },
         { role: 'redo' },
@@ -35,7 +36,7 @@ export function createAppMenu(): void {
       ],
     },
     {
-      label: 'View',
+      label: desktopText('view'),
       submenu: [
         { role: 'reload' },
         { role: 'forceReload' },
@@ -49,7 +50,7 @@ export function createAppMenu(): void {
       ],
     },
     {
-      label: 'Window',
+      label: desktopText('window'),
       submenu: [
         { role: 'minimize' },
         { role: 'zoom' },
@@ -59,10 +60,10 @@ export function createAppMenu(): void {
       ],
     },
     {
-      label: 'Help',
+      label: desktopText('help'),
       submenu: [
         {
-          label: 'Documentation',
+          label: desktopText('documentation'),
           click: () => {
             shell.openExternal('https://shadowob.com')
           },

@@ -57,7 +57,17 @@ import {
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../../../src/theme'
 
 function createIdempotencyKey(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -72,45 +82,45 @@ const PRODUCT_VISUAL_THEME: Record<
   { bg: string; border: string; color: string; tint: string; icon: typeof Package }
 > = {
   service: {
-    bg: '#12242B',
-    border: '#67E8F955',
-    color: '#A5F3FC',
-    tint: '#67E8F920',
+    bg: palette.surface,
+    border: palette.cyan,
+    color: palette.cyanSurface,
+    tint: palette.surface,
     icon: ShieldCheck,
   },
   file: {
-    bg: '#142033',
-    border: '#7DD3FC55',
-    color: '#BAE6FD',
-    tint: '#7DD3FC20',
+    bg: palette.surface,
+    border: palette.cyan,
+    color: palette.cyanSurface,
+    tint: palette.surface,
     icon: FileText,
   },
   badge: {
-    bg: '#2A2518',
-    border: '#FDE68A55',
-    color: '#FEF3C7',
-    tint: '#FDE68A22',
+    bg: palette.surface,
+    border: palette.yellow,
+    color: palette.warningSurface,
+    tint: palette.surface,
     icon: Award,
   },
   gift: {
-    bg: '#2A1C25',
-    border: '#FDA4AF55',
-    color: '#FFE4E6',
-    tint: '#FDA4AF20',
+    bg: palette.surface,
+    border: palette.crimson,
+    color: palette.dangerSurface,
+    tint: palette.surface,
     icon: Gift,
   },
   ticket: {
-    bg: '#1F2A1C',
-    border: '#BEF26455',
-    color: '#ECFCCB',
-    tint: '#BEF26420',
+    bg: palette.surface,
+    border: palette.emerald,
+    color: palette.successSurface,
+    tint: palette.surface,
     icon: Ticket,
   },
   physical: {
-    bg: '#2B2218',
-    border: '#FDBA7455',
-    color: '#FED7AA',
-    tint: '#FDBA7420',
+    bg: palette.surface,
+    border: palette.warning,
+    color: palette.warningSurface,
+    tint: palette.surface,
     icon: Package,
   },
 }
@@ -591,7 +601,7 @@ export default function ShopScreen() {
         {/* Wallet */}
         <View style={styles.walletChip}>
           <AppText variant="bodyStrong" tone="primary" style={styles.walletText}>
-            <PriceCompact amount={wallet?.balance ?? 0} size={14} />
+            <PriceCompact amount={wallet?.balance ?? 0} size={iconSize.sm} />
           </AppText>
         </View>
         {/* View tabs */}
@@ -626,7 +636,7 @@ export default function ShopScreen() {
         <>
           <GlassPanel style={styles.shopHero}>
             <View style={styles.shopHeroTop}>
-              <View style={[styles.shopLogo, { backgroundColor: `${colors.primary}18` }]}>
+              <View style={[styles.shopLogo, { backgroundColor: colors.inputBackground }]}>
                 {shop?.logoUrl ? (
                   <Image
                     source={{ uri: getImageUrl(shop.logoUrl) ?? shop.logoUrl }}
@@ -634,7 +644,7 @@ export default function ShopScreen() {
                     contentFit="cover"
                   />
                 ) : (
-                  <Store size={22} color={colors.primary} />
+                  <Store size={iconSize['2xl']} color={colors.primary} />
                 )}
               </View>
               <View style={{ flex: 1 }}>
@@ -707,7 +717,11 @@ export default function ShopScreen() {
                 icon={ArrowUpDown}
                 title={opt.label}
                 tone={sortBy === opt.key ? 'primary' : 'muted'}
-                right={sortBy === opt.key ? <Check size={14} color={colors.primary} /> : undefined}
+                right={
+                  sortBy === opt.key ? (
+                    <Check size={iconSize.sm} color={colors.primary} />
+                  ) : undefined
+                }
                 onPress={() => {
                   setSortBy(opt.key)
                   setShowSortMenu(false)
@@ -790,8 +804,8 @@ export default function ShopScreen() {
                       }}
                     >
                       <Heart
-                        size={18}
-                        color={favorites.has(item.id) ? colors.error : colors.glassLineStrong}
+                        size={iconSize.lg}
+                        color={favorites.has(item.id) ? colors.error : colors.textMuted}
                         fill={favorites.has(item.id) ? colors.error : 'transparent'}
                       />
                     </Pressable>
@@ -800,7 +814,7 @@ export default function ShopScreen() {
                         {item.name}
                       </AppText>
                       <View style={styles.productSourceLine}>
-                        <Store size={10} color={colors.primary} />
+                        <Store size={iconSize.micro} color={colors.primary} />
                         <AppText
                           variant="label"
                           tone="secondary"
@@ -815,7 +829,11 @@ export default function ShopScreen() {
                         <View style={styles.metaRow}>
                           {item.avgRating > 0 && (
                             <View style={styles.ratingRow}>
-                              <Star size={10} color={colors.warning} fill={colors.warning} />
+                              <Star
+                                size={iconSize.micro}
+                                color={colors.warning}
+                                fill={colors.warning}
+                              />
                               <AppText variant="label" tone="secondary" style={styles.ratingText}>
                                 {item.avgRating.toFixed(1)}
                               </AppText>
@@ -834,7 +852,7 @@ export default function ShopScreen() {
                           {item.tags.slice(0, 2).map((tag) => (
                             <View
                               key={tag}
-                              style={[styles.tagChip, { backgroundColor: `${colors.primary}15` }]}
+                              style={[styles.tagChip, { backgroundColor: colors.inputBackground }]}
                             >
                               <AppText variant="label" tone="primary" style={styles.tagText}>
                                 {tag}
@@ -844,7 +862,7 @@ export default function ShopScreen() {
                         </View>
                       )}
                       <AppText variant="bodyStrong" tone="primary" style={styles.productPrice}>
-                        <PriceCompact amount={item.basePrice} size={12} />
+                        <PriceCompact amount={item.basePrice} size={iconSize.xs} />
                       </AppText>
                     </View>
                   </CardPressable>
@@ -873,14 +891,13 @@ export default function ShopScreen() {
             <GlassPanel style={styles.orderCard}>
               <View style={styles.orderHeader}>
                 <Text style={[styles.orderNo, { color: colors.textMuted }]}>#{order.orderNo}</Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: `${statusColor(order.status)}20` },
-                  ]}
-                >
+                <View style={[styles.statusBadge, { backgroundColor: colors.inputBackground }]}>
                   <Text
-                    style={{ color: statusColor(order.status), fontSize: 10, fontWeight: '700' }}
+                    style={{
+                      color: statusColor(order.status),
+                      fontSize: fontSize.micro,
+                      fontWeight: '700',
+                    }}
                   >
                     {statusLabel(order.status)}
                   </Text>
@@ -911,7 +928,7 @@ export default function ShopScreen() {
                     <Text
                       style={{ color: colors.primary, fontWeight: '700', fontSize: fontSize.sm }}
                     >
-                      <PriceCompact amount={item.price} size={14} />
+                      <PriceCompact amount={item.price} size={iconSize.sm} />
                     </Text>
                     <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
                       ×{item.quantity}
@@ -921,7 +938,7 @@ export default function ShopScreen() {
               ))}
               <View style={[styles.orderFooter, { borderTopColor: colors.border }]}>
                 <Text style={{ color: colors.text, fontWeight: '800' }}>
-                  {t('shop.total')}: <PriceCompact amount={order.totalAmount} size={14} />
+                  {t('shop.total')}: <PriceCompact amount={order.totalAmount} size={iconSize.sm} />
                 </Text>
                 <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                   {(order.status === 'pending' || order.status === 'paid') && (
@@ -1010,9 +1027,12 @@ export default function ShopScreen() {
                   {/* Price + favorite */}
                   <View style={styles.detailPriceRow}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <ShrimpCoinIcon size={20} color={colors.shrimpCoin} />
+                      <ShrimpCoinIcon size={iconSize.xl} color={colors.shrimpCoin} />
                       <Text
-                        style={[styles.detailPrice, { color: colors.shrimpCoin, marginLeft: 4 }]}
+                        style={[
+                          styles.detailPrice,
+                          { color: colors.shrimpCoin, marginLeft: spacing.xs },
+                        ]}
                       >
                         {selectedSkuId
                           ? ((productDetail?.skus ?? []).find((s) => s.id === selectedSkuId)
@@ -1022,7 +1042,7 @@ export default function ShopScreen() {
                     </View>
                     <Pressable onPress={() => toggleFavorite(selectedProduct.id)}>
                       <Heart
-                        size={24}
+                        size={iconSize['3xl']}
                         color={favorites.has(selectedProduct.id) ? colors.error : colors.textMuted}
                         fill={favorites.has(selectedProduct.id) ? colors.error : 'transparent'}
                       />
@@ -1039,7 +1059,7 @@ export default function ShopScreen() {
                     ]}
                   >
                     <View style={styles.productSourcePanelHeader}>
-                      <Store size={16} color={colors.primary} />
+                      <Store size={iconSize.md} color={colors.primary} />
                       <Text style={[styles.productSourceTitle, { color: colors.text }]}>
                         {t('shop.productSourceTitle', {
                           shop: shop?.name ?? t('shop.serverStorefront'),
@@ -1060,9 +1080,9 @@ export default function ShopScreen() {
                       {selectedProduct.tags.map((tag) => (
                         <View
                           key={tag}
-                          style={[styles.tagChip, { backgroundColor: `${colors.primary}15` }]}
+                          style={[styles.tagChip, { backgroundColor: colors.inputBackground }]}
                         >
-                          <Tag size={10} color={colors.primary} />
+                          <Tag size={iconSize.micro} color={colors.primary} />
                           <Text
                             style={{
                               color: colors.primary,
@@ -1081,7 +1101,7 @@ export default function ShopScreen() {
                   <View style={styles.statsRow}>
                     {selectedProduct.avgRating > 0 && (
                       <View style={styles.statItem}>
-                        <Star size={14} color={colors.warning} fill={colors.warning} />
+                        <Star size={iconSize.sm} color={colors.warning} fill={colors.warning} />
                         <Text style={{ color: colors.text, fontWeight: '700' }}>
                           {selectedProduct.avgRating.toFixed(1)}
                         </Text>
@@ -1122,7 +1142,7 @@ export default function ShopScreen() {
                                   {
                                     backgroundColor:
                                       selectedSkuId === sku.id
-                                        ? `${colors.primary}15`
+                                        ? colors.surfaceHover
                                         : colors.inputBackground,
                                     borderColor:
                                       selectedSkuId === sku.id ? colors.primary : colors.border,
@@ -1147,8 +1167,8 @@ export default function ShopScreen() {
                                   {sku.specValues.join(' ')}
                                 </Text>
                                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                                  <PriceCompact amount={sku.price} size={12} /> · {t('shop.stock')}{' '}
-                                  {sku.stock}
+                                  <PriceCompact amount={sku.price} size={iconSize.xs} /> ·{' '}
+                                  {t('shop.stock')} {sku.stock}
                                 </Text>
                               </Pressable>
                             ))}
@@ -1166,13 +1186,13 @@ export default function ShopScreen() {
                         onPress={() => setQuantity(Math.max(1, quantity - 1))}
                         style={[styles.qtyBtn, { backgroundColor: colors.inputBackground }]}
                       >
-                        <Minus size={14} color={colors.text} />
+                        <Minus size={iconSize.sm} color={colors.text} />
                       </Pressable>
                       <Text
                         style={{
                           color: colors.text,
                           fontWeight: '700',
-                          minWidth: 24,
+                          minWidth: size.avatarXs,
                           textAlign: 'center',
                         }}
                       >
@@ -1182,7 +1202,7 @@ export default function ShopScreen() {
                         onPress={() => setQuantity(quantity + 1)}
                         style={[styles.qtyBtn, { backgroundColor: colors.inputBackground }]}
                       >
-                        <Plus size={14} color={colors.text} />
+                        <Plus size={iconSize.sm} color={colors.text} />
                       </Pressable>
                     </View>
                   </View>
@@ -1199,11 +1219,11 @@ export default function ShopScreen() {
                       <Text style={{ color: colors.text, fontWeight: '600' }}>
                         {t('shop.reviews')}
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                         <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
                           {selectedProduct.ratingCount} {t('shop.reviewCount')}
                         </Text>
-                        <ChevronRight size={14} color={colors.textMuted} />
+                        <ChevronRight size={iconSize.sm} color={colors.textMuted} />
                       </View>
                     </Pressable>
                   )}
@@ -1243,7 +1263,7 @@ export default function ShopScreen() {
       >
         {cartItems.length === 0 ? (
           <View style={styles.cartEmpty}>
-            <ShoppingCart size={40} color={colors.textMuted} />
+            <ShoppingCart size={iconSize['6xl']} color={colors.textMuted} />
             <AppText tone="secondary">{t('shop.emptyCart')}</AppText>
           </View>
         ) : (
@@ -1267,7 +1287,7 @@ export default function ShopScreen() {
                       },
                     ]}
                   >
-                    <Package size={16} color={colors.textMuted} />
+                    <Package size={iconSize.md} color={colors.textMuted} />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
@@ -1284,10 +1304,10 @@ export default function ShopScreen() {
                       color: colors.primary,
                       fontSize: fontSize.sm,
                       fontWeight: '700',
-                      marginTop: 2,
+                      marginTop: spacing.xxs,
                     }}
                   >
-                    <PriceCompact amount={item.unitPrice} size={12} />
+                    <PriceCompact amount={item.unitPrice} size={iconSize.xs} />
                   </Text>
                 </View>
                 <View style={styles.qtyRow}>
@@ -1303,16 +1323,16 @@ export default function ShopScreen() {
                     style={[styles.qtyBtn, { backgroundColor: colors.inputBackground }]}
                   >
                     {item.quantity <= 1 ? (
-                      <Trash2 size={12} color={colors.error} />
+                      <Trash2 size={iconSize.xs} color={colors.error} />
                     ) : (
-                      <Minus size={14} color={colors.text} />
+                      <Minus size={iconSize.sm} color={colors.text} />
                     )}
                   </Pressable>
                   <Text
                     style={{
                       color: colors.text,
                       fontWeight: '700',
-                      minWidth: 24,
+                      minWidth: size.avatarXs,
                       textAlign: 'center',
                     }}
                   >
@@ -1327,7 +1347,7 @@ export default function ShopScreen() {
                     }
                     style={[styles.qtyBtn, { backgroundColor: colors.inputBackground }]}
                   >
-                    <Plus size={14} color={colors.text} />
+                    <Plus size={iconSize.sm} color={colors.text} />
                   </Pressable>
                 </View>
               </View>
@@ -1339,7 +1359,7 @@ export default function ShopScreen() {
                   {t('shop.total')}
                 </Text>
                 <Text style={{ color: colors.text, fontWeight: '800', fontSize: fontSize.xl }}>
-                  <PriceCompact amount={cartTotal} size={14} />
+                  <PriceCompact amount={cartTotal} size={iconSize.sm} />
                 </Text>
               </View>
               <Button
@@ -1379,7 +1399,7 @@ export default function ShopScreen() {
       >
         {reviews.length === 0 ? (
           <View style={styles.cartEmpty}>
-            <Star size={40} color={colors.textMuted} />
+            <Star size={iconSize['6xl']} color={colors.textMuted} />
             <AppText tone="secondary">{t('shop.noReviews')}</AppText>
           </View>
         ) : (
@@ -1393,11 +1413,11 @@ export default function ShopScreen() {
                   <Text style={{ color: colors.text, fontWeight: '600' }}>
                     {review.isAnonymous ? t('shop.anonymous') : review.authorName}
                   </Text>
-                  <View style={{ flexDirection: 'row', gap: 2 }}>
+                  <View style={{ flexDirection: 'row', gap: spacing.xxs }}>
                     {[1, 2, 3, 4, 5].map((n) => (
                       <Star
                         key={n}
-                        size={12}
+                        size={iconSize.xs}
                         color={colors.warning}
                         fill={n <= review.rating ? colors.warning : 'transparent'}
                       />
@@ -1406,7 +1426,11 @@ export default function ShopScreen() {
                 </View>
                 {review.content && (
                   <Text
-                    style={{ color: colors.textSecondary, fontSize: fontSize.sm, marginTop: 4 }}
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: fontSize.sm,
+                      marginTop: spacing.xs,
+                    }}
                   >
                     {review.content}
                   </Text>
@@ -1462,7 +1486,7 @@ const styles = StyleSheet.create({
   },
   walletChip: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: spacing.xs,
   },
   walletText: {
     fontSize: fontSize.sm,
@@ -1471,15 +1495,15 @@ const styles = StyleSheet.create({
   cartBtn: { padding: spacing.sm, position: 'relative' },
   cartBadge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: spacing.none,
+    right: spacing.none,
+    width: size.badgeMd,
+    height: size.badgeMd,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cartBadgeText: { fontSize: 10, fontWeight: '700' },
+  cartBadgeText: { fontSize: fontSize.micro, fontWeight: '700' },
   // Search
   searchRow: {
     flexDirection: 'row',
@@ -1502,8 +1526,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   shopLogo: {
-    width: 48,
-    height: 48,
+    width: size.controlLg,
+    height: size.controlLg,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1517,7 +1541,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   shopSubtitle: {
-    lineHeight: 20,
+    lineHeight: lineHeight.sm,
   },
   shopHeroStats: {
     flexDirection: 'row',
@@ -1536,27 +1560,27 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.tight,
   },
   consumerStepIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+    width: size.controlXs - spacing.xxs,
+    height: size.controlXs - spacing.xxs,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   consumerStepText: {
     flex: 1,
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   // Categories
-  catBar: { maxHeight: 44, borderBottomWidth: 1 },
+  catBar: { maxHeight: size.controlMd, borderBottomWidth: border.hairline },
   catBarContent: {
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     gap: spacing.sm,
-    height: 44,
+    height: size.controlMd,
   },
   // Grid
   grid: { padding: spacing.sm },
@@ -1565,46 +1589,46 @@ const styles = StyleSheet.create({
   productImage: { width: '100%', aspectRatio: 3 / 2 },
   productVisual: {
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: border.hairline,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   productVisualBadge: {
     position: 'absolute',
-    left: 8,
-    top: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
+    left: spacing.sm,
+    top: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.full,
   },
   productVisualBadgeText: {
-    fontSize: 9,
+    fontSize: fontSize.micro,
     fontWeight: '800',
   },
   productVisualIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
   },
   productVisualCaption: {
     position: 'absolute',
-    left: 8,
-    right: 8,
-    bottom: 8,
+    left: spacing.sm,
+    right: spacing.sm,
+    bottom: spacing.sm,
     textAlign: 'center',
-    fontSize: 10,
+    fontSize: fontSize.micro,
     fontWeight: '700',
   },
   favBtn: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    top: spacing.sm,
+    right: spacing.sm,
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1613,28 +1637,28 @@ const styles = StyleSheet.create({
   productSourceLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
-  productSourceText: { flex: 1, fontSize: 10 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 4 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  ratingText: { fontSize: 10 },
-  salesText: { fontSize: 10 },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  productSourceText: { flex: 1, fontSize: fontSize.micro },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs },
+  ratingText: { fontSize: fontSize.micro },
+  salesText: { fontSize: fontSize.micro },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
   tagChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.tight,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.sm,
   },
   tagText: {
-    fontSize: 9,
+    fontSize: fontSize.micro,
     fontWeight: '600',
   },
-  productPrice: { fontSize: fontSize.sm, fontWeight: '800', marginTop: 6 },
+  productPrice: { fontSize: fontSize.sm, fontWeight: '800', marginTop: spacing.tight },
   // Orders
   orderList: { padding: spacing.md, gap: spacing.md },
   orderCard: { borderRadius: radius.xl, padding: spacing.lg },
@@ -1645,14 +1669,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   orderNo: { fontSize: fontSize.xs, fontFamily: 'monospace' },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 },
+  statusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.full,
+  },
   orderItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     marginBottom: spacing.sm,
   },
-  orderItemImage: { width: 40, height: 40, borderRadius: radius.md },
+  orderItemImage: { width: size.iconButtonLg, height: size.iconButtonLg, borderRadius: radius.md },
   orderItemName: { fontSize: fontSize.sm, fontWeight: '600' },
   orderFooter: {
     flexDirection: 'row',
@@ -1660,22 +1688,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.md,
     paddingTop: spacing.md,
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
   },
   // Detail modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
+  modalOverlay: { flex: 1, backgroundColor: palette.black, justifyContent: 'flex-end' },
+  modalSheet: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, maxHeight: '85%' },
   detailImage: { width: '100%', aspectRatio: 3 / 2 },
   detailBody: { padding: spacing.xl },
   detailPriceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  detailPrice: { fontSize: 24, fontWeight: '800' },
+  detailPrice: { fontSize: fontSize['2xl'], fontWeight: '800' },
   detailName: { fontSize: fontSize.xl, fontWeight: '800', marginTop: spacing.xs },
   productSourcePanel: {
     marginTop: spacing.md,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     padding: spacing.md,
-    gap: 6,
+    gap: spacing.tight,
   },
   productSourcePanelHeader: {
     flexDirection: 'row',
@@ -1683,10 +1711,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   productSourceTitle: { flex: 1, fontSize: fontSize.sm, fontWeight: '800' },
-  productSourceBody: { fontSize: fontSize.sm, lineHeight: 20 },
-  detailDesc: { fontSize: fontSize.sm, marginTop: spacing.md, lineHeight: 20 },
+  productSourceBody: { fontSize: fontSize.sm, lineHeight: lineHeight.sm },
+  detailDesc: { fontSize: fontSize.sm, marginTop: spacing.md, lineHeight: lineHeight.sm },
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.sm },
-  statItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   // SKU
   skuSection: { marginTop: spacing.lg },
   skuLabel: { fontSize: fontSize.sm, fontWeight: '700', marginBottom: spacing.sm },
@@ -1695,12 +1723,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  skuImage: { width: 24, height: 24, borderRadius: 4 },
+  skuImage: { width: size.avatarXs, height: size.avatarXs, borderRadius: radius.sm },
   // Quantity
   qtySection: {
     flexDirection: 'row',
@@ -1710,9 +1738,9 @@ const styles = StyleSheet.create({
   },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   qtyBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: size.controlXs,
+    height: size.controlXs,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1721,7 +1749,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: 1,
+    borderTopWidth: border.hairline,
     marginTop: spacing.lg,
     paddingTop: spacing.lg,
   },
@@ -1736,10 +1764,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: border.hairline,
     gap: spacing.md,
   },
-  cartItemImage: { width: 48, height: 48, borderRadius: radius.md },
+  cartItemImage: { width: size.controlLg, height: size.controlLg, borderRadius: radius.md },
   cartFooter: {
     padding: spacing.xl,
     flexDirection: 'row',
@@ -1749,6 +1777,11 @@ const styles = StyleSheet.create({
   // Reviews modal
   reviewCard: { padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.sm },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  reviewImage: { width: 60, height: 60, borderRadius: radius.md, marginRight: spacing.sm },
+  reviewImage: {
+    width: size.plusPanelIconLg,
+    height: size.plusPanelIconLg,
+    borderRadius: radius.md,
+    marginRight: spacing.sm,
+  },
   reviewReply: { marginTop: spacing.sm, padding: spacing.sm, borderRadius: radius.md },
 })

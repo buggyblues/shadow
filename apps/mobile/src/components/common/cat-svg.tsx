@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react-native'
 import { type StyleProp, View, type ViewStyle } from 'react-native'
+import { palette } from '../../theme'
 
 type CatSvgProps = {
   size?: number
@@ -28,12 +29,12 @@ function resolveSize({ size, width, height }: CatSvgProps): number {
 
 function IconBadge({
   Icon,
-  color = '#64748b',
+  color = palette.neutral500,
   focused,
   ...rest
 }: CatSvgProps & { Icon: LucideIcon }) {
   const iconSize = resolveSize(rest)
-  const tone = focused ? color : `${color}CC`
+  const tone = focused ? color : palette.neutral500
 
   return (
     <View

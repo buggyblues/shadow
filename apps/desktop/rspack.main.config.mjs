@@ -36,6 +36,7 @@ export default {
   },
   externals: {
     electron: 'commonjs electron',
+    'sherpa-onnx-node': 'commonjs sherpa-onnx-node',
   },
   node: {
     __dirname: false,

@@ -7,8 +7,29 @@ type PostedMessage = {
 }
 
 function createBridgeWindow() {
-  let listener: ((event: MessageEvent) => void) | null = null
+  const listeners = new Set<(event: MessageEvent) => void>()
   const posted: PostedMessage[] = []
+  const storage = new Map<string, string>()
+  const sessionStorage = {
+    get length() {
+      return storage.size
+    },
+    clear() {
+      storage.clear()
+    },
+    getItem(key: string) {
+      return storage.get(key) ?? null
+    },
+    key(index: number) {
+      return Array.from(storage.keys())[index] ?? null
+    },
+    removeItem(key: string) {
+      storage.delete(key)
+    },
+    setItem(key: string, value: string) {
+      storage.set(key, value)
+    },
+  } as Storage
   const parent = {
     postMessage(message: unknown, targetOrigin: string) {
       posted.push({ message: message as Record<string, unknown>, targetOrigin })
@@ -17,11 +38,12 @@ function createBridgeWindow() {
   const win = {
     location: { search: '?shadow_launch=test-launch' },
     parent,
+    sessionStorage,
     addEventListener(type: string, callback: (event: MessageEvent) => void) {
-      if (type === 'message') listener = callback
+      if (type === 'message') listeners.add(callback)
     },
     removeEventListener(type: string, callback: (event: MessageEvent) => void) {
-      if (type === 'message' && listener === callback) listener = null
+      if (type === 'message') listeners.delete(callback)
     },
     setTimeout() {
       return 0
@@ -32,7 +54,7 @@ function createBridgeWindow() {
     posted,
     win,
     respond(message: Record<string, unknown>) {
-      listener?.({ data: message } as MessageEvent)
+      for (const listener of listeners) listener({ data: message } as MessageEvent)
     },
   }
 }
@@ -148,6 +170,39 @@ describe('ShadowBridge', () => {
       channelId: 'channel-1',
       messageId: 'message-2',
       cardId: 'task-card-1',
+    })
+  })
+
+  it('keeps bridge context after app-side routing removes launch query', async () => {
+    const fixture = createBridgeWindow()
+    const bridge = new ShadowBridge({ appKey: 'shadow-warbuddy', windowRef: fixture.win })
+    expect(bridge.isAvailable()).toBe(true)
+
+    ;(fixture.win.location as unknown as { search: string }).search = ''
+    expect(bridge.isAvailable()).toBe(true)
+
+    const routedBridge = new ShadowBridge({ appKey: 'shadow-warbuddy', windowRef: fixture.win })
+    expect(routedBridge.isAvailable()).toBe(true)
+
+    const createPromise = routedBridge.openBuddyCreator({
+      landing: { title: 'WarBuddy tactics', source: 'warbuddy' },
+    })
+    expect(fixture.posted[0]?.message).toMatchObject({
+      appKey: 'shadow-warbuddy',
+      type: ShadowBridge.openBuddyCreatorRequestType,
+      landing: { title: 'WarBuddy tactics', source: 'warbuddy' },
+    })
+
+    fixture.respond({
+      type: ShadowBridge.openBuddyCreatorResponseType,
+      requestId: fixture.posted[0]?.message.requestId,
+      ok: true,
+      result: { opened: true, agent: { id: 'agent-1' } },
+    })
+
+    await expect(createPromise).resolves.toEqual({
+      opened: true,
+      agent: { id: 'agent-1' },
     })
   })
 })

@@ -60,7 +60,13 @@ import {
   RuntimeIcon,
 } from '../buddy-management/agent-dialogs'
 import { ConfigCodeBlock } from '../buddy-management/config-code-block'
-import type { Agent, ConnectorComputer, ConnectorRuntimeInfo } from '../buddy-management/types'
+import {
+  type Agent,
+  type ConnectorComputer,
+  type ConnectorRuntimeInfo,
+  connectorComputerDisplayName,
+  connectorRuntimeDisplayDetail,
+} from '../buddy-management/types'
 import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
@@ -904,103 +910,6 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               </TooltipContent>
             </TooltipPortal>
           </Tooltip>
-
-          {/* OpenClaw — desktop only */}
-          {'desktopAPI' in window && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-[56px] h-[56px] rounded-full hover:scale-105 bouncy"
-                  onClick={() => navigate({ to: '/openclaw' })}
-                >
-                  <svg
-                    width={24}
-                    height={24}
-                    viewBox="0 0 100 100"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <defs>
-                      <radialGradient
-                        id="sb_oc_body"
-                        cx="0"
-                        cy="0"
-                        r="1"
-                        gradientUnits="userSpaceOnUse"
-                        gradientTransform="translate(50 48) rotate(90) scale(42)"
-                      >
-                        <stop stopColor="#FF5E69" />
-                        <stop offset="1" stopColor="#E53945" />
-                      </radialGradient>
-                      <linearGradient
-                        id="sb_oc_claw"
-                        x1="10"
-                        y1="50"
-                        x2="30"
-                        y2="70"
-                        gradientUnits="userSpaceOnUse"
-                      >
-                        <stop stopColor="#FF5E69" />
-                        <stop offset="1" stopColor="#D93540" />
-                      </linearGradient>
-                    </defs>
-                    <path
-                      d="M40 15C35 5 25 5 20 10"
-                      stroke="#E53945"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      d="M60 15C65 5 75 5 80 10"
-                      stroke="#E53945"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      d="M35 85C35 88 32 92 28 92C24 92 22 88 24 85"
-                      stroke="#B3242E"
-                      strokeWidth="6"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      d="M65 85C65 88 68 92 72 92C76 92 78 88 76 85"
-                      stroke="#B3242E"
-                      strokeWidth="6"
-                      strokeLinecap="round"
-                    />
-                    <circle cx="15" cy="55" r="12" fill="url(#sb_oc_claw)" />
-                    <circle cx="85" cy="55" r="12" fill="url(#sb_oc_claw)" />
-                    <circle cx="50" cy="50" r="40" fill="url(#sb_oc_body)" />
-                    <circle cx="35" cy="42" r="9" fill="white" />
-                    <circle cx="65" cy="42" r="9" fill="white" />
-                    <circle cx="37" cy="41" r="5" fill="#1a1a2e" />
-                    <circle cx="67" cy="41" r="5" fill="#1a1a2e" />
-                    <circle cx="38" cy="39" r="2" fill="white" />
-                    <circle cx="68" cy="39" r="2" fill="white" />
-                    <circle cx="24" cy="55" r="5" fill="#FFC1C7" opacity="0.5" />
-                    <circle cx="76" cy="55" r="5" fill="#FFC1C7" opacity="0.5" />
-                    <path
-                      d="M42 60C45 64 55 64 58 60"
-                      stroke="#8B1A24"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      fill="none"
-                    />
-                  </svg>
-                </Button>
-              </TooltipTrigger>
-              <TooltipPortal>
-                <TooltipContent
-                  side="right"
-                  className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-                >
-                  OpenClaw
-                </TooltipContent>
-              </TooltipPortal>
-            </Tooltip>
-          )}
         </div>
 
         <Modal open={showDmPicker} onClose={() => setShowDmPicker(false)}>
@@ -1162,7 +1071,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                         </div>
                       )}
 
-                      {connectorRuntimeOptions.length > 0 && (
+                      {connectorComputers.some((computer) => computer.runtimes.length > 0) && (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-3">
                             <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
@@ -1186,7 +1095,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                             </Button>
                           </div>
                           {connectorComputers.map((computer) => {
-                            const runtimes = availableRuntimes(computer).sort(
+                            const runtimes = [...computer.runtimes].sort(
                               (a, b) =>
                                 runtimeSortKey(a) - runtimeSortKey(b) ||
                                 a.label.localeCompare(b.label),
@@ -1195,27 +1104,32 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                             return (
                               <div key={computer.id} className="space-y-2">
                                 <div className="text-xs font-black text-text-secondary">
-                                  {computer.name}
+                                  {connectorComputerDisplayName(computer)}
                                 </div>
                                 <div className="grid gap-2 sm:grid-cols-2">
                                   {runtimes.map((runtime) => {
                                     const optionKey = `${computer.id}:${runtime.id}`
                                     const selected =
                                       selectedConnectorRuntimeOption?.key === optionKey
+                                    const available = runtime.status === 'available'
                                     return (
                                       <button
                                         key={optionKey}
                                         type="button"
+                                        disabled={!available}
                                         onClick={() => {
+                                          if (!available) return
                                           setSelectedConnectorComputerId(computer.id)
                                           setSelectedConnectorRuntimeId(runtime.id)
                                           setConnectorSelectionConfirmed(false)
                                         }}
                                         className={cn(
                                           'rounded-2xl border px-4 py-3 text-left transition',
-                                          selected
-                                            ? 'border-primary/50 bg-primary/10'
-                                            : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
+                                          !available
+                                            ? 'border-border-subtle bg-bg-tertiary/20 opacity-75'
+                                            : selected
+                                              ? 'border-primary/50 bg-primary/10'
+                                              : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
                                         )}
                                       >
                                         <div className="flex items-center gap-3">
@@ -1230,8 +1144,15 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                                             <span className="block truncate text-sm font-black text-text-primary">
                                               {runtime.label}
                                             </span>
-                                            <span className="mt-0.5 block truncate text-xs text-text-muted">
-                                              {runtime.version ?? runtime.command ?? runtime.id}
+                                            <span
+                                              className={cn(
+                                                'mt-0.5 block text-xs text-text-muted',
+                                                available ? 'truncate' : 'leading-5',
+                                              )}
+                                            >
+                                              {available
+                                                ? connectorRuntimeDisplayDetail(computer, runtime)
+                                                : t('agentMgmt.runtimeMissing')}
                                             </span>
                                           </span>
                                         </div>

@@ -1,12 +1,45 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+function applyDesktopDocumentClasses(): void {
+  const apply = () => {
+    document.documentElement.classList.add(
+      'desktop-app',
+      `desktop-${process.platform}`,
+      'desktop-community-window',
+    )
+  }
+  if (document.documentElement) apply()
+  window.addEventListener('DOMContentLoaded', apply, { once: true })
+}
+
+function syncCommunityAuthToken(): void {
+  try {
+    ipcRenderer.send('desktop:communityAuthSnapshot', {
+      accessToken: window.localStorage?.getItem('accessToken') ?? '',
+    })
+  } catch {
+    // Ignore origins where localStorage is unavailable.
+  }
+}
+
 const desktopAPI = {
   platform: process.platform as 'darwin' | 'win32' | 'linux',
   isDesktop: true as const,
 
   // Notifications
-  showNotification: (title: string, body: string, channelId?: string) => {
-    ipcRenderer.invoke('desktop:showNotification', { title, body, channelId })
+  showNotification: (
+    title: string,
+    body: string,
+    channelId?: string,
+    options?: { routePath?: string; messageId?: string },
+  ) => {
+    ipcRenderer.invoke('desktop:showNotification', {
+      title,
+      body,
+      channelId,
+      routePath: options?.routePath,
+      messageId: options?.messageId,
+    })
   },
   setBadgeCount: (count: number) => {
     ipcRenderer.invoke('desktop:setBadgeCount', count)
@@ -19,10 +52,257 @@ const desktopAPI = {
   minimizeToTray: () => {
     ipcRenderer.invoke('desktop:minimizeToTray')
   },
-
-  // Onboarding
-  completeOnboarding: (result: { completed: boolean }) => {
-    return ipcRenderer.invoke('onboarding:complete', result) as Promise<{ success: boolean }>
+  openExternal: (url: string) => {
+    return ipcRenderer.invoke('desktop:openExternal', url) as Promise<boolean>
+  },
+  openReader: (input: {
+    url: string
+    title?: string
+    useDefaultApp?: boolean
+    attachmentId?: string
+  }) => {
+    return ipcRenderer.invoke('desktop:openReader', input) as Promise<boolean>
+  },
+  selectDirectory: (defaultPath?: string) => {
+    return ipcRenderer.invoke('desktop:selectDirectory', { defaultPath }) as Promise<string | null>
+  },
+  quit: () => {
+    return ipcRenderer.invoke('desktop:quit') as Promise<void>
+  },
+  getCommunityAuthToken: () => {
+    return ipcRenderer.invoke('desktop:getCommunityAuthToken') as Promise<string>
+  },
+  communityFetchJson: (input: {
+    path: string
+    method?: string
+    body?: unknown
+    headers?: Record<string, string>
+  }) => {
+    return ipcRenderer.invoke('desktop:community:fetchJson', input) as Promise<unknown>
+  },
+  showMainWindow: () => {
+    return ipcRenderer.invoke('desktop:showMainWindow') as Promise<void>
+  },
+  showCommunity: (path?: string) => {
+    return ipcRenderer.invoke('desktop:showCommunity', { path }) as Promise<void>
+  },
+  showCreateBuddy: () => {
+    return ipcRenderer.invoke('desktop:showCreateBuddy') as Promise<void>
+  },
+  showContextMenu: () => {
+    return ipcRenderer.invoke('desktop:showContextMenu') as Promise<void>
+  },
+  showSettings: (tab?: 'general' | 'connector' | 'shortcuts' | 'voice' | 'network' | 'about') => {
+    return ipcRenderer.invoke('desktop:showSettings', { tab }) as Promise<void>
+  },
+  reader: {
+    getState: () => {
+      return ipcRenderer.invoke('desktop:reader:getState') as Promise<{
+        activeId: string | null
+        tabs: Array<{
+          id: string
+          title: string
+          sourceUrl: string
+          displayAddress: string
+          contentType: string
+          fileName: string
+          assetUrl: string
+          createdAt: number
+        }>
+      }>
+    },
+    activate: (id: string) => {
+      return ipcRenderer.invoke('desktop:reader:activate', { id }) as Promise<{
+        activeId: string | null
+        tabs: Array<{
+          id: string
+          title: string
+          sourceUrl: string
+          displayAddress: string
+          contentType: string
+          fileName: string
+          assetUrl: string
+          createdAt: number
+        }>
+      }>
+    },
+    close: (id: string) => {
+      return ipcRenderer.invoke('desktop:reader:close', { id }) as Promise<{
+        activeId: string | null
+        tabs: Array<{
+          id: string
+          title: string
+          sourceUrl: string
+          displayAddress: string
+          contentType: string
+          fileName: string
+          assetUrl: string
+          createdAt: number
+        }>
+      }>
+    },
+    openDefault: (id: string) => {
+      return ipcRenderer.invoke('desktop:reader:openDefault', { id }) as Promise<boolean>
+    },
+    onState: (
+      callback: (state: {
+        activeId: string | null
+        tabs: Array<{
+          id: string
+          title: string
+          sourceUrl: string
+          displayAddress: string
+          contentType: string
+          fileName: string
+          assetUrl: string
+          createdAt: number
+        }>
+      }) => void,
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        state: {
+          activeId: string | null
+          tabs: Array<{
+            id: string
+            title: string
+            sourceUrl: string
+            displayAddress: string
+            contentType: string
+            fileName: string
+            assetUrl: string
+            createdAt: number
+          }>
+        },
+      ) => callback(state)
+      ipcRenderer.on('desktop:reader:state', handler)
+      return () => ipcRenderer.removeListener('desktop:reader:state', handler)
+    },
+  },
+  pet: {
+    show: () => {
+      return ipcRenderer.invoke('desktop:pet:show') as Promise<void>
+    },
+    hide: () => {
+      return ipcRenderer.invoke('desktop:pet:hide') as Promise<void>
+    },
+    setPanelMode: (mode: 'compact' | 'expanded') => {
+      return ipcRenderer.invoke('desktop:pet:panel-mode', mode) as Promise<void>
+    },
+    moveWindow: (delta: { x: number; y: number }) => {
+      return ipcRenderer.invoke('desktop:pet:move-window', delta) as Promise<void>
+    },
+    modelProxyStream: (
+      input: { requestId: string; body: Record<string, unknown> },
+      onDelta: (delta: string) => void,
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { requestId: string; delta: string },
+      ) => {
+        if (payload.requestId === input.requestId) onDelta(payload.delta)
+      }
+      ipcRenderer.on('desktop:pet:modelProxyDelta', handler)
+      return (
+        ipcRenderer.invoke('desktop:pet:modelProxyStream', input) as Promise<{ text: string }>
+      ).finally(() => ipcRenderer.removeListener('desktop:pet:modelProxyDelta', handler))
+    },
+    speak: (text: string) => {
+      return ipcRenderer.invoke('desktop:pet:speak', text) as Promise<boolean>
+    },
+    cancelSpeech: () => {
+      return ipcRenderer.invoke('desktop:pet:cancelSpeech') as Promise<void>
+    },
+    voiceEngineStatus: () => {
+      return ipcRenderer.invoke('desktop:pet:voiceEngineStatus') as Promise<{
+        engine: string
+        asrProvider: 'sherpa-local' | 'web-speech'
+        ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
+        nativeAddonAvailable: boolean
+        modelRoot: string
+        asr: { installed: boolean; name: string; sourceUrl: string }
+        tts: { installed: boolean; name: string; sourceUrl: string }
+        ttsProviders: Record<
+          'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2',
+          {
+            installed: boolean
+            runtimeInstalled?: boolean
+            modelInstalled?: boolean
+            name: string
+            sourceUrl: string
+          }
+        >
+      }>
+    },
+    prewarmVoice: () => {
+      return ipcRenderer.invoke('desktop:pet:prewarmVoice') as Promise<boolean>
+    },
+    installVoiceModel: (input: { provider: 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2' }) => {
+      return ipcRenderer.invoke('desktop:pet:installVoiceModel', input) as Promise<{
+        engine: string
+        asrProvider: 'sherpa-local' | 'web-speech'
+        ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
+        nativeAddonAvailable: boolean
+        modelRoot: string
+        asr: { installed: boolean; name: string; sourceUrl: string }
+        tts: { installed: boolean; name: string; sourceUrl: string }
+        ttsProviders: Record<
+          'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2',
+          {
+            installed: boolean
+            runtimeInstalled?: boolean
+            modelInstalled?: boolean
+            name: string
+            sourceUrl: string
+          }
+        >
+      }>
+    },
+    asrStart: () => {
+      return ipcRenderer.invoke('desktop:pet:asrStart') as Promise<{ ok: boolean }>
+    },
+    asrAccept: (input: { samples: ArrayBuffer; sampleRate: number }) => {
+      return ipcRenderer.invoke('desktop:pet:asrAccept', input) as Promise<{ ok: boolean }>
+    },
+    asrStop: () => {
+      return ipcRenderer.invoke('desktop:pet:asrStop') as Promise<{ text: string }>
+    },
+    onAsrPartial: (callback: (payload: { text: string }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, payload: { text: string }) =>
+        callback(payload)
+      ipcRenderer.on('desktop:pet:asrPartial', handler)
+      return () => ipcRenderer.removeListener('desktop:pet:asrPartial', handler)
+    },
+    onVoiceModelProgress: (
+      callback: (payload: {
+        key: 'asr' | 'tts'
+        phase: 'download' | 'extract' | 'ready'
+        receivedBytes?: number
+        totalBytes?: number
+        percent?: number
+      }) => void,
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: {
+          key: 'asr' | 'tts'
+          phase: 'download' | 'extract' | 'ready'
+          receivedBytes?: number
+          totalBytes?: number
+          percent?: number
+        },
+      ) => callback(payload)
+      ipcRenderer.on('desktop:pet:voiceModelProgress', handler)
+      return () => ipcRenderer.removeListener('desktop:pet:voiceModelProgress', handler)
+    },
+    onShortcut: (callback: (action: 'voice' | 'chat' | 'notifications') => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        action: 'voice' | 'chat' | 'notifications',
+      ) => callback(action)
+      ipcRenderer.on('desktop:pet:shortcut', handler)
+      return () => ipcRenderer.removeListener('desktop:pet:shortcut', handler)
+    },
   },
 
   // Process Management
@@ -82,6 +362,111 @@ const desktopAPI = {
   quitAndRestart: () => {
     ipcRenderer.invoke('desktop:quitAndRestart')
   },
+  getDesktopSettings: () =>
+    ipcRenderer.invoke('desktop:getSettings') as Promise<{
+      serverBaseUrl: string
+      httpProxy: string
+      httpsProxy: string
+      connectorApiKey: string
+      connectorAutoStart: boolean
+      connectorWorkDir: string
+      connectorBuddyWorkDirs: Record<string, string>
+      ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
+      asrProvider: 'sherpa-local' | 'web-speech'
+      shortcuts: {
+        openCommunity: string
+        togglePet: string
+        petVoice: string
+        petChat: string
+        showNotifications: string
+      }
+    }>,
+  setDesktopSettings: (settings: {
+    serverBaseUrl?: string
+    httpProxy?: string
+    httpsProxy?: string
+    connectorApiKey?: string
+    connectorAutoStart?: boolean
+    connectorWorkDir?: string
+    connectorBuddyWorkDirs?: Record<string, string>
+    ttsProvider?: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
+    asrProvider?: 'sherpa-local' | 'web-speech'
+    shortcuts?: {
+      openCommunity?: string
+      togglePet?: string
+      petVoice?: string
+      petChat?: string
+      showNotifications?: string
+    }
+  }) =>
+    ipcRenderer.invoke('desktop:setSettings', settings) as Promise<{
+      serverBaseUrl: string
+      httpProxy: string
+      httpsProxy: string
+      connectorApiKey: string
+      connectorAutoStart: boolean
+      connectorWorkDir: string
+      connectorBuddyWorkDirs: Record<string, string>
+      ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
+      asrProvider: 'sherpa-local' | 'web-speech'
+      shortcuts: {
+        openCommunity: string
+        togglePet: string
+        petVoice: string
+        petChat: string
+        showNotifications: string
+      }
+    }>,
+  connector: {
+    getStatus: () => ipcRenderer.invoke('desktop:connector:getStatus'),
+    start: (settings?: {
+      serverBaseUrl?: string
+      httpProxy?: string
+      httpsProxy?: string
+      connectorApiKey?: string
+      connectorAutoStart?: boolean
+      connectorWorkDir?: string
+    }) => ipcRenderer.invoke('desktop:connector:start', settings),
+    stop: () => ipcRenderer.invoke('desktop:connector:stop'),
+    scan: () => ipcRenderer.invoke('desktop:connector:scan') as Promise<{ output: string }>,
+    scanRuntimes: () =>
+      ipcRenderer.invoke('desktop:connector:scanRuntimes') as Promise<{
+        runtimes: Array<{
+          id: string
+          label: string
+          kind: 'openclaw' | 'cli'
+          status: 'available' | 'missing'
+          version?: string | null
+          command?: string | null
+          iconId?: string | null
+          installCommand?: string | null
+          installCommands?: string[]
+          helpUrl?: string | null
+          detectedAt?: string | null
+        }>
+      }>,
+    installRuntime: (input: { runtimeId: string }) =>
+      ipcRenderer.invoke('desktop:connector:installRuntime', input) as Promise<{
+        runtimes: Array<{
+          id: string
+          label: string
+          kind: 'openclaw' | 'cli'
+          status: 'available' | 'missing'
+          version?: string | null
+          command?: string | null
+          iconId?: string | null
+          installCommand?: string | null
+          installCommands?: string[]
+          helpUrl?: string | null
+          detectedAt?: string | null
+        }>
+      }>,
+    getConnections: () => ipcRenderer.invoke('desktop:connector:getConnections'),
+    setConnectionEnabled: (input: { agentId: string; enabled: boolean }) =>
+      ipcRenderer.invoke('desktop:connector:setConnectionEnabled', input),
+    setConnectionWorkDir: (input: { agentId: string; workDir: string }) =>
+      ipcRenderer.invoke('desktop:connector:setConnectionWorkDir', input),
+  },
 
   // Agent event listeners
   onAgentMessage: (callback: (data: { id: string; message: unknown }) => void) => {
@@ -128,156 +513,76 @@ const desktopAPI = {
     ipcRenderer.on('desktop:updateState', handler)
     return () => ipcRenderer.removeListener('desktop:updateState', handler)
   },
-
-  // ─── OpenClaw Gateway ───────────────────────────────────────────────
-
-  openClaw: {
-    // Gateway lifecycle
-    getGatewayStatus: () => ipcRenderer.invoke('openclaw:gateway:status'),
-    startGateway: () => ipcRenderer.invoke('openclaw:gateway:start'),
-    stopGateway: () => ipcRenderer.invoke('openclaw:gateway:stop'),
-    restartGateway: () => ipcRenderer.invoke('openclaw:gateway:restart'),
-    installOpenClaw: () => ipcRenderer.invoke('openclaw:gateway:install'),
-    openConsole: () => ipcRenderer.invoke('openclaw:gateway:open-console'),
-    getRecentLogs: (limit?: number) => ipcRenderer.invoke('openclaw:gateway:recent-logs', limit),
-    pickDirectory: (defaultPath?: string) =>
-      ipcRenderer.invoke('openclaw:dialog:pick-directory', defaultPath),
-
-    onGatewayStatusChanged: (callback: (status: unknown) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)
-      ipcRenderer.on('openclaw:gateway:status-changed', handler)
-      return () => ipcRenderer.removeListener('openclaw:gateway:status-changed', handler)
-    },
-
-    onGatewayLog: (callback: (entry: unknown) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, entry: unknown) => callback(entry)
-      ipcRenderer.on('openclaw:gateway:log', handler)
-      return () => ipcRenderer.removeListener('openclaw:gateway:log', handler)
-    },
-
-    // Config
-    getConfig: () => ipcRenderer.invoke('openclaw:config:get'),
-    saveConfig: (config: unknown) => ipcRenderer.invoke('openclaw:config:save', config),
-
-    // Desktop Settings (autoStart, autoRestart — not in openclaw.json)
-    getDesktopSettings: () => ipcRenderer.invoke('openclaw:desktop-settings:get'),
-    saveDesktopSettings: (settings: unknown) =>
-      ipcRenderer.invoke('openclaw:desktop-settings:save', settings),
-
-    // Agents
-    listAgents: () => ipcRenderer.invoke('openclaw:agents:list'),
-    getAgent: (id: string) => ipcRenderer.invoke('openclaw:agents:get', id),
-    createAgent: (agent: unknown) => ipcRenderer.invoke('openclaw:agents:create', agent),
-    updateAgent: (id: string, updates: unknown) =>
-      ipcRenderer.invoke('openclaw:agents:update', id, updates),
-    deleteAgent: (id: string) => ipcRenderer.invoke('openclaw:agents:delete', id),
-
-    // Agent Bootstrap Files
-    listBootstrapFiles: (agentId: string) =>
-      ipcRenderer.invoke('openclaw:agents:bootstrap:list', agentId),
-    readBootstrapFile: (agentId: string, fileName: string) =>
-      ipcRenderer.invoke('openclaw:agents:bootstrap:read', agentId, fileName),
-    writeBootstrapFile: (agentId: string, fileName: string, content: string) =>
-      ipcRenderer.invoke('openclaw:agents:bootstrap:write', agentId, fileName, content),
-
-    // Channels
-    getChannelRegistry: () => ipcRenderer.invoke('openclaw:channels:registry'),
-    getChannelMeta: (channelId: string) => ipcRenderer.invoke('openclaw:channels:meta', channelId),
-    getChannelConfigs: () => ipcRenderer.invoke('openclaw:channels:configs'),
-    getChannelConfig: (channelId: string) =>
-      ipcRenderer.invoke('openclaw:channels:config:get', channelId),
-    saveChannelConfig: (channelType: string, config: unknown) =>
-      ipcRenderer.invoke('openclaw:channels:config:save', channelType, config),
-    deleteChannelConfig: (channelType: string) =>
-      ipcRenderer.invoke('openclaw:channels:config:delete', channelType),
-
-    // Models
-    listModels: () => ipcRenderer.invoke('openclaw:models:list'),
-    saveModel: (id: string, provider: unknown) =>
-      ipcRenderer.invoke('openclaw:models:save', id, provider),
-    deleteModel: (id: string) => ipcRenderer.invoke('openclaw:models:delete', id),
-    getDefaultModel: () => ipcRenderer.invoke('openclaw:models:default'),
-    setDefaultModel: (modelKey: string) =>
-      ipcRenderer.invoke('openclaw:models:default:set', modelKey),
-
-    // Cron Config
-    getCronConfig: () => ipcRenderer.invoke('openclaw:cron:config'),
-    updateCronConfig: (updates: unknown) =>
-      ipcRenderer.invoke('openclaw:cron:config:update', updates),
-
-    // Cron Tasks
-    listCronTasks: () => ipcRenderer.invoke('openclaw:cron:tasks:list'),
-    saveCronTask: (task: unknown) => ipcRenderer.invoke('openclaw:cron:tasks:save', task),
-    deleteCronTask: (id: string) => ipcRenderer.invoke('openclaw:cron:tasks:delete', id),
-
-    // Skills
-    listSkills: () => ipcRenderer.invoke('openclaw:skills:list'),
-    getSkillsConfig: () => ipcRenderer.invoke('openclaw:skills:config'),
-    updateSkillConfig: (skillName: string, updates: unknown) =>
-      ipcRenderer.invoke('openclaw:skills:config:update', skillName, updates),
-    deleteSkillEntry: (name: string) => ipcRenderer.invoke('openclaw:skills:entry:delete', name),
-    getSkillReadme: (slug: string) => ipcRenderer.invoke('openclaw:skills:readme', slug),
-
-    // SkillHub
-    searchSkills: (query: string, options?: unknown) =>
-      ipcRenderer.invoke('openclaw:skillhub:search', query, options),
-    installSkill: (slug: string, registryId?: string) =>
-      ipcRenderer.invoke('openclaw:skillhub:install', slug, registryId),
-    uninstallSkill: (slug: string) => ipcRenderer.invoke('openclaw:skillhub:uninstall', slug),
-    getRegistries: () => ipcRenderer.invoke('openclaw:skillhub:registries'),
-    getSkillLeaderboard: (limit?: number) =>
-      ipcRenderer.invoke('openclaw:skillhub:leaderboard', limit),
-    updateRegistries: (registries: unknown) =>
-      ipcRenderer.invoke('openclaw:skillhub:registries:update', registries),
-
-    // Connector Center
-    getConnectorOverview: () => ipcRenderer.invoke('openclaw:connector:overview'),
-    getConnectorToolStatuses: () => ipcRenderer.invoke('openclaw:connector:tools:status'),
-    installConnectorTools: (tools: unknown) =>
-      ipcRenderer.invoke('openclaw:connector:tools:install', tools),
-    loginShadowCli: (input: unknown) =>
-      ipcRenderer.invoke('openclaw:connector:shadow:login', input),
-    getShadowCliStatus: (profile?: string) =>
-      ipcRenderer.invoke('openclaw:connector:shadow:status', profile),
-    listShadowNotifications: (input?: unknown) =>
-      ipcRenderer.invoke('openclaw:connector:notifications:list', input),
-    markAllShadowNotificationsRead: (profile?: string) =>
-      ipcRenderer.invoke('openclaw:connector:notifications:mark-all-read', profile),
-    getShadowCloudStatus: (args?: string[]) =>
-      ipcRenderer.invoke('openclaw:connector:cloud:status', args),
-    collectShadowCloudCosts: (input?: unknown) =>
-      ipcRenderer.invoke('openclaw:connector:cloud:costs', input),
-    listAgentBuddyBindings: () => ipcRenderer.invoke('openclaw:connector:bindings'),
-
-    // Buddy Connections
-    listBuddyConnections: () => ipcRenderer.invoke('openclaw:buddy:list'),
-    addBuddyConnection: (connection: unknown) =>
-      ipcRenderer.invoke('openclaw:buddy:add', connection),
-    removeBuddyConnection: (id: string) => ipcRenderer.invoke('openclaw:buddy:remove', id),
-    updateBuddyConnection: (id: string, updates: unknown) =>
-      ipcRenderer.invoke('openclaw:buddy:update', id, updates),
-    connectBuddy: (id: string) => ipcRenderer.invoke('openclaw:buddy:connect', id),
-    disconnectBuddy: (id: string) => ipcRenderer.invoke('openclaw:buddy:disconnect', id),
-    connectAllBuddies: () => ipcRenderer.invoke('openclaw:buddy:connect-all'),
-    probeBuddyConnections: () => ipcRenderer.invoke('openclaw:buddy:probe-all'),
-
-    // Debug CLI
-    execCli: (args: string[]) =>
-      ipcRenderer.invoke('openclaw:cli:exec', args) as Promise<{
-        code: number | null
-        stdout: string
-        stderr: string
-      }>,
-
-    onBuddyStatusChanged: (callback: (connections: unknown) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, connections: unknown) =>
-        callback(connections)
-      ipcRenderer.on('openclaw:buddy:status-changed', handler)
-      return () => ipcRenderer.removeListener('openclaw:buddy:status-changed', handler)
-    },
+  onDesktopSettingsChanged: (
+    callback: (settings: {
+      serverBaseUrl: string
+      httpProxy: string
+      httpsProxy: string
+      connectorApiKey: string
+      connectorAutoStart: boolean
+      connectorWorkDir: string
+      connectorBuddyWorkDirs: Record<string, string>
+      shortcuts: {
+        openCommunity: string
+        togglePet: string
+        petVoice: string
+        petChat: string
+        showNotifications: string
+      }
+    }) => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      settings: {
+        serverBaseUrl: string
+        httpProxy: string
+        httpsProxy: string
+        connectorApiKey: string
+        connectorAutoStart: boolean
+        connectorWorkDir: string
+        connectorBuddyWorkDirs: Record<string, string>
+        ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
+        asrProvider: 'sherpa-local' | 'web-speech'
+        shortcuts: {
+          openCommunity: string
+          togglePet: string
+          petVoice: string
+          petChat: string
+          showNotifications: string
+        }
+      },
+    ) => callback(settings)
+    ipcRenderer.on('desktop:settingsChanged', handler)
+    return () => ipcRenderer.removeListener('desktop:settingsChanged', handler)
   },
+  onConnectorState: (callback: (state: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
+    ipcRenderer.on('desktop:connectorState', handler)
+    return () => ipcRenderer.removeListener('desktop:connectorState', handler)
+  },
+  onSettingsTabRequest: (
+    callback: (tab: 'general' | 'connector' | 'shortcuts' | 'voice' | 'network' | 'about') => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      tab: 'general' | 'connector' | 'shortcuts' | 'voice' | 'network' | 'about',
+    ) => callback(tab)
+    ipcRenderer.on('desktop:settings:selectTab', handler)
+    return () => ipcRenderer.removeListener('desktop:settings:selectTab', handler)
+  },
+  reloadShortcuts: () => ipcRenderer.invoke('desktop:shortcuts:reload'),
+  suspendShortcuts: () => ipcRenderer.invoke('desktop:shortcuts:suspend'),
+  resumeShortcuts: () => ipcRenderer.invoke('desktop:shortcuts:resume'),
 }
 
 contextBridge.exposeInMainWorld('desktopAPI', desktopAPI)
+
+applyDesktopDocumentClasses()
+syncCommunityAuthToken()
+window.addEventListener('DOMContentLoaded', syncCommunityAuthToken)
+window.addEventListener('load', syncCommunityAuthToken)
+window.addEventListener('focus', syncCommunityAuthToken)
+window.addEventListener('storage', syncCommunityAuthToken)
+window.setInterval(syncCommunityAuthToken, 1000)
 
 export type DesktopAPI = typeof desktopAPI

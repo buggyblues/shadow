@@ -1,7 +1,7 @@
 import { type LucideIcon, Moon, Star, Sun } from 'lucide-react-native'
 import type { ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { useColors } from '../../theme'
+import { iconSize, spacing, useColors } from '../../theme'
 
 /** QQ-style online rank: stars (<100h) → moons (100-500h) → suns (500h+) */
 export function OnlineRank({ totalSeconds }: { totalSeconds: number }) {
@@ -35,7 +35,12 @@ export function OnlineRank({ totalSeconds }: { totalSeconds: number }) {
     const items: ReactNode[] = []
     for (let n = count; n >= 1; n--) {
       items.push(
-        <Icon key={`${prefix}-${n}`} size={12} color={colors.warning} fill={colors.warning} />,
+        <Icon
+          key={`${prefix}-${n}`}
+          size={iconSize.xs}
+          color={colors.warning}
+          fill={colors.warning}
+        />,
       )
     }
     return items
@@ -54,6 +59,6 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 1,
+    gap: spacing.px,
   },
 })

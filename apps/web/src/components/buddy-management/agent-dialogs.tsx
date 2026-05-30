@@ -8,15 +8,38 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Switch,
 } from '@shadowob/ui'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Bot, CheckCircle2, ChevronRight, Cloud, Loader2, Terminal } from 'lucide-react'
+import {
+  ArrowLeft,
+  Bot,
+  CheckCircle2,
+  ChevronRight,
+  CircleHelp,
+  Cloud,
+  Code2,
+  Cpu,
+  Loader2,
+  type LucideIcon,
+  Sparkles,
+  Terminal,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { fetchApi } from '../../lib/api'
 import { toPinyinSlug } from '../../lib/pinyin'
 import { AvatarEditor } from '../common/avatar-editor'
-import { type Agent, type BuddyMode, getAgentAllowedServerIds, getAgentBuddyMode } from './types'
+import {
+  type Agent,
+  type BuddyMode,
+  connectorRuntimeInstallCommand,
+  connectorRuntimeInstallCommandList,
+  getAgentAllowedServerIds,
+  getAgentBuddyMode,
+} from './types'
 
 type ServerEntry = {
   server: {
@@ -80,13 +103,31 @@ export const CLOUD_RUNTIME_LABELS: Record<CloudBuddyRuntimeId, string> = {
 }
 
 const RUNTIME_ICON_SOURCES: Record<string, string> = {
-  openclaw: '/connectors/openclaw.svg',
-  hermes: '/connectors/hermes-agent.png',
-  'claude-code': '/connectors/claude-code.svg',
-  codex: '/connectors/codex.svg',
-  opencode: '/connectors/opencode.svg',
-  gemini: '/connectors/gemini.svg',
-  'cc-connect': '/connectors/cc-connect.svg',
+  openclaw: new URL('../../assets/runtime-icons/openclaw.svg', import.meta.url).toString(),
+  hermes: new URL('../../assets/runtime-icons/hermes-agent.png', import.meta.url).toString(),
+  'claude-code': new URL('../../assets/runtime-icons/claude-code.svg', import.meta.url).toString(),
+  codex: new URL('../../assets/runtime-icons/codex.svg', import.meta.url).toString(),
+  opencode: new URL('../../assets/runtime-icons/opencode.svg', import.meta.url).toString(),
+  gemini: new URL('../../assets/runtime-icons/gemini.svg', import.meta.url).toString(),
+  cursor: new URL('../../assets/runtime-icons/cursor.svg', import.meta.url).toString(),
+  kimi: new URL('../../assets/runtime-icons/kimi.png', import.meta.url).toString(),
+  copilot: new URL('../../assets/runtime-icons/copilot.svg', import.meta.url).toString(),
+  antigravity: new URL('../../assets/runtime-icons/antigravity.png', import.meta.url).toString(),
+  'cc-connect': new URL('../../assets/runtime-icons/cc-connect.svg', import.meta.url).toString(),
+}
+
+const RUNTIME_ICON_COMPONENTS: Record<string, LucideIcon> = {
+  openclaw: Bot,
+  hermes: Sparkles,
+  'claude-code': Code2,
+  codex: Terminal,
+  opencode: Code2,
+  gemini: Sparkles,
+  cursor: Cpu,
+  kimi: Sparkles,
+  copilot: Code2,
+  antigravity: Cpu,
+  'cc-connect': Terminal,
 }
 
 const BUDDY_INTRO_PROMPT_KEY = 'agentMgmt.buddyIntroPrompt'
@@ -98,24 +139,92 @@ export function getBuddyIntroPrompt(t: (key: string) => string) {
 }
 
 export function getRuntimeIconSrc(runtimeId: string) {
-  return RUNTIME_ICON_SOURCES[runtimeId] ?? RUNTIME_ICON_SOURCES['cc-connect']
+  return RUNTIME_ICON_SOURCES[runtimeId] ?? null
 }
 
 export function RuntimeIcon({
   runtimeId,
-  label,
   className,
 }: {
   runtimeId: string
   label: string
   className?: string
 }) {
-  const src = getRuntimeIconSrc(runtimeId)
-  if (!src) {
-    return <Terminal size={18} className={className} />
+  const [failed, setFailed] = useState(false)
+  const src = failed ? null : getRuntimeIconSrc(runtimeId)
+  const Icon = RUNTIME_ICON_COMPONENTS[runtimeId] ?? Terminal
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        className={cn('object-contain', className)}
+        onError={() => setFailed(true)}
+      />
+    )
   }
+  return <Icon aria-hidden="true" className={cn('text-current', className)} />
+}
 
-  return <img src={src} alt={label} className={cn('object-contain', className)} />
+export function RuntimeInstallHint({
+  runtimeId,
+  t,
+}: {
+  runtimeId: string
+  t: (key: string) => string
+}) {
+  const command = connectorRuntimeInstallCommand(runtimeId)
+  if (!command) return <span>{t('agentMgmt.runtimeInstallGuide')}</span>
+  return (
+    <span>
+      {t('agentMgmt.runtimeInstallCommand')}{' '}
+      <code className="rounded-md border border-border-subtle bg-bg-deep/70 px-1.5 py-0.5 text-[10px] text-text-primary">
+        {command}
+      </code>
+    </span>
+  )
+}
+
+export function RuntimeInstallHelpButton({
+  runtimeId,
+  t,
+}: {
+  runtimeId: string
+  t: (key: string) => string
+}) {
+  const commands = connectorRuntimeInstallCommandList(runtimeId)
+  const primaryCommand = commands[0] ?? connectorRuntimeInstallCommand(runtimeId)
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-bg-deep/75 text-text-secondary transition hover:border-primary/50 hover:text-primary"
+          aria-label={t('agentMgmt.runtimeInstallHelp')}
+        >
+          <CircleHelp size={16} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-3">
+        <div className="space-y-2">
+          <p className="text-sm font-black text-text-primary">
+            {t('agentMgmt.runtimeInstallHelp')}
+          </p>
+          <p className="text-xs leading-5 text-text-muted">
+            {t('agentMgmt.runtimeInstallPopoverDesc')}
+          </p>
+          {primaryCommand ? (
+            <code className="block whitespace-pre-wrap rounded-xl border border-border-subtle bg-bg-deep/85 px-3 py-2 text-[11px] leading-5 text-text-primary">
+              {commands.join('\n')}
+            </code>
+          ) : (
+            <p className="text-xs text-text-muted">{t('agentMgmt.runtimeInstallGuide')}</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 const CLOUD_DEPLOYMENT_POLL_INTERVAL_MS = 3000

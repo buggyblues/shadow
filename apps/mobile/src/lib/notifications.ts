@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications'
 import { router } from 'expo-router'
 import { Platform } from 'react-native'
 import { fetchApi } from './api'
+import { serverChannelHref } from './routes'
 
 type NotificationRouteData = {
   channelId?: string
@@ -56,9 +57,7 @@ async function navigateToChannel(channelId: string, messageId?: string | null) {
   }
   const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${channel.serverId}`)
   router.push(
-    `/(main)/servers/${server.slug ?? channel.serverId}/channels/${channel.id}${
-      messageId ? `?msg=${messageId}` : ''
-    }` as never,
+    serverChannelHref(server.slug ?? channel.serverId, channel.id, { messageId }) as never,
   )
 }
 
@@ -141,7 +140,7 @@ export function setupNotificationResponseListener(): () => void {
       const legacyChannelId = dataString(data, 'channelId')
       const legacyServerSlug = dataString(data, 'serverSlug')
       if (legacyServerSlug && legacyChannelId) {
-        router.push(`/(main)/servers/${legacyServerSlug}/channels/${legacyChannelId}` as never)
+        router.push(serverChannelHref(legacyServerSlug, legacyChannelId) as never)
         return
       }
 

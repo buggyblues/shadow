@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -13,6 +12,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Bot, MessageCircle, Rocket, Users } from '../../lib/icons'
+import { fontSize, iconSize, lineHeight, palette, radius, size, spacing } from '../../theme'
 
 interface SplashScreenProps {
   onComplete: () => void
@@ -26,28 +26,28 @@ const slides = [
     icon: Rocket,
     titleKey: 'splash.welcome',
     descKey: 'splash.welcomeDesc',
-    gradient: ['#667eea', '#764ba2'],
+    color: palette.indigo,
   },
   {
     id: 'chat',
     icon: MessageCircle,
     titleKey: 'splash.chat',
     descKey: 'splash.chatDesc',
-    gradient: ['#11998e', '#38ef7d'],
+    color: palette.emerald,
   },
   {
     id: 'buddy',
     icon: Bot,
     titleKey: 'splash.buddy',
     descKey: 'splash.buddyDesc',
-    gradient: ['#f093fb', '#f5576c'],
+    color: palette.crimson,
   },
   {
     id: 'community',
     icon: Users,
     titleKey: 'splash.community',
     descKey: 'splash.communityDesc',
-    gradient: ['#4facfe', '#00f2fe'],
+    color: palette.cyan,
   },
 ]
 
@@ -79,14 +79,9 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
       const IconComponent = item.icon
       return (
         <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-          <LinearGradient
-            colors={item.gradient as [string, string]}
-            style={styles.iconContainer}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <IconComponent size={64} color="#fff" />
-          </LinearGradient>
+          <View style={[styles.iconContainer, { backgroundColor: item.color }]}>
+            <IconComponent size={iconSize.hero} color={palette.white} />
+          </View>
           <Text style={styles.title}>{t(item.titleKey)}</Text>
           <Text style={styles.description}>{t(item.descKey)}</Text>
         </View>
@@ -143,39 +138,24 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
             index * SCREEN_WIDTH,
             (index + 1) * SCREEN_WIDTH,
           ]
-          const opacity = scrollX.interpolate({
-            inputRange,
-            outputRange: [0.3, 1, 0.3],
-            extrapolate: 'clamp',
-          })
           const scale = scrollX.interpolate({
             inputRange,
             outputRange: [1, 1.5, 1],
             extrapolate: 'clamp',
           })
           return (
-            <Animated.View
-              key={index}
-              style={[styles.indicator, { opacity, transform: [{ scale }] }]}
-            />
+            <Animated.View key={index} style={[styles.indicator, { transform: [{ scale }] }]} />
           )
         })}
       </View>
 
       {/* Action button */}
       <TouchableOpacity style={styles.actionButton} onPress={handleNext}>
-        <LinearGradient
-          colors={['#667eea', '#764ba2']}
-          style={styles.actionButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.actionButtonText}>
-            {currentIndex === slides.length - 1
-              ? t('splash.getStarted', 'Get Started')
-              : t('common.next', 'Next')}
-          </Text>
-        </LinearGradient>
+        <Text style={styles.actionButtonText}>
+          {currentIndex === slides.length - 1
+            ? t('splash.getStarted', 'Get Started')
+            : t('common.next', 'Next')}
+        </Text>
       </TouchableOpacity>
     </View>
   )
@@ -184,78 +164,72 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: palette.foundation,
   },
   skipButton: {
     position: 'absolute',
-    top: 60,
-    right: 20,
+    top: size.tabBar + spacing.xxs,
+    right: spacing.xl,
     zIndex: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   skipText: {
-    color: '#999',
-    fontSize: 16,
+    color: palette.neutral400,
+    fontSize: fontSize.md,
   },
   slide: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: spacing['4xl'],
   },
   iconContainer: {
-    width: 128,
-    height: 128,
-    borderRadius: 32,
+    width: size.avatarXl * 2,
+    height: size.avatarXl * 2,
+    borderRadius: radius['3xl'],
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    marginBottom: spacing['4xl'],
   },
   title: {
-    fontSize: 28,
+    fontSize: fontSize['2xl'],
     fontWeight: 'bold',
-    color: '#fff',
+    color: palette.white,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   description: {
-    fontSize: 16,
-    color: '#999',
+    fontSize: fontSize.md,
+    color: palette.neutral400,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: lineHeight.md,
   },
   indicatorContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: spacing['4xl'],
   },
   indicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#667eea',
-    marginHorizontal: 4,
+    width: size.dotMd,
+    height: size.dotMd,
+    borderRadius: radius.sm,
+    backgroundColor: palette.indigo,
+    marginHorizontal: spacing.xs,
   },
   actionButton: {
-    marginHorizontal: 40,
-    marginBottom: 40,
-  },
-  actionButtonGradient: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 16,
+    marginHorizontal: spacing['4xl'],
+    marginBottom: spacing['4xl'],
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing['3xl'],
+    borderRadius: radius['2lg'],
     alignItems: 'center',
+    backgroundColor: palette.indigo,
   },
   actionButtonText: {
-    color: '#fff',
-    fontSize: 18,
+    color: palette.white,
+    fontSize: fontSize.lg,
     fontWeight: '600',
   },
 })

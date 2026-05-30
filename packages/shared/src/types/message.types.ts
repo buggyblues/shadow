@@ -296,6 +296,30 @@ export interface Attachment {
   size: number
   width: number | null
   height: number | null
+  workspaceNodeId?: string | null
+  kind?: 'file' | 'image' | 'voice'
+  durationMs?: number | null
+  audioCodec?: string | null
+  audioContainer?: string | null
+  waveformPeaks?: number[] | null
+  waveformVersion?: number | null
+  transcript?: {
+    id: string
+    status: 'pending' | 'processing' | 'ready' | 'failed'
+    text: string | null
+    language: string | null
+    source: 'client' | 'server' | 'runtime'
+    provider?: string | null
+    confidence?: number | null
+    errorCode?: string | null
+    updatedAt?: string
+  } | null
+  playback?: {
+    played: boolean
+    completed: boolean
+    lastPositionMs: number
+    playedCount?: number
+  } | null
   createdAt: string
 }
 

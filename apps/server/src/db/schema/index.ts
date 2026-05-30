@@ -13,7 +13,7 @@ export {
   serverAppCommandTokens,
   serverAppIntegrations,
 } from './app-integrations'
-export { attachments } from './attachments'
+export { type AttachmentKind, attachments } from './attachments'
 export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'
 export { channelKindEnum, channels, channelTypeEnum } from './channels'
@@ -166,4 +166,10 @@ export { userRewardLogs, userTaskClaims } from './task-center'
 export { threads } from './threads'
 export { userSessions } from './user-sessions'
 export { userEconomyStatusEnum, userStatusEnum, users } from './users'
+export {
+  type VoiceTranscriptSource,
+  type VoiceTranscriptStatus,
+  voiceMessagePlaybacks,
+  voiceTranscripts,
+} from './voice-messages'
 export { workspaceNodeKindEnum, workspaceNodes, workspaces } from './workspaces'

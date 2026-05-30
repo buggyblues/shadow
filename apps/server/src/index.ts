@@ -17,7 +17,6 @@ import { configureCloudSaasClusterFromEnv } from './lib/cloud-saas-cluster-confi
 import { resolveCloudTemplatesDir } from './lib/cloud-templates'
 import { randomFixedDigits } from './lib/id'
 import { logger } from './lib/logger'
-import { seedPlayCatalogResources } from './lib/play-catalog-seed'
 import { setupWebSocket } from './ws'
 
 const PORT = Number(process.env.PORT ?? 3002)
@@ -141,13 +140,6 @@ async function main() {
     } catch (err) {
       logger.warn({ err }, 'Server app catalog seeding skipped')
     }
-  }
-
-  try {
-    const result = await seedPlayCatalogResources(container)
-    logger.info({ result }, 'Play catalog resources seeded')
-  } catch (err) {
-    logger.warn({ err }, 'Play catalog resource seeding skipped')
   }
 
   // Create Hono app with DI container

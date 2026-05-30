@@ -47,6 +47,9 @@ export type LoginViewText = {
   loggingIn: string
   switchToPassword: string
   switchToEmailCode: string
+  forgotPassword: string
+  passwordResetSent: string
+  passwordResetEmailRequired: string
   checkEmailTitle: string
   checkEmailMessage: string
   codeDigit: (index: number) => string
@@ -183,6 +186,8 @@ export function LoginView({
   const [digits, setDigits] = useState<string[]>(() => Array(CODE_LENGTH).fill(''))
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
+  const [resetSending, setResetSending] = useState(false)
+  const [notice, setNotice] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [resendSeconds, setResendSeconds] = useState(0)
 
@@ -235,6 +240,7 @@ export function LoginView({
     event?.preventDefault()
     if (!trimmedEmail || sending) return
     setError('')
+    setNotice('')
     setSending(true)
     try {
       await request('/api/auth/email/start', {
@@ -257,6 +263,7 @@ export function LoginView({
     event.preventDefault()
     if (!trimmedEmail || !password || verifying) return
     setError('')
+    setNotice('')
     setVerifying(true)
     try {
       const session = await request<LoginSession>('/api/auth/login', {
@@ -275,6 +282,7 @@ export function LoginView({
     const nextCode = input.code.trim()
     if (!input.email || nextCode.length !== CODE_LENGTH || verificationInFlightRef.current) return
     setError('')
+    setNotice('')
     verificationInFlightRef.current = true
     setVerifying(true)
     try {
@@ -328,6 +336,7 @@ export function LoginView({
 
   const goBack = () => {
     setError('')
+    setNotice('')
     if (step === 'password') {
       setPassword('')
       setStep(passwordOriginRef.current)
@@ -340,6 +349,7 @@ export function LoginView({
 
   const showPasswordLogin = () => {
     setError('')
+    setNotice('')
     setPassword('')
     passwordOriginRef.current = step === 'code' ? 'code' : 'choose'
     setStep('password')
@@ -347,9 +357,31 @@ export function LoginView({
 
   const showEmailCode = () => {
     setError('')
+    setNotice('')
     setPassword('')
     setStep(trimmedEmail ? 'code' : 'choose')
     if (trimmedEmail) window.setTimeout(() => digitRefs.current[0]?.focus(), 80)
+  }
+
+  const requestPasswordReset = async () => {
+    if (!trimmedEmail || resetSending) {
+      setError(text.passwordResetEmailRequired)
+      return
+    }
+    setError('')
+    setNotice('')
+    setResetSending(true)
+    try {
+      await request('/api/auth/password-reset/start', {
+        method: 'POST',
+        body: JSON.stringify({ email: trimmedEmail, locale: formatLocale(lang) }),
+      })
+      setNotice(text.passwordResetSent)
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setResetSending(false)
+    }
   }
 
   const content = (
@@ -370,11 +402,7 @@ export function LoginView({
       {step === 'choose' ? (
         <>
           <div className={cn('text-center', isModal ? 'mb-4 sm:mb-5' : 'mb-5')}>
-            <FormTitle
-              modal={isModal}
-              title={text.welcomeTitle}
-              description={text.welcomeSubtitle}
-            />
+            <FormTitle modal={isModal} title={text.welcomeTitle} />
           </div>
 
           <div className="flex w-full flex-col gap-2.5">
@@ -412,6 +440,11 @@ export function LoginView({
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            ) : null}
+            {notice ? (
+              <p className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-[13px] font-bold leading-5 text-primary">
+                {notice}
+              </p>
             ) : null}
             <Input
               ref={emailInputRef}
@@ -605,6 +638,17 @@ export function LoginView({
             variant="ghost"
             size="sm"
             className="mt-3 normal-case tracking-normal text-text-muted"
+            disabled={resetSending}
+            onClick={requestPasswordReset}
+          >
+            {text.forgotPassword}
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-1 normal-case tracking-normal text-text-muted"
             onClick={showEmailCode}
           >
             {text.switchToEmailCode}

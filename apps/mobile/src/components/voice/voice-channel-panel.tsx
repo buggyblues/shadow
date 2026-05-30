@@ -1,10 +1,28 @@
-import { Headphones, Mic, MicOff, PhoneOff, Volume2, VolumeX } from 'lucide-react-native'
+import {
+  AlertCircle,
+  Headphones,
+  Mic,
+  MicOff,
+  PhoneOff,
+  Volume2,
+  VolumeX,
+} from 'lucide-react-native'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { RtcSurfaceView } from 'react-native-agora'
-import { fontSize, radius, spacing, useColors } from '../../theme'
-import { AppText, BackgroundSurface, Button, GlassHeader, GlassPanel } from '../ui'
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { getAgoraRtcSurfaceView } from '../../lib/agora'
+import {
+  border,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
+import { Avatar } from '../common/avatar'
+import { AppText, BackgroundSurface, Button, MobileBackButton, MobileNavigationBar } from '../ui'
 import { useVoiceSession } from './voice-session-provider'
 
 export function VoiceChannelPanel({
@@ -25,6 +43,17 @@ export function VoiceChannelPanel({
   const isCurrentSession = activeChannel?.channelId === channelId
   const connected = isCurrentSession && voice.status === 'connected'
   const connecting = isCurrentSession && voice.status === 'connecting'
+  const RtcSurfaceView = focusedVideoUid !== null ? getAgoraRtcSurfaceView() : null
+  const statusTitle = connected
+    ? t('voice.activeCall')
+    : connecting
+      ? t('voice.connecting')
+      : t('voice.ready')
+  const statusDescription = voice.error
+    ? t('voice.setupRequired')
+    : connected
+      ? t('voice.connectedCount', { count: voice.participants.length })
+      : t('voice.callHint')
 
   useEffect(() => {
     const sameChannel =
@@ -49,124 +78,151 @@ export function VoiceChannelPanel({
 
   return (
     <BackgroundSurface style={styles.container}>
-      <GlassHeader style={styles.header}>
-        <View style={styles.headerText}>
-          <AppText variant="title" numberOfLines={1}>
-            {channelName}
-          </AppText>
-          <AppText variant="label" tone="secondary">
-            {connected
-              ? t('voice.connectedCount', { count: voice.participants.length })
-              : t('voice.ready')}
-          </AppText>
-        </View>
-        <Button
-          variant={connected ? 'danger' : 'primary'}
-          size="sm"
-          icon={connected ? PhoneOff : Volume2}
-          loading={connecting}
-          onPress={() => {
-            if (!isCurrentSession) {
-              setActiveChannel({ channelId, channelName, serverSlug })
-              return
-            }
-            connected ? void voice.leave() : void voice.join()
-          }}
-        >
-          {connected ? t('voice.leave') : t('voice.join')}
-        </Button>
-        <Button variant="ghost" size="sm" onPress={onBack}>
-          {t('common.back')}
-        </Button>
-      </GlassHeader>
+      <MobileNavigationBar
+        title={channelName}
+        left={<MobileBackButton onPress={onBack} />}
+        right={
+          <Button
+            variant={connected ? 'danger' : 'primary'}
+            size="sm"
+            icon={connected ? PhoneOff : Volume2}
+            loading={connecting}
+            disabled={connecting}
+            onPress={() => {
+              if (!isCurrentSession) {
+                setActiveChannel({ channelId, channelName, serverSlug })
+                return
+              }
+              connected ? void voice.leave() : void voice.join()
+            }}
+          >
+            {connected ? t('voice.leave') : t('voice.join')}
+          </Button>
+        }
+      />
 
       <View style={styles.body}>
-        {voice.error && (
-          <GlassPanel style={[styles.error, { borderColor: colors.error }]}>
-            <Text style={[styles.errorText, { color: colors.error }]}>{voice.error}</Text>
-          </GlassPanel>
-        )}
-
-        <View style={styles.controls}>
-          <Pressable
-            disabled={!connected}
-            onPress={voice.toggleMute}
+        <View
+          style={[
+            styles.statusCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <View
             style={[
-              styles.control,
-              { backgroundColor: voice.isMuted ? `${colors.error}22` : colors.surface },
+              styles.statusIcon,
+              {
+                backgroundColor: voice.error
+                  ? colors.toneDangerSurface
+                  : connected
+                    ? colors.toneSuccessSurface
+                    : colors.inputBackground,
+              },
             ]}
           >
-            {voice.isMuted ? (
-              <MicOff size={22} color={colors.error} />
+            {voice.error ? (
+              <AlertCircle size={iconSize['2xl']} color={colors.error} strokeWidth={2.5} />
             ) : (
-              <Mic size={22} color={colors.primary} />
+              <Volume2
+                size={iconSize['2xl']}
+                color={connected ? colors.success : colors.textMuted}
+                strokeWidth={2.5}
+              />
             )}
-            <Text style={[styles.controlLabel, { color: colors.text }]}>
-              {voice.isMuted ? t('voice.unmute') : t('voice.mute')}
-            </Text>
-          </Pressable>
-          <Pressable
-            disabled={!connected}
-            onPress={voice.toggleDeafen}
-            style={[
-              styles.control,
-              { backgroundColor: voice.isDeafened ? `${colors.error}22` : colors.surface },
-            ]}
-          >
-            <Headphones size={22} color={voice.isDeafened ? colors.error : colors.primary} />
-            <Text style={[styles.controlLabel, { color: colors.text }]}>
-              {voice.isDeafened ? t('voice.undeafen') : t('voice.deafen')}
-            </Text>
-          </Pressable>
-          <Pressable
-            disabled={!connected}
-            onPress={voice.toggleSpeaker}
-            style={[styles.control, { backgroundColor: colors.surface }]}
-          >
-            {voice.speakerEnabled ? (
-              <Volume2 size={22} color={colors.primary} />
-            ) : (
-              <VolumeX size={22} color={colors.textMuted} />
-            )}
-            <Text style={[styles.controlLabel, { color: colors.text }]}>
-              {voice.speakerEnabled ? t('voice.speaker') : t('voice.earpiece')}
-            </Text>
-          </Pressable>
+          </View>
+          <View style={styles.statusCopy}>
+            <AppText variant="bodyStrong">{statusTitle}</AppText>
+            <AppText
+              variant="label"
+              tone={voice.error ? 'danger' : 'secondary'}
+              style={styles.statusDescription}
+            >
+              {statusDescription}
+            </AppText>
+          </View>
         </View>
 
-        {focusedVideoUid !== null && (
-          <GlassPanel style={styles.screenStage}>
-            {voice.remoteVideoUids.length > 1 && (
+        {voice.error ? (
+          <View
+            style={[
+              styles.notice,
+              { backgroundColor: colors.toneDangerSurface, borderColor: colors.error },
+            ]}
+          >
+            <AppText variant="bodyStrong" tone="danger">
+              {t('voice.unavailableTitle')}
+            </AppText>
+            <AppText variant="label" tone="secondary" style={styles.noticeText}>
+              {voice.error}
+            </AppText>
+          </View>
+        ) : null}
+
+        <View style={styles.controls}>
+          <VoiceControlButton
+            disabled={!connected}
+            active={voice.isMuted}
+            danger={voice.isMuted}
+            icon={voice.isMuted ? MicOff : Mic}
+            label={voice.isMuted ? t('voice.unmute') : t('voice.mute')}
+            onPress={voice.toggleMute}
+          />
+          <VoiceControlButton
+            disabled={!connected}
+            active={voice.isDeafened}
+            danger={voice.isDeafened}
+            icon={Headphones}
+            label={voice.isDeafened ? t('voice.undeafen') : t('voice.deafen')}
+            onPress={voice.toggleDeafen}
+          />
+          <VoiceControlButton
+            disabled={!connected}
+            active={voice.speakerEnabled}
+            icon={voice.speakerEnabled ? Volume2 : VolumeX}
+            label={voice.speakerEnabled ? t('voice.speaker') : t('voice.earpiece')}
+            onPress={voice.toggleSpeaker}
+          />
+        </View>
+
+        {focusedVideoUid !== null ? (
+          <View
+            style={[
+              styles.screenStage,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            {voice.remoteVideoUids.length > 1 ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.screenTabs}
               >
-                {voice.remoteVideoUids.map((uid, index) => (
-                  <Pressable
-                    key={uid}
-                    accessibilityLabel={t('voice.focusScreen')}
-                    onPress={() => setFocusedVideoUid(uid)}
-                    style={[
-                      styles.screenTab,
-                      {
-                        backgroundColor: focusedVideoUid === uid ? colors.primary : colors.surface,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Text
+                {voice.remoteVideoUids.map((uid, index) => {
+                  const active = focusedVideoUid === uid
+                  return (
+                    <Pressable
+                      key={uid}
+                      accessibilityLabel={t('voice.focusScreen')}
+                      onPress={() => setFocusedVideoUid(uid)}
                       style={[
-                        styles.screenTabText,
-                        { color: focusedVideoUid === uid ? '#fff' : colors.text },
+                        styles.screenTab,
+                        {
+                          backgroundColor: active ? colors.primary : colors.surface,
+                          borderColor: colors.border,
+                        },
                       ]}
                     >
-                      {index + 1}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <AppText
+                        variant="label"
+                        style={{ color: active ? palette.foundation : colors.text }}
+                      >
+                        {index + 1}
+                      </AppText>
+                    </Pressable>
+                  )
+                })}
               </ScrollView>
-            )}
+            ) : null}
             <ScrollView
               style={styles.screenViewport}
               contentContainerStyle={styles.screenZoomContent}
@@ -176,12 +232,25 @@ export function VoiceChannelPanel({
               decelerationRate="fast"
               centerContent
             >
-              <RtcSurfaceView style={styles.screen} canvas={{ uid: focusedVideoUid }} />
+              {RtcSurfaceView ? (
+                <RtcSurfaceView style={styles.screen} canvas={{ uid: focusedVideoUid }} />
+              ) : (
+                <View style={[styles.screen, styles.screenFallback]}>
+                  <AppText variant="bodyStrong" tone="secondary" style={styles.centerText}>
+                    {t('voice.nativeModuleUnavailable')}
+                  </AppText>
+                </View>
+              )}
             </ScrollView>
-          </GlassPanel>
-        )}
+          </View>
+        ) : null}
 
-        <GlassPanel style={styles.participants}>
+        <View
+          style={[
+            styles.participants,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.participantHeader}>
             <AppText variant="headline">{t('voice.participants')}</AppText>
             <AppText variant="label" tone="secondary">
@@ -193,39 +262,88 @@ export function VoiceChannelPanel({
             keyExtractor={(item) => item.userId}
             contentContainerStyle={styles.participantList}
             ListEmptyComponent={
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                {t('voice.noParticipants')}
-              </Text>
-            }
-            renderItem={({ item }) => (
-              <View
-                style={[
-                  styles.participantRow,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: item.isSpeaking ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                <View style={[styles.avatar, { backgroundColor: `${colors.primary}20` }]}>
-                  <Text style={[styles.avatarText, { color: colors.primary }]}>
-                    {(item.displayName ?? item.username).slice(0, 1).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.participantBody}>
-                  <Text style={[styles.participantName, { color: colors.text }]} numberOfLines={1}>
-                    {item.displayName ?? item.username}
-                  </Text>
-                  <Text style={[styles.participantMeta, { color: colors.textMuted }]}>
-                    {item.isMuted ? t('voice.muted') : t('voice.listening')}
-                  </Text>
-                </View>
+              <View style={styles.emptyState}>
+                <Headphones size={iconSize['4xl']} color={colors.textMuted} strokeWidth={2.2} />
+                <AppText variant="bodyStrong" tone="secondary" style={styles.centerText}>
+                  {t('voice.noParticipants')}
+                </AppText>
               </View>
-            )}
+            }
+            renderItem={({ item }) => {
+              const name = item.displayName ?? item.username
+              return (
+                <View
+                  style={[
+                    styles.participantRow,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: item.isSpeaking ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  <Avatar
+                    uri={item.avatarUrl}
+                    name={name}
+                    userId={item.userId}
+                    size={size.iconButtonLg}
+                    status={item.isSpeaking ? 'online' : null}
+                    showStatus={item.isSpeaking}
+                  />
+                  <View style={styles.participantBody}>
+                    <AppText variant="bodyStrong" numberOfLines={1}>
+                      {name}
+                    </AppText>
+                    <AppText variant="label" tone="secondary">
+                      {item.isMuted ? t('voice.muted') : t('voice.listening')}
+                    </AppText>
+                  </View>
+                </View>
+              )
+            }}
           />
-        </GlassPanel>
+        </View>
       </View>
     </BackgroundSurface>
+  )
+}
+
+function VoiceControlButton({
+  icon: Icon,
+  label,
+  active,
+  danger,
+  disabled,
+  onPress,
+}: {
+  icon: typeof Mic
+  label: string
+  active?: boolean
+  danger?: boolean
+  disabled?: boolean
+  onPress: () => void
+}) {
+  const colors = useColors()
+  const iconColor = danger ? colors.error : active ? colors.primary : colors.textMuted
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.control,
+        {
+          backgroundColor: pressed ? colors.messageHover : colors.surface,
+          borderColor: active ? colors.primary : colors.border,
+          opacity: disabled ? 0.5 : 1,
+        },
+      ]}
+    >
+      <Icon size={iconSize['2xl']} color={iconColor} strokeWidth={2.5} />
+      <AppText variant="bodyStrong" style={styles.controlLabel}>
+        {label}
+      </AppText>
+    </Pressable>
   )
 }
 
@@ -233,28 +351,43 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  headerText: {
-    flex: 1,
-    minWidth: 0,
-  },
   body: {
     flex: 1,
     padding: spacing.lg,
     gap: spacing.md,
   },
-  error: {
+  statusCard: {
+    minHeight: size.listItemLg,
+    borderWidth: border.hairline,
+    borderRadius: radius.xl,
     padding: spacing.md,
-    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
-  errorText: {
-    fontWeight: '700',
+  statusIcon: {
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  statusDescription: {
+    lineHeight: lineHeight.sm,
+  },
+  notice: {
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  noticeText: {
+    lineHeight: lineHeight.sm,
   },
   controls: {
     flexDirection: 'row',
@@ -262,17 +395,19 @@ const styles = StyleSheet.create({
   },
   control: {
     flex: 1,
-    minHeight: 76,
-    borderRadius: radius.lg,
+    minHeight: size.listItemLg,
+    borderWidth: border.hairline,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
   },
   controlLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '800',
+    textAlign: 'center',
   },
   screenStage: {
+    borderWidth: border.hairline,
+    borderRadius: radius.xl,
     padding: spacing.sm,
     gap: spacing.sm,
   },
@@ -280,25 +415,21 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   screenTab: {
-    width: 34,
-    height: 34,
+    width: size.iconBubble,
+    height: size.iconBubble,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  screenTabText: {
-    fontSize: fontSize.sm,
-    fontWeight: '900',
-  },
   screenViewport: {
-    maxHeight: 360,
+    maxHeight: size.mediaViewportMaxHeight,
     borderRadius: radius.lg,
-    backgroundColor: '#000',
+    backgroundColor: palette.black,
     overflow: 'hidden',
   },
   screenZoomContent: {
-    minHeight: 220,
+    minHeight: size.mediaPlaceholderMinHeight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -306,8 +437,15 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 16 / 9,
   },
+  screenFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
   participants: {
     flex: 1,
+    borderWidth: border.hairline,
+    borderRadius: radius.xl,
     padding: spacing.lg,
   },
   participantHeader: {
@@ -319,39 +457,25 @@ const styles = StyleSheet.create({
   participantList: {
     gap: spacing.sm,
   },
-  emptyText: {
+  emptyState: {
+    minHeight: size.panelStateMinHeight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  centerText: {
     textAlign: 'center',
-    paddingVertical: spacing.xl,
-    fontWeight: '700',
   },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    borderWidth: 1,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     padding: spacing.sm,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontWeight: '900',
   },
   participantBody: {
     flex: 1,
     minWidth: 0,
-  },
-  participantName: {
-    fontSize: fontSize.md,
-    fontWeight: '800',
-  },
-  participantMeta: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
   },
 })

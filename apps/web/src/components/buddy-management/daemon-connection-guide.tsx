@@ -5,9 +5,14 @@ import { CheckCircle2, RefreshCw, Terminal } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
-import { RuntimeIcon } from './agent-dialogs'
+import { RuntimeIcon, RuntimeInstallHint } from './agent-dialogs'
 import { ConfigCodeBlock } from './config-code-block'
-import type { Agent, ConnectorComputer, ConnectorRuntimeInfo } from './types'
+import {
+  type Agent,
+  type ConnectorComputer,
+  type ConnectorRuntimeInfo,
+  connectorRuntimeDisplayDetail,
+} from './types'
 
 type ConnectorBootstrapResult = {
   computer: ConnectorComputer
@@ -17,10 +22,6 @@ type ConnectorBootstrapResult = {
 type ConnectorConfigureResult = {
   agent: Agent
   job: { id: string; status: string; type: string } | null
-}
-
-function availableRuntimes(computer: ConnectorComputer | null | undefined) {
-  return (computer?.runtimes ?? []).filter((runtime) => runtime.status === 'available')
 }
 
 function runtimeSortKey(runtime: ConnectorRuntimeInfo) {
@@ -54,7 +55,7 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
       connectorComputers
         .filter((computer) => computer.status === 'online')
         .flatMap((computer) =>
-          availableRuntimes(computer).map((runtime) => ({
+          computer.runtimes.map((runtime) => ({
             key: `${computer.id}:${runtime.id}`,
             computer,
             runtime,
@@ -67,8 +68,14 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
         ),
     [connectorComputers],
   )
+  const firstAvailableRuntimeOption =
+    runtimeOptions.find((option) => option.runtime.status === 'available') ?? null
   const selectedRuntimeOption =
-    runtimeOptions.find((option) => option.key === selectedRuntimeKey) ?? runtimeOptions[0] ?? null
+    runtimeOptions.find(
+      (option) => option.key === selectedRuntimeKey && option.runtime.status === 'available',
+    ) ??
+    firstAvailableRuntimeOption ??
+    null
   const runtimeOptionKeys = runtimeOptions.map((option) => option.key).join('\u0000')
   const canConfigure = Boolean(selectedRuntimeOption)
 
@@ -123,11 +130,13 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
     }
     if (
       !selectedRuntimeKey ||
-      !runtimeOptions.some((option) => option.key === selectedRuntimeKey)
+      !runtimeOptions.some(
+        (option) => option.key === selectedRuntimeKey && option.runtime.status === 'available',
+      )
     ) {
-      setSelectedRuntimeKey(runtimeOptions[0]?.key ?? null)
+      setSelectedRuntimeKey(firstAvailableRuntimeOption?.key ?? null)
     }
-  }, [runtimeOptionKeys, runtimeOptions, selectedRuntimeKey])
+  }, [firstAvailableRuntimeOption, runtimeOptionKeys, runtimeOptions, selectedRuntimeKey])
 
   useEffect(() => {
     setQueuedRuntimeId(null)
@@ -194,41 +203,57 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
             </Button>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            {runtimeOptions.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                aria-pressed={selectedRuntimeOption?.key === option.key}
-                onClick={() => {
-                  setSelectedRuntimeKey(option.key)
-                  setQueuedRuntimeId(null)
-                }}
-                className={cn(
-                  'rounded-2xl border px-4 py-3 text-left transition',
-                  selectedRuntimeOption?.key === option.key
-                    ? 'border-primary/50 bg-primary/10'
-                    : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
-                    <RuntimeIcon
-                      runtimeId={option.runtime.id}
-                      label={option.runtime.label}
-                      className="h-5 w-5"
-                    />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-text-primary">
-                      {option.runtime.label}
+            {runtimeOptions.map((option) => {
+              const available = option.runtime.status === 'available'
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  aria-pressed={selectedRuntimeOption?.key === option.key}
+                  disabled={!available}
+                  onClick={() => {
+                    if (!available) return
+                    setSelectedRuntimeKey(option.key)
+                    setQueuedRuntimeId(null)
+                  }}
+                  className={cn(
+                    'rounded-2xl border px-4 py-3 text-left transition',
+                    !available
+                      ? 'border-border-subtle bg-bg-tertiary/20 opacity-75'
+                      : selectedRuntimeOption?.key === option.key
+                        ? 'border-primary/50 bg-primary/10'
+                        : 'border-border-subtle bg-bg-tertiary/40 hover:bg-bg-tertiary/70',
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
+                      <RuntimeIcon
+                        runtimeId={option.runtime.id}
+                        label={option.runtime.label}
+                        className="h-5 w-5"
+                      />
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-text-muted">
-                      {option.runtime.version ?? option.runtime.command ?? option.runtime.id}
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-text-primary">
+                        {option.runtime.label}
+                      </span>
+                      <span
+                        className={cn(
+                          'mt-0.5 block text-xs text-text-muted',
+                          available ? 'truncate' : 'leading-5',
+                        )}
+                      >
+                        {available ? (
+                          connectorRuntimeDisplayDetail(option.computer, option.runtime)
+                        ) : (
+                          <RuntimeInstallHint runtimeId={option.runtime.id} t={t} />
+                        )}
+                      </span>
                     </span>
-                  </span>
-                </div>
-              </button>
-            ))}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </div>
       )}

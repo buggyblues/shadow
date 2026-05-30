@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react-native'
 import type { ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { spacing, useColors } from '../../theme'
+import { iconSize, spacing, useColors } from '../../theme'
 import { ToolbarButton } from '../ui'
 
 interface HeaderButtonProps {
@@ -16,7 +16,7 @@ interface HeaderButtonProps {
 export function HeaderButton({
   icon: Icon,
   onPress,
-  size = 20,
+  size = iconSize.xl,
   color,
   badge,
   disabled,
@@ -30,10 +30,9 @@ export function HeaderButton({
       iconSize={size}
       disabled={disabled}
       onPress={onPress}
-      hitSlop={6}
+      hitSlop={spacing.tight}
       badge={badge}
       variant="ghost"
-      style={disabled ? { opacity: 0.4 } : undefined}
     />
   )
 }
