@@ -14,7 +14,7 @@ import { basename, dirname, join, normalize, relative, sep } from 'node:path'
 import { app, dialog, ipcMain, nativeImage, net } from 'electron'
 import JSZip from 'jszip'
 import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../shared/community-auth'
-import { readCommunityAccessToken } from './connector-daemon'
+import { forgetCommunityAccessToken, readCommunityAccessToken } from './connector-daemon'
 import {
   broadcastDesktopSettings,
   type DesktopPetAssetPack,
@@ -464,8 +464,10 @@ async function fetchMarketplaceJson<T>(path: string, init?: RequestInit): Promis
     },
   })
   const text = await response.text()
-  if (response.status === 401 || response.status === 403)
+  if (response.status === 401 || response.status === 403) {
+    forgetCommunityAccessToken(token)
     throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
+  }
   if (!response.ok) throw new Error(text || `REQUEST_FAILED_${response.status}`)
   return (text ? JSON.parse(text) : null) as T
 }
@@ -484,8 +486,10 @@ async function downloadMarketplacePaidFile(fileId: string): Promise<Buffer> {
     headers['x-paid-file-grant-token'] = opened.grantToken
   }
   const response = await net.fetch(url.toString(), { headers })
-  if (response.status === 401 || response.status === 403)
+  if (response.status === 401 || response.status === 403) {
+    forgetCommunityAccessToken()
     throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
+  }
   if (!response.ok) throw new Error(`PAID_FILE_DOWNLOAD_FAILED_${response.status}`)
   const fileName = url.pathname.split('/').pop()?.toLowerCase() ?? ''
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''

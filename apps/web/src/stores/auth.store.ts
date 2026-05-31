@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { syncDesktopCommunityAuthToken } from '../lib/desktop-community-auth'
 import { queryClient } from '../lib/query-client'
 import { useChatStore } from './chat.store'
 
@@ -42,12 +43,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   setAuth: (user, accessToken, refreshToken) => {
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
+    syncDesktopCommunityAuthToken(accessToken)
     set({ user, accessToken, isAuthenticated: true })
   },
 
   logout: () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
+    syncDesktopCommunityAuthToken(null)
     // Clear all query cache to prevent stale data leaking across sessions
     queryClient.removeQueries()
     queryClient.clear()

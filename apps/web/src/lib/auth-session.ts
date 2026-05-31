@@ -1,6 +1,7 @@
 import { useAuthStore } from '../stores/auth.store'
 import { useChatStore } from '../stores/chat.store'
 import { getApiUrl } from './api-url'
+import { syncDesktopCommunityAuthToken } from './desktop-community-auth'
 import { queryClient } from './query-client'
 import { disconnectSocket } from './socket'
 
@@ -45,6 +46,7 @@ function isAuthPath(pathname: string) {
 }
 
 function markAuthenticated(user: AuthenticatedUser, accessToken: string) {
+  syncDesktopCommunityAuthToken(accessToken)
   useAuthStore.setState({ user, accessToken, isAuthenticated: true })
   queryClient.setQueryData(['me'], user)
 }
@@ -73,6 +75,7 @@ async function refreshStoredTokens(): Promise<StoredTokens | null> {
   const data = (await response.json()) as StoredTokens
   localStorage.setItem('accessToken', data.accessToken)
   localStorage.setItem('refreshToken', data.refreshToken)
+  syncDesktopCommunityAuthToken(data.accessToken)
   return data
 }
 

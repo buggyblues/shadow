@@ -1,6 +1,7 @@
 import { getApiUrl } from './api-url'
 import { currentAppRedirect } from './auth-redirect'
 import { clearAuthenticatedSession } from './auth-session'
+import { syncDesktopCommunityAuthToken } from './desktop-community-auth'
 
 export class ApiError extends Error {
   status: number
@@ -91,6 +92,7 @@ async function refreshAccessToken(): Promise<string | null> {
     const data = (await res.json()) as { accessToken: string; refreshToken: string }
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
+    syncDesktopCommunityAuthToken(data.accessToken)
     return data.accessToken
   } catch {
     return null
