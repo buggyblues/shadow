@@ -119,6 +119,7 @@ jobs:
     environment: ShadowOB Expo
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_ASC_APP_ID: ${{ vars.EXPO_ASC_APP_ID || secrets.EXPO_ASC_APP_ID || vars.ASC_APP_ID || secrets.ASC_APP_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -140,6 +141,30 @@ jobs:
 
       - name: Validate mobile app
         run: pnpm mobile:verify:ios
+
+      - name: Configure TestFlight submit profile
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_ASC_APP_ID:-}" ]]; then
+            echo "::error::Missing EXPO_ASC_APP_ID or ASC_APP_ID in the ShadowOB Expo environment. Set it to the App Store Connect app id for com.shadowob.mobile."
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs = require('node:fs')
+
+          const ascAppId = process.env.EXPO_ASC_APP_ID
+          if (!ascAppId) throw new Error('EXPO_ASC_APP_ID is required')
+
+          const file = 'eas.json'
+          const config = JSON.parse(fs.readFileSync(file, 'utf8'))
+          config.submit ??= {}
+          config.submit.production ??= {}
+          config.submit.production.ios ??= {}
+          config.submit.production.ios.ascAppId = ascAppId
+          fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`)
+          NODE
 
       - name: Build and auto-submit to TestFlight
         working-directory: apps/mobile

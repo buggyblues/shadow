@@ -47,9 +47,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.1.0
         version: 4.1.0(vitest@4.1.0(@opentelemetry/api@1.9.1)(@types/node@25.6.0)(jsdom@28.1.0(@noble/hashes@2.0.1))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4)))
-      fs-xattr:
-        specifier: 0.3.1
-        version: 0.3.1
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -62,6 +59,10 @@ importers:
       vitest:
         specifier: ^4.1.0
         version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@25.6.0)(jsdom@28.1.0(@noble/hashes@2.0.1))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4))
+    optionalDependencies:
+      fs-xattr:
+        specifier: 0.3.1
+        version: 0.3.1
 
   apps/admin:
     dependencies:
@@ -27727,7 +27728,8 @@ snapshots:
       random-path: 0.1.2
     optional: true
 
-  fs-xattr@0.3.1: {}
+  fs-xattr@0.3.1:
+    optional: true
 
   fs.realpath@1.0.0: {}
 
