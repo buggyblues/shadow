@@ -125,6 +125,12 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_ASC_APP_ID: ${{ vars.EXPO_ASC_APP_ID || secrets.EXPO_ASC_APP_ID || vars.ASC_APP_ID || secrets.ASC_APP_ID }}
+      EXPO_ASC_KEY_ID: ${{ vars.EXPO_ASC_KEY_ID || secrets.EXPO_ASC_KEY_ID || vars.ASC_KEY_ID || secrets.ASC_KEY_ID }}
+      EXPO_ASC_ISSUER_ID: ${{ vars.EXPO_ASC_ISSUER_ID || secrets.EXPO_ASC_ISSUER_ID || vars.ASC_ISSUER_ID || secrets.ASC_ISSUER_ID }}
+      EXPO_ASC_API_KEY_P8: ${{ secrets.EXPO_ASC_API_KEY_P8 || secrets.ASC_API_KEY_P8 }}
+      EXPO_ASC_API_KEY_BASE64: ${{ secrets.EXPO_ASC_API_KEY_BASE64 || secrets.ASC_API_KEY_BASE64 }}
+      EXPO_APPLE_TEAM_ID: ${{ vars.EXPO_APPLE_TEAM_ID || secrets.EXPO_APPLE_TEAM_ID || vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
+      EXPO_APPLE_TEAM_TYPE: ${{ vars.EXPO_APPLE_TEAM_TYPE || secrets.EXPO_APPLE_TEAM_TYPE || vars.APPLE_TEAM_TYPE || secrets.APPLE_TEAM_TYPE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -175,6 +181,37 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
         working-directory: apps/mobile
         run: node scripts/reset-eas-ios-profile.mjs
+
+      - name: Configure ASC API key for EAS credential repair
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in EXPO_ASC_KEY_ID EXPO_ASC_ISSUER_ID EXPO_APPLE_TEAM_ID EXPO_APPLE_TEAM_TYPE; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [[ -z "${EXPO_ASC_API_KEY_P8:-}" && -z "${EXPO_ASC_API_KEY_BASE64:-}" ]]; then
+            missing+=("EXPO_ASC_API_KEY_P8 or EXPO_ASC_API_KEY_BASE64")
+          fi
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing App Store Connect API credentials required to regenerate the iOS provisioning profile: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+          key_path="$RUNNER_TEMP/AuthKey_${EXPO_ASC_KEY_ID}.p8"
+          if [[ -n "${EXPO_ASC_API_KEY_BASE64:-}" ]]; then
+            printf '%s' "$EXPO_ASC_API_KEY_BASE64" | base64 --decode > "$key_path"
+          else
+            printf '%s\n' "$EXPO_ASC_API_KEY_P8" > "$key_path"
+          fi
+          chmod 600 "$key_path"
+          echo "EXPO_ASC_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
 
       - name: Build and auto-submit to TestFlight
         working-directory: apps/mobile
