@@ -12,14 +12,12 @@
       "os": [
         "current",
         "darwin",
-        "linux",
-        "win32"
+        "linux"
       ],
       "cpu": [
         "current",
         "x64",
-        "arm64",
-        "ia32"
+        "arm64"
       ]
     },
     "onlyBuiltDependencies": [
@@ -158,6 +156,7 @@
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@vitest/coverage-v8": "^4.1.0",
+    "fs-xattr": "0.3.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "typescript": "^5.9.3",

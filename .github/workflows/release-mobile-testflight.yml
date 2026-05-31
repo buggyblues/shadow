@@ -116,6 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: gate
     if: needs.gate.outputs.should_release == 'true'
+    environment: ShadowOB Expo
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:

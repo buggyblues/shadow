@@ -300,13 +300,31 @@ jobs:
 
       - name: Publish public npm packages
         if: steps.settings.outputs.publish_npm == 'true' && steps.settings.outputs.dry_run != 'true'
+        shell: bash
         run: |
+          set -euo pipefail
           if [ "${RELEASE_CHANNEL}" = "test" ]; then
             PUBLISH_TAG="test"
           else
             PUBLISH_TAG="latest"
           fi
-          pnpm -r ${NPM_FILTERS} publish --no-git-checks --access public --tag "${PUBLISH_TAG}"
+
+          node <<'NODE' > /tmp/shadow-npm-publish-packages.txt
+          const filters = process.env.NPM_FILTERS.split(/\s+/).filter(Boolean)
+          for (const filter of filters) {
+            const name = filter.replace(/^--filter=/, '')
+            if (name) console.log(name)
+          }
+          NODE
+
+          while read -r package_name; do
+            [ -n "$package_name" ] || continue
+            if npm view "${package_name}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+              echo "Skipping ${package_name}@${RELEASE_VERSION}; it is already published."
+              continue
+            fi
+            pnpm --filter "$package_name" publish --no-git-checks --access public --tag "${PUBLISH_TAG}"
+          done < /tmp/shadow-npm-publish-packages.txt
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RELEASE_CHANNEL: ${{ steps.settings.outputs.release_channel }}
@@ -318,7 +336,7 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
           python -m pip install --upgrade twine
-          python -m twine upload packages/sdk-python/dist/*
+          python -m twine upload --skip-existing packages/sdk-python/dist/*
 
       - name: Dry run summary
         if: steps.settings.outputs.dry_run == 'true'
@@ -429,14 +447,31 @@ jobs:
         if: steps.settings.outputs.release_channel == 'stable' && steps.settings.outputs.dry_run != 'true'
         shell: bash
         run: |
+          set -euo pipefail
           VERSION="${SDK_VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/*/package.json apps/flash/packages/*/package.json apps/cloud/package.json packages/sdk-python/pyproject.toml pnpm-lock.yaml
-          git commit -m "chore(release): packages v${VERSION}"
-          git tag "sdk-v${VERSION}"
+          shopt -s nullglob
+          release_files=(
+            packages/*/package.json
+            apps/flash/packages/*/package.json
+            apps/cloud/package.json
+            packages/sdk-python/pyproject.toml
+            pnpm-lock.yaml
+          )
+          git add "${release_files[@]}"
+          if git diff --cached --quiet; then
+            echo "No release manifest changes to commit."
+          else
+            git commit -m "chore(release): packages v${VERSION}"
+          fi
+          if git rev-parse -q --verify "refs/tags/sdk-v${VERSION}" >/dev/null; then
+            echo "Tag sdk-v${VERSION} already exists."
+          else
+            git tag "sdk-v${VERSION}"
+          fi
           git push
-          git push --tags
+          git push origin "sdk-v${VERSION}"
 
       - name: Create GitHub Release
         if: steps.settings.outputs.release_channel == 'stable' && steps.settings.outputs.create_release == 'true' && steps.settings.outputs.dry_run != 'true'
