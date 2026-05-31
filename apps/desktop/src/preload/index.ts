@@ -4,7 +4,7 @@ import {
   isCommunityAuthRequiredError,
   normalizeCommunityAccessToken,
   normalizeCommunityAuthError,
-  readCommunityAccessTokenFromStorage,
+  readCommunityAuthTokensFromStorage,
 } from '../shared/community-auth'
 
 function applyDesktopDocumentClasses(): void {
@@ -19,24 +19,31 @@ function applyDesktopDocumentClasses(): void {
   window.addEventListener('DOMContentLoaded', apply, { once: true })
 }
 
-let lastSyncedCommunityAuthToken: string | null = null
+let lastSyncedCommunityAuthSnapshot: string | null = null
 
-function readCommunityAuthTokenSnapshot(): string {
-  return readCommunityAccessTokenFromStorage((key) => window.localStorage?.getItem(key))
+function readCommunityAuthSnapshot(): { accessToken: string; refreshToken: string } {
+  return readCommunityAuthTokensFromStorage((key) => window.localStorage?.getItem(key))
 }
 
 function syncCommunityAuthSnapshot(
-  options: { force?: boolean; accessToken?: string | null } = {},
+  options: { force?: boolean; accessToken?: string | null; refreshToken?: string | null } = {},
 ): void {
   try {
+    const storedTokens = readCommunityAuthSnapshot()
     const accessToken =
       options.accessToken === undefined
-        ? readCommunityAuthTokenSnapshot()
+        ? storedTokens.accessToken
         : normalizeCommunityAccessToken(options.accessToken)
-    if (!options.force && accessToken === lastSyncedCommunityAuthToken) return
-    lastSyncedCommunityAuthToken = accessToken
+    const refreshToken =
+      options.refreshToken === undefined
+        ? storedTokens.refreshToken
+        : normalizeCommunityAccessToken(options.refreshToken)
+    const snapshotKey = `${accessToken}\n${refreshToken}`
+    if (!options.force && snapshotKey === lastSyncedCommunityAuthSnapshot) return
+    lastSyncedCommunityAuthSnapshot = snapshotKey
     ipcRenderer.send('desktop:communityAuthSnapshot', {
       accessToken,
+      refreshToken,
       sourceUrl: window.location.href,
     })
   } catch {
@@ -121,8 +128,8 @@ const desktopAPI = {
   getCommunityAuthToken: () => {
     return ipcRenderer.invoke('desktop:getCommunityAuthToken') as Promise<string>
   },
-  syncCommunityAuthToken: (accessToken?: string | null) => {
-    syncCommunityAuthSnapshot({ force: true, accessToken })
+  syncCommunityAuthToken: (accessToken?: string | null, refreshToken?: string | null) => {
+    syncCommunityAuthSnapshot({ force: true, accessToken, refreshToken })
   },
   communityFetchJson: (input: {
     path: string

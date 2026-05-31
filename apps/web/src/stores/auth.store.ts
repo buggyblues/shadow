@@ -43,14 +43,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   setAuth: (user, accessToken, refreshToken) => {
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
-    syncDesktopCommunityAuthToken(accessToken)
+    syncDesktopCommunityAuthToken(accessToken, refreshToken)
     set({ user, accessToken, isAuthenticated: true })
   },
 
   logout: () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
-    syncDesktopCommunityAuthToken(null)
+    syncDesktopCommunityAuthToken(null, null)
     // Clear all query cache to prevent stale data leaking across sessions
     queryClient.removeQueries()
     queryClient.clear()

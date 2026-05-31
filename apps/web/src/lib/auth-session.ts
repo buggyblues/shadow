@@ -75,7 +75,7 @@ async function refreshStoredTokens(): Promise<StoredTokens | null> {
   const data = (await response.json()) as StoredTokens
   localStorage.setItem('accessToken', data.accessToken)
   localStorage.setItem('refreshToken', data.refreshToken)
-  syncDesktopCommunityAuthToken(data.accessToken)
+  syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken)
   return data
 }
 
