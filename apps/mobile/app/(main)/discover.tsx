@@ -21,25 +21,18 @@ import {
   Users,
   X,
 } from 'lucide-react-native'
-import { Children, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { Children, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import {
   BackgroundSurface,
   Badge,
   Button,
+  CardPressable,
   EmptyState,
   GlassPanel,
   IconButton,
-  MobileTabBar,
+  MobileSwipeTabs,
   PageScroll,
   TextField,
 } from '../../src/components/ui'
@@ -236,9 +229,6 @@ export default function DiscoverScreen() {
   const colors = useColors()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { width: tabPageWidth } = useWindowDimensions()
-  const tabScrollRef = useRef<ScrollView>(null)
-  const previousTabPageWidthRef = useRef(tabPageWidth)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeSection, setActiveSection] = useState<HubSection>('all')
   const [selectedMarketplaceTag, setSelectedMarketplaceTag] = useState('')
@@ -249,16 +239,6 @@ export default function DiscoverScreen() {
   useEffect(() => {
     setSectionPages(initialSectionPages)
   }, [effectiveSearch, selectedMarketplaceTag])
-
-  useEffect(() => {
-    if (previousTabPageWidthRef.current === tabPageWidth) return
-    previousTabPageWidthRef.current = tabPageWidth
-    const activeIndex = Math.max(
-      0,
-      HUB_SECTIONS.findIndex((section) => section.key === activeSection),
-    )
-    tabScrollRef.current?.scrollTo({ x: activeIndex * tabPageWidth, animated: false })
-  }, [activeSection, tabPageWidth])
 
   const { data: myServers = [] } = useQuery({
     queryKey: ['servers'],
@@ -370,33 +350,18 @@ export default function DiscoverScreen() {
   const empty = counts.all === 0
   const loadingContent = isLoading || isMarketplaceLoading
 
-  const selectSection = (
-    section: HubSection,
-    index = HUB_SECTIONS.findIndex((s) => s.key === section),
-  ) => {
-    const safeIndex = Math.max(0, index)
+  const selectSection = (section: HubSection) => {
     if (section !== activeSection) {
       animateNextLayout()
       setActiveSection(section)
       setSectionPages((current) => ({ ...current, [section]: 1 }))
     }
-    tabScrollRef.current?.scrollTo({ x: safeIndex * tabPageWidth, animated: true })
   }
 
   const loadMore = (section: HubSection) => {
     selectionHaptic()
     animateNextLayout()
     setSectionPages((current) => ({ ...current, [section]: current[section] + 1 }))
-  }
-
-  const handleTabScrollEnd = (offsetX: number) => {
-    const index = Math.max(0, Math.min(HUB_SECTIONS.length - 1, Math.round(offsetX / tabPageWidth)))
-    const nextSection = HUB_SECTIONS[index]?.key ?? 'all'
-    if (nextSection !== activeSection) {
-      selectionHaptic()
-      animateNextLayout()
-    }
-    setActiveSection(nextSection)
   }
 
   const openSeller = (owner: HubOwner | null) => {
@@ -712,7 +677,7 @@ export default function DiscoverScreen() {
           />
         </GlassPanel>
 
-        <MobileTabBar
+        <MobileSwipeTabs
           value={activeSection}
           options={HUB_SECTIONS.map((section) => ({
             value: section.key,
@@ -721,24 +686,8 @@ export default function DiscoverScreen() {
           }))}
           onChange={selectSection}
           tone="primary"
+          renderPage={(section) => renderSectionContent(section.value)}
         />
-
-        <ScrollView
-          ref={tabScrollRef}
-          horizontal
-          pagingEnabled
-          decelerationRate="fast"
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onMomentumScrollEnd={(event) => handleTabScrollEnd(event.nativeEvent.contentOffset.x)}
-        >
-          {HUB_SECTIONS.map((section) => (
-            <View key={section.key} style={[styles.tabPage, { width: tabPageWidth }]}>
-              {renderSectionContent(section.key)}
-            </View>
-          ))}
-        </ScrollView>
       </PageScroll>
     </BackgroundSurface>
   )
@@ -897,7 +846,7 @@ function PlayCard({
   const category = isZh ? play.category : play.categoryEn
   const gated = play.status === 'gated'
   return (
-    <GlassPanel style={styles.itemCard}>
+    <FeedCard onPress={onOpen} accessibilityLabel={title}>
       <Visual imageUrl={play.image} icon={Play} label={title} />
       <View style={styles.row}>
         <View style={styles.titleBlock}>
@@ -915,10 +864,8 @@ function PlayCard({
       <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
         {desc}
       </Text>
-      <Button variant="primary" size="sm" icon={Play} onPress={onOpen}>
-        {t('discover.startPlay')}
-      </Button>
-    </GlassPanel>
+      <FeedAction label={t('discover.startPlay')} />
+    </FeedCard>
   )
 }
 
@@ -929,7 +876,7 @@ function BuddyCard({ item, onOpen }: { item: HubBuddy; onOpen: () => void }) {
     item.buddy?.displayName ?? item.buddy?.username ?? item.owner?.displayName ?? item.title
   const ownerName = item.owner?.displayName ?? item.owner?.username ?? t('common.unknown')
   return (
-    <GlassPanel style={styles.itemCard}>
+    <FeedCard onPress={onOpen} accessibilityLabel={item.title}>
       <View style={styles.row}>
         <Avatar imageUrl={item.buddy?.avatarUrl} icon={Bot} label={buddyName} />
         <View style={styles.titleBlock}>
@@ -955,10 +902,8 @@ function BuddyCard({ item, onOpen }: { item: HubBuddy; onOpen: () => void }) {
           value={String(item.rentalCount)}
         />
       </View>
-      <Button variant="glass" size="sm" onPress={onOpen}>
-        {t('discover.openBuddy')}
-      </Button>
-    </GlassPanel>
+      <FeedAction label={t('discover.openBuddy')} />
+    </FeedCard>
   )
 }
 
@@ -966,7 +911,7 @@ function ProductCard({ item, onOpen }: { item: HubProduct; onOpen: () => void })
   const { t } = useTranslation()
   const colors = useColors()
   return (
-    <GlassPanel style={styles.itemCard}>
+    <FeedCard onPress={onOpen} accessibilityLabel={item.name}>
       <Visual imageUrl={item.imageUrl} icon={Package} label={item.name} />
       <View style={styles.row}>
         <View style={styles.titleBlock}>
@@ -982,10 +927,8 @@ function ProductCard({ item, onOpen }: { item: HubProduct; onOpen: () => void })
       <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
         {item.summary || item.description || t('discover.noDescription')}
       </Text>
-      <Button variant="primary" size="sm" onPress={onOpen}>
-        {t('discover.openProduct')}
-      </Button>
-    </GlassPanel>
+      <FeedAction label={t('discover.openProduct')} />
+    </FeedCard>
   )
 }
 
@@ -995,7 +938,7 @@ function ShopCard({ shop, onOpen }: { shop: HubShop; onOpen: () => void }) {
   const owner =
     shop.server?.name ?? shop.owner?.displayName ?? shop.owner?.username ?? t('common.unknown')
   return (
-    <GlassPanel style={styles.itemCard}>
+    <FeedCard onPress={onOpen} accessibilityLabel={shop.name}>
       <Visual imageUrl={shop.bannerUrl ?? shop.logoUrl} icon={Store} label={shop.name} />
       <View style={styles.row}>
         <Avatar imageUrl={shop.logoUrl} icon={Store} label={shop.name} />
@@ -1015,11 +958,9 @@ function ShopCard({ shop, onOpen }: { shop: HubShop; onOpen: () => void }) {
         <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
           {t('discover.productCount', { count: shop.productCount })}
         </Text>
-        <Button variant="glass" size="sm" onPress={onOpen}>
-          {t('discover.openShop')}
-        </Button>
+        <FeedAction label={t('discover.openShop')} />
       </View>
-    </GlassPanel>
+    </FeedCard>
   )
 }
 
@@ -1027,7 +968,7 @@ function CloudCashbackCard({ onOpen }: { onOpen: () => void }) {
   const { t } = useTranslation()
   const colors = useColors()
   return (
-    <GlassPanel style={styles.itemCard}>
+    <FeedCard onPress={onOpen} accessibilityLabel={t('discover.cashbackTitle')}>
       <View style={[styles.cloudVisual, { backgroundColor: colors.tonePrimarySurface }]}>
         <Badge variant="primary" size="sm">
           {t('discover.cashbackBadge')}
@@ -1040,10 +981,8 @@ function CloudCashbackCard({ onOpen }: { onOpen: () => void }) {
       <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={3}>
         {t('discover.cashbackDesc')}
       </Text>
-      <Button variant="primary" size="sm" onPress={onOpen}>
-        {t('discover.cashbackAction')}
-      </Button>
-    </GlassPanel>
+      <FeedAction label={t('discover.cashbackAction')} />
+    </FeedCard>
   )
 }
 
@@ -1058,7 +997,7 @@ function CloudTemplateCard({
   const colors = useColors()
   const meta = getTemplateMeta(template)
   return (
-    <GlassPanel style={styles.itemCard}>
+    <FeedCard onPress={onOpen} accessibilityLabel={template.name || template.slug}>
       <View style={styles.row}>
         <Avatar imageUrl={null} icon={Cloud} label={template.name || template.slug} />
         <View style={styles.titleBlock}>
@@ -1088,10 +1027,8 @@ function CloudTemplateCard({
           value={formatCompact(template.deployCount ?? 0)}
         />
       </View>
-      <Button variant="primary" size="sm" icon={Rocket} onPress={onOpen}>
-        {t('discover.cloudTemplateAction')}
-      </Button>
-    </GlassPanel>
+      <FeedAction label={t('discover.cloudTemplateAction')} />
+    </FeedCard>
   )
 }
 
@@ -1111,7 +1048,11 @@ function CommunityCard({
   const { t } = useTranslation()
   const colors = useColors()
   return (
-    <GlassPanel style={styles.itemCard}>
+    <FeedCard
+      onPress={joined ? onEnter : onJoin}
+      disabled={pending}
+      accessibilityLabel={community.name}
+    >
       <Visual imageUrl={community.bannerUrl} icon={Server} label={community.name} />
       <View style={styles.row}>
         <Avatar imageUrl={community.iconUrl} icon={Server} label={community.name} />
@@ -1130,15 +1071,45 @@ function CommunityCard({
       <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
         {community.description || t('discover.noDescription')}
       </Text>
-      <Button
-        variant={joined ? 'glass' : 'primary'}
-        size="sm"
-        onPress={joined ? onEnter : onJoin}
-        disabled={pending}
-      >
-        {joined ? t('discover.enterButton') : t('discover.joinButton')}
-      </Button>
-    </GlassPanel>
+      <FeedAction label={joined ? t('discover.enterButton') : t('discover.joinButton')} />
+    </FeedCard>
+  )
+}
+
+function FeedCard({
+  children,
+  onPress,
+  disabled,
+  accessibilityLabel,
+}: {
+  children: ReactNode
+  onPress: () => void
+  disabled?: boolean
+  accessibilityLabel: string
+}) {
+  return (
+    <CardPressable
+      variant="glassPanel"
+      style={styles.itemCard}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      {children}
+    </CardPressable>
+  )
+}
+
+function FeedAction({ label }: { label: string }) {
+  const colors = useColors()
+  return (
+    <View style={styles.feedAction}>
+      <Text style={[styles.feedActionText, { color: colors.primary }]} numberOfLines={1}>
+        {label}
+      </Text>
+      <ArrowRight size={iconSize.sm} color={colors.primary} strokeWidth={2.5} />
+    </View>
   )
 }
 
@@ -1665,6 +1636,19 @@ const styles = StyleSheet.create({
   itemCard: {
     gap: spacing.sm,
   },
+  feedAction: {
+    minHeight: size.controlSm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+  },
+  feedActionText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSize.xs,
+    fontWeight: '900',
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1705,7 +1689,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   visual: {
-    height: size.actionTileMin,
+    height: size.panelStateMinHeight,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1716,7 +1700,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   cloudVisual: {
-    minHeight: size.actionTileMin,
+    minHeight: size.panelStateMinHeight,
     borderRadius: radius.lg,
     padding: spacing.md,
     justifyContent: 'space-between',

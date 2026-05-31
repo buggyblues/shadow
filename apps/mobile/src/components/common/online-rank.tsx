@@ -38,8 +38,8 @@ export function OnlineRank({ totalSeconds }: { totalSeconds: number }) {
         <Icon
           key={`${prefix}-${n}`}
           size={iconSize.xs}
-          color={colors.warning}
-          fill={colors.warning}
+          color={colors.primary}
+          fill={colors.primary}
         />,
       )
     }

@@ -534,7 +534,7 @@ export default function WorkspaceScreen() {
             variant="ghost"
             size="icon"
             icon={FolderPlus}
-            iconColor={colors.textMuted}
+            iconColor={colors.primary}
             onPress={() => {
               setActionMode('create-folder')
               setInputValue('')
@@ -545,7 +545,7 @@ export default function WorkspaceScreen() {
             variant="ghost"
             size="icon"
             icon={FilePlus}
-            iconColor={colors.textMuted}
+            iconColor={colors.primary}
             onPress={() => {
               setActionMode('create-file')
               setInputValue('')

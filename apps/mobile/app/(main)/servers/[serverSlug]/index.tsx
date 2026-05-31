@@ -26,17 +26,9 @@ import {
   Volume2,
   X,
 } from 'lucide-react-native'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Alert,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native'
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import Reanimated, { FadeInDown } from 'react-native-reanimated'
 import { ChannelCatSvg } from '../../../../src/components/common/cat-svg'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
@@ -50,7 +42,7 @@ import {
   MenuItem,
   MobileBackButton,
   MobileNavigationBar,
-  MobileTabBar,
+  MobileSwipeTabs,
   Sheet,
   TextField,
   ToolbarButton,
@@ -173,9 +165,6 @@ export default function ServerHomeScreen() {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const navigation = useNavigation()
-  const { width: tabPageWidth } = useWindowDimensions()
-  const tabScrollRef = useRef<ScrollView>(null)
-  const previousTabPageWidthRef = useRef(tabPageWidth)
 
   // State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
@@ -411,35 +400,12 @@ export default function ServerHomeScreen() {
   useEffect(() => {
     if (!serverTabs.some((tab) => tab.value === activeTab)) {
       setActiveTab('channels')
-      tabScrollRef.current?.scrollTo({ x: 0, animated: false })
     }
   }, [activeTab, serverTabs])
 
-  useEffect(() => {
-    if (previousTabPageWidthRef.current === tabPageWidth) return
-    previousTabPageWidthRef.current = tabPageWidth
-    const activeIndex = Math.max(
-      0,
-      serverTabs.findIndex((tab) => tab.value === activeTab),
-    )
-    tabScrollRef.current?.scrollTo({ x: activeIndex * tabPageWidth, animated: false })
-  }, [activeTab, serverTabs, tabPageWidth])
-
-  const handleTabChange = (tab: ServerTab, index: number) => {
+  const handleTabChange = (tab: ServerTab) => {
     if (tab !== activeTab) animateNextLayout()
     setActiveTab(tab)
-    tabScrollRef.current?.scrollTo({ x: tabPageWidth * index, animated: true })
-  }
-
-  const handleTabScrollEnd = (offsetX: number) => {
-    const index = Math.max(0, Math.min(serverTabs.length - 1, Math.round(offsetX / tabPageWidth)))
-    const nextTab = serverTabs[index]
-    if (!nextTab) return
-    if (nextTab.value !== activeTab) {
-      selectionHaptic()
-      animateNextLayout()
-    }
-    setActiveTab(nextTab.value)
   }
 
   // ── Nav items ──────────────────────────────────
@@ -535,20 +501,12 @@ export default function ServerHomeScreen() {
           />
         }
       >
-        <MobileTabBar value={activeTab} options={serverTabs} onChange={handleTabChange} />
-
-        <ScrollView
-          ref={tabScrollRef}
-          horizontal
-          pagingEnabled
-          decelerationRate="fast"
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onMomentumScrollEnd={(event) => handleTabScrollEnd(event.nativeEvent.contentOffset.x)}
-        >
-          {serverTabs.map((tab) => (
-            <View key={tab.value} style={[styles.tabPage, { width: tabPageWidth }]}>
+        <MobileSwipeTabs
+          value={activeTab}
+          options={serverTabs}
+          onChange={handleTabChange}
+          renderPage={(tab) => (
+            <View style={styles.tabPage}>
               {tab.value === 'channels' ? (
                 <View style={styles.tabSection}>
                   <View style={styles.channelToolbar}>
@@ -679,7 +637,7 @@ export default function ServerHomeScreen() {
                     {channels.length === 0 && (
                       <Reanimated.View entering={FadeInDown.duration(CHANNEL_GROUP_ENTER_MS)}>
                         <GlassPanel style={styles.emptyChannels}>
-                          <ChannelCatSvg width={80} height={80} />
+                          <ChannelCatSvg width={size.thumbnailMd} height={size.thumbnailMd} />
                           <AppText tone="secondary" style={styles.emptyText}>
                             {t('server.noChannels')}
                           </AppText>
@@ -762,8 +720,8 @@ export default function ServerHomeScreen() {
                 </View>
               ) : null}
             </View>
-          ))}
-        </ScrollView>
+          )}
+        />
       </ScrollView>
 
       <Sheet
@@ -773,7 +731,7 @@ export default function ServerHomeScreen() {
       >
         <MenuItem
           icon={UserPlus}
-          title={t('channel.inviteMember', '邀请成员')}
+          title={t('channel.inviteMember')}
           onPress={() => {
             const ch = contextChannel
             setContextChannel(null)
@@ -786,7 +744,7 @@ export default function ServerHomeScreen() {
         />
         <MenuItem
           icon={Edit3}
-          title={t('channel.editChannel', '编辑频道')}
+          title={t('channel.editChannel')}
           onPress={() => {
             if (contextChannel) {
               setEditingChannel(contextChannel)
@@ -797,11 +755,7 @@ export default function ServerHomeScreen() {
         />
         <MenuItem
           icon={contextChannel?.isPrivate ? LockOpen : Lock}
-          title={
-            contextChannel?.isPrivate
-              ? t('channel.setPublic', '设为公开')
-              : t('channel.setPrivate', '设为私有')
-          }
+          title={contextChannel?.isPrivate ? t('channel.setPublic') : t('channel.setPrivate')}
           onPress={() => {
             if (contextChannel) {
               updateChannelMutation.mutate({
@@ -815,10 +769,10 @@ export default function ServerHomeScreen() {
         />
         <MenuItem
           icon={Copy}
-          title={t('channel.copyChannelLink', '复制频道链接')}
+          title={t('channel.copyChannelLink')}
           onPress={() => {
             if (contextChannel) {
-              showToast(t('channel.linkCopied', '频道链接已复制'), 'success')
+              showToast(t('channel.linkCopied'), 'success')
             }
             setContextChannel(null)
           }}
@@ -826,23 +780,19 @@ export default function ServerHomeScreen() {
         <MenuItem
           icon={Trash2}
           tone="danger"
-          title={t('channel.deleteChannel', '删除频道')}
+          title={t('channel.deleteChannel')}
           onPress={() => {
             const ch = contextChannel
             setContextChannel(null)
             if (ch) {
-              Alert.alert(
-                t('channel.deleteChannel', '删除频道'),
-                t('channel.deleteChannelConfirm', '确定要删除此频道吗？此操作不可撤销。'),
-                [
-                  { text: t('common.cancel', '取消'), style: 'cancel' },
-                  {
-                    text: t('common.delete', '删除'),
-                    style: 'destructive',
-                    onPress: () => deleteChannelMutation.mutate(ch.id),
-                  },
-                ],
-              )
+              Alert.alert(t('channel.deleteChannel'), t('channel.deleteChannelConfirm'), [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                  text: t('common.delete'),
+                  style: 'destructive',
+                  onPress: () => deleteChannelMutation.mutate(ch.id),
+                },
+              ])
             }
           }}
         />
@@ -851,7 +801,7 @@ export default function ServerHomeScreen() {
       <Dialog
         visible={!!editingChannel}
         onClose={() => setEditingChannel(null)}
-        title={t('channel.editChannel', '编辑频道')}
+        title={t('channel.editChannel')}
         actions={
           <>
             <Button
@@ -860,7 +810,7 @@ export default function ServerHomeScreen() {
               style={styles.editAction}
               onPress={() => setEditingChannel(null)}
             >
-              {t('common.cancel', '取消')}
+              {t('common.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -875,7 +825,7 @@ export default function ServerHomeScreen() {
                 }
               }}
             >
-              {t('common.save', '保存')}
+              {t('common.save')}
             </Button>
           </>
         }
@@ -883,7 +833,7 @@ export default function ServerHomeScreen() {
         <TextField
           value={editChannelName}
           onChangeText={setEditChannelName}
-          placeholder={t('channel.channelName', '频道名称')}
+          placeholder={t('channel.channelName')}
           autoFocus
         />
       </Dialog>
@@ -891,18 +841,18 @@ export default function ServerHomeScreen() {
       <Sheet
         visible={showSortModal}
         onClose={() => setShowSortModal(false)}
-        title={t('sort.title', '排序方式')}
+        title={t('sort.title')}
       >
         <View style={styles.sortOptionsContainer}>
           {[
             {
               value: 'position' as ChannelSortBy,
-              label: t('sort.byPosition', '默认顺序'),
+              label: t('sort.byPosition'),
               icon: ArrowUpDown,
             },
             {
               value: 'lastMessageAt' as ChannelSortBy,
-              label: t('sort.byLastMessage', '最新消息'),
+              label: t('sort.byLastMessage'),
               icon: MessageSquare,
             },
           ].map((option) => {
@@ -924,7 +874,7 @@ export default function ServerHomeScreen() {
           })}
         </View>
         <Button variant="glass" size="md" onPress={() => setShowSortModal(false)}>
-          {t('common.close', '关闭')}
+          {t('common.close')}
         </Button>
       </Sheet>
     </BackgroundSurface>

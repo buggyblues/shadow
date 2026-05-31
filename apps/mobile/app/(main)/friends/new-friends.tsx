@@ -113,7 +113,7 @@ export default function NewFriendsScreen() {
             { backgroundColor: colors.inputBackground, borderColor: colors.border },
           ]}
         >
-          <UserPlus size={iconSize.lg} color={colors.textMuted} />
+          <UserPlus size={iconSize.lg} color={colors.primary} />
           <TextInput
             style={[styles.addInput, { color: colors.text }]}
             value={addUsername}
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     paddingHorizontal: spacing.lg,
   },
-  addBtnText: { color: palette.white, fontWeight: '700', fontSize: fontSize.sm },
+  addBtnText: { color: palette.foundation, fontWeight: '700', fontSize: fontSize.sm },
   sectionTitle: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,

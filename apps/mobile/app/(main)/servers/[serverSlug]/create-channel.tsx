@@ -38,6 +38,7 @@ import {
   TextField,
 } from '../../../../src/components/ui'
 import { fetchApi } from '../../../../src/lib/api'
+import { selectionHaptic } from '../../../../src/lib/haptics'
 import { serverChannelHref } from '../../../../src/lib/routes'
 import { showToast } from '../../../../src/lib/toast'
 import {
@@ -238,7 +239,7 @@ export default function CreateChannelScreen() {
     selectedAgents.forEach((agentId) => {
       const agent = myAgents.find((item) => item.id === agentId)
       if (agent?.botUser) {
-        names.push(agent.botUser.displayName || agent.botUser.username || 'Buddy')
+        names.push(agent.botUser.displayName || agent.botUser.username || t('common.bot'))
       }
     })
 
@@ -286,7 +287,7 @@ export default function CreateChannelScreen() {
       if (agent?.botUser) {
         items.push({
           id: agent.id,
-          name: agent.botUser.displayName || agent.botUser.username || 'Buddy',
+          name: agent.botUser.displayName || agent.botUser.username || t('common.bot'),
           avatarUrl: agent.botUser.avatarUrl ?? null,
           userId: agent.botUser.id,
         })
@@ -294,7 +295,7 @@ export default function CreateChannelScreen() {
     })
 
     return items.slice(0, 6)
-  }, [members, myAgents, selectedAgents, selectedMembers])
+  }, [members, myAgents, selectedAgents, selectedMembers, t])
 
   const toggleMemberSelection = (userId: string) => {
     setSelectedMembers((prev) => {
@@ -450,7 +451,10 @@ export default function CreateChannelScreen() {
                     icon={channelIconComponent(item)}
                     active={selected}
                     style={styles.typeChip}
-                    onPress={() => setChannelType(item)}
+                    onPress={() => {
+                      if (!selected) selectionHaptic()
+                      setChannelType(item)
+                    }}
                   />
                 )
               })}
@@ -460,7 +464,10 @@ export default function CreateChannelScreen() {
               icon={Lock}
               active={isPrivate}
               style={styles.privateToggleCompact}
-              onPress={() => setIsPrivate(!isPrivate)}
+              onPress={() => {
+                selectionHaptic()
+                setIsPrivate(!isPrivate)
+              }}
             />
           </View>
         </View>
@@ -480,7 +487,10 @@ export default function CreateChannelScreen() {
                 icon={Layers3}
                 active={!categoryId}
                 style={styles.categoryChip}
-                onPress={() => setCategoryId(null)}
+                onPress={() => {
+                  if (categoryId) selectionHaptic()
+                  setCategoryId(null)
+                }}
               />
 
               {categories.map((cat) => (
@@ -489,7 +499,10 @@ export default function CreateChannelScreen() {
                   label={cat.name}
                   active={categoryId === cat.id}
                   style={styles.categoryChip}
-                  onPress={() => setCategoryId(cat.id)}
+                  onPress={() => {
+                    if (categoryId !== cat.id) selectionHaptic()
+                    setCategoryId(cat.id)
+                  }}
                 />
               ))}
             </ScrollView>
@@ -575,7 +588,10 @@ export default function CreateChannelScreen() {
                     icon={Icon}
                     active={selected}
                     style={styles.tab}
-                    onPress={() => setActiveTab(key)}
+                    onPress={() => {
+                      if (!selected) selectionHaptic()
+                      setActiveTab(key)
+                    }}
                   />
                 )
               })}
@@ -591,7 +607,7 @@ export default function CreateChannelScreen() {
                       colors={colors}
                       selected={selected}
                       name={member.user.displayName || member.user.username}
-                      meta="Server Buddy"
+                      meta={t('members.serverBuddy')}
                       avatarUrl={member.user.avatarUrl}
                       userId={member.user.id}
                       onPress={() => toggleMemberSelection(member.user.id)}
@@ -688,7 +704,7 @@ function SelectableRow({
       ]}
       onPress={onPress}
     >
-      <Avatar uri={avatarUrl} name={name} size={44} userId={userId} />
+      <Avatar uri={avatarUrl} name={name} size={size.controlMd} userId={userId} />
       <View style={styles.memberInfo}>
         <Text
           style={[styles.memberName, { color: highlight ? colors.primary : colors.text }]}

@@ -85,6 +85,8 @@ interface RenderMemberEntry {
 }
 
 type PolicyMode = 'replyAll' | 'mentionOnly' | 'custom' | 'disabled'
+const MEMBER_ROW_PRESS_SCALE = 0.995
+const MEMBER_ACTION_PRESS_SCALE = 0.98
 
 interface PolicyConfig {
   replyToUsers?: string[]
@@ -353,9 +355,9 @@ export default function MembersScreen() {
 
   const roleBadge = (role: string) => {
     if (role === 'owner')
-      return <Crown size={iconSize.xs} color={colors.primary} style={{ marginLeft: spacing.xs }} />
+      return <Crown size={iconSize.xs} color={colors.primary} style={styles.roleIcon} />
     if (role === 'admin')
-      return <Shield size={iconSize.xs} color={colors.primary} style={{ marginLeft: spacing.xs }} />
+      return <Shield size={iconSize.xs} color={colors.primary} style={styles.roleIcon} />
     return null
   }
 
@@ -364,12 +366,15 @@ export default function MembersScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <MobileNavigationBar
-        title={t('member.title', '成员')}
+        title={t('member.title')}
         left={<MobileBackButton onPress={() => router.back()} />}
       />
       <SectionList
         sections={sections}
         keyExtractor={(item) => `${item.member.user.id}-${item.depth}`}
+        stickySectionHeadersEnabled
+        showsVerticalScrollIndicator={false}
+        keyboardDismissMode="interactive"
         ListHeaderComponent={
           <Pressable
             onPress={() => {
@@ -381,6 +386,7 @@ export default function MembersScreen() {
               {
                 backgroundColor: pressed ? (colors.surfaceHover ?? colors.border) : colors.surface,
                 borderBottomColor: colors.border,
+                transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
               },
             ]}
           >
@@ -388,14 +394,20 @@ export default function MembersScreen() {
               <UserPlus size={iconSize.lg} color={palette.foundation} />
             </View>
             <Text style={[styles.inviteLabel, { color: colors.text }]}>
-              {t('members.inviteMembers', '邀请成员')}
+              {t('members.inviteMembers')}
             </Text>
             <ChevronRight size={iconSize.lg} color={colors.textMuted} />
           </Pressable>
         }
         renderSectionHeader={({ section }) => (
           <Pressable
-            style={[styles.sectionHeaderRow, { backgroundColor: colors.background }]}
+            style={({ pressed }) => [
+              styles.sectionHeaderRow,
+              {
+                backgroundColor: pressed ? colors.surfaceHover : colors.background,
+                transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
+              },
+            ]}
             onPress={() => toggleSection(section.key)}
           >
             <ChevronDown
@@ -435,6 +447,7 @@ export default function MembersScreen() {
                         : colors.surface,
                     borderBottomColor: colors.border,
                     borderLeftColor: member.user.isBot ? colors.primary : colors.border,
+                    transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
                   },
                 ]}
                 onPress={() => {
@@ -473,7 +486,9 @@ export default function MembersScreen() {
                     {member.user.isBot && (
                       <View style={[styles.botBadge, { backgroundColor: colors.surface }]}>
                         <Bot size={iconSize.micro} color={colors.primary} />
-                        <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
+                        <Text style={[styles.botBadgeText, { color: colors.primary }]}>
+                          {t('common.bot')}
+                        </Text>
                       </View>
                     )}
                   </View>
@@ -510,7 +525,13 @@ export default function MembersScreen() {
                 {item.childCount > 0 ? (
                   <Pressable
                     hitSlop={spacing.md}
-                    style={styles.collapseButton}
+                    style={({ pressed }) => [
+                      styles.collapseButton,
+                      {
+                        backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground,
+                        transform: [{ scale: pressed ? MEMBER_ACTION_PRESS_SCALE : 1 }],
+                      },
+                    ]}
                     onPress={() => toggleOwner(member.user.id)}
                   >
                     <Text style={[styles.childCount, { color: colors.textMuted }]}>
@@ -548,8 +569,7 @@ export default function MembersScreen() {
           >
             <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              <MessageSquare size={iconSize.md} color={colors.primary} />{' '}
-              {t('member.replyPolicy', '回复策略')}
+              <MessageSquare size={iconSize.md} color={colors.primary} /> {t('member.replyPolicy')}
             </Text>
             <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>
               {policySheet?.user.displayName || policySheet?.user.username}
@@ -557,7 +577,14 @@ export default function MembersScreen() {
 
             {/* Reply All */}
             <Pressable
-              style={[styles.policyOption, { borderBottomColor: colors.border }]}
+              style={({ pressed }) => [
+                styles.policyOption,
+                {
+                  borderBottomColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                  transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
+                },
+              ]}
               onPress={() => {
                 selectionHaptic()
                 updatePolicy.mutate({ mode: 'replyAll' })
@@ -566,10 +593,10 @@ export default function MembersScreen() {
             >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  {t('member.policyReplyAll', '回复所有消息')}
+                  {t('member.policyReplyAll')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyReplyAllDesc', 'Buddy 会回复频道中的所有消息')}
+                  {t('member.policyReplyAllDesc')}
                 </Text>
               </View>
               {currentMode === 'replyAll' && <Check size={iconSize.lg} color={colors.primary} />}
@@ -577,7 +604,14 @@ export default function MembersScreen() {
 
             {/* Mention Only */}
             <Pressable
-              style={[styles.policyOption, { borderBottomColor: colors.border }]}
+              style={({ pressed }) => [
+                styles.policyOption,
+                {
+                  borderBottomColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                  transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
+                },
+              ]}
               onPress={() => {
                 selectionHaptic()
                 updatePolicy.mutate({ mode: 'mentionOnly' })
@@ -586,10 +620,10 @@ export default function MembersScreen() {
             >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  {t('member.policyMentionOnly', '仅回复 @提及')}
+                  {t('member.policyMentionOnly')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyMentionOnlyDesc', '仅在被 @ 时回复')}
+                  {t('member.policyMentionOnlyDesc')}
                 </Text>
               </View>
               {currentMode === 'mentionOnly' && <Check size={iconSize.lg} color={colors.primary} />}
@@ -597,16 +631,22 @@ export default function MembersScreen() {
 
             {/* Custom */}
             <Pressable
-              style={[styles.policyOption, { borderBottomColor: colors.border }]}
+              style={({ pressed }) => [
+                styles.policyOption,
+                {
+                  borderBottomColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                  transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
+                },
+              ]}
               onPress={openCustomPolicy}
             >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  <Settings size={iconSize.sm} color={colors.primary} />{' '}
-                  {t('member.policyCustom', '自定义策略')}
+                  <Settings size={iconSize.sm} color={colors.primary} /> {t('member.policyCustom')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyCustomDesc', '配置 Buddy 互动、智能回复等高级选项')}
+                  {t('member.policyCustomDesc')}
                 </Text>
               </View>
               {currentMode === 'custom' && <Check size={iconSize.lg} color={colors.primary} />}
@@ -614,7 +654,14 @@ export default function MembersScreen() {
 
             {/* Disabled */}
             <Pressable
-              style={[styles.policyOption, { borderBottomColor: colors.border }]}
+              style={({ pressed }) => [
+                styles.policyOption,
+                {
+                  borderBottomColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                  transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
+                },
+              ]}
               onPress={() => {
                 selectionHaptic()
                 updatePolicy.mutate({ mode: 'disabled' })
@@ -623,10 +670,10 @@ export default function MembersScreen() {
             >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.error }]}>
-                  {t('member.policyDisabled', '静默（不回复）')}
+                  {t('member.policyDisabled')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyDisabledDesc', 'Buddy 将不会在此频道回复任何消息')}
+                  {t('member.policyDisabledDesc')}
                 </Text>
               </View>
               {currentMode === 'disabled' && <Check size={iconSize.lg} color={colors.error} />}
@@ -640,7 +687,7 @@ export default function MembersScreen() {
               }}
             >
               <Text style={[styles.sheetCancelText, { color: colors.text }]}>
-                {t('common.cancel', '取消')}
+                {t('common.cancel')}
               </Text>
             </Pressable>
           </Pressable>
@@ -661,8 +708,7 @@ export default function MembersScreen() {
           >
             <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              <Settings size={iconSize.md} color={colors.primary} />{' '}
-              {t('member.policyCustomTitle', '自定义回复策略')}
+              <Settings size={iconSize.md} color={colors.primary} /> {t('member.policyCustomTitle')}
             </Text>
             <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>
               {policySheet?.user.displayName || policySheet?.user.username}
@@ -672,10 +718,10 @@ export default function MembersScreen() {
             <View style={[styles.customOption, { borderBottomColor: colors.border }]}>
               <View style={styles.customOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  {t('member.policySmartReply', '智能回复')}
+                  {t('member.policySmartReply')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policySmartReplyDesc', '跳过明显针对其他人的消息')}
+                  {t('member.policySmartReplyDesc')}
                 </Text>
               </View>
               <AppSwitch value={customSmartReply} onValueChange={setCustomSmartReply} />
@@ -685,10 +731,10 @@ export default function MembersScreen() {
             <View style={[styles.customOption, { borderBottomColor: colors.border }]}>
               <View style={styles.customOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
-                  {t('member.policyReplyToBuddy', '回复其他 Buddy 的消息')}
+                  {t('member.policyReplyToBuddy')}
                 </Text>
                 <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyReplyToBuddyDesc', '允许回复其他 Buddy 发送的消息')}
+                  {t('member.policyReplyToBuddyDesc')}
                 </Text>
               </View>
               <AppSwitch value={customReplyToBuddy} onValueChange={setCustomReplyToBuddy} />
@@ -699,16 +745,21 @@ export default function MembersScreen() {
               <View style={[styles.customOption, { borderBottomColor: colors.border }]}>
                 <View style={styles.customOptionContent}>
                   <Text style={[styles.policyLabel, { color: colors.text }]}>
-                    {t('member.policyMaxBuddyChainDepth', '最大对话链深度')}:{' '}
-                    {customMaxBuddyChainDepth}
+                    {t('member.policyMaxBuddyChainDepth')}: {customMaxBuddyChainDepth}
                   </Text>
                   <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                    {t('member.policyMaxBuddyChainDepthDesc', '防止 Buddy 之间无限循环对话')}
+                    {t('member.policyMaxBuddyChainDepthDesc')}
                   </Text>
                   {/* Simple +/- controls instead of slider */}
                   <View style={styles.stepperRow}>
                     <Pressable
-                      style={[styles.stepperBtn, { backgroundColor: colors.background }]}
+                      style={({ pressed }) => [
+                        styles.stepperBtn,
+                        {
+                          backgroundColor: pressed ? colors.surfaceHover : colors.background,
+                          transform: [{ scale: pressed ? MEMBER_ACTION_PRESS_SCALE : 1 }],
+                        },
+                      ]}
                       onPress={() => {
                         selectionHaptic()
                         setCustomMaxBuddyChainDepth(Math.max(1, customMaxBuddyChainDepth - 1))
@@ -720,7 +771,13 @@ export default function MembersScreen() {
                       {customMaxBuddyChainDepth}
                     </Text>
                     <Pressable
-                      style={[styles.stepperBtn, { backgroundColor: colors.background }]}
+                      style={({ pressed }) => [
+                        styles.stepperBtn,
+                        {
+                          backgroundColor: pressed ? colors.surfaceHover : colors.background,
+                          transform: [{ scale: pressed ? MEMBER_ACTION_PRESS_SCALE : 1 }],
+                        },
+                      ]}
                       onPress={() => {
                         selectionHaptic()
                         setCustomMaxBuddyChainDepth(Math.min(10, customMaxBuddyChainDepth + 1))
@@ -738,7 +795,7 @@ export default function MembersScreen() {
               onPress={saveCustomPolicy}
             >
               <Text style={[styles.sheetSaveText, { color: palette.foundation }]}>
-                {t('member.policySave', '保存策略')}
+                {t('member.policySave')}
               </Text>
             </Pressable>
 
@@ -750,7 +807,7 @@ export default function MembersScreen() {
               }}
             >
               <Text style={[styles.sheetCancelText, { color: colors.text }]}>
-                {t('common.cancel', '取消')}
+                {t('common.cancel')}
               </Text>
             </Pressable>
           </Pressable>
@@ -828,6 +885,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  roleIcon: {
+    marginLeft: spacing.xs,
+  },
   name: {
     fontSize: fontSize.md,
     fontWeight: '600',
@@ -860,6 +920,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xxs,
     padding: spacing.xs,
+    borderRadius: radius.full,
   },
   childCount: {
     fontSize: fontSize.xs,

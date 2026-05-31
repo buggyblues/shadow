@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router'
+import { Stack, useRootNavigationState, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -21,9 +21,13 @@ export default function MainLayout() {
   const colors = useColors()
   const { t } = useTranslation()
   const router = useRouter()
-  const { setUser, isAuthenticated, accessToken, logout } = useAuthStore()
+  const rootNavigationState = useRootNavigationState()
+  const { setUser, isAuthenticated, accessToken, logout, isLoading } = useAuthStore()
+  const navigationReady = !!rootNavigationState?.key
 
   useEffect(() => {
+    if (isLoading || !navigationReady) return
+
     if (!isAuthenticated) {
       router.replace('/(auth)/login')
       return
@@ -71,7 +75,7 @@ export default function MainLayout() {
       disconnectSocket()
       cleanupResponse()
     }
-  }, [accessToken, isAuthenticated, logout, router, setUser, t])
+  }, [accessToken, isAuthenticated, isLoading, logout, navigationReady, router, setUser, t])
 
   // Listen for new messages via socket and show local notifications
   useEffect(() => {

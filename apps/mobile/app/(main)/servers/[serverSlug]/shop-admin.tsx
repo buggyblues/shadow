@@ -244,8 +244,8 @@ export default function ShopAdminScreen() {
         style={[styles.addBtn, { backgroundColor: colors.primary }]}
         onPress={() => setShowCreate(true)}
       >
-        <Plus size={iconSize.lg} color={palette.white} />
-        <Text style={{ color: palette.white, fontWeight: '700' }}>{t('shop.addProduct')}</Text>
+        <Plus size={iconSize.lg} color={palette.foundation} />
+        <Text style={{ color: palette.foundation, fontWeight: '700' }}>{t('shop.addProduct')}</Text>
       </Pressable>
 
       {products.length === 0 ? (
@@ -452,7 +452,7 @@ export default function ShopAdminScreen() {
                 onPress={() => createMutation.mutate()}
                 disabled={!newName.trim() || !newPrice.trim() || createMutation.isPending}
               >
-                <Text style={{ color: palette.white, fontWeight: '700' }}>
+                <Text style={{ color: palette.foundation, fontWeight: '700' }}>
                   {t('common.create')}
                 </Text>
               </Pressable>

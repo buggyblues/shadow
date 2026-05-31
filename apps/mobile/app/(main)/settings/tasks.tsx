@@ -76,7 +76,7 @@ export default function TaskCenterScreen() {
             </Text>
           </Card>
           <Card variant="stat" style={styles.statCard}>
-            <IconBubble icon={WalletCards} tone="accent" size={iconSize.md} />
+            <IconBubble icon={WalletCards} tone="primary" size={iconSize.md} />
             <Typography variant="micro">{t('taskCenter.wallet', '虾币')}</Typography>
             <PriceCompact amount={data?.wallet.balance ?? 0} size={fontSize.lg} />
           </Card>

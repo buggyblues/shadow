@@ -166,7 +166,7 @@ export default function CreateBuddyScreen() {
               {t('agentMgmt.cloudDeployingDesc')}
             </AppText>
           </View>
-          <Button variant="secondary" size="lg" onPress={handleAbandon}>
+          <Button variant="glass" size="lg" onPress={handleAbandon}>
             {t('agentMgmt.abandonCloudCreate')}
           </Button>
         </View>
