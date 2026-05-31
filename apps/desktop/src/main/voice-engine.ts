@@ -140,15 +140,15 @@ const MOSS_TTS_REPO = 'https://github.com/OpenMOSS/MOSS-TTS-Nano.git'
 const MOSS_TTS_REPO_DIR = 'repo'
 const MOSS_TTS_RUNTIME_DIR = 'moss-tts-nano'
 const MOSS_TTS_CHILD_VOICE = 'Junhao'
-const MOSS_TTS_TEST_TEXT = '你好，我是小豆。'
+const MOSS_TTS_TEST_TEXT = '你好，我是你的桌面宠物。'
 const VOXCPM2_SOURCE_URL = 'https://github.com/OpenBMB/VoxCPM'
 const VOXCPM2_MODEL_ID = 'openbmb/VoxCPM2'
 const VOXCPM2_RUNTIME_DIR = 'voxcpm2'
-const VOXCPM2_TEST_TEXT = '你好，我是小豆。'
-const ENABLE_LOCAL_TTS = false
+const VOXCPM2_TEST_TEXT = '你好，我是你的桌面宠物。'
 const TTS_PROVIDER_IDS: TtsProvider[] = ['system', 'moss-tts-nano', 'sherpa-local', 'voxcpm2']
 const DEFAULT_TTS_CHUNK_CHAR_LIMIT = 140
 const SHERPA_TTS_CHUNK_CHAR_LIMIT = 90
+const LOCAL_TTS_FALLBACK_ORDER: TtsProvider[] = ['voxcpm2', 'moss-tts-nano', 'sherpa-local']
 
 let sherpaModule: SherpaOnnx | null = null
 let recognizer: OnlineRecognizer | null = null
@@ -813,8 +813,19 @@ async function getTts() {
 
 function emitAsrPartial() {
   if (!activeAsr || activeAsr.sender.isDestroyed()) return
-  const text = [...activeAsr.segments, activeAsr.lastText].join('').trim()
+  const text = joinAsrSegments([...activeAsr.segments, activeAsr.lastText])
   activeAsr.sender.send('desktop:pet:asrPartial', { text })
+}
+
+function joinAsrSegments(segments: string[]): string {
+  let out = ''
+  for (const raw of segments) {
+    const segment = raw.trim()
+    if (!segment) continue
+    const needsSpace = /[A-Za-z0-9]$/.test(out) && /^[A-Za-z0-9]/.test(segment)
+    out = `${out}${needsSpace ? ' ' : ''}${segment}`
+  }
+  return out.trim()
 }
 
 function decodeAsrChunk(samples: Float32Array, sampleRate: number) {
@@ -1163,12 +1174,16 @@ export async function speakWithDesktopVoice(
 ): Promise<boolean> {
   const generation = playback?.generation ?? desktopSpeechGeneration
   const content = normalizeSpeechText(text)
-  const chunks = splitTtsText(content, 72)
+  const chunks = splitTtsText(content, ttsChunkLimit(readDesktopSettings().ttsProvider))
   if (!chunks.length) return false
   const results = await Promise.all(
     chunks.map((chunk) => enqueueDesktopSpeechSegment(chunk, generation)),
   )
   return results.some(Boolean)
+}
+
+function ttsChunkLimit(provider: TtsProvider): number {
+  return provider === 'sherpa-local' ? SHERPA_TTS_CHUNK_CHAR_LIMIT : DEFAULT_TTS_CHUNK_CHAR_LIMIT
 }
 
 function enqueueDesktopSpeechSegment(text: string, generation: number): Promise<boolean> {
@@ -1245,18 +1260,30 @@ async function synthesizeDesktopSpeechClip(
   const nativeAddonAvailable = isSherpaNativeAddonAvailable()
   const providers = createTtsProviderDefinitions(nativeAddonAvailable)
   const configuredProvider = readDesktopSettings().ttsProvider
-  const provider = providers[configuredProvider] ?? providers.system
   const options = { generation }
-  const clip = await provider.synthesize(text, options)
-  if (clip) return clip
-  if (configuredProvider !== 'system') {
-    const systemClip = await providers.system.synthesize(text, options)
-    if (systemClip) return systemClip
-  }
-  if (ENABLE_LOCAL_TTS && configuredProvider !== 'sherpa-local') {
-    return providers['sherpa-local'].synthesize(text, options)
+  for (const providerId of ttsSynthesisOrder(configuredProvider, providers)) {
+    if (!isSpeechGenerationCurrent(generation)) return null
+    const provider = providers[providerId]
+    if (providerId !== 'system' && !provider.installed()) continue
+    const clip = await provider.synthesize(text, options)
+    if (clip) return clip
   }
   return null
+}
+
+function ttsSynthesisOrder(
+  configuredProvider: TtsProvider,
+  providers: Record<TtsProvider, TtsProviderDefinition>,
+): TtsProvider[] {
+  const order: TtsProvider[] = [configuredProvider]
+  if (configuredProvider !== 'system') order.push(...LOCAL_TTS_FALLBACK_ORDER)
+  else {
+    order.push(
+      ...LOCAL_TTS_FALLBACK_ORDER.filter((providerId) => providers[providerId].installed()),
+    )
+  }
+  order.push('system')
+  return Array.from(new Set(order))
 }
 
 export function cancelDesktopSpeech(): void {
@@ -1292,6 +1319,17 @@ export async function prewarmDesktopVoice(): Promise<boolean> {
       return true
     }
     if (configuredProvider === 'sherpa-local' && providers['sherpa-local'].installed()) {
+      await getTts()
+      return true
+    }
+    const fallback = LOCAL_TTS_FALLBACK_ORDER.find((providerId) =>
+      providers[providerId].installed(),
+    )
+    if (fallback === 'voxcpm2') {
+      await ensureVoxCpm2Worker()
+      return true
+    }
+    if (fallback === 'sherpa-local') {
       await getTts()
       return true
     }
@@ -1381,7 +1419,7 @@ export function setupPetVoiceHandlers(): void {
     }
     const text = recognizer.getResult(activeAsr.stream).text?.trim()
     if (text) activeAsr.segments.push(text)
-    const finalText = activeAsr.segments.join('').trim()
+    const finalText = joinAsrSegments(activeAsr.segments)
     activeAsr = null
     return { text: finalText }
   })

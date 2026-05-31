@@ -2,7 +2,7 @@ import { app, ipcMain, Notification, net } from 'electron'
 import { readCommunityAccessToken } from './connector-daemon'
 import { getDesktopServerBaseUrl } from './desktop-settings'
 import { setTrayAttention } from './tray'
-import { showCommunityWindow } from './window'
+import { sendPetShortcut, showCommunityWindow } from './window'
 
 type DesktopNotificationInput = {
   title: string
@@ -10,6 +10,7 @@ type DesktopNotificationInput = {
   channelId?: string
   messageId?: string
   routePath?: string
+  target?: 'community' | 'pet'
 }
 
 function normalizeRoutePath(value: unknown): string | null {
@@ -54,6 +55,10 @@ async function resolveChannelRoute(channelId: string, messageId?: string): Promi
 }
 
 async function openNotificationTarget(args: DesktopNotificationInput): Promise<void> {
+  if (args.target === 'pet') {
+    sendPetShortcut('services')
+    return
+  }
   const routePath = normalizeRoutePath(args.routePath)
   if (routePath) {
     showCommunityWindow(routePath)

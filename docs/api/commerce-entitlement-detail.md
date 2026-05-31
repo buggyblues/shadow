@@ -4,7 +4,9 @@
 
 Returns a single purchase entitlement with the linked shop, product, offer, paid file, buyer,
 order, and fulfillment jobs. The buyer can read their own entitlement. A shop manager can read
-entitlements belonging to their shop.
+entitlements belonging to their shop. Product summaries include `tags`; desktop pet pack purchases
+also carry `metadata.desktopPetPack` so desktop clients can discover entitlement-backed pack
+downloads without public object URLs.
 
 ### Response
 
@@ -23,7 +25,13 @@ entitlements belonging to their shop.
   "resourceId": "file-id",
   "capability": "view",
   "shop": { "id": "shop-id", "name": "Store", "ownerUserId": "owner-user-id" },
-  "product": { "id": "product-id", "name": "Product", "basePrice": 8 },
+  "product": { "id": "product-id", "name": "Product", "basePrice": 8, "tags": ["desktop-pet-pack"] },
+  "metadata": {
+    "desktopPetPack": {
+      "kind": "desktop_pet_pack",
+      "schemaVersion": "shadow.desktopPet.pack.v1"
+    }
+  },
   "offer": { "id": "offer-id", "status": "active" },
   "paidFile": { "id": "file-id", "name": "deliverable.html" },
   "buyer": { "id": "buyer-user-id", "username": "buyer" },
@@ -73,6 +81,7 @@ context when relevant, and asset homepage when one exists.
 ```ts
 const entitlement = await client.getEntitlement('entitlement-id')
 const opened = await client.openPaidFile('file-id')
+console.log(opened.viewerUrl, opened.grantToken)
 await client.cancelEntitlementRenewal('entitlement-id', {
   reason: 'buyer_cancelled_auto_renewal',
 })
@@ -81,6 +90,7 @@ await client.cancelEntitlementRenewal('entitlement-id', {
 ```python
 entitlement = client.get_entitlement("entitlement-id")
 opened = client.open_paid_file("file-id")
+print(opened["viewerUrl"], opened.get("grantToken"))
 client.cancel_entitlement_renewal(
     "entitlement-id",
     reason="buyer_cancelled_auto_renewal",

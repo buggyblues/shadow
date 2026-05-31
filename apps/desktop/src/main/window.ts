@@ -12,8 +12,20 @@ let allowPetClose = false
 
 const isDev = !!(process.env.DESKTOP_WEB_DEV_URL || process.env.DESKTOP_DEV_URL)
 const PET_COMPACT_SIZE = { width: 240, height: 240 }
-const PET_EXPANDED_SIZE = { width: 620, height: 340 }
-const SETTINGS_TABS = new Set(['general', 'connector', 'shortcuts', 'voice', 'network', 'about'])
+const PET_EXPANDED_SIZE = { width: 960, height: 600 }
+const WINDOW_STATE_SAVE_DEBOUNCE_MS = 500
+const SETTINGS_TABS = new Set([
+  'general',
+  'connector',
+  'shortcuts',
+  'voice',
+  'pet',
+  'network',
+  'about',
+])
+
+let mainWindowStateSaveTimer: ReturnType<typeof setTimeout> | null = null
+let petWindowStateSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 function applyPetWindowLevel(mode: 'compact' | 'expanded'): void {
   if (!petWindow || petWindow.isDestroyed()) return
@@ -119,9 +131,23 @@ export function createWindow(): BrowserWindow {
     const isMaximized = mainWindow.isMaximized()
     saveWindowState({ ...bounds, isMaximized })
   }
+  const scheduleSaveState = () => {
+    if (mainWindowStateSaveTimer) clearTimeout(mainWindowStateSaveTimer)
+    mainWindowStateSaveTimer = setTimeout(() => {
+      mainWindowStateSaveTimer = null
+      saveState()
+    }, WINDOW_STATE_SAVE_DEBOUNCE_MS)
+  }
 
-  mainWindow.on('resize', saveState)
-  mainWindow.on('move', saveState)
+  mainWindow.on('resize', scheduleSaveState)
+  mainWindow.on('move', scheduleSaveState)
+  mainWindow.on('close', () => {
+    if (mainWindowStateSaveTimer) {
+      clearTimeout(mainWindowStateSaveTimer)
+      mainWindowStateSaveTimer = null
+    }
+    saveState()
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -308,8 +334,8 @@ export function createPetWindow(): BrowserWindow {
     ...savedState,
     minWidth: 180,
     minHeight: 180,
-    maxWidth: 700,
-    maxHeight: 520,
+    maxWidth: 1080,
+    maxHeight: 760,
     title: 'Shadow Desktop Pet',
     frame: false,
     transparent: true,
@@ -354,10 +380,22 @@ export function createPetWindow(): BrowserWindow {
     if (!petWindow || petWindow.isDestroyed()) return
     savePetWindowState(petWindow.getBounds())
   }
+  const scheduleSavePetState = () => {
+    if (petWindowStateSaveTimer) clearTimeout(petWindowStateSaveTimer)
+    petWindowStateSaveTimer = setTimeout(() => {
+      petWindowStateSaveTimer = null
+      savePetState()
+    }, WINDOW_STATE_SAVE_DEBOUNCE_MS)
+  }
 
-  petWindow.on('resize', savePetState)
-  petWindow.on('move', savePetState)
+  petWindow.on('resize', scheduleSavePetState)
+  petWindow.on('move', scheduleSavePetState)
   petWindow.on('close', (event) => {
+    if (petWindowStateSaveTimer) {
+      clearTimeout(petWindowStateSaveTimer)
+      petWindowStateSaveTimer = null
+    }
+    savePetState()
     if (allowPetClose) return
     event.preventDefault()
     petWindow?.hide()
@@ -385,13 +423,21 @@ export function setPetPanelMode(mode: 'compact' | 'expanded'): void {
   const requestedSize = mode === 'expanded' ? PET_EXPANDED_SIZE : PET_COMPACT_SIZE
   const display = screen.getDisplayMatching(win.getBounds())
   const bounds = display.workArea
+  const currentBounds = win.getBounds()
   const size = {
     width: Math.min(requestedSize.width, bounds.width),
     height: Math.min(requestedSize.height, bounds.height),
   }
-  const [currentX = bounds.x, currentY = bounds.y] = win.getPosition()
-  const x = Math.min(Math.max(currentX, bounds.x), bounds.x + bounds.width - size.width)
-  const y = Math.min(Math.max(currentY, bounds.y), bounds.y + bounds.height - size.height)
+  const stageCenterX = currentBounds.x + PET_COMPACT_SIZE.width / 2
+  const stageCenterY = currentBounds.y + currentBounds.height / 2
+  const x = Math.min(
+    Math.max(stageCenterX - PET_COMPACT_SIZE.width / 2, bounds.x),
+    bounds.x + bounds.width - size.width,
+  )
+  const y = Math.min(
+    Math.max(stageCenterY - size.height / 2, bounds.y),
+    bounds.y + bounds.height - size.height,
+  )
   win.setBounds({ x, y, ...size }, true)
   applyPetWindowLevel(mode)
 }
@@ -402,7 +448,9 @@ export function hidePetWindow(): void {
   win.hide()
 }
 
-export function sendPetShortcut(action: 'voice' | 'chat' | 'notifications'): void {
+export function sendPetShortcut(
+  action: 'voice' | 'chat' | 'notifications' | 'services' | 'care',
+): void {
   const win = createPetWindow()
   applyPetWindowLevel('expanded')
   win.showInactive()

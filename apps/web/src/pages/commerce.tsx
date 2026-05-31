@@ -55,6 +55,14 @@ import { fetchApi } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
 import { deliveryDetailHref, entitlementHasOpenablePaidFile } from '../lib/commerce-delivery'
 import { hasActivePurchasedEntitlement } from '../lib/commerce-products'
+import {
+  DESKTOP_PET_PACK_ASSET_TYPE,
+  DESKTOP_PET_PACK_MARKETPLACE_TAGS,
+  hasDesktopPetPackTag,
+  isDesktopPetPackFilename,
+  isDesktopPetPackTag,
+  withDesktopPetPackTags,
+} from '../lib/desktop-pet-marketplace'
 import { compressImageForUpload } from '../lib/image-upload'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
@@ -373,7 +381,13 @@ type DeliveryState =
   | 'refunding'
 type EntitlementFilter = 'all' | DeliveryState
 type ShopSettingsSection = 'shop' | 'orders'
-type DeliveryPreset = 'service' | 'paid_file' | 'badge' | 'gift' | 'service_ticket'
+type DeliveryPreset =
+  | 'service'
+  | 'paid_file'
+  | 'desktop_pet_pack'
+  | 'badge'
+  | 'gift'
+  | 'service_ticket'
 type CommunityAssetType =
   | 'badge'
   | 'gift'
@@ -408,6 +422,7 @@ const DELIVERY_PRESETS: Array<{
 }> = [
   { value: 'service', icon: ShieldCheck },
   { value: 'paid_file', icon: FileText },
+  { value: 'desktop_pet_pack', icon: Package },
   { value: 'badge', icon: Award, assetType: 'badge' },
   { value: 'gift', icon: Gem, assetType: 'gift' },
   { value: 'service_ticket', icon: Ticket, assetType: 'service_ticket' },
@@ -486,6 +501,7 @@ function entitlementImage(entitlement: Entitlement) {
 }
 
 function productAssetType(product?: Product | null) {
+  if (hasDesktopPetPackTag(product?.tags)) return DESKTOP_PET_PACK_ASSET_TYPE
   const config = firstEntitlementConfig(product)
   if (config?.resourceType !== 'community_asset') return null
   return product?.tags?.find((tag) =>
@@ -505,6 +521,26 @@ function parseProvisioning(metadata?: Record<string, unknown> | null): Provision
     resourceId: typeof value.resourceId === 'string' ? value.resourceId : null,
     capability: typeof value.capability === 'string' ? value.capability : null,
   }
+}
+
+function isFileDeliveryPreset(preset: DeliveryPreset) {
+  return preset === 'paid_file' || preset === 'desktop_pet_pack'
+}
+
+function withDesktopPetTagsFromInput(value: string) {
+  return withDesktopPetPackTags(
+    value
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  )
+}
+
+function withoutDesktopPetTagsFromInput(value: string) {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter((tag) => tag && !isDesktopPetPackTag(tag))
 }
 
 function PriceBadge({ amount }: { amount: number }) {
@@ -1158,7 +1194,7 @@ export function PersonalShopPage({
       setCapability('use')
       return
     }
-    if (deliveryPreset === 'paid_file') {
+    if (isFileDeliveryPreset(deliveryPreset)) {
       setResourceType('workspace_file')
       setCapability('download')
       return
@@ -1206,7 +1242,9 @@ export function PersonalShopPage({
     const assetType = productAssetType(product)
     const preset: DeliveryPreset =
       config?.resourceType === 'workspace_file'
-        ? 'paid_file'
+        ? hasDesktopPetPackTag(product.tags)
+          ? 'desktop_pet_pack'
+          : 'paid_file'
         : assetType === 'badge' || assetType === 'gift' || assetType === 'service_ticket'
           ? assetType
           : 'service'
@@ -1243,7 +1281,9 @@ export function PersonalShopPage({
   })
   const products = productsData?.products ?? []
   const serviceProductCount = products.filter(
-    (product) => firstEntitlementConfig(product)?.resourceType !== 'community_asset',
+    (product) =>
+      firstEntitlementConfig(product)?.resourceType !== 'community_asset' &&
+      !hasDesktopPetPackTag(product.tags),
   ).length
   const assetProductCount = products.length - serviceProductCount
 
@@ -1314,11 +1354,13 @@ export function PersonalShopPage({
 
       const baseTags = selectedPreset?.assetType
         ? [selectedPreset.assetType]
-        : deliveryPreset === 'paid_file'
-          ? ['paid_file']
-          : deliveryPreset === 'service'
-            ? ['service']
-            : []
+        : deliveryPreset === 'desktop_pet_pack'
+          ? ['paid_file', ...DESKTOP_PET_PACK_MARKETPLACE_TAGS]
+          : deliveryPreset === 'paid_file'
+            ? ['paid_file']
+            : deliveryPreset === 'service'
+              ? ['service']
+              : []
       const customTags = productTags
         .split(',')
         .map((tag) => tag.trim())
@@ -1337,9 +1379,17 @@ export function PersonalShopPage({
         globalPublic: productGlobalPublic,
         basePrice: Math.round(numericPrice),
         entitlementConfig: {
-          resourceType: assetDefinitionId ? 'community_asset' : resourceType.trim() || 'service',
+          resourceType: assetDefinitionId
+            ? 'community_asset'
+            : isFileDeliveryPreset(deliveryPreset)
+              ? 'workspace_file'
+              : resourceType.trim() || 'service',
           resourceId: assetDefinitionId ?? (resourceId.trim() || undefined),
-          capability: assetDefinitionId ? 'redeem' : capability,
+          capability: assetDefinitionId
+            ? 'redeem'
+            : isFileDeliveryPreset(deliveryPreset)
+              ? 'download'
+              : capability,
           durationSeconds: billingMode === 'one_time' ? null : durationSeconds,
           renewalPeriodSeconds: billingMode === 'subscription' ? durationSeconds : undefined,
           repeatable,
@@ -1421,7 +1471,7 @@ export function PersonalShopPage({
     canManage &&
     Boolean(name.trim()) &&
     Boolean(resourceType.trim()) &&
-    (deliveryPreset !== 'paid_file' || Boolean(resourceId.trim())) &&
+    (!isFileDeliveryPreset(deliveryPreset) || Boolean(resourceId.trim())) &&
     !priceInvalid &&
     !durationInvalid &&
     !productImageUploading &&
@@ -1448,17 +1498,47 @@ export function PersonalShopPage({
   const buyerPreviewName = name.trim() || t('commerce.productName')
   const buyerPreviewSummary =
     summary.trim() || privilegeDescription.trim() || assetDescription.trim() || selectedDeliveryHint
+  const previewResourceType = isFileDeliveryPreset(deliveryPreset)
+    ? 'workspace_file'
+    : deliveryPreset === 'service'
+      ? resourceType
+      : 'community_asset'
+  const previewAssetType =
+    deliveryPreset === 'desktop_pet_pack'
+      ? DESKTOP_PET_PACK_ASSET_TYPE
+      : selectedDeliveryPreset?.assetType
+  const paidFileTitle =
+    deliveryPreset === 'desktop_pet_pack'
+      ? t('commerce.desktopPetPackUploadTitle')
+      : t('commerce.paidFileUploadTitle')
+  const paidFileHint =
+    deliveryPreset === 'desktop_pet_pack'
+      ? t('commerce.desktopPetPackUploadHint')
+      : t('commerce.paidFileUploadHint')
   const starterPresets: DeliveryPreset[] = [
     'service',
     'paid_file',
+    'desktop_pet_pack',
     'badge',
     'gift',
     'service_ticket',
   ]
   const startProductWithPreset = (preset: DeliveryPreset) => {
-    if (preset !== 'paid_file') {
+    if (!isFileDeliveryPreset(preset)) {
       setPaidFileNode(null)
-      if (deliveryPreset === 'paid_file') setResourceId('')
+      if (isFileDeliveryPreset(deliveryPreset)) setResourceId('')
+    }
+    if (preset === 'desktop_pet_pack') {
+      setBillingMode('one_time')
+      setRepeatable(false)
+      setProductGlobalPublic(true)
+      setProductTags((current) =>
+        withDesktopPetTagsFromInput(current)
+          .filter((tag) => tag !== 'paid_file')
+          .join(', '),
+      )
+    } else {
+      setProductTags((current) => withoutDesktopPetTagsFromInput(current).join(', '))
     }
     setDeliveryPreset(preset)
     setShopSheet('product')
@@ -1525,6 +1605,10 @@ export function PersonalShopPage({
       showToast(t('commerce.paidFileServerRequired'), 'error')
       return
     }
+    if (deliveryPreset === 'desktop_pet_pack' && !isDesktopPetPackFilename(file.name)) {
+      showToast(t('commerce.desktopPetPackFileRequired'), 'error')
+      return
+    }
     setPaidFileUploading(true)
     try {
       const formData = new FormData()
@@ -1549,9 +1633,25 @@ export function PersonalShopPage({
     setPaidFileNode(node)
     setResourceId(node.id)
     if (!name.trim()) setName(node.name.replace(/\.[^.]+$/, ''))
-    if (!summary.trim()) setSummary(t('commerce.paidFileDefaultSummary', { name: node.name }))
+    if (!summary.trim()) {
+      setSummary(
+        t(
+          deliveryPreset === 'desktop_pet_pack'
+            ? 'commerce.desktopPetPackDefaultSummary'
+            : 'commerce.paidFileDefaultSummary',
+          { name: node.name },
+        ),
+      )
+    }
     if (!privilegeDescription.trim()) {
-      setPrivilegeDescription(t('commerce.paidFileDefaultPrivilege', { name: node.name }))
+      setPrivilegeDescription(
+        t(
+          deliveryPreset === 'desktop_pet_pack'
+            ? 'commerce.desktopPetPackDefaultPrivilege'
+            : 'commerce.paidFileDefaultPrivilege',
+          { name: node.name },
+        ),
+      )
     }
   }
 
@@ -1715,7 +1815,7 @@ export function PersonalShopPage({
               {t('commerce.creatorStudio')}
             </CommercePill>
           </div>
-          <div className="grid gap-3 xl:grid-cols-2 2xl:grid-cols-4">
+          <div className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-6">
             {starterPresets.map((preset) => {
               const meta = DELIVERY_PRESETS.find((item) => item.value === preset)
               const Icon = meta?.icon ?? ShieldCheck
@@ -1999,8 +2099,8 @@ export function PersonalShopPage({
                       name={buyerPreviewName}
                       imageUrl={productImagePreviewUrl || productImageUrl}
                       productType="entitlement"
-                      resourceType={deliveryPreset === 'service' ? resourceType : 'community_asset'}
-                      assetType={selectedDeliveryPreset?.assetType}
+                      resourceType={previewResourceType}
+                      assetType={previewAssetType}
                       showLabel={false}
                       className="aspect-[3/2] w-full"
                     />
@@ -2122,12 +2222,26 @@ export function PersonalShopPage({
                         key={preset.value}
                         type="button"
                         onClick={() => {
-                          if (preset.value !== 'paid_file') {
+                          if (!isFileDeliveryPreset(preset.value)) {
                             setPaidFileNode(null)
-                            if (deliveryPreset === 'paid_file') setResourceId('')
+                            if (isFileDeliveryPreset(deliveryPreset)) setResourceId('')
                           }
-                          if (preset.value === 'paid_file') {
+                          if (isFileDeliveryPreset(preset.value)) {
                             setResourceId(paidFileNode?.id ?? '')
+                          }
+                          if (preset.value === 'desktop_pet_pack') {
+                            setBillingMode('one_time')
+                            setRepeatable(false)
+                            setProductGlobalPublic(true)
+                            setProductTags((current) =>
+                              withDesktopPetTagsFromInput(current)
+                                .filter((tag) => tag !== 'paid_file')
+                                .join(', '),
+                            )
+                          } else {
+                            setProductTags((current) =>
+                              withoutDesktopPetTagsFromInput(current).join(', '),
+                            )
                           }
                           setDeliveryPreset(preset.value)
                         }}
@@ -2251,7 +2365,7 @@ export function PersonalShopPage({
                       />
                     </label>
                   </div>
-                ) : deliveryPreset === 'paid_file' ? (
+                ) : isFileDeliveryPreset(deliveryPreset) ? (
                   <div className="grid gap-3">
                     <label className="grid gap-1.5">
                       <span className="text-xs font-black uppercase tracking-[0.12em] text-text-muted">
@@ -2282,7 +2396,7 @@ export function PersonalShopPage({
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 text-sm font-black text-text-primary">
                             <FileText size={16} className="text-primary" />
-                            {paidFileNode ? paidFileNode.name : t('commerce.paidFileUploadTitle')}
+                            {paidFileNode ? paidFileNode.name : paidFileTitle}
                           </div>
                           <p className="mt-1 text-xs leading-5 text-text-muted">
                             {paidFileNode
@@ -2291,7 +2405,7 @@ export function PersonalShopPage({
                                     formatFileSizeLabel(paidFileNode.sizeBytes) ??
                                     t('common.unknown'),
                                 })
-                              : t('commerce.paidFileUploadHint')}
+                              : paidFileHint}
                           </p>
                         </div>
                         <label
@@ -2311,6 +2425,11 @@ export function PersonalShopPage({
                             : t('commerce.uploadPaidFile')}
                           <input
                             type="file"
+                            accept={
+                              deliveryPreset === 'desktop_pet_pack'
+                                ? '.zip,.shadowpet,.shadowpet.zip,application/zip,application/x-zip-compressed'
+                                : undefined
+                            }
                             disabled={paidFileUploading || !paidFileServerId}
                             className="sr-only"
                             onChange={(event) => {
@@ -2333,7 +2452,9 @@ export function PersonalShopPage({
                     </div>
                     {!resourceId.trim() && (
                       <p className="text-xs font-bold text-danger">
-                        {t('commerce.paidFileRequiredHint')}
+                        {deliveryPreset === 'desktop_pet_pack'
+                          ? t('commerce.desktopPetPackRequiredHint')
+                          : t('commerce.paidFileRequiredHint')}
                       </p>
                     )}
                   </div>
@@ -2390,8 +2511,8 @@ export function PersonalShopPage({
                       name={buyerPreviewName}
                       imageUrl={productImagePreviewUrl || productImageUrl}
                       productType="entitlement"
-                      resourceType={deliveryPreset === 'service' ? resourceType : 'community_asset'}
-                      assetType={selectedDeliveryPreset?.assetType}
+                      resourceType={previewResourceType}
+                      assetType={previewAssetType}
                       className="aspect-[3/2] w-full"
                     />
                     <div className="min-w-0">

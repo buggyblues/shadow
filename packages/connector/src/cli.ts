@@ -21,6 +21,15 @@ import {
   connectorRuntimeById,
   connectorRuntimeInstallCommands,
 } from './runtime-catalog.js'
+import {
+  CONNECTOR_MANAGED_NODE_VERSION,
+  commandExistsOnConnectorPath,
+  connectorProcessEnv,
+  ensureManagedNodeRuntime,
+  managedNodeBinDir,
+  nodeGlobalBinDir,
+  shellCommandNeedsNpm,
+} from './toolchain.js'
 
 interface CliOptions {
   command:
@@ -45,6 +54,11 @@ interface CliOptions {
   workDirMapFile?: string
   projectName?: string
   agentType?: string
+  modelProviderId?: string
+  modelProviderLabel?: string
+  modelProviderBaseUrl?: string
+  modelProviderApiKey?: string
+  modelProviderModel?: string
   json: boolean
   force: boolean
   install: boolean
@@ -112,6 +126,10 @@ function usage(): string {
     '  --work-dir-map-file <path> Daemon-local JSON map for Buddy/runtime work directories',
     '  --project-name <name>   cc-connect project name',
     '  --agent-type <type>     cc-connect agent type, default codex',
+    '  --model-provider-base-url <url> OpenAI-compatible model provider base URL',
+    '  --model-provider-api-key <key> OpenAI-compatible model provider API key',
+    '  --model-provider-model <model> OpenAI-compatible model id',
+    '  --model-provider-id <id> Model provider id, default shadow-official',
     '  --json                  Print the full plan as JSON',
     '  --force                 Overwrite target config files when needed',
     '  --install               Install connector runtime dependencies',
@@ -178,6 +196,11 @@ function parseArgs(args: string[]): CliOptions {
     workDirMapFile: readOption(optionArgs, '--work-dir-map-file'),
     projectName: readOption(optionArgs, '--project-name'),
     agentType: readOption(optionArgs, '--agent-type'),
+    modelProviderId: readOption(optionArgs, '--model-provider-id'),
+    modelProviderLabel: readOption(optionArgs, '--model-provider-label'),
+    modelProviderBaseUrl: readOption(optionArgs, '--model-provider-base-url'),
+    modelProviderApiKey: readOption(optionArgs, '--model-provider-api-key'),
+    modelProviderModel: readOption(optionArgs, '--model-provider-model'),
     json: hasFlag(optionArgs, '--json'),
     force: hasFlag(optionArgs, '--force'),
     install,
@@ -192,7 +215,11 @@ function parseArgs(args: string[]): CliOptions {
 
 function printPlan(options: CliOptions): void {
   const target = requireTarget(options)
-  const plan = createConnectorPlan({ ...options, target })
+  const plan = createConnectorPlan({
+    ...options,
+    target,
+    modelProvider: modelProviderFromOptions(options),
+  })
   if (options.json) {
     console.log(JSON.stringify(plan, null, 2))
     return
@@ -210,26 +237,41 @@ function printPlan(options: CliOptions): void {
   }
 }
 
-function runShell(command: string, dryRun: boolean): void {
+function runShell(
+  command: string,
+  dryRun: boolean,
+  env: NodeJS.ProcessEnv = connectorProcessEnv(),
+): void {
   if (dryRun) {
     console.log(`[dry-run] ${command}`)
     return
   }
-  const result = spawnSync(command, { shell: true, stdio: 'inherit' })
+  const result = spawnSync(command, { shell: true, stdio: 'inherit', env })
   if (result.status !== 0) {
     throw new Error(`Command failed with exit code ${result.status ?? 'unknown'}: ${command}`)
   }
 }
 
-function runShellQuiet(command: string, dryRun: boolean): void {
+function runShellQuiet(
+  command: string,
+  dryRun: boolean,
+  env: NodeJS.ProcessEnv = connectorProcessEnv(),
+): void {
   if (dryRun) return
-  const result = spawnSync(command, { shell: true, encoding: 'utf8' })
+  const result = spawnSync(command, { shell: true, encoding: 'utf8', env })
   if (result.status !== 0) {
     const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
     throw new Error(
       output || `Command failed with exit code ${result.status ?? 'unknown'}: ${command}`,
     )
   }
+}
+
+async function envForShellCommand(command: string, dryRun: boolean): Promise<NodeJS.ProcessEnv> {
+  if (shellCommandNeedsNpm(command) && !commandExists('npm')) {
+    await ensureManagedNodeRuntime({ dryRun, log: (message) => console.log(message) })
+  }
+  return connectorProcessEnv()
 }
 
 function runBinary(binaryPath: string, args: string[], dryRun: boolean): void {
@@ -240,7 +282,7 @@ function runBinary(binaryPath: string, args: string[], dryRun: boolean): void {
     console.log(`[dry-run] ${rendered}`)
     return
   }
-  const result = spawnSync(binaryPath, args, { stdio: 'inherit' })
+  const result = spawnSync(binaryPath, args, { stdio: 'inherit', env: connectorProcessEnv() })
   if (result.status !== 0) {
     throw new Error(`Command failed with exit code ${result.status ?? 'unknown'}: ${rendered}`)
   }
@@ -291,6 +333,28 @@ function tokenForCommand(options: CliOptions): string {
   return options.token.trim() || '<BUDDY_TOKEN>'
 }
 
+function modelProviderFromOptions(options: CliOptions):
+  | {
+      id?: string
+      label?: string
+      baseUrl: string
+      apiKey: string
+      model: string
+    }
+  | undefined {
+  const baseUrl = options.modelProviderBaseUrl?.trim()
+  const apiKey = options.modelProviderApiKey?.trim()
+  const model = options.modelProviderModel?.trim()
+  if (!baseUrl || !apiKey || !model) return undefined
+  return {
+    id: options.modelProviderId?.trim() || 'shadow-official',
+    label: options.modelProviderLabel?.trim() || 'Shadow official LLM proxy',
+    baseUrl,
+    apiKey,
+    model,
+  }
+}
+
 function connectorCommand(
   command: 'connect' | 'update' | 'fix' | 'doctor' | 'status',
   target: ShadowConnectorTarget,
@@ -311,8 +375,7 @@ function connectorCommand(
 }
 
 function commandExists(command: string): boolean {
-  const result = spawnSync(command, ['--version'], { stdio: 'ignore' })
-  return result.status === 0
+  return commandExistsOnConnectorPath(command)
 }
 
 function writeExecutable(path: string, content: string, dryRun: boolean): void {
@@ -327,11 +390,18 @@ function ensureNpxShim(options: {
   binaryName: string
   dryRun: boolean
 }): void {
-  if (commandExists(options.command)) return
   const localBin = resolve(homedir(), '.local/bin')
   const target = resolve(localBin, options.command)
+  if (commandExists(options.command) && existsSync(target)) return
+  const pathPrefix = [localBin, nodeGlobalBinDir(), managedNodeBinDir()].map(shellQuote).join(':')
   const content = [
     '#!/usr/bin/env sh',
+    `PATH=${pathPrefix}:$PATH`,
+    'export PATH',
+    `if command -v ${options.binaryName} >/dev/null 2>&1; then`,
+    `  resolved="$(command -v ${options.binaryName})"`,
+    '  if [ "$resolved" != "$0" ]; then exec "$resolved" "$@"; fi',
+    'fi',
     `exec npx -y ${options.packageSpec} ${options.binaryName === options.command ? '' : options.binaryName} "$@"`,
     '',
   ]
@@ -343,6 +413,22 @@ function ensureNpxShim(options: {
   if (!pathEntries.includes(localBin)) {
     console.log(`Note: add ${localBin} to PATH so agents can run ${options.command}`)
   }
+}
+
+async function installShadowNpmPackages(options: CliOptions): Promise<void> {
+  if (commandExists('shadowob') && commandExists('shadowob-connector')) return
+  if (!commandExists('npm')) {
+    await ensureManagedNodeRuntime({
+      dryRun: options.dryRun,
+      log: (message) => console.log(message),
+    })
+  }
+  console.log('Applying: Install Shadow CLI packages')
+  runShellQuiet(
+    `npm install -g ${SHADOW_CLI_PACKAGE} ${SHADOW_CONNECTOR_PACKAGE}`,
+    options.dryRun,
+    connectorProcessEnv(),
+  )
 }
 
 function shadowCliProfileName(options: CliOptions): string {
@@ -411,7 +497,8 @@ function shadowobSkillTargets(options: CliOptions): string[] {
   )
 }
 
-function installShadowCliAndSkills(options: CliOptions): void {
+async function installShadowCliAndSkills(options: CliOptions): Promise<void> {
+  await installShadowNpmPackages(options)
   ensureNpxShim({
     command: 'shadowob',
     packageSpec: SHADOW_CLI_PACKAGE,
@@ -987,6 +1074,13 @@ interface DaemonJob {
     projectName?: string
     workDir?: string
     buddy?: { id?: string; username?: string; displayName?: string | null }
+    modelProvider?: {
+      id?: string
+      label?: string
+      baseUrl: string
+      apiKey: string
+      model: string
+    }
   }
 }
 
@@ -1061,7 +1155,7 @@ function commandVersionWithArgs(
   command: string,
   args: string[] = ['--version'],
 ): { ok: boolean; version?: string | null } {
-  const result = spawnSync(command, args, { encoding: 'utf8' })
+  const result = spawnSync(command, args, { encoding: 'utf8', env: connectorProcessEnv() })
   if (result.status !== 0) return { ok: false }
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
   return { ok: true, version: output.split(/\r?\n/)[0]?.slice(0, 120) || null }
@@ -1168,7 +1262,7 @@ function printRuntimeScan(options: CliOptions): void {
   }
 }
 
-function installRuntime(options: CliOptions): void {
+async function installRuntime(options: CliOptions): Promise<void> {
   const runtime = connectorRuntimeById(options.runtimeId)
   if (!runtime) {
     throw new Error(
@@ -1181,10 +1275,12 @@ function installRuntime(options: CliOptions): void {
       `No install command is available for ${runtime.label}. See ${runtime.install.helpUrl}`,
     )
   }
+  const command = commands[0] as string
+  const env = await envForShellCommand(command, options.dryRun)
   if (options.json) {
-    runShellQuiet(commands[0] as string, options.dryRun)
+    runShellQuiet(command, options.dryRun, env)
   } else {
-    runShell(commands[0] as string, options.dryRun)
+    runShell(command, options.dryRun, env)
   }
   const detected = detectCatalogRuntime(runtime)
   if (options.json) {
@@ -1271,6 +1367,7 @@ function startDetached(binaryPath: string, args: string[], dryRun: boolean): voi
   }
   const child = spawn(binaryPath, args, {
     detached: true,
+    env: connectorProcessEnv(),
     stdio: 'ignore',
   })
   child.unref()
@@ -1290,7 +1387,7 @@ async function applyDaemonJob(
   const workDir = resolveDaemonWorkDir(job, baseOptions)
 
   if (runtimeId === 'openclaw') {
-    applyOpenClaw(
+    await applyOpenClaw(
       {
         ...baseOptions,
         target: 'openclaw',
@@ -1298,6 +1395,11 @@ async function applyDaemonJob(
         token: payload.token,
         projectName,
         workDir,
+        modelProviderId: payload.modelProvider?.id,
+        modelProviderLabel: payload.modelProvider?.label,
+        modelProviderBaseUrl: payload.modelProvider?.baseUrl,
+        modelProviderApiKey: payload.modelProvider?.apiKey,
+        modelProviderModel: payload.modelProvider?.model,
         install: true,
       },
       { restart: true },
@@ -1306,13 +1408,18 @@ async function applyDaemonJob(
   }
 
   if (runtimeId === 'hermes') {
-    applyHermes({
+    await applyHermes({
       ...baseOptions,
       target: 'hermes',
       serverUrl: payload.serverUrl,
       token: payload.token,
       projectName,
       workDir,
+      modelProviderId: payload.modelProvider?.id,
+      modelProviderLabel: payload.modelProvider?.label,
+      modelProviderBaseUrl: payload.modelProvider?.baseUrl,
+      modelProviderApiKey: payload.modelProvider?.apiKey,
+      modelProviderModel: payload.modelProvider?.model,
       install: true,
       start: false,
     })
@@ -1328,6 +1435,11 @@ async function applyDaemonJob(
     projectName,
     workDir,
     agentType: ccAgentTypeForRuntime(runtimeId),
+    modelProviderId: payload.modelProvider?.id,
+    modelProviderLabel: payload.modelProvider?.label,
+    modelProviderBaseUrl: payload.modelProvider?.baseUrl,
+    modelProviderApiKey: payload.modelProvider?.apiKey,
+    modelProviderModel: payload.modelProvider?.model,
     install: true,
     start: false,
   })
@@ -1396,20 +1508,22 @@ function hermesPluginSource(): string {
   return found
 }
 
-function applyOpenClaw(
+async function applyOpenClaw(
   options: CliOptions,
   behavior: { restart: boolean } = { restart: true },
-): void {
+): Promise<void> {
   const target = requireTarget(options)
-  const plan = createConnectorPlan({ ...options, target })
+  const modelProvider = modelProviderFromOptions(options)
+  const plan = createConnectorPlan({ ...options, target, modelProvider })
   const configPath = resolveOpenClawConfigPath(options)
 
-  installShadowCliAndSkills(options)
+  await installShadowCliAndSkills(options)
 
   console.log(`Applying: Merge OpenClaw config ${configPath}`)
   const next = mergeOpenClawConfigContent(readExisting(configPath), {
     token: options.token,
     serverUrl: normalizeServerUrl(options.serverUrl),
+    modelProvider,
   })
   writeFile(configPath, next, options.dryRun)
 
@@ -1425,9 +1539,10 @@ function applyOpenClaw(
   }
 }
 
-function applyHermes(options: CliOptions): void {
+async function applyHermes(options: CliOptions): Promise<void> {
   const target = requireTarget(options)
-  const plan = createConnectorPlan({ ...options, target })
+  const modelProvider = modelProviderFromOptions(options)
+  const plan = createConnectorPlan({ ...options, target, modelProvider })
   const hermesDir = expandHome(options.hermesHome ?? process.env.HERMES_HOME ?? '~/.hermes')
   const pluginTarget = resolve(hermesDir, 'plugins/shadowob')
   const envPath = resolve(hermesDir, '.env')
@@ -1436,7 +1551,7 @@ function applyHermes(options: CliOptions): void {
 
   if (!envBlock) throw new Error('Hermes plan is missing config blocks')
 
-  installShadowCliAndSkills(options)
+  await installShadowCliAndSkills(options)
 
   if (options.dryRun) {
     console.log(`[dry-run] copy ${hermesPluginSource()} -> ${pluginTarget}`)
@@ -1449,12 +1564,14 @@ function applyHermes(options: CliOptions): void {
     : mergeEnvContent(readExisting(envPath), {
         token: options.token,
         serverUrl: normalizeServerUrl(options.serverUrl),
+        modelProvider,
       })
   writeFile(envPath, nextEnv, options.dryRun)
 
   const nextConfig = mergeHermesConfigContent(options.force ? '' : readExisting(configPath), {
     token: options.token,
     serverUrl: normalizeServerUrl(options.serverUrl),
+    modelProvider,
   })
   writeFile(configPath, nextConfig, options.dryRun)
 
@@ -1473,11 +1590,12 @@ function applyHermes(options: CliOptions): void {
 
 async function applyCcConnect(options: CliOptions): Promise<void> {
   const target = requireTarget(options)
-  const plan = createConnectorPlan({ ...options, target })
+  const modelProvider = modelProviderFromOptions(options)
+  const plan = createConnectorPlan({ ...options, target, modelProvider })
   const configBlock = plan.configBlocks.find((block) => block.label === '~/.cc-connect/config.toml')
   if (!configBlock) throw new Error('cc-connect plan is missing config block')
 
-  installShadowCliAndSkills(options)
+  await installShadowCliAndSkills(options)
 
   const configPath = resolve(homedir(), '.cc-connect/config.toml')
   const nextConfig = options.force
@@ -1488,6 +1606,7 @@ async function applyCcConnect(options: CliOptions): Promise<void> {
         projectName: options.projectName?.trim() || 'shadow-buddy',
         workDir: options.workDir?.trim() || '.',
         agentType: options.agentType?.trim() || 'codex',
+        modelProvider,
       })
   writeFile(configPath, nextConfig, options.dryRun)
 
@@ -1509,11 +1628,11 @@ async function applyCcConnect(options: CliOptions): Promise<void> {
 async function connect(options: CliOptions): Promise<void> {
   const target = requireTarget(options)
   if (target === 'openclaw') {
-    applyOpenClaw(options)
+    await applyOpenClaw(options)
     return
   }
   if (target === 'hermes') {
-    applyHermes(options)
+    await applyHermes(options)
     return
   }
   await applyCcConnect(options)
@@ -1523,11 +1642,11 @@ async function repair(options: CliOptions, mode: 'fix' | 'update'): Promise<void
   const target = requireTarget(options)
   console.log(`Applying: ${mode} ${target} connector`)
   if (target === 'openclaw') {
-    applyOpenClaw(options, { restart: options.start })
+    await applyOpenClaw(options, { restart: options.start })
     return
   }
   if (target === 'hermes') {
-    applyHermes({ ...options, start: options.start })
+    await applyHermes({ ...options, start: options.start })
     return
   }
   await applyCcConnect({ ...options, start: options.start })
@@ -1549,7 +1668,7 @@ async function main(): Promise<void> {
   } else if (options.command === 'runtime-scan') {
     printRuntimeScan(options)
   } else if (options.command === 'runtime-install') {
-    installRuntime(options)
+    await installRuntime(options)
   } else {
     printPlan(options)
   }

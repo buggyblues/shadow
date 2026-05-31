@@ -394,6 +394,15 @@ export interface ShadowServerAppIntegration {
   updatedAt: string
 }
 
+export interface ShadowServerAppSummary {
+  id: string
+  serverId: string
+  appKey: string
+  name: string
+  iconUrl?: string | null
+  status: string
+}
+
 export interface ShadowServerAppDiscovery {
   manifest: ShadowServerAppManifest
   installed: ShadowServerAppIntegration | null
@@ -907,6 +916,8 @@ export interface ShadowChannelBootstrap {
   channel: ShadowChannel
   server: ShadowServer | null
   channels: ShadowChannel[]
+  buddyInboxes?: ShadowBuddyInboxSummary[]
+  appSummaries?: ShadowServerAppSummary[]
   members: ShadowMember[]
   messages: {
     messages: ShadowMessage[]
@@ -976,6 +987,10 @@ export interface ShadowConnectorRuntimeInfo {
   status: 'available' | 'missing'
   version?: string | null
   command?: string | null
+  iconId?: string | null
+  installCommand?: string | null
+  installCommands?: string[]
+  helpUrl?: string | null
   detectedAt?: string | null
 }
 
@@ -1349,6 +1364,7 @@ export interface ShadowEntitlement {
     basePrice: number
     currency: string
     billingMode: 'one_time' | 'fixed_duration' | 'subscription' | string
+    tags?: string[]
     entitlementConfig?: Record<string, unknown> | Record<string, unknown>[] | null
   } | null
   offer?: {
@@ -1573,6 +1589,7 @@ export interface ShadowCommerceProductContext {
 
 export interface ShadowPaidFileOpenResult {
   grant: { id: string; fileId: string; status: string; expiresAt: string }
+  grantToken?: string
   viewerUrl: string
 }
 

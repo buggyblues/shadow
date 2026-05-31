@@ -295,7 +295,7 @@ export function MessageInput({
   onMessageSent,
 }: MessageInputProps) {
   const { t, i18n } = useTranslation()
-  const { activeServerId } = useChatStore()
+  const activeServerId = useChatStore((state) => state.activeServerId)
   const queryClient = useQueryClient()
   const [content, setContent] = useState('')
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
@@ -438,6 +438,7 @@ export function MessageInput({
       fetchApi<{ commands: SlashCommand[] }>(`/api/channels/${channelId}/slash-commands`),
     enabled: Boolean(activeServerId && channelId),
     staleTime: 30_000,
+    refetchOnMount: false,
   })
 
   const { data: productPickerData, isFetching: isFetchingProducts } = useQuery({

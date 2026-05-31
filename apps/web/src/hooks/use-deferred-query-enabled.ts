@@ -149,11 +149,13 @@ export function useDeferredQueryEnabled({
   stage = 'background',
   priority = 'normal',
   delayMs,
+  resetKey,
 }: {
   enabled?: boolean
   stage?: DeferredQueryStage
   priority?: DeferredQueryPriority
   delayMs?: number
+  resetKey?: unknown
 } = {}) {
   const [ready, setReady] = useState(false)
 
@@ -163,13 +165,14 @@ export function useDeferredQueryEnabled({
       return
     }
 
+    setReady(false)
     return enqueueDeferredGate({
       stage,
       priority,
       delayMs: delayMs ?? STAGE_CONFIG[stage].delayMs,
       resolve: () => setReady(true),
     })
-  }, [delayMs, enabled, priority, stage])
+  }, [delayMs, enabled, priority, resetKey, stage])
 
   return ready
 }

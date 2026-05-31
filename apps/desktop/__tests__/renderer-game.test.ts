@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   applyPetAction,
   createDefaultPetState,
+  getPetDayPhase,
   parsePetState,
   selectAnimation,
+  selectPetEmotion,
   serializePetState,
   settlePetAction,
   tickPet,
@@ -44,6 +46,42 @@ describe('renderer pet game state', () => {
     expect(next.stats.hunger).toBeGreaterThanOrEqual(0)
     expect(next.stats.hunger).toBeLessThan(initial.stats.hunger)
     expect(next.stats.energy).toBeLessThan(initial.stats.energy)
+  })
+
+  it('uses local day phases and lets the pet sleep at night', () => {
+    const morning = new Date(2026, 4, 31, 8, 0, 0).getTime()
+    const bedtime = new Date(2026, 4, 31, 22, 0, 0).getTime()
+    const night = new Date(2026, 4, 31, 23, 0, 0).getTime()
+    const state = createDefaultPetState(bedtime)
+    state.stats.energy = 20
+
+    const next = tickPet(state, night)
+
+    expect(getPetDayPhase(morning)).toBe('morning')
+    expect(getPetDayPhase(night)).toBe('night')
+    expect(next.stats.energy).toBeGreaterThan(state.stats.energy)
+    expect(selectAnimation(next)).toBe('rest')
+  })
+
+  it('generates a daily random event and resolves it through the matching action', () => {
+    const now = new Date(2026, 4, 31, 11, 0, 0).getTime()
+    const state = tickPet(createDefaultPetState(now - 60_000), now)
+    const event = state.game.todayEvent
+    expect(event).toBeTruthy()
+
+    const next = applyPetAction(state, event?.action ?? 'pet', now + 60_000)
+
+    expect(next.game.todayEvent?.resolved).toBe(true)
+    expect(next.stats.xp).toBeGreaterThanOrEqual(state.stats.xp)
+  })
+
+  it('derives emotion without exposing raw stats as a separate stored field', () => {
+    const state = createDefaultPetState(1_700_000_000_000)
+    state.stats.hunger = 12
+    const emotion = selectPetEmotion(state, 1_700_000_060_000)
+
+    expect(emotion.state).toBe('hungry')
+    expect('emotion' in state).toBe(false)
   })
 
   it('round-trips serialized state through parser', () => {

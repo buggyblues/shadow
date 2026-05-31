@@ -1,0 +1,124 @@
+@keyframes desktop-pet-quiet-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-0.8px) scale(1.003);
+  }
+}
+
+@keyframes desktop-pet-happy-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: 0 -4px;
+  }
+}
+
+@keyframes desktop-pet-voice-glow {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.78;
+  }
+
+  50% {
+    transform: translate(-50%, -50%) scale(1.035);
+    opacity: 1;
+  }
+}
+
+@keyframes desktop-pet-speaking-glow {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.72;
+  }
+
+  50% {
+    transform: translate(-50%, -50%) scale(1.02);
+    opacity: 1;
+  }
+}
+
+@keyframes desktop-pet-voice-ring-fade {
+  0%,
+  100% {
+    opacity: 0.16;
+  }
+
+  50% {
+    opacity: 0.46;
+  }
+}
+
+@keyframes desktop-pet-sine-ring {
+  0% {
+    transform: rotate(var(--ring-base-rotate)) scale(var(--ring-base-scale));
+    filter: drop-shadow(0 0 4px rgba(68, 255, 228, 0.18));
+  }
+
+  50% {
+    transform: rotate(calc(var(--ring-base-rotate) + 11deg))
+      scale(calc(var(--ring-base-scale) + 0.2));
+    filter: drop-shadow(0 0 10px rgba(68, 255, 228, 0.38));
+  }
+
+  100% {
+    transform: rotate(calc(var(--ring-base-rotate) + 22deg)) scale(var(--ring-base-scale));
+    filter: drop-shadow(0 0 4px rgba(68, 255, 228, 0.18));
+  }
+}
+
+@keyframes desktop-pet-stream-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes desktop-pet-attention-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes desktop-pet-attention-ring {
+  0% {
+    opacity: 0.62;
+    transform: scale(0.74);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@media (max-height: 420px) {
+  .desktop-pet.expanded {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .desktop-pet.expanded .desktop-pet-button {
+    width: min(50%, 108px);
+    height: min(76%, 168px);
+  }
+}

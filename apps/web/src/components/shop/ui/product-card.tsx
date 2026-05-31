@@ -2,6 +2,10 @@ import { Badge, Button, Card, CardContent, cn } from '@shadowob/ui'
 import { Plus, ShieldCheck, Star, Store } from 'lucide-react'
 import type React from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  DESKTOP_PET_PACK_ASSET_TYPE,
+  hasDesktopPetPackTag,
+} from '../../../lib/desktop-pet-marketplace'
 import { PriceDisplay } from './currency'
 import { ProductVisual, resolveProductVisualKind } from './product-visual'
 
@@ -64,8 +68,9 @@ export function ProductCard<TProduct extends ProductCardProduct>({
     ? product.entitlementConfig[0]
     : product.entitlementConfig
   const resourceType = entitlementConfig?.resourceType
-  const assetType =
-    resourceType === 'community_asset'
+  const assetType = hasDesktopPetPackTag(product.tags)
+    ? DESKTOP_PET_PACK_ASSET_TYPE
+    : resourceType === 'community_asset'
       ? product.tags?.find((tag) =>
           ['badge', 'gift', 'coupon', 'service_ticket', 'collectible'].includes(tag),
         )

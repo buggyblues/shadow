@@ -45,6 +45,24 @@ function productAllowsRepeatPurchase(product: { type?: string; entitlementConfig
   )
 }
 
+function isDesktopPetPackTag(tag: string) {
+  return ['desktop-pet-pack', 'desktop_pet_pack', '虾豆桌面宠物'].includes(tag)
+}
+
+const DESKTOP_PET_PACK_ASSET_TYPE = 'desktop_pet_pack'
+
+function productDesktopPetPackMetadata(product: {
+  tags?: string[] | null
+}): Record<string, unknown> | null {
+  const tags = product.tags ?? []
+  if (!tags.some(isDesktopPetPackTag)) return null
+  return {
+    kind: 'desktop_pet_pack',
+    schemaVersion: 'shadow.desktopPet.pack.v1',
+    marketplaceTag: 'desktop-pet-pack',
+  }
+}
+
 export class EntitlementPurchaseService {
   constructor(
     private deps: {
@@ -150,18 +168,20 @@ export class EntitlementPurchaseService {
     const price = offer.priceOverride ?? sku?.price ?? product.basePrice
     const productImageUrl =
       sku?.imageUrl ?? product.media?.[0]?.thumbnailUrl ?? product.media?.[0]?.url ?? null
-    const productAssetType =
-      product.tags?.find((tag) =>
-        [
-          'badge',
-          'gift',
-          'coupon',
-          'service_ticket',
-          'collectible',
-          'content_pass',
-          'reward',
-        ].includes(tag),
-      ) ?? null
+    const productAssetType = product.tags?.find(isDesktopPetPackTag)
+      ? DESKTOP_PET_PACK_ASSET_TYPE
+      : (product.tags?.find((tag) =>
+          [
+            'badge',
+            'gift',
+            'coupon',
+            'service_ticket',
+            'collectible',
+            'content_pass',
+            'reward',
+          ].includes(tag),
+        ) ?? null)
+    const desktopPetPack = productDesktopPetPackMetadata(product)
     const settlementUserId = await this.resolveSettlementUserId({
       buyerId: input.buyerId,
       sellerBuddyUserId: offer.sellerBuddyUserId,
@@ -316,6 +336,8 @@ export class EntitlementPurchaseService {
             offerId: offer.id,
             productImageUrl,
             productAssetType,
+            productTags: product.tags ?? [],
+            ...(desktopPetPack ? { desktopPetPack } : {}),
           },
         })
         .returning()

@@ -113,6 +113,8 @@ export function createChannelHandler(container: AppContainer) {
 
     return {
       channel,
+      serverMember,
+      channelMember,
       isServerMember: Boolean(serverMember),
       isChannelMember: Boolean(channelMember),
       canManage,
@@ -123,11 +125,17 @@ export function createChannelHandler(container: AppContainer) {
     }
   }
 
+  function publicAccessStatus<T extends { serverMember?: unknown; channelMember?: unknown }>(
+    access: T,
+  ) {
+    const { serverMember: _serverMember, channelMember: _channelMember, ...publicAccess } = access
+    return publicAccess
+  }
+
   async function getSlashCommandsForChannel(id: string, requesterId: string) {
     const channelService = container.resolve('channelService')
     const serverDao = container.resolve('serverDao')
     const channelMemberDao = container.resolve('channelMemberDao')
-    const agentDao = container.resolve('agentDao')
     const channel = await channelService.getById(id)
 
     if (channel.kind === 'dm') {
@@ -135,6 +143,7 @@ export function createChannelHandler(container: AppContainer) {
       const peer = await channelService.findDirectPeer(id, requesterId)
       if (!peer?.isBot) return { commands: [] }
 
+      const agentDao = container.resolve('agentDao')
       const agents = await agentDao.findByUserIds([peer.id])
       return {
         commands: agents.flatMap((agent) =>
@@ -167,8 +176,24 @@ export function createChannelHandler(container: AppContainer) {
     }
 
     const members = await channelService.getChannelMembers(id, serverId)
+    return getSlashCommandsForServerMembers(members)
+  }
+
+  async function getSlashCommandsForServerMembers(
+    members: Array<{
+      userId: string
+      user?: {
+        isBot?: boolean | null
+        username?: string | null
+        displayName?: string | null
+      } | null
+    }>,
+  ) {
+    const agentDao = container.resolve('agentDao')
     const botMembers = members.filter((member) => member.user?.isBot)
     const botUserIds = botMembers.map((member) => member.userId)
+    if (botUserIds.length === 0) return { commands: [] }
+
     const agents = await agentDao.findByUserIds(botUserIds)
     const memberByUserId = new Map(botMembers.map((member) => [member.userId, member]))
 
@@ -358,13 +383,23 @@ export function createChannelHandler(container: AppContainer) {
 
     if (!access.canAccess) {
       if (access.channel.kind === 'server' && access.channel.serverId && access.isServerMember) {
+        const buddyInboxService = container.resolve('buddyInboxService')
+        const appIntegrationService = container.resolve('appIntegrationService')
+        const actor = c.get('actor')
         const server = await serverService.getById(access.channel.serverId)
-        const channels = await channelService.getByServerIdForUser(
-          access.channel.serverId,
-          c.get('actor'),
-        )
+        const [channels, buddyInboxes, appSummaries] = await Promise.all([
+          channelService.getByServerIdForUser(access.channel.serverId, actor, {
+            serverMember: access.serverMember,
+          }),
+          buddyInboxService.listForServer(access.channel.serverId, actor, {
+            serverMember: access.serverMember,
+          }),
+          appIntegrationService.listSummaries(access.channel.serverId, actor, {
+            serverMember: access.serverMember,
+          }),
+        ])
         return c.json({
-          access,
+          access: publicAccessStatus(access),
           channel: access.channel,
           server: {
             ...server,
@@ -376,6 +411,8 @@ export function createChannelHandler(container: AppContainer) {
             }),
           },
           channels,
+          buddyInboxes,
+          appSummaries,
           members: [],
           messages: { messages: [], hasMore: false },
           slashCommands: { commands: [] },
@@ -383,10 +420,12 @@ export function createChannelHandler(container: AppContainer) {
       }
 
       return c.json({
-        access,
+        access: publicAccessStatus(access),
         channel: access.channel,
         server: null,
         channels: [],
+        buddyInboxes: [],
+        appSummaries: [],
         members: [],
         messages: { messages: [], hasMore: false },
         slashCommands: { commands: [] },
@@ -397,17 +436,19 @@ export function createChannelHandler(container: AppContainer) {
       access.channel.kind === 'dm'
         ? await channelService.getDirectChannelById(id, userId)
         : await channelService.getById(id)
-    const [messages, slashCommands] = await Promise.all([
-      messageService.getByChannelId(id, limit, undefined, userId),
-      getSlashCommandsForChannel(id, userId),
-    ])
 
     if (access.channel.kind !== 'server' || !access.channel.serverId) {
+      const [messages, slashCommands] = await Promise.all([
+        messageService.getByChannelId(id, limit, undefined, userId),
+        getSlashCommandsForChannel(id, userId),
+      ])
       return c.json({
-        access,
+        access: publicAccessStatus(access),
         channel,
         server: null,
         channels: [],
+        buddyInboxes: [],
+        appSummaries: [],
         members: [],
         messages,
         slashCommands,
@@ -415,36 +456,66 @@ export function createChannelHandler(container: AppContainer) {
     }
 
     const serverId = access.channel.serverId
-    const [server, channels, members] = await Promise.all([
-      serverService.getById(serverId),
-      channelService.getByServerIdForUser(serverId, c.get('actor')),
-      channelService.getChannelMembers(id, serverId),
-    ])
-    const signedMembers = await Promise.all(
-      members.map(async (member) => ({
-        ...member,
-        user: member.user
-          ? {
-              ...member.user,
-              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl, {
-                variant: 'avatar',
-              }),
-            }
-          : null,
-      })),
+    const actor = c.get('actor')
+    const buddyInboxService = container.resolve('buddyInboxService')
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const serverMembersPromise = serverService.getMembers(serverId)
+    const membersPromise = serverMembersPromise.then((serverMembers) =>
+      channelService.getChannelMembers(id, serverId, {
+        channel: access.channel,
+        serverMembers,
+      }),
     )
+    const buddyInboxesPromise = serverMembersPromise.then((serverMembers) =>
+      buddyInboxService.listForServer(serverId, actor, {
+        serverMember: access.serverMember,
+        serverMembers,
+      }),
+    )
+    const [messages, server, channels, members, buddyInboxes, appSummaries] = await Promise.all([
+      messageService.getByChannelId(id, limit, undefined, userId),
+      serverService.getById(serverId),
+      channelService.getByServerIdForUser(serverId, actor, {
+        serverMember: access.serverMember,
+      }),
+      membersPromise,
+      buddyInboxesPromise,
+      appIntegrationService.listSummaries(serverId, actor, {
+        serverMember: access.serverMember,
+      }),
+    ])
+    const [slashCommands, signedMembers, serverIconUrl, serverBannerUrl] = await Promise.all([
+      getSlashCommandsForServerMembers(members),
+      Promise.all(
+        members.map(async (member) => ({
+          ...member,
+          user: member.user
+            ? {
+                ...member.user,
+                avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl, {
+                  variant: 'avatar',
+                }),
+              }
+            : null,
+        })),
+      ),
+      resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+      resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+        variant: 'banner',
+      }),
+    ])
 
     return c.json({
-      access,
+      access: publicAccessStatus(access),
       channel,
       server: {
         ...server,
-        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
-        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
-          variant: 'banner',
-        }),
+        iconUrl: serverIconUrl,
+        bannerUrl: serverBannerUrl,
       },
       channels,
+      buddyInboxes,
+      appSummaries,
       members: signedMembers,
       messages,
       slashCommands,
@@ -471,7 +542,7 @@ export function createChannelHandler(container: AppContainer) {
     const id = c.req.param('id')
     const userId = c.get('user').userId
     const access = await getAccessStatus(id, userId)
-    return c.json(access)
+    return c.json(publicAccessStatus(access))
   })
 
   // GET /api/channels/:id/voice/state — current voice presence for a voice channel.

@@ -452,6 +452,7 @@ export function QuickCreateBuddyModal({
                                       <div className="flex items-center gap-3 pr-8">
                                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
                                           <RuntimeIcon
+                                            iconId={runtime.iconId}
                                             runtimeId={runtime.id}
                                             label={runtime.label}
                                             className="h-5 w-5"

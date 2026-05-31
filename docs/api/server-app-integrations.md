@@ -175,7 +175,7 @@ shadowob app call demo-desk tickets.list --server "$SHADOWOB_SERVER_ID" --json-i
 
 Server-scoped endpoints:
 
-- `GET /api/servers/:serverId/apps`: list installed Apps visible to a server member.
+- `GET /api/servers/:serverId/apps`: list installed Apps visible to a server member. Add `?summary=1` for lightweight sidebar/navigation summaries (`id`, `serverId`, `appKey`, `name`, `iconUrl`, `status`) without manifest payloads.
 - `GET /api/servers/:serverId/apps/catalog`: list active App catalog entries plus whether each App is already installed in the server.
 - `POST /api/servers/:serverId/apps/discover`: validate a manifest and return an install-review payload; requires server admin.
 - `POST /api/servers/:serverId/apps`: install or refresh an App manifest; requires server admin.
@@ -205,6 +205,7 @@ Global admin endpoints:
 TypeScript SDK methods:
 
 - `client.listServerApps(serverIdOrSlug)`
+- `client.listServerAppSummaries(serverIdOrSlug)`
 - `client.listServerAppCatalog(serverIdOrSlug)`
 - `client.discoverServerApp(serverIdOrSlug, { manifestUrl | manifest })`
 - `client.installServerApp(serverIdOrSlug, { manifestUrl | manifest })`

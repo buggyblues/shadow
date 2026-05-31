@@ -7,6 +7,8 @@ import { isBuddyInboxTopic } from './buddy-inbox-protocol'
 import type { PolicyService } from './policy.service'
 import type { ServerService } from './server.service'
 
+type ServerMemberList = Awaited<ReturnType<ServerService['getMembers']>>
+
 export class ChannelService {
   constructor(
     private deps: {
@@ -77,9 +79,16 @@ export class ChannelService {
   }
 
   /** Get channels for a server, filtered to only those the user can see. */
-  async getByServerIdForUser(serverId: string, actor: ActorInput) {
+  async getByServerIdForUser(
+    serverId: string,
+    actor: ActorInput,
+    options?: {
+      serverMember?: Awaited<ReturnType<PolicyService['requireServerMember']>> | null
+    },
+  ) {
     const userId = actorUserId(actor)
-    const serverMember = await this.deps.policyService.requireServerMember(actor, serverId)
+    const serverMember =
+      options?.serverMember ?? (await this.deps.policyService.requireServerMember(actor, serverId))
     const allChannels = (await this.deps.channelDao.findByServerId(serverId)).filter(
       (ch) => !ch.name.startsWith('app:') && !isBuddyInboxTopic(ch.topic),
     )
@@ -174,8 +183,18 @@ export class ChannelService {
    * Get members of a channel with full user info and server role.
    * Falls back to server members if channel_members table doesn't exist.
    */
-  async getChannelMembers(channelId: string, serverId: string | null) {
-    const channel = await this.deps.channelDao.findById(channelId)
+  async getChannelMembers(
+    channelId: string,
+    serverId: string | null,
+    options?: {
+      channel?: { kind: string } | null
+      serverMembers?: ServerMemberList
+    },
+  ) {
+    const channel =
+      options && 'channel' in options
+        ? options.channel
+        : await this.deps.channelDao.findById(channelId)
     if (channel?.kind === 'dm') {
       return this.deps.channelMemberDao.getMembersWithUsers(channelId)
     }
@@ -188,17 +207,19 @@ export class ChannelService {
       if (channelUserIds.length === 0) {
         // No channel members found — either empty or legacy data without channel_members.
         // Fall back to server members.
-        return this.deps.serverService.getMembers(serverId)
+        return options?.serverMembers ?? this.deps.serverService.getMembers(serverId)
       }
 
       // Get full server member data (role, nickname, user info)
-      const allServerMembers = await this.deps.serverService.getMembers(serverId)
+      const allServerMembers =
+        options?.serverMembers ?? (await this.deps.serverService.getMembers(serverId))
+      const channelUserIdSet = new Set(channelUserIds)
 
       // Filter to only those in the channel
-      return allServerMembers.filter((m) => channelUserIds.includes(m.userId))
+      return allServerMembers.filter((m) => channelUserIdSet.has(m.userId))
     } catch {
       // channel_members table may not exist — fall back to server members
-      return this.deps.serverService.getMembers(serverId)
+      return options?.serverMembers ?? this.deps.serverService.getMembers(serverId)
     }
   }
 

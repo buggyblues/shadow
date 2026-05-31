@@ -624,6 +624,35 @@ describe('EntitlementPurchaseService', () => {
     expect(result.nextAction).toBe('open_paid_file')
   })
 
+  it('marks desktop pet pack entitlements for marketplace import', async () => {
+    const { service, db } = createEntitlementPurchaseSubject({
+      product: {
+        tags: ['paid_file', 'desktop-pet-pack', '虾豆桌面宠物'],
+      },
+    })
+
+    await service.purchaseOffer({
+      buyerId,
+      offerId,
+      idempotencyKey: 'purchase-key-pet-pack',
+    })
+
+    expect(db.inserts.find((entry) => entry.table === entitlements)?.data).toMatchObject({
+      resourceType: 'workspace_file',
+      resourceId: fileId,
+      capability: 'view',
+      metadata: expect.objectContaining({
+        productAssetType: 'desktop_pet_pack',
+        productTags: ['paid_file', 'desktop-pet-pack', '虾豆桌面宠物'],
+        desktopPetPack: {
+          kind: 'desktop_pet_pack',
+          schemaVersion: 'shadow.desktopPet.pack.v1',
+          marketplaceTag: 'desktop-pet-pack',
+        },
+      }),
+    })
+  })
+
   it('rejects active repeat purchases for non-repeatable entitlement products', async () => {
     const { service, ledgerService } = createEntitlementPurchaseSubject({
       product: {

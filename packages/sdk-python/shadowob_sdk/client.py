@@ -506,6 +506,9 @@ class ShadowClient:
     def list_server_apps(self, server_id_or_slug: str) -> list[dict[str, Any]]:
         return self._get(f"/api/servers/{server_id_or_slug}/apps")
 
+    def list_server_app_summaries(self, server_id_or_slug: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id_or_slug}/apps?summary=1")
+
     def list_server_app_catalog(self, server_id_or_slug: str) -> list[dict[str, Any]]:
         return self._get(f"/api/servers/{server_id_or_slug}/apps/catalog")
 

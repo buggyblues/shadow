@@ -11,6 +11,10 @@ const runtimeSchema = z.object({
   status: z.enum(['available', 'missing']),
   version: z.string().max(120).nullable().optional(),
   command: z.string().max(120).nullable().optional(),
+  iconId: z.string().max(80).nullable().optional(),
+  installCommand: z.string().max(500).nullable().optional(),
+  installCommands: z.array(z.string().max(500)).max(8).optional(),
+  helpUrl: z.string().url().max(500).nullable().optional(),
   detectedAt: z.string().datetime().nullable().optional(),
 })
 

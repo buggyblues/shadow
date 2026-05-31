@@ -281,6 +281,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
       setSelectedAppKey(app.appKey)
       setMode('detail')
       queryClient.invalidateQueries({ queryKey: ['server-apps', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['server-app-summaries', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['server-app-catalog', serverSlug] })
     },
   })
@@ -298,6 +299,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
       setSelectedAppKey(app.appKey)
       setMode('detail')
       queryClient.invalidateQueries({ queryKey: ['server-apps', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['server-app-summaries', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['server-app-catalog', serverSlug] })
     },
   })
@@ -310,6 +312,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
     onSuccess: (_result, app) => {
       setSelectedAppKey((current) => (current === app.appKey ? '' : current))
       queryClient.invalidateQueries({ queryKey: ['server-apps', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['server-app-summaries', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['server-app-catalog', serverSlug] })
       queryClient.removeQueries({ queryKey: ['server-app-detail', serverSlug, app.appKey] })
     },
@@ -350,6 +353,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
         queryKey: ['server-app-detail', serverSlug, selectedApp?.appKey],
       })
       queryClient.invalidateQueries({ queryKey: ['server-apps', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['server-app-summaries', serverSlug] })
     },
   })
 

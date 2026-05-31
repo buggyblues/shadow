@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { channels } from './channels'
 import { threads } from './threads'
@@ -174,5 +175,11 @@ export const messages = pgTable(
     messagesChannelIdIdx: index('messages_channel_id_idx').on(t.channelId),
     messagesThreadIdIdx: index('messages_thread_id_idx').on(t.threadId),
     messagesCreatedAtIdx: index('messages_created_at_idx').on(t.createdAt),
+    messagesChannelRootCreatedAtDescIdx: index('messages_channel_root_created_at_desc_idx')
+      .on(t.channelId, t.createdAt.desc())
+      .where(sql`${t.threadId} IS NULL`),
+    messagesThreadCreatedAtDescIdx: index('messages_thread_created_at_desc_idx')
+      .on(t.threadId, t.createdAt.desc())
+      .where(sql`${t.threadId} IS NOT NULL`),
   }),
 )

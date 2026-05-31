@@ -47,8 +47,8 @@ import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { type VoiceParticipant, type VoiceState } from '../../hooks/use-voice-channel'
 import { fetchApi } from '../../lib/api'
+import { scheduleIdleAfterNextPaint } from '../../lib/schedule'
 import { joinChannel } from '../../lib/socket'
-
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
@@ -137,7 +137,7 @@ interface ServerMember {
   } | null
 }
 
-interface ServerAppSummary {
+export interface ServerAppSummary {
   id: string
   appKey: string
   name: string
@@ -170,7 +170,7 @@ function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
   )
 }
 
-interface BuddyInboxEntry {
+export interface BuddyInboxEntry {
   agent: {
     id: string
     ownerId: string
@@ -254,7 +254,8 @@ export function ChannelSidebar({
     channelId?: string
   }
   const queryClient = useQueryClient()
-  const { activeChannelId, setActiveChannel } = useChatStore()
+  const activeChannelId = useChatStore((state) => state.activeChannelId)
+  const setActiveChannel = useChatStore((state) => state.setActiveChannel)
   const {
     connectedVoiceChannel,
     voice,
@@ -311,16 +312,19 @@ export function ChannelSidebar({
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const localUnreadEventIdsRef = useRef<Set<string>>(new Set())
-  const lastMarkedChannelRef = useRef<string | null>(null)
   const canLoadInitialQueries = Boolean(serverSlug) && !deferInitialQueries
   const loadApplications = useDeferredQueryEnabled({
-    enabled: !deferInitialQueries,
+    enabled: canLoadInitialQueries,
     stage: 'interactive',
     priority: 'high',
+    resetKey: serverSlug,
   })
   const loadNotifications = useDeferredQueryEnabled({
-    enabled: !deferInitialQueries,
+    enabled: canLoadInitialQueries,
     stage: 'background',
+    priority: 'low',
+    delayMs: 2200,
+    resetKey: serverSlug,
   })
 
   const { data: server } = useQuery({
@@ -340,8 +344,8 @@ export function ChannelSidebar({
   })
 
   const { data: serverApps = [] } = useQuery<ServerAppSummary[]>({
-    queryKey: ['server-apps', serverSlug],
-    queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps`),
+    queryKey: ['server-app-summaries', serverSlug],
+    queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps?summary=1`),
     enabled: !!serverSlug && loadApplications,
     staleTime: CHANNEL_NAVIGATION_STALE_MS,
     gcTime: CHANNEL_NAVIGATION_GC_MS,
@@ -388,8 +392,11 @@ export function ChannelSidebar({
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const { sortChannels, updateLastAccessed } = useChannelSort(server?.id)
-  const sortedChannels = sortChannels(rawChannels)
-  const channels = showArchived ? sortedChannels : sortedChannels.filter((ch) => !ch.isArchived)
+  const sortedChannels = useMemo(() => sortChannels(rawChannels), [rawChannels, sortChannels])
+  const channels = useMemo(
+    () => (showArchived ? sortedChannels : sortedChannels.filter((ch) => !ch.isArchived)),
+    [showArchived, sortedChannels],
+  )
   const visibleChannels = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase()
     if (!keyword) return channels
@@ -419,11 +426,22 @@ export function ChannelSidebar({
     () => visibleChannels.filter((channel) => channel.type === 'voice'),
     [visibleChannels],
   )
+  const voiceStateResetKey = useMemo(
+    () => `${serverSlug}:${voiceChannels.map((channel) => channel.id).join('|')}`,
+    [serverSlug, voiceChannels],
+  )
+  const loadVoiceStates = useDeferredQueryEnabled({
+    enabled: canLoadInitialQueries && voiceChannels.length > 0,
+    stage: 'background',
+    priority: 'low',
+    delayMs: 3000,
+    resetKey: voiceStateResetKey,
+  })
   const voiceStateQueries = useQueries({
     queries: voiceChannels.map((channel) => ({
       queryKey: ['voice-state', channel.id],
       queryFn: () => fetchApi<VoiceState>(`/api/channels/${channel.id}/voice/state`),
-      enabled: canLoadInitialQueries,
+      enabled: canLoadInitialQueries && loadVoiceStates,
       staleTime: 5_000,
       refetchInterval: 10_000,
       retry: false,
@@ -461,6 +479,7 @@ export function ChannelSidebar({
     queryKey: ['notification-scoped-unread'],
     queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
     enabled: loadNotifications,
+    staleTime: 5_000,
     refetchInterval: 15_000,
   })
   const [localMessageUnread, setLocalMessageUnread] = useState<Record<string, number>>({})
@@ -685,18 +704,20 @@ export function ChannelSidebar({
     }
   }, [contextMenu])
 
-  const { setMobileView, openMobileServerSidebar } = useUIStore()
+  const setMobileView = useUIStore((state) => state.setMobileView)
+  const openMobileServerSidebar = useUIStore((state) => state.openMobileServerSidebar)
 
   const handleSelectChannel = useCallback(
     (channel: Channel) => {
-      requestMarkScopeRead({ channelId: channel.id })
-      setLocalMessageUnread((prev) => {
-        if (!prev[channel.id]) return prev
-        const next = { ...prev }
-        delete next[channel.id]
-        return next
+      scheduleIdleAfterNextPaint(() => {
+        setLocalMessageUnread((prev) => {
+          if (!prev[channel.id]) return prev
+          const next = { ...prev }
+          delete next[channel.id]
+          return next
+        })
+        updateLastAccessed(channel.id)
       })
-      updateLastAccessed(channel.id)
       setMobileView('chat')
       if (onSelectChannel) {
         onSelectChannel(channel)
@@ -708,15 +729,7 @@ export function ChannelSidebar({
         params: { serverSlug: server?.slug ?? serverSlug, channelId: channel.id },
       })
     },
-    [
-      setMobileView,
-      onSelectChannel,
-      server?.slug,
-      serverSlug,
-      navigate,
-      requestMarkScopeRead,
-      updateLastAccessed,
-    ],
+    [setMobileView, onSelectChannel, server?.slug, serverSlug, navigate, updateLastAccessed],
   )
 
   const handleJoinVoiceChannel = useCallback(
@@ -787,20 +800,14 @@ export function ChannelSidebar({
   })
 
   useEffect(() => {
-    if (!activeChannelId) {
-      lastMarkedChannelRef.current = null
-      return
-    }
+    if (!activeChannelId) return
     setLocalMessageUnread((prev) => {
       if (!prev[activeChannelId]) return prev
       const next = { ...prev }
       delete next[activeChannelId]
       return next
     })
-    if (lastMarkedChannelRef.current === activeChannelId) return
-    lastMarkedChannelRef.current = activeChannelId
-    requestMarkScopeRead({ channelId: activeChannelId })
-  }, [activeChannelId, requestMarkScopeRead])
+  }, [activeChannelId])
 
   // Auto-refresh channel list when a new channel is created
   useSocketEvent('channel:created', (data: { serverId: string }) => {

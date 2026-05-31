@@ -367,11 +367,16 @@ export function NotificationBell({ className }: { className?: string } = {}) {
   )
 
   // Fetch unread count
-  const unreadEnabled = useDeferredQueryEnabled({ stage: 'background', priority: 'low' })
+  const unreadEnabled = useDeferredQueryEnabled({
+    stage: 'background',
+    priority: 'low',
+    delayMs: 2200,
+  })
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
     queryFn: () => fetchApi<{ count: number }>('/api/notifications/unread-count'),
     enabled: unreadEnabled || showPanel,
+    staleTime: 5_000,
     refetchInterval: 30_000,
   })
 

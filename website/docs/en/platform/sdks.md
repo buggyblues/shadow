@@ -60,6 +60,8 @@ if (preview.nextAction === 'purchase') {
 }
 
 const entitlement = await client.getEntitlement('entitlement-id')
+const opened = await client.openPaidFile(entitlement.paidFile?.id ?? 'file-id')
+console.log(opened.viewerUrl, opened.grantToken)
 await client.cancelEntitlementRenewal('entitlement-id', {
   reason: 'buyer_cancelled_auto_renewal',
 })
@@ -77,6 +79,8 @@ if preview["nextAction"] == "purchase":
     )
 
 entitlement = client.get_entitlement("entitlement-id")
+opened = client.open_paid_file(entitlement.get("paidFile", {}).get("id", "file-id"))
+print(opened["viewerUrl"], opened.get("grantToken"))
 client.cancel_entitlement_renewal(
     "entitlement-id",
     reason="buyer_cancelled_auto_renewal",

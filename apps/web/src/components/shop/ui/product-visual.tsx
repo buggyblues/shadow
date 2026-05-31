@@ -1,6 +1,7 @@
 import { cn } from '@shadowob/ui'
 import { AppWindow, Award, FileText, Gem, Package, ShieldCheck, Ticket } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { isDesktopPetPackTag } from '../../../lib/desktop-pet-marketplace'
 
 type VisualMedia = {
   type?: string | null
@@ -8,7 +9,16 @@ type VisualMedia = {
   thumbnailUrl?: string | null
 }
 
-type VisualKind = 'service' | 'file' | 'badge' | 'gift' | 'ticket' | 'asset' | 'app' | 'physical'
+type VisualKind =
+  | 'service'
+  | 'file'
+  | 'desktop_pet_pack'
+  | 'badge'
+  | 'gift'
+  | 'ticket'
+  | 'asset'
+  | 'app'
+  | 'physical'
 
 const visualConfig: Record<
   VisualKind,
@@ -27,6 +37,11 @@ const visualConfig: Record<
     icon: FileText,
     className: 'border-sky-300/18 bg-[#172235] text-sky-100',
     iconClassName: 'bg-sky-300/12 ring-sky-200/18 text-sky-100',
+  },
+  desktop_pet_pack: {
+    icon: Package,
+    className: 'border-cyan-200/20 bg-[#112b31] text-cyan-100',
+    iconClassName: 'bg-cyan-200/14 ring-cyan-100/20 text-cyan-100',
   },
   badge: {
     icon: Award,
@@ -66,6 +81,7 @@ export function resolveProductVisualKind(input: {
   assetType?: string | null
 }): VisualKind {
   if (input.productType === 'physical') return 'physical'
+  if (input.assetType && isDesktopPetPackTag(input.assetType)) return 'desktop_pet_pack'
   if (input.resourceType === 'workspace_file') return 'file'
   if (input.assetType === 'badge') return 'badge'
   if (input.assetType === 'gift' || input.assetType === 'collectible') return 'gift'

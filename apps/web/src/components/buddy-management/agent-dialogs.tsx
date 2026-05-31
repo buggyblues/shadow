@@ -143,16 +143,22 @@ export function getRuntimeIconSrc(runtimeId: string) {
 }
 
 export function RuntimeIcon({
+  iconId,
   runtimeId,
   className,
 }: {
+  iconId?: string | null
   runtimeId: string
   label: string
   className?: string
 }) {
-  const [failed, setFailed] = useState(false)
-  const src = failed ? null : getRuntimeIconSrc(runtimeId)
-  const Icon = RUNTIME_ICON_COMPONENTS[runtimeId] ?? Terminal
+  const [failedIconIds, setFailedIconIds] = useState<string[]>([])
+  const resolvedIconId = iconId?.trim() || runtimeId
+  const fallbackIconId = resolvedIconId === runtimeId ? null : runtimeId
+  const activeIconId =
+    failedIconIds.includes(resolvedIconId) && fallbackIconId ? fallbackIconId : resolvedIconId
+  const src = failedIconIds.includes(activeIconId) ? null : getRuntimeIconSrc(activeIconId)
+  const Icon = RUNTIME_ICON_COMPONENTS[activeIconId] ?? Terminal
   if (src) {
     return (
       <img
@@ -160,7 +166,11 @@ export function RuntimeIcon({
         alt=""
         aria-hidden="true"
         className={cn('object-contain', className)}
-        onError={() => setFailed(true)}
+        onError={() =>
+          setFailedIconIds((current) =>
+            current.includes(activeIconId) ? current : [...current, activeIconId],
+          )
+        }
       />
     )
   }

@@ -11,6 +11,10 @@ export interface ConnectorRuntimeInfo {
   status: ConnectorRuntimeStatus
   version?: string | null
   command?: string | null
+  iconId?: string | null
+  installCommand?: string | null
+  installCommands?: string[]
+  helpUrl?: string | null
   detectedAt?: string | null
 }
 

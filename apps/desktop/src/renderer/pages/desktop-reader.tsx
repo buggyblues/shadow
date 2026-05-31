@@ -249,7 +249,7 @@ export function DesktopReaderPage() {
       <section className="desktop-drag-titlebar flex h-11 shrink-0 items-end border-zinc-800/80 border-b bg-[#202124]">
         <div
           className={[
-            'desktop-no-drag flex min-w-0 flex-1 items-end gap-1 px-2',
+            'desktop-drag-region flex min-w-0 flex-1 items-end gap-1 px-2',
             isDarwin ? 'pl-[90px]' : 'pl-2',
           ].join(' ')}
         >
@@ -335,10 +335,7 @@ export function DesktopReaderPage() {
           </button>
         </div>
 
-        <div
-          data-no-drag
-          className="desktop-no-drag flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-[#202124] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-        >
+        <div className="desktop-drag-region flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-[#202124] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <LockKeyhole className="h-4 w-4 shrink-0 text-emerald-300" strokeWidth={1.8} />
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-200">
             {activeTab?.displayAddress ?? t('desktopReader.emptyAddress')}

@@ -286,6 +286,8 @@ export class AgentService {
       connectorComputerId: string
       connectorRuntimeId: string
       connectorRuntimeLabel: string
+      connectorServerUrl?: string
+      connectorWorkDir?: string
     },
   ) {
     const agent = await this.deps.agentDao.findById(id)
@@ -301,6 +303,8 @@ export class AgentService {
       connectorComputerId: data.connectorComputerId,
       connectorRuntimeId: data.connectorRuntimeId,
       connectorRuntimeLabel: data.connectorRuntimeLabel,
+      ...(data.connectorServerUrl ? { connectorServerUrl: data.connectorServerUrl } : {}),
+      ...(data.connectorWorkDir ? { connectorWorkDir: data.connectorWorkDir } : {}),
       connectorConfiguredAt: new Date().toISOString(),
     })
 

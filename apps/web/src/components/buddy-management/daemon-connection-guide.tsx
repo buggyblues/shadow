@@ -228,6 +228,7 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
                   <div className="flex items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
                       <RuntimeIcon
+                        iconId={option.runtime.iconId}
                         runtimeId={option.runtime.id}
                         label={option.runtime.label}
                         className="h-5 w-5"

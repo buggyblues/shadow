@@ -610,6 +610,20 @@
       "when": 1780318800007,
       "tag": "0086_backfill_voice_recording_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1780318800008,
+      "tag": "0087_message_pagination_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1780318800009,
+      "tag": "0088_message_search_indexes",
+      "breakpoints": true
     }
   ]
 }

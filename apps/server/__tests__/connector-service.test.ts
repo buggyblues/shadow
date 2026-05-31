@@ -43,8 +43,11 @@ function makeService() {
     deletePendingComputersForUserExcept: vi.fn(async () => undefined),
     listComputers: vi.fn(),
     findComputerByTokenHash: vi.fn(),
+    findComputerById: vi.fn(),
     findComputerForUser: vi.fn(),
     updateComputerHeartbeat: vi.fn(),
+    listConnectorAgentsForComputer: vi.fn(async () => []),
+    hasRecentConfigureJob: vi.fn(async () => false),
     createJob: vi.fn(async (input: any) => {
       capturedPayloadEncrypted = input.payloadEncrypted
       return {
@@ -239,6 +242,8 @@ describe('ConnectorService', () => {
           connectorComputerId: 'computer-1',
           connectorRuntimeId: 'codex',
           connectorRuntimeLabel: 'Codex CLI',
+          connectorServerUrl: 'https://shadowob.com',
+          connectorWorkDir: '.',
         },
       }),
     )
@@ -292,6 +297,8 @@ describe('ConnectorService', () => {
       connectorComputerId: 'computer-1',
       connectorRuntimeId: 'claude-code',
       connectorRuntimeLabel: 'Claude Code',
+      connectorServerUrl: 'https://shadowob.com',
+      connectorWorkDir: '.',
     })
     expect(connectorDao.createJob).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -312,5 +319,198 @@ describe('ConnectorService', () => {
         displayName: 'Alice',
       },
     })
+  })
+
+  it('queues reconnect jobs for existing buddies when a daemon heartbeat arrives', async () => {
+    const { agentService, connectorDao, service } = makeService()
+    connectorDao.updateComputerHeartbeat.mockResolvedValue(
+      makeComputer({
+        runtimes: [
+          {
+            id: 'codex',
+            label: 'Codex CLI',
+            kind: 'cli',
+            status: 'available',
+            version: '0.134.0',
+            command: 'codex',
+            detectedAt: now().toISOString(),
+          },
+        ],
+      }),
+    )
+    connectorDao.listConnectorAgentsForComputer.mockResolvedValue([
+      {
+        agent: {
+          id: 'agent-1',
+          userId: 'bot-user-1',
+          ownerId: 'user-1',
+          kernelType: 'codex',
+          config: {
+            connectorComputerId: 'computer-1',
+            connectorRuntimeId: 'codex',
+            connectorRuntimeLabel: 'Codex CLI',
+            connectorServerUrl: 'https://shadowob.com/api',
+            connectorWorkDir: '/work/project',
+          },
+          status: 'stopped',
+          createdAt: now(),
+          updatedAt: now(),
+        },
+        botUser: {
+          id: 'bot-user-1',
+          username: 'alice',
+          displayName: 'Alice',
+        },
+      },
+    ])
+
+    await service.recordHeartbeat('computer-1', {
+      hostname: 'laptop.local',
+      os: 'darwin',
+      arch: 'arm64',
+      daemonVersion: 'test',
+      runtimes: [
+        {
+          id: 'codex',
+          label: 'Codex CLI',
+          kind: 'cli',
+          status: 'available',
+          version: '0.134.0',
+          command: 'codex',
+          detectedAt: now().toISOString(),
+        },
+      ],
+    })
+
+    expect(connectorDao.listConnectorAgentsForComputer).toHaveBeenCalledWith('computer-1')
+    expect(connectorDao.hasRecentConfigureJob).toHaveBeenCalledWith(
+      'computer-1',
+      'agent-1',
+      expect.any(Date),
+    )
+    expect(agentService.generateToken).toHaveBeenCalledWith('agent-1', 'user-1')
+    expect(connectorDao.createJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        computerId: 'computer-1',
+        agentId: 'agent-1',
+        type: 'configure-buddy',
+      }),
+    )
+
+    const jobs = await service.claimDaemonJobs('computer-1')
+    expect(jobs[0]?.payload).toMatchObject({
+      serverUrl: 'https://shadowob.com',
+      token: 'buddy-token',
+      runtimeId: 'codex',
+      workDir: '/work/project',
+      buddy: {
+        id: 'agent-1',
+        username: 'alice',
+        displayName: 'Alice',
+      },
+    })
+  })
+
+  it('does not enqueue duplicate reconnect jobs while one is active or recent', async () => {
+    const { connectorDao, service } = makeService()
+    connectorDao.updateComputerHeartbeat.mockResolvedValue(
+      makeComputer({
+        runtimes: [
+          {
+            id: 'codex',
+            label: 'Codex CLI',
+            kind: 'cli',
+            status: 'available',
+            detectedAt: now().toISOString(),
+          },
+        ],
+      }),
+    )
+    connectorDao.listConnectorAgentsForComputer.mockResolvedValue([
+      {
+        agent: {
+          id: 'agent-1',
+          userId: 'bot-user-1',
+          ownerId: 'user-1',
+          kernelType: 'codex',
+          config: { connectorRuntimeId: 'codex' },
+          status: 'stopped',
+          createdAt: now(),
+          updatedAt: now(),
+        },
+        botUser: {
+          id: 'bot-user-1',
+          username: 'alice',
+          displayName: 'Alice',
+        },
+      },
+    ])
+    connectorDao.hasRecentConfigureJob.mockResolvedValue(true)
+
+    await service.recordHeartbeat('computer-1', {
+      runtimes: [
+        {
+          id: 'codex',
+          label: 'Codex CLI',
+          kind: 'cli',
+          status: 'available',
+          detectedAt: now().toISOString(),
+        },
+      ],
+    })
+
+    expect(connectorDao.createJob).not.toHaveBeenCalled()
+  })
+
+  it('does not enqueue reconnect jobs for buddies that are already online', async () => {
+    const { connectorDao, service } = makeService()
+    connectorDao.updateComputerHeartbeat.mockResolvedValue(
+      makeComputer({
+        runtimes: [
+          {
+            id: 'codex',
+            label: 'Codex CLI',
+            kind: 'cli',
+            status: 'available',
+            detectedAt: now().toISOString(),
+          },
+        ],
+      }),
+    )
+    connectorDao.listConnectorAgentsForComputer.mockResolvedValue([
+      {
+        agent: {
+          id: 'agent-1',
+          userId: 'bot-user-1',
+          ownerId: 'user-1',
+          kernelType: 'codex',
+          config: { connectorRuntimeId: 'codex' },
+          status: 'running',
+          lastHeartbeat: new Date(),
+          createdAt: now(),
+          updatedAt: now(),
+        },
+        botUser: {
+          id: 'bot-user-1',
+          username: 'alice',
+          displayName: 'Alice',
+        },
+      },
+    ])
+
+    await service.recordHeartbeat('computer-1', {
+      runtimes: [
+        {
+          id: 'codex',
+          label: 'Codex CLI',
+          kind: 'cli',
+          status: 'available',
+          detectedAt: now().toISOString(),
+        },
+      ],
+    })
+
+    expect(connectorDao.hasRecentConfigureJob).not.toHaveBeenCalled()
+    expect(connectorDao.createJob).not.toHaveBeenCalled()
   })
 })

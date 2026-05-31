@@ -95,6 +95,7 @@ import type {
   ShadowServerAppLaunchContext,
   ShadowServerAppManifest,
   ShadowServerAppSkillDocument,
+  ShadowServerAppSummary,
   ShadowServerAppTokenIntrospection,
   ShadowServerJoinRequestResult,
   ShadowServerJoinRequestStatus,
@@ -707,6 +708,10 @@ export class ShadowClient {
 
   async listServerApps(serverIdOrSlug: string): Promise<ShadowServerAppIntegration[]> {
     return this.request(`/api/servers/${serverIdOrSlug}/apps`)
+  }
+
+  async listServerAppSummaries(serverIdOrSlug: string): Promise<ShadowServerAppSummary[]> {
+    return this.request(`/api/servers/${serverIdOrSlug}/apps?summary=1`)
   }
 
   async listServerAppCatalog(serverIdOrSlug: string): Promise<ShadowServerAppCatalogEntry[]> {

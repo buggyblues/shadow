@@ -123,15 +123,17 @@ function handleVisibilityChange() {
 }
 
 export function joinChannel(channelId: string): void {
+  const alreadyJoined = joinedChannels.has(channelId)
   joinedChannels.add(channelId)
   const s = getSocket()
-  if (s.connected) {
+  if (s.connected && !alreadyJoined) {
     s.emit('channel:join', { channelId })
   }
 }
 
 export function leaveChannel(channelId: string): void {
-  joinedChannels.delete(channelId)
+  const wasJoined = joinedChannels.delete(channelId)
+  if (!wasJoined) return
   const s = getSocket()
   if (s.connected) {
     s.emit('channel:leave', { channelId })

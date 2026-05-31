@@ -13,6 +13,39 @@ type EntitlementConfig = {
 
 export type EntitlementConfigInput = EntitlementConfig | EntitlementConfig[]
 
+type DesktopPetPackProductInput = {
+  type?: 'physical' | 'entitlement' | string | null
+  tags?: string[] | null
+  entitlementConfig?: EntitlementConfigInput | null
+}
+
+const DESKTOP_PET_PACK_TAGS = new Set(['desktop-pet-pack', 'desktop_pet_pack', '虾豆桌面宠物'])
+const DESKTOP_PET_PACK_CAPABILITIES = new Set(['view', 'download'])
+
+function firstEntitlementConfig(config?: EntitlementConfigInput | null) {
+  if (Array.isArray(config)) return config[0] ?? null
+  return config ?? null
+}
+
+function hasDesktopPetPackTag(tags?: string[] | null) {
+  return Boolean(tags?.some((tag) => DESKTOP_PET_PACK_TAGS.has(tag)))
+}
+
+function assertDesktopPetPackProduct(input: DesktopPetPackProductInput) {
+  if (!hasDesktopPetPackTag(input.tags)) return
+  const config = firstEntitlementConfig(input.entitlementConfig)
+  if (
+    input.type !== 'entitlement' ||
+    !config ||
+    config.resourceType !== 'workspace_file' ||
+    !config.resourceId ||
+    !config.capability ||
+    !DESKTOP_PET_PACK_CAPABILITIES.has(config.capability)
+  ) {
+    throw apiError('DESKTOP_PET_PACK_REQUIRES_WORKSPACE_FILE', 400)
+  }
+}
+
 /**
  * ProductService — manages products (SPU), media, and SKUs.
  * Pure product catalog logic, no order / payment coupling.
@@ -98,6 +131,7 @@ export class ProductService {
     },
   ) {
     const { media, skus, ...productData } = data
+    assertDesktopPetPackProduct(productData)
     const product = await this.deps.productDao.create({ shopId, ...productData })
     if (!product) throw new Error('Failed to create product')
 
@@ -159,6 +193,14 @@ export class ProductService {
     const product = await this.deps.productDao.findById(id)
     if (!product || product.shopId !== shopId) throw apiError('PRODUCT_NOT_FOUND', 404)
     const { media, skus, ...productData } = data
+    assertDesktopPetPackProduct({
+      type: productData.type ?? product.type,
+      tags: productData.tags ?? product.tags,
+      entitlementConfig:
+        productData.entitlementConfig === undefined
+          ? product.entitlementConfig
+          : productData.entitlementConfig,
+    })
     await this.deps.productDao.updateByShopIdAndId(shopId, id, productData)
 
     if (media !== undefined) {

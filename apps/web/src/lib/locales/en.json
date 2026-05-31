@@ -762,6 +762,20 @@
     "addBuddyDm": "Buddy DM",
     "addFriendDm": "Friend DM"
   },
+  "commandPalette": {
+    "open": "Open command palette",
+    "placeholder": "Jump to channels, DMs, servers, actions",
+    "empty": "No matching destinations",
+    "loading": "Loading destinations...",
+    "groupActions": "Actions",
+    "groupChannels": "Channels",
+    "groupDms": "Direct messages",
+    "groupServers": "Servers",
+    "searchMessages": "Search messages",
+    "openServerHome": "Open server home",
+    "openApps": "Open server apps",
+    "openShop": "Open server shop"
+  },
   "serverLanding": {
     "eyebrow": "Shadow community intro",
     "title": "Turn AI capability into a durable community asset",
@@ -932,6 +946,16 @@
     "replyingTo": "Replying to message...",
     "inputPlaceholder": "Message #{{channelName}}",
     "inputPlaceholderCompact": "#{{channelName}} message",
+    "searchMessages": "Search messages",
+    "searchPanelTitle": "Search this chat",
+    "searchMessagesPlaceholder": "Search message text",
+    "searchMinChars": "2+ characters",
+    "searchNoResults": "No matching messages",
+    "searchResultCount": "{{count}} results",
+    "searchHasAttachment": "Has attachment",
+    "searchOpenResult": "Open search result",
+    "searchResultNotLoaded": "That result is older than the loaded timeline. Load older messages, then try again.",
+    "searchAttachmentOnly": "Attachment-only message",
     "addMenu": "Add content",
     "uploadFile": "Upload File",
     "addMenuUploadFileDesc": "Send documents, archives, or any attachment",
@@ -2877,6 +2901,12 @@
     "paidFileUploadFailed": "Protected file upload failed",
     "paidFileDefaultSummary": "Open {{name}} after purchase.",
     "paidFileDefaultPrivilege": "View or download {{name}} online.",
+    "desktopPetPackUploadTitle": "Upload desktop pet pack",
+    "desktopPetPackUploadHint": "Upload a .shadowpet or .zip pack. Buyers can import it from the desktop pet settings after purchase.",
+    "desktopPetPackRequiredHint": "Upload or bind a desktop pet pack first.",
+    "desktopPetPackFileRequired": "Upload a .shadowpet, .shadowpet.zip, or .zip desktop pet pack.",
+    "desktopPetPackDefaultSummary": "Import {{name}} as a desktop pet pack after purchase.",
+    "desktopPetPackDefaultPrivilege": "Import and use {{name}} in the Shadow desktop pet settings.",
     "entitlementGroups": {
       "active": "Active entitlements",
       "expiring": "Expiring soon",
@@ -2969,6 +2999,7 @@
     "visual": {
       "service": "Service",
       "file": "File",
+      "desktop_pet_pack": "Desktop pet",
       "badge": "Badge",
       "gift": "Gift",
       "ticket": "Service pass",
@@ -2993,6 +3024,7 @@
     "visualPromise": {
       "service": "Order service",
       "file": "Unlock after purchase",
+      "desktop_pet_pack": "Import in desktop",
       "badge": "Badge",
       "gift": "Giftable collectible",
       "ticket": "Redeemable pass",
@@ -3409,6 +3441,7 @@
     "deliveryPreset": {
       "service": "Service access",
       "paid_file": "Paid file",
+      "desktop_pet_pack": "Desktop pet pack",
       "badge": "Badge",
       "gift": "Digital gift",
       "service_ticket": "Service ticket"
@@ -3416,6 +3449,7 @@
     "deliveryPresetHint": {
       "service": "Access, membership, files, or manual service fulfillment.",
       "paid_file": "Docs, HTML, images, or downloads that open from purchase delivery.",
+      "desktop_pet_pack": "Sprite and metadata packs that buyers install from desktop pet settings.",
       "badge": "A permanent identity badge for supporters or members.",
       "gift": "A collectible digital gift that can be transferred.",
       "service_ticket": "A redeemable ticket for one service or event."
@@ -3613,7 +3647,7 @@
       "closePanel": "Close panel"
     },
     "pet": {
-      "name": "XiaDou",
+      "name": "Xiao Lan",
       "level": "Lv. {{level}}",
       "xp": "{{xp}} / {{next}} XP",
       "personality": "Personality",
@@ -3630,6 +3664,9 @@
       "rest": "Rest",
       "explore": "Explore",
       "tea": "Tea",
+      "levelUp": "Level up",
+      "interact": "Interact",
+      "back": "Back",
       "voice": "Voice",
       "connection": "Connection",
       "community": "Community",
@@ -3637,21 +3674,32 @@
     },
     "tabs": {
       "chat": "Chat",
+      "care": "Care",
+      "services": "Services",
       "stats": "Stats",
       "community": "Alerts",
       "subscriptions": "Subscriptions",
       "bag": "Bag",
       "store": "Store"
     },
+    "panelSubtitle": {
+      "chat": "Keep a light conversation with {{name}}",
+      "care": "Read behavior, not raw stats",
+      "services": "Focus timer, water, stretch, and runtime alerts",
+      "community": "Review alerts to clear attention dots",
+      "subscriptions": "Sync new files from subscribed channels",
+      "store": "Manage and get desktop pet asset packs"
+    },
     "store": {
       "title": "Desktop pet store",
       "subtitle": "Get desktop pet asset packs",
-      "petAssets": "Xiaodou desktop pet assets",
+      "petAssets": "Desktop pet asset packs",
       "petAssetsHint": "Open public marketplace products tagged \"Xiaodou desktop pets\".",
-      "open": "Open store"
+      "open": "Open store",
+      "manage": "Manage packs"
     },
     "chat": {
-      "input": "Talk to XiaDou",
+      "input": "Talk to {{name}}",
       "send": "Send",
       "authRequired": "Sign in from the main Shadow window before I can use the official model proxy.",
       "proxyError": "The model proxy did not respond. Try again later.",
@@ -3674,8 +3722,119 @@
       "replySleepy": "I will keep things calm and stay out of your way.",
       "replyLevel": "I will remember the current state and stay quiet.",
       "replyCommunity": "Open the alerts tab and I will help you scan recent community notifications.",
-      "replyStatus": "Mood {{mood}}, hunger {{hunger}}, energy {{energy}}, health {{health}}.",
+      "replyStatus": "I am showing how I feel. Watch my movement and I will nudge you when I need care.",
       "replySick": "I feel off. Tea or rest would help me recover."
+    },
+    "phase": {
+      "morning": "Morning routine",
+      "day": "Daytime",
+      "evening": "Evening wind-down",
+      "night": "Night sleep"
+    },
+    "emotions": {
+      "excited": "Bright and eager",
+      "content": "Comfortable and close",
+      "calm": "Calm",
+      "lonely": "Quiet and waiting",
+      "hungry": "Looking for food",
+      "sleepy": "Sleepy",
+      "sick": "Needs gentle care"
+    },
+    "profile": {
+      "name": "Name",
+      "personality": "Personality",
+      "personality_lazy": "Lazy",
+      "personality_curious": "Curious",
+      "personality_clingy": "Clingy",
+      "personality_brave": "Brave",
+      "random": "Random",
+      "statusLine": "{{name}} is {{emotion}}"
+    },
+    "care": {
+      "todayEvent": "Today's small moment",
+      "noEvent": "Everything is quiet for now.",
+      "recommendedAction": "Recommended care"
+    },
+    "actionFeedback": {
+      "feed": "That helped. I will nibble quietly.",
+      "pet": "I felt that. Staying close.",
+      "play": "That woke me up.",
+      "rest": "I will curl up for a while.",
+      "explore": "I will scout nearby and come back.",
+      "tea": "Warm tea helps."
+    },
+    "events": {
+      "morningStretch": {
+        "hint": "I keep glancing around like I want a quick stretch.",
+        "resolved": "Good stretch. The day feels easier now."
+      },
+      "windowSunbeam": {
+        "hint": "A patch of light landed nearby. I look extra still.",
+        "resolved": "That quiet moment made me settle down."
+      },
+      "curiousPing": {
+        "hint": "Something near the desk caught my attention.",
+        "resolved": "I found a tiny thing worth keeping."
+      },
+      "rainyNap": {
+        "hint": "The room feels slow. I keep trying to nap.",
+        "resolved": "That rest made the evening softer."
+      },
+      "midnightHungry": {
+        "hint": "It is late and I am nosing around for a snack.",
+        "resolved": "A midnight bite fixed it."
+      },
+      "looseShell": {
+        "hint": "I spotted a loose shell near the edge of the screen.",
+        "resolved": "I brought the shell back."
+      }
+    },
+    "services": {
+      "title": "Helper habits",
+      "subtitle": "Quiet reminders from the pet",
+      "notificationTitle": "Desktop pet reminder",
+      "unread": "Pending pet reminder",
+      "water": "Water",
+      "focus": "Focus timer",
+      "fitness": "Stretch",
+      "coding": "Coding agent",
+      "waterMeta": "Nudges every hour.",
+      "focusMeta": "Starts a 25 minute focus block.",
+      "focusActive": "Focus block running.",
+      "fitnessMeta": "Nudges every 90 minutes.",
+      "active": "Active",
+      "idle": "Idle",
+      "reminded": "Needs attention",
+      "dueNow": "Due now",
+      "waterNext": "Next nudge in {{time}}",
+      "fitnessNext": "Next nudge in {{time}}",
+      "focusIdle": "Choose a focus length and I will watch the time.",
+      "focusRemaining": "{{time}} remaining",
+      "start25": "25 min",
+      "start50": "50 min",
+      "stop": "Stop",
+      "done": "Done",
+      "minutes": "{{count}} min",
+      "hoursMinutes": "{{hours}}h {{minutes}}m",
+      "on": "On",
+      "off": "Off",
+      "waterEnabled": "I will remind you to drink water.",
+      "waterDisabled": "Water reminders are off.",
+      "focusEnabled": "Focus timer started. I will watch the time.",
+      "focusDisabled": "Focus timer stopped.",
+      "fitnessEnabled": "I will remind you to stretch.",
+      "fitnessDisabled": "Stretch reminders are off.",
+      "codingEnabled": "I will watch local Coding Agent status.",
+      "codingDisabled": "Coding Agent status nudges are off.",
+      "waterDone": "Water logged. I will remind you next time.",
+      "fitnessDone": "Stretch logged. Keep going.",
+      "waterReminder": "Drink some water.",
+      "fitnessReminder": "Stand up and stretch for a minute.",
+      "focusReady": "Focus block complete. Take a short break.",
+      "codingOnline": "{{count}} local Coding Agent connection is online.",
+      "codingOffline": "A local Coding Agent connection went offline.",
+      "runtimeReady": "{{name}} on {{runtime}} is ready.",
+      "runtimeReadyMany": "{{count}} runtime sessions are ready."
     },
     "stats": {
       "mood": "Mood",
@@ -3689,8 +3848,11 @@
       "shells": "Shells",
       "streak": "Streak",
       "days": "{{count}} days",
+      "level": "Lv {{level}}",
+      "xp": "XP",
       "questProgress": "Quests",
       "quests": "Quests",
+      "inventory": "Items",
       "achievements": "Achievements",
       "noAchievements": "No achievements yet"
     },
@@ -3753,7 +3915,12 @@
     },
     "auth": {
       "title": "Sign in to sync Shadow",
+      "loginAction": "Sign in",
       "description": "Open the main Shadow window to sign in, then return here for community alerts.",
+      "chatDescription": "Sign in so your pet can use the community model for chat and voice.",
+      "notificationDescription": "Sign in to sync community notifications; checking them clears the dot.",
+      "subscriptionDescription": "Sign in to choose community channels and sync subscribed files.",
+      "storeDescription": "Sign in to view purchased packs, buy new ones, and install them for your pet.",
       "openMain": "Open Shadow",
       "refresh": "Check again"
     }
@@ -3899,7 +4066,33 @@
     "shortcut_petChat": "Desktop pet chat",
     "shortcut_petChat_desc": "Open the pet chat panel and focus the input.",
     "shortcut_showNotifications": "View notifications",
-    "shortcut_showNotifications_desc": "Open the pet panel on community notifications."
+    "shortcut_showNotifications_desc": "Open the pet panel on community notifications.",
+    "tabPetAssets": "Pet Packs",
+    "petAssetsTitle": "Desktop pet packs",
+    "petAssetsDesc": "Import creator-made sprite packs, preview their motions, and choose the active desktop pet look.",
+    "petAssetsOpenStore": "Open store",
+    "petAssetsImport": "Import pack",
+    "petAssetsDefault": "Built-in pet",
+    "petAssetsDefaultDesc": "Use the bundled desktop pet sprites and built-in animations.",
+    "petAssetsNoDesc": "No description provided.",
+    "petAssetsSourceMarketplace": "Marketplace",
+    "petAssetsSourceLocal": "Local import",
+    "petAssetsActive": "Active",
+    "petAssetsUse": "Use pack",
+    "petAssetsRemove": "Remove",
+    "petAssetsPreview": "Motion preview",
+    "petAssetsOwnedTitle": "Purchased packs",
+    "petAssetsOwnedDesc": "Install desktop pet packs from your marketplace entitlements; downloads stay behind paid-file authorization and local validation.",
+    "petAssetsRefreshOwned": "Refresh",
+    "petAssetsOwnedAuthHint": "Sign in to the community to view purchased desktop pet packs.",
+    "petAssetsOwnedLoadFailed": "Could not load purchased packs.",
+    "petAssetsOwnedLoading": "Loading purchased packs...",
+    "petAssetsOwnedEmpty": "No purchased desktop pet packs are ready to install.",
+    "petAssetsOwnedUnnamed": "Untitled pack",
+    "petAssetsOwnedInstalled": "Installed",
+    "petAssetsOwnedReady": "Ready to install",
+    "petAssetsOwnedInstall": "Install",
+    "petAssetsOwnedUpdate": "Update"
   },
   "passwordReset": {
     "title": "Reset password",
