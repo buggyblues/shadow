@@ -1,5 +1,8 @@
 import { create } from 'zustand'
-import { syncDesktopCommunityAuthToken } from '../lib/desktop-community-auth'
+import {
+  type DesktopCommunityAuthSyncReason,
+  syncDesktopCommunityAuthToken,
+} from '../lib/desktop-community-auth'
 import { queryClient } from '../lib/query-client'
 import { useChatStore } from './chat.store'
 
@@ -31,37 +34,50 @@ interface AuthState {
   accessToken: string | null
   isAuthenticated: boolean
   setAuth: (user: User, accessToken: string, refreshToken: string) => void
-  logout: () => void
+  logout: (options?: {
+    syncDesktop?: boolean
+    desktopReason?: Extract<DesktopCommunityAuthSyncReason, 'logout' | 'revoked'>
+  }) => void
   setUser: (user: User) => void
+}
+
+function authStorage(): Storage | null {
+  return typeof window === 'undefined' ? null : window.localStorage
+}
+
+const initialAccessToken = authStorage()?.getItem('accessToken') ?? null
+
+function clearLocalAuthStorage() {
+  authStorage()?.removeItem('accessToken')
+  authStorage()?.removeItem('refreshToken')
+  queryClient.removeQueries()
+  queryClient.clear()
+  useChatStore.getState().setActiveServer(null)
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  accessToken: localStorage.getItem('accessToken'),
-  isAuthenticated: !!localStorage.getItem('accessToken'),
+  accessToken: initialAccessToken,
+  isAuthenticated: Boolean(initialAccessToken),
 
   setAuth: (user, accessToken, refreshToken) => {
-    localStorage.setItem('accessToken', accessToken)
-    localStorage.setItem('refreshToken', refreshToken)
-    syncDesktopCommunityAuthToken(accessToken, refreshToken)
+    authStorage()?.setItem('accessToken', accessToken)
+    authStorage()?.setItem('refreshToken', refreshToken)
+    syncDesktopCommunityAuthToken(accessToken, refreshToken, 'login')
     set({ user, accessToken, isAuthenticated: true })
   },
 
-  logout: () => {
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
-    syncDesktopCommunityAuthToken(null, null)
-    // Clear all query cache to prevent stale data leaking across sessions
-    queryClient.removeQueries()
-    queryClient.clear()
-    // Reset chat state (activeServerId, activeChannelId, etc.)
-    useChatStore.getState().setActiveServer(null)
+  logout: (options) => {
+    clearLocalAuthStorage()
+    if (options?.syncDesktop ?? true) {
+      syncDesktopCommunityAuthToken(null, null, options?.desktopReason ?? 'logout')
+    }
     set({ user: null, accessToken: null, isAuthenticated: false })
   },
 
   setUser: (user) =>
     set((state) => {
-      const accessToken = state.accessToken ?? localStorage.getItem('accessToken')
+      const accessToken = state.accessToken ?? authStorage()?.getItem('accessToken')
       return { user, accessToken, isAuthenticated: Boolean(accessToken) }
     }),
 }))

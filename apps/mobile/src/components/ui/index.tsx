@@ -1,5 +1,5 @@
 import { ChevronLeft, FileQuestion, type LucideIcon } from 'lucide-react-native'
-import type { ReactNode } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
   type AccessibilityRole,
   ActivityIndicator,
@@ -17,6 +17,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { selectionHaptic } from '../../lib/haptics'
 import {
   border,
   type ColorTokens,
@@ -50,7 +51,14 @@ export type CardVariant =
   | 'glassPanel'
   | 'glassCard'
   | 'stat'
-export type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+export type BadgeVariant =
+  | 'primary'
+  | 'accent'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'neutral'
 export type TypographyVariant = 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'micro'
 export type ButtonProps = {
   children?: ReactNode
@@ -845,7 +853,10 @@ export function AppSwitch({
       accessibilityRole="switch"
       accessibilityState={{ checked: value, disabled }}
       disabled={disabled}
-      onPress={() => onValueChange(!value)}
+      onPress={() => {
+        selectionHaptic()
+        onValueChange(!value)
+      }}
       style={({ pressed }) => [
         styles.appSwitchTrack,
         {
@@ -1242,39 +1253,80 @@ export function MobileTabBar<T extends string>({
   options,
   onChange,
   style,
+  tone = 'primary',
 }: {
   value: T
   options: Array<{ value: T; label: ReactNode; count?: ReactNode; icon?: LucideIcon }>
   onChange: (value: T, index: number) => void
   style?: StyleProp<ViewStyle>
+  tone?: Extract<Tone, 'primary' | 'accent'>
 }) {
   const colors = useColors()
+  const activeColor = toneColor(colors, tone)
+  const scrollRef = useRef<ScrollView>(null)
+  const tabLayouts = useRef<Partial<Record<T, { x: number; width: number }>>>({})
+  const [viewportWidth, setViewportWidth] = useState(0)
+
+  useEffect(() => {
+    const layout = tabLayouts.current[value]
+    if (!layout || viewportWidth <= 0) return
+    const centeredOffset = Math.max(0, layout.x - (viewportWidth - layout.width) / 2)
+    scrollRef.current?.scrollTo({ x: centeredOffset, animated: true })
+  }, [value, viewportWidth])
+
   return (
-    <View style={[styles.mobileTabBar, { borderBottomColor: colors.border }, style]}>
-      <View style={styles.mobileTabContent}>
+    <View
+      style={[styles.mobileTabBar, { borderBottomColor: colors.border }, style]}
+      onLayout={({ nativeEvent }) => {
+        const nextWidth = nativeEvent.layout.width
+        setViewportWidth((currentWidth) => (currentWidth === nextWidth ? currentWidth : nextWidth))
+      }}
+    >
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        decelerationRate="fast"
+        keyboardShouldPersistTaps="handled"
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.mobileTabContent}
+      >
         {options.map((option, index) => {
           const active = value === option.value
           const Icon = option.icon
           return (
             <Pressable
               key={option.value}
-              onPress={() => onChange(option.value, index)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              hitSlop={spacing.xs}
+              onLayout={({ nativeEvent }) => {
+                const layout = nativeEvent.layout
+                tabLayouts.current[option.value] = layout
+                if (!active || viewportWidth <= 0) return
+                const centeredOffset = Math.max(0, layout.x - (viewportWidth - layout.width) / 2)
+                scrollRef.current?.scrollTo({ x: centeredOffset, animated: false })
+              }}
+              onPress={() => {
+                selectionHaptic()
+                onChange(option.value, index)
+              }}
               style={({ pressed }) => [
                 styles.mobileTabPill,
                 {
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
                   backgroundColor: active
                     ? colors.surface
                     : pressed
-                      ? colors.messageHover
+                      ? colors.surfaceHover
                       : colors.surface,
-                  borderBottomColor: active ? colors.primary : colors.surface,
+                  borderBottomColor: active ? activeColor : colors.surface,
                 },
               ]}
             >
               {Icon ? (
                 <Icon
                   size={iconSize.md}
-                  color={active ? colors.primary : colors.textMuted}
+                  color={active ? activeColor : colors.textMuted}
                   strokeWidth={2.5}
                 />
               ) : null}
@@ -1288,10 +1340,20 @@ export function MobileTabBar<T extends string>({
               >
                 {option.label}
               </AppText>
+              {option.count !== undefined ? (
+                <Text
+                  style={[
+                    styles.mobileTabCount,
+                    { color: active ? activeColor : colors.textMuted },
+                  ]}
+                >
+                  {option.count}
+                </Text>
+              ) : null}
             </Pressable>
           )
         })}
-      </View>
+      </ScrollView>
     </View>
   )
 }
@@ -1896,6 +1958,7 @@ function buttonIconSize(size: ButtonSize) {
 }
 
 function badgeTone(colors: ColorTokens, variant: BadgeVariant) {
+  if (variant === 'accent') return colors.mode === 'light' ? colors.accentStrong : colors.accent
   if (variant === 'success') return colors.success
   if (variant === 'warning') return colors.warning
   if (variant === 'danger') return colors.error
@@ -1905,6 +1968,7 @@ function badgeTone(colors: ColorTokens, variant: BadgeVariant) {
 }
 
 function badgeSurface(colors: ColorTokens, variant: BadgeVariant) {
+  if (variant === 'accent') return colors.toneAccentSurface
   if (variant === 'success') return colors.toneSuccessSurface
   if (variant === 'warning') return colors.toneWarningSurface
   if (variant === 'danger') return colors.toneDangerSurface
@@ -2405,11 +2469,13 @@ const styles = StyleSheet.create({
   mobileTabContent: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    width: '100%',
+    minWidth: '100%',
     paddingHorizontal: spacing.none,
   },
   mobileTabPill: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    minWidth: size.navSide,
     minHeight: size.controlLg,
     borderBottomWidth: border.active,
     paddingHorizontal: spacing.xs,
@@ -2420,6 +2486,9 @@ const styles = StyleSheet.create({
   },
   mobileTabText: {
     flexShrink: 1,
+  },
+  mobileTabCount: {
+    fontWeight: '900',
   },
   segmented: {
     flexDirection: 'row',

@@ -50,6 +50,7 @@ export type DesktopPetAssetSettings = {
 
 export type DesktopPetApi = {
   getCommunityAuthToken?: () => Promise<string>
+  getCommunityAuthTokens?: () => Promise<{ accessToken: string; refreshToken: string }>
   showNotification?: (
     title: string,
     body: string,

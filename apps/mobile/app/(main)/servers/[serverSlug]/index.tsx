@@ -57,7 +57,9 @@ import {
 } from '../../../../src/components/ui'
 import { useChannelSort } from '../../../../src/hooks/use-channel-sort'
 import { API_BASE, fetchApi, getImageUrl } from '../../../../src/lib/api'
+import { selectionHaptic } from '../../../../src/lib/haptics'
 import { setLastChannel } from '../../../../src/lib/last-channel'
+import { animateNextLayout } from '../../../../src/lib/layout-animation'
 import { serverChannelHref } from '../../../../src/lib/routes'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
@@ -131,6 +133,9 @@ interface BuddyInboxEntry {
 
 type ServerTab = 'channels' | 'inbox' | 'apps'
 
+const CHANNEL_GROUP_ENTER_MS = 160
+const CHANNEL_GROUP_STAGGER_MS = 24
+
 function withLaunchParams(entry: string, launch: LaunchContext) {
   const url = new URL(entry)
   url.searchParams.set('shadow_launch', launch.launchToken)
@@ -170,11 +175,11 @@ export default function ServerHomeScreen() {
   const navigation = useNavigation()
   const { width: tabPageWidth } = useWindowDimensions()
   const tabScrollRef = useRef<ScrollView>(null)
+  const previousTabPageWidthRef = useRef(tabPageWidth)
 
   // State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState<ServerTab>('channels')
-  const [showSearch, setShowSearch] = useState(false)
   const [channelSearch, setChannelSearch] = useState('')
   const [contextChannel, setContextChannel] = useState<ServerChannel | null>(null)
   const [editingChannel, setEditingChannel] = useState<ServerChannel | null>(null)
@@ -351,6 +356,8 @@ export default function ServerHomeScreen() {
   }
 
   const toggleCategory = (catId: string) => {
+    selectionHaptic()
+    animateNextLayout()
     setCollapsedCategories((prev) => {
       const next = new Set(prev)
       if (next.has(catId)) next.delete(catId)
@@ -408,7 +415,18 @@ export default function ServerHomeScreen() {
     }
   }, [activeTab, serverTabs])
 
+  useEffect(() => {
+    if (previousTabPageWidthRef.current === tabPageWidth) return
+    previousTabPageWidthRef.current = tabPageWidth
+    const activeIndex = Math.max(
+      0,
+      serverTabs.findIndex((tab) => tab.value === activeTab),
+    )
+    tabScrollRef.current?.scrollTo({ x: activeIndex * tabPageWidth, animated: false })
+  }, [activeTab, serverTabs, tabPageWidth])
+
   const handleTabChange = (tab: ServerTab, index: number) => {
+    if (tab !== activeTab) animateNextLayout()
     setActiveTab(tab)
     tabScrollRef.current?.scrollTo({ x: tabPageWidth * index, animated: true })
   }
@@ -416,7 +434,12 @@ export default function ServerHomeScreen() {
   const handleTabScrollEnd = (offsetX: number) => {
     const index = Math.max(0, Math.min(serverTabs.length - 1, Math.round(offsetX / tabPageWidth)))
     const nextTab = serverTabs[index]
-    if (nextTab) setActiveTab(nextTab.value)
+    if (!nextTab) return
+    if (nextTab.value !== activeTab) {
+      selectionHaptic()
+      animateNextLayout()
+    }
+    setActiveTab(nextTab.value)
   }
 
   // ── Nav items ──────────────────────────────────
@@ -518,6 +541,7 @@ export default function ServerHomeScreen() {
           ref={tabScrollRef}
           horizontal
           pagingEnabled
+          decelerationRate="fast"
           nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}
@@ -528,6 +552,27 @@ export default function ServerHomeScreen() {
               {tab.value === 'channels' ? (
                 <View style={styles.tabSection}>
                   <View style={styles.channelToolbar}>
+                    <TextField
+                      value={channelSearch}
+                      onChangeText={setChannelSearch}
+                      placeholder={t('server.searchChannels')}
+                      icon={Search}
+                      containerStyle={styles.channelSearchInlineContainer}
+                      style={styles.channelSearchWrap}
+                      right={
+                        channelSearch.length > 0 ? (
+                          <Pressable
+                            onPress={() => {
+                              selectionHaptic()
+                              setChannelSearch('')
+                            }}
+                            hitSlop={spacing.md}
+                          >
+                            <X size={iconSize.md} color={colors.textMuted} strokeWidth={2.5} />
+                          </Pressable>
+                        ) : null
+                      }
+                    />
                     <View style={styles.channelsActions}>
                       <View style={styles.actionButtonWrap}>
                         <Button
@@ -536,58 +581,37 @@ export default function ServerHomeScreen() {
                           icon={ArrowUpDown}
                           iconColor={hasCustomSort ? palette.foundation : colors.text}
                           iconSize={iconSize.lg}
-                          onPress={() => setShowSortModal(true)}
+                          onPress={() => {
+                            selectionHaptic()
+                            setShowSortModal(true)
+                          }}
                         />
                         {hasCustomSort && (
-                          <View style={[styles.sortBadge, { backgroundColor: palette.white }]} />
+                          <View style={[styles.sortBadge, { backgroundColor: colors.primary }]} />
                         )}
                       </View>
-                      <Button
-                        variant="glass"
-                        size="icon"
-                        icon={Search}
-                        iconColor={colors.text}
-                        iconSize={iconSize.lg}
-                        onPress={() => setShowSearch(!showSearch)}
-                      />
                       {isOwner && (
                         <Button
                           variant="primary"
                           size="icon"
                           icon={Plus}
                           iconSize={iconSize.lg}
-                          onPress={() =>
+                          onPress={() => {
+                            selectionHaptic()
                             router.push(`/(main)/servers/${serverSlug}/create-channel` as never)
-                          }
+                          }}
                         />
                       )}
                     </View>
                   </View>
 
-                  {showSearch && (
-                    <TextField
-                      value={channelSearch}
-                      onChangeText={setChannelSearch}
-                      placeholder={t('server.searchChannels')}
-                      icon={Search}
-                      autoFocus
-                      containerStyle={styles.channelSearchContainer}
-                      style={styles.channelSearchWrap}
-                      right={
-                        channelSearch.length > 0 ? (
-                          <Pressable onPress={() => setChannelSearch('')} hitSlop={spacing.md}>
-                            <X size={iconSize.md} color={colors.textMuted} strokeWidth={2.5} />
-                          </Pressable>
-                        ) : null
-                      }
-                    />
-                  )}
-
                   <View style={styles.channelsList}>
                     {filteredGroups.map((group, groupIndex) => (
                       <Reanimated.View
                         key={group.category?.id ?? 'uncategorized'}
-                        entering={FadeInDown.delay(500 + groupIndex * 100).springify()}
+                        entering={FadeInDown.duration(CHANNEL_GROUP_ENTER_MS).delay(
+                          Math.min(groupIndex, 4) * CHANNEL_GROUP_STAGGER_MS,
+                        )}
                       >
                         <View style={styles.categoryBubble}>
                           {group.category && (
@@ -634,11 +658,15 @@ export default function ServerHomeScreen() {
                                     ) : null
                                   }
                                   onPress={() => {
+                                    selectionHaptic()
                                     updateLastAccessed(channel.id)
                                     if (server) setLastChannel(server.id, channel.id)
                                     router.push(serverChannelHref(serverSlug, channel.id) as never)
                                   }}
-                                  onLongPress={() => setContextChannel(channel)}
+                                  onLongPress={() => {
+                                    selectionHaptic()
+                                    setContextChannel(channel)
+                                  }}
                                   flat
                                 />
                               ))}
@@ -649,7 +677,7 @@ export default function ServerHomeScreen() {
                     ))}
 
                     {channels.length === 0 && (
-                      <Reanimated.View entering={FadeInDown.delay(500).springify()}>
+                      <Reanimated.View entering={FadeInDown.duration(CHANNEL_GROUP_ENTER_MS)}>
                         <GlassPanel style={styles.emptyChannels}>
                           <ChannelCatSvg width={80} height={80} />
                           <AppText tone="secondary" style={styles.emptyText}>
@@ -660,9 +688,10 @@ export default function ServerHomeScreen() {
                               variant="primary"
                               size="md"
                               icon={Plus}
-                              onPress={() =>
+                              onPress={() => {
+                                selectionHaptic()
                                 router.push(`/(main)/servers/${serverSlug}/create-channel` as never)
-                              }
+                              }}
                             >
                               {t('server.createChannel')}
                             </Button>
@@ -886,6 +915,7 @@ export default function ServerHomeScreen() {
                 tone={isSelected ? 'primary' : 'muted'}
                 right={isSelected ? <Check size={iconSize.md} color={colors.primary} /> : undefined}
                 onPress={() => {
+                  selectionHaptic()
                   setSortBy(option.value)
                   setShowSortModal(false)
                 }}
@@ -914,7 +944,8 @@ const styles = StyleSheet.create({
     minHeight: size.controlLg,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
   channelsActions: {
@@ -925,9 +956,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   // Search
-  channelSearchContainer: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+  channelSearchInlineContainer: {
+    flex: 1,
+    minWidth: 0,
   },
   channelSearchWrap: {
     height: size.controlLg,

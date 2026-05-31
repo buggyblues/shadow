@@ -29,6 +29,8 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { selectionHaptic, successHaptic } from '../../lib/haptics'
+import { animateNextLayout } from '../../lib/layout-animation'
 import { border, fontSize, iconSize, palette, radius, size, spacing, useColors } from '../../theme'
 import type { Message } from '../../types/message'
 import { formatCommercePrice } from '../common/price-display'
@@ -361,14 +363,23 @@ function ImageViewerModal({
             icon={X}
             variant="ghost"
             iconColor={palette.white}
-            iconSize={24}
+            iconSize={iconSize['3xl']}
             style={styles.imageViewerCloseBtn}
-            onPress={onClose}
+            onPress={() => {
+              selectionHaptic()
+              onClose()
+            }}
           />
           <Text style={styles.imageViewerTitle}>{t('chat.imagePreview', '图片预览')}</Text>
           <View style={{ width: size.iconButtonLg }} />
         </View>
-        <Pressable style={styles.imageViewerContent} onPress={onClose}>
+        <Pressable
+          style={styles.imageViewerContent}
+          onPress={() => {
+            selectionHaptic()
+            onClose()
+          }}
+        >
           <Image
             source={{ uri }}
             style={{ width: screenWidth, height: screenHeight * 0.7 }}
@@ -560,9 +571,13 @@ export const ChatComposer = memo(function ChatComposer({
                   icon={X}
                   variant="ghost"
                   iconColor={colors.textMuted}
-                  iconSize={14}
+                  iconSize={iconSize.sm}
                   style={styles.inlineRemoveBtn}
-                  onPress={() => onRemoveCommerceCard(card.id)}
+                  onPress={() => {
+                    selectionHaptic()
+                    animateNextLayout()
+                    onRemoveCommerceCard(card.id)
+                  }}
                 />
               )}
             </View>
@@ -595,14 +610,21 @@ export const ChatComposer = memo(function ChatComposer({
                     icon={X}
                     variant="ghost"
                     iconColor={colors.textMuted}
-                    iconSize={14}
+                    iconSize={iconSize.sm}
                     style={styles.inlineRemoveBtn}
-                    onPress={() => onRemovePendingFile(idx)}
+                    onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
+                      onRemovePendingFile(idx)
+                    }}
                   />
                 </View>
               ) : file.type.startsWith('image/') ? (
                 <Pressable
-                  onPress={() => setViewingImageUri(file.uri)}
+                  onPress={() => {
+                    selectionHaptic()
+                    setViewingImageUri(file.uri)
+                  }}
                   style={[styles.pendingImageChip, { backgroundColor: colors.inputBackground }]}
                 >
                   <Image
@@ -613,8 +635,12 @@ export const ChatComposer = memo(function ChatComposer({
                   <IconButton
                     icon={X}
                     variant="danger"
-                    iconSize={14}
-                    onPress={() => onRemovePendingFile(idx)}
+                    iconSize={iconSize.sm}
+                    onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
+                      onRemovePendingFile(idx)
+                    }}
                     containerStyle={styles.pendingImageRemovePosition}
                     style={styles.pendingImageRemoveBtn}
                   />
@@ -632,9 +658,13 @@ export const ChatComposer = memo(function ChatComposer({
                     icon={X}
                     variant="ghost"
                     iconColor={colors.textMuted}
-                    iconSize={14}
+                    iconSize={iconSize.sm}
                     style={styles.inlineRemoveBtn}
-                    onPress={() => onRemovePendingFile(idx)}
+                    onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
+                      onRemovePendingFile(idx)
+                    }}
                   />
                 </View>
               )}
@@ -671,10 +701,14 @@ export const ChatComposer = memo(function ChatComposer({
             variant="ghost"
             size="icon"
             icon={X}
-            iconSize={18}
+            iconSize={iconSize.lg}
             iconColor={colors.textMuted}
-            onPress={onClearReply}
-            hitSlop={8}
+            onPress={() => {
+              selectionHaptic()
+              animateNextLayout()
+              onClearReply()
+            }}
+            hitSlop={spacing.sm}
           />
         </GlassHeader>
       )}
@@ -695,7 +729,11 @@ export const ChatComposer = memo(function ChatComposer({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('chat.voiceCancelRecording')}
-            onPress={() => onFinishVoiceMessageRecording(true)}
+            onPress={() => {
+              selectionHaptic()
+              animateNextLayout()
+              onFinishVoiceMessageRecording(true)
+            }}
             style={({ pressed }) => [
               styles.voiceRecordingCancelButton,
               { backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground },
@@ -728,7 +766,11 @@ export const ChatComposer = memo(function ChatComposer({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('chat.voiceSendRecording')}
-            onPress={() => onFinishVoiceMessageRecording(false)}
+            onPress={() => {
+              successHaptic()
+              animateNextLayout()
+              onFinishVoiceMessageRecording(false)
+            }}
             style={({ pressed }) => [
               styles.voiceRecordingSendButton,
               { backgroundColor: pressed ? colors.primaryDark : colors.success },
@@ -755,8 +797,11 @@ export const ChatComposer = memo(function ChatComposer({
               size="icon"
               icon={AtSign}
               iconColor={colors.textMuted}
-              iconSize={22}
-              onPress={onPressAt}
+              iconSize={iconSize['2xl']}
+              onPress={() => {
+                selectionHaptic()
+                onPressAt()
+              }}
             />
           )}
 
@@ -788,10 +833,13 @@ export const ChatComposer = memo(function ChatComposer({
                 icon={Mic}
                 variant={isRecording ? 'primary' : 'ghost'}
                 iconColor={isRecording ? palette.foundation : colors.textMuted}
-                iconSize={18}
+                iconSize={iconSize.lg}
                 containerStyle={styles.inputMicBtnPosition}
                 style={styles.inputMicBtn}
-                onPress={onToggleVoice}
+                onPress={() => {
+                  selectionHaptic()
+                  onToggleVoice()
+                }}
               />
             ) : null}
           </InputValley>
@@ -800,20 +848,23 @@ export const ChatComposer = memo(function ChatComposer({
             icon={Plus}
             variant={panelRequested ? 'primary' : 'glass'}
             iconColor={panelRequested ? palette.foundation : colors.textMuted}
-            iconSize={22}
+            iconSize={iconSize['2xl']}
             style={styles.actionBtn}
             onPress={() => {
+              selectionHaptic()
               if (panelRequested) {
                 // Panel → keyboard: focus input, keyboardWillShow handles the rest
                 inputRef.current?.focus()
               } else if (keyboardUpRef.current) {
                 // Keyboard → panel: tell hide-handler to keep slot height
+                animateNextLayout()
                 panelIntentRef.current = true
                 setShowEmojiPicker(false)
                 setShowPlusMenu(true)
                 Keyboard.dismiss()
               } else {
                 // Idle → panel
+                animateNextLayout()
                 setShowEmojiPicker(false)
                 setShowPlusMenu(true)
               }
@@ -842,8 +893,12 @@ export const ChatComposer = memo(function ChatComposer({
                     icon={X}
                     variant="ghost"
                     iconColor={colors.textMuted}
-                    iconSize={20}
-                    onPress={() => setShowEmojiPicker(false)}
+                    iconSize={iconSize.xl}
+                    onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
+                      setShowEmojiPicker(false)
+                    }}
                     style={styles.emojiPanelClose}
                   />
                 </View>
@@ -861,6 +916,7 @@ export const ChatComposer = memo(function ChatComposer({
                         },
                       ]}
                       onPress={() => {
+                        selectionHaptic()
                         onInputChange(inputText + item)
                         inputRef.current?.focus()
                       }}
@@ -879,7 +935,11 @@ export const ChatComposer = memo(function ChatComposer({
                     styles.plusPanelItem,
                     pressed && styles.plusPanelPressed,
                   ]}
-                  onPress={() => setShowEmojiPicker(true)}
+                  onPress={() => {
+                    selectionHaptic()
+                    animateNextLayout()
+                    setShowEmojiPicker(true)
+                  }}
                 >
                   <IconBubble
                     icon={Smile}
@@ -898,6 +958,8 @@ export const ChatComposer = memo(function ChatComposer({
                       pressed && styles.plusPanelPressed,
                     ]}
                     onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
                       setShowPlusMenu(false)
                       onOpenProductPicker()
                     }}
@@ -920,6 +982,8 @@ export const ChatComposer = memo(function ChatComposer({
                       pressed && styles.plusPanelPressed,
                     ]}
                     onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
                       setShowPlusMenu(false)
                       onTakePhoto()
                     }}
@@ -942,6 +1006,8 @@ export const ChatComposer = memo(function ChatComposer({
                       pressed && styles.plusPanelPressed,
                     ]}
                     onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
                       setShowPlusMenu(false)
                       onStartVoiceMessageRecording()
                     }}
@@ -963,6 +1029,8 @@ export const ChatComposer = memo(function ChatComposer({
                     pressed && styles.plusPanelPressed,
                   ]}
                   onPress={() => {
+                    selectionHaptic()
+                    animateNextLayout()
                     setShowPlusMenu(false)
                     onPickImage()
                   }}
@@ -983,6 +1051,8 @@ export const ChatComposer = memo(function ChatComposer({
                     pressed && styles.plusPanelPressed,
                   ]}
                   onPress={() => {
+                    selectionHaptic()
+                    animateNextLayout()
                     setShowPlusMenu(false)
                     onPickFile()
                   }}

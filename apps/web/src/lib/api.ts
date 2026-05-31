@@ -73,6 +73,8 @@ function clearAuthState() {
   clearAuthenticatedSession({
     redirectToLogin: true,
     redirect: currentAppRedirect(),
+    syncDesktop: true,
+    desktopReason: 'revoked',
   })
 }
 
@@ -92,7 +94,7 @@ async function refreshAccessToken(): Promise<string | null> {
     const data = (await res.json()) as { accessToken: string; refreshToken: string }
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
-    syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken)
+    syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken, 'refresh')
     return data.accessToken
   } catch {
     return null

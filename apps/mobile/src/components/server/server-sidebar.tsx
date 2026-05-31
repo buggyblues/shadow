@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
+import { selectionHaptic } from '../../lib/haptics'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { border, iconSize, radius, size, spacing, useColors } from '../../theme'
@@ -167,14 +168,24 @@ export function ServerSidebar() {
           return (
             <Pressable
               key={server.id}
-              style={[styles.serverItem, isActive && { backgroundColor: colors.surfaceHover }]}
+              style={({ pressed }) => [
+                styles.serverItem,
+                { transform: [{ scale: pressed ? 0.96 : 1 }] },
+                pressed && { backgroundColor: colors.surfaceHover },
+              ]}
               onPress={() => {
+                selectionHaptic()
                 setActiveServer(server.id)
                 void markServerRead(server.id)
                 router.push(`/(main)/servers/${server.slug ?? server.id}`)
               }}
             >
-              <Avatar uri={server.iconUrl} name={server.name} size={44} />
+              <Avatar
+                uri={server.iconUrl}
+                name={server.name}
+                size={size.controlMd}
+                shape="server"
+              />
               {isActive && (
                 <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />
               )}
@@ -205,8 +216,13 @@ export function ServerSidebar() {
           return (
             <Pressable
               key={channel.id}
-              style={[styles.serverItem, isActive && { backgroundColor: colors.surfaceHover }]}
+              style={({ pressed }) => [
+                styles.serverItem,
+                { transform: [{ scale: pressed ? 0.96 : 1 }] },
+                pressed && { backgroundColor: colors.surfaceHover },
+              ]}
               onPress={() => {
+                selectionHaptic()
                 setActiveServer(null)
                 setActiveChannel(channel.id)
                 void markChannelRead(channel.id)
@@ -216,7 +232,7 @@ export function ServerSidebar() {
               <Avatar
                 uri={peer.avatarUrl}
                 name={peer.displayName || peer.username}
-                size={44}
+                size={size.controlMd}
                 userId={peer.id}
                 status={normalizePresenceStatus(peer.status)}
                 showStatus={true}
@@ -244,27 +260,54 @@ export function ServerSidebar() {
 
         {/* Create server */}
         <Pressable
-          style={[styles.actionItem, { backgroundColor: colors.surface }]}
-          onPress={openAddMenu}
+          style={({ pressed }) => [
+            styles.actionItem,
+            {
+              backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+              transform: [{ scale: pressed ? 0.96 : 1 }],
+            },
+          ]}
+          onPress={() => {
+            selectionHaptic()
+            openAddMenu()
+          }}
         >
           <Plus size={iconSize['2xl']} color={colors.success} />
         </Pressable>
 
         {/* Discover */}
         <Pressable
-          style={[styles.actionItem, { backgroundColor: colors.surface }]}
-          onPress={() => router.push('/(main)/discover')}
+          style={({ pressed }) => [
+            styles.actionItem,
+            {
+              backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+              transform: [{ scale: pressed ? 0.96 : 1 }],
+            },
+          ]}
+          onPress={() => {
+            selectionHaptic()
+            router.push('/(main)/discover')
+          }}
         >
           <Compass size={iconSize['2xl']} color={colors.primary} />
         </Pressable>
       </ScrollView>
 
       {/* User avatar at bottom */}
-      <Pressable style={styles.userSection} onPress={() => router.push('/(main)/settings')}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.userSection,
+          { transform: [{ scale: pressed ? 0.96 : 1 }] },
+        ]}
+        onPress={() => {
+          selectionHaptic()
+          router.push('/(main)/settings')
+        }}
+      >
         <Avatar
           uri={user?.avatarUrl}
           name={user?.displayName || user?.username || '?'}
-          size={36}
+          size={size.iconButtonMd}
           userId={user?.id}
         />
       </Pressable>

@@ -7,6 +7,25 @@ import {
   readCommunityAuthTokensFromStorage,
 } from '../shared/community-auth'
 
+const DESKTOP_SETTINGS_STORAGE_KEY = 'shadow:desktop-runtime-settings:v1'
+const DEFAULT_DESKTOP_SERVER_BASE_URL = 'https://shadowob.com'
+
+type DesktopRuntimeSettingsSnapshot = {
+  serverBaseUrl: string
+  httpProxy: string
+  httpsProxy: string
+}
+
+type CommunityAuthSyncReason =
+  | 'startup'
+  | 'storage'
+  | 'sync'
+  | 'login'
+  | 'refresh'
+  | 'logout'
+  | 'settings'
+  | 'revoked'
+
 function applyDesktopDocumentClasses(): void {
   const apply = () => {
     document.documentElement.classList.add(
@@ -19,6 +38,61 @@ function applyDesktopDocumentClasses(): void {
   window.addEventListener('DOMContentLoaded', apply, { once: true })
 }
 
+function normalizeDesktopRuntimeSettings(settings: unknown): DesktopRuntimeSettingsSnapshot | null {
+  if (!settings || typeof settings !== 'object') return null
+  const record = settings as Record<string, unknown>
+  const serverBaseUrl =
+    typeof record.serverBaseUrl === 'string'
+      ? normalizeDesktopServerBaseUrl(record.serverBaseUrl)
+      : DEFAULT_DESKTOP_SERVER_BASE_URL
+  return {
+    serverBaseUrl,
+    httpProxy: typeof record.httpProxy === 'string' ? record.httpProxy : '',
+    httpsProxy: typeof record.httpsProxy === 'string' ? record.httpsProxy : '',
+  }
+}
+
+function normalizeDesktopServerBaseUrl(value: string): string {
+  try {
+    const url = new URL(value.trim() || DEFAULT_DESKTOP_SERVER_BASE_URL)
+    if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin
+  } catch {
+    // Fall through to the hosted community.
+  }
+  return DEFAULT_DESKTOP_SERVER_BASE_URL
+}
+
+function persistDesktopRuntimeSettings(settings: unknown): void {
+  const normalized = normalizeDesktopRuntimeSettings(settings)
+  if (!normalized) return
+  try {
+    window.localStorage?.setItem(DESKTOP_SETTINGS_STORAGE_KEY, JSON.stringify(normalized))
+    window.dispatchEvent(new CustomEvent('shadow:desktop-runtime-settings-changed'))
+  } catch {
+    // Ignore origins where localStorage is unavailable.
+  }
+}
+
+function syncDesktopRuntimeSettingsSync(): void {
+  try {
+    persistDesktopRuntimeSettings(ipcRenderer.sendSync('desktop:getSettingsSync'))
+  } catch {
+    // The sync channel is best-effort so Web startup can read the desktop origin immediately.
+  }
+}
+
+async function syncDesktopRuntimeSettings(): Promise<void> {
+  try {
+    persistDesktopRuntimeSettings(await ipcRenderer.invoke('desktop:getSettings'))
+  } catch {
+    // Keep the last persisted runtime settings.
+  }
+}
+
+ipcRenderer.on('desktop:settingsChanged', (_event, settings) => {
+  persistDesktopRuntimeSettings(settings)
+})
+
 let lastSyncedCommunityAuthSnapshot: string | null = null
 
 function readCommunityAuthSnapshot(): { accessToken: string; refreshToken: string } {
@@ -26,7 +100,12 @@ function readCommunityAuthSnapshot(): { accessToken: string; refreshToken: strin
 }
 
 function syncCommunityAuthSnapshot(
-  options: { force?: boolean; accessToken?: string | null; refreshToken?: string | null } = {},
+  options: {
+    force?: boolean
+    accessToken?: string | null
+    refreshToken?: string | null
+    reason?: CommunityAuthSyncReason
+  } = {},
 ): void {
   try {
     const storedTokens = readCommunityAuthSnapshot()
@@ -44,6 +123,7 @@ function syncCommunityAuthSnapshot(
     ipcRenderer.send('desktop:communityAuthSnapshot', {
       accessToken,
       refreshToken,
+      reason: options.reason ?? 'sync',
       sourceUrl: window.location.href,
     })
   } catch {
@@ -52,11 +132,11 @@ function syncCommunityAuthSnapshot(
 }
 
 function forceSyncCommunityAuthToken(): void {
-  syncCommunityAuthSnapshot({ force: true })
+  syncCommunityAuthSnapshot({ force: true, reason: 'startup' })
 }
 
 function syncCommunityAuthTokenOnStorage(): void {
-  syncCommunityAuthSnapshot()
+  syncCommunityAuthSnapshot({ reason: 'storage' })
 }
 
 function dispatchCommunityAuthRequired(): void {
@@ -128,8 +208,18 @@ const desktopAPI = {
   getCommunityAuthToken: () => {
     return ipcRenderer.invoke('desktop:getCommunityAuthToken') as Promise<string>
   },
-  syncCommunityAuthToken: (accessToken?: string | null, refreshToken?: string | null) => {
-    syncCommunityAuthSnapshot({ force: true, accessToken, refreshToken })
+  getCommunityAuthTokens: () => {
+    return ipcRenderer.invoke('desktop:getCommunityAuthTokens') as Promise<{
+      accessToken: string
+      refreshToken: string
+    }>
+  },
+  syncCommunityAuthToken: (
+    accessToken?: string | null,
+    refreshToken?: string | null,
+    reason?: CommunityAuthSyncReason,
+  ) => {
+    syncCommunityAuthSnapshot({ force: true, accessToken, refreshToken, reason: reason ?? 'sync' })
   },
   communityFetchJson: (input: {
     path: string
@@ -660,12 +750,16 @@ const desktopAPI = {
   resumeShortcuts: () => ipcRenderer.invoke('desktop:shortcuts:resume'),
 }
 
+syncDesktopRuntimeSettingsSync()
 contextBridge.exposeInMainWorld('desktopAPI', desktopAPI)
-
 applyDesktopDocumentClasses()
+void syncDesktopRuntimeSettings()
 forceSyncCommunityAuthToken()
+window.addEventListener('DOMContentLoaded', () => void syncDesktopRuntimeSettings())
 window.addEventListener('DOMContentLoaded', forceSyncCommunityAuthToken)
+window.addEventListener('load', () => void syncDesktopRuntimeSettings())
 window.addEventListener('load', forceSyncCommunityAuthToken)
+window.addEventListener('focus', () => void syncDesktopRuntimeSettings())
 window.addEventListener('focus', forceSyncCommunityAuthToken)
 window.addEventListener('storage', syncCommunityAuthTokenOnStorage)
 window.setInterval(syncCommunityAuthSnapshot, 5000)

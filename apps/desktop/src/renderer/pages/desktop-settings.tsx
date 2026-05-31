@@ -40,6 +40,7 @@ import {
 import type { DesktopPetAssetSettings } from '../pet-types'
 
 const DESKTOP_SETTINGS_STORAGE_KEY = 'shadow:desktop-runtime-settings:v1'
+const DEFAULT_DESKTOP_SERVER_BASE_URL = 'https://shadowob.com'
 
 const desktopSettingsTabs = new Set<DesktopSettingsTab>([
   'general',
@@ -102,11 +103,21 @@ function persistRuntimeSettings(settings: DesktopRuntimeSettings): void {
   localStorage.setItem(
     DESKTOP_SETTINGS_STORAGE_KEY,
     JSON.stringify({
-      serverBaseUrl: settings.serverBaseUrl,
+      serverBaseUrl: resolveRuntimeServerBaseUrl(settings.serverBaseUrl),
       httpProxy: settings.httpProxy,
       httpsProxy: settings.httpsProxy,
     }),
   )
+}
+
+function resolveRuntimeServerBaseUrl(value: string): string {
+  try {
+    const url = new URL(value.trim() || DEFAULT_DESKTOP_SERVER_BASE_URL)
+    if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin
+  } catch {
+    // Fall through to the hosted community.
+  }
+  return DEFAULT_DESKTOP_SERVER_BASE_URL
 }
 
 export function DesktopSettingsPage() {
@@ -120,7 +131,7 @@ export function DesktopSettingsPage() {
   const [savingNetwork, setSavingNetwork] = useState(false)
   const [networkSaved, setNetworkSaved] = useState(false)
   const [autoCheckOnLaunch, setAutoCheckOnLaunch] = useState(true)
-  const [serverBaseUrl, setServerBaseUrl] = useState('https://shadowob.com')
+  const [serverBaseUrl, setServerBaseUrl] = useState('')
   const [httpProxy, setHttpProxy] = useState('')
   const [httpsProxy, setHttpsProxy] = useState('')
   const [connectorApiKey, setConnectorApiKey] = useState('')

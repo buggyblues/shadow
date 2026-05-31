@@ -13,7 +13,10 @@ import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
 import { fetchApi } from './lib/api'
 import { authenticatedRouterPathFromRedirect, currentAppRedirect } from './lib/auth-redirect'
-import { ensureAuthenticatedSession } from './lib/auth-session'
+import {
+  ensureAuthenticatedSession,
+  installDesktopCommunityAuthStateListener,
+} from './lib/auth-session'
 import { reloadOnceForChunkError } from './lib/chunk-reload'
 import { queryClient } from './lib/query-client'
 import { ChannelView } from './pages/channel-view'
@@ -46,6 +49,8 @@ import { ShopTagPage } from './pages/shop-tag'
 import { UserProfilePage } from './pages/user-profile'
 import { WorkspacePageRoute } from './pages/workspace'
 import './styles/globals.css'
+
+installDesktopCommunityAuthStateListener()
 
 const CloudSaasApp = lazy(() =>
   import('@shadowob/cloud-ui/web-saas')
