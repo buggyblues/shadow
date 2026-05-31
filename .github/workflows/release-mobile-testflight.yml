@@ -32,7 +32,11 @@ jobs:
   gate:
     name: Detect releasable mobile changes
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    if: |
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): mobile v'))
     outputs:
       should_release: ${{ steps.gate.outputs.should_release }}
       tag: ${{ steps.gate.outputs.tag }}
@@ -150,6 +154,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare mobile release version
+        id: mobile_version
+        working-directory: apps/mobile
+        run: node scripts/prepare-release-version.mjs
+
       - name: Validate mobile app
         run: pnpm mobile:verify:ios
 
@@ -240,14 +249,26 @@ jobs:
             --profile production \
             --auto-submit \
             --non-interactive \
-            --message "Mobile TestFlight ${{ needs.gate.outputs.tag }} ${{ needs.gate.outputs.head_sha }}"
+            --message "Mobile TestFlight ${{ steps.mobile_version.outputs.version }} ${{ needs.gate.outputs.tag }} ${{ needs.gate.outputs.head_sha }}"
 
       - name: Mark daily mobile TestFlight release
         shell: bash
+        env:
+          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
           set -euo pipefail
           git fetch --force --tags
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add apps/mobile/app.config.ts
+          if git diff --cached --quiet; then
+            echo "No mobile release version change to commit."
+          else
+            git commit -m "chore(release): mobile v${{ steps.mobile_version.outputs.version }}"
+          fi
+
           git tag -a "${{ needs.gate.outputs.tag }}" -m "Mobile TestFlight ${{ needs.gate.outputs.tag }}"
-          git push origin "${{ needs.gate.outputs.tag }}"
+          git tag -a "${{ steps.mobile_version.outputs.version_tag }}" -m "Mobile app ${{ steps.mobile_version.outputs.version }}"
+          git push origin "HEAD:${RELEASE_BRANCH}"
+          git push origin "${{ needs.gate.outputs.tag }}" "${{ steps.mobile_version.outputs.version_tag }}"
