@@ -180,11 +180,11 @@ export default function BuddyManagementScreen() {
       title: t('buddyMgmt.title', 'Buddy 管理'),
       headerRight: () => (
         <HeaderButtonGroup>
-          <HeaderButton icon={Plus} onPress={() => setShowCreate(true)} />
+          <HeaderButton icon={Plus} color={colors.primary} onPress={() => setShowCreate(true)} />
         </HeaderButtonGroup>
       ),
     })
-  }, [navigation, t])
+  }, [colors.primary, navigation, t])
 
   const resetCreateForm = () => {
     setShowCreate(false)

@@ -83,7 +83,7 @@ export default function SettingsScreen() {
       key: 'appearance',
       icon: Paintbrush,
       label: t('settings.tabAppearance'),
-      tone: 'accent',
+      tone: 'primary',
       route: '/(main)/settings/appearance',
     },
     {

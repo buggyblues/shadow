@@ -92,6 +92,7 @@ import type { PopupAction } from './selection-popup'
 import { SelectionPopup } from './selection-popup'
 
 const REACTION_ENTERING = ZoomIn.duration(120)
+const MESSAGE_ACTION_PRESS_SCALE = 0.98
 
 type SignedMediaUrl = {
   url: string
@@ -358,7 +359,7 @@ function WalletRechargeCard({ data }: { data: WalletRechargeMetadata }) {
       </View>
 
       <View style={styles.walletRechargeActions}>
-        <Button variant="secondary" size="sm" icon={Wallet} onPress={openTasks}>
+        <Button variant="primary" size="sm" icon={Wallet} onPress={openTasks}>
           {t('chat.modelWalletRechargeAction')}
         </Button>
         <Button variant="glass" size="sm" onPress={openTasks}>
@@ -464,9 +465,13 @@ function ServerAppCardMobile({
   return (
     <Pressable
       disabled={!serverSlug || openApp.isPending}
-      style={[
+      style={({ pressed }) => [
         styles.serverAppCard,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        {
+          backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+          borderColor: colors.border,
+          transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }],
+        },
       ]}
       onPress={() => {
         selectionHaptic()
@@ -516,7 +521,7 @@ function TaskCardMobile({ card }: { card: TaskMessageCard }) {
           uri={null}
           name={assigneeLabel}
           userId={card.assignee?.userId ?? card.assignee?.agentId ?? assigneeLabel}
-          size={34}
+          size={size.iconBubble}
         />
         <View style={styles.taskHeaderText}>
           <Text style={[styles.taskTitle, { color: colors.text }]}>{card.title}</Text>
@@ -714,6 +719,7 @@ function VoiceAttachmentView({
           {
             backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground,
             borderColor: isPlaying ? colors.primary : colors.border,
+            transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }],
           },
         ]}
       >
@@ -841,7 +847,7 @@ function MessageBubbleInner({
     selectionHaptic()
     const resolved = await resolveAttachmentUrl(attachmentAction, 'attachment')
     if (!resolved) {
-      showToast(t('chat.saveFailed', 'Failed to save file'), 'error')
+      showToast(t('chat.saveFailed'), 'error')
       setAttachmentAction(null)
       return
     }
@@ -853,21 +859,21 @@ function MessageBubbleInner({
       if (isMedia) {
         const { status } = await MediaLibrary.requestPermissionsAsync()
         if (status !== 'granted') {
-          showToast(t('chat.permissionDenied', 'Permission denied'), 'error')
+          showToast(t('chat.permissionDenied'), 'error')
           return
         }
         await MediaLibrary.saveToLibraryAsync(localUri)
         successHaptic()
-        showToast(t('chat.imageSaved', 'File saved to library'), 'success')
+        showToast(t('chat.imageSaved'), 'success')
       } else if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(localUri)
       } else {
-        showToast(t('chat.shareUnavailable', 'Sharing is not available on this device'), 'error')
+        showToast(t('chat.shareUnavailable'), 'error')
       }
     } catch (err) {
       console.error('Save failed:', err)
       errorHaptic()
-      showToast(t('chat.saveFailed', 'Failed to save file'), 'error')
+      showToast(t('chat.saveFailed'), 'error')
     }
     setAttachmentAction(null)
   }, [attachmentAction, t, downloadToLocal, resolveAttachmentUrl])
@@ -877,7 +883,7 @@ function MessageBubbleInner({
     selectionHaptic()
     const resolved = await resolveAttachmentUrl(attachmentAction, 'attachment')
     if (!resolved) {
-      showToast(t('chat.shareFailed', 'Failed to share file'), 'error')
+      showToast(t('chat.shareFailed'), 'error')
       setAttachmentAction(null)
       return
     }
@@ -886,12 +892,12 @@ function MessageBubbleInner({
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(localUri)
       } else {
-        showToast(t('chat.shareUnavailable', 'Sharing is not available on this device'), 'error')
+        showToast(t('chat.shareUnavailable'), 'error')
       }
     } catch (err) {
       console.error('Share failed:', err)
       errorHaptic()
-      showToast(t('chat.shareFailed', 'Failed to share file'), 'error')
+      showToast(t('chat.shareFailed'), 'error')
     }
     setAttachmentAction(null)
   }, [attachmentAction, t, downloadToLocal, resolveAttachmentUrl])
@@ -901,13 +907,13 @@ function MessageBubbleInner({
     selectionHaptic()
     const resolved = await resolveAttachmentUrl(attachmentAction, 'attachment')
     if (!resolved) {
-      showToast(t('chat.shareFailed', 'Failed to share file'), 'error')
+      showToast(t('chat.shareFailed'), 'error')
       setAttachmentAction(null)
       return
     }
     await Clipboard.setStringAsync(resolved)
     successHaptic()
-    showToast(t('common.copied', '已复制'), 'success')
+    showToast(t('common.copied'), 'success')
     setAttachmentAction(null)
   }, [attachmentAction, t, resolveAttachmentUrl])
 
@@ -1014,18 +1020,14 @@ function MessageBubbleInner({
   const handleDeleteMessage = useCallback(() => {
     selectionHaptic()
     dismissPopup()
-    Alert.alert(
-      t('chat.deleteMessage', '删除消息'),
-      t('chat.deleteMessageConfirm', '确定要删除这条消息吗？'),
-      [
-        { text: t('common.cancel', '取消'), style: 'cancel' },
-        {
-          text: t('common.delete', '删除'),
-          style: 'destructive',
-          onPress: () => deleteMutation.mutate(),
-        },
-      ],
-    )
+    Alert.alert(t('chat.deleteMessage'), t('chat.deleteMessageConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: () => deleteMutation.mutate(),
+      },
+    ])
   }, [dismissPopup, t, deleteMutation])
 
   const POPUP_HEIGHT_EST = 90
@@ -1036,13 +1038,13 @@ function MessageBubbleInner({
   const popupActions = useMemo<PopupAction[]>(() => {
     if (selectionMode) {
       return onSelectRangeTo && selectionAnchorId !== message.id
-        ? [{ label: t('chat.selectToHere', '选择到此消息'), onPress: handleSelectRangeTo }]
+        ? [{ label: t('chat.selectToHere'), onPress: handleSelectRangeTo }]
         : []
     }
 
     const actions: PopupAction[] = [
-      { label: t('chat.copy', '复制'), onPress: handleCopyMessage },
-      { label: t('chat.reply', '回复'), onPress: handleReplyAction },
+      { label: t('chat.copy'), onPress: handleCopyMessage },
+      { label: t('chat.reply'), onPress: handleReplyAction },
     ]
     if (onOpenThread && !message.threadId) {
       actions.push({
@@ -1052,13 +1054,13 @@ function MessageBubbleInner({
     }
     if (onEnterSelectionMode) {
       actions.push({
-        label: t('chat.multiSelect', '多选'),
+        label: t('chat.multiSelect'),
         onPress: handleEnterMultiSelect,
       })
     }
     if (isOwnMessage) {
       actions.push({
-        label: t('common.delete', '删除'),
+        label: t('common.delete'),
         onPress: handleDeleteMessage,
       })
     }
@@ -1141,7 +1143,7 @@ function MessageBubbleInner({
       contentType.includes('tar') ||
       contentType.includes('rar')
     )
-      return palette.yellow
+      return colors.primary
     if (contentType.includes('pdf')) return palette.crimson
     if (
       contentType.includes('json') ||
@@ -1224,9 +1226,7 @@ function MessageBubbleInner({
 
       <View style={styles.row}>
         {selectionMode && (
-          <View
-            style={{ paddingTop: spacing.sm, paddingRight: spacing.sm, paddingLeft: spacing.xs }}
-          >
+          <View style={styles.selectionGutter}>
             {isSelected ? (
               <CheckSquare size={iconSize.xl} color={colors.primary} />
             ) : (
@@ -1239,6 +1239,9 @@ function MessageBubbleInner({
         ) : (
           <Pressable
             disabled={selectionMode}
+            style={({ pressed }) => ({
+              transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }],
+            })}
             onPress={() => {
               selectionHaptic()
               router.push(`/(main)/profile/${message.authorId}` as never)
@@ -1266,7 +1269,7 @@ function MessageBubbleInner({
               </Pressable>
               {isBot && (
                 <View style={[styles.botBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.botBadgeText}>Buddy</Text>
+                  <Text style={styles.botBadgeText}>{t('common.bot')}</Text>
                 </View>
               )}
               <Text style={[styles.time, { color: colors.textMuted }]}>{timeAgo}</Text>
@@ -1352,7 +1355,10 @@ function MessageBubbleInner({
               return (
                 <Pressable
                   key={att.id}
-                  style={styles.imageAttachment}
+                  style={({ pressed }) => [
+                    styles.imageAttachment,
+                    { transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }] },
+                  ]}
                   disabled={selectionMode}
                   onPress={async () => {
                     selectionHaptic()
@@ -1386,9 +1392,13 @@ function MessageBubbleInner({
             return (
               <Pressable
                 key={att.id}
-                style={[
+                style={({ pressed }) => [
                   styles.fileCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  {
+                    backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                    borderColor: colors.border,
+                    transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }],
+                  },
                 ]}
                 disabled={selectionMode}
                 onPress={async () => {
@@ -1469,11 +1479,13 @@ function MessageBubbleInner({
                   <Animated.View key={r.emoji} entering={REACTION_ENTERING}>
                     <Pressable
                       disabled={selectionMode}
-                      style={[
+                      style={({ pressed }) => [
                         styles.reaction,
                         {
-                          backgroundColor: isReacted ? colors.surfaceHover : colors.surface,
+                          backgroundColor:
+                            pressed || isReacted ? colors.surfaceHover : colors.surface,
                           borderColor: isReacted ? colors.primary : colors.border,
+                          transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }],
                         },
                       ]}
                       onPress={() => {
@@ -1496,9 +1508,13 @@ function MessageBubbleInner({
               })}
               <Pressable
                 disabled={selectionMode}
-                style={[
+                style={({ pressed }) => [
                   styles.reactionAdd,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  {
+                    backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                    borderColor: colors.border,
+                    transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }],
+                  },
                 ]}
                 onPress={() => {
                   selectionHaptic()
@@ -1515,7 +1531,7 @@ function MessageBubbleInner({
             <View style={styles.sendStatus}>
               <AlertCircle size={iconSize.xs} color={colors.error} />
               <Text style={[styles.sendStatusText, { color: colors.error }]}>
-                {t('chat.sendFailed', '发送失败')}
+                {t('chat.sendFailed')}
               </Text>
               <Button
                 variant="danger"
@@ -1529,7 +1545,7 @@ function MessageBubbleInner({
                 }}
                 hitSlop={spacing.sm}
               >
-                {t('chat.retry', '重试')}
+                {t('chat.retry')}
               </Button>
             </View>
           )}
@@ -1581,15 +1597,11 @@ function MessageBubbleInner({
         onClose={() => setAttachmentAction(null)}
         title={attachmentAction?.filename}
       >
-        <MenuItem
-          icon={Save}
-          title={t('chat.saveFile', '保存文件')}
-          onPress={handleAttachmentSave}
-        />
-        <MenuItem icon={Share2} title={t('common.share', '分享')} onPress={handleAttachmentShare} />
+        <MenuItem icon={Save} title={t('chat.saveFile')} onPress={handleAttachmentSave} />
+        <MenuItem icon={Share2} title={t('common.share')} onPress={handleAttachmentShare} />
         <MenuItem
           icon={ExternalLink}
-          title={t('chat.copyLink', '复制链接')}
+          title={t('chat.copyLink')}
           onPress={handleAttachmentCopyUrl}
         />
         <Button
@@ -1600,7 +1612,7 @@ function MessageBubbleInner({
             setAttachmentAction(null)
           }}
         >
-          {t('common.cancel', '取消')}
+          {t('common.cancel')}
         </Button>
       </Sheet>
     </Pressable>
@@ -2234,6 +2246,11 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  selectionGutter: {
+    paddingTop: spacing.sm,
+    paddingRight: spacing.sm,
+    paddingLeft: spacing.xs,
   },
   bubble: {
     flex: 1,

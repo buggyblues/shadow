@@ -110,7 +110,7 @@ export default function InviteSettingsScreen() {
               </AppText>
             </View>
             <View style={styles.referralStat}>
-              <AppText variant="headline" style={{ color: colors.accentStrong }}>
+              <AppText variant="headline" style={{ color: colors.primary }}>
                 <PriceCompact amount={referralSummary?.totalInviteRewards ?? 0} size={17} />
               </AppText>
               <AppText variant="label" tone="secondary">

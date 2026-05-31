@@ -31,6 +31,7 @@ export function Avatar({
   const dotSize = Math.max(10, Math.round(size * 0.28))
   const statusColor = getStatusColor(colors, status)
   const borderRadius = shape === 'server' ? radius['2lg'] : size / 2
+  const isServerShape = shape === 'server'
 
   const initials = (name || '?').slice(0, 2).toUpperCase()
   return (
@@ -41,7 +42,8 @@ export function Avatar({
           width: size,
           height: size,
           borderRadius,
-          backgroundColor: shape === 'server' ? colors.surface : colors.inputBackground,
+          backgroundColor: isServerShape ? colors.surface : colors.inputBackground,
+          borderWidth: isServerShape ? border.none : border.active,
           borderColor: colors.border,
         },
       ]}
@@ -58,7 +60,7 @@ export function Avatar({
           style={[
             styles.fallback,
             {
-              backgroundColor: shape === 'server' ? colors.inputBackground : colors.primary,
+              backgroundColor: isServerShape ? colors.inputBackground : colors.primary,
               borderRadius,
             },
           ]}
@@ -68,7 +70,7 @@ export function Avatar({
               styles.initials,
               {
                 fontSize: Math.round(size * 0.4),
-                color: shape === 'server' ? colors.text : palette.white,
+                color: isServerShape ? colors.text : palette.white,
               },
             ]}
           >
@@ -105,7 +107,6 @@ const styles = StyleSheet.create({
   shell: {
     position: 'relative',
     overflow: 'visible',
-    borderWidth: border.active,
   },
   image: {
     width: '100%',

@@ -4,6 +4,8 @@ import {
   type AccessibilityRole,
   ActivityIndicator,
   Modal,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
   ScrollView,
   type StyleProp,
@@ -41,6 +43,8 @@ export type ButtonVariant =
   | 'glass'
   | 'ghost'
   | 'outline'
+
+const ROW_PRESS_SCALE = 0.995
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'icon'
 export type CardVariant =
   | 'default'
@@ -122,7 +126,13 @@ export function AppScreen({
 
   if (scroll) {
     return (
-      <ScrollView style={baseStyle} contentContainerStyle={contentStyle}>
+      <ScrollView
+        style={baseStyle}
+        contentContainerStyle={contentStyle}
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+      >
         {children}
       </ScrollView>
     )
@@ -148,6 +158,8 @@ export function PageScroll({
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      contentInsetAdjustmentBehavior="automatic"
       style={[styles.pageScroll, style]}
       contentContainerStyle={[
         styles.pageContent,
@@ -298,7 +310,10 @@ export function MobileBackButton({
       icon={ChevronLeft}
       iconColor={colors.text}
       iconSize={iconSize['3xl']}
-      onPress={onPress}
+      onPress={() => {
+        selectionHaptic()
+        onPress()
+      }}
       hitSlop={spacing.md}
       accessibilityLabel={accessibilityLabel}
       variant="ghost"
@@ -394,6 +409,7 @@ export function GlassListItem({
           backgroundColor: pressed ? colors.messageHover : colors.surface,
           borderBottomColor: colors.border,
           borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+          transform: [{ scale: pressed ? ROW_PRESS_SCALE : 1 }],
         },
         style,
       ]}
@@ -438,6 +454,7 @@ export function SurfaceListItem({
           backgroundColor: pressed ? colors.messageHover : colors.surface,
           borderBottomColor: colors.border,
           borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+          transform: [{ scale: pressed ? ROW_PRESS_SCALE : 1 }],
         },
         style,
       ]}
@@ -827,7 +844,7 @@ export function ActionTile({
       onPress={onPress}
       style={[styles.actionTile, style]}
     >
-      <IconBubble icon={icon} tone={tone} size={17} style={styles.actionTileIcon} />
+      <IconBubble icon={icon} tone={tone} size={iconSize.lg} style={styles.actionTileIcon} />
       <AppText variant="label" tone="secondary" style={styles.actionTileLabel} numberOfLines={2}>
         {label}
       </AppText>
@@ -1003,7 +1020,10 @@ export function ListRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.listRow,
-        { backgroundColor: pressed ? colors.messageHover : colors.surface },
+        {
+          backgroundColor: pressed ? colors.messageHover : colors.surface,
+          transform: [{ scale: pressed ? ROW_PRESS_SCALE : 1 }],
+        },
       ]}
     >
       {icon && <IconBubble icon={icon} tone={tone} size={iconSize.md} />}
@@ -1307,7 +1327,7 @@ export function MobileTabBar<T extends string>({
                 scrollRef.current?.scrollTo({ x: centeredOffset, animated: false })
               }}
               onPress={() => {
-                selectionHaptic()
+                if (!active) selectionHaptic()
                 onChange(option.value, index)
               }}
               style={({ pressed }) => [
@@ -1353,6 +1373,94 @@ export function MobileTabBar<T extends string>({
             </Pressable>
           )
         })}
+      </ScrollView>
+    </View>
+  )
+}
+
+export function MobileSwipeTabs<T extends string>({
+  value,
+  options,
+  onChange,
+  renderPage,
+  style,
+  tabBarStyle,
+  pageStyle,
+  tone = 'primary',
+}: {
+  value: T
+  options: Array<{ value: T; label: ReactNode; count?: ReactNode; icon?: LucideIcon }>
+  onChange: (value: T, index: number) => void
+  renderPage: (
+    option: { value: T; label: ReactNode; count?: ReactNode; icon?: LucideIcon },
+    index: number,
+  ) => ReactNode
+  style?: StyleProp<ViewStyle>
+  tabBarStyle?: StyleProp<ViewStyle>
+  pageStyle?: StyleProp<ViewStyle>
+  tone?: Extract<Tone, 'primary' | 'accent'>
+}) {
+  const scrollRef = useRef<ScrollView>(null)
+  const previousViewportWidthRef = useRef(0)
+  const [viewportWidth, setViewportWidth] = useState(0)
+  const activeIndex = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  )
+
+  useEffect(() => {
+    if (viewportWidth <= 0) return
+    const animated = previousViewportWidthRef.current === viewportWidth
+    previousViewportWidthRef.current = viewportWidth
+    scrollRef.current?.scrollTo({ x: activeIndex * viewportWidth, animated })
+  }, [activeIndex, viewportWidth])
+
+  const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (viewportWidth <= 0 || options.length === 0) return
+    const index = Math.max(
+      0,
+      Math.min(options.length - 1, Math.round(event.nativeEvent.contentOffset.x / viewportWidth)),
+    )
+    const next = options[index]
+    if (!next || next.value === value) return
+    selectionHaptic()
+    onChange(next.value, index)
+  }
+
+  return (
+    <View
+      style={[styles.mobileSwipeTabs, style]}
+      onLayout={({ nativeEvent }) => {
+        const nextWidth = nativeEvent.layout.width
+        setViewportWidth((currentWidth) => (currentWidth === nextWidth ? currentWidth : nextWidth))
+      }}
+    >
+      <MobileTabBar
+        value={value}
+        options={options}
+        onChange={onChange}
+        tone={tone}
+        style={tabBarStyle}
+      />
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        decelerationRate="fast"
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+      >
+        {options.map((option, index) => (
+          <View
+            key={option.value}
+            style={[styles.mobileSwipePage, { width: viewportWidth }, pageStyle]}
+          >
+            {renderPage(option, index)}
+          </View>
+        ))}
       </ScrollView>
     </View>
   )
@@ -1446,7 +1554,10 @@ export function SwitchRow({
       icon={icon}
       title={title}
       subtitle={subtitle}
-      onPress={() => onValueChange(!value)}
+      onPress={() => {
+        selectionHaptic()
+        onValueChange(!value)
+      }}
       right={<AppSwitch value={value} onValueChange={onValueChange} />}
     />
   )
@@ -1470,12 +1581,20 @@ export function SegmentedControl<T extends string>({
         return (
           <Pressable
             key={option.value}
-            onPress={() => onChange(option.value)}
-            style={[
+            onPress={() => {
+              if (!active) selectionHaptic()
+              onChange(option.value)
+            }}
+            style={({ pressed }) => [
               styles.segment,
               {
-                backgroundColor: active ? colors.surface : colors.inputBackground,
+                backgroundColor: active
+                  ? colors.surface
+                  : pressed
+                    ? colors.surfaceHover
+                    : colors.inputBackground,
                 borderColor: active ? colors.primary : colors.inputBackground,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
               },
             ]}
           >
@@ -1616,6 +1735,7 @@ export function MenuItem({
         styles.menuItem,
         {
           backgroundColor: pressed ? colors.messageHover : colors.surface,
+          transform: [{ scale: pressed ? ROW_PRESS_SCALE : 1 }],
         },
       ]}
     >
@@ -2489,6 +2609,12 @@ const styles = StyleSheet.create({
   },
   mobileTabCount: {
     fontWeight: '900',
+  },
+  mobileSwipeTabs: {
+    width: '100%',
+  },
+  mobileSwipePage: {
+    paddingBottom: spacing.xl,
   },
   segmented: {
     flexDirection: 'row',

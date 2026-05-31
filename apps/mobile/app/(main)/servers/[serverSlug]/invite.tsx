@@ -241,7 +241,7 @@ export default function ServerInviteScreen() {
       {invitableFriends.length > 0 && (
         <View style={{ marginBottom: spacing.md }}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            <UserPlus size={iconSize.sm} color={colors.textSecondary} />{' '}
+            <UserPlus size={iconSize.sm} color={colors.primary} />{' '}
             {t('members.inviteFriendsAndBuddies', '邀请好友 / Buddy')}
           </Text>
           <View
@@ -276,15 +276,15 @@ export default function ServerInviteScreen() {
                     onPress={() => inviteMutation.mutate(f.user.id)}
                   >
                     {isPending ? (
-                      <ActivityIndicator size="small" color={palette.white} />
+                      <ActivityIndicator size="small" color={palette.foundation} />
                     ) : invited ? (
                       <Check size={iconSize.sm} color={colors.textSecondary} />
                     ) : (
-                      <Send size={iconSize.sm} color={palette.white} />
+                      <Send size={iconSize.sm} color={palette.foundation} />
                     )}
                     <Text
                       style={{
-                        color: invited ? colors.textSecondary : palette.white,
+                        color: invited ? colors.textSecondary : palette.foundation,
                         fontWeight: '600',
                         fontSize: fontSize.sm,
                         marginLeft: spacing.xs,
@@ -311,11 +311,11 @@ export default function ServerInviteScreen() {
         onPress={() => setShowForm(!showForm)}
       >
         {showForm ? (
-          <X size={iconSize.sm} color={palette.white} />
+          <X size={iconSize.sm} color={palette.foundation} />
         ) : (
-          <Plus size={iconSize.sm} color={palette.white} />
+          <Plus size={iconSize.sm} color={palette.foundation} />
         )}
-        <Text style={{ color: palette.white, fontWeight: '700', fontSize: fontSize.md }}>
+        <Text style={{ color: palette.foundation, fontWeight: '700', fontSize: fontSize.md }}>
           {showForm ? t('common.cancel') : t('members.inviteCreate', '生成邀请码')}
         </Text>
       </Pressable>
@@ -341,7 +341,7 @@ export default function ServerInviteScreen() {
             onPress={handleCreate}
             disabled={creating}
           >
-            <Text style={{ color: palette.white, fontWeight: '700', fontSize: fontSize.sm }}>
+            <Text style={{ color: palette.foundation, fontWeight: '700', fontSize: fontSize.sm }}>
               {creating ? t('common.loading') : t('settings.inviteGenerate', '生成')}
             </Text>
           </Pressable>

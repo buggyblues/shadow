@@ -202,7 +202,7 @@ export default function ServersScreen() {
       title: '什么是 Buddy？',
       desc: 'Buddy 是黑猫打工仔：能写代码、审方案、查资料，24 小时在线协作。',
       tags: ['多 Agent', '自动协作', '持续产出'],
-      renderIcon: () => <HelpBuddySvg size={size.illustrationLg} color={palette.warning} />,
+      renderIcon: () => <HelpBuddySvg size={size.illustrationLg} color={colors.primary} />,
     },
     {
       key: 'start',
@@ -315,7 +315,7 @@ export default function ServersScreen() {
               >
                 <IconBubble
                   icon={Compass}
-                  tone="accent"
+                  tone="primary"
                   size={iconSize.xl}
                   style={styles.actionBubbleGlow}
                 />
@@ -439,7 +439,7 @@ export default function ServersScreen() {
                 }}
                 style={styles.menuItem}
               >
-                <IconBubble icon={Bot} tone="accent" size={iconSize.xl} />
+                <IconBubble icon={Bot} tone="primary" size={iconSize.xl} />
                 <AppText variant="bodyStrong" style={styles.menuLabel}>
                   {t('home.createBuddyAction')}
                 </AppText>

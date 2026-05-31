@@ -228,7 +228,7 @@ export default function DashboardScreen() {
                 {
                   label: '钱包明细',
                   Icon: Wallet,
-                  color: palette.yellow,
+                  color: colors.primary,
                   route: '/(main)/settings/tasks',
                 },
               ] as const

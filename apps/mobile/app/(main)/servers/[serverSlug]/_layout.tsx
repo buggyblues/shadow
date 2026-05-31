@@ -61,9 +61,9 @@ export default function ServerLayout() {
       <Stack.Screen name="shop" options={{ title: t('server.shop') }} />
       <Stack.Screen name="workspace" options={{ title: t('server.workspace') }} />
       <Stack.Screen name="shop-admin" options={{ title: t('shop.addProduct') }} />
-      <Stack.Screen name="members" options={{ title: t('server.members') }} />
-      <Stack.Screen name="channel-members" options={{ title: t('channel.members', '频道成员') }} />
-      <Stack.Screen name="invite" options={{ title: t('members.inviteMembers', '邀请成员') }} />
+      <Stack.Screen name="members" options={{ headerShown: false }} />
+      <Stack.Screen name="channel-members" options={{ title: t('channel.members') }} />
+      <Stack.Screen name="invite" options={{ title: t('members.inviteMembers') }} />
       <Stack.Screen name="server-settings" options={{ title: t('channel.serverSettings') }} />
     </Stack>
   )

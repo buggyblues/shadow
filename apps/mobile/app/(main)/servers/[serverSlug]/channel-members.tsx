@@ -670,9 +670,9 @@ export default function ChannelMembersScreen() {
 
   const roleBadge = (role: string) => {
     if (role === 'owner')
-      return <Crown size={iconSize.xs} color={palette.yellow} style={{ marginLeft: spacing.xs }} />
+      return <Crown size={iconSize.xs} color={colors.primary} style={styles.roleIcon} />
     if (role === 'admin')
-      return <Shield size={iconSize.xs} color={palette.indigo} style={{ marginLeft: spacing.xs }} />
+      return <Shield size={iconSize.xs} color={colors.primary} style={styles.roleIcon} />
     return null
   }
 
@@ -699,7 +699,7 @@ export default function ChannelMembersScreen() {
               ]}
             >
               <View style={[styles.inviteIcon, { backgroundColor: colors.primary }]}>
-                <UserPlus size={iconSize.lg} color={palette.white} />
+                <UserPlus size={iconSize.lg} color={palette.foundation} />
               </View>
               <Text style={[styles.inviteLabel, { color: colors.text }]}>
                 {t('members.addToChannel', '添加成员到频道')}
@@ -752,11 +752,13 @@ export default function ChannelMembersScreen() {
                 {item.user.isBot && (
                   <View style={[styles.botBadge, { backgroundColor: colors.inputBackground }]}>
                     <Bot size={iconSize.micro} color={colors.primary} />
-                    <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
+                    <Text style={[styles.botBadgeText, { color: colors.primary }]}>
+                      {t('common.bot')}
+                    </Text>
                   </View>
                 )}
               </View>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }} numberOfLines={1}>
+              <Text style={[styles.usernameText, { color: colors.textMuted }]} numberOfLines={1}>
                 {item.user.username}
               </Text>
             </View>
@@ -764,7 +766,7 @@ export default function ChannelMembersScreen() {
             {item.userId !== currentUser?.id && (
               <Pressable
                 onPress={() => removeMember.mutate(item.userId)}
-                hitSlop={8}
+                hitSlop={spacing.sm}
                 style={({ pressed }) => ({
                   backgroundColor: pressed ? colors.surfaceHover : colors.surface,
                 })}
@@ -798,7 +800,7 @@ export default function ChannelMembersScreen() {
             </Text>
             <Pressable
               onPress={() => setShowInviteSheet(false)}
-              hitSlop={8}
+              hitSlop={spacing.sm}
               style={({ pressed }) => ({
                 backgroundColor: pressed ? colors.surfaceHover : colors.surface,
               })}
@@ -884,7 +886,7 @@ export default function ChannelMembersScreen() {
                   fontSize: fontSize.xs,
                 }}
               >
-                Buddy ({buddyCandidates.length})
+                {t('common.bot')} ({buddyCandidates.length})
               </Text>
             </Pressable>
           </View>
@@ -910,7 +912,7 @@ export default function ChannelMembersScreen() {
               autoFocus
             />
             {inviteSearch.length > 0 && (
-              <Pressable onPress={() => setInviteSearch('')} hitSlop={8}>
+              <Pressable onPress={() => setInviteSearch('')} hitSlop={spacing.sm}>
                 <X size={iconSize.sm} color={colors.textMuted} />
               </Pressable>
             )}
@@ -1138,10 +1140,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  roleIcon: {
+    marginLeft: spacing.xs,
+  },
   name: {
     fontSize: fontSize.md,
     fontWeight: '600',
     flexShrink: 1,
+  },
+  usernameText: {
+    fontSize: fontSize.xs,
   },
   botBadge: {
     flexDirection: 'row',
@@ -1287,7 +1295,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   inviteSubmitText: {
-    color: palette.white,
+    color: palette.foundation,
     fontSize: fontSize.sm,
     fontWeight: '600',
   },

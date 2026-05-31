@@ -114,7 +114,7 @@ export function BuddyListItem({
       <Avatar
         uri={member.avatar}
         name={member.nickname}
-        size={36}
+        size={size.iconButtonMd}
         userId={member.uid}
         status={member.status}
         showStatus
@@ -131,7 +131,7 @@ export function BuddyListItem({
           {member.isBot ? (
             <View style={[styles.badge, { backgroundColor: colors.inputBackground }]}>
               <Bot size={iconSize.micro} color={colors.primary} />
-              <Text style={[styles.badgeText, { color: colors.primary }]}>Buddy</Text>
+              <Text style={[styles.badgeText, { color: colors.primary }]}>{t('common.bot')}</Text>
             </View>
           ) : null}
         </View>
@@ -142,7 +142,7 @@ export function BuddyListItem({
               <OnlineRank totalSeconds={member.totalOnlineSeconds} />
             </View>
           ) : (
-            <Text style={[styles.rankFallback, { color: colors.warning }]}>⭐</Text>
+            <Text style={[styles.rankFallback, { color: colors.primary }]}>⭐</Text>
           )
         ) : (
           <Text style={[styles.subText, { color: colors.textMuted }]}>
