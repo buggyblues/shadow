@@ -8,6 +8,20 @@
   },
   "packageManager": "pnpm@10.19.0",
   "pnpm": {
+    "supportedArchitectures": {
+      "os": [
+        "current",
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64",
+        "ia32"
+      ]
+    },
     "onlyBuiltDependencies": [
       "electron",
       "electron-winstaller",

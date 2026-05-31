@@ -61,6 +61,7 @@ RUN find node_modules -type d \( -name ".github" -o -name "test" -o -name "tests
 # TypeScript source changes.
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json .npmrc ./
+COPY patches patches
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/sdk/package.json packages/sdk/package.json
 COPY packages/cli/package.json packages/cli/package.json

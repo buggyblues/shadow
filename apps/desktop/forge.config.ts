@@ -36,7 +36,16 @@ if (isMac) {
 }
 
 function resolveDependencyDir(packageName: string) {
-  return dirname(requireFromDesktop.resolve(`${packageName}/package.json`))
+  try {
+    return dirname(requireFromDesktop.resolve(`${packageName}/package.json`))
+  } catch (error) {
+    if (!packageName.startsWith('sherpa-onnx-') || packageName === 'sherpa-onnx-node') {
+      throw error
+    }
+
+    const sherpaRequire = createRequire(requireFromDesktop.resolve('sherpa-onnx-node/package.json'))
+    return dirname(sherpaRequire.resolve(`${packageName}/package.json`))
+  }
 }
 
 function sherpaNativePackageName(platform: string, arch: string) {

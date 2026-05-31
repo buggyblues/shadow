@@ -3,6 +3,7 @@ import { defineConfig } from '@rsbuild/core'
 import { pluginReact } from '@rsbuild/plugin-react'
 
 // Absolute path to @shadowob/cloud-ui source
+const cloudUiRoot = path.resolve(__dirname, '../cloud/packages/ui')
 const cloudUiSrc = path.resolve(__dirname, '../cloud/packages/ui/src')
 const devApiTarget = process.env.SHADOW_DEV_API_BASE ?? 'http://127.0.0.1:3002'
 
@@ -34,6 +35,7 @@ export default defineConfig({
       '@shadowob/cloud-ui/stores': path.join(cloudUiSrc, 'stores'),
       '@shadowob/cloud-ui/styles': path.join(cloudUiSrc, 'styles'),
       '@shadowob/cloud-ui/i18n': path.join(cloudUiSrc, 'i18n/index.ts'),
+      '@shadowob/cloud-ui/web-saas': path.join(cloudUiRoot, 'web-saas/index.tsx'),
     },
     conditionNames: ['development', 'import', 'module', 'default'],
   },
@@ -70,9 +72,13 @@ export default defineConfig({
       config.plugins ??= []
       config.plugins.push(
         new rspack.NormalModuleReplacementPlugin(/^@\//, (resource) => {
-          const issuer: string = resource.contextInfo?.issuer ?? resource.context ?? ''
+          const issuer = (resource.contextInfo?.issuer ?? resource.context ?? '').replaceAll(
+            '\\',
+            '/',
+          )
           const isCloudFile =
             issuer.includes('/cloud/packages/ui/src/') ||
+            issuer.includes('/cloud/packages/ui/web-saas/') ||
             issuer.includes('/cloud/src/interfaces/web-saas/')
           if (isCloudFile) {
             resource.request = path.join(cloudUiSrc, resource.request.replace(/^@\//, ''))
