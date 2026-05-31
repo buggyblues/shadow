@@ -4,13 +4,18 @@ import { useParams } from '@tanstack/react-router'
 import { Clock, Lock, Send } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { type ChannelSwitcherOption, ChatArea } from '../components/chat/chat-area'
-import { MemberList } from '../components/member/member-list'
+import {
+  type ChannelSwitcherOption,
+  ChatArea,
+  type ChatInitialMessagesPage,
+} from '../components/chat/chat-area'
+import { MemberList, type MemberListInitialMember } from '../components/member/member-list'
 import { ServerLandingPanel } from '../components/server/server-landing'
 import { VoiceChannelPanel } from '../components/voice/voice-channel-panel'
 import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
 import { setLastChannelId } from '../lib/last-channel'
+import { scheduleIdleAfterDelay, scheduleIdleAfterNextPaint } from '../lib/schedule'
 import { joinChannel, leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 import { useUIStore } from '../stores/ui.store'
@@ -40,6 +45,8 @@ function getNotificationChannelId(event: NotificationEvent) {
 interface ChannelViewProps {
   channelId?: string
   serverSlug?: string
+  initialMessages?: ChatInitialMessagesPage | null
+  initialMembers?: MemberListInitialMember[] | null
   copilot?: {
     channels: ChannelSwitcherOption[]
     onSelectChannel: (channelId: string) => void
@@ -51,6 +58,8 @@ interface ChannelViewProps {
 export function ChannelView({
   channelId: channelIdProp,
   serverSlug: serverSlugProp,
+  initialMessages,
+  initialMembers,
   copilot,
 }: ChannelViewProps = {}) {
   const { t } = useTranslation()
@@ -187,21 +196,25 @@ export function ChannelView({
 
   // Sync channel ID from URL → store before paint
   useLayoutEffect(() => {
-    const prev = useChatStore.getState().activeChannelId
-    if (prev && prev !== channelId) {
-      leaveChannel(prev)
-    }
     useChatStore.getState().setActiveChannel(channelId)
-    if (canAccessChannel) {
-      joinChannel(channelId)
-      void markChannelScopeRead()
-    }
     setMobileView('chat')
+  }, [channelId, setMobileView])
+
+  useEffect(() => {
+    if (!canAccessChannel) return
+    const cancelDeferredJoin = scheduleIdleAfterNextPaint(() => {
+      joinChannel(channelId)
+    })
+    const cancelDeferredRead = scheduleIdleAfterDelay(() => {
+      void markChannelScopeRead()
+    }, 1600)
 
     return () => {
-      if (canAccessChannel) leaveChannel(channelId)
+      cancelDeferredJoin()
+      cancelDeferredRead()
+      leaveChannel(channelId)
     }
-  }, [canAccessChannel, channelId, markChannelScopeRead, setMobileView])
+  }, [canAccessChannel, channelId, markChannelScopeRead])
 
   useSocketEvent<NotificationEvent>('notification:new', (event) => {
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
@@ -283,9 +296,13 @@ export function ChannelView({
   }
 
   if (copilot) {
+    const routeServerId = access.channel.serverId ?? activeServerId
     return (
       <ChatArea
         key={channelId}
+        channelId={channelId}
+        serverId={routeServerId}
+        initialMessages={initialMessages}
         showMemberToggle={false}
         channelSwitcher={{
           channels: copilot.channels,
@@ -299,11 +316,24 @@ export function ChannelView({
   }
 
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
+  const routeServerId = access.channel.serverId ?? activeServerId
 
   return (
     <>
-      <ChatArea key={channelId} showMemberToggle={!isInboxChannel} />
-      {!isInboxChannel && <MemberList />}
+      <ChatArea
+        key={channelId}
+        channelId={channelId}
+        serverId={routeServerId}
+        initialMessages={initialMessages}
+        showMemberToggle={!isInboxChannel}
+      />
+      {!isInboxChannel && (
+        <MemberList
+          channelId={channelId}
+          serverId={routeServerId}
+          initialMembers={initialMembers}
+        />
+      )}
     </>
   )
 }

@@ -308,6 +308,7 @@ export default function ChannelViewScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(320)
   const [showSearchPanel, setShowSearchPanel] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [searchFromUser, setSearchFromUser] = useState<string | null>(null)
   const [searchHasAttachment, setSearchHasAttachment] = useState(false)
   const [searchTab, setSearchTab] = useState<'messages' | 'members'>('messages')
@@ -870,11 +871,10 @@ export default function ChannelViewScreen() {
   }, [slashCommands, slashQuery])
 
   // ---------- Search ----------
-  const debouncedSearchQuery = useRef(searchQuery)
   useEffect(() => {
     const timer = setTimeout(() => {
-      debouncedSearchQuery.current = searchQuery
-    }, 300)
+      setDebouncedSearchQuery(searchQuery.trim())
+    }, 250)
     return () => clearTimeout(timer)
   }, [searchQuery])
 
@@ -897,13 +897,13 @@ export default function ChannelViewScreen() {
     queryKey: [
       'search-messages',
       channelId,
-      debouncedSearchQuery.current,
+      debouncedSearchQuery,
       searchFromUser,
       searchHasAttachment,
     ],
     queryFn: () => {
       const params = new URLSearchParams({
-        query: debouncedSearchQuery.current,
+        query: debouncedSearchQuery,
         channelId: channelId!,
         limit: '30',
       })
@@ -915,7 +915,9 @@ export default function ChannelViewScreen() {
       canAccessChannel &&
       showSearchPanel &&
       searchTab === 'messages' &&
-      debouncedSearchQuery.current.length >= 2,
+      debouncedSearchQuery.length >= 2,
+    placeholderData: (previous) => previous,
+    staleTime: 10_000,
   })
 
   // Filter members by search query
@@ -927,6 +929,43 @@ export default function ChannelViewScreen() {
       return name.includes(q) || m.user.username.toLowerCase().includes(q)
     })
   }, [channelMembers, searchQuery])
+
+  const renderHighlightedSearchText = useCallback(
+    (content: string) => {
+      const source = content.trim() || t('chat.searchAttachmentOnly')
+      const query = debouncedSearchQuery.trim()
+      if (query.length === 0) return source
+
+      const lowerSource = source.toLocaleLowerCase()
+      const lowerQuery = query.toLocaleLowerCase()
+      const parts: Array<{ text: string; match: boolean }> = []
+      let cursor = 0
+      while (cursor < source.length) {
+        const matchIndex = lowerSource.indexOf(lowerQuery, cursor)
+        if (matchIndex < 0) {
+          parts.push({ text: source.slice(cursor), match: false })
+          break
+        }
+        if (matchIndex > cursor) {
+          parts.push({ text: source.slice(cursor, matchIndex), match: false })
+        }
+        const matchEnd = matchIndex + query.length
+        parts.push({ text: source.slice(matchIndex, matchEnd), match: true })
+        cursor = matchEnd
+      }
+
+      return parts.map((part, index) =>
+        part.match ? (
+          <Text key={`${part.text}-${index}`} style={{ color: colors.primary, fontWeight: '800' }}>
+            {part.text}
+          </Text>
+        ) : (
+          part.text
+        ),
+      )
+    },
+    [colors.primary, debouncedSearchQuery, t],
+  )
 
   useEffect(() => {
     if (channel && canAccessChannel) {
@@ -1153,21 +1192,23 @@ export default function ChannelViewScreen() {
   // Scroll to a message
   const scrollToMessage = useCallback(
     (messageId: string) => {
-      setShowSearchPanel(false)
       setHighlightMessageId(messageId)
       if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
       const idx = timeline.findIndex(
         (item) => item.kind === 'message' && item.data.id === messageId,
       )
       if (idx >= 0) {
+        setShowSearchPanel(false)
         flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 })
+      } else {
+        Alert.alert(t('chat.searchResultNotLoaded'))
       }
       highlightTimeoutRef.current = setTimeout(() => {
         setHighlightMessageId(null)
         highlightTimeoutRef.current = null
       }, 3000)
     },
-    [timeline],
+    [t, timeline],
   )
 
   useEffect(
@@ -3348,8 +3389,8 @@ export default function ChannelViewScreen() {
                 onChangeText={setSearchQuery}
                 placeholder={
                   searchTab === 'messages'
-                    ? t('chat.searchPlaceholder', '搜索消息...')
-                    : t('chat.searchMemberPlaceholder', '搜索成员...')
+                    ? t('chat.searchPlaceholder')
+                    : t('chat.searchMemberPlaceholder')
                 }
                 placeholderTextColor={colors.textMuted}
                 autoFocus
@@ -3362,7 +3403,7 @@ export default function ChannelViewScreen() {
               )}
             </InputValley>
             <Button variant="ghost" size="sm" onPress={() => setShowSearchPanel(false)} hitSlop={8}>
-              {t('common.cancel', '取消')}
+              {t('common.cancel')}
             </Button>
           </GlassHeader>
 
@@ -3388,7 +3429,7 @@ export default function ChannelViewScreen() {
                   { color: searchTab === 'messages' ? colors.primary : colors.textMuted },
                 ]}
               >
-                {t('chat.tabMessages', '消息')}
+                {t('chat.tabMessages')}
               </Text>
             </Pressable>
             <Pressable
@@ -3411,7 +3452,7 @@ export default function ChannelViewScreen() {
                   { color: searchTab === 'members' ? colors.primary : colors.textMuted },
                 ]}
               >
-                {t('chat.tabMembers', '成员')}
+                {t('chat.tabMembers')}
               </Text>
             </Pressable>
           </View>
@@ -3422,7 +3463,7 @@ export default function ChannelViewScreen() {
               {/* Filter chips */}
               <View style={styles.searchFilters}>
                 <ChipButton
-                  label={t('chat.hasFile', '含附件')}
+                  label={t('chat.hasFile')}
                   icon={File}
                   active={searchHasAttachment}
                   onPress={() => setSearchHasAttachment(!searchHasAttachment)}
@@ -3431,7 +3472,7 @@ export default function ChannelViewScreen() {
                   <ChipButton
                     active
                     iconRight={X}
-                    label={`${t('chat.fromUser', '来自')}: ${
+                    label={`${t('chat.fromUser')}: ${
                       channelMembers.find((m) => m.user.id === searchFromUser)?.user.displayName ??
                       '...'
                     }`}
@@ -3441,10 +3482,10 @@ export default function ChannelViewScreen() {
               </View>
 
               {/* Member filter list (when no query) */}
-              {searchQuery.length < 2 && !searchFromUser && (
+              {searchQuery.trim().length < 2 && !searchFromUser && (
                 <View style={styles.searchMemberFilter}>
                   <AppText variant="label" tone="secondary" style={styles.searchSectionLabel}>
-                    {t('chat.filterByMember', '按成员筛选')}
+                    {t('chat.filterByMember')}
                   </AppText>
                   {channelMembers.slice(0, 10).map((m) => (
                     <MenuItem
@@ -3465,11 +3506,18 @@ export default function ChannelViewScreen() {
               )}
 
               {/* Search results */}
-              {searchQuery.length >= 2 && (
+              {searchQuery.trim().length >= 2 && (
                 <FlatList
                   data={searchResults}
                   keyExtractor={(item) => item.id}
                   contentContainerStyle={{ padding: spacing.md }}
+                  ListHeaderComponent={
+                    searchResults.length > 0 ? (
+                      <AppText variant="label" tone="secondary" style={styles.searchSectionLabel}>
+                        {t('chat.searchResultCount', { count: searchResults.length })}
+                      </AppText>
+                    ) : null
+                  }
                   ListEmptyComponent={
                     isSearching ? (
                       <ActivityIndicator
@@ -3478,7 +3526,7 @@ export default function ChannelViewScreen() {
                       />
                     ) : (
                       <EmptyState
-                        title={t('chat.noSearchResults', '没有找到匹配的消息')}
+                        title={t('chat.noSearchResults')}
                         icon={Search}
                         style={styles.searchEmpty}
                       />
@@ -3523,7 +3571,7 @@ export default function ChannelViewScreen() {
                           }}
                           numberOfLines={3}
                         >
-                          {item.content}
+                          {renderHighlightedSearchText(item.content)}
                         </Text>
                       </Pressable>
                     )
@@ -3541,7 +3589,7 @@ export default function ChannelViewScreen() {
               contentContainerStyle={{ padding: spacing.md }}
               ListEmptyComponent={
                 <EmptyState
-                  title={t('chat.noMembersFound', '未找到成员')}
+                  title={t('chat.noMembersFound')}
                   icon={Users}
                   style={styles.searchEmpty}
                 />

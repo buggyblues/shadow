@@ -26,6 +26,7 @@ import { RechargeModal } from '../recharge/recharge-modal'
 import { NewcomerLandingModal } from '../server/server-landing'
 import { ServerSidebar } from '../server/server-sidebar'
 import { useVoiceSession, VoiceSessionProvider } from '../voice/voice-session-context'
+import { CommandPalette } from './command-palette'
 import { DynamicBackground } from './dynamic-background'
 
 export function AppLayout() {
@@ -331,6 +332,7 @@ function AppLayoutInner() {
         </ModalContent>
       </Modal>
       <RechargeModal />
+      <CommandPalette />
       <FloatingVoiceCall />
     </div>
   )

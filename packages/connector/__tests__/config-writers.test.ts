@@ -33,6 +33,40 @@ describe('connector config writers', () => {
     expect(parsed.plugins.entries['openclaw-shadowob'].enabled).toBe(true)
   })
 
+  it('adds the official OpenAI-compatible model provider to OpenClaw config and env', () => {
+    const provider = {
+      id: 'shadow-official',
+      baseUrl: 'https://shadow.example.com/api/ai/v1',
+      apiKey: 'mp_test',
+      model: 'deepseek-v4-flash',
+    }
+    const env = mergeEnvContent('', {
+      token: 'tok',
+      serverUrl: 'https://shadow.example.com',
+      modelProvider: provider,
+    })
+    expect(env).toContain('OPENAI_COMPATIBLE_BASE_URL=https://shadow.example.com/api/ai/v1')
+    expect(env).toContain('OPENAI_COMPATIBLE_API_KEY=mp_test')
+    expect(env).toContain('OPENAI_COMPATIBLE_MODEL_ID=deepseek-v4-flash')
+
+    const parsed = JSON.parse(
+      mergeOpenClawConfigContent(
+        JSON.stringify({ models: { providers: { existing: { api: 'anthropic' } } } }),
+        {
+          token: 'tok',
+          serverUrl: 'https://shadow.example.com',
+          modelProvider: provider,
+        },
+      ),
+    )
+    expect(parsed.models.providers.existing.api).toBe('anthropic')
+    expect(parsed.models.providers['shadow-official'].api).toBe('openai-completions')
+    expect(parsed.models.providers['shadow-official'].apiKey).toBe(
+      '${env:OPENAI_COMPATIBLE_API_KEY}',
+    )
+    expect(parsed.models.providers['shadow-official'].models[0].id).toBe('deepseek-v4-flash')
+  })
+
   it('merges Hermes env and YAML config in place', () => {
     const env = mergeEnvContent('DEEPSEEK_API_KEY=keep\nSHADOW_TOKEN=old\n', {
       token: 'new token',
@@ -107,5 +141,30 @@ describe('connector config writers', () => {
     expect(shadow.options.token).toBe('new-token')
     expect(shadow.options.server_url).toBe('https://shadow.example.com')
     expect(shadow.options.listen_dms).toBe(false)
+  })
+
+  it('adds the official model provider to cc-connect project config', () => {
+    const next = mergeCcConnectConfigContent('', {
+      projectName: 'buddy',
+      workDir: '/repo',
+      agentType: 'codex',
+      token: 'tok',
+      serverUrl: 'https://shadow.example.com',
+      modelProvider: {
+        id: 'shadow-official',
+        baseUrl: 'https://shadow.example.com/api/ai/v1',
+        apiKey: 'mp_test',
+        model: 'deepseek-v4-flash',
+      },
+    })
+
+    const parsed = parseToml(next) as any
+    expect(parsed.projects[0].agent.options.provider).toBe('shadow-official')
+    expect(parsed.projects[0].agent.options.model).toBe('deepseek-v4-flash')
+    expect(parsed.projects[0].agent.providers[0].name).toBe('shadow-official')
+    expect(parsed.projects[0].agent.providers[0].base_url).toBe(
+      'https://shadow.example.com/api/ai/v1',
+    )
+    expect(parsed.projects[0].agent.providers[0].models[0].model).toBe('deepseek-v4-flash')
   })
 })

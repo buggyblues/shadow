@@ -2,9 +2,15 @@ import { GlassPanel } from '@shadowob/ui'
 import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useLocation, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
-import { type PointerEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { type PointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChannelSidebar } from '../components/channel/channel-sidebar'
+import {
+  type BuddyInboxEntry,
+  ChannelSidebar,
+  type ServerAppSummary,
+} from '../components/channel/channel-sidebar'
+import { type ChatInitialMessagesPage } from '../components/chat/chat-area'
+import { type MemberListInitialMember } from '../components/member/member-list'
 import { ServerLandingPanel } from '../components/server/server-landing'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
@@ -42,6 +48,9 @@ interface ChannelMeta {
 interface ChannelAccessMeta {
   canAccess: boolean
   channel: ChannelMeta
+  isServerMember?: boolean
+  isChannelMember?: boolean
+  canManage?: boolean
   requiresApproval?: boolean
   joinRequestStatus?: 'pending' | 'approved' | 'rejected' | null
   joinRequestId?: string | null
@@ -57,18 +66,15 @@ interface ServerAccessMeta {
   joinRequestId: string | null
 }
 
-interface MessagePage {
-  messages: unknown[]
-  hasMore: boolean
-}
-
 interface ChannelBootstrap {
   access: ChannelAccessMeta
   channel?: ChannelMeta
   server: ServerMeta | null
   channels: ChannelMeta[]
-  members: unknown[]
-  messages: MessagePage
+  buddyInboxes?: BuddyInboxEntry[]
+  appSummaries?: ServerAppSummary[]
+  members: MemberListInitialMember[]
+  messages: ChatInitialMessagesPage
   slashCommands: { commands: unknown[] }
 }
 
@@ -206,25 +212,17 @@ export function ServerLayout() {
   }
   const location = useLocation()
   const routeSearch = useSearch({ strict: false }) as RouteSearch
-  const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
-  const { mobileView, copilotChannel, setMobileView, openCopilotChannel, closeCopilotChannel } =
-    useUIStore()
+  const activeServerId = useChatStore((state) => state.activeServerId)
+  const activeChannelId = useChatStore((state) => state.activeChannelId)
+  const setActiveServer = useChatStore((state) => state.setActiveServer)
+  const mobileView = useUIStore((state) => state.mobileView)
+  const copilotChannel = useUIStore((state) => state.copilotChannel)
+  const setMobileView = useUIStore((state) => state.setMobileView)
+  const openCopilotChannel = useUIStore((state) => state.openCopilotChannel)
+  const closeCopilotChannel = useUIStore((state) => state.closeCopilotChannel)
   const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
   const [stableServerMeta, setStableServerMeta] = useState<ServerMeta | null>(null)
   const copilotResize = useCopilotPanelResize()
-
-  const {
-    data: serverAccess,
-    isLoading: isServerAccessLoading,
-    isError: isServerAccessError,
-  } = useQuery({
-    queryKey: ['server-access', serverSlug],
-    queryFn: () => fetchApi<ServerAccessMeta>(`/api/servers/${serverSlug}/access`),
-    enabled: !!serverSlug,
-    retry: false,
-    staleTime: SERVER_ROUTE_STALE_MS,
-    gcTime: SERVER_ROUTE_GC_MS,
-  })
 
   const {
     data: channelBootstrap,
@@ -239,6 +237,19 @@ export function ServerLayout() {
     staleTime: SERVER_ROUTE_STALE_MS,
     gcTime: SERVER_ROUTE_GC_MS,
     refetchOnWindowFocus: false,
+  })
+
+  const {
+    data: serverAccess,
+    isLoading: isServerAccessLoading,
+    isError: isServerAccessError,
+  } = useQuery({
+    queryKey: ['server-access', serverSlug],
+    queryFn: () => fetchApi<ServerAccessMeta>(`/api/servers/${serverSlug}/access`),
+    enabled: !!serverSlug && (!channelId || channelBootstrap?.access.isServerMember === false),
+    retry: false,
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
   })
 
   const cachedServerMeta = serverSlug
@@ -273,15 +284,18 @@ export function ServerLayout() {
     setStableServerMeta(freshServerMeta)
   }, [freshServerMeta])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!channelId || !channelBootstrap) return
     queryClient.setQueryData(['channel-access', channelId], channelBootstrap.access)
     queryClient.setQueryData(['channel', channelId], channelBootstrap.channel)
     queryClient.setQueryData(['channel-slash-commands', channelId], channelBootstrap.slashCommands)
-    queryClient.setQueryData<InfiniteData<MessagePage, string | null>>(['messages', channelId], {
-      pages: [channelBootstrap.messages],
-      pageParams: [null],
-    })
+    queryClient.setQueryData<InfiniteData<ChatInitialMessagesPage, string | null>>(
+      ['messages', channelId],
+      {
+        pages: [channelBootstrap.messages],
+        pageParams: [null],
+      },
+    )
 
     if (channelBootstrap.server) {
       const serverKey = channelBootstrap.server.slug ?? serverSlug
@@ -290,6 +304,17 @@ export function ServerLayout() {
       queryClient.setQueryData(['server', serverSlug], channelBootstrap.server)
       queryClient.setQueryData(['channels', serverKey], channelBootstrap.channels)
       queryClient.setQueryData(['channels', serverSlug], channelBootstrap.channels)
+      if (channelBootstrap.buddyInboxes) {
+        queryClient.setQueryData(['buddy-inboxes', serverKey], channelBootstrap.buddyInboxes)
+        queryClient.setQueryData(['buddy-inboxes', serverSlug], channelBootstrap.buddyInboxes)
+      }
+      if (channelBootstrap.appSummaries) {
+        queryClient.setQueryData(['server-app-summaries', serverKey], channelBootstrap.appSummaries)
+        queryClient.setQueryData(
+          ['server-app-summaries', serverSlug],
+          channelBootstrap.appSummaries,
+        )
+      }
       queryClient.setQueryData(
         ['members', channelBootstrap.server.id, channelId],
         channelBootstrap.members,
@@ -403,14 +428,17 @@ export function ServerLayout() {
   }, [channelId, navigate, routeChannel, serverMeta?.id, serverMeta?.slug, serverSlug])
 
   // Channel name for title bar
+  const titleChannelId = channelId ?? activeChannelId ?? null
   const { data: channel } = useQuery({
-    queryKey: ['channel', activeChannelId],
-    queryFn: () => fetchApi<ChannelMeta>(`/api/channels/${activeChannelId}`),
+    queryKey: ['channel', titleChannelId],
+    queryFn: () => fetchApi<ChannelMeta>(`/api/channels/${titleChannelId}`),
     enabled:
-      !!activeChannelId &&
+      !!titleChannelId &&
       (!channelId || routeChannelAccess?.canAccess === true) &&
-      activeChannelId !== channelBootstrap?.channel?.id,
+      !routeChannel &&
+      titleChannelId !== channelBootstrap?.channel?.id,
     staleTime: 30_000,
+    refetchOnMount: false,
   })
 
   const unreadCount = useUnreadCount()
@@ -423,7 +451,9 @@ export function ServerLayout() {
   const routeServerSlug = serverMeta?.slug ?? serverSlug
   const activeCopilotChannelId = isServerAppsRoute ? routeCopilotChannelId : null
   const isCopilotMode = isServerAppsRoute && Boolean(activeCopilotChannelId)
-  const isServerMember = serverAccess?.isMember === true
+  const isServerMember = channelId
+    ? (channelBootstrap?.access.isServerMember ?? serverAccess?.isMember) === true
+    : serverAccess?.isMember === true
   const shouldRenderChannelSidebar = !isCopilotMode && isServerMember
 
   const { data: copilotChannels = [] } = useQuery<ChannelMeta[]>({
@@ -646,6 +676,13 @@ export function ServerLayout() {
           </div>
         ) : routeChannelBlocked ? (
           <RouteChannelContentLoading />
+        ) : channelId && channelBootstrap ? (
+          <ChannelView
+            channelId={channelId}
+            serverSlug={serverSlug}
+            initialMessages={channelBootstrap.messages}
+            initialMembers={channelBootstrap.members}
+          />
         ) : (
           <Outlet />
         )}

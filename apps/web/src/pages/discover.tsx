@@ -203,6 +203,8 @@ const CATEGORY_ICON_POOL: LucideIcon[] = [Sparkles, PackageOpen, ShoppingBag, Ta
 
 const FEATURED_LIMIT = 6
 const SECTION_PAGE_SIZE = 12
+const DISCOVER_STALE_MS = 60_000
+const DISCOVER_GC_MS = 10 * 60 * 1000
 
 const initialSectionPages: Record<HubSection, number> = {
   all: 1,
@@ -271,50 +273,68 @@ export function DiscoverPage() {
 
   const { data: myServers = [] } = useQuery({
     queryKey: ['servers'],
-    queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
+    queryFn: ({ signal }) => fetchApi<ServerEntry[]>('/api/servers', { signal }),
+    staleTime: DISCOVER_STALE_MS,
+    gcTime: DISCOVER_GC_MS,
   })
 
   const { data, isLoading } = useQuery({
     queryKey: ['discover-commerce', effectiveSearch],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchApi<DiscoverCommerceResponse>(
         `/api/discover/business?limit=48${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
+        { signal },
       ),
+    staleTime: DISCOVER_STALE_MS,
+    gcTime: DISCOVER_GC_MS,
   })
 
   const { data: marketplaceData, isLoading: isMarketplaceLoading } = useQuery({
     queryKey: ['discover-marketplace-products', effectiveSearch, selectedMarketplaceTag],
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       const params = new URLSearchParams({ limit: '72' })
       if (effectiveSearch) params.set('q', effectiveSearch)
       if (selectedMarketplaceTag) params.set('tag', selectedMarketplaceTag)
-      return fetchApi<MarketplaceProductsResponse>(`/api/discover/marketplace/products?${params}`)
+      return fetchApi<MarketplaceProductsResponse>(`/api/discover/marketplace/products?${params}`, {
+        signal,
+      })
     },
+    staleTime: DISCOVER_STALE_MS,
+    gcTime: DISCOVER_GC_MS,
   })
 
   const { data: marketplaceCategoriesData } = useQuery({
     queryKey: ['discover-marketplace-categories', effectiveSearch],
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       const params = new URLSearchParams({ limit: '12' })
       if (effectiveSearch) params.set('q', effectiveSearch)
       return fetchApi<MarketplaceCategoriesResponse>(
         `/api/discover/marketplace/categories?${params}`,
+        { signal },
       )
     },
+    staleTime: DISCOVER_STALE_MS,
+    gcTime: DISCOVER_GC_MS,
   })
 
   const { data: playData } = useQuery({
     queryKey: ['discover-plays'],
-    queryFn: () => fetchApi<{ plays: PlayCatalogItem[] }>('/api/play/catalog'),
+    queryFn: ({ signal }) =>
+      fetchApi<{ plays: PlayCatalogItem[] }>('/api/play/catalog', { signal }),
+    staleTime: DISCOVER_STALE_MS,
+    gcTime: DISCOVER_GC_MS,
   })
 
   const { data: cloudTemplates = [] } = useQuery({
     queryKey: ['discover-cloud-templates', i18n.language, effectiveSearch],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchApi<CloudTemplateSource[]>(
         `/api/cloud-saas/templates?locale=${encodeURIComponent(i18n.language)}${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
+        { signal },
       ),
     retry: false,
+    staleTime: DISCOVER_STALE_MS,
+    gcTime: DISCOVER_GC_MS,
   })
 
   useEffect(() => {

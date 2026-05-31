@@ -564,6 +564,20 @@
     "addBuddyDm": "Buddy DM",
     "addFriendDm": "フレンド DM"
   },
+  "commandPalette": {
+    "open": "コマンドパレットを開く",
+    "placeholder": "チャンネル、DM、サーバー、操作へ移動",
+    "empty": "一致する移動先がありません",
+    "loading": "移動先を読み込み中...",
+    "groupActions": "操作",
+    "groupChannels": "チャンネル",
+    "groupDms": "ダイレクトメッセージ",
+    "groupServers": "サーバー",
+    "searchMessages": "メッセージを検索",
+    "openServerHome": "サーバーホームを開く",
+    "openApps": "サーバーアプリを開く",
+    "openShop": "サーバーショップを開く"
+  },
   "serverLanding": {
     "eyebrow": "Shadow コミュニティ入門",
     "title": "AI の能力を長く使えるコミュニティ資産へ",
@@ -746,6 +760,16 @@
     "replyingTo": "返信中...",
     "inputPlaceholder": "#{{channelName}} にメッセージを送信",
     "inputPlaceholderCompact": "#{{channelName}} に送信",
+    "searchMessages": "メッセージを検索",
+    "searchPanelTitle": "このチャットを検索",
+    "searchMessagesPlaceholder": "メッセージ本文を検索",
+    "searchMinChars": "2文字以上",
+    "searchNoResults": "一致するメッセージはありません",
+    "searchResultCount": "{{count}} 件の結果",
+    "searchHasAttachment": "添付あり",
+    "searchOpenResult": "検索結果を開く",
+    "searchResultNotLoaded": "この結果は現在読み込まれているタイムラインより古いです。古いメッセージを読み込んでから再試行してください。",
+    "searchAttachmentOnly": "添付のみのメッセージ",
     "addMenu": "コンテンツを追加",
     "uploadFile": "ファイルをアップロード",
     "addMenuUploadFileDesc": "文書、アーカイブ、任意の添付を送信",
@@ -2676,6 +2700,12 @@
     "paidFileUploadFailed": "保護ファイルのアップロードに失敗しました",
     "paidFileDefaultSummary": "購入後に {{name}} を開けます。",
     "paidFileDefaultPrivilege": "{{name}} をオンラインで表示またはダウンロードできます。",
+    "desktopPetPackUploadTitle": "デスクトップペット素材パックをアップロード",
+    "desktopPetPackUploadHint": ".shadowpet または .zip の素材パックをアップロードします。購入者はデスクトップペット設定からインポートできます。",
+    "desktopPetPackRequiredHint": "先にデスクトップペット素材パックをアップロードまたは選択してください。",
+    "desktopPetPackFileRequired": ".shadowpet、.shadowpet.zip、または .zip のデスクトップペット素材パックをアップロードしてください。",
+    "desktopPetPackDefaultSummary": "購入後、{{name}} をデスクトップペット素材パックとしてインポートできます。",
+    "desktopPetPackDefaultPrivilege": "Shadow デスクトップのペット設定で {{name}} をインポートして使用できます。",
     "entitlementGroups": {
       "active": "利用可能な権限",
       "expiring": "まもなく期限切れ",
@@ -2768,6 +2798,7 @@
     "visual": {
       "service": "サービス",
       "file": "ファイル",
+      "desktop_pet_pack": "ペット素材",
       "badge": "バッジ",
       "gift": "ギフト",
       "ticket": "サービス券",
@@ -2792,6 +2823,7 @@
     "visualPromise": {
       "service": "注文サービス",
       "file": "購入後に開く",
+      "desktop_pet_pack": "デスクトップにインポート",
       "badge": "バッジ",
       "gift": "贈れるコレクション",
       "ticket": "利用券",
@@ -3406,6 +3438,7 @@
     "deliveryPreset": {
       "service": "サービス権限",
       "paid_file": "有料ファイル",
+      "desktop_pet_pack": "デスクトップペット素材",
       "badge": "バッジ",
       "gift": "デジタルギフト",
       "service_ticket": "サービスチケット"
@@ -3413,6 +3446,7 @@
     "deliveryPresetHint": {
       "service": "アクセス権、会員権、ファイル、手動サービスに適しています。",
       "paid_file": "資料、HTML、画像、ダウンロードコンテンツを購入後の納品センターで開けます。",
+      "desktop_pet_pack": "sprite と metadata の素材パック向け。購入者はペット設定でインストールします。",
       "badge": "支援者やメンバー向けの永続バッジです。",
       "gift": "譲渡やコレクションに向くデジタルギフトです。",
       "service_ticket": "1 回分のサービスやイベントに使えるチケットです。"
@@ -3613,7 +3647,7 @@
       "closePanel": "パネルを閉じる"
     },
     "pet": {
-      "name": "シャオドウ",
+      "name": "小懒",
       "level": "Lv. {{level}}",
       "xp": "{{xp}} / {{next}} XP",
       "personality": "性格",
@@ -3630,10 +3664,13 @@
       "rest": "休む",
       "explore": "探索",
       "tea": "お茶",
+      "levelUp": "レベルアップ",
       "voice": "音声",
       "connection": "接続",
       "community": "コミュニティ",
-      "hide": "非表示"
+      "hide": "非表示",
+      "interact": "ふれあう",
+      "back": "戻る"
     },
     "tabs": {
       "chat": "チャット",
@@ -3641,17 +3678,28 @@
       "community": "通知",
       "subscriptions": "購読",
       "bag": "バッグ",
-      "store": "ストア"
+      "store": "ストア",
+      "care": "ケア",
+      "services": "サービス"
+    },
+    "panelSubtitle": {
+      "chat": "{{name}} と軽く会話します",
+      "care": "数値ではなく動きで読み取ります",
+      "services": "集中タイマー、水分、ストレッチ、Runtime 通知",
+      "community": "通知を確認するとドットが消えます",
+      "subscriptions": "購読チャンネルの新しいファイルを同期",
+      "store": "デスクトップペット素材パックを管理"
     },
     "store": {
       "title": "デスクトップペットストア",
       "subtitle": "デスクトップペット素材パックを入手",
-      "petAssets": "Xiaodou デスクトップペット素材",
+      "petAssets": "デスクトップペット素材パック",
       "petAssetsHint": "「Xiaodou デスクトップペット」タグの公開マーケット商品を開きます。",
-      "open": "ストアを開く"
+      "open": "ストアを開く",
+      "manage": "パック管理"
     },
     "chat": {
-      "input": "シャオドウに話しかける",
+      "input": "{{name}}に話しかける",
       "send": "送信",
       "authRequired": "公式モデルプロキシを使うには、先に Shadow のメインウィンドウでログインしてください。",
       "proxyError": "モデルプロキシが応答しませんでした。しばらくしてからもう一度お試しください。",
@@ -3674,7 +3722,7 @@
       "replySleepy": "休むと元気が戻ります。少し丸くなります。",
       "replyLevel": "お世話、クエスト、毎日の習慣でレベルが上がります。",
       "replyCommunity": "通知タブを開くと、最近のコミュニティ通知を確認できます。",
-      "replyStatus": "気分 {{mood}}、空腹 {{hunger}}、元気 {{energy}}、健康 {{health}}。",
+      "replyStatus": "今の気分は動きで見せています。必要なときはそっと知らせます。",
       "replySick": "少し調子が悪いです。お茶か休憩で回復できます。"
     },
     "stats": {
@@ -3689,8 +3737,11 @@
       "shells": "貝殻",
       "streak": "連続ケア",
       "days": "{{count}} 日",
+      "level": "Lv {{level}}",
+      "xp": "経験値",
       "questProgress": "クエスト",
       "quests": "クエスト",
+      "inventory": "アイテム",
       "achievements": "実績",
       "noAchievements": "実績はまだありません"
     },
@@ -3753,9 +3804,125 @@
     },
     "auth": {
       "title": "ログインして Shadow と同期",
+      "loginAction": "ログイン",
       "description": "Shadow のメインウィンドウでログインしてから、ここでコミュニティ通知を確認できます。",
+      "chatDescription": "ログインすると、ペットがコミュニティモデルでチャットと音声会話を続けられます。",
+      "notificationDescription": "ログインするとコミュニティ通知を同期し、確認後にドットを消せます。",
+      "subscriptionDescription": "ログインするとコミュニティチャンネルを選び、購読ファイルを同期できます。",
+      "storeDescription": "ログインすると購入済みパックの確認、新規購入、ペットへのインストールができます。",
       "openMain": "Shadow を開く",
       "refresh": "再確認"
+    },
+    "phase": {
+      "morning": "朝の支度",
+      "day": "日中",
+      "evening": "夕方の落ち着き",
+      "night": "夜の睡眠"
+    },
+    "emotions": {
+      "excited": "明るくやる気あり",
+      "content": "安心してそばにいる",
+      "calm": "落ち着いている",
+      "lonely": "静かに待っている",
+      "hungry": "ごはんを探している",
+      "sleepy": "眠そう",
+      "sick": "やさしいケアが必要"
+    },
+    "profile": {
+      "name": "名前",
+      "personality": "性格",
+      "personality_lazy": "のんびり",
+      "personality_curious": "好奇心旺盛",
+      "personality_clingy": "甘えん坊",
+      "personality_brave": "勇敢",
+      "random": "ランダム",
+      "statusLine": "{{name}} は {{emotion}}"
+    },
+    "care": {
+      "todayEvent": "今日の小さな出来事",
+      "noEvent": "今は静かです。",
+      "recommendedAction": "おすすめのケア"
+    },
+    "actionFeedback": {
+      "feed": "助かりました。静かに食べます。",
+      "pet": "伝わりました。そばにいます。",
+      "play": "目が覚めました。",
+      "rest": "しばらく丸くなります。",
+      "explore": "近くを見回って戻ります。",
+      "tea": "温かいお茶は効きます。"
+    },
+    "events": {
+      "morningStretch": {
+        "hint": "少し体を伸ばしたそうに周りを見ています。",
+        "resolved": "よく伸びました。今日は少し楽になりそうです。"
+      },
+      "windowSunbeam": {
+        "hint": "近くに光が差しています。いつもより静かです。",
+        "resolved": "静かな時間で落ち着きました。"
+      },
+      "curiousPing": {
+        "hint": "机のそばの何かが気になっています。",
+        "resolved": "小さな拾い物を見つけました。"
+      },
+      "rainyNap": {
+        "hint": "部屋がゆっくりしています。眠りたそうです。",
+        "resolved": "休んだので夕方が少し柔らかくなりました。"
+      },
+      "midnightHungry": {
+        "hint": "夜遅く、おやつを探しています。",
+        "resolved": "夜食で落ち着きました。"
+      },
+      "looseShell": {
+        "hint": "画面の端に小さな貝殻を見つけました。",
+        "resolved": "貝殻を持って戻りました。"
+      }
+    },
+    "services": {
+      "title": "ヘルパー習慣",
+      "subtitle": "ペットからの静かなリマインダー",
+      "notificationTitle": "デスクトップペットのリマインダー",
+      "unread": "未確認のペットリマインダー",
+      "water": "水分",
+      "focus": "集中タイマー",
+      "fitness": "ストレッチ",
+      "coding": "Coding Agent",
+      "waterMeta": "1時間ごとに知らせます。",
+      "focusMeta": "25分の集中を始めます。",
+      "focusActive": "集中タイマー実行中。",
+      "fitnessMeta": "90分ごとに知らせます。",
+      "active": "実行中",
+      "idle": "待機中",
+      "reminded": "確認待ち",
+      "dueNow": "今がタイミングです",
+      "waterNext": "次の通知まで {{time}}",
+      "fitnessNext": "次の通知まで {{time}}",
+      "focusIdle": "集中時間を選ぶと、時間を見守ります。",
+      "focusRemaining": "残り {{time}}",
+      "start25": "25分",
+      "start50": "50分",
+      "stop": "停止",
+      "done": "完了",
+      "minutes": "{{count}}分",
+      "hoursMinutes": "{{hours}}時間{{minutes}}分",
+      "on": "オン",
+      "off": "オフ",
+      "waterEnabled": "水分補給を知らせます。",
+      "waterDisabled": "水分リマインダーを止めました。",
+      "focusEnabled": "集中タイマーを始めました。時間を見ています。",
+      "focusDisabled": "集中タイマーを止めました。",
+      "fitnessEnabled": "ストレッチを知らせます。",
+      "fitnessDisabled": "ストレッチ通知を止めました。",
+      "codingEnabled": "ローカル Coding Agent の状態を見ています。",
+      "codingDisabled": "Coding Agent の状態通知を止めました。",
+      "waterDone": "水分補給を記録しました。次も知らせます。",
+      "fitnessDone": "ストレッチを記録しました。その調子です。",
+      "waterReminder": "水を飲みましょう。",
+      "fitnessReminder": "立って少し伸びましょう。",
+      "focusReady": "集中時間が終わりました。少し休みましょう。",
+      "codingOnline": "{{count}} 件のローカル Coding Agent 接続がオンラインです。",
+      "codingOffline": "ローカル Coding Agent 接続がオフラインになりました。",
+      "runtimeReady": "{{runtime}} の {{name}} が準備できました。",
+      "runtimeReadyMany": "{{count}} 件の Runtime セッションが準備できました。"
     }
   },
   "desktopReader": {
@@ -3899,7 +4066,33 @@
     "shortcut_petChat": "デスクトップペットチャット",
     "shortcut_petChat_desc": "ペットのチャットパネルを開いて入力欄にフォーカスします。",
     "shortcut_showNotifications": "通知を見る",
-    "shortcut_showNotifications_desc": "ペットパネルを開いてコミュニティ通知を表示します。"
+    "shortcut_showNotifications_desc": "ペットパネルを開いてコミュニティ通知を表示します。",
+    "tabPetAssets": "ペット素材",
+    "petAssetsTitle": "デスクトップペット素材パック",
+    "petAssetsDesc": "クリエイター製 sprite パックをインポートし、動きをプレビューして使用中の外観を選びます。",
+    "petAssetsOpenStore": "ストアを開く",
+    "petAssetsImport": "パックをインポート",
+    "petAssetsDefault": "内蔵デスクトップペット",
+    "petAssetsDefaultDesc": "内蔵デスクトップペット素材と標準アニメーションを使います。",
+    "petAssetsNoDesc": "説明はありません。",
+    "petAssetsSourceMarketplace": "マーケット",
+    "petAssetsSourceLocal": "ローカル",
+    "petAssetsActive": "使用中",
+    "petAssetsUse": "使用する",
+    "petAssetsRemove": "削除",
+    "petAssetsPreview": "モーションプレビュー",
+    "petAssetsOwnedTitle": "購入済みパック",
+    "petAssetsOwnedDesc": "マーケットの権利からデスクトップペット素材パックをインストールします。ダウンロードは有料ファイル認可とローカル検証を通ります。",
+    "petAssetsRefreshOwned": "更新",
+    "petAssetsOwnedAuthHint": "コミュニティにログインすると購入済みパックを表示できます。",
+    "petAssetsOwnedLoadFailed": "購入済みパックを読み込めませんでした。",
+    "petAssetsOwnedLoading": "購入済みパックを読み込み中...",
+    "petAssetsOwnedEmpty": "インストール可能な購入済みパックはありません。",
+    "petAssetsOwnedUnnamed": "無題のパック",
+    "petAssetsOwnedInstalled": "インストール済み",
+    "petAssetsOwnedReady": "インストール可能",
+    "petAssetsOwnedInstall": "インストール",
+    "petAssetsOwnedUpdate": "更新"
   },
   "passwordReset": {
     "title": "パスワード再設定",

@@ -1,7 +1,7 @@
 import { type ChildProcess, execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { app, BrowserWindow, ipcMain, net } from 'electron'
 import {
   connectorWorkDirMapFilePath,
@@ -136,10 +136,22 @@ function setConnectorProgress(
 }
 
 function connectorEnv(settings = readDesktopSettings()): NodeJS.ProcessEnv {
+  const connectorHome = join(app.getPath('home'), '.shadowob', 'connector')
+  const managedNodeVersion = process.env.SHADOW_CONNECTOR_NODE_VERSION || '22.16.0'
+  const managedPaths = [
+    join(app.getPath('home'), '.local', 'bin'),
+    join(connectorHome, 'node-global', 'bin'),
+    join(connectorHome, 'node', `v${managedNodeVersion}`, 'bin'),
+  ]
+  const pathValue = [managedPaths.join(delimiter), process.env.PATH].filter(Boolean).join(delimiter)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
     ELECTRON_NO_ATTACH_CONSOLE: '1',
+    NPM_CONFIG_PREFIX: join(connectorHome, 'node-global'),
+    SHADOW_CONNECTOR_HOME: connectorHome,
+    SHADOW_CONNECTOR_USE_MANAGED_NODE: '1',
+    PATH: pathValue,
   }
   if (settings.httpProxy || settings.httpsProxy) {
     if (settings.httpProxy) {

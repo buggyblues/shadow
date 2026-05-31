@@ -1,0 +1,1150 @@
+.desktop-pet-panel {
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  border: 1px solid rgba(0, 243, 255, 0.2);
+  border-radius: 28px;
+  background: #05080c;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 18px 48px rgba(0, 0, 0, 0.42);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  overflow: hidden;
+}
+
+.desktop-pet-panel.auth-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.desktop-pet-panel-sidebar {
+  min-height: 0;
+  min-width: 0;
+  padding: 10px 8px;
+  border-right: 1px solid rgba(0, 243, 255, 0.12);
+  display: grid;
+  grid-template-rows: 30px minmax(0, 1fr);
+  gap: 10px;
+  background: linear-gradient(180deg, rgba(0, 243, 255, 0.04), rgba(255, 255, 255, 0.02));
+  cursor: grab;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.desktop-pet-panel-drag-buffer {
+  min-height: 30px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 243, 255, 0.1);
+  background:
+    linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.18), transparent) center / 42px 1px
+    no-repeat,
+    rgba(255, 255, 255, 0.03);
+}
+
+.desktop-pet-panel-sidebar:active {
+  cursor: grabbing;
+}
+
+.desktop-pet-panel-sidebar button {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.desktop-pet-panel-content {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.desktop-pet-panel-content.login-only {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.desktop-pet-panel-topbar {
+  flex: 0 0 52px;
+  padding: 9px 14px 8px;
+  border-bottom: 1px solid rgba(0, 243, 255, 0.08);
+  background:
+    linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.12), transparent) right 18px top 16px /
+    56px 1px no-repeat,
+    rgba(255, 255, 255, 0.015);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 10px;
+  cursor: grab;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.desktop-pet-panel-topbar:active {
+  cursor: grabbing;
+}
+
+.desktop-pet-panel-topbar div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.desktop-pet-panel-topbar strong {
+  color: #f7fbff;
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.desktop-pet-panel-topbar span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(217, 252, 255, 0.58);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.desktop-pet-panel-topbar i {
+  justify-self: end;
+  width: 54px;
+  height: 20px;
+  border: 1px solid rgba(0, 243, 255, 0.1);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.16), transparent) center / 34px 1px
+    no-repeat,
+    rgba(255, 255, 255, 0.02);
+}
+
+.desktop-pet-panel-nav {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.desktop-pet-panel-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.desktop-pet-tab-group {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.desktop-pet-tab-group + .desktop-pet-tab-group {
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 243, 255, 0.1);
+}
+
+.desktop-pet-tab-group.active-group {
+  color: #d9fcff;
+}
+
+.desktop-pet-login-guide {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin: 8px 8px 2px;
+  padding: 9px;
+  border: 1px solid rgba(0, 243, 255, 0.18);
+  border-radius: 20px;
+  background: rgba(0, 243, 255, 0.08);
+}
+
+.desktop-pet-panel-content.login-only .desktop-pet-login-guide {
+  width: min(280px, 100%);
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+}
+
+.desktop-pet-login-guide strong {
+  display: block;
+  color: #d9fcff;
+  font-size: 12px;
+}
+
+.desktop-pet-login-guide p {
+  margin: 3px 0 0;
+  color: rgba(217, 252, 255, 0.68);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.desktop-pet-login-actions {
+  display: grid;
+  gap: 5px;
+  align-content: center;
+}
+
+.desktop-pet-panel-content.login-only .desktop-pet-login-actions {
+  margin-top: 6px;
+}
+
+.desktop-pet-panel-content.login-only .desktop-pet-login-actions button {
+  width: 100%;
+}
+
+.desktop-pet-tab-button {
+  position: relative;
+  min-width: 0;
+  min-height: 54px;
+  padding: 7px 4px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: transparent;
+  color: rgba(217, 252, 255, 0.72);
+  display: grid;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.desktop-pet-tab-button > span:not(.desktop-pet-tab-dot) {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pet-tab-dot,
+.desktop-pet-inline-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ff3b30;
+  box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.16);
+}
+
+.desktop-pet-tab-dot {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.desktop-pet-tab-button.active {
+  border-color: rgba(0, 243, 255, 0.28);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.18), transparent 70%),
+    rgba(0, 243, 255, 0.1);
+  color: #d9fcff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.desktop-pet-ui-button {
+  min-width: 0;
+  border-style: solid;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.desktop-pet-ui-button-xs {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.desktop-pet-ui-button-sm {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.desktop-pet-ui-button-md {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.desktop-pet-ui-button-icon {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.desktop-pet-ui-button-primary {
+  border-color: rgba(0, 243, 255, 0.42);
+  background: rgba(0, 243, 255, 0.1);
+  color: #eafdff;
+}
+
+.desktop-pet-ui-button-warm {
+  border-color: rgba(255, 231, 148, 0.22);
+  background: rgba(255, 231, 148, 0.08);
+  color: #fffbd0;
+}
+
+.desktop-pet-ui-button-tile {
+  position: relative;
+  min-height: 58px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.desktop-pet-ui-button-chip {
+  max-width: 100%;
+  height: 24px;
+  border-color: rgba(0, 243, 255, 0.14);
+  background: rgba(5, 5, 8, 0.48);
+  color: rgba(217, 252, 255, 0.68);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desktop-pet-ui-switch {
+  width: 38px;
+  height: 22px;
+  padding: 2px;
+  border: 1px solid rgba(0, 243, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(5, 5, 8, 0.7);
+  display: inline-flex;
+  align-items: center;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.desktop-pet-ui-switch span {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(217, 252, 255, 0.66);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.34);
+  transform: translateX(0);
+  transition:
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.desktop-pet-ui-switch.active {
+  border-color: rgba(68, 255, 228, 0.58);
+  background: rgba(0, 243, 255, 0.16);
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.12);
+}
+
+.desktop-pet-ui-switch.active span {
+  background: #eafdff;
+  transform: translateX(16px);
+}
+
+.desktop-pet-ui-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.desktop-pet-care,
+.desktop-pet-services {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.desktop-pet-services {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.desktop-pet-services .desktop-pet-service-card:first-of-type {
+  grid-column: 1 / -1;
+}
+
+.desktop-pet-profile-card,
+.desktop-pet-mood-card,
+.desktop-pet-event-card,
+.desktop-pet-game-card,
+.desktop-pet-progress-card,
+.desktop-pet-service-card {
+  border: 1px solid rgba(0, 243, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.desktop-pet-profile-card {
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-pet-profile-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 7px;
+}
+
+.desktop-pet-profile-fields label {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.desktop-pet-profile-fields span {
+  color: rgba(217, 252, 255, 0.66);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.desktop-pet-profile-fields input,
+.desktop-pet-profile-fields select {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid rgba(0, 243, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(5, 5, 8, 0.56);
+  color: #f7fbff;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.desktop-pet-mood-card {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+}
+
+.desktop-pet-mood-card span,
+.desktop-pet-event-card span,
+.desktop-pet-service-card small {
+  color: rgba(217, 252, 255, 0.66);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.desktop-pet-mood-card strong {
+  color: #f7fbff;
+  font-size: 15px;
+}
+
+.desktop-pet-game-card,
+.desktop-pet-progress-card {
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-pet-game-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.desktop-pet-game-summary span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 10px;
+  background: rgba(5, 5, 8, 0.42);
+  color: #d9fcff;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.2;
+  padding: 7px 5px;
+  text-align: center;
+}
+
+.desktop-pet-xp-bar,
+.desktop-pet-stat-grid i {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.desktop-pet-xp-bar i,
+.desktop-pet-stat-grid b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00f3ff, #baff6a);
+}
+
+.desktop-pet-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.desktop-pet-stat-grid span {
+  display: grid;
+  gap: 4px;
+}
+
+.desktop-pet-stat-grid small {
+  color: rgba(217, 252, 255, 0.64);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.desktop-pet-progress-card {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.desktop-pet-progress-card div {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+
+.desktop-pet-progress-card strong {
+  color: #d9fcff;
+  font-size: 11px;
+}
+
+.desktop-pet-progress-card span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  color: rgba(217, 252, 255, 0.68);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pet-progress-card span.completed {
+  color: #baff6a;
+}
+
+.desktop-pet-event-card {
+  padding: 10px;
+}
+
+.desktop-pet-event-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.desktop-pet-event-card strong {
+  color: #d9fcff;
+  font-size: 12px;
+}
+
+.desktop-pet-care-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.desktop-pet-care-actions .desktop-pet-care-action,
+.desktop-pet-service-card {
+  min-width: 0;
+  border: 1px solid rgba(0, 243, 255, 0.18);
+  background: rgba(5, 5, 8, 0.68);
+  color: #d9fcff;
+  cursor: pointer;
+}
+
+.desktop-pet-action-dot {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ff3448;
+  box-shadow:
+    0 0 0 2px rgba(5, 5, 8, 0.82),
+    0 0 12px rgba(255, 52, 72, 0.48);
+}
+
+.desktop-pet-service-card {
+  width: 100%;
+  min-height: 86px;
+  padding: 10px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  text-align: left;
+}
+
+.desktop-pet-service-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-pet-service-icon {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(0, 243, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(0, 243, 255, 0.08);
+  color: #d9fcff;
+  display: grid;
+  place-items: center;
+}
+
+.desktop-pet-service-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.desktop-pet-service-card strong {
+  color: #f7fbff;
+  font-size: 12px;
+}
+
+.desktop-pet-service-card i {
+  color: rgba(255, 251, 208, 0.72);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.desktop-pet-service-state {
+  justify-self: end;
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.desktop-pet-service-card.active {
+  border-color: rgba(68, 255, 228, 0.48);
+  background: rgba(0, 243, 255, 0.1);
+}
+
+.desktop-pet-service-focus {
+  min-height: 108px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(0, 243, 255, 0.12), transparent 46%),
+    rgba(255, 255, 255, 0.045);
+}
+
+.desktop-pet-service-focus .desktop-pet-service-copy strong {
+  font-size: 13px;
+}
+
+.desktop-pet-service-focus .desktop-pet-service-actions {
+  justify-content: flex-end;
+}
+
+.desktop-pet-service-card.attention {
+  border-color: rgba(255, 59, 48, 0.42);
+  background: rgba(255, 59, 48, 0.08);
+}
+
+.desktop-pet-service-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.desktop-pet-service-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00f3ff, #fffbd0);
+}
+
+.desktop-pet-service-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .desktop-pet-services {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-pet-progress-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-pet-game-summary,
+  .desktop-pet-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.desktop-pet-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 10px 10px;
+  overflow: auto;
+}
+
+.desktop-pet-panel-body-chat {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.desktop-pet-messages {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.desktop-pet-message {
+  max-width: 86%;
+  min-width: 82px;
+  border-radius: 18px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.desktop-pet-message-text {
+  display: block;
+}
+
+.desktop-pet-message.pet {
+  align-self: flex-start;
+  background: rgba(0, 243, 255, 0.1);
+  color: #f7fbff;
+}
+
+.desktop-pet-stream-caret {
+  display: inline-block;
+  width: 5px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -0.15em;
+  border-radius: 999px;
+  background: #d9fcff;
+  animation: desktop-pet-stream-caret 0.7s steps(1) infinite;
+}
+
+.desktop-pet-message.user {
+  align-self: flex-end;
+  background: rgba(248, 231, 28, 0.14);
+  color: #fffbd0;
+}
+
+.desktop-pet-message time {
+  display: block;
+  margin-top: 4px;
+  color: rgba(217, 252, 255, 0.42);
+  font-size: 9.5px;
+  font-weight: 760;
+  line-height: 1;
+  text-align: right;
+}
+
+.desktop-pet-message.user time {
+  color: rgba(255, 251, 208, 0.52);
+}
+
+.desktop-pet-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.desktop-pet-chat-auth-block {
+  margin-top: 8px;
+}
+
+.desktop-pet-chat-auth-block .desktop-pet-login-guide {
+  margin: 0;
+}
+
+.desktop-pet-chat-form input {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid rgba(0, 243, 255, 0.16);
+  border-radius: 18px;
+  background: rgba(5, 5, 8, 0.6);
+  color: #f7fbff;
+  padding: 0 10px;
+  outline: none;
+}
+
+.desktop-pet-chat-form input::placeholder {
+  color: rgba(217, 252, 255, 0.42);
+}
+
+.desktop-pet-chat-form .desktop-pet-ui-button-icon {
+  flex: 0 0 34px;
+}
+
+.desktop-pet-ui-button.voice.active {
+  border-color: rgba(68, 255, 228, 0.7);
+  background: rgba(0, 243, 255, 0.18);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.18);
+}
+
+.desktop-pet-level-row,
+.desktop-pet-traits,
+.desktop-pet-community-toolbar,
+.desktop-pet-inventory-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.desktop-pet-level-row {
+  margin-bottom: 8px;
+  color: #fffbd0;
+}
+
+.desktop-pet-level-row span,
+.desktop-pet-quest span {
+  color: rgba(217, 252, 255, 0.68);
+  font-size: 12px;
+}
+
+.desktop-pet-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.desktop-pet-summary div {
+  min-width: 0;
+  border-radius: 18px;
+  padding: 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.desktop-pet-summary span {
+  display: block;
+  color: rgba(217, 252, 255, 0.58);
+  font-size: 11px;
+}
+
+.desktop-pet-summary strong {
+  display: block;
+  margin-top: 2px;
+  color: #fffbd0;
+  font-size: 13px;
+}
+
+.desktop-pet-stat {
+  margin: 8px 0;
+}
+
+.desktop-pet-stat div,
+.desktop-pet-quest div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.desktop-pet-stat meter,
+.desktop-pet-quest meter {
+  width: 100%;
+  height: 9px;
+  vertical-align: top;
+}
+
+.desktop-pet-traits {
+  margin: 12px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid rgba(0, 243, 255, 0.12);
+}
+
+.desktop-pet-traits dt {
+  color: rgba(217, 252, 255, 0.58);
+  font-size: 11px;
+}
+
+.desktop-pet-traits dd {
+  margin: 2px 0 0;
+  color: #fffbd0;
+  font-weight: 800;
+}
+
+.desktop-pet-section {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.desktop-pet-section h2 {
+  margin: 0;
+  color: #f7fbff;
+  font-size: 13px;
+}
+
+.desktop-pet-quest,
+.desktop-pet-notification,
+.desktop-pet-inventory-item,
+.desktop-pet-achievement {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.desktop-pet-quest {
+  padding: 8px;
+}
+
+.desktop-pet-quest.completed {
+  border: 1px solid rgba(0, 230, 118, 0.32);
+}
+
+.desktop-pet-community-toolbar {
+  margin-bottom: 8px;
+}
+
+.desktop-pet-community-toolbar div {
+  min-width: 0;
+  display: grid;
+}
+
+.desktop-pet-community-toolbar strong,
+.desktop-pet-notification strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pet-community-toolbar span {
+  color: #00f3ff;
+  font-size: 12px;
+}
+
+.desktop-pet-notifications {
+  display: grid;
+  gap: 6px;
+}
+
+.desktop-pet-notification {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.desktop-pet-notification.read {
+  opacity: 0.68;
+}
+
+.desktop-pet-notification p {
+  margin: 3px 0 0;
+  color: rgba(217, 252, 255, 0.72);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.desktop-pet-notification-heading {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-pet-notification-heading time {
+  color: rgba(217, 252, 255, 0.42);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.desktop-pet-notification-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-content: start;
+}
+
+.desktop-pet-empty {
+  margin: 10px 0;
+  color: rgba(217, 252, 255, 0.58);
+  text-align: center;
+  font-size: 13px;
+}
+
+.desktop-pet-inventory {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.desktop-pet-inventory-item,
+.desktop-pet-achievement {
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.desktop-pet-inventory-item > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.desktop-pet-inventory-item small {
+  color: rgba(217, 252, 255, 0.56);
+  font-size: 10px;
+}
+
+.desktop-pet-subscription-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(0, 243, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(4, 8, 12, 0.76);
+}
+
+.desktop-pet-subscription-selects {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 8px;
+}
+
+.desktop-pet-subscription-picker select {
+  min-width: 0;
+  height: 38px;
+  border: 1px solid rgba(0, 243, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(5, 5, 8, 0.86);
+  color: #f7fbff;
+  padding: 0 12px;
+  outline: none;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.desktop-pet-subscription-picker .desktop-pet-ui-button {
+  min-height: 38px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.desktop-pet-subscription-primary {
+  min-width: 84px;
+}
+
+.desktop-pet-subscription-picker .desktop-pet-ui-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 420px) {
+  .desktop-pet-subscription-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-pet-subscription-selects {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-pet-subscription-picker .desktop-pet-ui-button {
+    width: 100%;
+  }
+}
+
+.desktop-pet-subscription-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-height: 26px;
+}
+
+.desktop-pet-subscription-chips .desktop-pet-ui-button {
+  min-width: 0;
+  border-radius: 999px;
+}
+
+.desktop-pet-subscription-chips .desktop-pet-ui-button.active {
+  border-color: rgba(0, 243, 255, 0.48);
+  background: rgba(0, 243, 255, 0.12);
+  color: #d9fcff;
+}
+
+.desktop-pet-inline-dot {
+  margin-right: 7px;
+  vertical-align: 0.08em;
+}
+
+.desktop-pet-subscription-actions {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.desktop-pet-subscription-file-icon {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 243, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(0, 243, 255, 0.08);
+  color: #d9fcff;
+}
+
+.desktop-pet-subscription-file-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.desktop-pet-subscription-file-copy strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pet-subscription-open {
+  min-width: 56px;
+  max-width: 76px;
+  justify-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desktop-pet-inventory-item strong {
+  color: #fffbd0;
+}
+
+.desktop-pet-achievement {
+  display: inline-flex;
+  align-items: center;
+  color: #fffbd0;
+  font-size: 12px;
+  font-weight: 800;
+}

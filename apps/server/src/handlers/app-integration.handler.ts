@@ -321,6 +321,13 @@ export function createAppIntegrationHandler(container: AppContainer) {
 
   handler.get('/servers/:serverId/apps', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
+    if (c.req.query('summary') === '1') {
+      const apps = await appIntegrationService.listSummaries(
+        c.req.param('serverId'),
+        c.get('actor'),
+      )
+      return c.json(apps)
+    }
     const apps = await appIntegrationService.list(c.req.param('serverId'), c.get('actor'))
     return c.json(apps)
   })

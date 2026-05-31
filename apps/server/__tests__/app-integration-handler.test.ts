@@ -74,6 +74,30 @@ describe('app integration handler', () => {
     )
   })
 
+  it('lists lightweight server app summaries when requested', async () => {
+    const service = {
+      listSummaries: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'app-1', appKey: 'demo-desk', name: 'Demo Desk', iconUrl: null },
+        ]),
+    }
+    const app = createTestApp(service)
+
+    const response = await app.request('/api/servers/srv-1/apps?summary=1', {
+      headers: { Authorization: 'Bearer access-token' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual([
+      { id: 'app-1', appKey: 'demo-desk', name: 'Demo Desk', iconUrl: null },
+    ])
+    expect(service.listSummaries).toHaveBeenCalledWith(
+      'srv-1',
+      expect.objectContaining({ kind: 'user', userId: 'user-1' }),
+    )
+  })
+
   it('discovers a server app manifest through an authenticated admin route', async () => {
     const service = {
       discover: vi.fn().mockResolvedValue({

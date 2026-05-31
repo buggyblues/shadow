@@ -63,6 +63,7 @@ export class EntitlementDao {
           basePrice: products.basePrice,
           currency: products.currency,
           billingMode: products.billingMode,
+          tags: products.tags,
           entitlementConfig: products.entitlementConfig,
         },
         offer: {
@@ -143,6 +144,7 @@ export class EntitlementDao {
           basePrice: products.basePrice,
           currency: products.currency,
           billingMode: products.billingMode,
+          tags: products.tags,
           entitlementConfig: products.entitlementConfig,
         },
         offer: {
@@ -250,6 +252,7 @@ export class EntitlementDao {
           basePrice: products.basePrice,
           currency: products.currency,
           billingMode: products.billingMode,
+          tags: products.tags,
           entitlementConfig: products.entitlementConfig,
         },
         offer: {

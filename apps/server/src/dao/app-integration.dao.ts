@@ -24,6 +24,21 @@ export class AppIntegrationDao {
       .orderBy(serverAppIntegrations.name)
   }
 
+  async listSummariesByServer(serverId: string) {
+    return this.db
+      .select({
+        id: serverAppIntegrations.id,
+        serverId: serverAppIntegrations.serverId,
+        appKey: serverAppIntegrations.appKey,
+        name: serverAppIntegrations.name,
+        iconUrl: serverAppIntegrations.iconUrl,
+        status: serverAppIntegrations.status,
+      })
+      .from(serverAppIntegrations)
+      .where(eq(serverAppIntegrations.serverId, serverId))
+      .orderBy(serverAppIntegrations.name)
+  }
+
   async findById(id: string) {
     const rows = await this.db
       .select()

@@ -2,10 +2,12 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { ConnectorDao } from '../dao/connector.dao'
 import type { ConnectorRuntimeInfo } from '../db/schema'
 import { decrypt, encrypt } from '../lib/kms'
-import type { AgentService } from './agent.service'
+import { officialModelProxyEnvVars, officialModelProxyModel } from '../lib/model-proxy-config'
+import { type AgentService, effectiveAgentStatus } from './agent.service'
 
 const ONLINE_WINDOW_MS = 90_000
 const MACHINE_TOKEN_PREFIX = 'sk_machine_'
+const CONNECTOR_RECONNECT_JOB_DEDUPE_MS = 60_000
 
 export interface ConnectorComputerView {
   id: string
@@ -32,6 +34,13 @@ export interface ConnectorConfigureBuddyPayload {
   }
   projectName: string
   workDir: string
+  modelProvider?: {
+    id: string
+    label: string
+    baseUrl: string
+    apiKey: string
+    model: string
+  }
 }
 
 export function connectorComputerStatus(lastSeenAt: Date | string | null | undefined) {
@@ -109,10 +118,46 @@ function normalizeRuntimes(runtimes: ConnectorRuntimeInfo[]): ConnectorRuntimeIn
       status: runtime.status === 'available' ? 'available' : 'missing',
       version: runtime.version?.trim() || null,
       command: runtime.command?.trim() || null,
+      iconId: runtime.iconId?.trim() || null,
+      installCommand: runtime.installCommand?.trim() || null,
+      installCommands: Array.isArray(runtime.installCommands)
+        ? runtime.installCommands
+            .map((command) => command.trim())
+            .filter(Boolean)
+            .slice(0, 8)
+        : [],
+      helpUrl: runtime.helpUrl?.trim() || null,
       detectedAt: runtime.detectedAt?.trim() || new Date().toISOString(),
     })
   }
   return next.slice(0, 30)
+}
+
+function officialConnectorModelProvider(input: {
+  userId: string
+  serverUrl: string
+  agentId: string
+}): ConnectorConfigureBuddyPayload['modelProvider'] | undefined {
+  const env = officialModelProxyEnvVars({
+    runtimeServerUrl: input.serverUrl,
+    userId: input.userId,
+    namespace: `connector:${input.agentId}`,
+  })
+  const baseUrl = env.OPENAI_COMPATIBLE_BASE_URL?.trim()
+  const apiKey = env.OPENAI_COMPATIBLE_API_KEY?.trim()
+  if (!baseUrl || !apiKey) return undefined
+  return {
+    id: 'shadow-official',
+    label: 'Shadow official LLM proxy',
+    baseUrl,
+    apiKey,
+    model: officialModelProxyModel(),
+  }
+}
+
+function readConfigString(config: Record<string, unknown> | null | undefined, key: string) {
+  const value = config?.[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : ''
 }
 
 export class ConnectorService {
@@ -194,7 +239,68 @@ export class ConnectorService {
       daemonVersion: input.daemonVersion,
       runtimes: normalizeRuntimes(input.runtimes),
     })
+    if (updated) {
+      await this.enqueueReconnectJobs(updated)
+    }
     return updated ? toComputerView(updated) : null
+  }
+
+  private async enqueueReconnectJobs(computer: {
+    id: string
+    userId: string
+    runtimes: ConnectorRuntimeInfo[]
+  }) {
+    const availableRuntimes = new Map(
+      (computer.runtimes ?? [])
+        .filter((runtime) => runtime.status === 'available')
+        .map((runtime) => [runtime.id, runtime]),
+    )
+    if (availableRuntimes.size === 0) return
+
+    const boundAgents = await this.deps.connectorDao.listConnectorAgentsForComputer(computer.id)
+    const since = new Date(Date.now() - CONNECTOR_RECONNECT_JOB_DEDUPE_MS)
+    for (const { agent, botUser } of boundAgents) {
+      if (effectiveAgentStatus(agent) === 'running') continue
+      const config = (agent.config as Record<string, unknown> | null) ?? {}
+      const runtimeId = readConfigString(config, 'connectorRuntimeId') || agent.kernelType
+      const runtime = availableRuntimes.get(runtimeId)
+      if (!runtime) continue
+
+      const hasRecentJob = await this.deps.connectorDao.hasRecentConfigureJob(
+        computer.id,
+        agent.id,
+        since,
+      )
+      if (hasRecentJob) continue
+
+      const tokenResult = await this.deps.agentService.generateToken(agent.id, computer.userId)
+      const serverUrl = readConfigString(config, 'connectorServerUrl') || 'https://shadowob.com'
+      const payload: ConnectorConfigureBuddyPayload = {
+        serverUrl: normalizeServerUrl(serverUrl),
+        token: tokenResult.token,
+        runtimeId: runtime.id,
+        buddy: {
+          id: agent.id,
+          username: botUser.username,
+          displayName: botUser.displayName,
+        },
+        projectName: botUser.username,
+        workDir: readConfigString(config, 'connectorWorkDir') || '.',
+      }
+      payload.modelProvider = officialConnectorModelProvider({
+        userId: computer.userId,
+        serverUrl: payload.serverUrl,
+        agentId: agent.id,
+      })
+
+      await this.deps.connectorDao.createJob({
+        userId: computer.userId,
+        computerId: computer.id,
+        agentId: agent.id,
+        type: 'configure-buddy',
+        payloadEncrypted: encrypt(JSON.stringify(payload)),
+      })
+    }
   }
 
   async createBuddyOnComputer(
@@ -238,6 +344,8 @@ export class ConnectorService {
         connectorComputerId: computer.id,
         connectorRuntimeId: runtime.id,
         connectorRuntimeLabel: runtime.label,
+        connectorServerUrl: normalizeServerUrl(input.serverUrl),
+        connectorWorkDir: '.',
       },
       buddyMode: input.buddyMode,
       allowedServerIds: input.allowedServerIds,
@@ -261,6 +369,11 @@ export class ConnectorService {
       projectName: agent.botUser?.username ?? input.username,
       workDir: '.',
     }
+    payload.modelProvider = officialConnectorModelProvider({
+      userId,
+      serverUrl: payload.serverUrl,
+      agentId,
+    })
 
     const job = await this.deps.connectorDao.createJob({
       userId,
@@ -305,6 +418,8 @@ export class ConnectorService {
         connectorComputerId: computer.id,
         connectorRuntimeId: runtime.id,
         connectorRuntimeLabel: runtime.label,
+        connectorServerUrl: normalizeServerUrl(input.serverUrl),
+        connectorWorkDir: '.',
       })) ?? tokenResult.agent
     const botUser = tokenResult.botUser
 
@@ -320,6 +435,11 @@ export class ConnectorService {
       projectName: botUser.username,
       workDir: '.',
     }
+    payload.modelProvider = officialConnectorModelProvider({
+      userId,
+      serverUrl: payload.serverUrl,
+      agentId,
+    })
 
     const job = await this.deps.connectorDao.createJob({
       userId,

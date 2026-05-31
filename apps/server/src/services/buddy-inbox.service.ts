@@ -26,6 +26,7 @@ import {
 } from './buddy-inbox-protocol'
 import type { MessageService } from './message.service'
 import type { PolicyService } from './policy.service'
+import type { ServerService } from './server.service'
 
 type ServerMemberRole = 'owner' | 'admin' | 'member'
 type TaskPriority = 'low' | 'normal' | 'high' | 'urgent'
@@ -47,6 +48,9 @@ type AdmissionSubject = {
 }
 
 type InboxAccess = Awaited<ReturnType<PolicyService['requireChannelRead']>>
+type BuddyInboxServerMember =
+  | Awaited<ReturnType<ServerDao['getMembers']>>[number]
+  | Awaited<ReturnType<ServerService['getMembers']>>[number]
 
 type UserSummary = {
   id: string
@@ -680,12 +684,22 @@ export class BuddyInboxService {
     return null
   }
 
-  async listForServer(serverId: string, actor: ActorInput) {
+  async listForServer(
+    serverId: string,
+    actor: ActorInput,
+    options?: {
+      serverMember?: Awaited<ReturnType<PolicyService['requireServerMember']>> | null
+      serverMembers?: BuddyInboxServerMember[]
+    },
+  ) {
     const userId = actorUserId(actor)
-    const serverMember = await this.deps.policyService.requireServerMember(actor, serverId)
+    const serverMember =
+      options?.serverMember && options.serverMember.serverId === serverId
+        ? options.serverMember
+        : await this.deps.policyService.requireServerMember(actor, serverId)
     const canSeeAll = canManageServer(serverMember.role)
     const [members, inboxChannels] = await Promise.all([
-      this.deps.serverDao.getMembers(serverId),
+      options?.serverMembers ?? this.deps.serverDao.getMembers(serverId),
       this.findInboxChannels(serverId),
     ])
 

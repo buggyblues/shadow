@@ -12,7 +12,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
@@ -58,6 +58,8 @@ interface Member {
   user?: MemberUser
 }
 
+export type MemberListInitialMember = Member
+
 type PresenceStatus = MemberUser['status']
 
 interface BuddyAgent {
@@ -80,14 +82,26 @@ interface BuddyAgent {
   } | null
 }
 
-export function MemberList() {
+export const MemberList = memo(function MemberList({
+  channelId: channelIdProp,
+  serverId: serverIdProp,
+  initialMembers,
+}: {
+  channelId?: string | null
+  serverId?: string | null
+  initialMembers?: MemberListInitialMember[] | null
+} = {}) {
   const { t } = useTranslation()
   const { channelId: routeChannelId } = useParams({ strict: false }) as { channelId?: string }
-  const { activeServerId, activeChannelId } = useChatStore()
-  const currentChannelId = routeChannelId ?? activeChannelId ?? null
+  const activeServerId = useChatStore((state) => state.activeServerId)
+  const activeChannelId = useChatStore((state) => state.activeChannelId)
+  const currentServerId = serverIdProp ?? activeServerId
+  const currentChannelId = channelIdProp ?? routeChannelId ?? activeChannelId ?? null
   const currentUser = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
-  const { mobileMemberListOpen, closeMobileMemberList, rightPanelOpen } = useUIStore()
+  const mobileMemberListOpen = useUIStore((state) => state.mobileMemberListOpen)
+  const closeMobileMemberList = useUIStore((state) => state.closeMobileMemberList)
+  const rightPanelOpen = useUIStore((state) => state.rightPanelOpen)
   const [showInvitePanel, setShowInvitePanel] = useState(false)
   const [inviteInitialTab, setInviteInitialTab] = useState<'members' | 'buddies'>('members')
   const [inviteCopied, setInviteCopied] = useState(false)
@@ -102,18 +116,24 @@ export function MemberList() {
     y: number
     member: Member
   } | null>(null)
-
+  const initialMembersUpdatedAt = useMemo(
+    () => (initialMembers ? Date.now() : undefined),
+    [initialMembers],
+  )
   const { data: members = [] } = useQuery({
-    queryKey: ['members', activeServerId, currentChannelId],
+    queryKey: ['members', currentServerId, currentChannelId],
     queryFn: () => {
       // Prefer channel-specific members when a channel is active
       if (currentChannelId) {
         return fetchApi<Member[]>(`/api/channels/${currentChannelId}/members`)
       }
-      return fetchApi<Member[]>(`/api/servers/${activeServerId}/members`)
+      return fetchApi<Member[]>(`/api/servers/${currentServerId}/members`)
     },
-    enabled: !!activeServerId,
-    staleTime: 30_000,
+    enabled: Boolean(currentServerId && !initialMembers),
+    initialData: initialMembers ?? undefined,
+    initialDataUpdatedAt: initialMembersUpdatedAt,
+    staleTime: initialMembers ? Number.POSITIVE_INFINITY : 30_000,
+    refetchOnMount: false,
   })
 
   const { data: channel } = useQuery({
@@ -122,20 +142,14 @@ export function MemberList() {
       fetchApi<{ id: string; isArchived?: boolean }>(`/api/channels/${currentChannelId}`),
     enabled: !!currentChannelId,
     staleTime: 30_000,
-  })
-
-  const { data: server } = useQuery({
-    queryKey: ['server', activeServerId],
-    queryFn: () => fetchApi<{ id: string; inviteCode: string }>(`/api/servers/${activeServerId}`),
-    enabled: !!activeServerId,
-    staleTime: 30_000,
+    refetchOnMount: false,
   })
 
   const { data: buddyAgents = [] } = useQuery({
-    queryKey: ['members-buddy-agents', activeServerId],
+    queryKey: ['members-buddy-agents', currentServerId],
     queryFn: () => fetchApi<BuddyAgent[]>('/api/agents?includeRentals=true'),
     enabled:
-      !!activeServerId && (showInvitePanel || Boolean(profileMember) || Boolean(contextMenu)),
+      !!currentServerId && (showInvitePanel || Boolean(profileMember) || Boolean(contextMenu)),
     staleTime: 60_000,
   })
 
@@ -177,26 +191,26 @@ export function MemberList() {
       hasSeenSocketConnectRef.current = true
       return
     }
-    queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
+    queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
   })
 
   // Listen for channel member changes (buddy added/removed from channel)
   useSocketEvent('channel:member-added', (data: { channelId: string }) => {
     if (data.channelId === currentChannelId) {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
+      queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
     }
   })
   useSocketEvent('member:joined', (data: { serverId?: string; channelId?: string }) => {
     if (
       (currentChannelId && data.channelId === currentChannelId) ||
-      (!currentChannelId && data.serverId === activeServerId)
+      (!currentChannelId && data.serverId === currentServerId)
     ) {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
+      queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
     }
   })
   useSocketEvent('channel:member-removed', (data: { channelId: string }) => {
     if (data.channelId === currentChannelId) {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
+      queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
     }
   })
 
@@ -205,7 +219,7 @@ export function MemberList() {
     mutationFn: ({ serverId, userId }: { serverId: string; userId: string }) =>
       fetchApi(`/api/servers/${serverId}/members/${userId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
+      queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
       setContextMenu(null)
     },
   })
@@ -215,7 +229,7 @@ export function MemberList() {
     mutationFn: ({ channelId, userId }: { channelId: string; userId: string }) =>
       fetchApi(`/api/channels/${channelId}/members/${userId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, currentChannelId] })
+      queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
       setContextMenu(null)
     },
   })
@@ -256,172 +270,193 @@ export function MemberList() {
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
   // Determine if current user can kick members
-  const currentMember = members.find((m) => m.userId === currentUser?.id)
+  const currentMember = useMemo(
+    () => members.find((member) => member.userId === currentUser?.id),
+    [currentUser?.id, members],
+  )
   const canKick = currentMember?.role === 'owner' || currentMember?.role === 'admin'
 
-  const onlineMembers = members.filter((m) => m.user?.status !== 'offline')
-  const offlineMembers = members.filter((m) => m.user?.status === 'offline')
+  const onlineMembers = useMemo(
+    () => members.filter((member) => member.user?.status !== 'offline'),
+    [members],
+  )
+  const offlineMembers = useMemo(
+    () => members.filter((member) => member.user?.status === 'offline'),
+    [members],
+  )
 
-  const renderMemberGroup = (label: string, items: Member[], opts?: { flat?: boolean }) => {
-    if (items.length === 0) return null
-    const isFlat = opts?.flat ?? false
-    return (
-      <div className="mb-4">
-        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted px-4 mb-2">
-          {label} — {items.length}
-        </h4>
-        {(() => {
-          const botOwnerByUserId = new Map<string, string>()
-          const buddyMetaByUserId = new Map<
-            string,
-            {
-              ownerName?: string
-              ownerId?: string
-              ownerAvatarUrl?: string | null
-              description?: string
-              totalOnlineSeconds?: number
-            }
-          >()
-          for (const member of items) {
-            if (!member.user?.isBot) continue
-            const botUserId = member.userId
-            const ownerId = member.agent?.ownerId ?? member.creator?.uid
-            const totalOnlineSeconds =
-              typeof member.totalOnlineSeconds === 'number'
-                ? member.totalOnlineSeconds
-                : typeof member.agent?.totalOnlineSeconds === 'number'
-                  ? member.agent.totalOnlineSeconds
-                  : undefined
-            if (ownerId) botOwnerByUserId.set(botUserId, ownerId)
-            buddyMetaByUserId.set(botUserId, {
-              ownerName: member.creator?.nickname ?? member.creator?.username ?? undefined,
-              ownerId: ownerId ?? undefined,
-              ownerAvatarUrl: member.creator?.avatarUrl ?? null,
-              description:
-                typeof member.agent?.config?.description === 'string'
-                  ? member.agent.config.description
-                  : undefined,
-              totalOnlineSeconds,
-            })
-          }
-          for (const a of buddyAgents) {
-            const botUserId = a.botUser?.id
-            if (botUserId) botOwnerByUserId.set(botUserId, a.ownerId)
-            if (botUserId) {
-              const ownerName = a.owner?.displayName ?? a.owner?.username ?? undefined
-              const description =
-                typeof a.config?.description === 'string' ? a.config.description : undefined
-              const existing = buddyMetaByUserId.get(botUserId)
+  const memberContent = useMemo(() => {
+    const renderMemberGroup = (label: string, items: Member[], opts?: { flat?: boolean }) => {
+      if (items.length === 0) return null
+      const isFlat = opts?.flat ?? false
+      return (
+        <div className="mb-4">
+          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted px-4 mb-2">
+            {label} — {items.length}
+          </h4>
+          {(() => {
+            const botOwnerByUserId = new Map<string, string>()
+            const buddyMetaByUserId = new Map<
+              string,
+              {
+                ownerName?: string
+                ownerId?: string
+                ownerAvatarUrl?: string | null
+                description?: string
+                totalOnlineSeconds?: number
+              }
+            >()
+            for (const member of items) {
+              if (!member.user?.isBot) continue
+              const botUserId = member.userId
+              const ownerId = member.agent?.ownerId ?? member.creator?.uid
+              const totalOnlineSeconds =
+                typeof member.totalOnlineSeconds === 'number'
+                  ? member.totalOnlineSeconds
+                  : typeof member.agent?.totalOnlineSeconds === 'number'
+                    ? member.agent.totalOnlineSeconds
+                    : undefined
+              if (ownerId) botOwnerByUserId.set(botUserId, ownerId)
               buddyMetaByUserId.set(botUserId, {
-                ownerName: ownerName ?? existing?.ownerName,
-                ownerId: a.ownerId ?? existing?.ownerId,
-                ownerAvatarUrl: a.owner?.avatarUrl ?? existing?.ownerAvatarUrl ?? null,
-                description: description ?? existing?.description,
-                totalOnlineSeconds: a.totalOnlineSeconds ?? existing?.totalOnlineSeconds,
+                ownerName: member.creator?.nickname ?? member.creator?.username ?? undefined,
+                ownerId: ownerId ?? undefined,
+                ownerAvatarUrl: member.creator?.avatarUrl ?? null,
+                description:
+                  typeof member.agent?.config?.description === 'string'
+                    ? member.agent.config.description
+                    : undefined,
+                totalOnlineSeconds,
               })
             }
-          }
-
-          const membersByUserId = new Map(items.map((m) => [m.userId, m]))
-          const ownerChildren = new Map<string, Member[]>()
-          const orphanBots: Member[] = []
-
-          for (const m of items) {
-            if (!m.user?.isBot) continue
-            const ownerId = botOwnerByUserId.get(m.userId)
-            if (ownerId && membersByUserId.has(ownerId)) {
-              ownerChildren.set(ownerId, [...(ownerChildren.get(ownerId) ?? []), m])
-            } else {
-              orphanBots.push(m)
+            for (const a of buddyAgents) {
+              const botUserId = a.botUser?.id
+              if (botUserId) botOwnerByUserId.set(botUserId, a.ownerId)
+              if (botUserId) {
+                const ownerName = a.owner?.displayName ?? a.owner?.username ?? undefined
+                const description =
+                  typeof a.config?.description === 'string' ? a.config.description : undefined
+                const existing = buddyMetaByUserId.get(botUserId)
+                buddyMetaByUserId.set(botUserId, {
+                  ownerName: ownerName ?? existing?.ownerName,
+                  ownerId: a.ownerId ?? existing?.ownerId,
+                  ownerAvatarUrl: a.owner?.avatarUrl ?? existing?.ownerAvatarUrl ?? null,
+                  description: description ?? existing?.description,
+                  totalOnlineSeconds: a.totalOnlineSeconds ?? existing?.totalOnlineSeconds,
+                })
+              }
             }
-          }
 
-          const topLevelMembers = items.filter((m) => !m.user?.isBot)
+            const membersByUserId = new Map(items.map((m) => [m.userId, m]))
+            const ownerChildren = new Map<string, Member[]>()
+            const orphanBots: Member[] = []
 
-          const renderMemberRow = (member: Member, rowOpts?: { child?: boolean }) => {
-            const buddyMeta = member.user?.isBot ? buddyMetaByUserId.get(member.user.id) : undefined
-            const buddyItem = memberToBuddyItem(member, buddyMeta)
-            if (!buddyItem) return null
+            for (const m of items) {
+              if (!m.user?.isBot) continue
+              const ownerId = botOwnerByUserId.get(m.userId)
+              if (ownerId && membersByUserId.has(ownerId)) {
+                ownerChildren.set(ownerId, [...(ownerChildren.get(ownerId) ?? []), m])
+              } else {
+                orphanBots.push(m)
+              }
+            }
+
+            const topLevelMembers = items.filter((m) => !m.user?.isBot)
+
+            const renderMemberRow = (member: Member, rowOpts?: { child?: boolean }) => {
+              const buddyMeta = member.user?.isBot
+                ? buddyMetaByUserId.get(member.user.id)
+                : undefined
+              const buddyItem = memberToBuddyItem(member, buddyMeta)
+              if (!buddyItem) return null
+
+              return (
+                <div key={member.id} className={`relative ${rowOpts?.child ? 'pl-4' : 'mx-2'}`}>
+                  {rowOpts?.child && (
+                    <div className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 rounded-full bg-border-subtle/70" />
+                  )}
+                  <div onContextMenu={(e) => handleContextMenu(e, member)}>
+                    <BuddyListItem
+                      buddy={buddyItem}
+                      showHoverCard={true}
+                      clickable={true}
+                      showBotBadge={true}
+                      showRoleBadge={true}
+                      showOnlineRank={true}
+                      onlineRankCompact={true}
+                    />
+                  </div>
+                </div>
+              )
+            }
 
             return (
-              <div key={member.id} className={`relative ${rowOpts?.child ? 'pl-4' : 'mx-2'}`}>
-                {rowOpts?.child && (
-                  <div className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 rounded-full bg-border-subtle/70" />
-                )}
-                <div onContextMenu={(e) => handleContextMenu(e, member)}>
-                  <BuddyListItem
-                    buddy={buddyItem}
-                    showHoverCard={true}
-                    clickable={true}
-                    showBotBadge={true}
-                    showRoleBadge={true}
-                    showOnlineRank={true}
-                    onlineRankCompact={true}
-                  />
-                </div>
-              </div>
+              <>
+                {topLevelMembers.map((member) => {
+                  const children = isFlat ? [] : (ownerChildren.get(member.userId) ?? [])
+                  return (
+                    <div key={member.id}>
+                      {renderMemberRow(member)}
+                      {children.length > 0 && (
+                        <div className="relative ml-8 mt-1 space-y-1 pl-1 before:absolute before:left-0 before:top-0 before:bottom-3 before:w-px before:rounded-full before:bg-border-subtle/50">
+                          {children.map((child) => renderMemberRow(child, { child: true }))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {/* In flat mode, render all bots without tree structure */}
+                {isFlat
+                  ? items.filter((m) => m.user?.isBot).map((m) => renderMemberRow(m))
+                  : orphanBots.map((member) => renderMemberRow(member, { child: true }))}
+              </>
             )
-          }
-
-          return (
-            <>
-              {topLevelMembers.map((member) => {
-                const children = isFlat ? [] : (ownerChildren.get(member.userId) ?? [])
-                return (
-                  <div key={member.id}>
-                    {renderMemberRow(member)}
-                    {children.length > 0 && (
-                      <div className="relative ml-8 mt-1 space-y-1 pl-1 before:absolute before:left-0 before:top-0 before:bottom-3 before:w-px before:rounded-full before:bg-border-subtle/50">
-                        {children.map((child) => renderMemberRow(child, { child: true }))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-              {/* In flat mode, render all bots without tree structure */}
-              {isFlat
-                ? items.filter((m) => m.user?.isBot).map((m) => renderMemberRow(m))
-                : orphanBots.map((member) => renderMemberRow(member, { child: true }))}
-            </>
-          )
-        })()}
-      </div>
-    )
-  }
-
-  const memberContent = (
-    <>
-      {/* Action buttons - hidden when channel is archived */}
-      {!channel?.isArchived && (
-        <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              setInviteInitialTab('buddies')
-              setShowInvitePanel(true)
-            }}
-            className="flex items-center justify-center gap-2 px-4 py-[14px] rounded-full text-[13px] font-black text-[#050508] uppercase tracking-[0.05em] transition-all duration-500 w-full bouncy"
-            style={{
-              background: 'linear-gradient(135deg, #F8E71C, #ffb300)',
-              border: '1px solid rgba(255,255,255,0.5)',
-              boxShadow:
-                '0 10px 25px rgba(248, 231, 28, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.7)',
-              backdropFilter: 'blur(12px)',
-            }}
-            title={t('channel.addAgent')}
-          >
-            <PawPrint size={14} className="text-[#050508]" />
-            <span className="truncate uppercase tracking-widest">{t('channel.addAgent')}</span>
-          </button>
+          })()}
         </div>
-      )}
-      {renderMemberGroup(t('member.groupOnline'), onlineMembers)}
-      {renderMemberGroup(t('member.groupOffline'), offlineMembers, { flat: true })}
-      {members.length === 0 && (
-        <p className="text-text-muted text-sm px-4 py-2">{t('member.noMembers')}</p>
-      )}
-    </>
-  )
+      )
+    }
+
+    return (
+      <>
+        {/* Action buttons - hidden when channel is archived */}
+        {!channel?.isArchived && (
+          <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setInviteInitialTab('buddies')
+                setShowInvitePanel(true)
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-[14px] rounded-full text-[13px] font-black text-[#050508] uppercase tracking-[0.05em] transition-all duration-500 w-full bouncy"
+              style={{
+                background: 'linear-gradient(135deg, #F8E71C, #ffb300)',
+                border: '1px solid rgba(255,255,255,0.5)',
+                boxShadow:
+                  '0 10px 25px rgba(248, 231, 28, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+              }}
+              title={t('channel.addAgent')}
+            >
+              <PawPrint size={14} className="text-[#050508]" />
+              <span className="truncate uppercase tracking-widest">{t('channel.addAgent')}</span>
+            </button>
+          </div>
+        )}
+        {renderMemberGroup(t('member.groupOnline'), onlineMembers)}
+        {renderMemberGroup(t('member.groupOffline'), offlineMembers, { flat: true })}
+        {members.length === 0 && (
+          <p className="text-text-muted text-sm px-4 py-2">{t('member.noMembers')}</p>
+        )}
+      </>
+    )
+  }, [
+    buddyAgents,
+    channel?.isArchived,
+    handleContextMenu,
+    members.length,
+    offlineMembers,
+    onlineMembers,
+    t,
+  ])
 
   return (
     <>
@@ -455,9 +490,9 @@ export function MemberList() {
       )}
 
       {/* Invite Panel */}
-      {showInvitePanel && activeServerId && (
+      {showInvitePanel && currentServerId && (
         <InvitePanel
-          serverId={activeServerId}
+          serverId={currentServerId}
           channelId={currentChannelId}
           initialTab={inviteInitialTab}
           onClose={() => setShowInvitePanel(false)}
@@ -472,7 +507,7 @@ export function MemberList() {
           setProfileMember={setProfileMember}
           setContextMenu={setContextMenu}
           activeChannelId={currentChannelId}
-          activeServerId={activeServerId}
+          activeServerId={currentServerId}
           buddyAgents={buddyAgents}
           members={members}
           updateBotPolicy={updateBotPolicy}
@@ -536,7 +571,7 @@ export function MemberList() {
       )}
     </>
   )
-}
+})
 
 /* ── Bot Context Menu ──────────────────── */
 

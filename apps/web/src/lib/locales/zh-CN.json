@@ -762,6 +762,20 @@
     "addBuddyDm": "Buddy 私信",
     "addFriendDm": "好友私信"
   },
+  "commandPalette": {
+    "open": "打开命令面板",
+    "placeholder": "跳转频道、私信、服务器、操作",
+    "empty": "没有匹配的目标",
+    "loading": "正在加载目标...",
+    "groupActions": "操作",
+    "groupChannels": "频道",
+    "groupDms": "私信",
+    "groupServers": "服务器",
+    "searchMessages": "搜索消息",
+    "openServerHome": "打开服务器主页",
+    "openApps": "打开服务器应用",
+    "openShop": "打开服务器商店"
+  },
   "serverLanding": {
     "eyebrow": "Shadow 社区入门",
     "title": "在社区里把 AI 能力变成长期资产",
@@ -932,6 +946,16 @@
     "replyingTo": "回复消息中...",
     "inputPlaceholder": "在 #{{channelName}} 中发送消息",
     "inputPlaceholderCompact": "#{{channelName}} 发消息",
+    "searchMessages": "搜索消息",
+    "searchPanelTitle": "搜索当前聊天",
+    "searchMessagesPlaceholder": "搜索消息内容",
+    "searchMinChars": "至少 2 个字符",
+    "searchNoResults": "没有匹配的消息",
+    "searchResultCount": "{{count}} 条结果",
+    "searchHasAttachment": "含附件",
+    "searchOpenResult": "打开搜索结果",
+    "searchResultNotLoaded": "这条结果早于当前已加载时间线。先加载更早消息后再试。",
+    "searchAttachmentOnly": "仅附件消息",
     "addMenu": "添加内容",
     "uploadFile": "上传文件",
     "addMenuUploadFileDesc": "发送文档、压缩包或任意附件",
@@ -2877,6 +2901,12 @@
     "paidFileUploadFailed": "上传受保护文件失败",
     "paidFileDefaultSummary": "购买后可打开 {{name}}。",
     "paidFileDefaultPrivilege": "可在线查看或下载 {{name}}。",
+    "desktopPetPackUploadTitle": "上传桌宠素材包",
+    "desktopPetPackUploadHint": "上传 .shadowpet 或 .zip 素材包，买家购买后可在桌面端桌宠设置里导入。",
+    "desktopPetPackRequiredHint": "请先上传或绑定一个桌宠素材包。",
+    "desktopPetPackFileRequired": "请上传 .shadowpet、.shadowpet.zip 或 .zip 桌宠素材包。",
+    "desktopPetPackDefaultSummary": "购买后可将 {{name}} 导入为桌宠素材包。",
+    "desktopPetPackDefaultPrivilege": "可在 Shadow 桌面端桌宠设置中导入并使用 {{name}}。",
     "entitlementGroups": {
       "active": "可用权益",
       "expiring": "即将到期",
@@ -2969,6 +2999,7 @@
     "visual": {
       "service": "服务",
       "file": "文件",
+      "desktop_pet_pack": "桌宠素材",
       "badge": "徽章",
       "gift": "礼物",
       "ticket": "服务券",
@@ -2993,6 +3024,7 @@
     "visualPromise": {
       "service": "订单服务",
       "file": "购买后打开",
+      "desktop_pet_pack": "桌面端导入",
       "badge": "徽章",
       "gift": "可赠送收藏",
       "ticket": "可核销凭证",
@@ -3409,6 +3441,7 @@
     "deliveryPreset": {
       "service": "服务权益",
       "paid_file": "付费文件",
+      "desktop_pet_pack": "桌宠素材包",
       "badge": "身份徽章",
       "gift": "数字礼物",
       "service_ticket": "服务券"
@@ -3416,6 +3449,7 @@
     "deliveryPresetHint": {
       "service": "适合访问权限、会员、文件或人工服务交付。",
       "paid_file": "适合资料、HTML、图像或可下载内容，购买后在交付中心打开。",
+      "desktop_pet_pack": "适合 sprite 与 metadata 素材包，买家购买后在桌宠设置里安装。",
       "badge": "适合粉丝、成员或早鸟身份的永久徽章。",
       "gift": "适合可转赠、可收藏的数字礼物。",
       "service_ticket": "适合可核销的一次性服务或活动凭证。"
@@ -3613,7 +3647,7 @@
       "closePanel": "关闭面板"
     },
     "pet": {
-      "name": "小豆",
+      "name": "小懒",
       "level": "{{level}} 级",
       "xp": "{{xp}} / {{next}} 经验",
       "personality": "性格",
@@ -3630,6 +3664,9 @@
       "rest": "休息",
       "explore": "探索",
       "tea": "喝茶",
+      "levelUp": "升级",
+      "interact": "交互",
+      "back": "返回",
       "voice": "语音",
       "connection": "连接",
       "community": "社区",
@@ -3637,21 +3674,32 @@
     },
     "tabs": {
       "chat": "聊天",
+      "care": "照顾",
+      "services": "服务",
       "stats": "状态",
       "community": "通知",
       "subscriptions": "订阅",
       "bag": "背包",
       "store": "商店"
     },
+    "panelSubtitle": {
+      "chat": "和{{name}}保持轻量对话",
+      "care": "看动作，不看数值",
+      "services": "番茄钟、喝水、伸展和 Runtime 提醒",
+      "community": "社区提醒检查后会清除红点",
+      "subscriptions": "同步订阅频道里的新文件",
+      "store": "管理和获取桌宠素材包"
+    },
     "store": {
       "title": "桌宠商店",
       "subtitle": "获取桌宠素材包",
-      "petAssets": "虾豆桌面宠物素材",
+      "petAssets": "桌宠素材包",
       "petAssetsHint": "打开公开商城中带有「虾豆桌面宠物」标签的商品。",
-      "open": "打开商店"
+      "open": "打开商店",
+      "manage": "管理素材包"
     },
     "chat": {
-      "input": "和小豆说话",
+      "input": "和{{name}}说话",
       "send": "发送",
       "authRequired": "请先在虾豆社区登录，我才能连接官方模型代理。",
       "proxyError": "模型代理暂时没有回应，稍后再试。",
@@ -3674,8 +3722,119 @@
       "replySleepy": "我会轻一点，不打扰你工作。",
       "replyLevel": "我会记住当前状态，尽量保持安静。",
       "replyCommunity": "打开通知页，我可以帮你扫一眼最近的社区提醒。",
-      "replyStatus": "心情 {{mood}}，饱腹 {{hunger}}，能量 {{energy}}，健康 {{health}}。",
+      "replyStatus": "我会用动作表现现在的状态，需要照顾时也会轻轻提醒你。",
       "replySick": "我有点不舒服。喝茶或休息能帮我恢复。"
+    },
+    "phase": {
+      "morning": "早晨活动",
+      "day": "白天陪伴",
+      "evening": "傍晚收尾",
+      "night": "夜间休息"
+    },
+    "emotions": {
+      "excited": "精神很好",
+      "content": "舒服亲近",
+      "calm": "安静平稳",
+      "lonely": "安静等待",
+      "hungry": "想吃东西",
+      "sleepy": "有点困",
+      "sick": "需要照顾"
+    },
+    "profile": {
+      "name": "名字",
+      "personality": "性格",
+      "personality_lazy": "很懒",
+      "personality_curious": "好奇",
+      "personality_clingy": "黏人",
+      "personality_brave": "勇敢",
+      "random": "随机",
+      "statusLine": "{{name}}现在{{emotion}}"
+    },
+    "care": {
+      "todayEvent": "今天的小状况",
+      "noEvent": "现在一切都很安静。",
+      "recommendedAction": "推荐照顾"
+    },
+    "actionFeedback": {
+      "feed": "吃到啦，我会安静待着。",
+      "pet": "我感觉到了，会靠近一点。",
+      "play": "精神起来了。",
+      "rest": "我先蜷起来休息一会儿。",
+      "explore": "我去周围看看，很快回来。",
+      "tea": "热茶很有帮助。"
+    },
+    "events": {
+      "morningStretch": {
+        "hint": "我一直东张西望，像是想活动一下。",
+        "resolved": "伸展了一下，今天轻松多了。"
+      },
+      "windowSunbeam": {
+        "hint": "窗边有一小片光，我看起来格外安静。",
+        "resolved": "安静晒了一会儿，舒服多了。"
+      },
+      "curiousPing": {
+        "hint": "桌边好像有什么东西吸引了我。",
+        "resolved": "我找到了一点值得留下的小东西。"
+      },
+      "rainyNap": {
+        "hint": "房间慢了下来，我一直想打盹。",
+        "resolved": "休息之后，傍晚变柔和了。"
+      },
+      "midnightHungry": {
+        "hint": "夜深了，我在找一点小零食。",
+        "resolved": "夜宵解决了。"
+      },
+      "looseShell": {
+        "hint": "屏幕边缘有一枚松动的小贝壳。",
+        "resolved": "我把贝壳带回来了。"
+      }
+    },
+    "services": {
+      "title": "小助手习惯",
+      "subtitle": "由桌宠轻轻提醒",
+      "notificationTitle": "桌宠提醒",
+      "unread": "有待查看的桌宠提醒",
+      "water": "喝水",
+      "focus": "专注计时",
+      "fitness": "伸展",
+      "coding": "Coding Agent",
+      "waterMeta": "每小时轻提醒一次。",
+      "focusMeta": "开启 25 分钟专注。",
+      "focusActive": "专注计时进行中。",
+      "fitnessMeta": "每 90 分钟提醒活动。",
+      "active": "进行中",
+      "idle": "待命",
+      "reminded": "待处理",
+      "dueNow": "现在该处理了",
+      "waterNext": "下次提醒：{{time}} 后",
+      "fitnessNext": "下次提醒：{{time}} 后",
+      "focusIdle": "选择一个专注时长，我会帮你看时间。",
+      "focusRemaining": "剩余 {{time}}",
+      "start25": "25 分钟",
+      "start50": "50 分钟",
+      "stop": "停止",
+      "done": "完成",
+      "minutes": "{{count}} 分钟",
+      "hoursMinutes": "{{hours}} 小时 {{minutes}} 分钟",
+      "on": "开",
+      "off": "关",
+      "waterEnabled": "我会提醒你喝水。",
+      "waterDisabled": "喝水提醒已关闭。",
+      "focusEnabled": "专注计时开始，我会看着时间。",
+      "focusDisabled": "专注计时已停止。",
+      "fitnessEnabled": "我会提醒你伸展活动。",
+      "fitnessDisabled": "伸展提醒已关闭。",
+      "codingEnabled": "我会关注本地 Coding Agent 状态。",
+      "codingDisabled": "Coding Agent 状态提醒已关闭。",
+      "waterDone": "已记录喝水，下次我再提醒你。",
+      "fitnessDone": "已记录伸展，继续保持。",
+      "waterReminder": "该喝点水了。",
+      "fitnessReminder": "站起来伸展一分钟。",
+      "focusReady": "专注结束，短暂休息一下。",
+      "codingOnline": "{{count}} 个本地 Coding Agent 连接在线。",
+      "codingOffline": "有本地 Coding Agent 连接离线了。",
+      "runtimeReady": "{{runtime}} 的 {{name}} 已准备好。",
+      "runtimeReadyMany": "{{count}} 个 Runtime 会话已准备好。"
     },
     "stats": {
       "mood": "心情",
@@ -3689,8 +3848,11 @@
       "shells": "贝壳",
       "streak": "连续照顾",
       "days": "{{count}} 天",
+      "level": "{{level}} 级",
+      "xp": "经验",
       "questProgress": "任务",
       "quests": "任务",
+      "inventory": "道具",
       "achievements": "成就",
       "noAchievements": "还没有成就"
     },
@@ -3753,7 +3915,12 @@
     },
     "auth": {
       "title": "登录后同步虾豆",
+      "loginAction": "登录",
       "description": "打开虾豆社区完成登录，然后回到这里查看社区通知。",
+      "chatDescription": "登录后，桌宠才能使用社区模型继续聊天和语音对话。",
+      "notificationDescription": "登录后才能同步社区通知，查看后会清除红点。",
+      "subscriptionDescription": "登录后才能选择社区频道，并同步订阅文件。",
+      "storeDescription": "登录后才能查看已购素材包、购买新素材并安装到桌宠。",
       "openMain": "打开虾豆社区",
       "refresh": "重新检查"
     }
@@ -3899,7 +4066,33 @@
     "shortcut_petChat": "桌宠聊天",
     "shortcut_petChat_desc": "打开桌宠聊天面板并聚焦输入框。",
     "shortcut_showNotifications": "查看通知",
-    "shortcut_showNotifications_desc": "打开桌宠面板并显示社区通知。"
+    "shortcut_showNotifications_desc": "打开桌宠面板并显示社区通知。",
+    "tabPetAssets": "桌宠素材",
+    "petAssetsTitle": "桌面宠物素材包",
+    "petAssetsDesc": "导入创作者制作的 sprite 素材包，预览动作，并选择当前桌宠外观。",
+    "petAssetsOpenStore": "打开商城",
+    "petAssetsImport": "导入素材包",
+    "petAssetsDefault": "内置桌宠",
+    "petAssetsDefaultDesc": "使用内置桌宠素材和默认动画。",
+    "petAssetsNoDesc": "暂无简介。",
+    "petAssetsSourceMarketplace": "商城",
+    "petAssetsSourceLocal": "本地导入",
+    "petAssetsActive": "使用中",
+    "petAssetsUse": "使用素材包",
+    "petAssetsRemove": "移除",
+    "petAssetsPreview": "动作预览",
+    "petAssetsOwnedTitle": "已购买素材包",
+    "petAssetsOwnedDesc": "从你的商城权益中安装桌宠素材包；下载会经过付费文件授权和本地校验。",
+    "petAssetsRefreshOwned": "刷新权益",
+    "petAssetsOwnedAuthHint": "登录社区后可查看已购买的桌宠素材包。",
+    "petAssetsOwnedLoadFailed": "无法加载已购买素材包。",
+    "petAssetsOwnedLoading": "正在加载已购买素材包...",
+    "petAssetsOwnedEmpty": "暂无可安装的已购桌宠素材包。",
+    "petAssetsOwnedUnnamed": "未命名素材包",
+    "petAssetsOwnedInstalled": "已安装",
+    "petAssetsOwnedReady": "可安装",
+    "petAssetsOwnedInstall": "安装",
+    "petAssetsOwnedUpdate": "更新"
   },
   "passwordReset": {
     "title": "重设密码",

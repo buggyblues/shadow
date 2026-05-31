@@ -62,6 +62,10 @@ class ShadowConnectorRuntimeInfo:
     status: str
     version: str | None = None
     command: str | None = None
+    icon_id: str | None = None
+    install_command: str | None = None
+    install_commands: list[str] = field(default_factory=list)
+    help_url: str | None = None
     detected_at: str | None = None
 
 
@@ -816,6 +820,7 @@ class ShadowOAuthCommerceEntitlementRedeemResult:
 class ShadowPaidFileOpenResult:
     grant: dict[str, Any]
     viewer_url: str
+    grant_token: str | None = None
 
 
 @dataclass

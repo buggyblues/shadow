@@ -27,6 +27,15 @@ export interface ShadowConnectorInput {
   workDir?: string
   projectName?: string
   agentType?: 'codex' | 'claudecode' | 'opencode' | 'gemini' | 'cursor' | string
+  modelProvider?: ShadowConnectorModelProvider
+}
+
+export interface ShadowConnectorModelProvider {
+  id?: string
+  label?: string
+  baseUrl: string
+  apiKey: string
+  model: string
 }
 
 export interface ConnectorCommand {
@@ -70,9 +79,41 @@ const normalizeServerUrl = (value: string): string => {
 
 const tokenOrPlaceholder = (token: string): string => token.trim() || '<BUDDY_TOKEN>'
 
+function normalizeModelProvider(input: ShadowConnectorInput): ShadowConnectorModelProvider | null {
+  const baseUrl = input.modelProvider?.baseUrl.trim()
+  const apiKey = input.modelProvider?.apiKey.trim()
+  const model = input.modelProvider?.model.trim()
+  if (!baseUrl || !apiKey || !model) return null
+  return {
+    id: input.modelProvider?.id?.trim() || 'shadow-official',
+    label: input.modelProvider?.label?.trim() || 'Shadow official LLM proxy',
+    baseUrl,
+    apiKey,
+    model,
+  }
+}
+
+function modelProviderEnvLines(provider: ShadowConnectorModelProvider | null): string[] {
+  if (!provider) return []
+  return [
+    `OPENAI_COMPATIBLE_BASE_URL=${shellQuote(provider.baseUrl)}`,
+    `OPENAI_COMPATIBLE_API_KEY=${shellQuote(provider.apiKey)}`,
+    `OPENAI_COMPATIBLE_MODEL_ID=${shellQuote(provider.model)}`,
+    `SHADOW_MODEL_PROVIDER_ID=${shellQuote(provider.id ?? 'shadow-official')}`,
+  ]
+}
+
+function modelProviderCapabilities(
+  provider: ShadowConnectorModelProvider | null,
+  capabilities: string[],
+): string[] {
+  return provider ? [...capabilities, 'officialModelProvider'] : capabilities
+}
+
 function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
   const token = tokenOrPlaceholder(input.token)
   const serverUrl = normalizeServerUrl(input.serverUrl)
+  const modelProvider = normalizeModelProvider(input)
   const jsonConfig = JSON.stringify(
     {
       channels: {
@@ -81,6 +122,22 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
           serverUrl,
         },
       },
+      ...(modelProvider
+        ? {
+            models: {
+              mode: 'merge',
+              providers: {
+                [modelProvider.id ?? 'shadow-official']: {
+                  api: 'openai-completions',
+                  apiKey: '${env:OPENAI_COMPATIBLE_API_KEY}',
+                  baseUrl: modelProvider.baseUrl,
+                  request: { allowPrivateNetwork: true },
+                  models: [{ id: modelProvider.model, name: modelProvider.model }],
+                },
+              },
+            },
+          }
+        : {}),
     },
     null,
     2,
@@ -128,6 +185,9 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
       '',
       `Preferred one-line setup: ${connectCommand}`,
       'The connector installs/configures the Shadow CLI, official Shadow skill files, and the Buddy profile before applying the OpenClaw channel config.',
+      modelProvider
+        ? `It also configures ${modelProvider.label ?? 'Shadow official LLM proxy'} as an OpenAI-compatible model provider (${modelProvider.model}).`
+        : '',
       '',
       'Run these steps in order:',
       ...commands.map((item, index) => `${index + 1}. ${item.command}`),
@@ -135,7 +195,7 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
       'Confirm each step and then verify the gateway is running.',
     ].join('\n'),
     docsUrl: '/product/index.html',
-    capabilities: [
+    capabilities: modelProviderCapabilities(modelProvider, [
       'channelMessages',
       'dms',
       'threads',
@@ -156,19 +216,21 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
       'notifications',
       'officialSkills',
       'cronTasks',
-    ],
+    ]),
   }
 }
 
 function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
   const token = tokenOrPlaceholder(input.token)
   const serverUrl = normalizeServerUrl(input.serverUrl)
+  const modelProvider = normalizeModelProvider(input)
   const envBlock = [
     `SHADOW_BASE_URL=${shellQuote(serverUrl)}`,
     `SHADOW_TOKEN=${shellQuote(token)}`,
     'SHADOW_ALLOW_ALL_USERS=true',
     'SHADOW_HEARTBEAT_INTERVAL_SECONDS=30',
     `SHADOW_SLASH_COMMANDS_JSON=${shellQuote('[]')}`,
+    ...modelProviderEnvLines(modelProvider),
   ].join('\n')
   const yamlConfig = [
     'plugins:',
@@ -186,6 +248,15 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
     '      catchup_minutes: 0',
     '      download_media: true',
     '      slash_commands: []',
+    ...(modelProvider
+      ? [
+          '',
+          'model:',
+          `  default: "${modelProvider.model}"`,
+          '  provider: custom',
+          `  base_url: "${modelProvider.baseUrl}"`,
+        ]
+      : []),
   ].join('\n')
   const commands = [
     {
@@ -233,9 +304,12 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
       '',
       `Preferred one-line setup: ${connectCommand}`,
       'The connector installs/configures the Shadow CLI, official Shadow skill files, and the Buddy profile before writing Hermes config. The plugin resolves the Buddy agent id and channel policy from Shadow at runtime.',
+      modelProvider
+        ? `It also configures Hermes custom model endpoint ${modelProvider.baseUrl} with model ${modelProvider.model}.`
+        : '',
     ].join('\n'),
     docsUrl: 'https://hermes-agent.nousresearch.com/docs/user-guide/messaging',
-    capabilities: [
+    capabilities: modelProviderCapabilities(modelProvider, [
       'channelMessages',
       'dms',
       'threads',
@@ -252,7 +326,7 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
       'shadowCliLogin',
       'notifications',
       'officialSkills',
-    ],
+    ]),
   }
 }
 
@@ -262,6 +336,7 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
   const projectName = input.projectName?.trim() || DEFAULT_PROJECT_NAME
   const workDir = input.workDir?.trim() || DEFAULT_WORK_DIR
   const agentType = input.agentType?.trim() || DEFAULT_CC_AGENT
+  const modelProvider = normalizeModelProvider(input)
   const tomlConfig = [
     'language = "zh"',
     '',
@@ -273,6 +348,21 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
     '',
     '[projects.agent.options]',
     `work_dir = "${workDir}"`,
+    ...(modelProvider
+      ? [
+          `provider = "${modelProvider.id ?? 'shadow-official'}"`,
+          `model = "${modelProvider.model}"`,
+          '',
+          '[[projects.agent.providers]]',
+          `name = "${modelProvider.id ?? 'shadow-official'}"`,
+          `api_key = "${modelProvider.apiKey}"`,
+          `base_url = "${modelProvider.baseUrl}"`,
+          `model = "${modelProvider.model}"`,
+          '',
+          '[[projects.agent.providers.models]]',
+          `model = "${modelProvider.model}"`,
+        ]
+      : []),
     '',
     '[[projects.platforms]]',
     'type = "shadowob"',
@@ -327,9 +417,12 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
       '',
       `Preferred one-line setup: ${startCommand}`,
       `Install ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF}, install/configure the Shadow CLI and official Shadow skill files, add the TOML platform block, and start cc-connect.`,
+      modelProvider
+        ? `Configure ${modelProvider.label ?? 'Shadow official LLM proxy'} as provider ${modelProvider.id ?? 'shadow-official'} for ${agentType}.`
+        : '',
     ].join('\n'),
     docsUrl: CC_CONNECT_FORK_DOCS_URL,
-    capabilities: [
+    capabilities: modelProviderCapabilities(modelProvider, [
       'channelMessages',
       'dms',
       'attachments',
@@ -344,7 +437,7 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
       'multiAgentBinding',
       'shadowCliLogin',
       'notifications',
-    ],
+    ]),
   }
 }
 

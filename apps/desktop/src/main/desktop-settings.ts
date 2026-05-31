@@ -2,6 +2,53 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 
+export type DesktopPetAssetRenderer = 'sprite-sheet' | 'live2d-cubism'
+
+export interface DesktopPetAssetSprite {
+  src: string
+  frame?: {
+    width: number
+    height: number
+    count: number
+    fps: number
+  }
+  loop?: boolean
+}
+
+export interface DesktopPetAssetPack {
+  id: string
+  version: string
+  displayName: Record<string, string>
+  description?: Record<string, string> | string
+  author?: { name?: string; url?: string }
+  license?: { kind?: string; summary?: string }
+  compatibility?: {
+    shadowDesktop?: string
+    renderer?: DesktopPetAssetRenderer[]
+    features?: string[]
+  }
+  entry?: {
+    renderer?: DesktopPetAssetRenderer
+    pixelRatio?: number
+    canvas?: { width?: number; height?: number }
+    anchor?: { x?: number; y?: number }
+  }
+  files?: {
+    cover?: string
+    thumbnail?: string
+  }
+  sprites: Record<string, DesktopPetAssetSprite>
+  expressions?: Record<string, unknown>
+  hitAreas?: Record<string, unknown>
+  interactionMap?: Record<string, unknown>
+  importedAt: string
+  source: 'local' | 'marketplace'
+  sourcePath: string
+  marketplaceProductId?: string
+  marketplaceEntitlementId?: string
+  marketplacePaidFileId?: string
+}
+
 export interface DesktopRuntimeSettings {
   serverBaseUrl: string
   httpProxy: string
@@ -13,6 +60,8 @@ export interface DesktopRuntimeSettings {
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
   shortcuts: DesktopShortcutSettings
+  desktopPetActivePackId: string
+  desktopPetPacks: DesktopPetAssetPack[]
 }
 
 export type DesktopShortcutAction =
@@ -46,6 +95,8 @@ const defaultSettings: DesktopRuntimeSettings = {
   ttsProvider: 'system',
   asrProvider: 'sherpa-local',
   shortcuts: defaultDesktopShortcuts,
+  desktopPetActivePackId: '',
+  desktopPetPacks: [],
 }
 
 function settingsFilePath(): string {
@@ -146,6 +197,105 @@ function normalizeShortcuts(value: unknown): DesktopShortcutSettings {
   }
 }
 
+function normalizeLocaleMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const result: Record<string, string> = {}
+  for (const [locale, text] of Object.entries(value)) {
+    const normalizedLocale = locale.trim()
+    if (normalizedLocale && typeof text === 'string' && text.trim()) {
+      result[normalizedLocale] = text.trim()
+    }
+  }
+  return result
+}
+
+function normalizeDesktopPetSprite(value: unknown): DesktopPetAssetSprite | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Partial<DesktopPetAssetSprite>
+  if (typeof record.src !== 'string' || !record.src.trim()) return null
+  const sprite: DesktopPetAssetSprite = { src: record.src.trim() }
+  const frame = record.frame
+  if (frame && typeof frame === 'object') {
+    const width = Math.floor(Number(frame.width))
+    const height = Math.floor(Number(frame.height))
+    const count = Math.floor(Number(frame.count))
+    const fps = Math.floor(Number(frame.fps))
+    if (width > 0 && height > 0 && count > 0 && fps > 0) {
+      sprite.frame = { width, height, count, fps }
+    }
+  }
+  if (typeof record.loop === 'boolean') sprite.loop = record.loop
+  return sprite
+}
+
+function normalizeDesktopPetPacks(value: unknown): DesktopPetAssetPack[] {
+  if (!Array.isArray(value)) return []
+  const packs: DesktopPetAssetPack[] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const record = item as Partial<DesktopPetAssetPack>
+    const id = typeof record.id === 'string' ? record.id.trim() : ''
+    const version = typeof record.version === 'string' ? record.version.trim() : ''
+    const sourcePath = typeof record.sourcePath === 'string' ? record.sourcePath.trim() : ''
+    const displayName = normalizeLocaleMap(record.displayName)
+    const sprites: Record<string, DesktopPetAssetSprite> = {}
+    if (record.sprites && typeof record.sprites === 'object' && !Array.isArray(record.sprites)) {
+      for (const [key, sprite] of Object.entries(record.sprites)) {
+        const normalized = normalizeDesktopPetSprite(sprite)
+        if (key.trim() && normalized) sprites[key.trim()] = normalized
+      }
+    }
+    if (!id || !version || !sourcePath || !displayName.en || !sprites.idle || seen.has(id)) {
+      continue
+    }
+    seen.add(id)
+    packs.push({
+      id,
+      version,
+      displayName,
+      description:
+        typeof record.description === 'string'
+          ? record.description
+          : normalizeLocaleMap(record.description),
+      author: record.author && typeof record.author === 'object' ? record.author : undefined,
+      license: record.license && typeof record.license === 'object' ? record.license : undefined,
+      compatibility:
+        record.compatibility && typeof record.compatibility === 'object'
+          ? record.compatibility
+          : undefined,
+      entry: record.entry && typeof record.entry === 'object' ? record.entry : undefined,
+      files: record.files && typeof record.files === 'object' ? record.files : undefined,
+      sprites,
+      expressions:
+        record.expressions && typeof record.expressions === 'object'
+          ? record.expressions
+          : undefined,
+      hitAreas:
+        record.hitAreas && typeof record.hitAreas === 'object' ? record.hitAreas : undefined,
+      interactionMap:
+        record.interactionMap && typeof record.interactionMap === 'object'
+          ? record.interactionMap
+          : undefined,
+      importedAt:
+        typeof record.importedAt === 'string' && record.importedAt.trim()
+          ? record.importedAt.trim()
+          : new Date().toISOString(),
+      source: record.source === 'marketplace' ? 'marketplace' : 'local',
+      sourcePath,
+      marketplaceProductId:
+        typeof record.marketplaceProductId === 'string' ? record.marketplaceProductId : undefined,
+      marketplaceEntitlementId:
+        typeof record.marketplaceEntitlementId === 'string'
+          ? record.marketplaceEntitlementId
+          : undefined,
+      marketplacePaidFileId:
+        typeof record.marketplacePaidFileId === 'string' ? record.marketplacePaidFileId : undefined,
+    })
+  }
+  return packs
+}
+
 function toProxyRules(httpProxy: string, httpsProxy: string): string {
   const rules: string[] = []
   if (httpProxy) {
@@ -175,6 +325,9 @@ export function readDesktopSettings(): DesktopRuntimeSettings {
       ttsProvider: normalizeTtsProvider(parsed.ttsProvider),
       asrProvider: normalizeAsrProvider(parsed.asrProvider),
       shortcuts: normalizeShortcuts(parsed.shortcuts),
+      desktopPetPacks: normalizeDesktopPetPacks(parsed.desktopPetPacks),
+      desktopPetActivePackId:
+        typeof parsed.desktopPetActivePackId === 'string' ? parsed.desktopPetActivePackId : '',
     }
   } catch {
     return defaultSettings
@@ -223,6 +376,22 @@ export function saveDesktopSettings(
         : normalizeAsrProvider(incoming.asrProvider),
     shortcuts:
       incoming.shortcuts === undefined ? current.shortcuts : normalizeShortcuts(incoming.shortcuts),
+    desktopPetPacks:
+      incoming.desktopPetPacks === undefined
+        ? current.desktopPetPacks
+        : normalizeDesktopPetPacks(incoming.desktopPetPacks),
+    desktopPetActivePackId:
+      incoming.desktopPetActivePackId === undefined
+        ? current.desktopPetActivePackId
+        : typeof incoming.desktopPetActivePackId === 'string'
+          ? incoming.desktopPetActivePackId
+          : '',
+  }
+  if (
+    next.desktopPetActivePackId &&
+    !next.desktopPetPacks.some((pack) => pack.id === next.desktopPetActivePackId)
+  ) {
+    next.desktopPetActivePackId = ''
   }
 
   mkdirSync(app.getPath('userData'), { recursive: true })
@@ -246,7 +415,7 @@ export function writeConnectorWorkDirMap(settings = readDesktopSettings()): void
   )
 }
 
-function broadcastDesktopSettings(settings: DesktopRuntimeSettings): void {
+export function broadcastDesktopSettings(settings: DesktopRuntimeSettings): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send('desktop:settingsChanged', settings)

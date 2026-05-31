@@ -329,7 +329,7 @@ export function MentionSpan({
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spanRef = useRef<HTMLSpanElement>(null)
-  const { activeServerId } = useChatStore()
+  const activeServerId = useChatStore((state) => state.activeServerId)
   const currentUser = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
 

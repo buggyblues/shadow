@@ -1,4 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import {
+  DESKTOP_COMMUNITY_AUTH_REQUIRED_EVENT,
+  isCommunityAuthRequiredError,
+  normalizeCommunityAuthError,
+} from '../shared/community-auth'
 
 function applyDesktopDocumentClasses(): void {
   const apply = () => {
@@ -12,13 +17,44 @@ function applyDesktopDocumentClasses(): void {
   window.addEventListener('DOMContentLoaded', apply, { once: true })
 }
 
-function syncCommunityAuthToken(): void {
+let lastSyncedCommunityAuthToken: string | null = null
+
+function syncCommunityAuthToken(options: { force?: boolean } = {}): void {
   try {
+    const accessToken = window.localStorage?.getItem('accessToken') ?? ''
+    if (!options.force && accessToken === lastSyncedCommunityAuthToken) return
+    lastSyncedCommunityAuthToken = accessToken
     ipcRenderer.send('desktop:communityAuthSnapshot', {
-      accessToken: window.localStorage?.getItem('accessToken') ?? '',
+      accessToken,
     })
   } catch {
     // Ignore origins where localStorage is unavailable.
+  }
+}
+
+function forceSyncCommunityAuthToken(): void {
+  syncCommunityAuthToken({ force: true })
+}
+
+function syncCommunityAuthTokenOnStorage(): void {
+  syncCommunityAuthToken()
+}
+
+function dispatchCommunityAuthRequired(): void {
+  try {
+    window.dispatchEvent(new CustomEvent(DESKTOP_COMMUNITY_AUTH_REQUIRED_EVENT))
+  } catch {
+    // Ignore pages where DOM event dispatching is unavailable.
+  }
+}
+
+async function invokeCommunityIpc<T>(channel: string, ...args: unknown[]): Promise<T> {
+  try {
+    return (await ipcRenderer.invoke(channel, ...args)) as T
+  } catch (error) {
+    const normalized = normalizeCommunityAuthError(error)
+    if (isCommunityAuthRequiredError(normalized)) dispatchCommunityAuthRequired()
+    throw normalized
   }
 }
 
@@ -31,18 +67,19 @@ const desktopAPI = {
     title: string,
     body: string,
     channelId?: string,
-    options?: { routePath?: string; messageId?: string },
+    options?: { routePath?: string; messageId?: string; target?: 'community' | 'pet' },
   ) => {
-    ipcRenderer.invoke('desktop:showNotification', {
+    return ipcRenderer.invoke('desktop:showNotification', {
       title,
       body,
       channelId,
       routePath: options?.routePath,
       messageId: options?.messageId,
-    })
+      target: options?.target,
+    }) as Promise<void>
   },
   setBadgeCount: (count: number) => {
-    ipcRenderer.invoke('desktop:setBadgeCount', count)
+    return ipcRenderer.invoke('desktop:setBadgeCount', count) as Promise<void>
   },
   setNotificationMode: (mode: 'all' | 'mentions' | 'none') => {
     ipcRenderer.invoke('desktop:setNotificationMode', mode)
@@ -78,7 +115,7 @@ const desktopAPI = {
     body?: unknown
     headers?: Record<string, string>
   }) => {
-    return ipcRenderer.invoke('desktop:community:fetchJson', input) as Promise<unknown>
+    return invokeCommunityIpc('desktop:community:fetchJson', input)
   },
   showMainWindow: () => {
     return ipcRenderer.invoke('desktop:showMainWindow') as Promise<void>
@@ -92,7 +129,9 @@ const desktopAPI = {
   showContextMenu: () => {
     return ipcRenderer.invoke('desktop:showContextMenu') as Promise<void>
   },
-  showSettings: (tab?: 'general' | 'connector' | 'shortcuts' | 'voice' | 'network' | 'about') => {
+  showSettings: (
+    tab?: 'general' | 'connector' | 'shortcuts' | 'voice' | 'pet' | 'network' | 'about',
+  ) => {
     return ipcRenderer.invoke('desktop:showSettings', { tab }) as Promise<void>
   },
   reader: {
@@ -203,9 +242,9 @@ const desktopAPI = {
         if (payload.requestId === input.requestId) onDelta(payload.delta)
       }
       ipcRenderer.on('desktop:pet:modelProxyDelta', handler)
-      return (
-        ipcRenderer.invoke('desktop:pet:modelProxyStream', input) as Promise<{ text: string }>
-      ).finally(() => ipcRenderer.removeListener('desktop:pet:modelProxyDelta', handler))
+      return invokeCommunityIpc<{ text: string }>('desktop:pet:modelProxyStream', input).finally(
+        () => ipcRenderer.removeListener('desktop:pet:modelProxyDelta', handler),
+      )
     },
     speak: (text: string) => {
       return ipcRenderer.invoke('desktop:pet:speak', text) as Promise<boolean>
@@ -295,10 +334,12 @@ const desktopAPI = {
       ipcRenderer.on('desktop:pet:voiceModelProgress', handler)
       return () => ipcRenderer.removeListener('desktop:pet:voiceModelProgress', handler)
     },
-    onShortcut: (callback: (action: 'voice' | 'chat' | 'notifications') => void) => {
+    onShortcut: (
+      callback: (action: 'voice' | 'chat' | 'notifications' | 'services' | 'care') => void,
+    ) => {
       const handler = (
         _event: Electron.IpcRendererEvent,
-        action: 'voice' | 'chat' | 'notifications',
+        action: 'voice' | 'chat' | 'notifications' | 'services' | 'care',
       ) => callback(action)
       ipcRenderer.on('desktop:pet:shortcut', handler)
       return () => ipcRenderer.removeListener('desktop:pet:shortcut', handler)
@@ -380,6 +421,8 @@ const desktopAPI = {
         petChat: string
         showNotifications: string
       }
+      desktopPetActivePackId: string
+      desktopPetPacks: Array<Record<string, unknown>>
     }>,
   setDesktopSettings: (settings: {
     serverBaseUrl?: string
@@ -398,6 +441,8 @@ const desktopAPI = {
       petChat?: string
       showNotifications?: string
     }
+    desktopPetActivePackId?: string
+    desktopPetPacks?: Array<Record<string, unknown>>
   }) =>
     ipcRenderer.invoke('desktop:setSettings', settings) as Promise<{
       serverBaseUrl: string
@@ -416,7 +461,19 @@ const desktopAPI = {
         petChat: string
         showNotifications: string
       }
+      desktopPetActivePackId: string
+      desktopPetPacks: Array<Record<string, unknown>>
     }>,
+  petAssets: {
+    importDirectory: (path?: string) =>
+      ipcRenderer.invoke('desktop:petAssets:importDirectory', { path }) as Promise<unknown>,
+    importMarketplace: (input: { entitlementId: string; fileId: string; productId?: string }) =>
+      invokeCommunityIpc('desktop:petAssets:importMarketplace', input),
+    setActive: (packId: string) =>
+      ipcRenderer.invoke('desktop:petAssets:setActive', { packId }) as Promise<unknown>,
+    remove: (packId: string) =>
+      ipcRenderer.invoke('desktop:petAssets:remove', { packId }) as Promise<unknown>,
+  },
   connector: {
     getStatus: () => ipcRenderer.invoke('desktop:connector:getStatus'),
     start: (settings?: {
@@ -529,6 +586,8 @@ const desktopAPI = {
         petChat: string
         showNotifications: string
       }
+      desktopPetActivePackId: string
+      desktopPetPacks: Array<Record<string, unknown>>
     }) => void,
   ) => {
     const handler = (
@@ -550,6 +609,8 @@ const desktopAPI = {
           petChat: string
           showNotifications: string
         }
+        desktopPetActivePackId: string
+        desktopPetPacks: Array<Record<string, unknown>>
       },
     ) => callback(settings)
     ipcRenderer.on('desktop:settingsChanged', handler)
@@ -561,11 +622,13 @@ const desktopAPI = {
     return () => ipcRenderer.removeListener('desktop:connectorState', handler)
   },
   onSettingsTabRequest: (
-    callback: (tab: 'general' | 'connector' | 'shortcuts' | 'voice' | 'network' | 'about') => void,
+    callback: (
+      tab: 'general' | 'connector' | 'shortcuts' | 'voice' | 'pet' | 'network' | 'about',
+    ) => void,
   ) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      tab: 'general' | 'connector' | 'shortcuts' | 'voice' | 'network' | 'about',
+      tab: 'general' | 'connector' | 'shortcuts' | 'voice' | 'pet' | 'network' | 'about',
     ) => callback(tab)
     ipcRenderer.on('desktop:settings:selectTab', handler)
     return () => ipcRenderer.removeListener('desktop:settings:selectTab', handler)
@@ -578,11 +641,11 @@ const desktopAPI = {
 contextBridge.exposeInMainWorld('desktopAPI', desktopAPI)
 
 applyDesktopDocumentClasses()
-syncCommunityAuthToken()
-window.addEventListener('DOMContentLoaded', syncCommunityAuthToken)
-window.addEventListener('load', syncCommunityAuthToken)
-window.addEventListener('focus', syncCommunityAuthToken)
-window.addEventListener('storage', syncCommunityAuthToken)
-window.setInterval(syncCommunityAuthToken, 1000)
+forceSyncCommunityAuthToken()
+window.addEventListener('DOMContentLoaded', forceSyncCommunityAuthToken)
+window.addEventListener('load', forceSyncCommunityAuthToken)
+window.addEventListener('focus', forceSyncCommunityAuthToken)
+window.addEventListener('storage', syncCommunityAuthTokenOnStorage)
+window.setInterval(syncCommunityAuthToken, 5000)
 
 export type DesktopAPI = typeof desktopAPI

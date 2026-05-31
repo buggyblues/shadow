@@ -1,6 +1,12 @@
-import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { type ConnectorRuntimeInfo, connectorComputers, connectorJobs } from '../db/schema'
+import {
+  agents,
+  type ConnectorRuntimeInfo,
+  connectorComputers,
+  connectorJobs,
+  users,
+} from '../db/schema'
 
 export class ConnectorDao {
   constructor(private deps: { db: Database }) {}
@@ -26,6 +32,15 @@ export class ConnectorDao {
       .select()
       .from(connectorComputers)
       .where(eq(connectorComputers.tokenHash, tokenHash))
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async findComputerById(id: string) {
+    const result = await this.db
+      .select()
+      .from(connectorComputers)
+      .where(eq(connectorComputers.id, id))
       .limit(1)
     return result[0] ?? null
   }
@@ -126,6 +141,34 @@ export class ConnectorDao {
       })
       .returning()
     return result[0] ?? null
+  }
+
+  async listConnectorAgentsForComputer(computerId: string) {
+    return this.db
+      .select({ agent: agents, botUser: users })
+      .from(agents)
+      .innerJoin(users, eq(users.id, agents.userId))
+      .where(sql`${agents.config}->>'connectorComputerId' = ${computerId}`)
+      .orderBy(asc(agents.createdAt))
+  }
+
+  async hasRecentConfigureJob(computerId: string, agentId: string, since: Date) {
+    const result = await this.db
+      .select({ id: connectorJobs.id })
+      .from(connectorJobs)
+      .where(
+        and(
+          eq(connectorJobs.computerId, computerId),
+          eq(connectorJobs.agentId, agentId),
+          eq(connectorJobs.type, 'configure-buddy'),
+          or(
+            inArray(connectorJobs.status, ['pending', 'running']),
+            and(eq(connectorJobs.status, 'completed'), gt(connectorJobs.completedAt, since)),
+          ),
+        ),
+      )
+      .limit(1)
+    return result.length > 0
   }
 
   async findJobForUser(id: string, userId: string) {

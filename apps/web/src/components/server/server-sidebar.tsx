@@ -37,16 +37,18 @@ import {
   PawPrint,
   Plus,
   RefreshCw,
+  Search,
   Terminal,
   UserPlus,
   Volume2,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
-import { getLastChannelId } from '../../lib/last-channel'
+import { getLastChannelId, setLastChannelId } from '../../lib/last-channel'
+import { scheduleIdleAfterDelay } from '../../lib/schedule'
 import { showToast } from '../../lib/toast'
 import { UnifiedContactSidebar } from '../../pages/friends'
 import { useAuthStore } from '../../stores/auth.store'
@@ -100,6 +102,12 @@ interface DirectChannelEntry {
   } | null
 }
 
+interface ServerNavigationChannel {
+  id: string
+  type?: string
+  isArchived?: boolean
+}
+
 type ConnectorBootstrapResult = {
   computer: ConnectorComputer
   command: string
@@ -132,8 +140,17 @@ function normalizePresenceStatus(status?: string | null) {
   return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline'
 }
 
+function pickServerNavigationChannel(channels: ServerNavigationChannel[]) {
+  return (
+    channels.find((channel) => !channel.isArchived && channel.type !== 'voice') ??
+    channels.find((channel) => !channel.isArchived) ??
+    channels[0] ??
+    null
+  )
+}
+
 // Individual server item component to properly use hooks
-function ServerItem({
+const ServerItem = memo(function ServerItem({
   server,
   member,
   isActive,
@@ -195,9 +212,9 @@ function ServerItem({
       )}
     </div>
   )
-}
+})
 
-function DirectMessageItem({
+const DirectMessageItem = memo(function DirectMessageItem({
   channel,
   isActive,
   unreadCount,
@@ -256,7 +273,7 @@ function DirectMessageItem({
       )}
     </div>
   )
-}
+})
 
 interface NotificationPreference {
   strategy: 'all' | 'mention_only' | 'none'
@@ -314,7 +331,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const navigate = useNavigate()
   const { channelId } = useParams({ strict: false }) as { channelId?: string }
   const queryClient = useQueryClient()
-  const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
+  const activeServerId = useChatStore((state) => state.activeServerId)
+  const activeChannelId = useChatStore((state) => state.activeChannelId)
+  const setActiveServer = useChatStore((state) => state.setActiveServer)
   const [showCreate, setShowCreate] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
   const [showAddMenu, setShowAddMenu] = useState(false)
@@ -341,6 +360,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   } | null>(null)
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
+  const serverNavigationRequestRef = useRef(0)
   const connectorBootstrapStartedRef = useRef(false)
   const { user } = useAuthStore()
   const createServerNameInputRef = useRef<HTMLInputElement>(null)
@@ -350,7 +370,8 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   })
   const loadNotifications = useDeferredQueryEnabled({
     stage: 'background',
-    priority: 'normal',
+    priority: 'low',
+    delayMs: 2200,
   })
 
   // Listen for 'create-server' pending action from task center
@@ -392,6 +413,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     queryKey: ['notification-scoped-unread'],
     queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
     enabled: loadNotifications,
+    staleTime: 5_000,
     refetchInterval: 15_000,
   })
 
@@ -647,7 +669,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     },
   })
 
-  const { setMobileView } = useUIStore()
+  const setMobileView = useUIStore((state) => state.setMobileView)
 
   const leaveServer = useMutation({
     mutationFn: (serverId: string) =>
@@ -678,31 +700,84 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     connectorBootstrapStartedRef.current = false
   }, [])
 
-  const handleSelect = (serverId: string, slug?: string | null) => {
-    setActiveServer(serverId)
-    setMobileView('channels')
-    const serverSlug = slug ?? serverId
-    // Navigate to last-visited channel if available, otherwise show the server index.
-    const lastChannelId = getLastChannelId(serverId)
-    if (lastChannelId) {
-      navigate({
-        to: '/servers/$serverSlug/channels/$channelId',
-        params: { serverSlug, channelId: lastChannelId },
-      })
-    } else {
-      navigate({ to: '/servers/$serverSlug', params: { serverSlug } })
-    }
-    requestMarkScopeRead({ serverId })
-    onNavigate?.()
-  }
+  const openFirstChannelForServer = useCallback(
+    async (serverId: string, serverSlug: string, requestId: number) => {
+      try {
+        const channels = await queryClient.fetchQuery({
+          queryKey: ['channels', serverSlug],
+          queryFn: ({ signal }) =>
+            fetchApi<ServerNavigationChannel[]>(`/api/servers/${serverSlug}/channels`, {
+              signal,
+            }),
+          staleTime: SERVER_NAVIGATION_STALE_MS,
+          gcTime: SERVER_NAVIGATION_GC_MS,
+        })
+        if (serverNavigationRequestRef.current !== requestId) return
 
-  const handleSelectDirectChannel = (dmChannelId: string) => {
-    setActiveServer(null)
-    setMobileView('chat')
-    navigate({ to: '/dm/$dmChannelId', params: { dmChannelId } })
-    requestMarkScopeRead({ channelId: dmChannelId })
-    onNavigate?.()
-  }
+        const channel = pickServerNavigationChannel(channels)
+        if (channel) {
+          setLastChannelId(serverId, channel.id)
+          navigate({
+            to: '/servers/$serverSlug/channels/$channelId',
+            params: { serverSlug, channelId: channel.id },
+          })
+          return
+        }
+      } catch (error) {
+        if (serverNavigationRequestRef.current !== requestId) return
+        if ((error as { name?: string }).name === 'AbortError') return
+      }
+
+      if (serverNavigationRequestRef.current === requestId) {
+        navigate({ to: '/servers/$serverSlug', params: { serverSlug } })
+      }
+    },
+    [navigate, queryClient],
+  )
+
+  const handleSelect = useCallback(
+    (serverId: string, slug?: string | null) => {
+      setActiveServer(serverId)
+      setMobileView('channels')
+      const serverSlug = slug ?? serverId
+      const requestId = ++serverNavigationRequestRef.current
+      // Navigate directly into chat; the server index triggers a slower first-paint waterfall.
+      const lastChannelId = getLastChannelId(serverId)
+      if (lastChannelId) {
+        navigate({
+          to: '/servers/$serverSlug/channels/$channelId',
+          params: { serverSlug, channelId: lastChannelId },
+        })
+      } else {
+        void openFirstChannelForServer(serverId, serverSlug, requestId)
+      }
+      scheduleIdleAfterDelay(() => {
+        void requestMarkScopeRead({ serverId })
+      }, 1800)
+      onNavigate?.()
+    },
+    [
+      navigate,
+      onNavigate,
+      openFirstChannelForServer,
+      requestMarkScopeRead,
+      setActiveServer,
+      setMobileView,
+    ],
+  )
+
+  const handleSelectDirectChannel = useCallback(
+    (dmChannelId: string) => {
+      setActiveServer(null)
+      setMobileView('chat')
+      navigate({ to: '/dm/$dmChannelId', params: { dmChannelId } })
+      scheduleIdleAfterDelay(() => {
+        void requestMarkScopeRead({ channelId: dmChannelId })
+      }, 1600)
+      onNavigate?.()
+    },
+    [navigate, onNavigate, requestMarkScopeRead, setActiveServer, setMobileView],
+  )
 
   const openCreatedBuddyDm = async (agent: Agent) => {
     const userId = agent.botUser?.id ?? agent.userId
@@ -863,6 +938,29 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
               >
                 {t('server.add')}
+              </TooltipContent>
+            </TooltipPortal>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-[48px] h-[48px] rounded-2xl bg-white/5 hover:bg-white/10 text-text-muted hover:text-primary transition-all bouncy"
+                onClick={() => window.dispatchEvent(new Event('shadow:open-command-palette'))}
+                title={t('commandPalette.open')}
+                aria-label={t('commandPalette.open')}
+              >
+                <Search size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipPortal>
+              <TooltipContent
+                side="right"
+                className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
+              >
+                {t('commandPalette.open')}
               </TooltipContent>
             </TooltipPortal>
           </Tooltip>
@@ -1135,6 +1233,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                                         <div className="flex items-center gap-3">
                                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-deep/50">
                                             <RuntimeIcon
+                                              iconId={runtime.iconId}
                                               runtimeId={runtime.id}
                                               label={runtime.label}
                                               className="h-5 w-5"

@@ -1,4 +1,13 @@
 export type PetAttribute = 'tide' | 'spark' | 'snack' | 'focus'
+export type PetDayPhase = 'morning' | 'day' | 'evening' | 'night'
+export type PetEmotionState =
+  | 'excited'
+  | 'content'
+  | 'calm'
+  | 'lonely'
+  | 'hungry'
+  | 'sleepy'
+  | 'sick'
 
 export type PetStats = {
   mood: number
@@ -32,6 +41,13 @@ export type PetAnimationKey =
   | 'level-up'
 
 export type PetQuestId = 'firstPat' | 'snackRoutine' | 'harborScout' | 'steadyCare'
+export type PetRandomEventId =
+  | 'morningStretch'
+  | 'windowSunbeam'
+  | 'curiousPing'
+  | 'rainyNap'
+  | 'midnightHungry'
+  | 'looseShell'
 export type PetAchievementId =
   | 'firstFriend'
   | 'snackKeeper'
@@ -47,10 +63,31 @@ export type PetQuest = {
   completed: boolean
 }
 
+export type PetRandomEvent = {
+  id: PetRandomEventId
+  date: string
+  phase: PetDayPhase
+  action: PetAction
+  resolved: boolean
+  createdAt: number
+}
+
+export type PetEmotion = {
+  state: PetEmotionState
+  valence: number
+  arousal: number
+  needScore: number
+  phase: PetDayPhase
+}
+
 export type PetGameState = {
   shells: number
   streakDays: number
   lastCareDate: string
+  lastEventDate: string
+  todayEvent: PetRandomEvent | null
+  eventHistory: PetRandomEventId[]
+  dailyActions: Partial<Record<PetAction, { date: string; count: number }>>
   quests: PetQuest[]
   achievements: PetAchievementId[]
 }
@@ -64,7 +101,12 @@ export type PetState = {
   lastAction: PetLastAction
 }
 
-const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)))
+const HOUR_MS = 60 * 60_000
+const DAY_MS = 24 * HOUR_MS
+const MAX_TICK_HOURS = 72
+
+const clamp = (value: number) => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0))
+const whole = (value: number) => Math.round(clamp(value))
 
 export const PET_ANIMATION_FRAMES: Record<PetAnimationKey, number> = {
   idle: 6,
@@ -87,6 +129,18 @@ const QUESTS: PetQuest[] = [
   { id: 'harborScout', action: 'explore', progress: 0, goal: 2, completed: false },
   { id: 'steadyCare', action: 'rest', progress: 0, goal: 2, completed: false },
 ]
+
+const RANDOM_EVENTS: Record<
+  PetRandomEventId,
+  { phase: PetDayPhase; action: PetAction; weight: number }
+> = {
+  morningStretch: { phase: 'morning', action: 'play', weight: 3 },
+  windowSunbeam: { phase: 'day', action: 'pet', weight: 3 },
+  curiousPing: { phase: 'day', action: 'explore', weight: 2 },
+  rainyNap: { phase: 'evening', action: 'rest', weight: 2 },
+  midnightHungry: { phase: 'night', action: 'feed', weight: 2 },
+  looseShell: { phase: 'evening', action: 'explore', weight: 1 },
+}
 
 const QUEST_REWARDS: Record<
   PetQuestId,
@@ -126,24 +180,24 @@ export function createDefaultPetState(now = Date.now()): PetState {
 }
 
 export function tickPet(state: PetState, now = Date.now()): PetState {
-  const elapsedMinutes = Math.floor((now - state.lastTickAt) / 60_000)
-  if (elapsedMinutes <= 0) return normalizeState(state)
-  const decay = Math.min(18, elapsedMinutes)
-  return normalizeState({
-    ...state,
-    lastTickAt: now,
-    stats: {
-      ...state.stats,
-      hunger: clamp(state.stats.hunger - decay * 2),
-      energy: clamp(state.stats.energy - decay),
-      mood: clamp(state.stats.mood - Math.ceil(decay / 2)),
-      health: clamp(
-        state.stats.health -
-          (state.stats.hunger < 20 ? decay : 0) -
-          (state.stats.energy < 12 ? Math.ceil(decay / 2) : 0),
-      ),
-    },
-  })
+  const normalized = normalizeState(state)
+  const elapsedHours = Math.min(MAX_TICK_HOURS, Math.max(0, now - normalized.lastTickAt) / HOUR_MS)
+  const next = structuredClone(normalized) as PetState
+
+  if (elapsedHours > 0) {
+    let remaining = elapsedHours
+    let cursor = normalized.lastTickAt
+    while (remaining > 0) {
+      const hours = Math.min(1, remaining)
+      applyTimeStep(next.stats, hours, getPetDayPhase(cursor))
+      cursor += hours * HOUR_MS
+      remaining -= hours
+    }
+    next.lastTickAt = now
+  }
+
+  ensureDailyEvent(next, now)
+  return normalizeState(next)
 }
 
 export function applyPetAction(state: PetState, action: PetAction, now = Date.now()): PetState {
@@ -154,57 +208,71 @@ export function applyPetAction(state: PetState, action: PetAction, now = Date.no
   next.lastActionAt = now
   next.lastTickAt = now
   recordCare(next, now)
+  const rewardScale = dailyActionRewardScale(recordDailyAction(next, action, now))
 
   switch (action) {
     case 'feed': {
       const premiumSnack = consumeItem(next, 'shrimpSnack')
-      if (!premiumSnack && next.game.shells >= 4) next.game.shells -= 4
+      if (!premiumSnack && next.game.shells >= 3) next.game.shells -= 3
       boost(next.stats, {
-        hunger: premiumSnack ? 28 : 16,
-        mood: premiumSnack ? 7 : 4,
-        health: premiumSnack ? 3 : 1,
-        loyalty: 2,
-        xp: premiumSnack ? 12 : 8,
+        hunger: premiumSnack ? 36 : 28,
+        mood: premiumSnack ? 7 : 5,
+        health: premiumSnack ? 6 : 4,
+        loyalty: 1,
+        xp: scaledXp(premiumSnack ? 10 : 8, rewardScale),
       })
       break
     }
     case 'pet':
-      boost(next.stats, { mood: 14, loyalty: 6, charm: 1, xp: 8 })
+      boost(next.stats, { mood: 9, loyalty: 5, charm: 1, xp: scaledXp(4, rewardScale) })
       break
     case 'play':
       boost(next.stats, {
-        mood: next.stats.energy > 12 ? 16 : 6,
-        charm: 4,
-        loyalty: 3,
-        xp: next.stats.energy > 12 ? 16 : 6,
-        energy: -14,
-        hunger: -8,
-        health: next.stats.energy > 12 ? 0 : -4,
+        mood: next.stats.energy > 30 ? 15 : 5,
+        charm: 3,
+        loyalty: 2,
+        xp: scaledXp(next.stats.energy > 30 ? 12 : 4, rewardScale),
+        energy: -12,
+        hunger: -5,
+        health: next.stats.energy > 30 ? 0 : -2,
       })
       break
     case 'rest':
-      boost(next.stats, { energy: 30, health: 5, mood: 3, hunger: -5, xp: 5 })
+      boost(next.stats, {
+        energy: 34,
+        health: 7,
+        mood: 4,
+        hunger: -2,
+        xp: scaledXp(4, rewardScale),
+      })
       break
     case 'explore':
-      if (next.stats.energy < 18 || next.stats.hunger < 18) {
-        boost(next.stats, { mood: -4, health: -8, energy: -8, hunger: -6, xp: 4 })
+      if (next.stats.energy < 45 || next.stats.hunger < 38 || getPetDayPhase(now) === 'night') {
+        boost(next.stats, { mood: -3, health: -3, energy: -6, hunger: -4, xp: 2 })
       } else {
         rewardExploration(next, now)
-        boost(next.stats, { xp: 22, charm: 3, mood: 6, energy: -18, hunger: -10 })
+        boost(next.stats, {
+          xp: scaledXp(18, rewardScale),
+          charm: 2,
+          mood: 6,
+          energy: -18,
+          hunger: -7,
+        })
       }
       break
     case 'tea': {
       const hasTea = consumeItem(next, 'coralTea')
       boost(next.stats, {
-        health: hasTea ? 12 : 4,
-        energy: hasTea ? 18 : 8,
-        mood: 4,
-        xp: hasTea ? 8 : 4,
+        health: hasTea ? 12 : 6,
+        energy: hasTea ? 20 : 10,
+        mood: 3,
+        xp: scaledXp(hasTea ? 5 : 3, rewardScale),
       })
       break
     }
   }
 
+  resolveDailyEvent(next, action, now)
   progressQuests(next, action)
   const normalized = normalizeState(next)
   if (normalized.stats.level > startingLevel) {
@@ -222,13 +290,74 @@ export function settlePetAction(state: PetState): PetState {
 export function selectAnimation(state: PetState): PetAnimationKey {
   if (state.lastAction === 'level-up') return 'level-up'
   if (ACTIONS.includes(state.lastAction as PetAction)) return state.lastAction as PetAction
-  if (state.stats.health <= 24) return 'sick'
-  if (state.stats.hunger <= 18 || state.stats.energy <= 14) return 'rest'
+  const emotion = selectPetEmotion(state)
+  if (emotion.state === 'sick') return 'sick'
+  if (emotion.state === 'sleepy' || emotion.phase === 'night') return 'rest'
   return 'idle'
 }
 
+export function recommendedPetActions(state: PetState, now = Date.now()): PetAction[] {
+  const normalized = tickPet(state, now)
+  const event = normalized.game.todayEvent
+  const recommendations = new Set<PetAction>()
+  if (event && !event.resolved && event.date === dateKey(now)) {
+    recommendations.add(event.action)
+  }
+  if (normalized.stats.health < 35) {
+    recommendations.add('tea')
+    recommendations.add('rest')
+  }
+  if (normalized.stats.hunger < 34) recommendations.add('feed')
+  if (normalized.stats.energy < 30) recommendations.add('rest')
+  if (normalized.stats.mood < 45) recommendations.add('pet')
+  if (normalized.stats.energy > 52 && normalized.stats.hunger > 42 && normalized.stats.mood < 68) {
+    recommendations.add('play')
+  }
+  return ACTIONS.filter((action) => recommendations.has(action)).slice(0, 3)
+}
+
 export function levelXpRequirement(level: number) {
-  return Math.max(1, level) * 100
+  return 120 + (Math.max(1, level) - 1) * 60
+}
+
+export function getPetDayPhase(now = Date.now()): PetDayPhase {
+  const hour = new Date(now).getHours()
+  if (hour >= 5 && hour < 10) return 'morning'
+  if (hour >= 10 && hour < 17) return 'day'
+  if (hour >= 17 && hour < 22) return 'evening'
+  return 'night'
+}
+
+export function selectPetEmotion(state: PetState, now = Date.now()): PetEmotion {
+  const stats = normalizeState(state).stats
+  const phase = getPetDayPhase(now)
+  const needScore =
+    stats.hunger * 0.36 + stats.energy * 0.28 + stats.health * 0.22 + stats.loyalty * 0.14
+  const valence = clamp(stats.mood * 0.55 + needScore * 0.35)
+  const arousal = clamp(stats.energy * 0.45 + stats.mood * 0.25)
+  let emotion: PetEmotionState = 'calm'
+
+  if (stats.health < 30) {
+    emotion = 'sick'
+  } else if (stats.hunger < 28) {
+    emotion = 'hungry'
+  } else if (stats.energy < 25 || phase === 'night') {
+    emotion = 'sleepy'
+  } else if (valence >= 66 && arousal >= 58) {
+    emotion = 'excited'
+  } else if (valence >= 60) {
+    emotion = 'content'
+  } else if (valence < 45) {
+    emotion = arousal >= 50 ? 'excited' : 'lonely'
+  }
+
+  return {
+    state: emotion,
+    valence: whole(valence),
+    arousal: whole(arousal),
+    needScore: whole(needScore),
+    phase,
+  }
 }
 
 export function serializePetState(state: PetState) {
@@ -263,8 +392,28 @@ function createDefaultGameState(): PetGameState {
     shells: 12,
     streakDays: 0,
     lastCareDate: '',
+    lastEventDate: '',
+    todayEvent: null,
+    eventHistory: [],
+    dailyActions: {},
     quests: QUESTS.map((quest) => ({ ...quest })),
     achievements: [],
+  }
+}
+
+function applyTimeStep(stats: PetStats, hours: number, phase: PetDayPhase) {
+  const sleeping = phase === 'night'
+  stats.hunger = clamp(stats.hunger - (sleeping ? 0.32 : 0.42) * hours)
+  stats.energy = clamp(stats.energy + (sleeping ? 2.6 : -0.5) * hours)
+  const discomfort =
+    (stats.hunger < 30 ? 0.7 : 0) +
+    (stats.energy < 25 && !sleeping ? 0.7 : 0) +
+    (stats.health < 45 ? 0.7 : 0)
+  stats.mood = clamp(stats.mood - (sleeping ? 0.12 : 0.28) * hours - discomfort * hours)
+  if (stats.hunger < 18 || (stats.energy < 15 && !sleeping)) {
+    stats.health = clamp(stats.health - 0.32 * hours)
+  } else if (stats.hunger > 55 && stats.energy > 45 && stats.mood > 55) {
+    stats.health = clamp(stats.health + 0.25 * hours)
   }
 }
 
@@ -276,6 +425,16 @@ function boost(stats: PetStats, delta: Partial<Record<keyof PetStats, number>>) 
   stats.health = clamp(stats.health + (delta.health ?? 0))
   stats.loyalty = clamp(stats.loyalty + (delta.loyalty ?? 0))
   stats.xp += delta.xp ?? 0
+}
+
+function scaledXp(value: number, scale: number) {
+  return Math.max(1, Math.round(value * scale))
+}
+
+function dailyActionRewardScale(count: number) {
+  if (count > 4) return 0.35
+  if (count > 2) return 0.65
+  return 1
 }
 
 function consumeItem(state: PetState, itemId: InventoryItem['id']) {
@@ -295,11 +454,78 @@ function addItem(state: PetState, itemId: InventoryItem['id'], count: number) {
 }
 
 function rewardExploration(state: PetState, now: number) {
-  state.game.shells += 2 + Math.floor(state.stats.level / 2)
+  state.game.shells += 4 + Math.floor(state.stats.level / 2)
   addItem(state, 'moonShell', 1)
   const discovery = (now + state.stats.level + state.stats.loyalty) % 4
   if (discovery === 0) addItem(state, 'shrimpSnack', 1)
   if (discovery === 1) addItem(state, 'coralTea', 1)
+}
+
+function recordDailyAction(state: PetState, action: PetAction, now: number) {
+  const today = dateKey(now)
+  const existing = state.game.dailyActions[action]
+  const count = existing?.date === today ? existing.count + 1 : 1
+  state.game.dailyActions[action] = { date: today, count }
+  return count
+}
+
+function ensureDailyEvent(state: PetState, now: number) {
+  const today = dateKey(now)
+  if (state.game.lastEventDate === today) return
+  const event = createDailyEvent(state, now)
+  state.game.lastEventDate = today
+  state.game.todayEvent = event
+  state.game.eventHistory = [
+    event.id,
+    ...state.game.eventHistory.filter((id) => id !== event.id),
+  ].slice(0, 14)
+}
+
+function createDailyEvent(state: PetState, now: number): PetRandomEvent {
+  const today = dateKey(now)
+  const seed = seededNumber(`${today}:${state.stats.level}:${whole(state.stats.loyalty)}`)
+  const pool = Object.entries(RANDOM_EVENTS).flatMap(([id, config]) =>
+    Array.from({ length: config.weight }, () => id as PetRandomEventId),
+  )
+  const id = pool[seed % pool.length] ?? 'windowSunbeam'
+  const config = RANDOM_EVENTS[id]
+  return {
+    id,
+    date: today,
+    phase: config.phase,
+    action: config.action,
+    resolved: false,
+    createdAt: now,
+  }
+}
+
+function resolveDailyEvent(state: PetState, action: PetAction, now: number) {
+  const event = state.game.todayEvent
+  if (!event || event.resolved || event.date !== dateKey(now) || event.action !== action) return
+  event.resolved = true
+  switch (event.id) {
+    case 'morningStretch':
+      boost(state.stats, { mood: 6, energy: 4, xp: 6 })
+      break
+    case 'windowSunbeam':
+      boost(state.stats, { mood: 5, health: 2, loyalty: 1, xp: 5 })
+      break
+    case 'curiousPing':
+      state.game.shells += 5
+      boost(state.stats, { mood: 3, charm: 1, xp: 8 })
+      break
+    case 'rainyNap':
+      boost(state.stats, { energy: 8, health: 4, mood: 3, xp: 5 })
+      break
+    case 'midnightHungry':
+      boost(state.stats, { hunger: 8, loyalty: 2, xp: 5 })
+      break
+    case 'looseShell':
+      state.game.shells += 3
+      addItem(state, 'moonShell', 1)
+      boost(state.stats, { mood: 2, xp: 6 })
+      break
+  }
 }
 
 function progressQuests(state: PetState, action: PetAction) {
@@ -348,12 +574,12 @@ function normalizeState(state: PetState): PetState {
     lastActionAt: Number(state.lastActionAt) || 0,
     stats: {
       ...state.stats,
-      mood: clamp(state.stats.mood),
-      hunger: clamp(state.stats.hunger),
-      charm: clamp(state.stats.charm),
-      energy: clamp(state.stats.energy),
-      health: clamp(state.stats.health),
-      loyalty: clamp(state.stats.loyalty),
+      mood: clamp(Number(state.stats.mood) || 0),
+      hunger: clamp(Number(state.stats.hunger) || 0),
+      charm: clamp(Number(state.stats.charm) || 0),
+      energy: clamp(Number(state.stats.energy) || 0),
+      health: clamp(Number(state.stats.health) || 0),
+      loyalty: clamp(Number(state.stats.loyalty) || 0),
       xp,
       level,
     },
@@ -392,9 +618,42 @@ function normalizeGameState(game?: Partial<PetGameState>): PetGameState {
     shells: Math.max(0, Math.floor(Number(game?.shells ?? defaults.shells) || 0)),
     streakDays: Math.max(0, Math.floor(Number(game?.streakDays ?? defaults.streakDays) || 0)),
     lastCareDate: typeof game?.lastCareDate === 'string' ? game.lastCareDate : '',
+    lastEventDate: typeof game?.lastEventDate === 'string' ? game.lastEventDate : '',
+    todayEvent: normalizeRandomEvent(game?.todayEvent),
+    eventHistory: (game?.eventHistory ?? []).filter(isRandomEventId).slice(0, 14),
+    dailyActions: normalizeDailyActions(game?.dailyActions),
     quests,
     achievements: [...achievements],
   }
+}
+
+function normalizeRandomEvent(event?: PetRandomEvent | null): PetRandomEvent | null {
+  if (!event || !isRandomEventId(event.id)) return null
+  const config = RANDOM_EVENTS[event.id]
+  return {
+    id: event.id,
+    date: typeof event.date === 'string' ? event.date : '',
+    phase: config.phase,
+    action: config.action,
+    resolved: Boolean(event.resolved),
+    createdAt: Number(event.createdAt) || 0,
+  }
+}
+
+function normalizeDailyActions(
+  value?: Partial<Record<PetAction, { date: string; count: number }>>,
+): Partial<Record<PetAction, { date: string; count: number }>> {
+  const actions: Partial<Record<PetAction, { date: string; count: number }>> = {}
+  if (!value || typeof value !== 'object') return actions
+  for (const action of ACTIONS) {
+    const entry = value[action]
+    if (!entry || typeof entry.date !== 'string') continue
+    actions[action] = {
+      date: entry.date,
+      count: Math.max(0, Math.floor(Number(entry.count) || 0)),
+    }
+  }
+  return actions
 }
 
 function unlockAchievement(state: PetState, achievement: PetAchievementId) {
@@ -403,16 +662,33 @@ function unlockAchievement(state: PetState, achievement: PetAchievementId) {
 }
 
 function dateKey(now: number) {
-  return new Date(now).toISOString().slice(0, 10)
+  const date = new Date(now)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function isYesterday(previous: string, today: string) {
   if (!previous) return false
-  const previousTime = Date.parse(`${previous}T00:00:00.000Z`)
-  const todayTime = Date.parse(`${today}T00:00:00.000Z`)
-  return todayTime - previousTime === 86_400_000
+  const previousTime = new Date(`${previous}T00:00:00`).getTime()
+  const todayTime = new Date(`${today}T00:00:00`).getTime()
+  return todayTime - previousTime === DAY_MS
 }
 
 function isLastAction(value: unknown): value is PetLastAction {
   return typeof value === 'string' && LAST_ACTIONS.includes(value as PetLastAction)
+}
+
+function isRandomEventId(value: unknown): value is PetRandomEventId {
+  return typeof value === 'string' && value in RANDOM_EVENTS
+}
+
+function seededNumber(value: string) {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
 }

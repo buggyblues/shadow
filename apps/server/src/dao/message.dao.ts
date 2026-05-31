@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, ilike, inArray, isNull, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, inArray, isNull, lt, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import {
   attachments,
@@ -248,9 +248,12 @@ export class MessageDao {
       from?: string
       hasAttachment?: boolean
       limit?: number
+      offset?: number
     },
   ) {
-    const conditions = [ilike(messages.content, `%${query}%`)]
+    const normalizedQuery = query.trim().toLocaleLowerCase()
+    const pattern = `%${escapeLikePattern(normalizedQuery)}%`
+    const conditions = [sql`lower(${messages.content}) LIKE ${pattern} ESCAPE '\\'`]
     if (!options?.accessibleChannelIds || options.accessibleChannelIds.length === 0) {
       throw Object.assign(new Error('Message search requires accessibleChannelIds'), {
         status: 500,
@@ -273,6 +276,8 @@ export class MessageDao {
         ),
       )
     }
+    const limit = Math.min(Math.max(options?.limit ?? 50, 1), 100)
+    const offset = Math.max(options?.offset ?? 0, 0)
 
     const rows = await this.db
       .select({
@@ -283,7 +288,8 @@ export class MessageDao {
       .leftJoin(users, eq(messages.authorId, users.id))
       .where(and(...conditions))
       .orderBy(desc(messages.createdAt))
-      .limit(options?.limit ?? 50)
+      .limit(limit)
+      .offset(offset)
 
     return rows.map((r) => ({
       ...r.message,
@@ -434,4 +440,8 @@ export class MessageDao {
   async deleteThread(id: string) {
     await this.db.delete(threads).where(eq(threads.id, id))
   }
+}
+
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`)
 }

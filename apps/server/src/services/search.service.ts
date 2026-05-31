@@ -29,9 +29,11 @@ export class SearchService {
       from?: string
       hasAttachment?: boolean
       limit?: number
+      offset?: number
     },
   ) {
-    if (!query || query.trim().length < 2) {
+    const normalizedQuery = query.trim()
+    if (!normalizedQuery || normalizedQuery.length < 2) {
       throw Object.assign(new Error('Search query must be at least 2 characters'), { status: 400 })
     }
 
@@ -43,6 +45,6 @@ export class SearchService {
 
     if (options.accessibleChannelIds.length === 0) return []
 
-    return this.deps.messageDao.search(query, options)
+    return this.deps.messageDao.search(normalizedQuery, options)
   }
 }

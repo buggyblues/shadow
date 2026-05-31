@@ -13,6 +13,7 @@ import {
   session,
   shell,
 } from 'electron'
+import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../shared/community-auth'
 
 // Suppress EPIPE errors that occur when a child process dies while the main
 // process writes to its stdio pipe (e.g. gateway process exit).
@@ -36,6 +37,7 @@ import {
 } from './desktop-settings'
 import { createAppMenu } from './menu'
 import { setupNotificationHandler } from './notifications'
+import { resolveDesktopPetAssetPath, setupDesktopPetAssetHandlers } from './pet-assets'
 import { killAllAgents, setupProcessManager } from './process-manager'
 import { registerGlobalShortcuts, setupShortcutHandlers, unregisterAllShortcuts } from './shortcuts'
 import { createTray, showDesktopContextMenu } from './tray'
@@ -93,6 +95,15 @@ protocol.registerSchemesAsPrivileged([
       corsEnabled: true,
     },
   },
+  {
+    scheme: 'shadow-pet-asset',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
+  },
 ])
 
 type ReaderResource = {
@@ -117,6 +128,7 @@ type ReaderResourceSnapshot = {
 }
 
 const readerResources = new Map<string, ReaderResource>()
+const staticFileLookupCache = new Map<string, string | null>()
 let activeReaderResourceId: string | null = null
 
 function resolveDesktopIconPath(): string | null {
@@ -267,7 +279,8 @@ async function fetchReaderResource(rawUrl: string, title: string): Promise<Reade
     const token = await readCommunityAccessToken()
     if (token && isTrustedCommunityUrl(url)) headers.set('Authorization', `Bearer ${token}`)
     const response = await net.fetch(url.toString(), { headers })
-    if (response.status === 401 || response.status === 403) throw new Error('AUTH_REQUIRED')
+    if (response.status === 401 || response.status === 403)
+      throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
     if (!response.ok) throw new Error(`READER_FETCH_FAILED_${response.status}`)
     buffer = Buffer.from(await response.arrayBuffer())
     contentType = inferContentType(url, response.headers.get('content-type') ?? '')
@@ -298,7 +311,7 @@ async function fetchReaderResource(rawUrl: string, title: string): Promise<Reade
 
 async function resolveReaderAttachmentUrl(attachmentId: string): Promise<string> {
   const token = await readCommunityAccessToken()
-  if (!token) throw new Error('AUTH_REQUIRED')
+  if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
   const response = await net.fetch(
     `${getDesktopServerBaseUrl()}/api/attachments/${encodeURIComponent(
       attachmentId,
@@ -311,7 +324,8 @@ async function resolveReaderAttachmentUrl(attachmentId: string): Promise<string>
     },
   )
   const text = await response.text()
-  if (response.status === 401 || response.status === 403) throw new Error('AUTH_REQUIRED')
+  if (response.status === 401 || response.status === 403)
+    throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
   if (!response.ok) throw new Error(text || `READER_ATTACHMENT_URL_FAILED_${response.status}`)
   const payload = text ? (JSON.parse(text) as { url?: unknown }) : {}
   if (typeof payload.url !== 'string' || !payload.url)
@@ -350,10 +364,14 @@ app.on('ready', async () => {
 
   function findStaticFile(baseDir: string, filePath: string): string | null {
     const normalizedPath = filePath === '/' || filePath === '' ? '/index.html' : filePath
+    const cacheKey = `${baseDir}\0${normalizedPath}`
+    if (staticFileLookupCache.has(cacheKey)) {
+      return staticFileLookupCache.get(cacheKey) ?? null
+    }
     const candidatePaths = normalizedPath.startsWith('/app/')
       ? [join(baseDir, normalizedPath.slice('/app'.length)), join(baseDir, normalizedPath)]
       : [join(baseDir, normalizedPath)]
-    return (
+    const resolved =
       candidatePaths.find((candidate) => {
         try {
           return existsSync(candidate) && statSync(candidate).isFile()
@@ -361,7 +379,8 @@ app.on('ready', async () => {
           return false
         }
       }) ?? null
-    )
+    staticFileLookupCache.set(cacheKey, resolved)
+    return resolved
   }
 
   function normalizeCommunityApiPath(rawPath: string): string {
@@ -465,7 +484,17 @@ app.on('ready', async () => {
     })
   })
 
+  protocol.handle('shadow-pet-asset', (request) => {
+    const url = new URL(request.url)
+    const packId = decodeURIComponent(url.hostname)
+    const relativePath = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
+    const filePath = resolveDesktopPetAssetPath(packId, relativePath)
+    if (!filePath) return new Response('Not Found', { status: 404 })
+    return net.fetch(pathToFileURL(filePath).toString())
+  })
+
   setupDesktopSettingsHandlers()
+  setupDesktopPetAssetHandlers()
   setupConnectorDaemonHandlers()
   setupShortcutHandlers()
   setupPetVoiceHandlers()
@@ -579,7 +608,7 @@ app.on('ready', async () => {
       },
     ) => {
       const token = await readCommunityAccessToken()
-      if (!token) throw new Error('AUTH_REQUIRED')
+      if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
       const path = normalizeCommunityApiPath(input.path)
       const response = await net.fetch(`${getDesktopServerBaseUrl()}${path}`, {
         method: input.method ?? 'GET',
@@ -591,7 +620,8 @@ app.on('ready', async () => {
         body: input.body === undefined ? undefined : JSON.stringify(input.body),
       })
       const text = await response.text()
-      if (response.status === 401 || response.status === 403) throw new Error('AUTH_REQUIRED')
+      if (response.status === 401 || response.status === 403)
+        throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
       if (!response.ok) throw new Error(text || `REQUEST_FAILED_${response.status}`)
       return text ? (JSON.parse(text) as unknown) : null
     },
@@ -606,7 +636,7 @@ app.on('ready', async () => {
       },
     ) => {
       const token = await readCommunityAccessToken()
-      if (!token) throw new Error('AUTH_REQUIRED')
+      if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
       const response = await net.fetch(`${getDesktopServerBaseUrl()}/api/ai/v1/chat/completions`, {
         method: 'POST',
         headers: {
@@ -617,7 +647,8 @@ app.on('ready', async () => {
         body: JSON.stringify({ ...input.body, stream: true }),
       })
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) throw new Error('AUTH_REQUIRED')
+        if (response.status === 401 || response.status === 403)
+          throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
         const text = await response.text().catch(() => '')
         throw new Error(text || `REQUEST_FAILED_${response.status}`)
       }

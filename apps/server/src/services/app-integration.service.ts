@@ -890,6 +890,21 @@ export class AppIntegrationService {
     return rows.map((row) => redactApp(row)!)
   }
 
+  async listSummaries(
+    serverIdOrSlug: string,
+    actor: Actor,
+    options?: {
+      serverMember?: Awaited<ReturnType<PolicyService['requireServerMember']>> | null
+    },
+  ) {
+    const serverId = await this.resolveServerId(serverIdOrSlug)
+    const verifiedMember = options?.serverMember
+    if (!verifiedMember || verifiedMember.serverId !== serverId) {
+      await this.deps.policyService.requireServerMember(actor, serverId)
+    }
+    return this.deps.appIntegrationDao.listSummariesByServer(serverId)
+  }
+
   async get(serverIdOrSlug: string, appKey: string, actor: Actor) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)

@@ -6,12 +6,21 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 export interface ShadowConfigValues {
   token: string
   serverUrl: string
+  modelProvider?: ConnectorModelProviderValues
 }
 
 export interface CcConnectConfigValues extends ShadowConfigValues {
   projectName: string
   workDir: string
   agentType: string
+}
+
+export interface ConnectorModelProviderValues {
+  id?: string
+  label?: string
+  baseUrl: string
+  apiKey: string
+  model: string
 }
 
 const SHADOW_ENV_VALUES = {
@@ -40,6 +49,22 @@ function ensureTrailingNewline(value: string): string {
 
 function quoteEnv(value: string): string {
   return /^[A-Za-z0-9_./:@-]+$/.test(value) ? value : JSON.stringify(value)
+}
+
+function normalizeModelProvider(
+  provider: ConnectorModelProviderValues | undefined,
+): ConnectorModelProviderValues | null {
+  const baseUrl = provider?.baseUrl.trim()
+  const apiKey = provider?.apiKey.trim()
+  const model = provider?.model.trim()
+  if (!baseUrl || !apiKey || !model) return null
+  return {
+    id: provider?.id?.trim() || 'shadow-official',
+    label: provider?.label?.trim() || 'Shadow official LLM proxy',
+    baseUrl,
+    apiKey,
+    model,
+  }
 }
 
 function normalizeJsonRoot(existing: string, label: string): Record<string, unknown> {
@@ -73,10 +98,17 @@ function parseTomlRoot(existing: string, label: string): TomlTable {
 export function mergeEnvContent(existing: string, values: ShadowConfigValues): string {
   parseDotenv(existing)
 
+  const modelProvider = normalizeModelProvider(values.modelProvider)
   const updates: Record<string, string> = {
     SHADOW_BASE_URL: values.serverUrl,
     SHADOW_TOKEN: values.token,
     ...SHADOW_ENV_VALUES,
+  }
+  if (modelProvider) {
+    updates.OPENAI_COMPATIBLE_BASE_URL = modelProvider.baseUrl
+    updates.OPENAI_COMPATIBLE_API_KEY = modelProvider.apiKey
+    updates.OPENAI_COMPATIBLE_MODEL_ID = modelProvider.model
+    updates.SHADOW_MODEL_PROVIDER_ID = modelProvider.id ?? 'shadow-official'
   }
   const seen = new Set<string>()
   const lines = existing.length > 0 ? existing.split(/\r?\n/) : []
@@ -104,6 +136,7 @@ export function mergeEnvContent(existing: string, values: ShadowConfigValues): s
 
 export function mergeOpenClawConfigContent(existing: string, values: ShadowConfigValues): string {
   const root = normalizeJsonRoot(existing, 'OpenClaw')
+  const modelProvider = normalizeModelProvider(values.modelProvider)
   const channels = asRecord(root.channels)
   const legacyShadow = asRecord(channels['openclaw-shadowob'])
   const shadow = asRecord(channels.shadowob)
@@ -131,11 +164,29 @@ export function mergeOpenClawConfigContent(existing: string, values: ShadowConfi
   plugins.entries = entries
   root.plugins = plugins
 
+  if (modelProvider) {
+    const models = asRecord(root.models)
+    const providers = asRecord(models.providers)
+    const providerId = modelProvider.id ?? 'shadow-official'
+    providers[providerId] = {
+      ...asRecord(providers[providerId]),
+      api: 'openai-completions',
+      apiKey: '${env:OPENAI_COMPATIBLE_API_KEY}',
+      baseUrl: modelProvider.baseUrl,
+      request: { allowPrivateNetwork: true },
+      models: [{ id: modelProvider.model, name: modelProvider.model }],
+    }
+    models.mode = models.mode ?? 'merge'
+    models.providers = providers
+    root.models = models
+  }
+
   return ensureTrailingNewline(JSON.stringify(root, null, 2))
 }
 
 export function mergeHermesConfigContent(existing: string, values: ShadowConfigValues): string {
   const root = parseYamlRoot(existing, 'Hermes')
+  const modelProvider = normalizeModelProvider(values.modelProvider)
 
   const plugins = asRecord(root.plugins)
   plugins.enabled = uniqueStrings(Array.isArray(plugins.enabled) ? plugins.enabled : [], 'shadowob')
@@ -159,6 +210,16 @@ export function mergeHermesConfigContent(existing: string, values: ShadowConfigV
     },
   }
   root.platforms = platforms
+
+  if (modelProvider) {
+    const model = asRecord(root.model)
+    root.model = {
+      ...model,
+      default: model.model ?? model.default ?? modelProvider.model,
+      provider: model.provider ?? 'custom',
+      base_url: model.base_url ?? modelProvider.baseUrl,
+    }
+  }
 
   return ensureTrailingNewline(stringifyYaml(root))
 }
@@ -211,6 +272,27 @@ export function mergeCcConnectConfigContent(
   agent.options = {
     ...agentOptions,
     work_dir: values.workDir,
+  }
+  const modelProvider = normalizeModelProvider(values.modelProvider)
+  if (modelProvider) {
+    agent.options = {
+      ...asTomlTable(agent.options),
+      provider: modelProvider.id ?? 'shadow-official',
+      model: modelProvider.model,
+    }
+    const providers = tomlArray(agent.providers)
+    const providerId = modelProvider.id ?? 'shadow-official'
+    let provider = providers.find((item) => item.name === providerId)
+    if (!provider) {
+      provider = {}
+      providers.push(provider)
+    }
+    provider.name = providerId
+    provider.api_key = modelProvider.apiKey
+    provider.base_url = modelProvider.baseUrl
+    provider.model = modelProvider.model
+    provider.models = [{ model: modelProvider.model }]
+    agent.providers = providers
   }
   project.agent = agent
 

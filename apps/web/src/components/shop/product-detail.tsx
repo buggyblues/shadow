@@ -33,6 +33,10 @@ import {
   type EntitlementOwnership,
   hasActivePurchasedEntitlement,
 } from '../../lib/commerce-products'
+import {
+  DESKTOP_PET_PACK_ASSET_TYPE,
+  hasDesktopPetPackTag,
+} from '../../lib/desktop-pet-marketplace'
 import { showToast } from '../../lib/toast'
 import { OrderConfirm } from './order-confirm'
 import type { Product, ProductMediaItem, ServerSummary, Shop, SkuItem } from './shop-page'
@@ -80,6 +84,7 @@ function isInstantDeliveryProduct(product?: Product | null) {
 }
 
 function productAssetType(product?: Product | null) {
+  if (hasDesktopPetPackTag(product?.tags)) return DESKTOP_PET_PACK_ASSET_TYPE
   const config = firstEntitlementConfig(product)
   if (config?.resourceType !== 'community_asset') return null
   return product?.tags?.find((tag) =>

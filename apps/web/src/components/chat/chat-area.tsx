@@ -30,7 +30,9 @@ import {
   LogOut,
   type LucideProps,
   Megaphone,
+  Paperclip,
   PawPrint,
+  Search,
   ShoppingBag,
   Smartphone,
   UserPlus,
@@ -49,6 +51,7 @@ import {
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { playReceiveSound } from '../../lib/sounds'
@@ -61,6 +64,7 @@ import { useConfirmStore } from '../common/confirm-dialog'
 import { InvitePanel } from '../common/invite-panel'
 import { NotificationBell } from '../notification/notification-bell'
 import { type PickerResult, WorkspaceFilePicker } from '../workspace'
+import { buildChatTimeline, type ChatTimelineItem } from './chat-timeline'
 import {
   CHAT_SCROLLING_RESET_DELAY,
   CHAT_VIRTUAL_OVERSCAN,
@@ -111,10 +115,23 @@ interface Message {
   sendStatus?: 'sending' | 'failed'
 }
 
+interface SearchMessageResult {
+  id: string
+  content: string
+  channelId?: string
+  authorId: string
+  threadId?: string | null
+  createdAt: string
+  author?: Author | null
+  attachments?: Attachment[]
+}
+
 interface MessagesPage {
   messages: Message[]
   hasMore: boolean
 }
+
+export type ChatInitialMessagesPage = MessagesPage
 
 interface Channel {
   id: string
@@ -222,9 +239,7 @@ interface BuddyAgentAccessEntry {
 }
 
 /** Pre-computed timeline item with grouping info */
-type TimelineItem =
-  | { kind: 'message'; data: Message; isGrouped: boolean }
-  | { kind: 'system'; data: SystemEvent }
+type TimelineItem = ChatTimelineItem<Message, SystemEvent>
 
 type InteractiveResponse = NonNullable<
   NonNullable<BubbleMessage['metadata']>['interactiveResponse']
@@ -297,12 +312,18 @@ function isSelectionDragIgnoredTarget(target: EventTarget | null) {
 }
 
 export function ChatArea({
+  channelId: channelIdProp,
+  serverId: serverIdProp,
+  initialMessages,
   onBack,
   showMemberToggle = true,
   channelSwitcher,
   onEnterChannel,
   onExitCopilot,
 }: {
+  channelId?: string
+  serverId?: string | null
+  initialMessages?: ChatInitialMessagesPage | null
   onBack?: () => void
   showMemberToggle?: boolean
   channelSwitcher?: {
@@ -315,9 +336,14 @@ export function ChatArea({
 } = {}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { activeChannelId, activeServerId } = useChatStore()
+  const storeActiveChannelId = useChatStore((state) => state.activeChannelId)
+  const storeActiveServerId = useChatStore((state) => state.activeServerId)
+  const activeChannelId = channelIdProp ?? storeActiveChannelId
+  const activeServerId = serverIdProp ?? storeActiveServerId
   const user = useAuthStore((s) => s.user)
-  const { closeMobileMemberList, setMobileView, setRightPanelOpen } = useUIStore()
+  const closeMobileMemberList = useUIStore((state) => state.closeMobileMemberList)
+  const setMobileView = useUIStore((state) => state.setMobileView)
+  const setRightPanelOpen = useUIStore((state) => state.setRightPanelOpen)
   const parentRef = useRef<HTMLDivElement>(null)
   const [replyToId, setReplyToId] = useState<string | null>(null)
   const [droppedFiles, setDroppedFiles] = useState<File[]>([])
@@ -355,16 +381,29 @@ export function ChatArea({
     size: number
   } | null>(null)
   const [previewOAuthLink, setPreviewOAuthLink] = useState<OAuthLinkPreview | null>(null)
+  const [showSearchPanel, setShowSearchPanel] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [searchHasAttachment, setSearchHasAttachment] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
+  const loadServerShopEntry = useDeferredQueryEnabled({
+    enabled: Boolean(activeServerId),
+    stage: 'background',
+    priority: 'low',
+    delayMs: 2600,
+    resetKey: activeServerId,
+  })
   const { data: serverShopEntry } = useQuery({
     queryKey: ['chat-server-shop-entry', activeServerId],
     queryFn: () =>
       fetchApi<{ products: Array<{ id: string }>; total?: number }>(
         `/api/servers/${activeServerId}/shop/products?limit=1`,
       ),
-    enabled: Boolean(activeServerId),
+    enabled: Boolean(activeServerId && loadServerShopEntry),
     retry: false,
     staleTime: 60_000,
+    refetchOnMount: false,
   })
   const hasServerShopProducts =
     Boolean(activeServerId) &&
@@ -374,6 +413,7 @@ export function ChatArea({
     queryFn: () => fetchApi<{ id: string; slug?: string | null }>(`/api/servers/${activeServerId}`),
     enabled: Boolean(activeServerId && hasServerShopProducts),
     staleTime: 60_000,
+    refetchOnMount: false,
   })
   const serverShopRouteKey = activeServerSummary?.slug ?? activeServerId
 
@@ -521,6 +561,7 @@ export function ChatArea({
     queryFn: () => fetchApi<Channel>(`/api/channels/${activeChannelId}`),
     enabled: !!activeChannelId,
     staleTime: 30_000,
+    refetchOnMount: false,
   })
 
   const { data: buddyAgents = [] } = useQuery({
@@ -548,6 +589,33 @@ export function ChatArea({
   const channelDisplayName = directPeer ? directPeerName : (channel?.name ?? '...')
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
   const visibleChannelTopic = isInboxChannel ? null : channel?.topic
+  const normalizedSearchQuery = debouncedSearchQuery.trim()
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 220)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
+
+  const { data: chatSearchResults = [], isFetching: isSearchingMessages } = useQuery({
+    queryKey: ['search-messages', activeChannelId, normalizedSearchQuery, searchHasAttachment],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        query: normalizedSearchQuery,
+        channelId: activeChannelId!,
+        limit: '30',
+      })
+      if (searchHasAttachment) params.set('hasAttachment', 'true')
+      const response = await fetchApi<SearchMessageResult[] | { messages?: SearchMessageResult[] }>(
+        `/api/search/messages?${params.toString()}`,
+      )
+      return Array.isArray(response) ? response : (response.messages ?? [])
+    },
+    enabled: Boolean(showSearchPanel && activeChannelId && normalizedSearchQuery.length >= 2),
+    placeholderData: (previous) => previous,
+    staleTime: 10_000,
+  })
 
   const updateDirectPeerPresence = useCallback(
     (userId: string, status: string) => {
@@ -567,15 +635,37 @@ export function ChatArea({
     [activeChannelId, queryClient],
   )
 
+  const loadThreadMetadata = useDeferredQueryEnabled({
+    enabled: Boolean(activeChannelId),
+    stage: 'background',
+    priority: 'low',
+    delayMs: 2400,
+    resetKey: activeChannelId,
+  })
+
   const { data: threads = [] } = useQuery({
     queryKey: ['threads', activeChannelId],
     queryFn: () => fetchApi<Thread[]>(`/api/channels/${activeChannelId}/threads`),
-    enabled: Boolean(activeChannelId),
+    enabled: Boolean(activeChannelId && loadThreadMetadata),
     staleTime: 30_000,
   })
 
   // Fetch messages with infinite query (cursor-based pagination)
   const PAGE_SIZE = 50
+  const initialMessagesData = useMemo<InfiniteData<MessagesPage, string | null> | undefined>(
+    () =>
+      initialMessages
+        ? {
+            pages: [initialMessages],
+            pageParams: [null],
+          }
+        : undefined,
+    [initialMessages],
+  )
+  const initialMessagesUpdatedAt = useMemo(
+    () => (initialMessagesData ? Date.now() : undefined),
+    [initialMessagesData],
+  )
   const {
     data,
     fetchNextPage,
@@ -595,8 +685,11 @@ export function ChatArea({
       // Cursor = createdAt of the oldest message in this page (first item, since sorted oldest-to-newest)
       return lastPage.messages[0]?.createdAt
     },
-    enabled: !!activeChannelId,
-    staleTime: 30_000,
+    enabled: Boolean(activeChannelId && !initialMessagesData),
+    initialData: initialMessagesData,
+    initialDataUpdatedAt: initialMessagesUpdatedAt,
+    staleTime: initialMessagesData ? Number.POSITIVE_INFINITY : 30_000,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
   })
 
@@ -646,6 +739,7 @@ export function ChatArea({
       closeMobileMemberList()
       closeThreadPanel()
       setPreviewOAuthLink(null)
+      setShowSearchPanel(false)
       setPreviewFile(attachment)
     },
     [closeMobileMemberList, closeThreadPanel],
@@ -656,6 +750,7 @@ export function ChatArea({
       closeMobileMemberList()
       closeThreadPanel()
       setPreviewFile(null)
+      setShowSearchPanel(false)
       setPreviewOAuthLink(preview)
     },
     [closeMobileMemberList, closeThreadPanel],
@@ -666,11 +761,105 @@ export function ChatArea({
       closeMobileMemberList()
       setPreviewFile(null)
       setPreviewOAuthLink(null)
+      setShowSearchPanel(false)
       setActiveThread(thread)
       setActiveThreadParent(parentMessage)
     },
     [closeMobileMemberList],
   )
+
+  const openSearchPanel = useCallback(() => {
+    closeMobileMemberList()
+    closeThreadPanel()
+    setPreviewFile(null)
+    setPreviewOAuthLink(null)
+    setShowSearchPanel(true)
+    window.requestAnimationFrame(() => searchInputRef.current?.focus())
+  }, [closeMobileMemberList, closeThreadPanel])
+
+  const focusMessageFromSearch = useCallback(
+    (messageId: string) => {
+      setHighlightMsgId(messageId)
+      const element = document.getElementById(`msg-${messageId}`)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } else {
+        showToast(t('chat.searchResultNotLoaded'), 'error')
+      }
+      window.setTimeout(() => {
+        setHighlightMsgId((current) => (current === messageId ? null : current))
+      }, 3000)
+    },
+    [t],
+  )
+
+  const focusSearchResultByOffset = useCallback((offset: number) => {
+    const results = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[data-chat-search-result="true"]'),
+    )
+    if (results.length === 0) return
+
+    const currentIndex = results.indexOf(document.activeElement as HTMLButtonElement)
+    const nextIndex =
+      currentIndex < 0 ? 0 : Math.max(0, Math.min(results.length - 1, currentIndex + offset))
+    results[nextIndex]?.focus()
+  }, [])
+
+  const handleSearchInputKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'ArrowDown' && chatSearchResults.length > 0) {
+        event.preventDefault()
+        focusSearchResultByOffset(1)
+      } else if (event.key === 'Enter' && chatSearchResults.length > 0) {
+        event.preventDefault()
+        focusMessageFromSearch(chatSearchResults[0]!.id)
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        setShowSearchPanel(false)
+      }
+    },
+    [chatSearchResults, focusMessageFromSearch, focusSearchResultByOffset],
+  )
+
+  const handleSearchResultKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        focusSearchResultByOffset(1)
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        focusSearchResultByOffset(-1)
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        setShowSearchPanel(false)
+        searchInputRef.current?.focus()
+      }
+    },
+    [focusSearchResultByOffset],
+  )
+
+  useEffect(() => {
+    const handleOpenSearch = () => openSearchPanel()
+    window.addEventListener('shadow:open-chat-search', handleOpenSearch)
+    return () => window.removeEventListener('shadow:open-chat-search', handleOpenSearch)
+  }, [openSearchPanel])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !activeChannelId) return
+      if (showSearchPanel && event.key === 'Escape') {
+        event.preventDefault()
+        setShowSearchPanel(false)
+        return
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'f') {
+        event.preventDefault()
+        openSearchPanel()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+  }, [activeChannelId, openSearchPanel, showSearchPanel])
 
   const createThreadMutation = useMutation({
     mutationFn: ({ message }: { message: Message }) =>
@@ -708,12 +897,16 @@ export function ChatArea({
   useEffect(() => {
     setActiveThread(null)
     setActiveThreadParent(null)
+    setShowSearchPanel(false)
+    setSearchQuery('')
+    setDebouncedSearchQuery('')
+    setSearchHasAttachment(false)
   }, [activeChannelId])
 
   useEffect(() => {
-    setRightPanelOpen(Boolean(previewFile || previewOAuthLink || activeThread))
+    setRightPanelOpen(Boolean(previewFile || previewOAuthLink || activeThread || showSearchPanel))
     return () => setRightPanelOpen(false)
-  }, [activeThread, previewFile, previewOAuthLink, setRightPanelOpen])
+  }, [activeThread, previewFile, previewOAuthLink, setRightPanelOpen, showSearchPanel])
 
   const interactiveResponsesBySourceId = useMemo(() => {
     const map = new Map<string, InteractiveResponse>()
@@ -726,37 +919,11 @@ export function ChatArea({
     return map
   }, [messages])
 
-  // Build timeline with pre-computed grouping — avoids per-render calculation
-  const timeline = useMemo<TimelineItem[]>(() => {
-    const items: TimelineItem[] = []
-    for (let i = 0; i < timelineMessages.length; i++) {
-      const m = timelineMessages[i]!
-      const prev = i > 0 ? timelineMessages[i - 1] : undefined
-      const isGrouped =
-        prev !== undefined &&
-        prev.authorId === m.authorId &&
-        !m.replyToId &&
-        Math.abs(new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime()) < 60_000
-      items.push({ kind: 'message' as const, data: m, isGrouped })
-    }
-
-    // Insert system events at the correct position based on timestamp
-    for (const evt of systemEvents) {
-      let insertIdx = items.length
-      for (let i = items.length - 1; i >= 0; i--) {
-        const item = items[i]!
-        const itemTime =
-          item.kind === 'message' ? new Date(item.data.createdAt).getTime() : item.data.timestamp
-        if (itemTime <= evt.timestamp) {
-          insertIdx = i + 1
-          break
-        }
-        if (i === 0) insertIdx = 0
-      }
-      items.splice(insertIdx, 0, { kind: 'system', data: evt })
-    }
-    return items
-  }, [systemEvents, timelineMessages])
+  // Build timeline with pre-computed grouping — avoids per-message work during render.
+  const timeline = useMemo<TimelineItem[]>(
+    () => buildChatTimeline(timelineMessages, systemEvents),
+    [systemEvents, timelineMessages],
+  )
 
   // Listen for new messages via WebSocket
   useSocketEvent('message:new', (msg: Message) => {
@@ -1099,7 +1266,8 @@ export function ChatArea({
     paddingEnd: timelineBottomPadding,
     scrollPaddingEnd: timelineBottomPadding,
     isScrollingResetDelay: CHAT_SCROLLING_RESET_DELAY,
-    useFlushSync: true,
+    useFlushSync: false,
+    useAnimationFrameWithResizeObserver: true,
   })
 
   useLayoutEffect(() => {
@@ -1582,7 +1750,7 @@ export function ChatArea({
   }
 
   return (
-    <div className="flex-1 flex min-w-0 h-full">
+    <div className="relative flex-1 flex min-w-0 h-full">
       <GlassPanel
         className="flex-1 flex flex-col chat-panel overflow-hidden min-w-0 h-full relative"
         style={{
@@ -1719,6 +1887,19 @@ export function ChatArea({
           )}
           {/* Right side: mobile QR + members toggle + notification bell */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={openSearchPanel}
+              className={cn(
+                'h-8 w-8 rounded-full',
+                showSearchPanel && 'bg-primary/15 text-primary',
+              )}
+              title={t('chat.searchMessages')}
+              aria-label={t('chat.searchMessages')}
+            >
+              <Search size={18} />
+            </Button>
             {onExitCopilot ? (
               <>
                 {onEnterChannel && (
@@ -1827,6 +2008,7 @@ export function ChatArea({
                     onClick={() => {
                       setPreviewFile(null)
                       setPreviewOAuthLink(null)
+                      setShowSearchPanel(false)
                       closeThreadPanel()
                       useUIStore.getState().toggleMobileMemberList()
                     }}
@@ -2056,6 +2238,149 @@ export function ChatArea({
         )}
       </GlassPanel>
 
+      {showSearchPanel && (
+        <div
+          className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px] [@media(min-width:1440px)]:hidden"
+          onClick={() => setShowSearchPanel(false)}
+        />
+      )}
+
+      {showSearchPanel && (
+        <GlassPanel className="fixed inset-2 z-40 flex min-w-0 shrink-0 animate-slide-in-right flex-col overflow-hidden rounded-3xl border border-border-subtle bg-bg-secondary/88 shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl [@media(min-width:720px)]:inset-y-3 [@media(min-width:720px)]:left-auto [@media(min-width:720px)]:right-3 [@media(min-width:720px)]:w-[min(92vw,420px)] [@media(min-width:1440px)]:relative [@media(min-width:1440px)]:inset-auto [@media(min-width:1440px)]:z-auto [@media(min-width:1440px)]:ml-2 [@media(min-width:1440px)]:mr-3 [@media(min-width:1440px)]:h-full [@media(min-width:1440px)]:w-[min(34vw,420px)] [@media(min-width:1440px)]:min-w-[360px]">
+          <div className="m-1.5 mb-0 flex h-14 shrink-0 items-center gap-2.5 rounded-[20px] border border-border-subtle/70 bg-bg-primary/45 px-3">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
+              <Search size={17} strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-sm font-black text-text-primary">
+                {t('chat.searchPanelTitle')}
+              </h3>
+              <p className="truncate text-xs font-semibold text-text-muted">{channelDisplayName}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowSearchPanel(false)}
+              className="h-8 w-8 rounded-full"
+              title={t('common.close')}
+              aria-label={t('common.close')}
+            >
+              <X size={17} />
+            </Button>
+          </div>
+
+          <div className="m-1.5 mb-0 space-y-3 rounded-[20px] border border-border-subtle/70 bg-bg-primary/45 p-3">
+            <label className="flex h-11 items-center gap-2 rounded-2xl border border-border-subtle bg-bg-tertiary/55 px-3 text-text-muted transition focus-within:border-primary/50 focus-within:bg-bg-tertiary/80 focus-within:text-primary">
+              <Search size={16} className="shrink-0" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={handleSearchInputKeyDown}
+                placeholder={t('chat.searchMessagesPlaceholder')}
+                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-text-primary outline-none placeholder:text-text-muted/50"
+              />
+              {searchQuery.length > 0 && (
+                <button
+                  type="button"
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+                  onClick={() => setSearchQuery('')}
+                  aria-label={t('common.close')}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </label>
+            <button
+              type="button"
+              onClick={() => setSearchHasAttachment((current) => !current)}
+              aria-pressed={searchHasAttachment}
+              className={cn(
+                'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+                searchHasAttachment
+                  ? 'border-primary/45 bg-primary/15 text-primary'
+                  : 'border-border-subtle bg-bg-tertiary/35 text-text-muted hover:text-text-primary',
+              )}
+            >
+              <Paperclip size={13} />
+              {t('chat.searchHasAttachment')}
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 p-1.5">
+            <div className="flex h-full min-h-0 flex-col overflow-y-auto rounded-[20px] border border-border-subtle/70 bg-bg-primary/45 p-3 custom-scrollbar">
+              {normalizedSearchQuery.length < 2 ? (
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm font-semibold leading-6 text-text-muted">
+                  {t('chat.searchMinChars')}
+                </div>
+              ) : isSearchingMessages && chatSearchResults.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-text-muted">
+                  <Loader2 size={18} className="animate-spin text-primary" />
+                </div>
+              ) : chatSearchResults.length === 0 ? (
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm font-semibold leading-6 text-text-muted">
+                  {t('chat.searchNoResults')}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1 pb-1 text-[11px] font-black uppercase tracking-widest text-text-muted">
+                    <span>{t('chat.searchResultCount', { count: chatSearchResults.length })}</span>
+                    {isSearchingMessages && (
+                      <Loader2 size={13} className="animate-spin text-primary" />
+                    )}
+                  </div>
+                  {chatSearchResults.map((result) => {
+                    const authorName =
+                      result.author?.displayName ??
+                      result.author?.username ??
+                      t('common.unknownUser')
+                    const displayContent = result.content.trim() || t('chat.searchAttachmentOnly')
+                    return (
+                      <button
+                        key={result.id}
+                        type="button"
+                        data-chat-search-result="true"
+                        className="group w-full rounded-2xl border border-border-subtle bg-bg-tertiary/45 p-3 text-left transition hover:border-primary/35 hover:bg-bg-tertiary/75 focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        onClick={() => focusMessageFromSearch(result.id)}
+                        onKeyDown={handleSearchResultKeyDown}
+                        aria-label={t('chat.searchOpenResult')}
+                      >
+                        <div className="mb-2 flex items-center gap-2">
+                          <UserAvatar
+                            userId={result.authorId}
+                            avatarUrl={result.author?.avatarUrl ?? null}
+                            displayName={authorName}
+                            size="xs"
+                          />
+                          <span className="min-w-0 flex-1 truncate text-xs font-black text-text-primary">
+                            {authorName}
+                          </span>
+                          <span className="shrink-0 text-[10px] font-bold text-text-muted">
+                            {new Date(result.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="line-clamp-3 text-sm font-semibold leading-6 text-text-secondary group-hover:text-text-primary">
+                          <HighlightedSearchText
+                            content={displayContent}
+                            query={normalizedSearchQuery}
+                          />
+                        </p>
+                        {(result.attachments?.length ?? 0) > 0 && (
+                          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-bg-primary/45 px-2 py-1 text-[10px] font-black text-text-muted">
+                            <Paperclip size={11} />
+                            {result.attachments?.length}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </GlassPanel>
+      )}
+
       {/* File preview panel */}
       {previewFile && (
         <FilePreviewPanel attachment={previewFile} onClose={() => setPreviewFile(null)} />
@@ -2093,6 +2418,45 @@ export function ChatArea({
         />
       )}
     </div>
+  )
+}
+
+function HighlightedSearchText({ content, query }: { content: string; query: string }) {
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  if (!normalizedQuery) return <>{content}</>
+
+  const lowerContent = content.toLocaleLowerCase()
+  const parts: Array<{ text: string; match: boolean }> = []
+  let cursor = 0
+  while (cursor < content.length) {
+    const matchIndex = lowerContent.indexOf(normalizedQuery, cursor)
+    if (matchIndex < 0) {
+      parts.push({ text: content.slice(cursor), match: false })
+      break
+    }
+    if (matchIndex > cursor) {
+      parts.push({ text: content.slice(cursor, matchIndex), match: false })
+    }
+    const matchEnd = matchIndex + normalizedQuery.length
+    parts.push({ text: content.slice(matchIndex, matchEnd), match: true })
+    cursor = matchEnd
+  }
+
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.match ? (
+          <mark
+            key={`${part.text}-${index}`}
+            className="rounded bg-primary/25 px-0.5 font-black text-primary"
+          >
+            {part.text}
+          </mark>
+        ) : (
+          <span key={`${part.text}-${index}`}>{part.text}</span>
+        ),
+      )}
+    </>
   )
 }
 

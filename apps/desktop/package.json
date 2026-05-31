@@ -29,6 +29,7 @@
     "@shadowob/ui": "workspace:*",
     "@tanstack/react-query": "^5.80.7",
     "@tanstack/react-router": "^1.168.2",
+    "jszip": "^3.10.1",
     "sherpa-onnx-node": "1.13.2",
     "socket.io-client": "^4.8.1"
   },

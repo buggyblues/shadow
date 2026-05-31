@@ -16,6 +16,12 @@ npx @shadowob/connector@latest --daemon \
 
 The daemon connects this computer once, scans supported runtimes, sends heartbeats to Shadow, claims Buddy setup jobs, and configures the selected runtime. Supported runtime detection currently includes OpenClaw, Hermes Agent, Claude Code, Codex CLI, OpenCode, Gemini CLI, Cursor CLI, Kimi CLI, Copilot CLI, and Antigravity CLI.
 
+Desktop builds run the connector through Electron's Node runtime. If the user's
+machine does not have Node/npm, the connector downloads a verified official
+Node.js runtime under `~/.shadowob/connector/node/`, installs Shadow CLI tools
+under `~/.shadowob/connector/node-global/`, and adds that toolchain plus nvm,
+login-shell, and common user bin directories to the runtime `PATH`.
+
 Use `--once` to run one heartbeat/job pass for debugging, and `--poll-interval-ms` to tune the loop interval.
 
 Print a plan:
@@ -66,6 +72,22 @@ npx @shadowob/connector@latest update --target cc-connect --server-url https://s
 
 Existing model providers, plugins, projects, platforms, and unrelated keys are preserved.
 
+When Shadow's official model proxy is enabled on the server, daemon-created
+Buddy setup jobs also include an OpenAI-compatible provider. The connector
+writes it into OpenClaw/Hermes/cc-connect config so a newly installed desktop
+Buddy has a usable default LLM provider without asking the user for an API key.
+Manual runs can pass the same values explicitly:
+
+```bash
+npx @shadowob/connector@latest connect \
+  --target cc-connect \
+  --server-url https://shadowob.com \
+  --token buddy-token \
+  --model-provider-base-url https://shadowob.com/api/ai/v1 \
+  --model-provider-api-key model-proxy-token \
+  --model-provider-model deepseek-v4-flash
+```
+
 ## OpenClaw
 
 ```bash
@@ -85,6 +107,10 @@ openclaw gateway restart
 ```
 
 OpenClaw resolves the Buddy identity from the token and pulls channel policy dynamically from Shadow.
+
+Reference: OpenClaw's plugin documentation covers `openclaw plugins install`,
+managed plugin roots, and repair/update behavior:
+https://docs.openclaw.ai/plugins
 
 ## Hermes Agent
 
@@ -128,10 +154,15 @@ export SHADOW_HEARTBEAT_INTERVAL_SECONDS=30
 export SHADOW_SLASH_COMMANDS_JSON='[]'
 ```
 
+For the official model proxy, Hermes receives `model.provider: custom`,
+`model.base_url`, and `model.default` in `~/.hermes/config.yaml`. This follows
+Hermes' documented custom OpenAI-compatible endpoint shape:
+https://hermes-agent.nousresearch.com/docs/integrations/providers
+
 ## cc-connect
 
 The connector uses the ShadowOB-capable fork
-`buggyblues/cc-connect@63b5d59`. It does not install the official npm
+`buggyblues/cc-connect@f382563`. It does not install the official npm
 `cc-connect` package, because the npm package currently points to the upstream
 `chenhg5/cc-connect` release line.
 
@@ -151,8 +182,15 @@ With `--install`, the CLI first tries the fork's GitHub release asset matching
 the local OS/CPU and verifies its pinned SHA-256. If the fork release asset is
 missing or does not match, it pulls the pinned source archive, builds a `no_web`
 Go binary, caches it under
-`~/.shadowob/connector/cc-connect/63b5d59/bin/`, and starts that binary when
+`~/.shadowob/connector/cc-connect/f382563/bin/`, and starts that binary when
 `--start` is present.
+
+The fork is published as GitHub release
+https://github.com/buggyblues/cc-connect/releases/tag/v1.3.3-beta.7. It is
+merged from upstream `chenhg5/cc-connect` and preserves the ShadowOB platform.
+Upstream usage docs cover supported agents, providers, `/model`, `/dir`, voice,
+attachments, cron, daemon mode, and web management:
+https://github.com/chenhg5/cc-connect/blob/main/docs/usage.zh-CN.md
 
 Equivalent TOML:
 
@@ -167,6 +205,17 @@ type = "codex"
 
 [projects.agent.options]
 work_dir = "."
+provider = "shadow-official"
+model = "deepseek-v4-flash"
+
+[[projects.agent.providers]]
+name = "shadow-official"
+api_key = "model-proxy-token"
+base_url = "https://shadowob.com/api/ai/v1"
+model = "deepseek-v4-flash"
+
+[[projects.agent.providers.models]]
+model = "deepseek-v4-flash"
 
 [[projects.platforms]]
 type = "shadowob"

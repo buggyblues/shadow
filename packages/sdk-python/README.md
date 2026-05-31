@@ -49,6 +49,10 @@ if preview["nextAction"] == "purchase":
         idempotency_key="checkout-20260518-001",
     )
 
+# Paid files return a short-lived grant token for authorized downloads or previews.
+opened = client.open_paid_file("workspace-file-id")
+print(opened["viewerUrl"], opened.get("grantToken"))
+
 # External provider apps use an OAuth access token for app-scoped entitlements.
 app_client = ShadowClient("https://shadowob.com", token="oauth-access-token")
 access = app_client.get_oauth_commerce_entitlement_access(
