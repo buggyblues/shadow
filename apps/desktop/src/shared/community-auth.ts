@@ -2,7 +2,8 @@ export const DESKTOP_COMMUNITY_AUTH_REQUIRED = 'AUTH_REQUIRED'
 export const DESKTOP_COMMUNITY_AUTH_REQUIRED_EVENT = 'shadow:desktop-community-auth-required'
 
 const ACCESS_TOKEN_STORAGE_KEYS = ['accessToken', 'shadowAccessToken', 'shadow:accessToken']
-const ACCESS_TOKEN_CONTAINER_KEYS = [
+const REFRESH_TOKEN_STORAGE_KEYS = ['refreshToken', 'shadowRefreshToken', 'shadow:refreshToken']
+const TOKEN_CONTAINER_KEYS = [
   'auth',
   'auth-storage',
   'shadow-auth',
@@ -11,6 +12,11 @@ const ACCESS_TOKEN_CONTAINER_KEYS = [
 ]
 const MAX_TOKEN_SEARCH_DEPTH = 4
 const MAX_TOKEN_SEARCH_KEYS = 80
+
+export type CommunityAuthTokens = {
+  accessToken: string
+  refreshToken: string
+}
 
 export class DesktopCommunityAuthRequiredError extends Error {
   readonly code = DESKTOP_COMMUNITY_AUTH_REQUIRED
@@ -44,13 +50,17 @@ export function normalizeCommunityAccessToken(token: unknown): string {
   return typeof token === 'string' ? token.trim() : ''
 }
 
-function extractTokenFromValue(value: unknown, depth = 0): string {
+function extractTokenFromValue(
+  value: unknown,
+  tokenKey: 'accessToken' | 'refreshToken',
+  depth = 0,
+): string {
   if (!value || depth > MAX_TOKEN_SEARCH_DEPTH) return ''
   if (typeof value === 'string') {
     const trimmed = value.trim()
     if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) return ''
     try {
-      return extractTokenFromValue(JSON.parse(trimmed) as unknown, depth + 1)
+      return extractTokenFromValue(JSON.parse(trimmed) as unknown, tokenKey, depth + 1)
     } catch {
       return ''
     }
@@ -59,42 +69,65 @@ function extractTokenFromValue(value: unknown, depth = 0): string {
 
   if (Array.isArray(value)) {
     for (const item of value.slice(0, MAX_TOKEN_SEARCH_KEYS)) {
-      const token = extractTokenFromValue(item, depth + 1)
+      const token = extractTokenFromValue(item, tokenKey, depth + 1)
       if (token) return token
     }
     return ''
   }
 
   const record = value as Record<string, unknown>
-  const directToken = normalizeCommunityAccessToken(record.accessToken)
+  const directToken = normalizeCommunityAccessToken(record[tokenKey])
   if (directToken) return directToken
 
   for (const item of Object.values(record).slice(0, MAX_TOKEN_SEARCH_KEYS)) {
-    const token = extractTokenFromValue(item, depth + 1)
+    const token = extractTokenFromValue(item, tokenKey, depth + 1)
     if (token) return token
   }
+  return ''
+}
+
+function readCommunityTokenFromStorage(
+  getItem: (key: string) => string | null | undefined,
+  storageKeys: string[],
+  tokenKey: 'accessToken' | 'refreshToken',
+): string {
+  for (const key of storageKeys) {
+    const token = normalizeCommunityAccessToken(getItem(key))
+    if (token) return token
+  }
+
+  for (const key of TOKEN_CONTAINER_KEYS) {
+    const token = extractTokenFromValue(getItem(key), tokenKey)
+    if (token) return token
+  }
+
   return ''
 }
 
 export function readCommunityAccessTokenFromStorage(
   getItem: (key: string) => string | null | undefined,
 ): string {
-  for (const key of ACCESS_TOKEN_STORAGE_KEYS) {
-    const token = normalizeCommunityAccessToken(getItem(key))
-    if (token) return token
-  }
-
-  for (const key of ACCESS_TOKEN_CONTAINER_KEYS) {
-    const token = extractTokenFromValue(getItem(key))
-    if (token) return token
-  }
-
-  return ''
+  return readCommunityTokenFromStorage(getItem, ACCESS_TOKEN_STORAGE_KEYS, 'accessToken')
 }
 
-export function readCommunityAccessTokenFromStorageRecord(
-  entries: Iterable<readonly [string, unknown]>,
+export function readCommunityRefreshTokenFromStorage(
+  getItem: (key: string) => string | null | undefined,
 ): string {
+  return readCommunityTokenFromStorage(getItem, REFRESH_TOKEN_STORAGE_KEYS, 'refreshToken')
+}
+
+export function readCommunityAuthTokensFromStorage(
+  getItem: (key: string) => string | null | undefined,
+): CommunityAuthTokens {
+  return {
+    accessToken: readCommunityAccessTokenFromStorage(getItem),
+    refreshToken: readCommunityRefreshTokenFromStorage(getItem),
+  }
+}
+
+export function readCommunityAuthTokensFromStorageRecord(
+  entries: Iterable<readonly [string, unknown]>,
+): CommunityAuthTokens {
   const byKey = new Map<string, unknown>()
   let count = 0
   for (const [key, value] of entries) {
@@ -107,13 +140,22 @@ export function readCommunityAccessTokenFromStorageRecord(
     const value = byKey.get(key)
     return typeof value === 'string' ? value : null
   })
-  if (directToken) return directToken
-
-  for (const value of byKey.values()) {
-    const token = extractTokenFromValue(value)
-    if (token) return token
+  const directRefreshToken = readCommunityRefreshTokenFromStorage((key) => {
+    const value = byKey.get(key)
+    return typeof value === 'string' ? value : null
+  })
+  if (directToken || directRefreshToken) {
+    return { accessToken: directToken, refreshToken: directRefreshToken }
   }
-  return ''
+
+  let accessToken = ''
+  let refreshToken = ''
+  for (const value of byKey.values()) {
+    accessToken ||= extractTokenFromValue(value, 'accessToken')
+    refreshToken ||= extractTokenFromValue(value, 'refreshToken')
+    if (accessToken && refreshToken) break
+  }
+  return { accessToken, refreshToken }
 }
 
 export function communityAccessTokenFromAuthorizationHeader(header: unknown): string {
@@ -122,19 +164,20 @@ export function communityAccessTokenFromAuthorizationHeader(header: unknown): st
   return normalizeCommunityAccessToken(match?.[1])
 }
 
-export const COMMUNITY_ACCESS_TOKEN_FROM_STORAGE_SCRIPT = `(() => {
-  const directKeys = ${JSON.stringify(ACCESS_TOKEN_STORAGE_KEYS)}
-  const containerKeys = ${JSON.stringify(ACCESS_TOKEN_CONTAINER_KEYS)}
+export const COMMUNITY_AUTH_TOKENS_FROM_STORAGE_SCRIPT = `(() => {
+  const accessKeys = ${JSON.stringify(ACCESS_TOKEN_STORAGE_KEYS)}
+  const refreshKeys = ${JSON.stringify(REFRESH_TOKEN_STORAGE_KEYS)}
+  const containerKeys = ${JSON.stringify(TOKEN_CONTAINER_KEYS)}
   const maxDepth = ${MAX_TOKEN_SEARCH_DEPTH}
   const maxKeys = ${MAX_TOKEN_SEARCH_KEYS}
   const normalize = (value) => (typeof value === 'string' ? value.trim() : '')
-  const extract = (value, depth = 0) => {
+  const extract = (value, tokenKey, depth = 0) => {
     if (!value || depth > maxDepth) return ''
     if (typeof value === 'string') {
       const trimmed = value.trim()
       if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) return ''
       try {
-        return extract(JSON.parse(trimmed), depth + 1)
+        return extract(JSON.parse(trimmed), tokenKey, depth + 1)
       } catch {
         return ''
       }
@@ -142,36 +185,47 @@ export const COMMUNITY_ACCESS_TOKEN_FROM_STORAGE_SCRIPT = `(() => {
     if (typeof value !== 'object') return ''
     if (Array.isArray(value)) {
       for (const item of value.slice(0, maxKeys)) {
-        const token = extract(item, depth + 1)
+        const token = extract(item, tokenKey, depth + 1)
         if (token) return token
       }
       return ''
     }
-    const direct = normalize(value.accessToken)
+    const direct = normalize(value[tokenKey])
     if (direct) return direct
     for (const item of Object.values(value).slice(0, maxKeys)) {
-      const token = extract(item, depth + 1)
+      const token = extract(item, tokenKey, depth + 1)
+      if (token) return token
+    }
+    return ''
+  }
+  const readToken = (keys, tokenKey) => {
+    for (const key of keys) {
+      const token = normalize(localStorage.getItem(key))
+      if (token) return token
+    }
+    for (const key of containerKeys) {
+      const token = extract(localStorage.getItem(key), tokenKey)
+      if (token) return token
+    }
+    for (let index = 0; index < Math.min(localStorage.length, maxKeys); index += 1) {
+      const key = localStorage.key(index)
+      const token = key ? extract(localStorage.getItem(key), tokenKey) : ''
       if (token) return token
     }
     return ''
   }
 
   try {
-    for (const key of directKeys) {
-      const token = normalize(localStorage.getItem(key))
-      if (token) return token
-    }
-    for (const key of containerKeys) {
-      const token = extract(localStorage.getItem(key))
-      if (token) return token
-    }
-    for (let index = 0; index < Math.min(localStorage.length, maxKeys); index += 1) {
-      const key = localStorage.key(index)
-      const token = key ? extract(localStorage.getItem(key)) : ''
-      if (token) return token
+    return {
+      accessToken: readToken(accessKeys, 'accessToken'),
+      refreshToken: readToken(refreshKeys, 'refreshToken'),
     }
   } catch {
-    return ''
+    return { accessToken: '', refreshToken: '' }
   }
-  return ''
+})()`
+
+export const COMMUNITY_ACCESS_TOKEN_FROM_STORAGE_SCRIPT = `(() => {
+  const tokens = ${COMMUNITY_AUTH_TOKENS_FROM_STORAGE_SCRIPT}
+  return tokens.accessToken || ''
 })()`

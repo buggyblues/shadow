@@ -14,7 +14,7 @@ import { basename, dirname, join, normalize, relative, sep } from 'node:path'
 import { app, dialog, ipcMain, nativeImage, net } from 'electron'
 import JSZip from 'jszip'
 import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../shared/community-auth'
-import { forgetCommunityAccessToken, readCommunityAccessToken } from './connector-daemon'
+import { fetchCommunityWithAuth, forgetCommunityAccessToken } from './connector-daemon'
 import {
   broadcastDesktopSettings,
   type DesktopPetAssetPack,
@@ -453,21 +453,14 @@ async function importPetPackFromArchive(
 }
 
 async function fetchMarketplaceJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await readCommunityAccessToken()
-  if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-  const response = await net.fetch(`${getDesktopServerBaseUrl()}${path}`, {
+  const response = await fetchCommunityWithAuth(path, {
     ...init,
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
     },
   })
   const text = await response.text()
-  if (response.status === 401 || response.status === 403) {
-    forgetCommunityAccessToken(token)
-    throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-  }
   if (!response.ok) throw new Error(text || `REQUEST_FAILED_${response.status}`)
   return (text ? JSON.parse(text) : null) as T
 }

@@ -1,6 +1,5 @@
-import { app, ipcMain, Notification, net } from 'electron'
-import { readCommunityAccessToken } from './connector-daemon'
-import { getDesktopServerBaseUrl } from './desktop-settings'
+import { app, ipcMain, Notification } from 'electron'
+import { fetchCommunityWithAuth } from './connector-daemon'
 import { setTrayAttention } from './tray'
 import { sendPetShortcut, showCommunityWindow } from './window'
 
@@ -28,10 +27,7 @@ function withMessageSearch(path: string, messageId?: string): string {
 }
 
 async function communityFetchJson<T>(path: string): Promise<T> {
-  const token = await readCommunityAccessToken()
-  const response = await net.fetch(`${getDesktopServerBaseUrl()}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  })
+  const response = await fetchCommunityWithAuth(path)
   if (!response.ok) throw new Error(`REQUEST_FAILED_${response.status}`)
   return (await response.json()) as T
 }

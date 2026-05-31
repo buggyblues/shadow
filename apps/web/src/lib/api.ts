@@ -92,7 +92,7 @@ async function refreshAccessToken(): Promise<string | null> {
     const data = (await res.json()) as { accessToken: string; refreshToken: string }
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
-    syncDesktopCommunityAuthToken(data.accessToken)
+    syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken)
     return data.accessToken
   } catch {
     return null

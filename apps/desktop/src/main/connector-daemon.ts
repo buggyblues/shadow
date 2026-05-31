@@ -4,8 +4,10 @@ import { hostname } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { app, BrowserWindow, ipcMain, net } from 'electron'
 import {
-  COMMUNITY_ACCESS_TOKEN_FROM_STORAGE_SCRIPT,
+  COMMUNITY_AUTH_TOKENS_FROM_STORAGE_SCRIPT,
+  type CommunityAuthTokens,
   communityAccessTokenFromAuthorizationHeader,
+  DESKTOP_COMMUNITY_AUTH_REQUIRED,
   normalizeCommunityAccessToken,
 } from '../shared/community-auth'
 import {
@@ -103,6 +105,8 @@ const AUTH_POLL_INTERVAL_MS = 800
 const AUTH_TIMEOUT_MS = 120_000
 const HOSTED_COMMUNITY_ORIGIN = 'https://shadowob.com'
 let lastCommunityAccessToken = ''
+let lastCommunityRefreshToken = ''
+let communityTokenRefreshPromise: Promise<string> | null = null
 
 function connectorRoot(): string {
   const packagedRoot = process.resourcesPath
@@ -215,34 +219,55 @@ function connectorBootstrapOrigins(settings: DesktopRuntimeSettings): string[] {
   )
 }
 
-async function readAccessTokenFromWindow(win: BrowserWindow | null): Promise<string> {
-  if (!win || win.isDestroyed() || win.webContents.isDestroyed() || win.webContents.isLoading()) {
-    return ''
-  }
-  try {
-    const token = (await win.webContents.executeJavaScript(
-      COMMUNITY_ACCESS_TOKEN_FROM_STORAGE_SCRIPT,
-      true,
-    )) as unknown
-    const normalizedToken = normalizeCommunityAccessToken(token)
-    if (normalizedToken) lastCommunityAccessToken = normalizedToken
-    return normalizedToken
-  } catch {
-    return ''
+function normalizeCommunityAuthTokens(tokens: unknown): CommunityAuthTokens {
+  const record = tokens && typeof tokens === 'object' ? (tokens as Record<string, unknown>) : {}
+  return {
+    accessToken: normalizeCommunityAccessToken(record.accessToken),
+    refreshToken: normalizeCommunityAccessToken(record.refreshToken),
   }
 }
 
-async function readAccessTokenFromOpenWindows(): Promise<string> {
-  for (const win of BrowserWindow.getAllWindows()) {
-    const token = await readAccessTokenFromWindow(win)
-    if (token) return token
+function rememberCommunityAuthTokens(tokens: Partial<CommunityAuthTokens>): void {
+  const accessToken = normalizeCommunityAccessToken(tokens.accessToken)
+  const refreshToken = normalizeCommunityAccessToken(tokens.refreshToken)
+  if (accessToken) lastCommunityAccessToken = accessToken
+  if (refreshToken) lastCommunityRefreshToken = refreshToken
+}
+
+async function readAuthTokensFromWindow(win: BrowserWindow | null): Promise<CommunityAuthTokens> {
+  if (!win || win.isDestroyed() || win.webContents.isDestroyed() || win.webContents.isLoading()) {
+    return { accessToken: '', refreshToken: '' }
   }
-  return ''
+  try {
+    const tokens = (await win.webContents.executeJavaScript(
+      COMMUNITY_AUTH_TOKENS_FROM_STORAGE_SCRIPT,
+      true,
+    )) as unknown
+    const normalizedTokens = normalizeCommunityAuthTokens(tokens)
+    rememberCommunityAuthTokens(normalizedTokens)
+    return normalizedTokens
+  } catch {
+    return { accessToken: '', refreshToken: '' }
+  }
+}
+
+async function readAuthTokensFromOpenWindows(): Promise<CommunityAuthTokens> {
+  let refreshToken = ''
+  for (const win of BrowserWindow.getAllWindows()) {
+    const tokens = await readAuthTokensFromWindow(win)
+    if (tokens.accessToken) return tokens
+    refreshToken ||= tokens.refreshToken
+  }
+  return { accessToken: '', refreshToken }
 }
 
 export function rememberCommunityAccessToken(token: string | null | undefined): void {
   const normalizedToken = normalizeCommunityAccessToken(token)
   if (normalizedToken) lastCommunityAccessToken = normalizedToken
+}
+
+export function rememberCommunityAuthSnapshot(tokens: Partial<CommunityAuthTokens>): void {
+  rememberCommunityAuthTokens(tokens)
 }
 
 export function rememberCommunityAuthorizationHeader(header: string | null | undefined): void {
@@ -256,12 +281,48 @@ export function forgetCommunityAccessToken(token?: string | null): void {
   }
 }
 
+export function forgetCommunityAuthTokens(token?: string | null): void {
+  forgetCommunityAccessToken(token)
+  if (!token || !lastCommunityAccessToken) lastCommunityRefreshToken = ''
+}
+
+export async function readCommunityAuthTokens(): Promise<CommunityAuthTokens> {
+  const mainTokens = await readAuthTokensFromWindow(getMainWindow())
+  if (mainTokens.accessToken) {
+    return {
+      accessToken: mainTokens.accessToken,
+      refreshToken: mainTokens.refreshToken || lastCommunityRefreshToken,
+    }
+  }
+
+  const authWindowTokens = await readAuthTokensFromWindow(getConnectorAuthWindow())
+  if (authWindowTokens.accessToken) {
+    return {
+      accessToken: authWindowTokens.accessToken,
+      refreshToken: authWindowTokens.refreshToken || lastCommunityRefreshToken,
+    }
+  }
+
+  const openWindowTokens = await readAuthTokensFromOpenWindows()
+  if (openWindowTokens.accessToken) {
+    return {
+      accessToken: openWindowTokens.accessToken,
+      refreshToken: openWindowTokens.refreshToken || lastCommunityRefreshToken,
+    }
+  }
+
+  return {
+    accessToken: lastCommunityAccessToken,
+    refreshToken:
+      mainTokens.refreshToken ||
+      authWindowTokens.refreshToken ||
+      openWindowTokens.refreshToken ||
+      lastCommunityRefreshToken,
+  }
+}
+
 export async function readCommunityAccessToken(): Promise<string> {
-  const token =
-    (await readAccessTokenFromWindow(getMainWindow())) ||
-    (await readAccessTokenFromWindow(getConnectorAuthWindow())) ||
-    (await readAccessTokenFromOpenWindows())
-  return token || lastCommunityAccessToken
+  return (await readCommunityAuthTokens()).accessToken
 }
 
 function communityApiUrl(settings: DesktopRuntimeSettings, path: string): string {
@@ -269,20 +330,135 @@ function communityApiUrl(settings: DesktopRuntimeSettings, path: string): string
   return `${origin}${path}`
 }
 
-async function fetchCommunityJson<T>(path: string, options: RequestInit = {}): Promise<T | null> {
-  const token = await readCommunityAccessToken()
-  if (!token) return null
-  const settings = readDesktopSettings()
-  const response = await net.fetch(communityApiUrl(settings, path), {
+function shouldWriteCommunityAuthToWindow(win: BrowserWindow): boolean {
+  try {
+    const url = new URL(win.webContents.getURL())
+    return url.protocol === 'app:' || url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+async function writeCommunityAuthTokensToWindow(
+  win: BrowserWindow,
+  tokens: Partial<CommunityAuthTokens>,
+): Promise<void> {
+  if (
+    win.isDestroyed() ||
+    win.webContents.isDestroyed() ||
+    win.webContents.isLoading() ||
+    !shouldWriteCommunityAuthToWindow(win)
+  ) {
+    return
+  }
+  const accessToken = normalizeCommunityAccessToken(tokens.accessToken)
+  const refreshToken = normalizeCommunityAccessToken(tokens.refreshToken)
+  const script = `(() => {
+    try {
+      const accessToken = ${JSON.stringify(accessToken)}
+      const refreshToken = ${JSON.stringify(refreshToken)}
+      if (accessToken) localStorage.setItem('accessToken', accessToken)
+      else localStorage.removeItem('accessToken')
+      if (refreshToken) localStorage.setItem('refreshToken', refreshToken)
+      else localStorage.removeItem('refreshToken')
+    } catch {}
+  })()`
+  await win.webContents.executeJavaScript(script, true).catch(() => undefined)
+}
+
+async function writeCommunityAuthTokensToOpenWindows(
+  tokens: Partial<CommunityAuthTokens>,
+): Promise<void> {
+  await Promise.all(
+    BrowserWindow.getAllWindows().map((win) => writeCommunityAuthTokensToWindow(win, tokens)),
+  )
+}
+
+async function refreshCommunityAccessTokenOnce(): Promise<string> {
+  const tokens = await readCommunityAuthTokens()
+  if (!tokens.refreshToken) return ''
+
+  const response = await net.fetch(communityApiUrl(readDesktopSettings(), '/api/auth/refresh'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+  })
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      forgetCommunityAuthTokens()
+      await writeCommunityAuthTokensToOpenWindows({ accessToken: '', refreshToken: '' })
+    }
+    return ''
+  }
+
+  const payload = normalizeCommunityAuthTokens(await response.json().catch(() => ({})))
+  if (!payload.accessToken) return ''
+  rememberCommunityAuthTokens(payload)
+  await writeCommunityAuthTokensToOpenWindows(payload)
+  return payload.accessToken
+}
+
+export async function refreshCommunityAccessToken(): Promise<string> {
+  communityTokenRefreshPromise ??= refreshCommunityAccessTokenOnce().finally(() => {
+    communityTokenRefreshPromise = null
+  })
+  return communityTokenRefreshPromise
+}
+
+function withCommunityAuthorization(
+  options: RequestInit,
+  token: string,
+): RequestInit & { headers: Record<string, string> } {
+  return {
     ...options,
     headers: {
-      Authorization: `Bearer ${token}`,
       ...((options.headers as Record<string, string> | undefined) ?? {}),
+      Authorization: `Bearer ${token}`,
     },
+  }
+}
+
+export async function fetchCommunityUrlWithAuth(
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  let token = await readCommunityAccessToken()
+  if (!token) token = await refreshCommunityAccessToken()
+  if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
+
+  let response = await net.fetch(url, withCommunityAuthorization(options, token))
+  if (response.status === 401 || response.status === 403) {
+    const refreshedToken = await refreshCommunityAccessToken()
+    if (refreshedToken && refreshedToken !== token) {
+      token = refreshedToken
+      response = await net.fetch(url, withCommunityAuthorization(options, token))
+    }
+  }
+  if (response.status === 401 || response.status === 403) {
+    forgetCommunityAuthTokens(token)
+    await writeCommunityAuthTokensToOpenWindows({ accessToken: '', refreshToken: '' })
+    throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
+  }
+  return response
+}
+
+export function fetchCommunityWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
+  return fetchCommunityUrlWithAuth(communityApiUrl(readDesktopSettings(), path), options)
+}
+
+async function fetchCommunityJson<T>(path: string, options: RequestInit = {}): Promise<T | null> {
+  const response = await fetchCommunityWithAuth(path, options).catch((error: unknown) => {
+    if (error instanceof Error && error.message.includes(DESKTOP_COMMUNITY_AUTH_REQUIRED)) {
+      return null
+    }
+    throw error
   })
+  if (!response) return null
   if (!response.ok) {
     const body = await response.text().catch(() => '')
-    if (response.status === 401 || response.status === 403) forgetCommunityAccessToken(token)
     throw new Error(`Community API ${path} failed (${response.status})${body ? `: ${body}` : ''}`)
   }
   return (await response.json()) as T
@@ -391,6 +567,13 @@ async function bootstrapConnectorApiKey(
 ): Promise<{ apiKey: string; serverBaseUrl: string }> {
   let token = await waitForCommunityAccessToken()
   let bootstrap = await requestConnectorBootstrap(settings, token)
+  if (bootstrap.response.status === 401 || bootstrap.response.status === 403) {
+    const refreshedToken = await refreshCommunityAccessToken()
+    if (refreshedToken && refreshedToken !== token) {
+      token = refreshedToken
+      bootstrap = await requestConnectorBootstrap(settings, refreshedToken)
+    }
+  }
   if (bootstrap.response.status === 401 || bootstrap.response.status === 403) {
     showConnectorAuthWindow()
     const deadline = Date.now() + AUTH_TIMEOUT_MS

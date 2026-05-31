@@ -13,10 +13,7 @@ import {
   session,
   shell,
 } from 'electron'
-import {
-  DESKTOP_COMMUNITY_AUTH_REQUIRED,
-  normalizeCommunityAccessToken,
-} from '../shared/community-auth'
+import { normalizeCommunityAccessToken } from '../shared/community-auth'
 
 // Suppress EPIPE errors that occur when a child process dies while the main
 // process writes to its stdio pipe (e.g. gateway process exit).
@@ -27,10 +24,12 @@ process.on('uncaughtException', (err) => {
 
 import { setupAutoUpdater } from './auto-updater'
 import {
-  forgetCommunityAccessToken,
+  fetchCommunityUrlWithAuth,
+  fetchCommunityWithAuth,
+  forgetCommunityAuthTokens,
   readCommunityAccessToken,
-  rememberCommunityAccessToken,
   rememberCommunityAuthorizationHeader,
+  rememberCommunityAuthSnapshot,
   setupConnectorDaemonHandlers,
   startConnectorDaemonIfEnabled,
   stopConnectorDaemon,
@@ -261,9 +260,8 @@ function isCommunityAuthSnapshotSource(sourceUrl: string): boolean {
   try {
     const url = new URL(sourceUrl)
     if (url.protocol === 'app:' && url.hostname === 'shadow') return true
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
-    const serverOrigin = new URL(getDesktopServerBaseUrl()).origin
-    return url.origin === serverOrigin
+    if (url.protocol === 'http:' || url.protocol === 'https:') return true
+    return false
   } catch {
     return false
   }
@@ -292,14 +290,9 @@ async function fetchReaderResource(rawUrl: string, title: string): Promise<Reade
     contentType = inferContentType(url)
     fileName = sanitizeFileName(title || basename(filePath))
   } else {
-    const headers = new Headers({ Accept: '*/*' })
-    const token = await readCommunityAccessToken()
-    if (token && isTrustedCommunityUrl(url)) headers.set('Authorization', `Bearer ${token}`)
-    const response = await net.fetch(url.toString(), { headers })
-    if (response.status === 401 || response.status === 403) {
-      forgetCommunityAccessToken(token)
-      throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-    }
+    const response = isTrustedCommunityUrl(url)
+      ? await fetchCommunityUrlWithAuth(url.toString(), { headers: { Accept: '*/*' } })
+      : await net.fetch(url.toString(), { headers: { Accept: '*/*' } })
     if (!response.ok) throw new Error(`READER_FETCH_FAILED_${response.status}`)
     buffer = Buffer.from(await response.arrayBuffer())
     contentType = inferContentType(url, response.headers.get('content-type') ?? '')
@@ -329,24 +322,11 @@ async function fetchReaderResource(rawUrl: string, title: string): Promise<Reade
 }
 
 async function resolveReaderAttachmentUrl(attachmentId: string): Promise<string> {
-  const token = await readCommunityAccessToken()
-  if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-  const response = await net.fetch(
-    `${getDesktopServerBaseUrl()}/api/attachments/${encodeURIComponent(
-      attachmentId,
-    )}/media-url?disposition=inline`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    },
+  const response = await fetchCommunityWithAuth(
+    `/api/attachments/${encodeURIComponent(attachmentId)}/media-url?disposition=inline`,
+    { headers: { 'Content-Type': 'application/json' } },
   )
   const text = await response.text()
-  if (response.status === 401 || response.status === 403) {
-    forgetCommunityAccessToken(token)
-    throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-  }
   if (!response.ok) throw new Error(text || `READER_ATTACHMENT_URL_FAILED_${response.status}`)
   const payload = text ? (JSON.parse(text) as { url?: unknown }) : {}
   if (typeof payload.url !== 'string' || !payload.url)
@@ -618,16 +598,18 @@ app.on('ready', async () => {
       event,
       payload: {
         accessToken?: unknown
+        refreshToken?: unknown
         sourceUrl?: unknown
       },
     ) => {
       const token = normalizeCommunityAccessToken(payload?.accessToken)
+      const refreshToken = normalizeCommunityAccessToken(payload?.refreshToken)
       const sourceUrl =
         typeof payload?.sourceUrl === 'string' ? payload.sourceUrl : event.sender.getURL()
-      if (token) {
-        rememberCommunityAccessToken(token)
+      if (token || refreshToken) {
+        rememberCommunityAuthSnapshot({ accessToken: token, refreshToken })
       } else if (isCommunityAuthSnapshotSource(sourceUrl)) {
-        forgetCommunityAccessToken()
+        forgetCommunityAuthTokens()
       }
     },
   )
@@ -643,23 +625,16 @@ app.on('ready', async () => {
         headers?: Record<string, string>
       },
     ) => {
-      const token = await readCommunityAccessToken()
-      if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
       const path = normalizeCommunityApiPath(input.path)
-      const response = await net.fetch(`${getDesktopServerBaseUrl()}${path}`, {
+      const response = await fetchCommunityWithAuth(path, {
         method: input.method ?? 'GET',
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           ...(input.headers ?? {}),
         },
         body: input.body === undefined ? undefined : JSON.stringify(input.body),
       })
       const text = await response.text()
-      if (response.status === 401 || response.status === 403) {
-        forgetCommunityAccessToken(token)
-        throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-      }
       if (!response.ok) throw new Error(text || `REQUEST_FAILED_${response.status}`)
       return text ? (JSON.parse(text) as unknown) : null
     },
@@ -673,22 +648,15 @@ app.on('ready', async () => {
         body: Record<string, unknown>
       },
     ) => {
-      const token = await readCommunityAccessToken()
-      if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-      const response = await net.fetch(`${getDesktopServerBaseUrl()}/api/ai/v1/chat/completions`, {
+      const response = await fetchCommunityWithAuth('/api/ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           Accept: 'text/event-stream',
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ ...input.body, stream: true }),
       })
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          forgetCommunityAccessToken(token)
-          throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-        }
         const text = await response.text().catch(() => '')
         throw new Error(text || `REQUEST_FAILED_${response.status}`)
       }
