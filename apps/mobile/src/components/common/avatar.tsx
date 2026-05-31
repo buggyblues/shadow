@@ -27,7 +27,7 @@ export function Avatar({
 
   const resolvedUri = getImageUrl(uri)
   const fallbackSeed = userId?.trim() || name.trim() || 'default'
-  const src = resolvedUri || getCatAvatarByUserId(fallbackSeed)
+  const src = resolvedUri || (shape === 'circle' ? getCatAvatarByUserId(fallbackSeed) : null)
   const dotSize = Math.max(10, Math.round(size * 0.28))
   const statusColor = getStatusColor(colors, status)
   const borderRadius = shape === 'server' ? radius['2lg'] : size / 2
@@ -42,7 +42,7 @@ export function Avatar({
           height: size,
           borderRadius,
           backgroundColor: shape === 'server' ? colors.surface : colors.inputBackground,
-          borderColor: shape === 'server' ? colors.primary : colors.border,
+          borderColor: colors.border,
         },
       ]}
     >
@@ -54,8 +54,24 @@ export function Avatar({
           transition={200}
         />
       ) : (
-        <View style={[styles.fallback, { backgroundColor: colors.primary, borderRadius }]}>
-          <Text style={[styles.initials, { fontSize: size * 0.4, color: palette.white }]}>
+        <View
+          style={[
+            styles.fallback,
+            {
+              backgroundColor: shape === 'server' ? colors.inputBackground : colors.primary,
+              borderRadius,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.initials,
+              {
+                fontSize: Math.round(size * 0.4),
+                color: shape === 'server' ? colors.text : palette.white,
+              },
+            ]}
+          >
             {initials}
           </Text>
         </View>

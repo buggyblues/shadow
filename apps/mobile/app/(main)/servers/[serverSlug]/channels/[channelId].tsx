@@ -79,7 +79,9 @@ import { VoiceChannelPanel } from '../../../../../src/components/voice/voice-cha
 import { useSocketEvent } from '../../../../../src/hooks/use-socket'
 import { useVoiceInput } from '../../../../../src/hooks/use-voice-input'
 import { fetchApi } from '../../../../../src/lib/api'
+import { selectionHaptic, successHaptic } from '../../../../../src/lib/haptics'
 import { setLastChannel } from '../../../../../src/lib/last-channel'
+import { animateNextLayout } from '../../../../../src/lib/layout-animation'
 import {
   getSocket,
   joinThread,
@@ -2433,6 +2435,8 @@ export default function ChannelViewScreen() {
     (suggestion: MentionSuggestion) => {
       const match = inputText.match(/(?:^|\s)([@#])([^\s@#]{0,128})$/u)
       if (!match || match.index === undefined) return
+      selectionHaptic()
+      animateNextLayout()
 
       const prefix = match[0].startsWith(' ') ? ' ' : ''
       const start = match.index + prefix.length
@@ -2459,6 +2463,8 @@ export default function ChannelViewScreen() {
     (command: SlashCommand) => {
       const match = inputText.match(/(?:^|\s)\/([^\s/]{0,64})$/u)
       if (!match || match.index === undefined) return
+      selectionHaptic()
+      animateNextLayout()
 
       const prefix = match[0].startsWith(' ') ? ' ' : ''
       const start = match.index + prefix.length
@@ -2474,10 +2480,13 @@ export default function ChannelViewScreen() {
   )
 
   const handleReply = useCallback((msg: Message) => {
+    selectionHaptic()
+    animateNextLayout()
     setReplyTo(msg)
   }, [])
 
   const handleToggleSelect = useCallback((messageId: string) => {
+    selectionHaptic()
     setSelectedMessageIds((prev) => {
       const next = new Set(prev)
       if (next.has(messageId)) next.delete(messageId)
@@ -2487,6 +2496,8 @@ export default function ChannelViewScreen() {
   }, [])
 
   const handleEnterSelectionMode = useCallback((messageId: string) => {
+    selectionHaptic()
+    animateNextLayout()
     setSelectionMode(true)
     setSelectedMessageIds(new Set([messageId]))
     setSelectionAnchorId(messageId)
@@ -2504,6 +2515,7 @@ export default function ChannelViewScreen() {
 
   const handleSelectRangeTo = useCallback(
     (messageId: string) => {
+      selectionHaptic()
       const anchorId = selectionAnchorId ?? messageId
       const anchorIndex = messages.findIndex((message) => message.id === anchorId)
       const targetIndex = messages.findIndex((message) => message.id === messageId)
@@ -2539,6 +2551,8 @@ export default function ChannelViewScreen() {
       })
       .join('\n\n---\n\n')
     await Clipboard.setStringAsync(md)
+    successHaptic()
+    animateNextLayout()
     handleExitSelectionMode()
   }, [messages, selectedMessageIds, handleExitSelectionMode])
 
@@ -2595,7 +2609,7 @@ export default function ChannelViewScreen() {
         <View
           style={
             highlightMessageId === item.data.id
-              ? { backgroundColor: colors.surfaceHover, borderRadius: radius.md }
+              ? { backgroundColor: colors.surfaceHover }
               : undefined
           }
         >
@@ -2693,7 +2707,10 @@ export default function ChannelViewScreen() {
             icon={Send}
             loading={requestAccessMutation.isPending}
             disabled={isPending || requestAccessMutation.isPending}
-            onPress={() => requestAccessMutation.mutate()}
+            onPress={() => {
+              selectionHaptic()
+              requestAccessMutation.mutate()
+            }}
             style={styles.accessGateButton}
           >
             {isPending ? t('channel.requestPending') : t('channel.requestAccess')}
@@ -2725,6 +2742,7 @@ export default function ChannelViewScreen() {
               icon={Users}
               iconColor={colors.textMuted}
               onPress={() => {
+                selectionHaptic()
                 if (serverSlug) {
                   router.push(
                     `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
@@ -2739,6 +2757,8 @@ export default function ChannelViewScreen() {
               icon={Search}
               iconColor={colors.textMuted}
               onPress={() => {
+                selectionHaptic()
+                animateNextLayout()
                 setShowSearchPanel(true)
                 setTimeout(() => searchInputRef.current?.focus(), 300)
               }}
@@ -2802,7 +2822,10 @@ export default function ChannelViewScreen() {
           icon={ChevronDown}
           iconColor={colors.textSecondary}
           style={styles.scrollBottomFab}
-          onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
+          onPress={() => {
+            selectionHaptic()
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
+          }}
         />
       )}
 
@@ -2844,7 +2867,7 @@ export default function ChannelViewScreen() {
               onPress={() => insertSlashCommand(command)}
             >
               <View style={[styles.mentionIcon, { backgroundColor: colors.inputBackground }]}>
-                <CommandIcon size={15} color={colors.primary} />
+                <CommandIcon size={iconSize.md} color={colors.primary} />
               </View>
               <View style={styles.slashCommandBody}>
                 <Text style={[styles.mentionName, { color: colors.text }]} numberOfLines={1}>
@@ -2858,7 +2881,7 @@ export default function ChannelViewScreen() {
                 </Text>
               </View>
               <View style={[styles.mentionBotBadge, { backgroundColor: colors.inputBackground }]}>
-                <Bot size={11} color={colors.primary} />
+                <Bot size={iconSize.xs} color={colors.primary} />
                 <Text style={[styles.mentionBotText, { color: colors.primary }]} numberOfLines={1}>
                   {command.botDisplayName ?? command.botUsername}
                 </Text>
@@ -2895,9 +2918,9 @@ export default function ChannelViewScreen() {
               ) : (
                 <View style={[styles.mentionIcon, { backgroundColor: colors.inputBackground }]}>
                   {m.kind === 'channel' ? (
-                    <Hash size={15} color={colors.primary} />
+                    <Hash size={iconSize.md} color={colors.primary} />
                   ) : (
-                    <Users size={15} color={colors.primary} />
+                    <Users size={iconSize.md} color={colors.primary} />
                   )}
                 </View>
               )}
@@ -2936,7 +2959,15 @@ export default function ChannelViewScreen() {
           >
             {t('workspaceFmt_markdown')}
           </Button>
-          <Button variant="glass" size="sm" onPress={handleExitSelectionMode}>
+          <Button
+            variant="glass"
+            size="sm"
+            onPress={() => {
+              selectionHaptic()
+              animateNextLayout()
+              handleExitSelectionMode()
+            }}
+          >
             {t('common.cancel')}
           </Button>
         </GlassHeader>
@@ -3165,21 +3196,25 @@ export default function ChannelViewScreen() {
                 {serverSlug && (
                   <Pressable
                     onPress={() => {
+                      selectionHaptic()
                       Keyboard.dismiss()
                       setShowMemberList(false)
                       router.push(
                         `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}&autoInvite=1` as never,
                       )
                     }}
-                    hitSlop={8}
+                    hitSlop={spacing.sm}
                     style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
                   >
                     <UserPlus size={iconSize.md} color={colors.primary} />
                   </Pressable>
                 )}
                 <Pressable
-                  onPress={() => setShowMemberList(false)}
-                  hitSlop={8}
+                  onPress={() => {
+                    selectionHaptic()
+                    setShowMemberList(false)
+                  }}
+                  hitSlop={spacing.sm}
                   style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
                 >
                   <X size={iconSize.md} color={colors.textSecondary} />
@@ -3237,7 +3272,7 @@ export default function ChannelViewScreen() {
                           style={[
                             styles.memberRoleText,
                             {
-                              color: item.role === 'owner' ? colors.warning : colors.info,
+                              color: item.role === 'owner' ? colors.primary : colors.info,
                             },
                           ]}
                         >
@@ -3288,8 +3323,11 @@ export default function ChannelViewScreen() {
                 {t('member.inviteMembers')}
               </Text>
               <Pressable
-                onPress={() => setShowInvitePanel(false)}
-                hitSlop={8}
+                onPress={() => {
+                  selectionHaptic()
+                  setShowInvitePanel(false)
+                }}
+                hitSlop={spacing.sm}
                 style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
               >
                 <X size={iconSize.md} color={colors.textSecondary} />
@@ -3397,12 +3435,27 @@ export default function ChannelViewScreen() {
                 returnKeyType="search"
               />
               {searchQuery.length > 0 && (
-                <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                <Pressable
+                  onPress={() => {
+                    selectionHaptic()
+                    setSearchQuery('')
+                  }}
+                  hitSlop={spacing.sm}
+                >
                   <X size={iconSize.md} color={colors.textMuted} />
                 </Pressable>
               )}
             </InputValley>
-            <Button variant="ghost" size="sm" onPress={() => setShowSearchPanel(false)} hitSlop={8}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                selectionHaptic()
+                animateNextLayout()
+                setShowSearchPanel(false)
+              }}
+              hitSlop={spacing.sm}
+            >
               {t('common.cancel')}
             </Button>
           </GlassHeader>
@@ -3417,7 +3470,11 @@ export default function ChannelViewScreen() {
                   borderBottomWidth: border.active,
                 },
               ]}
-              onPress={() => setSearchTab('messages')}
+              onPress={() => {
+                selectionHaptic()
+                animateNextLayout()
+                setSearchTab('messages')
+              }}
             >
               <MessageSquare
                 size={iconSize.sm}
@@ -3440,7 +3497,11 @@ export default function ChannelViewScreen() {
                   borderBottomWidth: border.active,
                 },
               ]}
-              onPress={() => setSearchTab('members')}
+              onPress={() => {
+                selectionHaptic()
+                animateNextLayout()
+                setSearchTab('members')
+              }}
             >
               <Users
                 size={iconSize.sm}
@@ -3466,7 +3527,10 @@ export default function ChannelViewScreen() {
                   label={t('chat.hasFile')}
                   icon={File}
                   active={searchHasAttachment}
-                  onPress={() => setSearchHasAttachment(!searchHasAttachment)}
+                  onPress={() => {
+                    selectionHaptic()
+                    setSearchHasAttachment(!searchHasAttachment)
+                  }}
                 />
                 {searchFromUser && (
                   <ChipButton
@@ -3476,7 +3540,10 @@ export default function ChannelViewScreen() {
                       channelMembers.find((m) => m.user.id === searchFromUser)?.user.displayName ??
                       '...'
                     }`}
-                    onPress={() => setSearchFromUser(null)}
+                    onPress={() => {
+                      selectionHaptic()
+                      setSearchFromUser(null)
+                    }}
                   />
                 )}
               </View>
@@ -3491,7 +3558,10 @@ export default function ChannelViewScreen() {
                     <MenuItem
                       key={m.user.id}
                       title={m.user.displayName || m.user.username}
-                      onPress={() => setSearchFromUser(m.user.id)}
+                      onPress={() => {
+                        selectionHaptic()
+                        setSearchFromUser(m.user.id)
+                      }}
                       right={
                         <Avatar
                           uri={m.user.avatarUrl}
@@ -3538,7 +3608,11 @@ export default function ChannelViewScreen() {
                     return (
                       <Pressable
                         style={[styles.searchResultCard, { backgroundColor: colors.surface }]}
-                        onPress={() => scrollToMessage(item.id)}
+                        onPress={() => {
+                          selectionHaptic()
+                          animateNextLayout()
+                          scrollToMessage(item.id)
+                        }}
                       >
                         <View style={styles.searchResultHeader}>
                           <Avatar
@@ -3600,6 +3674,8 @@ export default function ChannelViewScreen() {
                   <Pressable
                     style={[styles.searchMemberRow, { backgroundColor: colors.surface }]}
                     onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
                       setSearchTab('messages')
                       setSearchFromUser(item.user.id)
                     }}
@@ -3607,7 +3683,7 @@ export default function ChannelViewScreen() {
                     <Avatar
                       uri={item.user.avatarUrl}
                       name={name}
-                      size={36}
+                      size={size.iconButtonMd}
                       userId={item.user.id}
                       status={item.user.status || 'offline'}
                       showStatus

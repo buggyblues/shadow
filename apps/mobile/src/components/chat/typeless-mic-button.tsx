@@ -2,6 +2,7 @@ import { Mic } from 'lucide-react-native'
 import { memo, useEffect } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
+import { selectionHaptic } from '../../lib/haptics'
 import { iconSize, palette, radius, size, spacing, useColors } from '../../theme'
 
 interface TypelessMicButtonProps {
@@ -49,10 +50,13 @@ export const TypelessMicButton = memo(function TypelessMicButton({
             backgroundColor: isHolding ? colors.error : colors.inputBackground,
           },
         ]}
-        onPressIn={onPressIn}
+        onPressIn={() => {
+          selectionHaptic()
+          onPressIn()
+        }}
         onPressOut={onPressOut}
         delayLongPress={0}
-        hitSlop={12}
+        hitSlop={spacing.md}
       >
         <Mic size={iconSize['2xl']} color={isHolding ? palette.white : colors.textMuted} />
       </AnimatedPressable>

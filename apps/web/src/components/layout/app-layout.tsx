@@ -122,7 +122,11 @@ function AppLayoutInner() {
   // Redirect to login on auth failure
   useEffect(() => {
     if (meError && (meError as Error & { status?: number }).status === 401) {
-      clearAuthenticatedSession({ redirectToLogin: true })
+      clearAuthenticatedSession({
+        redirectToLogin: true,
+        syncDesktop: true,
+        desktopReason: 'revoked',
+      })
     }
   }, [meError])
 
@@ -132,7 +136,11 @@ function AppLayoutInner() {
     const socket = getSocket()
     const handleSessionRevoked = () => {
       showToast(t('settings.sessionRevokedNotice'), 'error')
-      clearAuthenticatedSession({ redirectToLogin: true })
+      clearAuthenticatedSession({
+        redirectToLogin: true,
+        syncDesktop: true,
+        desktopReason: 'revoked',
+      })
     }
     const handleServerAppApprovalRequired = (payload: unknown) => {
       if (!isServerAppApprovalRequest(payload)) return

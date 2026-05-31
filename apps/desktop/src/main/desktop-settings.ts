@@ -73,8 +73,8 @@ export type DesktopShortcutAction =
 
 export type DesktopShortcutSettings = Record<DesktopShortcutAction, string>
 
-const DEFAULT_SERVER_BASE_URL =
-  process.env.DESKTOP_API_ORIGIN || process.env.VITE_API_BASE || 'https://shadowob.com'
+export const DEFAULT_SERVER_BASE_URL = 'https://shadowob.com'
+const desktopSettingsAppliedListeners = new Set<(settings: DesktopRuntimeSettings) => void>()
 
 export const defaultDesktopShortcuts: DesktopShortcutSettings = {
   openCommunity: 'CommandOrControl+Alt+Shift+S',
@@ -85,7 +85,7 @@ export const defaultDesktopShortcuts: DesktopShortcutSettings = {
 }
 
 const defaultSettings: DesktopRuntimeSettings = {
-  serverBaseUrl: normalizeServerBaseUrl(DEFAULT_SERVER_BASE_URL) ?? 'https://shadowob.com',
+  serverBaseUrl: '',
   httpProxy: '',
   httpsProxy: '',
   connectorApiKey: '',
@@ -118,6 +118,20 @@ function normalizeServerBaseUrl(value: unknown): string | null {
   } catch {
     return null
   }
+}
+
+function normalizeConfiguredServerBaseUrl(value: unknown, fallback: string): string {
+  if (value === undefined) return fallback
+  if (typeof value !== 'string') return fallback
+  const input = value.trim()
+  if (!input) return ''
+  return normalizeServerBaseUrl(input) ?? fallback
+}
+
+export function resolveDesktopServerBaseUrl(
+  settings: Pick<DesktopRuntimeSettings, 'serverBaseUrl'> = readDesktopSettings(),
+): string {
+  return normalizeServerBaseUrl(settings.serverBaseUrl) ?? DEFAULT_SERVER_BASE_URL
 }
 
 function normalizeHttpProxy(value: unknown): string {
@@ -315,7 +329,10 @@ export function readDesktopSettings(): DesktopRuntimeSettings {
     if (!existsSync(path)) return defaultSettings
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<DesktopRuntimeSettings>
     return {
-      serverBaseUrl: normalizeServerBaseUrl(parsed.serverBaseUrl) ?? defaultSettings.serverBaseUrl,
+      serverBaseUrl: normalizeConfiguredServerBaseUrl(
+        parsed.serverBaseUrl,
+        defaultSettings.serverBaseUrl,
+      ),
       httpProxy: normalizeHttpProxy(parsed.httpProxy),
       httpsProxy: normalizeHttpProxy(parsed.httpsProxy),
       connectorApiKey: normalizeConnectorApiKey(parsed.connectorApiKey),
@@ -335,7 +352,7 @@ export function readDesktopSettings(): DesktopRuntimeSettings {
 }
 
 export function getDesktopServerBaseUrl(): string {
-  return readDesktopSettings().serverBaseUrl
+  return resolveDesktopServerBaseUrl()
 }
 
 export function saveDesktopSettings(
@@ -343,7 +360,7 @@ export function saveDesktopSettings(
 ): DesktopRuntimeSettings {
   const current = readDesktopSettings()
   const next: DesktopRuntimeSettings = {
-    serverBaseUrl: normalizeServerBaseUrl(incoming.serverBaseUrl) ?? current.serverBaseUrl,
+    serverBaseUrl: normalizeConfiguredServerBaseUrl(incoming.serverBaseUrl, current.serverBaseUrl),
     httpProxy:
       incoming.httpProxy === undefined ? current.httpProxy : normalizeHttpProxy(incoming.httpProxy),
     httpsProxy:
@@ -423,6 +440,13 @@ export function broadcastDesktopSettings(settings: DesktopRuntimeSettings): void
   }
 }
 
+export function onDesktopSettingsApplied(
+  listener: (settings: DesktopRuntimeSettings) => void,
+): () => void {
+  desktopSettingsAppliedListeners.add(listener)
+  return () => desktopSettingsAppliedListeners.delete(listener)
+}
+
 export async function applyDesktopNetworkSettings(settings = readDesktopSettings()): Promise<void> {
   if (settings.httpProxy || settings.httpsProxy) {
     await session.defaultSession.setProxy({
@@ -432,9 +456,14 @@ export async function applyDesktopNetworkSettings(settings = readDesktopSettings
     await session.defaultSession.setProxy({ mode: 'direct' })
   }
   broadcastDesktopSettings(settings)
+  for (const listener of desktopSettingsAppliedListeners) listener(settings)
 }
 
 export function setupDesktopSettingsHandlers(): void {
+  ipcMain.on('desktop:getSettingsSync', (event) => {
+    event.returnValue = readDesktopSettings()
+  })
+
   ipcMain.handle('desktop:getSettings', () => readDesktopSettings())
 
   ipcMain.handle(

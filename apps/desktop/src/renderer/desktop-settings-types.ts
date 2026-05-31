@@ -109,6 +109,7 @@ export interface DesktopSettingsAPI {
   showMainWindow?: () => Promise<void>
   showCommunity?: (path?: string) => Promise<void>
   getCommunityAuthToken?: () => Promise<string>
+  getCommunityAuthTokens?: () => Promise<{ accessToken: string; refreshToken: string }>
   communityFetchJson?: <T = unknown>(input: {
     path: string
     method?: string

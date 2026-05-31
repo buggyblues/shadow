@@ -12,7 +12,6 @@ import { formatDistanceToNow } from 'date-fns'
 import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import * as Clipboard from 'expo-clipboard'
 import * as FileSystem from 'expo-file-system/legacy'
-import * as Haptics from 'expo-haptics'
 import { Image } from 'expo-image'
 import * as MediaLibrary from 'expo-media-library'
 import { useRouter } from 'expo-router'
@@ -65,6 +64,7 @@ import WebView from 'react-native-webview'
 import type { EmojiType } from 'rn-emoji-keyboard'
 import RNEmojiPicker from 'rn-emoji-keyboard'
 import { API_BASE, fetchApi, getImageUrl } from '../../lib/api'
+import { errorHaptic, selectionHaptic, successHaptic } from '../../lib/haptics'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import {
@@ -313,7 +313,10 @@ function WalletRechargeCard({ data }: { data: WalletRechargeMetadata }) {
   const colors = useColors()
   const router = useRouter()
 
-  const openTasks = () => router.push('/(main)/settings/tasks' as never)
+  const openTasks = () => {
+    selectionHaptic()
+    router.push('/(main)/settings/tasks' as never)
+  }
 
   return (
     <View
@@ -465,7 +468,10 @@ function ServerAppCardMobile({
         styles.serverAppCard,
         { backgroundColor: colors.surface, borderColor: colors.border },
       ]}
-      onPress={() => openApp.mutate()}
+      onPress={() => {
+        selectionHaptic()
+        openApp.mutate()
+      }}
     >
       <View style={[styles.serverAppIcon, { backgroundColor: colors.inputBackground }]}>
         <AppWindow size={iconSize.lg} color={colors.primary} />
@@ -691,20 +697,23 @@ function VoiceAttachmentView({
   }, [attachment.id, clearProgressTimer, disabled, ensurePlayer, isPlaying, startProgressTimer])
 
   const activeIndex = Math.floor(progress * peaks.length)
-  const foregroundColor = isOwn ? palette.foundation : colors.text
-  const activeWaveColor = isOwn ? palette.foundation : colors.primary
-  const inactiveWaveColor = isOwn ? palette.foundation : colors.textMuted
+  const foregroundColor = colors.text
+  const activeWaveColor = colors.primary
+  const inactiveWaveColor = colors.textMuted
 
   return (
     <View style={styles.voiceAttachmentBlock}>
       <Pressable
         disabled={disabled || isLoading}
-        onPress={() => void togglePlayback()}
-        style={[
+        onPress={() => {
+          selectionHaptic()
+          void togglePlayback()
+        }}
+        style={({ pressed }) => [
           styles.voiceBubble,
           {
-            backgroundColor: isOwn ? colors.success : colors.inputBackground,
-            borderColor: isOwn ? colors.success : colors.border,
+            backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground,
+            borderColor: isPlaying ? colors.primary : colors.border,
           },
         ]}
       >
@@ -726,11 +735,11 @@ function VoiceAttachmentView({
             />
           ))}
         </View>
-        <View style={styles.voicePlayButton}>
+        <View style={[styles.voicePlayButton, { backgroundColor: colors.primary }]}>
           {isPlaying ? (
-            <Pause size={iconSize.md} color={foregroundColor} fill={foregroundColor} />
+            <Pause size={iconSize.md} color={palette.foundation} fill={palette.foundation} />
           ) : (
-            <Volume2 size={iconSize.lg} color={foregroundColor} />
+            <Volume2 size={iconSize.lg} color={palette.foundation} />
           )}
         </View>
         {!isOwn && !played ? (
@@ -829,6 +838,7 @@ function MessageBubbleInner({
   // Attachment long-press actions
   const handleAttachmentSave = useCallback(async () => {
     if (!attachmentAction) return
+    selectionHaptic()
     const resolved = await resolveAttachmentUrl(attachmentAction, 'attachment')
     if (!resolved) {
       showToast(t('chat.saveFailed', 'Failed to save file'), 'error')
@@ -847,6 +857,7 @@ function MessageBubbleInner({
           return
         }
         await MediaLibrary.saveToLibraryAsync(localUri)
+        successHaptic()
         showToast(t('chat.imageSaved', 'File saved to library'), 'success')
       } else if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(localUri)
@@ -855,6 +866,7 @@ function MessageBubbleInner({
       }
     } catch (err) {
       console.error('Save failed:', err)
+      errorHaptic()
       showToast(t('chat.saveFailed', 'Failed to save file'), 'error')
     }
     setAttachmentAction(null)
@@ -862,6 +874,7 @@ function MessageBubbleInner({
 
   const handleAttachmentShare = useCallback(async () => {
     if (!attachmentAction) return
+    selectionHaptic()
     const resolved = await resolveAttachmentUrl(attachmentAction, 'attachment')
     if (!resolved) {
       showToast(t('chat.shareFailed', 'Failed to share file'), 'error')
@@ -877,6 +890,7 @@ function MessageBubbleInner({
       }
     } catch (err) {
       console.error('Share failed:', err)
+      errorHaptic()
       showToast(t('chat.shareFailed', 'Failed to share file'), 'error')
     }
     setAttachmentAction(null)
@@ -884,6 +898,7 @@ function MessageBubbleInner({
 
   const handleAttachmentCopyUrl = useCallback(async () => {
     if (!attachmentAction) return
+    selectionHaptic()
     const resolved = await resolveAttachmentUrl(attachmentAction, 'attachment')
     if (!resolved) {
       showToast(t('chat.shareFailed', 'Failed to share file'), 'error')
@@ -891,6 +906,7 @@ function MessageBubbleInner({
       return
     }
     await Clipboard.setStringAsync(resolved)
+    successHaptic()
     showToast(t('common.copied', '已复制'), 'success')
     setAttachmentAction(null)
   }, [attachmentAction, t, resolveAttachmentUrl])
@@ -936,7 +952,7 @@ function MessageBubbleInner({
   const handleLongPress = useCallback(
     (event: GestureResponderEvent) => {
       if (selectionMode && (!onSelectRangeTo || selectionAnchorId === message.id)) return
-      Haptics.selectionAsync()
+      selectionHaptic()
       const { pageX, pageY } = event.nativeEvent
       setPopupPosition({ touchX: pageX, touchY: pageY })
       setShowPopup(true)
@@ -951,15 +967,18 @@ function MessageBubbleInner({
 
   const handleCopyMessage = useCallback(async () => {
     await Clipboard.setStringAsync(message.content)
+    successHaptic()
     dismissPopup()
   }, [message.content, dismissPopup])
 
   const handleReplyAction = useCallback(() => {
+    selectionHaptic()
     dismissPopup()
     onReply()
   }, [dismissPopup, onReply])
 
   const handleThreadAction = useCallback(() => {
+    selectionHaptic()
     dismissPopup()
     onOpenThread?.()
   }, [dismissPopup, onOpenThread])
@@ -973,6 +992,7 @@ function MessageBubbleInner({
 
   const handleQuickReaction = useCallback(
     (emoji: string) => {
+      selectionHaptic()
       dismissPopup()
       reactionMutation.mutate(emoji)
     },
@@ -980,16 +1000,19 @@ function MessageBubbleInner({
   )
 
   const handleEnterMultiSelect = useCallback(() => {
+    selectionHaptic()
     dismissPopup()
     onEnterSelectionMode?.(message.id)
   }, [dismissPopup, onEnterSelectionMode, message.id])
 
   const handleSelectRangeTo = useCallback(() => {
+    selectionHaptic()
     dismissPopup()
     onSelectRangeTo?.(message.id)
   }, [dismissPopup, onSelectRangeTo, message.id])
 
   const handleDeleteMessage = useCallback(() => {
+    selectionHaptic()
     dismissPopup()
     Alert.alert(
       t('chat.deleteMessage', '删除消息'),
@@ -1165,12 +1188,19 @@ function MessageBubbleInner({
 
   return (
     <Pressable
-      style={[
+      style={({ pressed }) => [
         styles.container,
         isGrouped && styles.containerGrouped,
-        isSelected && { backgroundColor: colors.surfaceHover },
+        (isSelected || pressed) && { backgroundColor: colors.surfaceHover },
       ]}
-      onPress={selectionMode ? () => onToggleSelect?.(message.id) : () => Keyboard.dismiss()}
+      onPress={
+        selectionMode
+          ? () => {
+              selectionHaptic()
+              onToggleSelect?.(message.id)
+            }
+          : () => Keyboard.dismiss()
+      }
       onLongPress={handleLongPress}
       delayLongPress={300}
     >
@@ -1209,22 +1239,28 @@ function MessageBubbleInner({
         ) : (
           <Pressable
             disabled={selectionMode}
-            onPress={() => router.push(`/(main)/profile/${message.authorId}` as never)}
+            onPress={() => {
+              selectionHaptic()
+              router.push(`/(main)/profile/${message.authorId}` as never)
+            }}
           >
             <Avatar
               uri={message.author?.avatarUrl}
               name={displayName}
-              size={36}
+              size={size.iconButtonMd}
               userId={message.authorId}
             />
           </Pressable>
         )}
-        <View style={[styles.bubble, colors.mode === 'light' && styles.lightBubblePlate]}>
+        <View style={styles.bubble}>
           {!isGrouped && (
             <View style={styles.header}>
               <Pressable
                 disabled={selectionMode}
-                onPress={() => router.push(`/(main)/profile/${message.authorId}` as never)}
+                onPress={() => {
+                  selectionHaptic()
+                  router.push(`/(main)/profile/${message.authorId}` as never)
+                }}
               >
                 <Text style={[styles.username, { color: colors.text }]}>{displayName}</Text>
               </Pressable>
@@ -1264,16 +1300,22 @@ function MessageBubbleInner({
                   icon={X}
                   variant="ghost"
                   iconColor={colors.textMuted}
-                  iconSize={16}
+                  iconSize={iconSize.md}
                   style={styles.editBtn}
-                  onPress={() => setIsEditing(false)}
+                  onPress={() => {
+                    selectionHaptic()
+                    setIsEditing(false)
+                  }}
                 />
                 <IconButton
                   icon={Check}
                   variant="primary"
-                  iconSize={16}
+                  iconSize={iconSize.md}
                   style={styles.editBtn}
-                  onPress={handleSaveEdit}
+                  onPress={() => {
+                    selectionHaptic()
+                    handleSaveEdit()
+                  }}
                 />
               </View>
             </View>
@@ -1313,6 +1355,7 @@ function MessageBubbleInner({
                   style={styles.imageAttachment}
                   disabled={selectionMode}
                   onPress={async () => {
+                    selectionHaptic()
                     const url = await resolveAttachmentUrl(att, 'inline')
                     if (!url) return
                     router.push({
@@ -1324,13 +1367,14 @@ function MessageBubbleInner({
                       },
                     })
                   }}
-                  onLongPress={() =>
+                  onLongPress={() => {
+                    selectionHaptic()
                     setAttachmentAction({
                       id: att.id,
                       url: att.url,
                       filename: att.filename,
                     })
-                  }
+                  }}
                 >
                   <SignedAttachmentImage attachment={att} />
                 </Pressable>
@@ -1348,6 +1392,7 @@ function MessageBubbleInner({
                 ]}
                 disabled={selectionMode}
                 onPress={async () => {
+                  selectionHaptic()
                   const url = await resolveAttachmentUrl(att, 'attachment')
                   if (!url) return
                   router.push({
@@ -1359,13 +1404,14 @@ function MessageBubbleInner({
                     },
                   })
                 }}
-                onLongPress={() =>
+                onLongPress={() => {
+                  selectionHaptic()
                   setAttachmentAction({
                     id: att.id,
                     url: att.url,
                     filename: att.filename,
                   })
-                }
+                }}
               >
                 <View style={[styles.fileIconWrap, { backgroundColor: colors.inputBackground }]}>
                   <FileIcon size={iconSize.xl} color={accentColor} />
@@ -1431,7 +1477,7 @@ function MessageBubbleInner({
                         },
                       ]}
                       onPress={() => {
-                        Haptics.selectionAsync()
+                        selectionHaptic()
                         handleReaction(r.emoji)
                       }}
                     >
@@ -1455,7 +1501,7 @@ function MessageBubbleInner({
                   { backgroundColor: colors.surface, borderColor: colors.border },
                 ]}
                 onPress={() => {
-                  Haptics.selectionAsync()
+                  selectionHaptic()
                   setShowEmojiPicker(true)
                 }}
               >
@@ -1475,10 +1521,13 @@ function MessageBubbleInner({
                 variant="danger"
                 size="xs"
                 icon={RefreshCw}
-                iconSize={12}
+                iconSize={iconSize.xs}
                 style={styles.retryBtn}
-                onPress={() => onRetry?.(message)}
-                hitSlop={8}
+                onPress={() => {
+                  selectionHaptic()
+                  onRetry?.(message)
+                }}
+                hitSlop={spacing.sm}
               >
                 {t('chat.retry', '重试')}
               </Button>
@@ -1513,8 +1562,14 @@ function MessageBubbleInner({
       {/* Emoji picker */}
       <RNEmojiPicker
         open={showEmojiPicker}
-        onClose={() => setShowEmojiPicker(false)}
-        onEmojiSelected={(emoji: EmojiType) => handleReaction(emoji.emoji)}
+        onClose={() => {
+          selectionHaptic()
+          setShowEmojiPicker(false)
+        }}
+        onEmojiSelected={(emoji: EmojiType) => {
+          selectionHaptic()
+          handleReaction(emoji.emoji)
+        }}
         enableSearchBar
         enableRecentlyUsed
         categoryPosition="top"
@@ -1537,7 +1592,14 @@ function MessageBubbleInner({
           title={t('chat.copyLink', '复制链接')}
           onPress={handleAttachmentCopyUrl}
         />
-        <Button variant="glass" size="md" onPress={() => setAttachmentAction(null)}>
+        <Button
+          variant="glass"
+          size="md"
+          onPress={() => {
+            selectionHaptic()
+            setAttachmentAction(null)
+          }}
+        >
           {t('common.cancel', '取消')}
         </Button>
       </Sheet>
@@ -1602,6 +1664,7 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
 
   const openFile = async () => {
     if (blockedFileState || isStateLoading) return
+    selectionHaptic()
     setIsOpening(true)
     setError(null)
     try {
@@ -1617,6 +1680,7 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
         },
       })
     } catch (err) {
+      errorHaptic()
       setError(err instanceof Error ? err.message : t('chat.paidFileOpenFailed'))
     } finally {
       setIsOpening(false)
@@ -1663,11 +1727,11 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
       <View style={styles.paidFileInfo}>
         <View style={styles.paidFileLabelRow}>
           {blockedFileState ? (
-            <AlertCircle size={11} color={colors.warning} />
+            <AlertCircle size={iconSize.xs} color={colors.warning} />
           ) : isUnlocked ? (
-            <Unlock size={11} color={colors.primary} />
+            <Unlock size={iconSize.xs} color={colors.primary} />
           ) : (
-            <Lock size={11} color={colors.textMuted} />
+            <Lock size={iconSize.xs} color={colors.textMuted} />
           )}
           <Text
             style={[
@@ -1725,11 +1789,11 @@ function PaidFileCardMobile({ card }: { card: PaidFileCard }) {
           ]}
         >
           {blockedFileState ? (
-            <AlertCircle size={15} color={colors.warning} />
+            <AlertCircle size={iconSize.md} color={colors.warning} />
           ) : isUnlocked ? (
-            <Unlock size={15} color={colors.primary} />
+            <Unlock size={iconSize.md} color={colors.primary} />
           ) : (
-            <Lock size={15} color={colors.textMuted} />
+            <Lock size={iconSize.md} color={colors.textMuted} />
           )}
         </View>
         {isUnlocked ? (
@@ -1789,9 +1853,11 @@ function OAuthLinkCardMobile({
   const origin = card.meta?.origin ?? formatOAuthCardOrigin(card.url)
 
   const openExternal = async () => {
+    selectionHaptic()
     try {
       await Linking.openURL(fallbackUrl)
     } catch {
+      errorHaptic()
       showToast(t('chat.oauthLinkOpenFailed'))
     }
   }
@@ -1834,6 +1900,7 @@ function OAuthLinkCardMobile({
   }
 
   const openPreview = () => {
+    selectionHaptic()
     setIsConnected(false)
     setIsOpen(true)
   }
@@ -1898,7 +1965,7 @@ function OAuthLinkCardMobile({
               icon={ExternalLink}
               variant="ghost"
               iconColor={colors.text}
-              iconSize={20}
+              iconSize={iconSize.xl}
               style={styles.oauthModalIconButton}
               onPress={openExternal}
             />
@@ -1906,9 +1973,12 @@ function OAuthLinkCardMobile({
               icon={X}
               variant="ghost"
               iconColor={colors.text}
-              iconSize={22}
+              iconSize={iconSize['2xl']}
               style={styles.oauthModalIconButton}
-              onPress={() => setIsOpen(false)}
+              onPress={() => {
+                selectionHaptic()
+                setIsOpen(false)
+              }}
             />
           </View>
           <WebView
@@ -1985,6 +2055,7 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
 
   const buy = async () => {
     if (hasCardIssue || isPreviewLoading) return
+    selectionHaptic()
     setIsBuying(true)
     try {
       const path = `/api/messages/${messageId}/commerce-cards/${card.id}/purchase`
@@ -1995,8 +2066,10 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
           idempotencyKey: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         }),
       })
+      successHaptic()
       showToast(t('chat.commercePurchaseSucceeded'))
     } catch (err) {
+      errorHaptic()
       showToast(err instanceof Error ? err.message : t('chat.commercePurchaseFailed'))
     } finally {
       setIsBuying(false)
@@ -2087,7 +2160,7 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
               ]}
             >
               {isShrimpPrice ? (
-                <PriceCompact amount={displayPrice.amount} size={15} />
+                <PriceCompact amount={displayPrice.amount} size={fontSize.sm} />
               ) : (
                 <Text style={[styles.commercePrice, { color: colors.primary }]} numberOfLines={1}>
                   {formatCommercePrice(displayPrice.amount, displayPrice.currency, t)}
@@ -2133,7 +2206,6 @@ const styles = StyleSheet.create({
   container: {
     paddingVertical: spacing.xxs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radius.sm,
     marginBottom: spacing.px,
   },
   containerGrouped: {
@@ -2165,14 +2237,7 @@ const styles = StyleSheet.create({
   },
   bubble: {
     flex: 1,
-  },
-  lightBubblePlate: {
-    backgroundColor: palette.white,
-    borderColor: palette.lineLight,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    minWidth: 0,
   },
   groupedGutter: {
     width: size.iconButtonMd,
@@ -2193,7 +2258,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xs,
   },
   botBadgeText: {
-    color: palette.white,
+    color: palette.foundation,
     fontSize: fontSize.micro,
     fontWeight: '800',
   },
@@ -2278,6 +2343,7 @@ const styles = StyleSheet.create({
   voicePlayButton: {
     width: size.controlSm,
     height: size.controlSm,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2952,11 +3018,11 @@ function InteractiveBlockRenderer({
           resultRecord.interactiveState?.response
         if (nextResponse) setServerResponse(nextResponse)
         setDone(actionId)
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+        successHaptic()
       } catch (e) {
         if (block.oneShot !== false) setDone(previousDone)
         setError(e instanceof Error ? e.message : t('chat.interactiveSubmitFailed'))
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+        errorHaptic()
       } finally {
         submittingRef.current = false
         setSubmitting(false)
@@ -3019,7 +3085,7 @@ function InteractiveBlockRenderer({
                 icon={isPicked ? Check : undefined}
                 style={styles.interactiveButton}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {})
+                  selectionHaptic()
                   send(it.id, it.value, it.label)
                 }}
               >
@@ -3075,6 +3141,7 @@ function InteractiveFormBody({
 
   const submit = (actionId: string, label: string) => {
     if (isLocked) return
+    selectionHaptic()
     setTouched(true)
     if (missingRequired) return
     onSubmit(actionId, label, values)
@@ -3094,7 +3161,10 @@ function InteractiveFormBody({
             {f.kind === 'checkbox' ? (
               <ChipButton
                 disabled={isLocked}
-                onPress={() => setField(f.id, v === 'true' ? 'false' : 'true')}
+                onPress={() => {
+                  selectionHaptic()
+                  setField(f.id, v === 'true' ? 'false' : 'true')
+                }}
                 active={v === 'true'}
                 icon={v === 'true' ? Check : undefined}
                 label={v === 'true' ? t('chat.interactiveOn') : t('chat.interactiveOff')}
@@ -3108,7 +3178,10 @@ function InteractiveFormBody({
                     <ChipButton
                       key={o.id}
                       disabled={isLocked}
-                      onPress={() => setField(f.id, o.value)}
+                      onPress={() => {
+                        selectionHaptic()
+                        setField(f.id, o.value)
+                      }}
                       active={picked}
                       label={o.label}
                       style={styles.interactiveButton}

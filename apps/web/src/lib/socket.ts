@@ -2,9 +2,11 @@ import type { MessageMention } from '@shadowob/shared'
 import { io, type Socket } from 'socket.io-client'
 
 let socket: Socket | null = null
+let socketOrigin = ''
 const joinedChannels = new Set<string>()
 const joinedThreads = new Set<string>()
 const DESKTOP_SETTINGS_STORAGE_KEY = 'shadow:desktop-runtime-settings:v1'
+const DESKTOP_SETTINGS_CHANGED_EVENT = 'shadow:desktop-runtime-settings-changed'
 
 function getStoredDesktopServerBaseUrl(): string {
   if (typeof window === 'undefined' || window.location.protocol !== 'app:') return ''
@@ -49,8 +51,13 @@ function rejoinRooms(s: Socket): void {
 }
 
 export function getSocket(): Socket {
+  const origin = getSocketOrigin()
+  if (socket && socketOrigin !== origin) {
+    disconnectSocket()
+  }
   if (!socket) {
-    const nextSocket = io(getSocketOrigin(), {
+    socketOrigin = origin
+    const nextSocket = io(origin, {
       auth: (cb) => {
         cb({ token: localStorage.getItem('accessToken') })
       },
@@ -85,8 +92,22 @@ export function disconnectSocket(): void {
     socket.disconnect()
     socket = null
   }
+  socketOrigin = ''
   joinedChannels.clear()
   joinedThreads.clear()
+}
+
+function handleDesktopRuntimeSettingsChanged() {
+  if (!socket) return
+  const nextOrigin = getSocketOrigin()
+  if (socketOrigin === nextOrigin) return
+  const shouldReconnect = socket.connected
+  disconnectSocket()
+  if (shouldReconnect) connectSocket()
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(DESKTOP_SETTINGS_CHANGED_EVENT, handleDesktopRuntimeSettingsChanged)
 }
 
 function handleBeforeUnload() {

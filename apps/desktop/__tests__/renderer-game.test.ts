@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   applyPetAction,
@@ -13,6 +13,15 @@ import {
 } from '../src/renderer/lib/game'
 
 describe('renderer pet game state', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 31, 12, 0, 0))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('creates a normalized default state', () => {
     const state = createDefaultPetState(1_700_000_000_000)
 
@@ -40,8 +49,9 @@ describe('renderer pet game state', () => {
   })
 
   it('decays needs on tick and keeps values in bounds', () => {
-    const initial = createDefaultPetState(1_700_000_000_000)
-    const next = tickPet(initial, 1_700_000_000_000 + 30 * 60_000)
+    const noon = new Date(2026, 4, 31, 12, 0, 0).getTime()
+    const initial = createDefaultPetState(noon)
+    const next = tickPet(initial, noon + 30 * 60_000)
 
     expect(next.stats.hunger).toBeGreaterThanOrEqual(0)
     expect(next.stats.hunger).toBeLessThan(initial.stats.hunger)

@@ -3,23 +3,33 @@ import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { app, BrowserWindow, ipcMain, net } from 'electron'
+import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../shared/community-auth'
 import {
-  COMMUNITY_AUTH_TOKENS_FROM_STORAGE_SCRIPT,
-  type CommunityAuthTokens,
-  communityAccessTokenFromAuthorizationHeader,
-  DESKTOP_COMMUNITY_AUTH_REQUIRED,
-  normalizeCommunityAccessToken,
-} from '../shared/community-auth'
+  fetchCommunityWithAuth,
+  readCommunityAccessToken,
+  refreshCommunityAccessToken,
+} from './community-session'
 import {
   connectorWorkDirMapFilePath,
   type DesktopRuntimeSettings,
   normalizeConnectorApiKey,
   readDesktopSettings,
+  resolveDesktopServerBaseUrl,
   saveDesktopSettings,
   writeConnectorWorkDirMap,
 } from './desktop-settings'
 import { resolveElectronNodeBinary } from './process-manager'
-import { getConnectorAuthWindow, getMainWindow, showConnectorAuthWindow } from './window'
+import { getConnectorAuthWindow, showConnectorAuthWindow } from './window'
+
+export {
+  fetchCommunityUrlWithAuth,
+  fetchCommunityWithAuth,
+  forgetCommunityAccessToken,
+  forgetCommunityAuthTokens,
+  readCommunityAccessToken,
+  rememberCommunityAuthorizationHeader,
+  rememberCommunityAuthSnapshot,
+} from './community-session'
 
 type ConnectorDaemonState = {
   running: boolean
@@ -103,10 +113,6 @@ let connectorConnections: ConnectorConnection[] = []
 const logTail: string[] = []
 const AUTH_POLL_INTERVAL_MS = 800
 const AUTH_TIMEOUT_MS = 120_000
-const HOSTED_COMMUNITY_ORIGIN = 'https://shadowob.com'
-let lastCommunityAccessToken = ''
-let lastCommunityRefreshToken = ''
-let communityTokenRefreshPromise: Promise<string> | null = null
 
 function connectorRoot(): string {
   const packagedRoot = process.resourcesPath
@@ -178,7 +184,7 @@ function buildArgs(settings: DesktopRuntimeSettings): string[] {
     connectorCliPath(),
     'daemon',
     '--server-url',
-    settings.serverBaseUrl,
+    resolveDesktopServerBaseUrl(settings),
     '--api-key',
     settings.connectorApiKey,
     '--poll-interval-ms',
@@ -205,248 +211,8 @@ function normalizeHttpOrigin(value: string | undefined): string | null {
 }
 
 function connectorBootstrapOrigins(settings: DesktopRuntimeSettings): string[] {
-  return Array.from(
-    new Set(
-      [
-        settings.serverBaseUrl,
-        process.env.DESKTOP_API_ORIGIN,
-        process.env.VITE_API_BASE,
-        HOSTED_COMMUNITY_ORIGIN,
-      ]
-        .map(normalizeHttpOrigin)
-        .filter((origin): origin is string => Boolean(origin)),
-    ),
-  )
-}
-
-function normalizeCommunityAuthTokens(tokens: unknown): CommunityAuthTokens {
-  const record = tokens && typeof tokens === 'object' ? (tokens as Record<string, unknown>) : {}
-  return {
-    accessToken: normalizeCommunityAccessToken(record.accessToken),
-    refreshToken: normalizeCommunityAccessToken(record.refreshToken),
-  }
-}
-
-function rememberCommunityAuthTokens(tokens: Partial<CommunityAuthTokens>): void {
-  const accessToken = normalizeCommunityAccessToken(tokens.accessToken)
-  const refreshToken = normalizeCommunityAccessToken(tokens.refreshToken)
-  if (accessToken) lastCommunityAccessToken = accessToken
-  if (refreshToken) lastCommunityRefreshToken = refreshToken
-}
-
-async function readAuthTokensFromWindow(win: BrowserWindow | null): Promise<CommunityAuthTokens> {
-  if (!win || win.isDestroyed() || win.webContents.isDestroyed() || win.webContents.isLoading()) {
-    return { accessToken: '', refreshToken: '' }
-  }
-  try {
-    const tokens = (await win.webContents.executeJavaScript(
-      COMMUNITY_AUTH_TOKENS_FROM_STORAGE_SCRIPT,
-      true,
-    )) as unknown
-    const normalizedTokens = normalizeCommunityAuthTokens(tokens)
-    rememberCommunityAuthTokens(normalizedTokens)
-    return normalizedTokens
-  } catch {
-    return { accessToken: '', refreshToken: '' }
-  }
-}
-
-async function readAuthTokensFromOpenWindows(): Promise<CommunityAuthTokens> {
-  let refreshToken = ''
-  for (const win of BrowserWindow.getAllWindows()) {
-    const tokens = await readAuthTokensFromWindow(win)
-    if (tokens.accessToken) return tokens
-    refreshToken ||= tokens.refreshToken
-  }
-  return { accessToken: '', refreshToken }
-}
-
-export function rememberCommunityAccessToken(token: string | null | undefined): void {
-  const normalizedToken = normalizeCommunityAccessToken(token)
-  if (normalizedToken) lastCommunityAccessToken = normalizedToken
-}
-
-export function rememberCommunityAuthSnapshot(tokens: Partial<CommunityAuthTokens>): void {
-  rememberCommunityAuthTokens(tokens)
-}
-
-export function rememberCommunityAuthorizationHeader(header: string | null | undefined): void {
-  rememberCommunityAccessToken(communityAccessTokenFromAuthorizationHeader(header))
-}
-
-export function forgetCommunityAccessToken(token?: string | null): void {
-  const normalizedToken = normalizeCommunityAccessToken(token)
-  if (!normalizedToken || normalizedToken === lastCommunityAccessToken) {
-    lastCommunityAccessToken = ''
-  }
-}
-
-export function forgetCommunityAuthTokens(token?: string | null): void {
-  forgetCommunityAccessToken(token)
-  if (!token || !lastCommunityAccessToken) lastCommunityRefreshToken = ''
-}
-
-export async function readCommunityAuthTokens(): Promise<CommunityAuthTokens> {
-  const mainTokens = await readAuthTokensFromWindow(getMainWindow())
-  if (mainTokens.accessToken) {
-    return {
-      accessToken: mainTokens.accessToken,
-      refreshToken: mainTokens.refreshToken || lastCommunityRefreshToken,
-    }
-  }
-
-  const authWindowTokens = await readAuthTokensFromWindow(getConnectorAuthWindow())
-  if (authWindowTokens.accessToken) {
-    return {
-      accessToken: authWindowTokens.accessToken,
-      refreshToken: authWindowTokens.refreshToken || lastCommunityRefreshToken,
-    }
-  }
-
-  const openWindowTokens = await readAuthTokensFromOpenWindows()
-  if (openWindowTokens.accessToken) {
-    return {
-      accessToken: openWindowTokens.accessToken,
-      refreshToken: openWindowTokens.refreshToken || lastCommunityRefreshToken,
-    }
-  }
-
-  return {
-    accessToken: lastCommunityAccessToken,
-    refreshToken:
-      mainTokens.refreshToken ||
-      authWindowTokens.refreshToken ||
-      openWindowTokens.refreshToken ||
-      lastCommunityRefreshToken,
-  }
-}
-
-export async function readCommunityAccessToken(): Promise<string> {
-  return (await readCommunityAuthTokens()).accessToken
-}
-
-function communityApiUrl(settings: DesktopRuntimeSettings, path: string): string {
-  const origin = normalizeHttpOrigin(settings.serverBaseUrl) ?? HOSTED_COMMUNITY_ORIGIN
-  return `${origin}${path}`
-}
-
-function shouldWriteCommunityAuthToWindow(win: BrowserWindow): boolean {
-  try {
-    const url = new URL(win.webContents.getURL())
-    return url.protocol === 'app:' || url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-async function writeCommunityAuthTokensToWindow(
-  win: BrowserWindow,
-  tokens: Partial<CommunityAuthTokens>,
-): Promise<void> {
-  if (
-    win.isDestroyed() ||
-    win.webContents.isDestroyed() ||
-    win.webContents.isLoading() ||
-    !shouldWriteCommunityAuthToWindow(win)
-  ) {
-    return
-  }
-  const accessToken = normalizeCommunityAccessToken(tokens.accessToken)
-  const refreshToken = normalizeCommunityAccessToken(tokens.refreshToken)
-  const script = `(() => {
-    try {
-      const accessToken = ${JSON.stringify(accessToken)}
-      const refreshToken = ${JSON.stringify(refreshToken)}
-      if (accessToken) localStorage.setItem('accessToken', accessToken)
-      else localStorage.removeItem('accessToken')
-      if (refreshToken) localStorage.setItem('refreshToken', refreshToken)
-      else localStorage.removeItem('refreshToken')
-    } catch {}
-  })()`
-  await win.webContents.executeJavaScript(script, true).catch(() => undefined)
-}
-
-async function writeCommunityAuthTokensToOpenWindows(
-  tokens: Partial<CommunityAuthTokens>,
-): Promise<void> {
-  await Promise.all(
-    BrowserWindow.getAllWindows().map((win) => writeCommunityAuthTokensToWindow(win, tokens)),
-  )
-}
-
-async function refreshCommunityAccessTokenOnce(): Promise<string> {
-  const tokens = await readCommunityAuthTokens()
-  if (!tokens.refreshToken) return ''
-
-  const response = await net.fetch(communityApiUrl(readDesktopSettings(), '/api/auth/refresh'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ refreshToken: tokens.refreshToken }),
-  })
-
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      forgetCommunityAuthTokens()
-      await writeCommunityAuthTokensToOpenWindows({ accessToken: '', refreshToken: '' })
-    }
-    return ''
-  }
-
-  const payload = normalizeCommunityAuthTokens(await response.json().catch(() => ({})))
-  if (!payload.accessToken) return ''
-  rememberCommunityAuthTokens(payload)
-  await writeCommunityAuthTokensToOpenWindows(payload)
-  return payload.accessToken
-}
-
-export async function refreshCommunityAccessToken(): Promise<string> {
-  communityTokenRefreshPromise ??= refreshCommunityAccessTokenOnce().finally(() => {
-    communityTokenRefreshPromise = null
-  })
-  return communityTokenRefreshPromise
-}
-
-function withCommunityAuthorization(
-  options: RequestInit,
-  token: string,
-): RequestInit & { headers: Record<string, string> } {
-  return {
-    ...options,
-    headers: {
-      ...((options.headers as Record<string, string> | undefined) ?? {}),
-      Authorization: `Bearer ${token}`,
-    },
-  }
-}
-
-export async function fetchCommunityUrlWithAuth(
-  url: string,
-  options: RequestInit = {},
-): Promise<Response> {
-  let token = await readCommunityAccessToken()
-  if (!token) token = await refreshCommunityAccessToken()
-  if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-
-  let response = await net.fetch(url, withCommunityAuthorization(options, token))
-  if (response.status === 401 || response.status === 403) {
-    const refreshedToken = await refreshCommunityAccessToken()
-    if (refreshedToken && refreshedToken !== token) {
-      token = refreshedToken
-      response = await net.fetch(url, withCommunityAuthorization(options, token))
-    }
-  }
-  if (response.status === 401 || response.status === 403) {
-    forgetCommunityAuthTokens(token)
-    await writeCommunityAuthTokensToOpenWindows({ accessToken: '', refreshToken: '' })
-    throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
-  }
-  return response
-}
-
-export function fetchCommunityWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
-  return fetchCommunityUrlWithAuth(communityApiUrl(readDesktopSettings(), path), options)
+  const origin = normalizeHttpOrigin(resolveDesktopServerBaseUrl(settings))
+  return origin ? [origin] : []
 }
 
 async function fetchCommunityJson<T>(path: string, options: RequestInit = {}): Promise<T | null> {
@@ -594,7 +360,7 @@ async function bootstrapConnectorApiKey(
   const result = (await bootstrap.response.json()) as { apiKey?: unknown }
   const apiKey = normalizeConnectorApiKey(result.apiKey)
   if (!apiKey) throw new Error('Connector authorization did not return a machine key')
-  saveDesktopSettings({ connectorApiKey: apiKey, serverBaseUrl: bootstrap.serverBaseUrl })
+  saveDesktopSettings({ connectorApiKey: apiKey })
   getConnectorAuthWindow()?.close()
   return { apiKey, serverBaseUrl: bootstrap.serverBaseUrl }
 }
@@ -641,7 +407,7 @@ export function getConnectorDaemonState(): ConnectorDaemonState {
     pid: daemonProcess?.pid ?? null,
     startedAt,
     uptimeMs: startedAt ? Date.now() - startedAt : 0,
-    serverBaseUrl: settings.serverBaseUrl,
+    serverBaseUrl: resolveDesktopServerBaseUrl(settings),
     hasApiKey: Boolean(settings.connectorApiKey),
     autoStart: settings.connectorAutoStart,
     phase,
@@ -727,7 +493,7 @@ export async function startConnectorDaemon(
     },
   )
   startedAt = Date.now()
-  appendLog(`[desktop] connector starting on ${launchSettings.serverBaseUrl}`)
+  appendLog(`[desktop] connector starting on ${resolveDesktopServerBaseUrl(launchSettings)}`)
 
   daemonProcess.stdout?.on('data', appendLog)
   daemonProcess.stderr?.on('data', appendLog)
@@ -797,7 +563,7 @@ export async function scanConnectorRuntimes(): Promise<{ output: string }> {
   return new Promise((resolve, reject) => {
     execFile(
       resolveElectronNodeBinary(),
-      [cliPath, 'scan', '--json', '--server-url', settings.serverBaseUrl],
+      [cliPath, 'scan', '--json', '--server-url', resolveDesktopServerBaseUrl(settings)],
       {
         env: connectorEnv(settings),
         timeout: 15_000,

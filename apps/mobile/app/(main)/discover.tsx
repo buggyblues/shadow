@@ -2,21 +2,36 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import {
+  ArrowRight,
   Bot,
+  Cloud,
   Coins,
   Compass,
   type LucideIcon,
   Package,
+  Play,
+  Rocket,
   Search,
   Server,
   ShieldCheck,
   ShoppingBag,
+  Sparkles,
   Store,
+  Tags,
+  Users,
   X,
 } from 'lucide-react-native'
-import { type ReactNode, useMemo, useState } from 'react'
+import { Children, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 import {
   BackgroundSurface,
   Badge,
@@ -24,10 +39,13 @@ import {
   EmptyState,
   GlassPanel,
   IconButton,
+  MobileTabBar,
   PageScroll,
   TextField,
 } from '../../src/components/ui'
-import { fetchApi } from '../../src/lib/api'
+import { API_BASE, fetchApi } from '../../src/lib/api'
+import { errorHaptic, selectionHaptic, successHaptic } from '../../src/lib/haptics'
+import { animateNextLayout } from '../../src/lib/layout-animation'
 import { showToast } from '../../src/lib/toast'
 import {
   border,
@@ -40,7 +58,7 @@ import {
   useColors,
 } from '../../src/theme'
 
-type HubSection = 'all' | 'buddies' | 'market' | 'shops' | 'communities'
+type HubSection = 'all' | 'plays' | 'buddies' | 'market' | 'shops' | 'cloud' | 'communities'
 
 interface ServerEntry {
   server: { id: string; name: string; slug: string | null; iconUrl: string | null }
@@ -65,9 +83,14 @@ interface HubBuddy {
   id: string
   title: string
   description: string | null
+  skills?: string[] | null
+  tags?: string[] | null
+  deviceTier?: string | null
+  osType?: string | null
   baseDailyRate: number
   messageFee: number
   rentalCount: number
+  viewCount?: number
   buddy: HubOwner | null
   owner: HubOwner | null
 }
@@ -78,10 +101,14 @@ interface HubProduct {
   summary: string | null
   description: string | null
   type: 'physical' | 'entitlement' | string
+  billingMode?: string
   price: number
+  currency?: string
   tags?: string[]
   imageUrl: string | null
   salesCount: number
+  ratingCount?: number
+  avgRating?: number
   shop: {
     id: string
     name: string
@@ -114,6 +141,35 @@ interface HubCommunity {
   bannerUrl: string | null
   memberCount: number
   inviteCode: string
+  heatScore?: number
+}
+
+type PlayAvailability = 'available' | 'gated' | 'coming_soon' | 'misconfigured'
+
+interface PlayCatalogItem {
+  id: string
+  image: string
+  title: string
+  titleEn: string
+  desc: string
+  descEn: string
+  category: string
+  categoryEn: string
+  starts: string
+  accentColor: string
+  hot?: boolean
+  status: PlayAvailability
+}
+
+interface CloudTemplateSource {
+  slug: string
+  name: string
+  description?: string | null
+  source?: string | null
+  tags?: string[] | null
+  category?: string | null
+  deployCount?: number | null
+  content?: Record<string, unknown> | null
 }
 
 interface DiscoverCommerceResponse {
@@ -153,24 +209,56 @@ interface MarketplaceCategoriesResponse {
 
 const HUB_SECTIONS: Array<{ key: HubSection; icon: LucideIcon }> = [
   { key: 'all', icon: Compass },
+  { key: 'plays', icon: Play },
   { key: 'buddies', icon: Bot },
   { key: 'market', icon: ShoppingBag },
   { key: 'shops', icon: Store },
+  { key: 'cloud', icon: Cloud },
   { key: 'communities', icon: Server },
 ]
 
-const CATEGORY_ICON_POOL: LucideIcon[] = [ShoppingBag, Package, Store, Compass]
+const CATEGORY_ICON_POOL: LucideIcon[] = [Sparkles, Package, ShoppingBag, Tags, Store]
+const FEATURED_LIMIT = 6
+const SECTION_PAGE_SIZE = 12
+
+const initialSectionPages: Record<HubSection, number> = {
+  all: 1,
+  plays: 1,
+  buddies: 1,
+  market: 1,
+  shops: 1,
+  cloud: 1,
+  communities: 1,
+}
 
 export default function DiscoverScreen() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const colors = useColors()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { width: tabPageWidth } = useWindowDimensions()
+  const tabScrollRef = useRef<ScrollView>(null)
+  const previousTabPageWidthRef = useRef(tabPageWidth)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeSection, setActiveSection] = useState<HubSection>('all')
   const [selectedMarketplaceTag, setSelectedMarketplaceTag] = useState('')
+  const [sectionPages, setSectionPages] = useState<Record<HubSection, number>>(initialSectionPages)
   const normalizedSearch = searchQuery.trim()
   const effectiveSearch = normalizedSearch.length >= 2 ? normalizedSearch : ''
+
+  useEffect(() => {
+    setSectionPages(initialSectionPages)
+  }, [effectiveSearch, selectedMarketplaceTag])
+
+  useEffect(() => {
+    if (previousTabPageWidthRef.current === tabPageWidth) return
+    previousTabPageWidthRef.current = tabPageWidth
+    const activeIndex = Math.max(
+      0,
+      HUB_SECTIONS.findIndex((section) => section.key === activeSection),
+    )
+    tabScrollRef.current?.scrollTo({ x: activeIndex * tabPageWidth, animated: false })
+  }, [activeSection, tabPageWidth])
 
   const { data: myServers = [] } = useQuery({
     queryKey: ['servers'],
@@ -182,14 +270,14 @@ export default function DiscoverScreen() {
     queryKey: ['discover-commerce', effectiveSearch],
     queryFn: () =>
       fetchApi<DiscoverCommerceResponse>(
-        `/api/discover/business?limit=10${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
+        `/api/discover/business?limit=48${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
       ),
   })
 
   const { data: marketplaceData, isLoading: isMarketplaceLoading } = useQuery({
     queryKey: ['discover-marketplace-products', effectiveSearch, selectedMarketplaceTag],
     queryFn: () => {
-      const params = new URLSearchParams({ limit: '24' })
+      const params = new URLSearchParams({ limit: '72' })
       if (effectiveSearch) params.set('q', effectiveSearch)
       if (selectedMarketplaceTag) params.set('tag', selectedMarketplaceTag)
       return fetchApi<MarketplaceProductsResponse>(`/api/discover/marketplace/products?${params}`)
@@ -207,6 +295,20 @@ export default function DiscoverScreen() {
     },
   })
 
+  const { data: playData } = useQuery({
+    queryKey: ['discover-plays'],
+    queryFn: () => fetchApi<{ plays: PlayCatalogItem[] }>('/api/play/catalog'),
+  })
+
+  const { data: cloudTemplates = [] } = useQuery({
+    queryKey: ['discover-cloud-templates', i18n.language, effectiveSearch],
+    queryFn: () =>
+      fetchApi<CloudTemplateSource[]>(
+        `/api/cloud-saas/templates?locale=${encodeURIComponent(i18n.language)}${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
+      ),
+    retry: false,
+  })
+
   const hub = data ?? {
     buddies: [],
     products: [],
@@ -214,17 +316,23 @@ export default function DiscoverScreen() {
     communities: [],
     totals: { buddies: 0, products: 0, shops: 0, communities: 0 },
   }
-  const marketplaceProducts = marketplaceData?.products ?? []
-  const marketplaceCategories = useMemo(
-    () =>
-      selectedMarketplaceTag
-        ? ensureSelectedCategory(
-            marketplaceCategoriesData?.categories ?? categoriesFromProducts(marketplaceProducts),
-            selectedMarketplaceTag,
-          )
-        : (marketplaceCategoriesData?.categories ?? categoriesFromProducts(marketplaceProducts)),
-    [marketplaceCategoriesData?.categories, marketplaceProducts, selectedMarketplaceTag],
+  const plays = useMemo(
+    () => sortPlays(filterPlays(playData?.plays ?? [], effectiveSearch)),
+    [effectiveSearch, playData?.plays],
   )
+  const buddies = useMemo(() => sortBuddies(hub.buddies), [hub.buddies])
+  const products = useMemo(
+    () => sortProducts(marketplaceData?.products ?? []),
+    [marketplaceData?.products],
+  )
+  const marketplaceCategories = useMemo(
+    () => buildMarketplaceCategories(marketplaceCategoriesData?.categories, products),
+    [marketplaceCategoriesData?.categories, products],
+  )
+  const shops = useMemo(() => sortShops(hub.shops), [hub.shops])
+  const communities = useMemo(() => sortCommunities(hub.communities), [hub.communities])
+  const cloudCards = useMemo(() => sortCloudTemplates(cloudTemplates), [cloudTemplates])
+  const isZh = i18n.language.startsWith('zh')
 
   const joinMutation = useMutation({
     mutationFn: ({ inviteCode }: { inviteCode: string }) =>
@@ -233,29 +341,74 @@ export default function DiscoverScreen() {
         body: JSON.stringify({ inviteCode }),
       }),
     onSuccess: (server) => {
+      successHaptic()
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       router.push(`/(main)/servers/${server.slug ?? server.id}`)
     },
-    onError: (err: { message?: string }) => showToast(err?.message || t('common.error'), 'error'),
+    onError: (err: { message?: string }) => {
+      errorHaptic()
+      showToast(err?.message || t('common.error'), 'error')
+    },
   })
 
-  const counts = {
+  const counts: Record<HubSection, number> = {
     all:
-      hub.buddies.length + marketplaceProducts.length + hub.shops.length + hub.communities.length,
+      plays.length +
+      buddies.length +
+      products.length +
+      shops.length +
+      cloudCards.length +
+      communities.length,
+    plays: plays.length,
     buddies: hub.totals.buddies,
-    market: marketplaceData?.total ?? marketplaceProducts.length,
+    market: marketplaceData?.total ?? products.length,
     shops: hub.totals.shops,
+    cloud: cloudCards.length,
     communities: hub.totals.communities,
   }
   const isSearching = effectiveSearch.length > 0
   const empty = counts.all === 0
+  const loadingContent = isLoading || isMarketplaceLoading
+
+  const selectSection = (
+    section: HubSection,
+    index = HUB_SECTIONS.findIndex((s) => s.key === section),
+  ) => {
+    const safeIndex = Math.max(0, index)
+    if (section !== activeSection) {
+      animateNextLayout()
+      setActiveSection(section)
+      setSectionPages((current) => ({ ...current, [section]: 1 }))
+    }
+    tabScrollRef.current?.scrollTo({ x: safeIndex * tabPageWidth, animated: true })
+  }
+
+  const loadMore = (section: HubSection) => {
+    selectionHaptic()
+    animateNextLayout()
+    setSectionPages((current) => ({ ...current, [section]: current[section] + 1 }))
+  }
+
+  const handleTabScrollEnd = (offsetX: number) => {
+    const index = Math.max(0, Math.min(HUB_SECTIONS.length - 1, Math.round(offsetX / tabPageWidth)))
+    const nextSection = HUB_SECTIONS[index]?.key ?? 'all'
+    if (nextSection !== activeSection) {
+      selectionHaptic()
+      animateNextLayout()
+    }
+    setActiveSection(nextSection)
+  }
 
   const openSeller = (owner: HubOwner | null) => {
-    if (owner?.id) router.push(`/(main)/profile/${owner.id}`)
+    if (owner?.id) {
+      selectionHaptic()
+      router.push(`/(main)/profile/${owner.id}`)
+    }
   }
 
   const openShop = (shop: HubShop | HubProduct['shop']) => {
     if (shop.server) {
+      selectionHaptic()
       router.push(`/(main)/servers/${shop.server.slug ?? shop.server.id}/shop` as never)
       return
     }
@@ -264,11 +417,254 @@ export default function DiscoverScreen() {
 
   const openProduct = (product: HubProduct) => {
     if (product.shop.server) {
+      selectionHaptic()
       const serverSlug = product.shop.server.slug ?? product.shop.server.id
       router.push(`/(main)/servers/${serverSlug}/shop?productId=${product.id}` as never)
       return
     }
     openSeller(product.shop.owner)
+  }
+
+  const openPlay = (play: PlayCatalogItem) => {
+    selectionHaptic()
+    router.push({
+      pathname: '/(main)/webview-preview',
+      params: {
+        url: encodeURIComponent(`${API_BASE}/play/launch?play=${encodeURIComponent(play.id)}`),
+        title: isZh ? play.title : play.titleEn,
+      },
+    })
+  }
+
+  const openCloudTemplate = (template: CloudTemplateSource) => {
+    selectionHaptic()
+    const slug = encodeURIComponent(template.slug || template.name)
+    router.push({
+      pathname: '/(main)/webview-preview',
+      params: {
+        url: encodeURIComponent(`${API_BASE}/cloud/store/${slug}/deploy`),
+        title: template.name || template.slug,
+      },
+    })
+  }
+
+  const openCloudCashback = () => {
+    selectionHaptic()
+    router.push({
+      pathname: '/(main)/webview-preview',
+      params: {
+        url: encodeURIComponent(`${API_BASE}/cloud/diy`),
+        title: t('discover.cashbackTitle'),
+      },
+    })
+  }
+
+  const openCommunity = (community: HubCommunity) => {
+    selectionHaptic()
+    router.push(`/(main)/servers/${community.slug ?? community.id}`)
+  }
+
+  const selectMarketplaceTag = (tag: string) => {
+    animateNextLayout()
+    setSelectedMarketplaceTag(tag)
+    selectSection('market')
+  }
+
+  const sectionItems = <T,>(items: T[], itemSection: HubSection, pageSection: HubSection) =>
+    pageSection === 'all'
+      ? items.slice(0, FEATURED_LIMIT)
+      : items.slice(0, sectionPages[itemSection] * SECTION_PAGE_SIZE)
+
+  const hasMore = (
+    pageSection: HubSection,
+    itemSection: HubSection,
+    visibleCount: number,
+    totalCount: number,
+  ) => pageSection === itemSection && visibleCount < totalCount
+
+  const renderSectionContent = (section: HubSection) => {
+    if (loadingContent) {
+      return (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )
+    }
+
+    if (empty) {
+      return (
+        <GlassPanel style={styles.emptyPanel}>
+          <EmptyState
+            icon={Search}
+            title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
+            description={isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')}
+          />
+        </GlassPanel>
+      )
+    }
+
+    const shownPlays = sectionItems(plays, 'plays', section)
+    const shownBuddies = sectionItems(buddies, 'buddies', section)
+    const shownProducts = sectionItems(products, 'market', section)
+    const shownShops = sectionItems(shops, 'shops', section)
+    const shownCommunities = sectionItems(communities, 'communities', section)
+    const cloudLimit =
+      section === 'all'
+        ? Math.max(FEATURED_LIMIT - 1, 0)
+        : Math.max(sectionPages.cloud * SECTION_PAGE_SIZE - 1, 0)
+    const shownCloud = cloudCards.slice(0, cloudLimit)
+
+    return (
+      <View style={styles.lanes}>
+        {(section === 'all' || section === 'plays') && (
+          <HubLane
+            icon={Play}
+            title={t('discover.lanes.plays')}
+            description={t('discover.laneDescriptions.plays')}
+            action={section === 'all' ? t('discover.viewAll') : undefined}
+            onAction={() => selectSection('plays')}
+            empty={t('discover.emptyLane.plays')}
+            hasContent={shownPlays.length > 0}
+            hasMore={hasMore(section, 'plays', shownPlays.length, plays.length)}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('plays')}
+          >
+            {shownPlays.map((play) => (
+              <PlayCard key={play.id} play={play} isZh={isZh} onOpen={() => openPlay(play)} />
+            ))}
+          </HubLane>
+        )}
+
+        {(section === 'all' || section === 'buddies') && (
+          <HubLane
+            icon={Bot}
+            title={t('discover.lanes.buddies')}
+            description={t('discover.laneDescriptions.buddies')}
+            action={section === 'all' ? t('discover.viewAll') : undefined}
+            onAction={() => selectSection('buddies')}
+            empty={t('discover.emptyLane.buddies')}
+            hasContent={shownBuddies.length > 0}
+            hasMore={hasMore(section, 'buddies', shownBuddies.length, buddies.length)}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('buddies')}
+          >
+            {shownBuddies.map((item) => (
+              <BuddyCard key={item.id} item={item} onOpen={() => openSeller(item.owner)} />
+            ))}
+          </HubLane>
+        )}
+
+        {(section === 'all' || section === 'market') && (
+          <HubLane
+            icon={ShoppingBag}
+            title={t('discover.lanes.market')}
+            description={t('discover.laneDescriptions.market')}
+            action={section === 'all' ? t('discover.viewAll') : undefined}
+            onAction={() => selectSection('market')}
+            empty={t('discover.emptyLane.market')}
+            hasContent={shownProducts.length > 0}
+            hasMore={hasMore(
+              section,
+              'market',
+              shownProducts.length,
+              marketplaceData?.total ?? products.length,
+            )}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('market')}
+            before={
+              <>
+                <MarketplaceAisleCards
+                  categories={marketplaceCategories}
+                  selectedTag={selectedMarketplaceTag}
+                  onSelect={selectMarketplaceTag}
+                />
+                <MarketplaceTagChips
+                  categories={marketplaceCategories}
+                  selectedTag={selectedMarketplaceTag}
+                  onSelect={selectMarketplaceTag}
+                />
+              </>
+            }
+          >
+            {shownProducts.map((item) => (
+              <ProductCard key={item.id} item={item} onOpen={() => openProduct(item)} />
+            ))}
+          </HubLane>
+        )}
+
+        {(section === 'all' || section === 'shops') && (
+          <HubLane
+            icon={Store}
+            title={t('discover.lanes.shops')}
+            description={t('discover.laneDescriptions.shops')}
+            action={section === 'all' ? t('discover.viewAll') : undefined}
+            onAction={() => selectSection('shops')}
+            empty={t('discover.emptyLane.shops')}
+            hasContent={shownShops.length > 0}
+            hasMore={hasMore(section, 'shops', shownShops.length, shops.length)}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('shops')}
+          >
+            {shownShops.map((shop) => (
+              <ShopCard key={shop.id} shop={shop} onOpen={() => openShop(shop)} />
+            ))}
+          </HubLane>
+        )}
+
+        {(section === 'all' || section === 'cloud') && (
+          <HubLane
+            icon={Cloud}
+            title={t('discover.lanes.cloud')}
+            description={t('discover.laneDescriptions.cloud')}
+            action={section === 'all' ? t('discover.viewAll') : undefined}
+            onAction={() => selectSection('cloud')}
+            empty={t('discover.emptyLane.cloud')}
+            hasContent={true}
+            hasMore={hasMore(section, 'cloud', shownCloud.length + 1, cloudCards.length + 1)}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('cloud')}
+          >
+            <CloudCashbackCard onOpen={openCloudCashback} />
+            {shownCloud.map((template) => (
+              <CloudTemplateCard
+                key={template.slug}
+                template={template}
+                onOpen={() => openCloudTemplate(template)}
+              />
+            ))}
+          </HubLane>
+        )}
+
+        {(section === 'all' || section === 'communities') && (
+          <HubLane
+            icon={Server}
+            title={t('discover.lanes.communities')}
+            description={t('discover.laneDescriptions.communities')}
+            action={section === 'all' ? t('discover.viewAll') : undefined}
+            onAction={() => selectSection('communities')}
+            empty={t('discover.emptyLane.communities')}
+            hasContent={shownCommunities.length > 0}
+            hasMore={hasMore(section, 'communities', shownCommunities.length, communities.length)}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('communities')}
+          >
+            {shownCommunities.map((community) => (
+              <CommunityCard
+                key={community.id}
+                community={community}
+                joined={joinedServerIds.has(community.id)}
+                pending={joinMutation.isPending}
+                onEnter={() => openCommunity(community)}
+                onJoin={() => {
+                  selectionHaptic()
+                  joinMutation.mutate({ inviteCode: community.inviteCode })
+                }}
+              />
+            ))}
+          </HubLane>
+        )}
+      </View>
+    )
   }
 
   return (
@@ -298,9 +694,12 @@ export default function DiscoverScreen() {
                   icon={X}
                   variant="ghost"
                   iconColor={colors.textMuted}
-                  iconSize={18}
+                  iconSize={iconSize.lg}
                   style={styles.clearButton}
-                  onPress={() => setSearchQuery('')}
+                  onPress={() => {
+                    selectionHaptic()
+                    setSearchQuery('')
+                  }}
                 />
               ) : null
             }
@@ -309,133 +708,37 @@ export default function DiscoverScreen() {
           <MarketplaceCategoryChips
             categories={marketplaceCategories}
             selectedTag={selectedMarketplaceTag}
-            onSelect={(tag) => {
-              setSelectedMarketplaceTag(tag)
-              setActiveSection('market')
-            }}
+            onSelect={selectMarketplaceTag}
           />
         </GlassPanel>
 
+        <MobileTabBar
+          value={activeSection}
+          options={HUB_SECTIONS.map((section) => ({
+            value: section.key,
+            label: t(`discover.sections.${section.key}`),
+            icon: section.icon,
+          }))}
+          onChange={selectSection}
+          tone="primary"
+        />
+
         <ScrollView
+          ref={tabScrollRef}
           horizontal
+          pagingEnabled
+          decelerationRate="fast"
+          nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabs}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={(event) => handleTabScrollEnd(event.nativeEvent.contentOffset.x)}
         >
-          {HUB_SECTIONS.map((section) => {
-            const Icon = section.icon
-            const active = activeSection === section.key
-            return (
-              <Pressable
-                key={section.key}
-                onPress={() => setActiveSection(section.key)}
-                style={[
-                  styles.tab,
-                  {
-                    borderColor: active ? colors.primary : colors.border,
-                    backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
-                  },
-                ]}
-              >
-                <Icon size={15} color={active ? colors.primary : colors.textMuted} />
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: active ? colors.primary : colors.textSecondary },
-                  ]}
-                >
-                  {t(`discover.sections.${section.key}`)}
-                </Text>
-                <Text
-                  style={[styles.tabCount, { color: active ? colors.primary : colors.textMuted }]}
-                >
-                  {counts[section.key]}
-                </Text>
-              </Pressable>
-            )
-          })}
+          {HUB_SECTIONS.map((section) => (
+            <View key={section.key} style={[styles.tabPage, { width: tabPageWidth }]}>
+              {renderSectionContent(section.key)}
+            </View>
+          ))}
         </ScrollView>
-
-        {isLoading || isMarketplaceLoading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : empty ? (
-          <GlassPanel style={styles.emptyPanel}>
-            <EmptyState
-              icon={Search}
-              title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
-              description={
-                isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')
-              }
-            />
-          </GlassPanel>
-        ) : (
-          <View style={styles.lanes}>
-            {(activeSection === 'all' || activeSection === 'buddies') && (
-              <HubLane title={t('discover.lanes.buddies')} empty={t('discover.emptyLane.buddies')}>
-                {hub.buddies.map((item) => (
-                  <BuddyCard key={item.id} item={item} onOpen={() => openSeller(item.owner)} />
-                ))}
-              </HubLane>
-            )}
-
-            {(activeSection === 'all' || activeSection === 'market') && (
-              <HubLane title={t('discover.lanes.market')} empty={t('discover.emptyLane.market')}>
-                <MarketplaceAisleCards
-                  categories={marketplaceCategories}
-                  selectedTag={selectedMarketplaceTag}
-                  onSelect={(tag) => {
-                    setSelectedMarketplaceTag(tag)
-                    setActiveSection('market')
-                  }}
-                />
-                <MarketplaceTagChips
-                  categories={marketplaceCategories}
-                  selectedTag={selectedMarketplaceTag}
-                  onSelect={(tag) => {
-                    setSelectedMarketplaceTag(tag)
-                    setActiveSection('market')
-                  }}
-                />
-                {marketplaceProducts.length === 0 ? (
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                    {t('discover.emptyLane.market')}
-                  </Text>
-                ) : (
-                  marketplaceProducts.map((item) => (
-                    <ProductCard key={item.id} item={item} onOpen={() => openProduct(item)} />
-                  ))
-                )}
-              </HubLane>
-            )}
-
-            {(activeSection === 'all' || activeSection === 'shops') && (
-              <HubLane title={t('discover.lanes.shops')} empty={t('discover.emptyLane.shops')}>
-                {hub.shops.map((shop) => (
-                  <ShopCard key={shop.id} shop={shop} onOpen={() => openShop(shop)} />
-                ))}
-              </HubLane>
-            )}
-
-            {(activeSection === 'all' || activeSection === 'communities') && (
-              <HubLane
-                title={t('discover.lanes.communities')}
-                empty={t('discover.emptyLane.communities')}
-              >
-                {hub.communities.map((community) => (
-                  <CommunityCard
-                    key={community.id}
-                    community={community}
-                    joined={joinedServerIds.has(community.id)}
-                    pending={joinMutation.isPending}
-                    onEnter={() => router.push(`/(main)/servers/${community.slug ?? community.id}`)}
-                    onJoin={() => joinMutation.mutate({ inviteCode: community.inviteCode })}
-                  />
-                ))}
-              </HubLane>
-            )}
-          </View>
-        )}
       </PageScroll>
     </BackgroundSurface>
   )
@@ -463,16 +766,19 @@ function MarketplaceCategoryChips({
         return (
           <Pressable
             key={category.tag}
-            onPress={() => onSelect(category.tag)}
+            onPress={() => {
+              selectionHaptic()
+              onSelect(category.tag)
+            }}
             style={[
               styles.heroCategory,
               {
                 borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
+                backgroundColor: active ? colors.tonePrimarySurface : colors.inputBackground,
               },
             ]}
           >
-            <Icon size={14} color={active ? colors.primary : colors.textMuted} />
+            <Icon size={iconSize.sm} color={active ? colors.primary : colors.textMuted} />
             <Text
               style={[
                 styles.heroCategoryText,
@@ -490,186 +796,130 @@ function MarketplaceCategoryChips({
 }
 
 function HubLane({
+  icon: Icon,
   title,
+  description,
   empty,
+  hasContent,
+  before,
   children,
+  action,
+  onAction,
+  hasMore,
+  loadMoreLabel,
+  onLoadMore,
 }: {
+  icon: LucideIcon
   title: string
+  description: string
   empty: string
+  hasContent: boolean
+  before?: ReactNode
   children: ReactNode
+  action?: string
+  onAction?: () => void
+  hasMore?: boolean
+  loadMoreLabel?: string
+  onLoadMore?: () => void
 }) {
   const colors = useColors()
-  const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children)
   return (
-    <GlassPanel style={styles.lane}>
-      <Text style={[styles.laneTitle, { color: colors.text }]}>{title}</Text>
+    <View style={styles.lane}>
+      <View style={styles.laneHeader}>
+        <View style={[styles.laneIcon, { backgroundColor: colors.tonePrimarySurface }]}>
+          <Icon size={iconSize.lg} color={colors.primary} />
+        </View>
+        <View style={styles.laneTitleBlock}>
+          <Text style={[styles.laneTitle, { color: colors.text }]}>{title}</Text>
+          <Text style={[styles.laneDescription, { color: colors.textMuted }]} numberOfLines={2}>
+            {description}
+          </Text>
+        </View>
+        {action && onAction ? (
+          <Button
+            variant="glass"
+            size="xs"
+            iconRight={ArrowRight}
+            onPress={() => {
+              selectionHaptic()
+              onAction()
+            }}
+            style={styles.laneAction}
+          >
+            {action}
+          </Button>
+        ) : null}
+      </View>
       <View style={styles.cardStack}>
-        {hasChildren ? (
-          children
+        {before}
+        {hasContent ? (
+          <>
+            <WaterfallGrid>{children}</WaterfallGrid>
+            {hasMore && loadMoreLabel && onLoadMore ? (
+              <Button variant="glass" size="sm" onPress={onLoadMore} style={styles.loadMoreButton}>
+                {loadMoreLabel}
+              </Button>
+            ) : null}
+          </>
         ) : (
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>{empty}</Text>
         )}
       </View>
-    </GlassPanel>
-  )
-}
-
-function MarketplaceAisleCards({
-  categories,
-  selectedTag,
-  onSelect,
-}: {
-  categories: MarketplaceCategory[]
-  selectedTag: string
-  onSelect: (tag: string) => void
-}) {
-  const { t } = useTranslation()
-  const colors = useColors()
-  if (categories.length === 0) return null
-  return (
-    <View style={styles.aisleCards}>
-      {categories.slice(0, 6).map((category, index) => {
-        const Icon = CATEGORY_ICON_POOL[index % CATEGORY_ICON_POOL.length] ?? ShoppingBag
-        const active = selectedTag === category.tag
-        return (
-          <Pressable
-            key={category.tag}
-            onPress={() => onSelect(category.tag)}
-            style={[
-              styles.aisleCard,
-              {
-                borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? colors.surfaceHover : colors.surface,
-              },
-            ]}
-          >
-            <View style={[styles.aisleIcon, { backgroundColor: colors.surfaceHover }]}>
-              <Icon size={18} color={colors.primary} />
-            </View>
-            <View style={styles.aisleCopy}>
-              <Text style={[styles.aisleTitle, { color: colors.text }]} numberOfLines={1}>
-                {category.title}
-              </Text>
-              <Text style={[styles.aisleSubtitle, { color: colors.textMuted }]} numberOfLines={2}>
-                {t('discover.supermarket.categoryProductCount', {
-                  count: category.productCount,
-                })}
-              </Text>
-            </View>
-          </Pressable>
-        )
-      })}
     </View>
   )
 }
 
-function MarketplaceTagChips({
-  categories,
-  selectedTag,
-  onSelect,
-}: {
-  categories: MarketplaceCategory[]
-  selectedTag: string
-  onSelect: (tag: string) => void
-}) {
-  const { t } = useTranslation()
-  const colors = useColors()
+function WaterfallGrid({ children }: { children: ReactNode }) {
+  const items = Children.toArray(children).filter(Boolean)
+  const left = items.filter((_, index) => index % 2 === 0)
+  const right = items.filter((_, index) => index % 2 === 1)
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.tagChips}
-    >
-      <Pressable
-        onPress={() => onSelect('')}
-        style={[
-          styles.tagChip,
-          {
-            borderColor: selectedTag ? colors.border : colors.primary,
-            backgroundColor: selectedTag ? colors.inputBackground : colors.surfaceHover,
-          },
-        ]}
-      >
-        <Text
-          style={[styles.tagChipText, { color: selectedTag ? colors.textMuted : colors.primary }]}
-        >
-          {t('discover.marketTags.all')}
-        </Text>
-      </Pressable>
-      {categories.map((category) => {
-        const active = selectedTag === category.tag
-        return (
-          <Pressable
-            key={category.tag}
-            onPress={() => onSelect(category.tag)}
-            style={[
-              styles.tagChip,
-              {
-                borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
-              },
-            ]}
-          >
-            <Text
-              style={[styles.tagChipText, { color: active ? colors.primary : colors.textMuted }]}
-            >
-              {category.title}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </ScrollView>
+    <View style={styles.waterfall}>
+      <View style={styles.waterfallColumn}>{left}</View>
+      <View style={styles.waterfallColumn}>{right}</View>
+    </View>
   )
 }
 
-function categoriesFromProducts(products: HubProduct[]): MarketplaceCategory[] {
-  const categoryMap = new Map<
-    string,
-    { productCount: number; salesCount: number; ratingCount: number; avgRating: number }
-  >()
-  for (const product of products) {
-    const tags = [...new Set((product.tags ?? []).map((tag) => tag.trim()).filter(Boolean))]
-    for (const tag of tags) {
-      const current = categoryMap.get(tag) ?? {
-        productCount: 0,
-        salesCount: 0,
-        ratingCount: 0,
-        avgRating: 0,
-      }
-      current.productCount += 1
-      current.salesCount += product.salesCount
-      categoryMap.set(tag, current)
-    }
-  }
-  return [...categoryMap.entries()]
-    .map(([tag, value]) => ({
-      tag,
-      title: tag,
-      productCount: value.productCount,
-      salesCount: value.salesCount,
-      ratingCount: value.ratingCount,
-      avgRating: value.avgRating,
-      score: value.productCount * 100 + value.salesCount * 8,
-      href: `/app/shop/tags/${encodeURIComponent(tag)}`,
-    }))
-    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
-}
-
-function ensureSelectedCategory(categories: MarketplaceCategory[], selectedTag: string) {
-  if (!selectedTag || categories.some((category) => category.tag === selectedTag)) return categories
-  return [
-    {
-      tag: selectedTag,
-      title: selectedTag,
-      productCount: 0,
-      salesCount: 0,
-      ratingCount: 0,
-      avgRating: 0,
-      score: 0,
-      href: `/app/shop/tags/${encodeURIComponent(selectedTag)}`,
-    },
-    ...categories,
-  ]
+function PlayCard({
+  play,
+  isZh,
+  onOpen,
+}: {
+  play: PlayCatalogItem
+  isZh: boolean
+  onOpen: () => void
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const title = isZh ? play.title : play.titleEn
+  const desc = isZh ? play.desc : play.descEn
+  const category = isZh ? play.category : play.categoryEn
+  const gated = play.status === 'gated'
+  return (
+    <GlassPanel style={styles.itemCard}>
+      <Visual imageUrl={play.image} icon={Play} label={title} />
+      <View style={styles.row}>
+        <View style={styles.titleBlock}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
+            {category}
+          </Text>
+        </View>
+        <Badge variant={gated ? 'neutral' : 'primary'} size="xs">
+          {gated ? t('discover.memberPlay') : t('discover.readyPlay')}
+        </Badge>
+      </View>
+      <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+        {desc}
+      </Text>
+      <Button variant="primary" size="sm" icon={Play} onPress={onOpen}>
+        {t('discover.startPlay')}
+      </Button>
+    </GlassPanel>
+  )
 }
 
 function BuddyCard({ item, onOpen }: { item: HubBuddy; onOpen: () => void }) {
@@ -732,7 +982,7 @@ function ProductCard({ item, onOpen }: { item: HubProduct; onOpen: () => void })
       <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
         {item.summary || item.description || t('discover.noDescription')}
       </Text>
-      <Button size="sm" onPress={onOpen}>
+      <Button variant="primary" size="sm" onPress={onOpen}>
         {t('discover.openProduct')}
       </Button>
     </GlassPanel>
@@ -769,6 +1019,78 @@ function ShopCard({ shop, onOpen }: { shop: HubShop; onOpen: () => void }) {
           {t('discover.openShop')}
         </Button>
       </View>
+    </GlassPanel>
+  )
+}
+
+function CloudCashbackCard({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  return (
+    <GlassPanel style={styles.itemCard}>
+      <View style={[styles.cloudVisual, { backgroundColor: colors.tonePrimarySurface }]}>
+        <Badge variant="primary" size="sm">
+          {t('discover.cashbackBadge')}
+        </Badge>
+        <View style={[styles.cloudIcon, { backgroundColor: colors.surface }]}>
+          <Coins size={iconSize['4xl']} color={colors.primary} />
+        </View>
+      </View>
+      <Text style={[styles.cardTitle, { color: colors.text }]}>{t('discover.cashbackTitle')}</Text>
+      <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={3}>
+        {t('discover.cashbackDesc')}
+      </Text>
+      <Button variant="primary" size="sm" onPress={onOpen}>
+        {t('discover.cashbackAction')}
+      </Button>
+    </GlassPanel>
+  )
+}
+
+function CloudTemplateCard({
+  template,
+  onOpen,
+}: {
+  template: CloudTemplateSource
+  onOpen: () => void
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const meta = getTemplateMeta(template)
+  return (
+    <GlassPanel style={styles.itemCard}>
+      <View style={styles.row}>
+        <Avatar imageUrl={null} icon={Cloud} label={template.name || template.slug} />
+        <View style={styles.titleBlock}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+            {template.name || template.slug}
+          </Text>
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
+            {template.category ?? t('discover.sections.cloud')}
+          </Text>
+        </View>
+        <Badge variant="primary" size="xs">
+          {t('discover.templateCashbackHint')}
+        </Badge>
+      </View>
+      <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+        {template.description || t('discover.cloudTemplateFallback')}
+      </Text>
+      <View style={styles.factRow}>
+        <Fact
+          icon={Users}
+          label={t('discover.cloudMetricAgents')}
+          value={String(meta.agentCount)}
+        />
+        <Fact
+          icon={Sparkles}
+          label={t('discover.cloudMetricPopularity')}
+          value={formatCompact(template.deployCount ?? 0)}
+        />
+      </View>
+      <Button variant="primary" size="sm" icon={Rocket} onPress={onOpen}>
+        {t('discover.cloudTemplateAction')}
+      </Button>
     </GlassPanel>
   )
 }
@@ -861,7 +1183,7 @@ function Visual({
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.visualImage} accessibilityLabel={label} />
       ) : (
-        <Icon size={26} color={colors.primary} />
+        <Icon size={iconSize['4xl']} color={colors.primary} />
       )}
     </View>
   )
@@ -875,6 +1197,296 @@ function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
       <Text style={[styles.factText, { color: colors.textMuted }]}>{label}</Text>
       <Text style={[styles.factValue, { color: colors.text }]}>{value}</Text>
     </View>
+  )
+}
+
+function filterPlays(plays: PlayCatalogItem[], query: string) {
+  const normalized = query.trim().toLowerCase()
+  const visible = plays.filter((play) => play.status !== 'misconfigured')
+  if (!normalized) return visible
+  return visible.filter((play) =>
+    [play.title, play.titleEn, play.desc, play.descEn, play.category, play.categoryEn]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(normalized)),
+  )
+}
+
+function sortPlays(plays: PlayCatalogItem[]) {
+  const statusRank: Record<PlayAvailability, number> = {
+    available: 0,
+    gated: 1,
+    coming_soon: 2,
+    misconfigured: 3,
+  }
+  return [...plays].sort((a, b) => {
+    const statusDelta = statusRank[a.status] - statusRank[b.status]
+    if (statusDelta !== 0) return statusDelta
+    if (a.hot !== b.hot) return a.hot ? -1 : 1
+    return a.title.localeCompare(b.title)
+  })
+}
+
+function sortBuddies(buddies: HubBuddy[]) {
+  return [...buddies].sort(
+    (a, b) =>
+      b.rentalCount * 6 + (b.viewCount ?? 0) - (a.rentalCount * 6 + (a.viewCount ?? 0)) ||
+      b.messageFee - a.messageFee ||
+      a.title.localeCompare(b.title),
+  )
+}
+
+function sortProducts(products: HubProduct[]) {
+  return [...products].sort(
+    (a, b) =>
+      b.salesCount * 6 +
+        (b.ratingCount ?? 0) * 2 +
+        (b.avgRating ?? 0) -
+        (a.salesCount * 6 + (a.ratingCount ?? 0) * 2 + (a.avgRating ?? 0)) ||
+      a.name.localeCompare(b.name),
+  )
+}
+
+function sortShops(shops: HubShop[]) {
+  return [...shops].sort(
+    (a, b) => (b.productCount ?? 0) - (a.productCount ?? 0) || a.name.localeCompare(b.name),
+  )
+}
+
+function sortCommunities(communities: HubCommunity[]) {
+  return [...communities].sort(
+    (a, b) =>
+      (b.heatScore ?? 0) - (a.heatScore ?? 0) ||
+      b.memberCount - a.memberCount ||
+      a.name.localeCompare(b.name),
+  )
+}
+
+function sortCloudTemplates(templates: CloudTemplateSource[]) {
+  return [...templates].sort((a, b) => {
+    const officialDelta = Number(b.source === 'official') - Number(a.source === 'official')
+    if (officialDelta !== 0) return officialDelta
+    return (b.deployCount ?? 0) - (a.deployCount ?? 0) || a.name.localeCompare(b.name)
+  })
+}
+
+function buildMarketplaceCategories(
+  categories: MarketplaceCategory[] | undefined,
+  products: HubProduct[],
+) {
+  const fallback = categoriesFromProducts(products)
+  const source = categories?.length ? mergeMarketplaceCategories(categories, fallback) : fallback
+  return source.slice(0, 12)
+}
+
+function categoriesFromProducts(products: HubProduct[]): MarketplaceCategory[] {
+  const categoryMap = new Map<
+    string,
+    { productCount: number; salesCount: number; ratingCount: number; avgRating: number }
+  >()
+  for (const product of products) {
+    const tags = [...new Set((product.tags ?? []).map((tag) => tag.trim()).filter(Boolean))]
+    for (const tag of tags) {
+      const current = categoryMap.get(tag) ?? {
+        productCount: 0,
+        salesCount: 0,
+        ratingCount: 0,
+        avgRating: 0,
+      }
+      current.productCount += 1
+      current.salesCount += product.salesCount
+      current.ratingCount += product.ratingCount ?? 0
+      current.avgRating += product.avgRating ?? 0
+      categoryMap.set(tag, current)
+    }
+  }
+  return [...categoryMap.entries()]
+    .map(([tag, value]) => ({
+      tag,
+      title: tag,
+      productCount: value.productCount,
+      salesCount: value.salesCount,
+      ratingCount: value.ratingCount,
+      avgRating: value.productCount ? Math.round(value.avgRating / value.productCount) : 0,
+      score: value.productCount * 100 + value.salesCount * 8 + value.ratingCount * 4,
+      href: `/app/shop/tags/${encodeURIComponent(tag)}`,
+    }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.productCount - a.productCount ||
+        b.salesCount - a.salesCount ||
+        a.title.localeCompare(b.title),
+    )
+}
+
+function mergeMarketplaceCategories(
+  categories: MarketplaceCategory[],
+  fallback: MarketplaceCategory[],
+) {
+  const byTag = new Map(categories.map((category) => [category.tag, category]))
+  for (const category of fallback) {
+    if (!byTag.has(category.tag)) byTag.set(category.tag, category)
+  }
+  return [...byTag.values()]
+}
+
+function ensureSelectedCategory(categories: MarketplaceCategory[], selectedTag: string) {
+  if (!selectedTag || categories.some((category) => category.tag === selectedTag)) return categories
+  return [
+    {
+      tag: selectedTag,
+      title: selectedTag,
+      productCount: 0,
+      salesCount: 0,
+      ratingCount: 0,
+      avgRating: 0,
+      score: 0,
+      href: `/app/shop/tags/${encodeURIComponent(selectedTag)}`,
+    },
+    ...categories,
+  ]
+}
+
+function getTemplateMeta(template: CloudTemplateSource) {
+  const deployments =
+    template.content && typeof template.content === 'object'
+      ? (template.content.deployments as { namespace?: unknown; agents?: unknown[] } | undefined)
+      : undefined
+  return {
+    namespace:
+      typeof deployments?.namespace === 'string' && deployments.namespace.trim()
+        ? deployments.namespace
+        : template.slug,
+    agentCount: Array.isArray(deployments?.agents) ? deployments.agents.length : 0,
+  }
+}
+
+function formatCompact(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace('.0', '')}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1).replace('.0', '')}K`
+  return String(value)
+}
+
+function MarketplaceAisleCards({
+  categories,
+  selectedTag,
+  onSelect,
+}: {
+  categories: MarketplaceCategory[]
+  selectedTag: string
+  onSelect: (tag: string) => void
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const visibleCategories = selectedTag
+    ? ensureSelectedCategory(categories, selectedTag)
+    : categories
+  if (visibleCategories.length === 0) return null
+  return (
+    <View style={styles.aisleCards}>
+      {visibleCategories.slice(0, 6).map((category, index) => {
+        const Icon = CATEGORY_ICON_POOL[index % CATEGORY_ICON_POOL.length] ?? ShoppingBag
+        const active = selectedTag === category.tag
+        return (
+          <Pressable
+            key={category.tag}
+            onPress={() => {
+              selectionHaptic()
+              onSelect(category.tag)
+            }}
+            style={[
+              styles.aisleCard,
+              {
+                borderColor: active ? colors.primary : colors.border,
+                backgroundColor: active ? colors.tonePrimarySurface : colors.surface,
+              },
+            ]}
+          >
+            <View style={[styles.aisleIcon, { backgroundColor: colors.inputBackground }]}>
+              <Icon size={iconSize.lg} color={colors.primary} />
+            </View>
+            <View style={styles.aisleCopy}>
+              <Text style={[styles.aisleTitle, { color: colors.text }]} numberOfLines={1}>
+                {category.title}
+              </Text>
+              <Text style={[styles.aisleSubtitle, { color: colors.textMuted }]} numberOfLines={2}>
+                {t('discover.supermarket.categoryProductCount', {
+                  count: category.productCount,
+                })}
+              </Text>
+            </View>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+function MarketplaceTagChips({
+  categories,
+  selectedTag,
+  onSelect,
+}: {
+  categories: MarketplaceCategory[]
+  selectedTag: string
+  onSelect: (tag: string) => void
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const visibleCategories = selectedTag
+    ? ensureSelectedCategory(categories, selectedTag)
+    : categories
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.tagChips}
+    >
+      <Pressable
+        onPress={() => {
+          selectionHaptic()
+          onSelect('')
+        }}
+        style={[
+          styles.tagChip,
+          {
+            borderColor: selectedTag ? colors.border : colors.primary,
+            backgroundColor: selectedTag ? colors.inputBackground : colors.tonePrimarySurface,
+          },
+        ]}
+      >
+        <Text
+          style={[styles.tagChipText, { color: selectedTag ? colors.textMuted : colors.primary }]}
+        >
+          {t('discover.marketTags.all')}
+        </Text>
+      </Pressable>
+      {visibleCategories.map((category) => {
+        const active = selectedTag === category.tag
+        return (
+          <Pressable
+            key={category.tag}
+            onPress={() => {
+              selectionHaptic()
+              onSelect(category.tag)
+            }}
+            style={[
+              styles.tagChip,
+              {
+                borderColor: active ? colors.primary : colors.border,
+                backgroundColor: active ? colors.tonePrimarySurface : colors.inputBackground,
+              },
+            ]}
+          >
+            <Text
+              style={[styles.tagChipText, { color: active ? colors.primary : colors.textMuted }]}
+            >
+              {category.title}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </ScrollView>
   )
 }
 
@@ -935,28 +1547,8 @@ const styles = StyleSheet.create({
     width: size.sectionCompactIcon,
     height: size.sectionCompactIcon,
   },
-  tabs: {
-    gap: spacing.sm,
-    paddingRight: spacing.md,
-  },
-  tab: {
-    minWidth: size.navSide,
-    height: size.iconBubble,
-    borderWidth: border.hairline,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  tabText: {
-    fontSize: fontSize.xs,
-    fontWeight: '900',
-  },
-  tabCount: {
-    marginLeft: 'auto',
-    fontSize: fontSize.xs,
-    fontWeight: '900',
+  tabPage: {
+    paddingBottom: spacing.xl,
   },
   centerContainer: {
     paddingVertical: spacing['3xl'],
@@ -968,11 +1560,49 @@ const styles = StyleSheet.create({
   lane: {
     gap: spacing.sm,
   },
+  laneHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  laneIcon: {
+    width: size.controlLg,
+    height: size.controlLg,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  laneTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
   laneTitle: {
     fontSize: fontSize.md,
     fontWeight: '900',
   },
+  laneDescription: {
+    marginTop: spacing.xxs,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeight.xs,
+    fontWeight: '700',
+  },
+  laneAction: {
+    flexShrink: 0,
+  },
   cardStack: {
+    gap: spacing.sm,
+  },
+  loadMoreButton: {
+    alignSelf: 'center',
+  },
+  waterfall: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  waterfallColumn: {
+    flex: 1,
     gap: spacing.sm,
   },
   aisleCards: {
@@ -1084,6 +1714,20 @@ const styles = StyleSheet.create({
   visualImage: {
     width: '100%',
     height: '100%',
+  },
+  cloudVisual: {
+    minHeight: size.actionTileMin,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    justifyContent: 'space-between',
+  },
+  cloudIcon: {
+    marginTop: spacing.lg,
+    width: size.plusPanelIcon,
+    height: size.plusPanelIcon,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   factRow: {
     flexDirection: 'row',

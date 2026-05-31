@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from '@rsbuild/core'
 import { pluginReact } from '@rsbuild/plugin-react'
@@ -5,13 +6,56 @@ import { pluginReact } from '@rsbuild/plugin-react'
 // Absolute path to @shadowob/cloud-ui source
 const cloudUiRoot = path.resolve(__dirname, '../cloud/packages/ui')
 const cloudUiSrc = path.resolve(__dirname, '../cloud/packages/ui/src')
-const devApiTarget = process.env.SHADOW_DEV_API_BASE ?? 'http://127.0.0.1:3002'
+const defaultHostedApiTarget = 'https://shadowob.com'
+const defaultStandaloneDevApiTarget = 'http://127.0.0.1:3002'
+const useDesktopSettingsProxy = process.env.SHADOW_DESKTOP_DYNAMIC_PROXY === '1'
+
+function normalizeHttpOrigin(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const input = value.trim()
+  if (!input) return null
+  try {
+    const url = new URL(input)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return url.origin
+  } catch {
+    return null
+  }
+}
+
+function readDesktopSettingsApiTarget(): string {
+  const settingsPath = process.env.SHADOW_DESKTOP_SETTINGS_PATH
+  if (!settingsPath || !existsSync(settingsPath)) return defaultHostedApiTarget
+  try {
+    const parsed = JSON.parse(readFileSync(settingsPath, 'utf8')) as { serverBaseUrl?: unknown }
+    return normalizeHttpOrigin(parsed.serverBaseUrl) ?? defaultHostedApiTarget
+  } catch {
+    return defaultHostedApiTarget
+  }
+}
+
+function getDevApiTarget(): string {
+  if (useDesktopSettingsProxy) return readDesktopSettingsApiTarget()
+  return normalizeHttpOrigin(process.env.SHADOW_DEV_API_BASE) ?? defaultStandaloneDevApiTarget
+}
+
+const devApiTarget = getDevApiTarget()
 
 function handleDevProxyError(error: NodeJS.ErrnoException) {
   if (error.code === 'EPIPE' || error.code === 'ECONNRESET') {
     return
   }
   console.error('[dev proxy] request failed:', error)
+}
+
+function apiProxyOptions(options: { ws?: boolean } = {}) {
+  return {
+    target: devApiTarget,
+    router: useDesktopSettingsProxy ? () => getDevApiTarget() : undefined,
+    ws: options.ws,
+    changeOrigin: true,
+    onError: handleDevProxyError,
+  }
 }
 
 export default defineConfig({
@@ -46,20 +90,9 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': {
-        target: devApiTarget,
-        changeOrigin: true,
-      },
-      '/socket.io': {
-        target: devApiTarget,
-        ws: true,
-        changeOrigin: true,
-        onError: handleDevProxyError,
-      },
-      '/shadow': {
-        target: devApiTarget,
-        changeOrigin: true,
-      },
+      '/api': apiProxyOptions(),
+      '/socket.io': apiProxyOptions({ ws: true }),
+      '/shadow': apiProxyOptions(),
     },
   },
   output: {

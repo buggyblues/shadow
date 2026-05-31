@@ -1,7 +1,13 @@
 import { useAuthStore } from '../stores/auth.store'
 import { useChatStore } from '../stores/chat.store'
 import { getApiUrl } from './api-url'
-import { syncDesktopCommunityAuthToken } from './desktop-community-auth'
+import { currentAppRedirect } from './auth-redirect'
+import {
+  DESKTOP_COMMUNITY_AUTH_UPDATED_EVENT,
+  type DesktopCommunityAuthSyncReason,
+  readDesktopCommunityAuthTokens,
+  syncDesktopCommunityAuthToken,
+} from './desktop-community-auth'
 import { queryClient } from './query-client'
 import { disconnectSocket } from './socket'
 
@@ -40,13 +46,18 @@ type StoredTokens = {
 }
 
 let validationPromise: Promise<AuthenticatedUser | null> | null = null
+let desktopAuthStateListenerInstalled = false
 
 function isAuthPath(pathname: string) {
   return pathname.startsWith('/app/login') || pathname.startsWith('/app/register')
 }
 
+function authStorage(): Storage | null {
+  return typeof window === 'undefined' ? null : window.localStorage
+}
+
 function markAuthenticated(user: AuthenticatedUser, accessToken: string) {
-  syncDesktopCommunityAuthToken(accessToken)
+  syncDesktopCommunityAuthToken(accessToken, undefined, 'sync')
   useAuthStore.setState({ user, accessToken, isAuthenticated: true })
   queryClient.setQueryData(['me'], user)
 }
@@ -62,7 +73,7 @@ async function fetchCurrentUser(accessToken: string): Promise<AuthenticatedUser 
 }
 
 async function refreshStoredTokens(): Promise<StoredTokens | null> {
-  const refreshToken = localStorage.getItem('refreshToken')
+  const refreshToken = authStorage()?.getItem('refreshToken')
   if (!refreshToken) return null
 
   const response = await fetch(getApiUrl('/api/auth/refresh'), {
@@ -73,20 +84,25 @@ async function refreshStoredTokens(): Promise<StoredTokens | null> {
 
   if (!response.ok) return null
   const data = (await response.json()) as StoredTokens
-  localStorage.setItem('accessToken', data.accessToken)
-  localStorage.setItem('refreshToken', data.refreshToken)
-  syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken)
+  authStorage()?.setItem('accessToken', data.accessToken)
+  authStorage()?.setItem('refreshToken', data.refreshToken)
+  syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken, 'refresh')
   return data
 }
 
 export function clearAuthenticatedSession(options?: {
   redirectToLogin?: boolean
   redirect?: string
+  syncDesktop?: boolean
+  desktopReason?: Extract<DesktopCommunityAuthSyncReason, 'logout' | 'revoked'>
 }) {
   if (typeof window !== 'undefined') {
     disconnectSocket()
   }
-  useAuthStore.getState().logout()
+  useAuthStore.getState().logout({
+    syncDesktop: options?.syncDesktop ?? false,
+    desktopReason: options?.desktopReason,
+  })
 
   if (
     options?.redirectToLogin &&
@@ -98,8 +114,32 @@ export function clearAuthenticatedSession(options?: {
   }
 }
 
+async function readStoredOrDesktopTokens(): Promise<StoredTokens> {
+  const storage = authStorage()
+  const storedAccessToken = storage?.getItem('accessToken') ?? ''
+  const storedRefreshToken = storage?.getItem('refreshToken') ?? ''
+  if (storedAccessToken) {
+    if (!storedRefreshToken) {
+      const desktopTokens = await readDesktopCommunityAuthTokens()
+      if (desktopTokens.refreshToken) storage?.setItem('refreshToken', desktopTokens.refreshToken)
+      return {
+        accessToken: storedAccessToken,
+        refreshToken: desktopTokens.refreshToken || storedRefreshToken,
+      }
+    }
+    return { accessToken: storedAccessToken, refreshToken: storedRefreshToken }
+  }
+
+  const desktopTokens = await readDesktopCommunityAuthTokens()
+  if (desktopTokens.accessToken) {
+    storage?.setItem('accessToken', desktopTokens.accessToken)
+    if (desktopTokens.refreshToken) storage?.setItem('refreshToken', desktopTokens.refreshToken)
+  }
+  return desktopTokens
+}
+
 async function validateStoredSession(): Promise<AuthenticatedUser | null> {
-  const accessToken = localStorage.getItem('accessToken')
+  const { accessToken } = await readStoredOrDesktopTokens()
   if (!accessToken) {
     clearAuthenticatedSession()
     return null
@@ -114,13 +154,13 @@ async function validateStoredSession(): Promise<AuthenticatedUser | null> {
 
     const refreshed = await refreshStoredTokens()
     if (!refreshed) {
-      clearAuthenticatedSession()
+      clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
       return null
     }
 
     const refreshedUser = await fetchCurrentUser(refreshed.accessToken)
     if (!refreshedUser) {
-      clearAuthenticatedSession()
+      clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
       return null
     }
 
@@ -146,4 +186,40 @@ export function applyAuthenticatedSession(session: AuthenticatedSession) {
   useChatStore.getState().setActiveServer(null)
   queryClient.removeQueries()
   queryClient.clear()
+}
+
+export function installDesktopCommunityAuthStateListener(): void {
+  if (desktopAuthStateListenerInstalled || typeof window === 'undefined') return
+  desktopAuthStateListenerInstalled = true
+  window.addEventListener(DESKTOP_COMMUNITY_AUTH_UPDATED_EVENT, (event) => {
+    const detail =
+      event instanceof CustomEvent && detailIsAuthUpdate(event.detail) ? event.detail : null
+    if (!detail) return
+    if (!detail.authenticated || !detail.accessToken) {
+      clearAuthenticatedSession({
+        redirectToLogin: true,
+        redirect: currentAppRedirect(),
+        syncDesktop: false,
+      })
+      return
+    }
+    authStorage()?.setItem('accessToken', detail.accessToken)
+    if (detail.refreshToken) authStorage()?.setItem('refreshToken', detail.refreshToken)
+    void ensureAuthenticatedSession()
+  })
+}
+
+function detailIsAuthUpdate(value: unknown): value is {
+  accessToken: string
+  refreshToken?: string
+  authenticated: boolean
+  reason?: string
+} {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.authenticated === 'boolean' &&
+    (typeof record.accessToken === 'string' || record.accessToken === undefined) &&
+    (typeof record.refreshToken === 'string' || record.refreshToken === undefined)
+  )
 }

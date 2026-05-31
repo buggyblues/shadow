@@ -13,7 +13,6 @@ import {
   session,
   shell,
 } from 'electron'
-import { normalizeCommunityAccessToken } from '../shared/community-auth'
 
 // Suppress EPIPE errors that occur when a child process dies while the main
 // process writes to its stdio pipe (e.g. gateway process exit).
@@ -23,6 +22,7 @@ process.on('uncaughtException', (err) => {
 })
 
 import { setupAutoUpdater } from './auto-updater'
+import { readCommunityAuthTokens, syncCommunityAuthStateToOpenWindows } from './community-session'
 import {
   fetchCommunityUrlWithAuth,
   fetchCommunityWithAuth,
@@ -37,6 +37,7 @@ import {
 import {
   applyDesktopNetworkSettings,
   getDesktopServerBaseUrl,
+  onDesktopSettingsApplied,
   setupDesktopSettingsHandlers,
 } from './desktop-settings'
 import { createAppMenu } from './menu'
@@ -254,17 +255,6 @@ function getReaderState(): { activeId: string | null; tabs: ReaderResourceSnapsh
       ? activeReaderResourceId
       : (tabs.at(-1)?.id ?? null)
   return { activeId, tabs }
-}
-
-function isCommunityAuthSnapshotSource(sourceUrl: string): boolean {
-  try {
-    const url = new URL(sourceUrl)
-    if (url.protocol === 'app:' && url.hostname === 'shadow') return true
-    if (url.protocol === 'http:' || url.protocol === 'https:') return true
-    return false
-  } catch {
-    return false
-  }
 }
 
 function publishReaderState(): void {
@@ -500,9 +490,22 @@ app.on('ready', async () => {
   setupConnectorDaemonHandlers()
   setupShortcutHandlers()
   setupPetVoiceHandlers()
+  onDesktopSettingsApplied(() => {
+    void syncCommunityAuthStateToOpenWindows('settings')
+  })
   await applyDesktopNetworkSettings()
 
-  createWindow()
+  const mainWindow = createWindow()
+  mainWindow.webContents.once('did-finish-load', () => {
+    void readCommunityAuthTokens()
+      .then((tokens) => {
+        if (tokens.accessToken || tokens.refreshToken) {
+          return syncCommunityAuthStateToOpenWindows('startup')
+        }
+        return undefined
+      })
+      .catch(() => undefined)
+  })
   createTray()
   createAppMenu()
   registerGlobalShortcuts()
@@ -599,21 +602,34 @@ app.on('ready', async () => {
       payload: {
         accessToken?: unknown
         refreshToken?: unknown
+        reason?: unknown
         sourceUrl?: unknown
       },
     ) => {
-      const token = normalizeCommunityAccessToken(payload?.accessToken)
-      const refreshToken = normalizeCommunityAccessToken(payload?.refreshToken)
-      const sourceUrl =
-        typeof payload?.sourceUrl === 'string' ? payload.sourceUrl : event.sender.getURL()
-      if (token || refreshToken) {
-        rememberCommunityAuthSnapshot({ accessToken: token, refreshToken })
-      } else if (isCommunityAuthSnapshotSource(sourceUrl)) {
-        forgetCommunityAuthTokens()
-      }
+      const reason = typeof payload?.reason === 'string' ? payload.reason : 'sync'
+      rememberCommunityAuthSnapshot(
+        {
+          accessToken: payload?.accessToken as string,
+          refreshToken: payload?.refreshToken as string,
+        },
+        {
+          reason:
+            reason === 'startup' ||
+            reason === 'storage' ||
+            reason === 'sync' ||
+            reason === 'login' ||
+            reason === 'refresh' ||
+            reason === 'logout' ||
+            reason === 'settings' ||
+            reason === 'revoked'
+              ? reason
+              : 'sync',
+        },
+      )
     },
   )
   ipcMain.handle('desktop:getCommunityAuthToken', () => readCommunityAccessToken())
+  ipcMain.handle('desktop:getCommunityAuthTokens', () => readCommunityAuthTokens())
   ipcMain.handle(
     'desktop:community:fetchJson',
     async (
