@@ -47,7 +47,8 @@
       "tar": ">=7.5.11",
       "fast-uri": ">=3.1.2",
       "fast-xml-builder": ">=1.1.5",
-      "tmp": ">=0.2.6"
+      "tmp": ">=0.2.6",
+      "@expo/plist": "0.7.0"
     },
     "peerDependencyRules": {
       "allowedVersions": {
@@ -62,7 +63,9 @@
       ]
     },
     "patchedDependencies": {
-      "plist@3.1.0": "patches/plist@3.1.0.patch"
+      "@expo/plist@0.7.0": "patches/@expo__plist@0.7.0.patch",
+      "appdmg@0.6.6": "patches/appdmg@0.6.6.patch",
+      "ds-store@0.1.6": "patches/ds-store@0.1.6.patch"
     }
   },
   "scripts": {
@@ -150,9 +153,6 @@
     "*.{ts,tsx}": [
       "bash -c 'pnpm typecheck:staged'"
     ]
-  },
-  "optionalDependencies": {
-    "fs-xattr": "0.3.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",
