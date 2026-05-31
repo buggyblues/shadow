@@ -177,11 +177,6 @@ jobs:
           fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`)
           NODE
 
-      - name: Reset EAS iOS App Store provisioning profile
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
-        working-directory: apps/mobile
-        run: node scripts/reset-eas-ios-profile.mjs
-
       - name: Configure ASC API key for EAS credential repair
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
         shell: bash
@@ -226,6 +221,16 @@ jobs:
           fi
 
           echo "EXPO_ASC_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Ensure Sign in with Apple capability
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
+        working-directory: apps/mobile
+        run: node scripts/ensure-apple-signin-capability.mjs
+
+      - name: Reset EAS iOS App Store provisioning profile
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
+        working-directory: apps/mobile
+        run: node scripts/reset-eas-ios-profile.mjs
 
       - name: Build and auto-submit to TestFlight
         working-directory: apps/mobile
