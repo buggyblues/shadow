@@ -18,6 +18,7 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.shadowob.mobile',
+    usesAppleSignIn: true,
     associatedDomains: ['applinks:shadowob.shadowob.com'],
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
