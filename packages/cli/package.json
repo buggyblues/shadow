@@ -1,6 +1,6 @@
 {
   "name": "@shadowob/cli",
-  "version": "1.1.10",
+  "version": "1.1.11",
   "description": "Shadow CLI — command-line interface for Shadow servers",
   "license": "MIT",
   "type": "module",
