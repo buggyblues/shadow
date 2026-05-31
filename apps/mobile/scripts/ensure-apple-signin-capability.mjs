@@ -21,6 +21,36 @@ function base64Url(input) {
     .replaceAll('=', '')
 }
 
+function readDerInteger(buffer, offset) {
+  if (buffer[offset] !== 0x02) {
+    throw new Error('Invalid ECDSA DER signature')
+  }
+  const length = buffer[offset + 1]
+  const start = offset + 2
+  return {
+    nextOffset: start + length,
+    value: buffer.subarray(start, start + length),
+  }
+}
+
+function normalizeSignatureInteger(value) {
+  const trimmed = value[0] === 0 ? value.subarray(1) : value
+  if (trimmed.length > 32) {
+    throw new Error('Invalid ECDSA signature integer length')
+  }
+  return Buffer.concat([Buffer.alloc(32 - trimmed.length), trimmed])
+}
+
+function derToJose(signature) {
+  if (signature[0] !== 0x30) {
+    throw new Error('Invalid ECDSA DER signature')
+  }
+
+  const r = readDerInteger(signature, 2)
+  const s = readDerInteger(signature, r.nextOffset)
+  return Buffer.concat([normalizeSignatureInteger(r.value), normalizeSignatureInteger(s.value)])
+}
+
 function createJwt() {
   const keyId = requireEnv('EXPO_ASC_KEY_ID')
   const issuerId = requireEnv('EXPO_ASC_ISSUER_ID')
@@ -37,7 +67,7 @@ function createJwt() {
     }),
   )
   const unsignedToken = `${header}.${payload}`
-  const signature = createSign('SHA256').update(unsignedToken).sign(privateKey)
+  const signature = derToJose(createSign('SHA256').update(unsignedToken).sign(privateKey))
   return `${unsignedToken}.${base64Url(signature)}`
 }
 
