@@ -1,0 +1,31 @@
+diff --git a/lib/util.js b/lib/util.js
+index 300106bf412bd5180a476a9855f1dfff6c8d2f8d..7d3a846898e25195f0ace615ccfe3afbc9c9d0ea 100644
+--- a/lib/util.js
++++ b/lib/util.js
+@@ -3,7 +3,12 @@
+ const execa = require('execa')
+ const pathExists = require('path-exists')
+ const util = require('util')
+-const xattr = require('fs-xattr')
++let xattr = null
++try {
++  xattr = require('fs-xattr')
++} catch (_error) {
++  xattr = null
++}
+ 
+ exports.sh = function (prog, args, cb) {
+   util.callbackify(() => execa(prog, args))(cb)
+@@ -34,7 +39,11 @@ exports.tiffutil = function (a, b, out, cb) {
+ exports.seticonflag = function (path, cb) {
+   const buf = Buffer.alloc(32)
+   buf.writeUInt8(4, 8)
+-  util.callbackify(() => xattr.set(path, 'com.apple.FinderInfo', buf))(cb)
++  if (xattr) {
++    util.callbackify(() => xattr.set(path, 'com.apple.FinderInfo', buf))(cb)
++    return
++  }
++  exports.sh('xattr', ['-wx', 'com.apple.FinderInfo', buf.toString('hex'), path], cb)
+ }
+ 
+ exports.codesign = function (identity, identifier, path, cb) {

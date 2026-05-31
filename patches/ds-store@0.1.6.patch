@@ -1,0 +1,24 @@
+diff --git a/index.js b/index.js
+index 2c6d3fb2a8258ffa87ff2116d3a5373ae52ae956..0f24780a03e97dfac8bd01114b388dc4d012df62 100644
+--- a/index.js
++++ b/index.js
+@@ -1,5 +1,4 @@
+ var assert = require('assert')
+-var alias = require('macos-alias')
+ var util = require('util')
+ 
+ var Entry = require('./lib/entry')
+@@ -47,7 +46,12 @@ Helper.prototype.write = function (path, cb) {
+   var rawAlias, colorComponents
+ 
+   if (this.opts.backgroundPath) {
+-    rawAlias = alias.create(this.opts.backgroundPath)
++    try {
++      var alias = require('macos-alias')
++      rawAlias = alias.create(this.opts.backgroundPath)
++    } catch (_error) {
++      rawAlias = undefined
++    }
+   }
+ 
+   if (this.opts.backgroundColor) {
