@@ -208,9 +208,23 @@ jobs:
           if [[ -n "${EXPO_ASC_API_KEY_BASE64:-}" ]]; then
             printf '%s' "$EXPO_ASC_API_KEY_BASE64" | base64 --decode > "$key_path"
           else
-            printf '%s\n' "$EXPO_ASC_API_KEY_P8" > "$key_path"
+            python3 - <<'PY' > "$key_path"
+          import os
+
+          value = os.environ["EXPO_ASC_API_KEY_P8"]
+          if "\\n" in value:
+              value = value.replace("\\n", "\n")
+
+          print(value, end="" if value.endswith("\n") else "\n")
+          PY
           fi
           chmod 600 "$key_path"
+
+          if ! grep -q "BEGIN PRIVATE KEY" "$key_path" || ! openssl pkey -in "$key_path" -noout >/dev/null 2>&1; then
+            echo "::error::EXPO_ASC_API_KEY_P8/EXPO_ASC_API_KEY_BASE64 is not a valid App Store Connect .p8 private key."
+            exit 1
+          fi
+
           echo "EXPO_ASC_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
 
       - name: Build and auto-submit to TestFlight
