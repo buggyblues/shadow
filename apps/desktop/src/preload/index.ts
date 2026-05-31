@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   DESKTOP_COMMUNITY_AUTH_REQUIRED_EVENT,
   isCommunityAuthRequiredError,
+  normalizeCommunityAccessToken,
   normalizeCommunityAuthError,
+  readCommunityAccessTokenFromStorage,
 } from '../shared/community-auth'
 
 function applyDesktopDocumentClasses(): void {
@@ -19,13 +21,23 @@ function applyDesktopDocumentClasses(): void {
 
 let lastSyncedCommunityAuthToken: string | null = null
 
-function syncCommunityAuthToken(options: { force?: boolean } = {}): void {
+function readCommunityAuthTokenSnapshot(): string {
+  return readCommunityAccessTokenFromStorage((key) => window.localStorage?.getItem(key))
+}
+
+function syncCommunityAuthSnapshot(
+  options: { force?: boolean; accessToken?: string | null } = {},
+): void {
   try {
-    const accessToken = window.localStorage?.getItem('accessToken') ?? ''
+    const accessToken =
+      options.accessToken === undefined
+        ? readCommunityAuthTokenSnapshot()
+        : normalizeCommunityAccessToken(options.accessToken)
     if (!options.force && accessToken === lastSyncedCommunityAuthToken) return
     lastSyncedCommunityAuthToken = accessToken
     ipcRenderer.send('desktop:communityAuthSnapshot', {
       accessToken,
+      sourceUrl: window.location.href,
     })
   } catch {
     // Ignore origins where localStorage is unavailable.
@@ -33,11 +45,11 @@ function syncCommunityAuthToken(options: { force?: boolean } = {}): void {
 }
 
 function forceSyncCommunityAuthToken(): void {
-  syncCommunityAuthToken({ force: true })
+  syncCommunityAuthSnapshot({ force: true })
 }
 
 function syncCommunityAuthTokenOnStorage(): void {
-  syncCommunityAuthToken()
+  syncCommunityAuthSnapshot()
 }
 
 function dispatchCommunityAuthRequired(): void {
@@ -108,6 +120,9 @@ const desktopAPI = {
   },
   getCommunityAuthToken: () => {
     return ipcRenderer.invoke('desktop:getCommunityAuthToken') as Promise<string>
+  },
+  syncCommunityAuthToken: (accessToken?: string | null) => {
+    syncCommunityAuthSnapshot({ force: true, accessToken })
   },
   communityFetchJson: (input: {
     path: string
@@ -646,6 +661,6 @@ window.addEventListener('DOMContentLoaded', forceSyncCommunityAuthToken)
 window.addEventListener('load', forceSyncCommunityAuthToken)
 window.addEventListener('focus', forceSyncCommunityAuthToken)
 window.addEventListener('storage', syncCommunityAuthTokenOnStorage)
-window.setInterval(syncCommunityAuthToken, 5000)
+window.setInterval(syncCommunityAuthSnapshot, 5000)
 
 export type DesktopAPI = typeof desktopAPI

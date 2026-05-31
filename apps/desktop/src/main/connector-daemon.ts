@@ -4,6 +4,11 @@ import { hostname } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { app, BrowserWindow, ipcMain, net } from 'electron'
 import {
+  COMMUNITY_ACCESS_TOKEN_FROM_STORAGE_SCRIPT,
+  communityAccessTokenFromAuthorizationHeader,
+  normalizeCommunityAccessToken,
+} from '../shared/community-auth'
+import {
   connectorWorkDirMapFilePath,
   type DesktopRuntimeSettings,
   normalizeConnectorApiKey,
@@ -216,16 +221,10 @@ async function readAccessTokenFromWindow(win: BrowserWindow | null): Promise<str
   }
   try {
     const token = (await win.webContents.executeJavaScript(
-      `(() => {
-        try {
-          return localStorage.getItem('accessToken') || ''
-        } catch {
-          return ''
-        }
-      })()`,
+      COMMUNITY_ACCESS_TOKEN_FROM_STORAGE_SCRIPT,
       true,
     )) as unknown
-    const normalizedToken = typeof token === 'string' ? token.trim() : ''
+    const normalizedToken = normalizeCommunityAccessToken(token)
     if (normalizedToken) lastCommunityAccessToken = normalizedToken
     return normalizedToken
   } catch {
@@ -242,8 +241,19 @@ async function readAccessTokenFromOpenWindows(): Promise<string> {
 }
 
 export function rememberCommunityAccessToken(token: string | null | undefined): void {
-  const normalizedToken = typeof token === 'string' ? token.trim() : ''
+  const normalizedToken = normalizeCommunityAccessToken(token)
   if (normalizedToken) lastCommunityAccessToken = normalizedToken
+}
+
+export function rememberCommunityAuthorizationHeader(header: string | null | undefined): void {
+  rememberCommunityAccessToken(communityAccessTokenFromAuthorizationHeader(header))
+}
+
+export function forgetCommunityAccessToken(token?: string | null): void {
+  const normalizedToken = normalizeCommunityAccessToken(token)
+  if (!normalizedToken || normalizedToken === lastCommunityAccessToken) {
+    lastCommunityAccessToken = ''
+  }
 }
 
 export async function readCommunityAccessToken(): Promise<string> {
@@ -272,6 +282,7 @@ async function fetchCommunityJson<T>(path: string, options: RequestInit = {}): P
   })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
+    if (response.status === 401 || response.status === 403) forgetCommunityAccessToken(token)
     throw new Error(`Community API ${path} failed (${response.status})${body ? `: ${body}` : ''}`)
   }
   return (await response.json()) as T

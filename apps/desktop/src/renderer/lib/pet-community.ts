@@ -1,6 +1,7 @@
 import {
   DESKTOP_COMMUNITY_AUTH_REQUIRED,
   DESKTOP_COMMUNITY_AUTH_REQUIRED_EVENT,
+  readCommunityAccessTokenFromStorage,
 } from '../../shared/community-auth'
 import type {
   ChannelSubscription,
@@ -75,7 +76,7 @@ export async function readShadowAccessToken(api: ShadowCommunityAuthApi | null):
   } catch {
     // Fall back to the current renderer's storage for non-desktop previews.
   }
-  return localStorage.getItem('accessToken')?.trim() ?? ''
+  return readCommunityAccessTokenFromStorage((key) => localStorage.getItem(key))
 }
 
 export async function fetchShadow<T>(
