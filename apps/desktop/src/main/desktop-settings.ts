@@ -58,6 +58,7 @@ export interface DesktopRuntimeSettings {
   connectorAutoStart: boolean
   connectorWorkDir: string
   connectorBuddyWorkDirs: Record<string, string>
+  connectorDeletedConnectionIds: string[]
   connectorRuntimeNotifications: Record<string, boolean>
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
@@ -102,6 +103,7 @@ const defaultSettings: DesktopRuntimeSettings = {
   connectorAutoStart: false,
   connectorWorkDir: '',
   connectorBuddyWorkDirs: {},
+  connectorDeletedConnectionIds: [],
   connectorRuntimeNotifications: {},
   ttsProvider: 'system',
   asrProvider: 'sherpa-local',
@@ -184,6 +186,18 @@ function normalizeConnectorBuddyWorkDirs(value: unknown): Record<string, string>
     if (normalizedAgentId && normalizedWorkDir) result[normalizedAgentId] = normalizedWorkDir
   }
   return result
+}
+
+function normalizeConnectorDeletedConnectionIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [
+    ...new Set(
+      value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ]
 }
 
 function normalizeConnectorRuntimeNotifications(value: unknown): Record<string, boolean> {
@@ -364,6 +378,9 @@ function normalizeDesktopSettings(parsed: Partial<DesktopRuntimeSettings>): Desk
     connectorAutoStart: parsed.connectorAutoStart === true,
     connectorWorkDir: normalizeWorkDir(parsed.connectorWorkDir),
     connectorBuddyWorkDirs: normalizeConnectorBuddyWorkDirs(parsed.connectorBuddyWorkDirs),
+    connectorDeletedConnectionIds: normalizeConnectorDeletedConnectionIds(
+      parsed.connectorDeletedConnectionIds,
+    ),
     connectorRuntimeNotifications: normalizeConnectorRuntimeNotifications(
       parsed.connectorRuntimeNotifications,
     ),
@@ -404,6 +421,10 @@ function mergeDesktopSettings(
       incoming.connectorBuddyWorkDirs === undefined
         ? current.connectorBuddyWorkDirs
         : normalizeConnectorBuddyWorkDirs(incoming.connectorBuddyWorkDirs),
+    connectorDeletedConnectionIds:
+      incoming.connectorDeletedConnectionIds === undefined
+        ? current.connectorDeletedConnectionIds
+        : normalizeConnectorDeletedConnectionIds(incoming.connectorDeletedConnectionIds),
     connectorRuntimeNotifications:
       incoming.connectorRuntimeNotifications === undefined
         ? current.connectorRuntimeNotifications

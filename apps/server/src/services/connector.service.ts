@@ -321,6 +321,7 @@ export class ConnectorService {
       buddyMode: input.buddyMode,
       allowedServerIds: input.allowedServerIds,
       ownerId: userId,
+      initialStatus: 'stopped',
     })
     if (!agent?.id) {
       throw new Error('Failed to create connector Buddy')
@@ -504,10 +505,14 @@ export class ConnectorService {
     jobId: string,
     input: { status: 'completed' | 'failed'; result?: Record<string, unknown>; error?: string },
   ) {
-    return this.deps.connectorDao.updateJobForComputer(jobId, computerId, {
+    const job = await this.deps.connectorDao.updateJobForComputer(jobId, computerId, {
       status: input.status,
       result: input.result ?? null,
       error: input.error ?? null,
     })
+    if (job?.agentId && input.status === 'failed') {
+      await this.deps.agentService.markError(job.agentId, input.error)
+    }
+    return job
   }
 }
