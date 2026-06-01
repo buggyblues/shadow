@@ -10,6 +10,7 @@ WORKDIR /repo
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY .npmrc ./
+COPY patches ./patches
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/sdk/bin ./packages/sdk/bin
