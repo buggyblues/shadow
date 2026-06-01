@@ -188,6 +188,37 @@ describe('auth session', () => {
     })
   })
 
+  it('does not revalidate an already current desktop auth echo', () => {
+    installDesktopCommunityAuthStateListener()
+    testStorage().setItem('accessToken', 'desktop-access')
+    testStorage().setItem('refreshToken', 'desktop-refresh')
+    useAuthStore.setState({
+      user,
+      accessToken: 'desktop-access',
+      isAuthenticated: true,
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    window.dispatchEvent(
+      new CustomEvent(DESKTOP_COMMUNITY_AUTH_UPDATED_EVENT, {
+        detail: {
+          accessToken: 'desktop-access',
+          refreshToken: 'desktop-refresh',
+          authenticated: true,
+          reason: 'sync',
+        },
+      }),
+    )
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(useAuthStore.getState()).toMatchObject({
+      user,
+      accessToken: 'desktop-access',
+      isAuthenticated: true,
+    })
+  })
+
   it('clears web auth immediately when desktop reports revocation', () => {
     installDesktopCommunityAuthStateListener()
     window.history.replaceState({}, '', '/app/login')

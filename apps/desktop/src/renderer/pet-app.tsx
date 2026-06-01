@@ -34,7 +34,11 @@ import {
   onCommunityAuthRequired,
   readShadowAccessToken,
 } from './lib/pet-community'
-import { markCommunityNotificationRead, resolveNotificationRoute } from './lib/pet-notifications'
+import {
+  markAllCommunityNotificationsRead,
+  markCommunityNotificationRead,
+  resolveNotificationRoute,
+} from './lib/pet-notifications'
 import {
   loadPetProfile,
   normalizePetProfile,
@@ -51,6 +55,7 @@ import type {
   DesktopPetAssetPack,
   NotificationItem,
   PetProfile,
+  PetServiceId,
   SubscriptionFile,
   WheelLayer,
 } from './pet-types'
@@ -61,6 +66,15 @@ const VOICE_LONG_PRESS_MS = 420
 function getDesktopApi(): DesktopPetApi | null {
   if (!('desktopAPI' in window)) return null
   return (window as unknown as { desktopAPI?: DesktopPetApi }).desktopAPI ?? null
+}
+
+function serviceDateKey(timestamp: number): string {
+  const date = new Date(timestamp)
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
 }
 
 export function PetApp() {
@@ -140,16 +154,20 @@ export function PetApp() {
 
   const {
     services,
+    serviceHistory,
     serviceAlerts,
     serviceNow,
     connectorSnapshot,
     toggleService,
     startFocusTimer,
+    updateServiceInterval,
     acknowledgeService,
+    clearServiceAlert,
   } = usePetServices({
     api,
     panelOpen,
     tab,
+    petName: profile.name,
     showPetNotice,
   })
 
@@ -167,8 +185,21 @@ export function PetApp() {
   const careAttentionCount = recommendedActions.length > 0 ? 1 : 0
   const communityAuthRequired = !isAuthenticated
   const authAttentionCount = communityAuthRequired ? 1 : 0
-  const communityAttention =
-    communityAuthRequired || unreadNotificationCount > 0 || unreadSubscriptionCount > 0
+  const communityWheelAttention = communityAuthRequired
+  const todayServiceKey = serviceDateKey(serviceNow)
+  const todayServiceHistory = serviceHistory.find((item) => item.date === todayServiceKey)
+  const serviceCompletions = {
+    focus: Boolean(todayServiceHistory && todayServiceHistory.focusMs > 0),
+    water: Boolean(todayServiceHistory && todayServiceHistory.waterCount > 0),
+    fitness: Boolean(todayServiceHistory && todayServiceHistory.fitnessCount > 0),
+    coding: Boolean(todayServiceHistory && todayServiceHistory.codingReadyCount > 0),
+  }
+  const serviceAlertFlags = {
+    focus: serviceAlerts.some((item) => item.id === 'focus'),
+    water: serviceAlerts.some((item) => item.id === 'water'),
+    fitness: serviceAlerts.some((item) => item.id === 'fitness'),
+    coding: serviceAlerts.some((item) => item.id === 'coding'),
+  }
   const desktopAttentionCount =
     unreadNotificationCount + unreadSubscriptionCount + serviceAlerts.length + authAttentionCount
   const attentionCount =
@@ -474,6 +505,29 @@ export function PetApp() {
     })
   }
 
+  function handleServiceWheelAction(service: PetServiceId) {
+    if (service === 'focus') {
+      if (services.focus) toggleService('focus')
+      else startFocusTimer(Math.round(services.focusDurationMs / 60_000))
+      return
+    }
+    if (service === 'water') {
+      if (services.water) acknowledgeService('water')
+      else toggleService('water')
+      return
+    }
+    if (service === 'fitness') {
+      if (services.fitness) acknowledgeService('fitness')
+      else toggleService('fitness')
+      return
+    }
+    if (serviceAlertFlags.coding) {
+      clearServiceAlert('coding')
+      return
+    }
+    toggleService('coding')
+  }
+
   function handleProfileChange(nextProfile: PetProfile) {
     setProfile(normalizePetProfile(nextProfile))
   }
@@ -489,6 +543,12 @@ export function PetApp() {
     )
   }
 
+  async function markAllNotificationsRead() {
+    if (!notifications.some((notification) => !notification.isRead)) return
+    await markAllCommunityNotificationsRead(api)
+    setNotifications((current) => current.map((item) => ({ ...item, isRead: true })))
+  }
+
   async function openNotification(notification: NotificationItem) {
     await markNotificationRead(notification)
     try {
@@ -499,7 +559,8 @@ export function PetApp() {
   }
 
   async function openMainWindowForLogin() {
-    await api?.showMainWindow?.()
+    const opened = await api?.openCommunityLogin?.('/discover')
+    if (!opened) await api?.showMainWindow?.()
     void refreshAuthState()
   }
 
@@ -776,16 +837,21 @@ export function PetApp() {
           layer={wheelLayer}
           panelOpen={panelOpen}
           voiceMode={voiceMode}
+          services={services}
+          serviceCompletions={serviceCompletions}
+          serviceAlertFlags={serviceAlertFlags}
+          serviceAttention={serviceAlerts.length > 0}
           connectorSnapshot={connectorSnapshot}
           recommendedActions={recommendedActions}
           communityAuthRequired={communityAuthRequired}
-          communityAttention={communityAttention}
+          communityAttention={communityWheelAttention}
           onVoicePressStart={handleVoiceWheelPointerDown}
           onVoicePressEnd={finishVoiceWheelPointer}
           onVoicePressCancel={(pointerId) => finishVoiceWheelPointer(pointerId, true)}
           onLayerChange={setWheelLayer}
           onPanel={() => setPanelOpen((open) => !open)}
           onConnection={() => void api?.showSettings?.('connector')}
+          onServiceAction={handleServiceWheelAction}
           onCommunity={() => {
             setWheelOpen(false)
             void openCommunityWindow()
@@ -856,11 +922,12 @@ export function PetApp() {
                 {tab === 'services' ? (
                   <ServicesPanel
                     services={services}
-                    connectorSnapshot={connectorSnapshot}
+                    serviceHistory={serviceHistory}
                     now={serviceNow}
                     onToggle={toggleService}
                     onAcknowledge={acknowledgeService}
                     onFocusStart={startFocusTimer}
+                    onIntervalChange={updateServiceInterval}
                   />
                 ) : null}
                 {tab === 'community' ? (
@@ -870,6 +937,7 @@ export function PetApp() {
                     onRefresh={refreshNotifications}
                     onOpen={openNotification}
                     onMarkRead={markNotificationRead}
+                    onMarkAllRead={markAllNotificationsRead}
                     onOpenMainWindow={openMainWindowForLogin}
                   />
                 ) : null}

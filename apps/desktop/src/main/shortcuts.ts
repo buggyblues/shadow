@@ -5,7 +5,7 @@ import { getMainWindow, sendPetShortcut, showCommunityWindow, togglePetWindow } 
 type ShortcutRegistrationEntry = {
   action: DesktopShortcutAction
   accelerator: string
-  reason?: 'empty' | 'duplicate' | 'system'
+  reason?: 'duplicate' | 'system'
 }
 
 export type ShortcutRegistrationResult = {
@@ -52,7 +52,6 @@ export function registerGlobalShortcuts(): ShortcutRegistrationResult {
   for (const action of Object.keys(shortcuts) as DesktopShortcutAction[]) {
     const accelerator = shortcuts[action].trim()
     if (!accelerator) {
-      result.failed.push({ action, accelerator, reason: 'empty' })
       continue
     }
     const normalized = accelerator.toLowerCase()

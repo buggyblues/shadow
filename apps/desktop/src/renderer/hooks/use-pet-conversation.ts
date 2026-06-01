@@ -32,6 +32,7 @@ const BUBBLE_CLAUSE_PAUSE_MS = 420
 const BUBBLE_SENTENCE_PAUSE_MS = 720
 const BUBBLE_MIN_VISIBLE_MS = 27_000
 const BUBBLE_HOLD_AFTER_DONE_MS = 10_800
+const PET_NOTICE_DEDUPE_MS = 2000
 const TTS_STREAM_MIN_SEGMENT_CHARS = 14
 const TTS_STREAM_SOFT_SEGMENT_CHARS = 28
 const TTS_STREAM_MAX_SEGMENT_CHARS = 64
@@ -108,6 +109,7 @@ export function usePetConversation({
   const bubbleTargetRef = useRef('')
   const bubbleVisibleRef = useRef('')
   const voiceFinishTimerRef = useRef<number | null>(null)
+  const noticeDedupeRef = useRef<{ message: string; createdAt: number } | null>(null)
   const chatInputRef = useRef<HTMLInputElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const bubbleContentRef = useRef<HTMLSpanElement | null>(null)
@@ -267,12 +269,22 @@ export function usePetConversation({
     (text: string) => {
       const message = normalizePetDisplayText(text)
       if (!message) return
-      const id = `pet-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const now = Date.now()
+      const previous = noticeDedupeRef.current
+      if (
+        previous?.message === message &&
+        now - previous.createdAt >= 0 &&
+        now - previous.createdAt < PET_NOTICE_DEDUPE_MS
+      ) {
+        return
+      }
+      noticeDedupeRef.current = { message, createdAt: now }
+      const id = `pet-${now}-${Math.random().toString(36).slice(2)}`
       const notice: ChatMessage = {
         id,
         role: 'pet',
         text: message,
-        createdAt: Date.now(),
+        createdAt: now,
       }
       setMessages((current) => [...current, notice].slice(-24))
       setBubbleMessageId(id)

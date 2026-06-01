@@ -6,6 +6,11 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 export interface ShadowConfigValues {
   token: string
   serverUrl: string
+  projectName?: string
+  buddyId?: string
+  buddyName?: string
+  buddyDescription?: string
+  agentId?: string
   modelProvider?: ConnectorModelProviderValues
 }
 
@@ -67,6 +72,11 @@ function normalizeModelProvider(
   }
 }
 
+function normalizedOptionalString(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : undefined
+}
+
 function normalizeJsonRoot(existing: string, label: string): Record<string, unknown> {
   if (!existing.trim()) return {}
   const parsed = JSON.parse(existing) as unknown
@@ -110,6 +120,8 @@ export function mergeEnvContent(existing: string, values: ShadowConfigValues): s
     updates.OPENAI_COMPATIBLE_MODEL_ID = modelProvider.model
     updates.SHADOW_MODEL_PROVIDER_ID = modelProvider.id ?? 'shadow-official'
   }
+  const agentId = normalizedOptionalString(values.agentId)
+  if (agentId) updates.SHADOW_AGENT_ID = agentId
   const seen = new Set<string>()
   const lines = existing.length > 0 ? existing.split(/\r?\n/) : []
   const next: string[] = []
@@ -137,15 +149,43 @@ export function mergeEnvContent(existing: string, values: ShadowConfigValues): s
 export function mergeOpenClawConfigContent(existing: string, values: ShadowConfigValues): string {
   const root = normalizeJsonRoot(existing, 'OpenClaw')
   const modelProvider = normalizeModelProvider(values.modelProvider)
+  const accountId = normalizedOptionalString(values.projectName)
   const channels = asRecord(root.channels)
   const legacyShadow = asRecord(channels['openclaw-shadowob'])
   const shadow = asRecord(channels.shadowob)
 
-  channels.shadowob = {
-    ...legacyShadow,
-    ...shadow,
-    token: values.token,
-    serverUrl: values.serverUrl,
+  if (accountId) {
+    const accounts = asRecord(shadow.accounts ?? legacyShadow.accounts)
+    const account = asRecord(accounts[accountId])
+    const nextAccount: Record<string, unknown> = {
+      ...account,
+      enabled: true,
+      token: values.token,
+      serverUrl: values.serverUrl,
+    }
+    const buddyId = normalizedOptionalString(values.buddyId)
+    const buddyName = normalizedOptionalString(values.buddyName)
+    const buddyDescription = normalizedOptionalString(values.buddyDescription)
+    const agentId = normalizedOptionalString(values.agentId)
+    if (buddyId) nextAccount.buddyId = buddyId
+    if (buddyName) nextAccount.buddyName = buddyName
+    if (buddyDescription) nextAccount.buddyDescription = buddyDescription
+    if (agentId) nextAccount.agentId = agentId
+    accounts[accountId] = nextAccount
+
+    channels.shadowob = {
+      ...legacyShadow,
+      ...shadow,
+      enabled: shadow.enabled ?? true,
+      accounts,
+    }
+  } else {
+    channels.shadowob = {
+      ...legacyShadow,
+      ...shadow,
+      token: values.token,
+      serverUrl: values.serverUrl,
+    }
   }
   delete channels['openclaw-shadowob']
   root.channels = channels
@@ -184,9 +224,25 @@ export function mergeOpenClawConfigContent(existing: string, values: ShadowConfi
   return ensureTrailingNewline(JSON.stringify(root, null, 2))
 }
 
+export function removeOpenClawAccountConfigContent(existing: string, projectName: string): string {
+  const accountId = normalizedOptionalString(projectName)
+  if (!accountId) return ensureTrailingNewline(existing)
+  const root = normalizeJsonRoot(existing, 'OpenClaw')
+  const channels = asRecord(root.channels)
+  const shadow = asRecord(channels.shadowob ?? channels['openclaw-shadowob'])
+  const accounts = asRecord(shadow.accounts)
+  delete accounts[accountId]
+  shadow.accounts = accounts
+  delete channels['openclaw-shadowob']
+  channels.shadowob = shadow
+  root.channels = channels
+  return ensureTrailingNewline(JSON.stringify(root, null, 2))
+}
+
 export function mergeHermesConfigContent(existing: string, values: ShadowConfigValues): string {
   const root = parseYamlRoot(existing, 'Hermes')
   const modelProvider = normalizeModelProvider(values.modelProvider)
+  const agentId = normalizedOptionalString(values.agentId)
 
   const plugins = asRecord(root.plugins)
   plugins.enabled = uniqueStrings(Array.isArray(plugins.enabled) ? plugins.enabled : [], 'shadowob')
@@ -207,6 +263,7 @@ export function mergeHermesConfigContent(existing: string, values: ShadowConfigV
       slash_commands: [],
       ...extra,
       base_url: values.serverUrl,
+      ...(agentId ? { agent_id: agentId } : {}),
     },
   }
   root.platforms = platforms
@@ -237,25 +294,13 @@ function tomlArray(value: TomlValue | undefined): TomlTable[] {
   return tables
 }
 
-function ccConnectProjectWorkDir(project: TomlTable): string | undefined {
-  const agent = asTomlTable(project.agent)
-  const options = asTomlTable(agent.options)
-  return typeof options.work_dir === 'string'
-    ? options.work_dir
-    : typeof project.work_dir === 'string'
-      ? project.work_dir
-      : undefined
-}
-
 export function mergeCcConnectConfigContent(
   existing: string,
   values: CcConnectConfigValues,
 ): string {
   const root = parseTomlRoot(existing, 'cc-connect')
   const projects = tomlArray(root.projects)
-  let project =
-    projects.find((item) => item.name === values.projectName) ??
-    projects.find((item) => ccConnectProjectWorkDir(item) === values.workDir)
+  let project = projects.find((item) => item.name === values.projectName)
 
   if (!project) {
     project = {}
@@ -293,6 +338,19 @@ export function mergeCcConnectConfigContent(
     provider.model = modelProvider.model
     provider.models = [{ model: modelProvider.model }]
     agent.providers = providers
+  } else {
+    const nextOptions = asTomlTable(agent.options)
+    if (nextOptions.provider === 'shadow-official') {
+      delete nextOptions.provider
+      delete nextOptions.model
+    }
+    agent.options = nextOptions
+    const providers = tomlArray(agent.providers).filter((item) => item.name !== 'shadow-official')
+    if (providers.length > 0) {
+      agent.providers = providers
+    } else {
+      delete agent.providers
+    }
   }
   project.agent = agent
 
@@ -317,5 +375,15 @@ export function mergeCcConnectConfigContent(
   project.platforms = platforms
   root.projects = projects
 
+  return ensureTrailingNewline(stringifyToml(root))
+}
+
+export function removeCcConnectProjectConfigContent(existing: string, projectName: string): string {
+  const normalizedProjectName = normalizedOptionalString(projectName)
+  if (!normalizedProjectName) return ensureTrailingNewline(existing)
+  const root = parseTomlRoot(existing, 'cc-connect')
+  root.projects = tomlArray(root.projects).filter(
+    (project) => project.name !== normalizedProjectName,
+  )
   return ensureTrailingNewline(stringifyToml(root))
 }

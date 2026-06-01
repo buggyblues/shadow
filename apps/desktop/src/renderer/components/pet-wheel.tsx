@@ -4,8 +4,10 @@ import {
   Cable,
   ChevronLeft,
   ChevronRight,
+  Code2,
   Coffee,
   Compass,
+  Dumbbell,
   EyeOff,
   Gamepad2,
   Hand,
@@ -14,11 +16,19 @@ import {
   MessageCircle,
   Mic,
   Sparkles,
+  Timer,
+  Waves,
 } from 'lucide-react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PetAction } from '../lib/game'
-import type { ConnectorSnapshot, WheelCommand, WheelLayer } from '../pet-types'
+import type {
+  ConnectorSnapshot,
+  PetServiceId,
+  PetServiceState,
+  WheelCommand,
+  WheelLayer,
+} from '../pet-types'
 
 const WHEEL_SIZE = 220
 const WHEEL_CENTER = WHEEL_SIZE / 2
@@ -37,7 +47,7 @@ const wheelItems: Array<{
   { id: 'hide', angle: 210, Icon: EyeOff, labelKey: 'desktopPet.actions.hide' },
   { id: 'community', angle: 30, Icon: MessageCircle, labelKey: 'desktopPet.actions.community' },
   { id: 'panel', angle: 90, Icon: ChevronRight, labelKey: 'desktopPet.app.expand' },
-  { id: 'connection', angle: 150, Icon: Cable, labelKey: 'desktopPet.actions.connection' },
+  { id: 'services', angle: 150, Icon: Timer, labelKey: 'desktopPet.services.wheelServices' },
 ]
 
 const interactionWheelItems: Array<{
@@ -55,11 +65,37 @@ const interactionWheelItems: Array<{
   { id: 'tea', angle: 219, Icon: Coffee, labelKey: 'desktopPet.actions.tea' },
 ]
 
+const serviceWheelItems: Array<{
+  id: WheelCommand
+  angle: number
+  Icon: LucideIcon
+  labelKey: string
+}> = [
+  { id: 'back', angle: 270, Icon: ChevronLeft, labelKey: 'desktopPet.actions.back' },
+  { id: 'serviceFocus', angle: 330, Icon: Timer, labelKey: 'desktopPet.services.focus' },
+  { id: 'serviceWater', angle: 30, Icon: Waves, labelKey: 'desktopPet.services.water' },
+  { id: 'serviceFitness', angle: 90, Icon: Dumbbell, labelKey: 'desktopPet.services.fitness' },
+  { id: 'serviceCoding', angle: 150, Icon: Code2, labelKey: 'desktopPet.services.coding' },
+  { id: 'connection', angle: 210, Icon: Cable, labelKey: 'desktopPet.actions.connection' },
+]
+
+function serviceIdFromWheelCommand(command: WheelCommand): PetServiceId | null {
+  if (command === 'serviceFocus') return 'focus'
+  if (command === 'serviceWater') return 'water'
+  if (command === 'serviceFitness') return 'fitness'
+  if (command === 'serviceCoding') return 'coding'
+  return null
+}
+
 export function PetWheel({
   visible,
   layer,
   panelOpen,
   voiceMode,
+  services,
+  serviceCompletions,
+  serviceAlertFlags,
+  serviceAttention,
   connectorSnapshot,
   recommendedActions,
   communityAuthRequired,
@@ -70,6 +106,7 @@ export function PetWheel({
   onLayerChange,
   onPanel,
   onConnection,
+  onServiceAction,
   onCommunity,
   onHide,
   onCareAction,
@@ -78,6 +115,10 @@ export function PetWheel({
   layer: WheelLayer
   panelOpen: boolean
   voiceMode: boolean
+  services: PetServiceState
+  serviceCompletions: Record<PetServiceId, boolean>
+  serviceAlertFlags: Record<PetServiceId, boolean>
+  serviceAttention: boolean
   connectorSnapshot: ConnectorSnapshot
   recommendedActions: PetAction[]
   communityAuthRequired?: boolean
@@ -88,12 +129,51 @@ export function PetWheel({
   onLayerChange: (layer: WheelLayer) => void
   onPanel: () => void
   onConnection: () => void
+  onServiceAction: (service: PetServiceId) => void
   onCommunity: () => void
   onHide: () => void
   onCareAction: (action: PetAction) => void
 }) {
   const { t } = useTranslation()
-  const items = layer === 'main' ? wheelItems : interactionWheelItems
+  const now = Date.now()
+  const focusRemaining = Math.max(0, (services.focusEndsAt ?? now) - now)
+  const waterRemaining = Math.max(0, services.lastWaterAt + services.waterIntervalMs - now)
+  const fitnessRemaining = Math.max(0, services.lastFitnessAt + services.fitnessIntervalMs - now)
+  const waterDue = services.water && waterRemaining <= 0
+  const fitnessDue = services.fitness && fitnessRemaining <= 0
+  const items =
+    layer === 'main' ? wheelItems : layer === 'services' ? serviceWheelItems : interactionWheelItems
+  const formatWheelDuration = (ms: number) => {
+    const minutes = Math.max(1, Math.ceil(ms / 60_000))
+    if (minutes < 60) return t('desktopPet.services.minutesShort', { count: minutes })
+    const hours = Math.floor(minutes / 60)
+    const rest = minutes % 60
+    if (rest === 0) return t('desktopPet.services.hoursShort', { count: hours })
+    return t('desktopPet.services.hoursMinutesShort', { hours, minutes: rest })
+  }
+  const servicesLabel = serviceAttention
+    ? t('desktopPet.services.wheelAttention')
+    : services.focus && focusRemaining > 0
+      ? t('desktopPet.services.wheelFocusRemaining', {
+          time: formatWheelDuration(focusRemaining),
+        })
+      : t('desktopPet.services.wheelServices')
+  const serviceWheelLabel = (serviceId: PetServiceId) => {
+    if (serviceAlertFlags[serviceId]) return t(`desktopPet.services.${serviceId}`)
+    if (serviceId === 'focus' && services.focus && focusRemaining > 0) {
+      return formatWheelDuration(focusRemaining)
+    }
+    if (serviceId === 'water' && waterDue) return t('desktopPet.services.water')
+    if (serviceId === 'water' && services.water && waterRemaining > 0) {
+      return formatWheelDuration(waterRemaining)
+    }
+    if (serviceId === 'fitness' && fitnessDue) return t('desktopPet.services.fitness')
+    if (serviceId === 'fitness' && services.fitness && fitnessRemaining > 0) {
+      return formatWheelDuration(fitnessRemaining)
+    }
+    if (serviceCompletions[serviceId]) return t(`desktopPet.services.${serviceId}Completed`)
+    return t(`desktopPet.services.${serviceId}`)
+  }
 
   return (
     <div
@@ -117,20 +197,40 @@ export function PetWheel({
           const hasAttention =
             layer === 'main'
               ? (item.id === 'interact' && hasRecommendedCare) ||
-                (item.id === 'community' && communityAttention)
-              : recommendedActions.includes(item.id as PetAction)
+                (item.id === 'community' && communityAttention) ||
+                (item.id === 'services' && serviceAttention)
+              : layer === 'services'
+                ? (item.id === 'serviceFocus' && serviceAlertFlags.focus) ||
+                  (item.id === 'serviceWater' && (serviceAlertFlags.water || waterDue)) ||
+                  (item.id === 'serviceFitness' && (serviceAlertFlags.fitness || fitnessDue)) ||
+                  (item.id === 'serviceCoding' && serviceAlertFlags.coding)
+                : recommendedActions.includes(item.id as PetAction)
+          const serviceId = serviceIdFromWheelCommand(item.id)
+          const serviceCompleted = serviceId ? serviceCompletions[serviceId] : false
+          const serviceActive =
+            item.id === 'serviceFocus'
+              ? services.focus || serviceCompleted
+              : item.id === 'serviceCoding'
+                ? services.coding || serviceCompleted
+                : serviceId
+                  ? services[serviceId] || serviceCompleted
+                  : serviceCompleted
           const label =
-            item.id === 'connection'
-              ? connectorSnapshot.running
-                ? t('desktopPet.connector.online', { count: connectorSnapshot.onlineCount })
-                : t('desktopPet.connector.offline')
-              : t(currentItem.labelKey)
+            item.id === 'services'
+              ? servicesLabel
+              : item.id === 'connection'
+                ? connectorSnapshot.running
+                  ? t('desktopPet.connector.online', { count: connectorSnapshot.onlineCount })
+                  : t('desktopPet.connector.offline')
+                : serviceId
+                  ? serviceWheelLabel(serviceId)
+                  : t(currentItem.labelKey)
           return (
             <WheelSector
               key={item.id}
               item={currentItem}
               sectorCount={items.length}
-              active={item.id === 'voice' && voiceMode}
+              active={(item.id === 'voice' && voiceMode) || serviceActive}
               attention={hasAttention}
               label={label}
               onPressStart={item.id === 'voice' ? onVoicePressStart : undefined}
@@ -148,12 +248,20 @@ export function PetWheel({
                   onLayerChange('interactions')
                   return
                 }
+                if (item.id === 'services') {
+                  onLayerChange('services')
+                  return
+                }
                 if (item.id === 'panel') {
                   onPanel()
                   return
                 }
                 if (item.id === 'connection') {
                   onConnection()
+                  return
+                }
+                if (serviceId) {
+                  onServiceAction(serviceId)
                   return
                 }
                 if (item.id === 'community') {

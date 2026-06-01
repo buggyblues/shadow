@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { BrowserWindow, screen, shell } from 'electron'
+import { readDesktopSettings, resolveDesktopAppBaseUrl } from './desktop-settings'
 import { readPetWindowState, savePetWindowState } from './pet-window-state'
 import { getWindowState, saveWindowState } from './window-state'
 
@@ -10,7 +11,7 @@ let connectorAuthWindow: BrowserWindow | null = null
 let readerWindow: BrowserWindow | null = null
 let allowPetClose = false
 
-const isDev = !!(process.env.DESKTOP_WEB_DEV_URL || process.env.DESKTOP_DEV_URL)
+const isDev = process.env.NODE_ENV === 'development'
 const PET_COMPACT_SIZE = { width: 240, height: 240 }
 const PET_EXPANDED_SIZE = { width: 960, height: 600 }
 const WINDOW_STATE_SAVE_DEBOUNCE_MS = 500
@@ -39,10 +40,7 @@ function getPreloadPath(): string {
 }
 
 function getWebRendererURL(): string {
-  if (process.env.DESKTOP_WEB_DEV_URL || process.env.DESKTOP_DEV_URL) {
-    return process.env.DESKTOP_WEB_DEV_URL || process.env.DESKTOP_DEV_URL || ''
-  }
-  return 'app://shadow'
+  return resolveDesktopAppBaseUrl(readDesktopSettings())
 }
 
 function getLocalRendererURL(): string {
@@ -57,10 +55,17 @@ function getPetRendererURL(): string {
 }
 
 function getWebAppRouteURL(path: string): string {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  const inputPath = path.trim()
+  const routePath =
+    inputPath === '/app'
+      ? ''
+      : inputPath.startsWith('/app/')
+        ? inputPath.slice('/app/'.length)
+        : inputPath
+  const normalizedPath = routePath.replace(/^\/+/, '')
   const rendererURL = getWebRendererURL()
   const base = rendererURL.endsWith('/') ? rendererURL : `${rendererURL}/`
-  return new URL(`app${normalizedPath}`, base).toString()
+  return normalizedPath ? new URL(normalizedPath, base).toString() : rendererURL
 }
 
 function normalizeSettingsTab(tab: string | null | undefined): string | null {
@@ -104,7 +109,7 @@ export function createWindow(): BrowserWindow {
   })
 
   // Load the renderer
-  mainWindow.loadURL(getWebAppRouteURL('/'))
+  mainWindow.loadURL(getWebRendererURL())
 
   // Open external links (target="_blank") in system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

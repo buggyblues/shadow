@@ -21,6 +21,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "hermes-shadowob-plugin",
     "skills",
     "README.md"

@@ -1,12 +1,52 @@
 import { useSearch } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LoginPanel } from '../components/auth/login-panel'
 import { useAppStatus } from '../hooks/use-app-status'
 
+type DesktopLoginBridge = {
+  isDesktop?: boolean
+  openCommunityLogin?: (redirect?: string) => Promise<boolean>
+}
+
+function desktopLoginBridge(): DesktopLoginBridge | null {
+  if (typeof window === 'undefined') return null
+  return (window as Window & { desktopAPI?: DesktopLoginBridge }).desktopAPI ?? null
+}
+
 export function LoginPage() {
   const { t } = useTranslation()
   const searchParams = useSearch({ strict: false }) as { redirect?: string }
+  const desktopAPI = desktopLoginBridge()
+  const isDesktopLogin = Boolean(desktopAPI?.isDesktop && desktopAPI.openCommunityLogin)
   useAppStatus({ title: t('auth.loginTitle'), variant: 'auth' })
+
+  useEffect(() => {
+    if (!isDesktopLogin) return
+    void desktopAPI?.openCommunityLogin?.(searchParams.redirect)
+  }, [desktopAPI, isDesktopLogin, searchParams.redirect])
+
+  if (isDesktopLogin) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-bg-deep px-6 text-center text-text-primary">
+        <div className="max-w-sm space-y-4">
+          <div>
+            <h1 className="text-xl font-bold">{t('desktop.browserLoginTitle')}</h1>
+            <p className="mt-2 text-sm leading-6 text-text-secondary">
+              {t('desktop.browserLoginDesc')}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="rounded-lg border border-primary/50 bg-primary/15 px-4 py-2 text-sm font-bold text-primary transition hover:bg-primary/20"
+            onClick={() => void desktopAPI?.openCommunityLogin?.(searchParams.redirect)}
+          >
+            {t('desktop.browserLoginAction')}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-bg-deep px-4 py-8 text-text-primary sm:px-6">

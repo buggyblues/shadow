@@ -4,7 +4,6 @@ import { app, BrowserWindow, net, safeStorage } from 'electron'
 import {
   COMMUNITY_AUTH_TOKENS_FROM_STORAGE_SCRIPT,
   type CommunityAuthTokens,
-  communityAccessTokenFromAuthorizationHeader,
   DESKTOP_COMMUNITY_AUTH_REQUIRED,
   normalizeCommunityAccessToken,
 } from '../shared/community-auth'
@@ -221,7 +220,7 @@ async function readAuthTokensFromOpenWindows(): Promise<CommunityAuthTokens> {
 function shouldWriteCommunityAuthToWindow(win: BrowserWindow): boolean {
   try {
     const url = new URL(win.webContents.getURL())
-    return url.protocol === 'app:' || url.protocol === 'http:' || url.protocol === 'https:'
+    return url.protocol === 'http:' || url.protocol === 'https:'
   } catch {
     return false
   }
@@ -301,10 +300,6 @@ export function rememberCommunityAccessToken(token: string | null | undefined): 
   rememberActiveTokens({ accessToken: normalizedToken })
 }
 
-export function rememberCommunityAuthorizationHeader(header: string | null | undefined): void {
-  rememberCommunityAccessToken(communityAccessTokenFromAuthorizationHeader(header))
-}
-
 export function forgetCommunityAccessToken(token?: string | null): void {
   if (clearActiveAccessToken(token)) {
     void syncCommunityAuthStateToOpenWindows('revoked')
@@ -338,6 +333,10 @@ export async function readCommunityAuthTokens(): Promise<CommunityAuthTokens> {
       authWindowTokens.refreshToken ||
       openWindowTokens.refreshToken,
   }
+}
+
+export function readStoredCommunityAuthTokens(): CommunityAuthTokens {
+  return activeStoredTokens()
 }
 
 export async function readCommunityAccessToken(): Promise<string> {

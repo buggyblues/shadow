@@ -7,9 +7,6 @@ vi.mock('socket.io-client', () => ({
   io: ioMock,
 }))
 
-const DESKTOP_SETTINGS_STORAGE_KEY = 'shadow:desktop-runtime-settings:v1'
-const DESKTOP_SETTINGS_CHANGED_EVENT = 'shadow:desktop-runtime-settings-changed'
-
 function createSocket() {
   const socket = {
     connected: false,
@@ -37,9 +34,22 @@ async function loadSocketModule() {
   return import('./socket')
 }
 
-describe('desktop socket origin', () => {
+describe('socket origin', () => {
   beforeEach(() => {
-    localStorage.clear()
+    const storage = {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    }
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: storage,
+    })
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: storage,
+    })
     ioMock.mockReset()
     ioMock.mockImplementation((_origin: string, options: unknown) =>
       Object.assign(createSocket(), options),
@@ -47,32 +57,18 @@ describe('desktop socket origin', () => {
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: {
-        protocol: 'app:',
-        origin: 'app://shadow',
+        protocol: 'https:',
+        origin: 'https://shadowob.com',
       },
     })
   })
 
-  it('recreates the socket when desktop server settings change', async () => {
-    localStorage.setItem(
-      DESKTOP_SETTINGS_STORAGE_KEY,
-      JSON.stringify({ serverBaseUrl: 'https://one.example' }),
-    )
+  it('uses the current page origin for hosted web and desktop community windows', async () => {
     const socketModule = await loadSocketModule()
 
     socketModule.connectSocket()
-    const firstSocket = ioMock.mock.results[0]?.value as ReturnType<typeof createSocket>
-    expect(ioMock.mock.calls[0]?.[0]).toBe('https://one.example')
 
-    localStorage.setItem(
-      DESKTOP_SETTINGS_STORAGE_KEY,
-      JSON.stringify({ serverBaseUrl: 'https://two.example' }),
-    )
-    window.dispatchEvent(new CustomEvent(DESKTOP_SETTINGS_CHANGED_EVENT))
-    socketModule.connectSocket()
-
-    expect(firstSocket.disconnect).toHaveBeenCalled()
-    expect(ioMock).toHaveBeenCalledTimes(2)
-    expect(ioMock.mock.calls[1]?.[0]).toBe('https://two.example')
+    expect(ioMock).toHaveBeenCalledTimes(1)
+    expect(ioMock.mock.calls[0]?.[0]).toBe('https://shadowob.com')
   })
 })

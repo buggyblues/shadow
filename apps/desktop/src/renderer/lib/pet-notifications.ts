@@ -10,6 +10,10 @@ export async function markCommunityNotificationRead(
   )
 }
 
+export async function markAllCommunityNotificationsRead(api: DesktopPetApi | null) {
+  await fetchShadow(api, '/api/notifications/read-all', { method: 'POST' }).catch(() => null)
+}
+
 export async function resolveNotificationRoute(
   api: DesktopPetApi | null,
   notification: NotificationItem,

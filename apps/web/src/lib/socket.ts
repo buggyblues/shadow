@@ -5,24 +5,6 @@ let socket: Socket | null = null
 let socketOrigin = ''
 const joinedChannels = new Set<string>()
 const joinedThreads = new Set<string>()
-const DESKTOP_SETTINGS_STORAGE_KEY = 'shadow:desktop-runtime-settings:v1'
-const DESKTOP_SETTINGS_CHANGED_EVENT = 'shadow:desktop-runtime-settings-changed'
-
-function getStoredDesktopServerBaseUrl(): string {
-  if (typeof window === 'undefined' || window.location.protocol !== 'app:') return ''
-  try {
-    const parsed = JSON.parse(
-      localStorage.getItem(DESKTOP_SETTINGS_STORAGE_KEY) ?? '{}',
-    ) as Partial<{ serverBaseUrl: string }>
-    if (typeof parsed.serverBaseUrl === 'string') {
-      const url = new URL(parsed.serverBaseUrl)
-      if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin
-    }
-  } catch {
-    // Fall through to the default hosted origin.
-  }
-  return 'https://shadowob.com'
-}
 
 function getSocketOrigin(): string {
   const configuredApiBase = import.meta.env.VITE_API_BASE
@@ -33,12 +15,11 @@ function getSocketOrigin(): string {
       // Fall through to protocol-aware defaults.
     }
   }
-  return getStoredDesktopServerBaseUrl() || window.location.origin
+  return window.location.origin
 }
 
 function getDisconnectUrl(): string {
-  const origin = getStoredDesktopServerBaseUrl()
-  return origin ? `${origin}/api/auth/disconnect` : '/api/auth/disconnect'
+  return '/api/auth/disconnect'
 }
 
 function rejoinRooms(s: Socket): void {
@@ -95,19 +76,6 @@ export function disconnectSocket(): void {
   socketOrigin = ''
   joinedChannels.clear()
   joinedThreads.clear()
-}
-
-function handleDesktopRuntimeSettingsChanged() {
-  if (!socket) return
-  const nextOrigin = getSocketOrigin()
-  if (socketOrigin === nextOrigin) return
-  const shouldReconnect = socket.connected
-  disconnectSocket()
-  if (shouldReconnect) connectSocket()
-}
-
-if (typeof window !== 'undefined') {
-  window.addEventListener(DESKTOP_SETTINGS_CHANGED_EVENT, handleDesktopRuntimeSettingsChanged)
 }
 
 function handleBeforeUnload() {

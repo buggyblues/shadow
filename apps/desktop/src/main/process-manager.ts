@@ -1,5 +1,5 @@
 import { type ChildProcess, fork } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { access, readdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { app, ipcMain } from 'electron'
 
@@ -11,40 +11,58 @@ interface ManagedProcess {
 
 const managedProcesses = new Map<string, ManagedProcess>()
 let processIdCounter = 0
+let electronNodeBinaryCache: string | null = null
 
-export function resolveElectronNodeBinary(): string {
-  if (process.platform !== 'darwin') return process.execPath
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function resolveElectronNodeBinaryAsync(): Promise<string> {
+  if (electronNodeBinaryCache) return electronNodeBinaryCache
+  if (process.platform !== 'darwin') {
+    electronNodeBinaryCache = process.execPath
+    return electronNodeBinaryCache
+  }
 
   const contentsDir = dirname(dirname(app.getPath('exe')))
   const frameworksDir = join(contentsDir, 'Frameworks')
 
   for (const name of [`${app.getName()} Helper`, 'Shadow Helper', 'Electron Helper']) {
     const helper = join(frameworksDir, `${name}.app`, 'Contents', 'MacOS', name)
-    if (existsSync(helper)) return helper
-  }
-
-  if (existsSync(frameworksDir)) {
-    try {
-      const entry = readdirSync(frameworksDir).find(
-        (item) => item.endsWith(' Helper.app') && !item.includes('('),
-      )
-      if (entry) {
-        const name = entry.replace('.app', '')
-        const helper = join(frameworksDir, entry, 'Contents', 'MacOS', name)
-        if (existsSync(helper)) return helper
-      }
-    } catch {
-      // Best effort fallback below.
+    if (await fileExists(helper)) {
+      electronNodeBinaryCache = helper
+      return helper
     }
   }
 
-  return process.execPath
+  try {
+    const entries = await readdir(frameworksDir)
+    const entry = entries.find((item) => item.endsWith(' Helper.app') && !item.includes('('))
+    if (entry) {
+      const name = entry.replace('.app', '')
+      const helper = join(frameworksDir, entry, 'Contents', 'MacOS', name)
+      if (await fileExists(helper)) {
+        electronNodeBinaryCache = helper
+        return helper
+      }
+    }
+  } catch {
+    // Best effort fallback below.
+  }
+
+  electronNodeBinaryCache = process.execPath
+  return electronNodeBinaryCache
 }
 
 export function setupProcessManager(): void {
   ipcMain.handle(
     'desktop:startAgent',
-    (_event, args: { name: string; scriptPath: string; args?: string[] }) => {
+    async (_event, args: { name: string; scriptPath: string; args?: string[] }) => {
       // Validate scriptPath is within the app directory
       const resolvedPath = resolve(args.scriptPath)
       const appPath = app.getAppPath()
@@ -56,7 +74,7 @@ export function setupProcessManager(): void {
       const child = fork(resolvedPath, args.args ?? [], {
         stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         silent: true,
-        execPath: resolveElectronNodeBinary(),
+        execPath: await resolveElectronNodeBinaryAsync(),
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ELECTRON_NO_ATTACH_CONSOLE: '1' },
       })
 

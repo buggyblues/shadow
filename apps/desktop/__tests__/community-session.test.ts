@@ -67,7 +67,7 @@ function response(body: unknown, init?: ResponseInit) {
   })
 }
 
-function createWindow(url = 'app://shadow/app/discover') {
+function createWindow(url = 'https://shadowob.com/app/discover') {
   return {
     isDestroyed: () => false,
     webContents: {

@@ -11,21 +11,26 @@ import {
   Hand,
   type LucideIcon,
   Package,
-  Play,
   Shell,
   Shuffle,
-  Square,
   Timer,
   Waves,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { levelXpRequirement, type PetAction, type PetEmotion, type PetState } from '../lib/game'
 import { PET_PERSONALITIES, type PetPersonalityId } from '../lib/pet-profile'
-import type { ConnectorSnapshot, PetProfile, PetServiceId, PetServiceState } from '../pet-types'
-import { PetPanelButton, PetPanelSwitch } from './pet-ui'
+import type {
+  PetProfile,
+  PetServiceHistoryDay,
+  PetServiceId,
+  PetServiceIntervalId,
+  PetServiceState,
+} from '../pet-types'
+import { PetPanelButton } from './pet-ui'
 
-const WATER_INTERVAL_MS = 60 * 60_000
-const FITNESS_INTERVAL_MS = 90 * 60_000
+const SERVICE_INTERVAL_STEP_MINUTES = 5
+const SERVICE_INTERVAL_MINUTES_MIN = 5
+const SERVICE_INTERVAL_MINUTES_MAX = 180
 
 export {
   ChatPanel,
@@ -75,6 +80,56 @@ export function CarePanel({
 
   return (
     <div className="desktop-pet-panel-body desktop-pet-care">
+      <section className="desktop-pet-care-action-shelf">
+        <div className="desktop-pet-care-status-card">
+          <span>{t(`desktopPet.phase.${emotion.phase}`)}</span>
+          <strong>
+            {t('desktopPet.profile.statusLine', {
+              name: profile.name,
+              emotion: t(`desktopPet.emotions.${emotion.state}`),
+            })}
+          </strong>
+        </div>
+        <div
+          className="desktop-pet-care-actions desktop-pet-care-actions-primary"
+          aria-label={t('desktopPet.actions.interact')}
+        >
+          {actions.map(({ id, Icon }) => (
+            <PetPanelButton
+              key={id}
+              type="button"
+              variant="tile"
+              className="desktop-pet-care-action"
+              onClick={() => onAction(id)}
+            >
+              <Icon size={16} />
+              <span>{t(`desktopPet.actions.${id}`)}</span>
+              {recommendedActions.includes(id) ? (
+                <i
+                  className="desktop-pet-action-dot"
+                  aria-label={t('desktopPet.care.recommendedAction')}
+                />
+              ) : null}
+            </PetPanelButton>
+          ))}
+        </div>
+      </section>
+
+      <section className="desktop-pet-event-card">
+        <div>
+          <strong>{t('desktopPet.care.todayEvent')}</strong>
+          <span>
+            {event
+              ? t(
+                  event.resolved
+                    ? `desktopPet.events.${event.id}.resolved`
+                    : `desktopPet.events.${event.id}.hint`,
+                )
+              : t('desktopPet.care.noEvent')}
+          </span>
+        </div>
+      </section>
+
       <section className="desktop-pet-profile-card">
         <div className="desktop-pet-profile-fields">
           <label>
@@ -119,16 +174,6 @@ export function CarePanel({
         </PetPanelButton>
       </section>
 
-      <section className="desktop-pet-mood-card">
-        <span>{t(`desktopPet.phase.${emotion.phase}`)}</span>
-        <strong>
-          {t('desktopPet.profile.statusLine', {
-            name: profile.name,
-            emotion: t(`desktopPet.emotions.${emotion.state}`),
-          })}
-        </strong>
-      </section>
-
       <section className="desktop-pet-game-card">
         <div className="desktop-pet-game-summary">
           <span>
@@ -157,21 +202,6 @@ export function CarePanel({
               </i>
             </span>
           ))}
-        </div>
-      </section>
-
-      <section className="desktop-pet-event-card">
-        <div>
-          <strong>{t('desktopPet.care.todayEvent')}</strong>
-          <span>
-            {event
-              ? t(
-                  event.resolved
-                    ? `desktopPet.events.${event.id}.resolved`
-                    : `desktopPet.events.${event.id}.hint`,
-                )
-              : t('desktopPet.care.noEvent')}
-          </span>
         </div>
       </section>
 
@@ -208,45 +238,26 @@ export function CarePanel({
           )}
         </div>
       </section>
-
-      <div className="desktop-pet-care-actions" aria-label={t('desktopPet.actions.interact')}>
-        {actions.map(({ id, Icon }) => (
-          <PetPanelButton
-            key={id}
-            type="button"
-            variant="tile"
-            className="desktop-pet-care-action"
-            onClick={() => onAction(id)}
-          >
-            <Icon size={16} />
-            <span>{t(`desktopPet.actions.${id}`)}</span>
-            {recommendedActions.includes(id) ? (
-              <i
-                className="desktop-pet-action-dot"
-                aria-label={t('desktopPet.care.recommendedAction')}
-              />
-            ) : null}
-          </PetPanelButton>
-        ))}
-      </div>
     </div>
   )
 }
 
 export function ServicesPanel({
   services,
-  connectorSnapshot,
+  serviceHistory,
   now,
   onToggle,
   onAcknowledge,
   onFocusStart,
+  onIntervalChange,
 }: {
   services: PetServiceState
-  connectorSnapshot: ConnectorSnapshot
+  serviceHistory: PetServiceHistoryDay[]
   now: number
   onToggle: (service: PetServiceId) => void
   onAcknowledge: (service: Extract<PetServiceId, 'water' | 'fitness'>) => void
   onFocusStart: (minutes: number) => void
+  onIntervalChange: (service: PetServiceIntervalId, minutes: number) => void
 }) {
   const { t } = useTranslation()
   const formatDuration = (ms: number) => {
@@ -257,191 +268,342 @@ export function ServicesPanel({
       minutes: minutes % 60,
     })
   }
-  const waterRemaining = Math.max(0, services.lastWaterAt + WATER_INTERVAL_MS - now)
-  const fitnessRemaining = Math.max(0, services.lastFitnessAt + FITNESS_INTERVAL_MS - now)
+  const intervalMinutes = (ms: number) => Math.max(5, Math.round(ms / 60_000 / 5) * 5)
+  const waterRemaining = Math.max(0, services.lastWaterAt + services.waterIntervalMs - now)
+  const fitnessRemaining = Math.max(0, services.lastFitnessAt + services.fitnessIntervalMs - now)
   const waterDue = services.water && waterRemaining <= 0
   const fitnessDue = services.fitness && fitnessRemaining <= 0
   const focusDurationMs = Math.max(60_000, services.focusDurationMs || 25 * 60_000)
   const focusEndsAt = services.focusEndsAt ?? now
-  const focusStartedAt = services.focusStartedAt ?? Math.max(now, focusEndsAt - focusDurationMs)
   const focusRemaining = Math.max(0, focusEndsAt - now)
-  const focusElapsed = Math.max(0, now - focusStartedAt)
-  const focusProgress = services.focus
-    ? Math.min(100, Math.max(4, (focusElapsed / focusDurationMs) * 100))
-    : 0
-  const codingMeta = connectorSnapshot.running
-    ? t('desktopPet.connector.online', { count: connectorSnapshot.onlineCount })
-    : t('desktopPet.connector.offline')
+  const historyByDate = new Map(serviceHistory.map((item) => [item.date, item]))
+  const historyDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(now)
+    date.setHours(0, 0, 0, 0)
+    date.setDate(date.getDate() - (6 - index))
+    const key = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-')
+    return (
+      historyByDate.get(key) ?? {
+        date: key,
+        focusMs: 0,
+        waterCount: 0,
+        fitnessCount: 0,
+        codingReadyCount: 0,
+      }
+    )
+  })
+  const todayHistory = historyDays[historyDays.length - 1] ?? {
+    date: '',
+    focusMs: 0,
+    waterCount: 0,
+    fitnessCount: 0,
+    codingReadyCount: 0,
+  }
+  const hasHistory = historyDays.some(
+    (day) =>
+      day.focusMs > 0 || day.waterCount > 0 || day.fitnessCount > 0 || day.codingReadyCount > 0,
+  )
+  const countMetric = (count: number) =>
+    count > 0 ? t('desktopPet.services.times', { count }) : t('desktopPet.services.notYet')
+  const dayCompletionCount = (day: PetServiceHistoryDay) =>
+    [day.focusMs > 0, day.waterCount > 0, day.fitnessCount > 0, day.codingReadyCount > 0].filter(
+      Boolean,
+    ).length
+  const dayLabel = (day: PetServiceHistoryDay, index: number) =>
+    index === historyDays.length - 1
+      ? t('desktopPet.services.today')
+      : day.date.slice(5).replace('-', '/')
+  const changeInterval = (service: PetServiceIntervalId, valueMs: number, delta: number) => {
+    const next = Math.min(
+      SERVICE_INTERVAL_MINUTES_MAX,
+      Math.max(SERVICE_INTERVAL_MINUTES_MIN, intervalMinutes(valueMs) + delta),
+    )
+    onIntervalChange(service, next)
+  }
+  const renderIntervalStepper = (service: PetServiceIntervalId, valueMs: number, label: string) => {
+    const minutes = intervalMinutes(valueMs)
+    return (
+      <div className="desktop-pet-service-stepper">
+        <span className="desktop-pet-service-stepper-label">{label}</span>
+        <div>
+          <button
+            type="button"
+            disabled={minutes <= SERVICE_INTERVAL_MINUTES_MIN}
+            onClick={() => changeInterval(service, valueMs, -SERVICE_INTERVAL_STEP_MINUTES)}
+            aria-label={t('desktopPet.services.decreaseInterval')}
+          >
+            -
+          </button>
+          <strong>{minutes}</strong>
+          <button
+            type="button"
+            disabled={minutes >= SERVICE_INTERVAL_MINUTES_MAX}
+            onClick={() => changeInterval(service, valueMs, SERVICE_INTERVAL_STEP_MINUTES)}
+            aria-label={t('desktopPet.services.increaseInterval')}
+          >
+            +
+          </button>
+        </div>
+      </div>
+    )
+  }
+  const renderTimerTile = ({
+    Icon,
+    title,
+    meta,
+    interval,
+    active,
+    due,
+    primaryLabel,
+    onPrimary,
+  }: {
+    Icon: LucideIcon
+    title: string
+    meta: string
+    interval?: { service: PetServiceIntervalId; valueMs: number; label: string }
+    active: boolean
+    due?: boolean
+    primaryLabel: string
+    onPrimary: () => void
+  }) => {
+    return (
+      <article
+        className={['desktop-pet-timer-tile', active ? 'active' : '', due ? 'attention' : '']
+          .filter(Boolean)
+          .join(' ')}
+      >
+        <div className="desktop-pet-timer-tile-head">
+          <span className="desktop-pet-timer-icon" aria-hidden="true">
+            <Icon size={16} />
+          </span>
+          <span className="desktop-pet-timer-copy">
+            <strong>{title}</strong>
+            <small>{meta}</small>
+          </span>
+          {due ? (
+            <i className="desktop-pet-timer-dot" aria-label={t('desktopPet.services.reminded')} />
+          ) : null}
+        </div>
+        <div className="desktop-pet-timer-controls">
+          {interval
+            ? renderIntervalStepper(interval.service, interval.valueMs, interval.label)
+            : null}
+          <PetPanelButton
+            type="button"
+            size="sm"
+            variant="primary"
+            className="desktop-pet-timer-action"
+            onClick={onPrimary}
+          >
+            <span>{primaryLabel}</span>
+          </PetPanelButton>
+        </div>
+      </article>
+    )
+  }
 
   return (
     <div className="desktop-pet-panel-body desktop-pet-services">
       <section
-        className={
-          services.focus
-            ? 'desktop-pet-service-card desktop-pet-service-focus active'
-            : 'desktop-pet-service-card desktop-pet-service-focus'
-        }
+        className="desktop-pet-service-action-board"
+        aria-label={t('desktopPet.services.actionTitle')}
       >
-        <div className="desktop-pet-service-main">
-          <span className="desktop-pet-service-icon" aria-hidden="true">
-            <Timer size={17} />
-          </span>
-          <span className="desktop-pet-service-copy">
-            <strong>{t('desktopPet.services.focus')}</strong>
-            <small>
-              {services.focus
-                ? t('desktopPet.services.focusRemaining', {
-                    time: formatDuration(focusRemaining),
+        <div className="desktop-pet-service-section-heading">
+          <strong>{t('desktopPet.services.actionTitle')}</strong>
+          <small>{t('desktopPet.services.actionSubtitle')}</small>
+        </div>
+        <div className="desktop-pet-timer-grid">
+          {renderTimerTile({
+            Icon: Timer,
+            title: t('desktopPet.services.focus'),
+            meta: services.focus
+              ? t('desktopPet.services.focusRemaining', {
+                  time: formatDuration(focusRemaining),
+                })
+              : t('desktopPet.services.focusIdleShort'),
+            interval: {
+              service: 'focus',
+              valueMs: focusDurationMs,
+              label: t('desktopPet.services.durationLabel'),
+            },
+            active: services.focus,
+            primaryLabel: services.focus
+              ? t('desktopPet.services.stop')
+              : t('desktopPet.services.start'),
+            onPrimary: services.focus
+              ? () => onToggle('focus')
+              : () => onFocusStart(intervalMinutes(focusDurationMs)),
+          })}
+          {renderTimerTile({
+            Icon: Waves,
+            title: t('desktopPet.services.water'),
+            meta: services.water
+              ? waterDue
+                ? t('desktopPet.services.reminded')
+                : t('desktopPet.services.waterNext', { time: formatDuration(waterRemaining) })
+              : t('desktopPet.services.intervalShort', {
+                  time: formatDuration(services.waterIntervalMs),
+                }),
+            interval: {
+              service: 'water',
+              valueMs: services.waterIntervalMs,
+              label: t('desktopPet.services.intervalLabel'),
+            },
+            active: services.water,
+            due: waterDue,
+            primaryLabel: services.water
+              ? waterDue
+                ? t('desktopPet.services.done')
+                : t('desktopPet.services.stop')
+              : t('desktopPet.services.enableReminder'),
+            onPrimary: services.water
+              ? waterDue
+                ? () => onAcknowledge('water')
+                : () => onToggle('water')
+              : () => onToggle('water'),
+          })}
+          {renderTimerTile({
+            Icon: Dumbbell,
+            title: t('desktopPet.services.fitness'),
+            meta: services.fitness
+              ? fitnessDue
+                ? t('desktopPet.services.reminded')
+                : t('desktopPet.services.fitnessNext', {
+                    time: formatDuration(fitnessRemaining),
                   })
-                : t('desktopPet.services.focusIdle')}
-            </small>
-          </span>
-          <i>{services.focus ? t('desktopPet.services.active') : t('desktopPet.services.idle')}</i>
-        </div>
-        <div className="desktop-pet-service-progress" aria-hidden="true">
-          <span style={{ width: `${focusProgress}%` }} />
-        </div>
-        <div className="desktop-pet-service-actions">
-          {services.focus ? (
-            <PetPanelButton type="button" size="sm" onClick={() => onToggle('focus')}>
-              <Square size={12} />
-              <span>{t('desktopPet.services.stop')}</span>
+              : t('desktopPet.services.intervalShort', {
+                  time: formatDuration(services.fitnessIntervalMs),
+                }),
+            interval: {
+              service: 'fitness',
+              valueMs: services.fitnessIntervalMs,
+              label: t('desktopPet.services.intervalLabel'),
+            },
+            active: services.fitness,
+            due: fitnessDue,
+            primaryLabel: services.fitness
+              ? fitnessDue
+                ? t('desktopPet.services.done')
+                : t('desktopPet.services.stop')
+              : t('desktopPet.services.start'),
+            onPrimary: services.fitness
+              ? fitnessDue
+                ? () => onAcknowledge('fitness')
+                : () => onToggle('fitness')
+              : () => onToggle('fitness'),
+          })}
+          <section
+            className={
+              services.coding ? 'desktop-pet-runtime-tile active' : 'desktop-pet-runtime-tile'
+            }
+          >
+            <div className="desktop-pet-timer-tile-head">
+              <span className="desktop-pet-timer-icon" aria-hidden="true">
+                <Code2 size={16} />
+              </span>
+              <span className="desktop-pet-timer-copy">
+                <strong>{t('desktopPet.services.coding')}</strong>
+                <small>
+                  {services.coding
+                    ? t('desktopPet.services.runtimeWatching')
+                    : t('desktopPet.services.runtimeIdleShort')}
+                </small>
+              </span>
+            </div>
+            <PetPanelButton
+              type="button"
+              size="sm"
+              variant={services.coding ? 'warm' : 'primary'}
+              className="desktop-pet-runtime-action"
+              onClick={() => onToggle('coding')}
+            >
+              <span>
+                {services.coding ? t('desktopPet.services.stop') : t('desktopPet.services.start')}
+              </span>
             </PetPanelButton>
-          ) : (
-            <>
-              <PetPanelButton type="button" size="sm" onClick={() => onFocusStart(25)}>
-                <Play size={12} />
-                <span>{t('desktopPet.services.start25')}</span>
-              </PetPanelButton>
-              <PetPanelButton type="button" size="sm" onClick={() => onFocusStart(50)}>
-                <Play size={12} />
-                <span>{t('desktopPet.services.start50')}</span>
-              </PetPanelButton>
-            </>
-          )}
+          </section>
         </div>
       </section>
 
       <section
-        className={[
-          'desktop-pet-service-card',
-          services.water ? 'active' : '',
-          waterDue ? 'attention' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
+        className="desktop-pet-service-history"
+        aria-label={t('desktopPet.services.historyTitle')}
       >
-        <div className="desktop-pet-service-main">
-          <span className="desktop-pet-service-icon" aria-hidden="true">
-            <Waves size={17} />
+        <div className="desktop-pet-service-section-heading">
+          <strong>{t('desktopPet.services.historyTitle')}</strong>
+          <small>{t('desktopPet.services.historySubtitle')}</small>
+        </div>
+        <div className="desktop-pet-service-today-grid">
+          <span className={todayHistory.focusMs > 0 ? 'done' : ''}>
+            <Timer size={13} />
+            <small>{t('desktopPet.services.historyFocus')}</small>
+            <strong>
+              {todayHistory.focusMs > 0
+                ? formatDuration(todayHistory.focusMs)
+                : t('desktopPet.services.notYet')}
+            </strong>
           </span>
-          <span className="desktop-pet-service-copy">
-            <strong>{t('desktopPet.services.water')}</strong>
-            <small>
-              {services.water
-                ? waterDue
-                  ? t('desktopPet.services.dueNow')
-                  : t('desktopPet.services.waterNext', { time: formatDuration(waterRemaining) })
-                : t('desktopPet.services.waterMeta')}
-            </small>
+          <span className={todayHistory.waterCount > 0 ? 'done' : ''}>
+            <Waves size={13} />
+            <small>{t('desktopPet.services.historyWater')}</small>
+            <strong>{countMetric(todayHistory.waterCount)}</strong>
           </span>
-          <span className="desktop-pet-service-state">
-            <i>
-              {waterDue
-                ? t('desktopPet.services.reminded')
-                : services.water
-                  ? t('desktopPet.services.active')
-                  : t('desktopPet.services.idle')}
-            </i>
-            <PetPanelSwitch
-              checked={services.water}
-              onCheckedChange={() => onToggle('water')}
-              aria-label={t('desktopPet.services.water')}
-            />
+          <span className={todayHistory.fitnessCount > 0 ? 'done' : ''}>
+            <Dumbbell size={13} />
+            <small>{t('desktopPet.services.historyFitness')}</small>
+            <strong>{countMetric(todayHistory.fitnessCount)}</strong>
+          </span>
+          <span className={todayHistory.codingReadyCount > 0 ? 'done' : ''}>
+            <Code2 size={13} />
+            <small>{t('desktopPet.services.historyCoding')}</small>
+            <strong>{countMetric(todayHistory.codingReadyCount)}</strong>
           </span>
         </div>
-        {services.water ? (
-          <div className="desktop-pet-service-actions">
-            <PetPanelButton type="button" size="sm" onClick={() => onAcknowledge('water')}>
-              <CheckCircle2 size={12} />
-              <span>{t('desktopPet.services.done')}</span>
-            </PetPanelButton>
-          </div>
+        <div className="desktop-pet-service-week-grid">
+          {historyDays.map((day, index) => {
+            const completed = dayCompletionCount(day)
+            return (
+              <article
+                key={day.date}
+                className={
+                  completed > 0 ? 'desktop-pet-service-day done' : 'desktop-pet-service-day'
+                }
+              >
+                <time dateTime={day.date}>{dayLabel(day, index)}</time>
+                <strong>
+                  {completed > 0
+                    ? t('desktopPet.services.dayCompleted', { count: completed })
+                    : t('desktopPet.services.dayEmpty')}
+                </strong>
+                <div>
+                  <span className={day.focusMs > 0 ? 'done' : ''}>
+                    <Timer size={11} />
+                    {day.focusMs > 0
+                      ? formatDuration(day.focusMs)
+                      : t('desktopPet.services.notYet')}
+                  </span>
+                  <span className={day.waterCount > 0 ? 'done' : ''}>
+                    <Waves size={11} />
+                    {day.waterCount > 0 ? day.waterCount : '-'}
+                  </span>
+                  <span className={day.fitnessCount > 0 ? 'done' : ''}>
+                    <Dumbbell size={11} />
+                    {day.fitnessCount > 0 ? day.fitnessCount : '-'}
+                  </span>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+        {!hasHistory ? (
+          <p className="desktop-pet-service-history-empty">
+            {t('desktopPet.services.historyEmpty')}
+          </p>
         ) : null}
-      </section>
-
-      <section
-        className={[
-          'desktop-pet-service-card',
-          services.fitness ? 'active' : '',
-          fitnessDue ? 'attention' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        <div className="desktop-pet-service-main">
-          <span className="desktop-pet-service-icon" aria-hidden="true">
-            <Dumbbell size={17} />
-          </span>
-          <span className="desktop-pet-service-copy">
-            <strong>{t('desktopPet.services.fitness')}</strong>
-            <small>
-              {services.fitness
-                ? fitnessDue
-                  ? t('desktopPet.services.dueNow')
-                  : t('desktopPet.services.fitnessNext', {
-                      time: formatDuration(fitnessRemaining),
-                    })
-                : t('desktopPet.services.fitnessMeta')}
-            </small>
-          </span>
-          <span className="desktop-pet-service-state">
-            <i>
-              {fitnessDue
-                ? t('desktopPet.services.reminded')
-                : services.fitness
-                  ? t('desktopPet.services.active')
-                  : t('desktopPet.services.idle')}
-            </i>
-            <PetPanelSwitch
-              checked={services.fitness}
-              onCheckedChange={() => onToggle('fitness')}
-              aria-label={t('desktopPet.services.fitness')}
-            />
-          </span>
-        </div>
-        {services.fitness ? (
-          <div className="desktop-pet-service-actions">
-            <PetPanelButton type="button" size="sm" onClick={() => onAcknowledge('fitness')}>
-              <CheckCircle2 size={12} />
-              <span>{t('desktopPet.services.done')}</span>
-            </PetPanelButton>
-          </div>
-        ) : null}
-      </section>
-
-      <section
-        className={services.coding ? 'desktop-pet-service-card active' : 'desktop-pet-service-card'}
-      >
-        <div className="desktop-pet-service-main">
-          <span className="desktop-pet-service-icon" aria-hidden="true">
-            <Code2 size={17} />
-          </span>
-          <span className="desktop-pet-service-copy">
-            <strong>{t('desktopPet.services.coding')}</strong>
-            <small>{codingMeta}</small>
-          </span>
-          <span className="desktop-pet-service-state">
-            <i>
-              {services.coding ? t('desktopPet.services.active') : t('desktopPet.services.idle')}
-            </i>
-            <PetPanelSwitch
-              checked={services.coding}
-              onCheckedChange={() => onToggle('coding')}
-              aria-label={t('desktopPet.services.coding')}
-            />
-          </span>
-        </div>
       </section>
     </div>
   )

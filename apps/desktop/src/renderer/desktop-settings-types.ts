@@ -8,6 +8,7 @@ export interface DesktopRuntimeSettings {
   connectorAutoStart: boolean
   connectorWorkDir: string
   connectorBuddyWorkDirs: Record<string, string>
+  connectorRuntimeNotifications: Record<string, boolean>
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
   shortcuts: DesktopShortcutSettings
@@ -45,6 +46,9 @@ export interface ConnectorDaemonState {
 export interface ConnectorConnection {
   agentId: string
   label: string
+  username?: string | null
+  displayName?: string | null
+  avatarUrl?: string | null
   runtimeId: string
   runtimeLabel: string
   computerId: string
@@ -65,6 +69,86 @@ export interface ConnectorRuntimeInfo {
   installCommands?: string[]
   helpUrl?: string | null
   detectedAt?: string | null
+}
+
+export type ConnectorRuntimeSessionState =
+  | 'idle'
+  | 'running'
+  | 'streaming'
+  | 'waiting_for_approval'
+  | 'blocked'
+  | 'completed'
+  | 'failed'
+  | 'stopped'
+  | 'unknown'
+
+export type ConnectorRuntimeInstanceStatus =
+  | 'running'
+  | 'available'
+  | 'stopped'
+  | 'missing'
+  | 'error'
+
+export interface ConnectorRuntimeInstanceInfo {
+  runtimeId: string
+  instanceId: string
+  label: string
+  status: ConnectorRuntimeInstanceStatus
+  endpoint?: string | null
+  capabilities: string[]
+  error?: string | null
+  metadata?: Record<string, unknown>
+}
+
+export interface ConnectorRuntimeSessionInfo {
+  runtimeId: string
+  instanceId: string
+  sessionId: string
+  title?: string | null
+  workDir?: string | null
+  state: ConnectorRuntimeSessionState
+  model?: string | null
+  lastActivityAt?: string | null
+  startedAt?: string | null
+  source: string
+  native?: Record<string, unknown>
+}
+
+export interface ConnectorRuntimeSessionSnapshot {
+  scannedAt: string
+  runtimeIds: string[]
+  instances: ConnectorRuntimeInstanceInfo[]
+  sessions: ConnectorRuntimeSessionInfo[]
+}
+
+export interface ConnectorRuntimeScanResult {
+  runtimes: ConnectorRuntimeInfo[]
+  runtimeSessions?: ConnectorRuntimeSessionSnapshot | null
+  cached?: boolean
+}
+
+export interface ConnectorBuddyCreateInput {
+  runtimeId: string
+  name: string
+  username: string
+  description?: string
+  avatarUrl?: string | null
+}
+
+export interface ConnectorBuddyCreateResult {
+  connections: ConnectorConnection[]
+  connectionError?: string | null
+  agent?: {
+    id?: string | null
+    userId?: string | null
+    buddyUserId?: string | null
+    botUser?: {
+      id?: string | null
+      username?: string | null
+      displayName?: string | null
+      avatarUrl?: string | null
+    } | null
+  } | null
 }
 
 export type TtsProvider = DesktopRuntimeSettings['ttsProvider']
@@ -110,6 +194,7 @@ export interface DesktopSettingsAPI {
   showCreateBuddy?: () => Promise<void>
   showMainWindow?: () => Promise<void>
   showCommunity?: (path?: string) => Promise<void>
+  openCommunityLogin?: (redirect?: string) => Promise<boolean>
   getCommunityAuthToken?: () => Promise<string>
   getCommunityAuthTokens?: () => Promise<{ accessToken: string; refreshToken: string }>
   communityFetchJson?: <T = unknown>(input: {
@@ -188,15 +273,21 @@ export interface DesktopSettingsAPI {
     start: (settings?: Partial<DesktopRuntimeSettings>) => Promise<ConnectorDaemonState>
     stop: () => Promise<ConnectorDaemonState>
     scan: () => Promise<{ output: string }>
-    scanRuntimes?: () => Promise<{ runtimes: ConnectorRuntimeInfo[] }>
+    scanRuntimes?: (input?: { force?: boolean }) => Promise<ConnectorRuntimeScanResult>
     installRuntime?: (input: { runtimeId: string }) => Promise<{
       runtimes: ConnectorRuntimeInfo[]
+      runtimeSessions?: ConnectorRuntimeSessionSnapshot | null
       installed?: ConnectorRuntimeInfo | null
     }>
+    createBuddy?: (input: ConnectorBuddyCreateInput) => Promise<ConnectorBuddyCreateResult>
     getConnections: () => Promise<ConnectorConnection[]>
     setConnectionEnabled: (input: {
       agentId: string
       enabled: boolean
+    }) => Promise<ConnectorConnection[]>
+    deleteConnection?: (input: {
+      agentId: string
+      deleteCloudBuddy?: boolean
     }) => Promise<ConnectorConnection[]>
     setConnectionWorkDir?: (input: {
       agentId: string
@@ -208,6 +299,7 @@ export interface DesktopSettingsAPI {
     installVoiceModel?: (input: { provider: TtsProvider }) => Promise<VoiceEngineStatus>
   }
   onConnectorState?: (callback: (state: ConnectorDaemonState) => void) => () => void
+  onConnectorRuntimeState?: (callback: (state: ConnectorRuntimeScanResult) => void) => () => void
   onDesktopSettingsChanged?: (callback: (settings: DesktopRuntimeSettings) => void) => () => void
   onSettingsTabRequest?: (callback: (tab: DesktopSettingsTab) => void) => () => void
 }

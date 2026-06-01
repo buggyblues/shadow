@@ -16,6 +16,9 @@ npx @shadowob/connector@latest --daemon \
 
 The daemon connects this computer once, scans supported runtimes, sends heartbeats to Shadow, claims Buddy setup jobs, and configures the selected runtime. Supported runtime detection currently includes OpenClaw, Hermes Agent, Claude Code, Codex CLI, OpenCode, Gemini CLI, Cursor CLI, Kimi CLI, Copilot CLI, and Antigravity CLI.
 
+Research and design notes for runtime session scanning, monitoring, and direct
+message push are in [`docs/agent-runtime-session-monitoring.md`](docs/agent-runtime-session-monitoring.md).
+
 Desktop builds run the connector through Electron's Node runtime. If the user's
 machine does not have Node/npm, the connector downloads a verified official
 Node.js runtime under `~/.shadowob/connector/node/`, installs Shadow CLI tools
@@ -48,6 +51,11 @@ Operational commands:
 
 ```bash
 npx @shadowob/connector@latest scan
+npx @shadowob/connector@latest runtime-scan --sessions --json
+npx @shadowob/connector@latest runtime-watch --runtime opencode
+npx @shadowob/connector@latest runtime-watch --runtime claude-code --json
+npx @shadowob/connector@latest session-list --runtime opencode --json
+npx @shadowob/connector@latest session-send --runtime opencode --session <session-id> --message "continue"
 npx @shadowob/connector@latest status --target cc-connect
 npx @shadowob/connector@latest doctor --target hermes
 npx @shadowob/connector@latest fix --target openclaw --server-url https://shadowob.com --token buddy-token
@@ -55,6 +63,15 @@ npx @shadowob/connector@latest update --target cc-connect --server-url https://s
 ```
 
 - `scan` probes local OpenClaw, Hermes Agent, and cc-connect installs/config files, then prints connection instructions for each target.
+- `runtime-scan --sessions` adds a compact runtime session snapshot for supported
+  monitor adapters. Initial support covers OpenCode's loopback server and
+  Claude Code transcript inventory.
+- `runtime-watch` shows a lightweight terminal monitor panel. With `--json`, it
+  emits newline-delimited event JSON for automation.
+- `session-list` prints normalized runtime session inventory, and
+  `session-send` pushes a message to a supported runtime session. OpenCode uses
+  the documented server API; Claude Code uses a structured `claude -p --resume`
+  process adapter.
 - `status` checks local connector health and exits successfully.
 - `doctor` prints the same checks with fix guidance and exits non-zero when required config is broken.
 - `fix` reinstalls common Shadow CLI/skill assets and repairs the target connector config.

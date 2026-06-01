@@ -1,4 +1,4 @@
-import { FileText, Mic, RefreshCcw, Send, Store } from 'lucide-react'
+import { CheckCheck, FileText, Mic, RefreshCcw, Send, Store } from 'lucide-react'
 import type { FormEvent, RefObject } from 'react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -224,6 +224,7 @@ export function CommunityPanel({
   onRefresh,
   onOpen,
   onMarkRead,
+  onMarkAllRead,
   onOpenMainWindow,
 }: {
   state: 'idle' | 'loading' | 'auth' | 'error'
@@ -231,24 +232,45 @@ export function CommunityPanel({
   onRefresh: () => void
   onOpen: (notification: NotificationItem) => void
   onMarkRead: (notification: NotificationItem) => void
+  onMarkAllRead: () => void
   onOpenMainWindow: () => void
 }) {
   const { t } = useTranslation()
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length
+  const statusText =
+    state === 'idle'
+      ? unreadCount > 0
+        ? t('desktopPet.community.unreadCount', { count: unreadCount })
+        : t('desktopPet.community.allRead')
+      : t(`desktopPet.community.state_${state}`)
   return (
     <div className="desktop-pet-panel-body">
       <div className="desktop-pet-community-toolbar">
-        <div>
+        <div className="desktop-pet-community-heading">
           <strong>{t('desktopPet.community.title')}</strong>
-          <span>{t(`desktopPet.community.state_${state}`)}</span>
+          <span>{statusText}</span>
         </div>
-        <PetPanelIconButton
-          type="button"
-          onClick={onRefresh}
-          title={t('desktopPet.community.refresh')}
-          aria-label={t('desktopPet.community.refresh')}
-        >
-          <RefreshCcw size={15} />
-        </PetPanelIconButton>
+        <div className="desktop-pet-community-actions">
+          <PetPanelButton
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="desktop-pet-community-read-all"
+            onClick={onMarkAllRead}
+            disabled={unreadCount === 0 || state !== 'idle'}
+          >
+            <CheckCheck size={14} />
+            {t('desktopPet.community.markAllRead')}
+          </PetPanelButton>
+          <PetPanelIconButton
+            type="button"
+            onClick={onRefresh}
+            title={t('desktopPet.community.refresh')}
+            aria-label={t('desktopPet.community.refresh')}
+          >
+            <RefreshCcw size={15} />
+          </PetPanelIconButton>
+        </div>
       </div>
       {state === 'auth' ? (
         <PetLoginGuide
@@ -268,11 +290,9 @@ export function CommunityPanel({
                 notification.isRead ? 'desktop-pet-notification read' : 'desktop-pet-notification'
               }
             >
-              <div>
+              <i className="desktop-pet-notification-dot" aria-hidden="true" />
+              <div className="desktop-pet-notification-main">
                 <span className="desktop-pet-notification-heading">
-                  {!notification.isRead ? (
-                    <i className="desktop-pet-inline-dot" aria-hidden="true" />
-                  ) : null}
                   <strong>{notification.title}</strong>
                   {notification.createdAt ? (
                     <time>{formatPanelTime(notification.createdAt)}</time>
@@ -281,11 +301,16 @@ export function CommunityPanel({
                 {notification.body ? <p>{notification.body}</p> : null}
               </div>
               <div className="desktop-pet-notification-actions">
-                <PetPanelButton type="button" size="sm" onClick={() => onOpen(notification)}>
+                <PetPanelButton type="button" size="xs" onClick={() => onOpen(notification)}>
                   {t('desktopPet.community.open')}
                 </PetPanelButton>
                 {!notification.isRead ? (
-                  <PetPanelButton type="button" size="sm" onClick={() => onMarkRead(notification)}>
+                  <PetPanelButton
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => onMarkRead(notification)}
+                  >
                     {t('desktopPet.community.markRead')}
                   </PetPanelButton>
                 ) : null}

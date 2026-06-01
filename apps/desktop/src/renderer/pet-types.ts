@@ -48,6 +48,10 @@ export type DesktopPetAssetSettings = {
   desktopPetPacks: DesktopPetAssetPack[]
 }
 
+export type DesktopPetRuntimeSettings = DesktopPetAssetSettings & {
+  connectorRuntimeNotifications?: Record<string, boolean>
+}
+
 export type DesktopPetApi = {
   getCommunityAuthToken?: () => Promise<string>
   getCommunityAuthTokens?: () => Promise<{ accessToken: string; refreshToken: string }>
@@ -74,12 +78,13 @@ export type DesktopPetApi = {
   quit?: () => Promise<void>
   showMainWindow?: () => Promise<void>
   showCommunity?: (path?: string) => Promise<void>
+  openCommunityLogin?: (redirect?: string) => Promise<boolean>
   showContextMenu?: () => Promise<void>
   showSettings?: (
     tab?: 'general' | 'connector' | 'shortcuts' | 'voice' | 'pet' | 'network' | 'about',
   ) => Promise<void>
-  getDesktopSettings?: () => Promise<DesktopPetAssetSettings>
-  onDesktopSettingsChanged?: (callback: (settings: DesktopPetAssetSettings) => void) => () => void
+  getDesktopSettings?: () => Promise<DesktopPetRuntimeSettings>
+  onDesktopSettingsChanged?: (callback: (settings: DesktopPetRuntimeSettings) => void) => () => void
   petAssets?: {
     importDirectory?: (path?: string) => Promise<DesktopPetAssetSettings>
     importMarketplace?: (input: {
@@ -137,6 +142,59 @@ export type DesktopPetApi = {
         status: 'running' | 'stopped' | 'error'
       }>
     }>
+    scanRuntimes?: (input?: { force?: boolean }) => Promise<{
+      runtimes: Array<{
+        id: string
+        label: string
+        status: 'available' | 'missing'
+      }>
+      runtimeSessions?: {
+        sessions: Array<{
+          runtimeId: string
+          instanceId: string
+          sessionId: string
+          title?: string | null
+          lastActivityAt?: string | null
+          state:
+            | 'idle'
+            | 'running'
+            | 'streaming'
+            | 'waiting_for_approval'
+            | 'blocked'
+            | 'completed'
+            | 'failed'
+            | 'stopped'
+            | 'unknown'
+        }>
+      } | null
+    }>
+    scanRuntimeSessions?: (input?: { force?: boolean }) => Promise<{
+      runtimes?: Array<{
+        id: string
+        label: string
+        status: 'available' | 'missing'
+      }>
+      runtimeSessions: {
+        runtimeIds: string[]
+        sessions: Array<{
+          runtimeId: string
+          instanceId: string
+          sessionId: string
+          title?: string | null
+          lastActivityAt?: string | null
+          state:
+            | 'idle'
+            | 'running'
+            | 'streaming'
+            | 'waiting_for_approval'
+            | 'blocked'
+            | 'completed'
+            | 'failed'
+            | 'stopped'
+            | 'unknown'
+        }>
+      }
+    }>
   }
 }
 
@@ -160,23 +218,39 @@ export type AppTab = 'chat' | 'care' | 'services' | 'community' | 'subscriptions
 export type VisibleAppTab = Exclude<AppTab, 'store'>
 export type WheelCommand =
   | 'interact'
+  | 'services'
   | 'back'
   | 'community'
   | 'panel'
   | 'voice'
   | 'hide'
   | 'connection'
+  | 'serviceFocus'
+  | 'serviceWater'
+  | 'serviceFitness'
+  | 'serviceCoding'
   | PetAction
-export type WheelLayer = 'main' | 'interactions'
+export type WheelLayer = 'main' | 'interactions' | 'services'
 export type PetServiceId = 'water' | 'focus' | 'fitness' | 'coding'
+export type PetServiceIntervalId = Extract<PetServiceId, 'focus' | 'water' | 'fitness'>
 export type PetServiceState = Record<PetServiceId, boolean> & {
   focusEndsAt: number | null
   focusStartedAt: number | null
   focusDurationMs: number
+  waterIntervalMs: number
   lastWaterAt: number
   lastWaterReminderAt: number
+  fitnessIntervalMs: number
   lastFitnessAt: number
   lastFitnessReminderAt: number
+}
+
+export type PetServiceHistoryDay = {
+  date: string
+  focusMs: number
+  waterCount: number
+  fitnessCount: number
+  codingReadyCount: number
 }
 
 export type ConnectorSnapshot = {
@@ -186,6 +260,7 @@ export type ConnectorSnapshot = {
     id: string
     label: string
     runtimeLabel: string
+    source: 'buddy' | 'runtime'
   }>
 }
 

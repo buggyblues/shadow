@@ -2,7 +2,6 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { ConnectorDao } from '../dao/connector.dao'
 import type { ConnectorRuntimeInfo } from '../db/schema'
 import { decrypt, encrypt } from '../lib/kms'
-import { officialModelProxyEnvVars, officialModelProxyModel } from '../lib/model-proxy-config'
 import { type AgentService, effectiveAgentStatus } from './agent.service'
 
 const ONLINE_WINDOW_MS = 90_000
@@ -131,28 +130,6 @@ function normalizeRuntimes(runtimes: ConnectorRuntimeInfo[]): ConnectorRuntimeIn
     })
   }
   return next.slice(0, 30)
-}
-
-function officialConnectorModelProvider(input: {
-  userId: string
-  serverUrl: string
-  agentId: string
-}): ConnectorConfigureBuddyPayload['modelProvider'] | undefined {
-  const env = officialModelProxyEnvVars({
-    runtimeServerUrl: input.serverUrl,
-    userId: input.userId,
-    namespace: `connector:${input.agentId}`,
-  })
-  const baseUrl = env.OPENAI_COMPATIBLE_BASE_URL?.trim()
-  const apiKey = env.OPENAI_COMPATIBLE_API_KEY?.trim()
-  if (!baseUrl || !apiKey) return undefined
-  return {
-    id: 'shadow-official',
-    label: 'Shadow official LLM proxy',
-    baseUrl,
-    apiKey,
-    model: officialModelProxyModel(),
-  }
 }
 
 function readConfigString(config: Record<string, unknown> | null | undefined, key: string) {
@@ -287,12 +264,6 @@ export class ConnectorService {
         projectName: botUser.username,
         workDir: readConfigString(config, 'connectorWorkDir') || '.',
       }
-      payload.modelProvider = officialConnectorModelProvider({
-        userId: computer.userId,
-        serverUrl: payload.serverUrl,
-        agentId: agent.id,
-      })
-
       await this.deps.connectorDao.createJob({
         userId: computer.userId,
         computerId: computer.id,
@@ -369,12 +340,6 @@ export class ConnectorService {
       projectName: agent.botUser?.username ?? input.username,
       workDir: '.',
     }
-    payload.modelProvider = officialConnectorModelProvider({
-      userId,
-      serverUrl: payload.serverUrl,
-      agentId,
-    })
-
     const job = await this.deps.connectorDao.createJob({
       userId,
       computerId: computer.id,
@@ -435,12 +400,6 @@ export class ConnectorService {
       projectName: botUser.username,
       workDir: '.',
     }
-    payload.modelProvider = officialConnectorModelProvider({
-      userId,
-      serverUrl: payload.serverUrl,
-      agentId,
-    })
-
     const job = await this.deps.connectorDao.createJob({
       userId,
       computerId: computer.id,
@@ -450,6 +409,67 @@ export class ConnectorService {
     })
 
     return { agent, job }
+  }
+
+  async removeBuddyFromComputer(
+    userId: string,
+    computerId: string,
+    agentId: string,
+    options: { deleteCloudBuddy?: boolean } = {},
+  ) {
+    const computer = await this.deps.connectorDao.findComputerForUser(computerId, userId)
+    if (!computer) {
+      throw Object.assign(new Error('Connector computer not found'), { status: 404 })
+    }
+
+    const agent = await this.deps.agentService.getById(agentId)
+    if (!agent) {
+      throw Object.assign(new Error('Buddy not found'), { status: 404 })
+    }
+    if (agent.ownerId !== userId) {
+      throw Object.assign(new Error('Not the owner of this Buddy'), { status: 403 })
+    }
+
+    const config = (agent.config as Record<string, unknown> | null) ?? {}
+    const boundComputerId = readConfigString(config, 'connectorComputerId')
+    if (boundComputerId && boundComputerId !== computer.id) {
+      throw Object.assign(new Error('This Buddy is connected to a different computer'), {
+        status: 409,
+      })
+    }
+
+    const runtimeId = readConfigString(config, 'connectorRuntimeId') || agent.kernelType
+    const projectName =
+      agent.botUser?.username || readConfigString(config, 'connectorProjectName') || agentId
+    const payload: ConnectorConfigureBuddyPayload = {
+      serverUrl: normalizeServerUrl(
+        readConfigString(config, 'connectorServerUrl') || 'https://shadowob.com',
+      ),
+      token: '',
+      runtimeId,
+      buddy: {
+        id: agentId,
+        username: agent.botUser?.username ?? projectName,
+        displayName: agent.botUser?.displayName ?? null,
+      },
+      projectName,
+      workDir: readConfigString(config, 'connectorWorkDir') || '.',
+    }
+    const job = await this.deps.connectorDao.createJob({
+      userId,
+      computerId: computer.id,
+      agentId,
+      type: 'remove-buddy',
+      payloadEncrypted: encrypt(JSON.stringify(payload)),
+    })
+    const updatedAgent = options.deleteCloudBuddy
+      ? null
+      : await this.deps.agentService.clearConnectorBinding(agentId, userId)
+    if (options.deleteCloudBuddy) {
+      await this.deps.agentService.delete(agentId)
+    }
+
+    return { agent: updatedAgent, job }
   }
 
   async claimDaemonJobs(computerId: string) {
