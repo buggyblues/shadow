@@ -487,6 +487,7 @@ const desktopAPI = {
       version: string
       downloadUrl: string
       releaseNotes: string
+      channel: 'production' | 'beta'
     }>,
   getUpdateState: () =>
     ipcRenderer.invoke('desktop:getUpdateState') as Promise<{
@@ -497,14 +498,20 @@ const desktopAPI = {
         version: string
         downloadUrl: string
         releaseNotes: string
+        channel: 'production' | 'beta'
       } | null
       error: string | null
+      channel: 'production' | 'beta'
     }>,
   getUpdateSettings: () =>
-    ipcRenderer.invoke('desktop:getUpdateSettings') as Promise<{ autoCheckOnLaunch: boolean }>,
-  setUpdateSettings: (settings: { autoCheckOnLaunch: boolean }) =>
+    ipcRenderer.invoke('desktop:getUpdateSettings') as Promise<{
+      autoCheckOnLaunch: boolean
+      channel: 'production' | 'beta'
+    }>,
+  setUpdateSettings: (settings: { autoCheckOnLaunch?: boolean; channel?: 'production' | 'beta' }) =>
     ipcRenderer.invoke('desktop:setUpdateSettings', settings) as Promise<{
       autoCheckOnLaunch: boolean
+      channel: 'production' | 'beta'
     }>,
   downloadUpdate: (url: string) =>
     ipcRenderer.invoke('desktop:downloadUpdate', url) as Promise<boolean>,
@@ -661,8 +668,10 @@ const desktopAPI = {
         version: string
         downloadUrl: string
         releaseNotes: string
+        channel: 'production' | 'beta'
       } | null
       error: string | null
+      channel: 'production' | 'beta'
     }) => void,
   ) => {
     const handler = (
@@ -675,8 +684,10 @@ const desktopAPI = {
           version: string
           downloadUrl: string
           releaseNotes: string
+          channel: 'production' | 'beta'
         } | null
         error: string | null
+        channel: 'production' | 'beta'
       },
     ) => callback(data)
     ipcRenderer.on('desktop:updateState', handler)

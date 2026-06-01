@@ -2,19 +2,23 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, net, shell } from 'electron'
 
-const RELEASE_API_URL = 'https://api.github.com/repos/buggyblues/shadow/releases/latest'
+const RELEASE_LATEST_API_URL = 'https://api.github.com/repos/buggyblues/shadow/releases/latest'
+const RELEASES_API_URL = 'https://api.github.com/repos/buggyblues/shadow/releases?per_page=30'
 
 type UpdateStatus = 'idle' | 'checking' | 'update-available' | 'up-to-date' | 'error'
+type UpdateChannel = 'production' | 'beta'
 
 interface UpdateInfo {
   hasUpdate: boolean
   version: string
   downloadUrl: string
   releaseNotes: string
+  channel: UpdateChannel
 }
 
 interface UpdateSettings {
   autoCheckOnLaunch: boolean
+  channel: UpdateChannel
 }
 
 interface UpdateState {
@@ -22,10 +26,12 @@ interface UpdateState {
   checkedAt: number | null
   info: UpdateInfo | null
   error: string | null
+  channel: UpdateChannel
 }
 
 const defaultSettings: UpdateSettings = {
   autoCheckOnLaunch: true,
+  channel: 'production',
 }
 
 let updateState: UpdateState = {
@@ -33,10 +39,15 @@ let updateState: UpdateState = {
   checkedAt: null,
   info: null,
   error: null,
+  channel: defaultSettings.channel,
 }
 
 function settingsFilePath(): string {
   return join(app.getPath('userData'), 'update-settings.json')
+}
+
+function normalizeUpdateChannel(channel: unknown): UpdateChannel {
+  return channel === 'beta' ? 'beta' : 'production'
 }
 
 function loadSettings(): UpdateSettings {
@@ -45,6 +56,7 @@ function loadSettings(): UpdateSettings {
     const parsed = JSON.parse(raw) as Partial<UpdateSettings>
     return {
       autoCheckOnLaunch: parsed.autoCheckOnLaunch ?? defaultSettings.autoCheckOnLaunch,
+      channel: normalizeUpdateChannel(parsed.channel),
     }
   } catch {
     return defaultSettings
@@ -82,6 +94,11 @@ function isNewerVersion(latest: string, current: string): boolean {
   return false
 }
 
+function releaseVersion(tagName: string, channel: UpdateChannel): string {
+  const pattern = channel === 'beta' ? /^desktop-beta-v(\d+\.\d+\.\d+)$/ : /^v(\d+\.\d+\.\d+)$/
+  return pattern.exec(tagName)?.[1] ?? ''
+}
+
 function selectReleaseAsset(
   assets: Array<{ name: string; browser_download_url: string }>,
 ): string | null {
@@ -112,42 +129,68 @@ function selectReleaseAsset(
   return linuxBest?.browser_download_url ?? null
 }
 
+type GithubRelease = {
+  tag_name?: string
+  body?: string
+  draft?: boolean
+  prerelease?: boolean
+  assets?: Array<{ name: string; browser_download_url: string }>
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await net.fetch(url, {
+    headers: {
+      'User-Agent': 'shadow-desktop-updater',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+
+  return (await response.json()) as T
+}
+
+async function fetchRelease(channel: UpdateChannel): Promise<GithubRelease | null> {
+  if (channel === 'production') {
+    return fetchJson<GithubRelease>(RELEASE_LATEST_API_URL)
+  }
+
+  const releases = await fetchJson<GithubRelease[]>(RELEASES_API_URL)
+  return (
+    releases.find(
+      (release) =>
+        !release.draft && release.prerelease && !!releaseVersion(release.tag_name ?? '', 'beta'),
+    ) ?? null
+  )
+}
+
 async function checkForUpdateInternal(): Promise<UpdateInfo> {
+  const settings = loadSettings()
+  const channel = settings.channel
   const currentVersion = app.getVersion()
 
   updateState = {
     ...updateState,
     status: 'checking',
     error: null,
+    channel,
   }
   sendUpdateState()
 
   try {
-    const response = await net.fetch(RELEASE_API_URL, {
-      headers: {
-        'User-Agent': 'shadow-desktop-updater',
-      },
-    })
+    const data = await fetchRelease(channel)
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    const data = (await response.json()) as {
-      tag_name?: string
-      body?: string
-      assets?: Array<{ name: string; browser_download_url: string }>
-    }
-
-    const latestVersion = (data.tag_name ?? '').replace(/^v/i, '')
-    const downloadUrl = selectReleaseAsset(data.assets ?? []) ?? ''
+    const latestVersion = data ? releaseVersion(data.tag_name ?? '', channel) : ''
+    const downloadUrl = selectReleaseAsset(data?.assets ?? []) ?? ''
     const hasUpdate = !!latestVersion && isNewerVersion(latestVersion, currentVersion)
 
     const info: UpdateInfo = {
       hasUpdate,
       version: latestVersion || currentVersion,
       downloadUrl: hasUpdate ? downloadUrl : '',
-      releaseNotes: data.body ?? '',
+      releaseNotes: data?.body ?? '',
+      channel,
     }
 
     updateState = {
@@ -155,6 +198,7 @@ async function checkForUpdateInternal(): Promise<UpdateInfo> {
       checkedAt: Date.now(),
       info,
       error: null,
+      channel,
     }
     sendUpdateState()
     return info
@@ -164,9 +208,10 @@ async function checkForUpdateInternal(): Promise<UpdateInfo> {
       checkedAt: Date.now(),
       info: null,
       error: error instanceof Error ? error.message : 'unknown error',
+      channel,
     }
     sendUpdateState()
-    return { hasUpdate: false, version: currentVersion, downloadUrl: '', releaseNotes: '' }
+    return { hasUpdate: false, version: currentVersion, downloadUrl: '', releaseNotes: '', channel }
   }
 }
 
@@ -180,8 +225,12 @@ export function setupAutoUpdater(): void {
     const current = loadSettings()
     const next: UpdateSettings = {
       autoCheckOnLaunch: incoming.autoCheckOnLaunch ?? current.autoCheckOnLaunch,
+      channel:
+        incoming.channel === undefined ? current.channel : normalizeUpdateChannel(incoming.channel),
     }
     saveSettings(next)
+    updateState = { ...updateState, channel: next.channel }
+    sendUpdateState()
     return next
   })
 
