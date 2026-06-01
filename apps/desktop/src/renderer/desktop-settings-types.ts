@@ -97,6 +97,8 @@ export type DesktopSettingsTab =
   | 'network'
   | 'about'
 
+export type UpdateChannel = 'production' | 'beta'
+
 export type ShortcutRegistrationResult = {
   suspended: boolean
   registered: Array<{ action: DesktopShortcutAction; accelerator: string }>
@@ -124,10 +126,15 @@ export interface DesktopSettingsAPI {
     version: string
     downloadUrl: string
     releaseNotes: string
+    channel: UpdateChannel
   }>
-  getUpdateSettings: () => Promise<{ autoCheckOnLaunch: boolean }>
-  setUpdateSettings: (settings: { autoCheckOnLaunch: boolean }) => Promise<{
+  getUpdateSettings: () => Promise<{ autoCheckOnLaunch: boolean; channel: UpdateChannel }>
+  setUpdateSettings: (settings: {
+    autoCheckOnLaunch?: boolean
+    channel?: UpdateChannel
+  }) => Promise<{
     autoCheckOnLaunch: boolean
+    channel: UpdateChannel
   }>
   getUpdateState: () => Promise<{
     status: 'idle' | 'checking' | 'update-available' | 'up-to-date' | 'error'
@@ -137,8 +144,10 @@ export interface DesktopSettingsAPI {
       version: string
       downloadUrl: string
       releaseNotes: string
+      channel: UpdateChannel
     } | null
     error: string | null
+    channel: UpdateChannel
   }>
   onUpdateState?: (
     cb: (data: {
@@ -149,8 +158,10 @@ export interface DesktopSettingsAPI {
         version: string
         downloadUrl: string
         releaseNotes: string
+        channel: UpdateChannel
       } | null
       error: string | null
+      channel: UpdateChannel
     }) => void,
   ) => () => void
   downloadUpdate: (url: string) => Promise<boolean>

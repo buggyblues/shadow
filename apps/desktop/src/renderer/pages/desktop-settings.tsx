@@ -30,6 +30,7 @@ import type {
   DesktopShortcutAction,
   DesktopShortcutSettings,
   TtsProvider,
+  UpdateChannel,
   VoiceEngineStatus,
 } from '../desktop-settings-types'
 import {
@@ -131,6 +132,7 @@ export function DesktopSettingsPage() {
   const [savingNetwork, setSavingNetwork] = useState(false)
   const [networkSaved, setNetworkSaved] = useState(false)
   const [autoCheckOnLaunch, setAutoCheckOnLaunch] = useState(true)
+  const [updateChannel, setUpdateChannel] = useState<UpdateChannel>('production')
   const [serverBaseUrl, setServerBaseUrl] = useState('')
   const [httpProxy, setHttpProxy] = useState('')
   const [httpsProxy, setHttpsProxy] = useState('')
@@ -169,6 +171,7 @@ export function DesktopSettingsPage() {
     version: string
     downloadUrl: string
     releaseNotes: string
+    channel: UpdateChannel
   } | null>(null)
 
   const refreshVoiceStatus = useCallback(async () => {
@@ -180,7 +183,10 @@ export function DesktopSettingsPage() {
   useEffect(() => {
     api?.getVersion().then(setVersion)
     api?.getOpenAtLogin().then(setOpenAtLogin)
-    api?.getUpdateSettings().then((s) => setAutoCheckOnLaunch(s.autoCheckOnLaunch))
+    api?.getUpdateSettings().then((s) => {
+      setAutoCheckOnLaunch(s.autoCheckOnLaunch)
+      setUpdateChannel(s.channel)
+    })
     api?.getDesktopSettings().then((settings) => {
       setServerBaseUrl(settings.serverBaseUrl)
       setHttpProxy(settings.httpProxy)
@@ -204,11 +210,13 @@ export function DesktopSettingsPage() {
     })
     api?.getUpdateState().then((state) => {
       if (state.info) setUpdateInfo(state.info)
+      setUpdateChannel(state.channel)
       setChecking(state.status === 'checking')
     })
 
     const unsubscribe = api?.onUpdateState?.((state) => {
       if (state.info) setUpdateInfo(state.info)
+      setUpdateChannel(state.channel)
       setChecking(state.status === 'checking')
     })
     const unsubscribeConnector = api?.onConnectorState?.((state) => {
@@ -273,6 +281,18 @@ export function DesktopSettingsPage() {
     async (v: boolean) => {
       setAutoCheckOnLaunch(v)
       await api?.setUpdateSettings({ autoCheckOnLaunch: v })
+    },
+    [api],
+  )
+
+  const handleUpdateChannelChange = useCallback(
+    async (channel: UpdateChannel) => {
+      setUpdateChannel(channel)
+      setUpdateInfo(null)
+      const next = await api?.setUpdateSettings({ channel })
+      if (!next) return
+      setAutoCheckOnLaunch(next.autoCheckOnLaunch)
+      setUpdateChannel(next.channel)
     },
     [api],
   )
@@ -784,7 +804,9 @@ export function DesktopSettingsPage() {
               version={version}
               platformLabel={platformLabel}
               checking={checking}
+              updateChannel={updateChannel}
               updateInfo={updateInfo}
+              onUpdateChannelChange={(channel) => void handleUpdateChannelChange(channel)}
               onCheckUpdate={() => void handleCheckUpdate()}
               onDownload={handleDownload}
               onRestart={() => api?.quitAndRestart()}

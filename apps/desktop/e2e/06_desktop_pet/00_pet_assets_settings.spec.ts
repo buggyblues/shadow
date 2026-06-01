@@ -97,12 +97,13 @@ test.describe('desktop pet asset settings', () => {
           getCommunityAuthToken: async () => 'test-token',
           getVersion: async () => 'test',
           getOpenAtLogin: async () => false,
-          getUpdateSettings: async () => ({ autoCheckOnLaunch: true }),
+          getUpdateSettings: async () => ({ autoCheckOnLaunch: true, channel: 'production' }),
           getUpdateState: async () => ({
             status: 'idle',
             checkedAt: null,
             info: null,
             error: null,
+            channel: 'production',
           }),
           getDesktopSettings: async () => settings,
           communityFetchJson: async ({ path }: { path: string }) => {
@@ -213,12 +214,13 @@ test.describe('desktop pet asset settings', () => {
           },
           getVersion: async () => 'test',
           getOpenAtLogin: async () => false,
-          getUpdateSettings: async () => ({ autoCheckOnLaunch: true }),
+          getUpdateSettings: async () => ({ autoCheckOnLaunch: true, channel: 'production' }),
           getUpdateState: async () => ({
             status: 'idle',
             checkedAt: null,
             info: null,
             error: null,
+            channel: 'production',
           }),
           getDesktopSettings: async () => settings,
           communityFetchJson: async () => {

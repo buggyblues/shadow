@@ -23,6 +23,7 @@ import type {
   DesktopShortcutAction,
   DesktopShortcutSettings,
   TtsProvider,
+  UpdateChannel,
   VoiceEngineStatus,
 } from '../desktop-settings-types'
 import { displayShortcut, shortcutActions } from '../desktop-settings-utils'
@@ -32,6 +33,7 @@ type UpdateInfo = {
   version: string
   downloadUrl: string
   releaseNotes: string
+  channel: UpdateChannel
 }
 
 const DESKTOP_RUNTIME_ICON_SOURCES: Record<string, string> = {
@@ -748,7 +750,9 @@ export function AboutSettingsPanel({
   version,
   platformLabel,
   checking,
+  updateChannel,
   updateInfo,
+  onUpdateChannelChange,
   onCheckUpdate,
   onDownload,
   onRestart,
@@ -756,7 +760,9 @@ export function AboutSettingsPanel({
   version: string
   platformLabel: string
   checking: boolean
+  updateChannel: UpdateChannel
   updateInfo: UpdateInfo | null
+  onUpdateChannelChange: (channel: UpdateChannel) => void
   onCheckUpdate: () => void
   onDownload: () => void
   onRestart: () => void
@@ -790,6 +796,20 @@ export function AboutSettingsPanel({
         >
           {checking ? t('desktop.checking') : t('desktop.checkNow')}
         </Button>
+      </div>
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-primary/35 px-4 py-3">
+        <div>
+          <p className="text-sm font-medium">{t('desktop.updateChannel')}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{t('desktop.updateChannelDesc')}</p>
+        </div>
+        <select
+          value={updateChannel}
+          onChange={(event) => onUpdateChannelChange(event.target.value as UpdateChannel)}
+          className="h-9 rounded-lg border border-border-subtle bg-bg-secondary px-3 text-sm text-text-primary outline-none transition hover:border-primary/40 focus:border-primary"
+        >
+          <option value="production">{t('desktop.updateChannelProduction')}</option>
+          <option value="beta">{t('desktop.updateChannelBeta')}</option>
+        </select>
       </div>
       {updateInfo ? (
         <div
