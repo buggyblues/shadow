@@ -1,64 +1,15 @@
-// Dev script: build main/preload, run the real web dev server, run the
-// desktop-local dev server, then launch Electron.
+// Dev script: build main/preload, run the desktop-local dev server, then launch
+// Electron. The community frontend is loaded directly from the configured App
+// base URL so desktop behavior stays aligned with the hosted web app.
 import { execSync, spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const root = resolve(__dirname, '..')
-const webRoot = resolve(root, '../web')
 const connectorRoot = resolve(root, '../../packages/connector')
 const env = { ...process.env, NODE_ENV: 'development' }
-const defaultServerBaseUrl = 'https://shadowob.com'
-const desktopWebDevPort = process.env.DESKTOP_WEB_DEV_PORT ?? '39100'
 const desktopLocalDevPort = process.env.DESKTOP_LOCAL_DEV_PORT ?? '39110'
-const persistedDesktopSettingsPath = desktopSettingsPath()
-const persistedDesktopApiOrigin = readPersistedDesktopApiOrigin()
-const desktopApiOrigin = persistedDesktopApiOrigin ?? normalizeHttpOrigin(defaultServerBaseUrl)
-const desktopApiOriginSource = persistedDesktopApiOrigin ? 'desktop-settings' : 'default'
-
-function normalizeHttpOrigin(value) {
-  if (typeof value !== 'string' || !value.trim()) return null
-  try {
-    const url = new URL(value.trim())
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
-    return url.origin
-  } catch {
-    return null
-  }
-}
-
-function desktopSettingsPath() {
-  if (process.env.SHADOW_DESKTOP_SETTINGS_PATH) return process.env.SHADOW_DESKTOP_SETTINGS_PATH
-  if (process.platform === 'darwin') {
-    return join(homedir(), 'Library/Application Support/Shadow/desktop-settings.json')
-  }
-  if (process.platform === 'win32') {
-    return join(
-      process.env.APPDATA || join(homedir(), 'AppData/Roaming'),
-      'Shadow',
-      'desktop-settings.json',
-    )
-  }
-  return join(
-    process.env.XDG_CONFIG_HOME || join(homedir(), '.config'),
-    'Shadow',
-    'desktop-settings.json',
-  )
-}
-
-function readPersistedDesktopApiOrigin() {
-  const path = persistedDesktopSettingsPath
-  if (!existsSync(path)) return null
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8'))
-    return normalizeHttpOrigin(parsed?.serverBaseUrl)
-  } catch {
-    return null
-  }
-}
 
 console.log('[dev] Building main process...')
 execSync('npx rspack build -c rspack.main.config.mjs --mode development', {
@@ -142,17 +93,6 @@ function devServerOrigin(rawUrl, fallbackUrl) {
   }
 }
 
-const webServer = startDevServer({
-  label: `web renderer dev server (apps/web on :${desktopWebDevPort})`,
-  cwd: webRoot,
-  args: ['rsbuild', 'dev', '-c', 'rsbuild.config.ts', '--port', desktopWebDevPort],
-  env: {
-    ...env,
-    SHADOW_DESKTOP_DYNAMIC_PROXY: '1',
-    SHADOW_DESKTOP_SETTINGS_PATH: persistedDesktopSettingsPath,
-  },
-})
-
 const localServer = startDevServer({
   label: `desktop local renderer dev server (desktop-local on :${desktopLocalDevPort})`,
   cwd: root,
@@ -160,33 +100,27 @@ const localServer = startDevServer({
   env,
 })
 
-await Promise.all([webServer.ready, localServer.ready])
+await localServer.ready
 
-const webUrl = devServerOrigin(webServer.url, `http://localhost:${desktopWebDevPort}`)
 const localUrl = devServerOrigin(localServer.url, `http://localhost:${desktopLocalDevPort}`)
 
-console.log(
-  `[dev] Launching Electron with web renderer at ${webUrl} and settings-driven API proxy ${desktopApiOrigin} (${desktopApiOriginSource}; ${persistedDesktopSettingsPath})...`,
-)
+console.log(`[dev] Launching Electron with desktop-local renderer at ${localUrl}...`)
 const electronPath = String((await import('electron')).default)
 const electron = spawn(electronPath, ['.'], {
   cwd: root,
   stdio: 'inherit',
   env: {
     ...env,
-    DESKTOP_WEB_DEV_URL: webUrl,
     DESKTOP_LOCAL_DEV_URL: localUrl,
   },
 })
 
 electron.on('exit', (code) => {
-  webServer.child.kill()
   localServer.child.kill()
   process.exit(code ?? 0)
 })
 
 const cleanup = () => {
-  webServer.child.kill()
   localServer.child.kill()
   electron.kill()
   process.exit(0)

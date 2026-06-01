@@ -6,6 +6,8 @@ import {
   mergeEnvContent,
   mergeHermesConfigContent,
   mergeOpenClawConfigContent,
+  removeCcConnectProjectConfigContent,
+  removeOpenClawAccountConfigContent,
 } from '../src/config-writers'
 
 describe('connector config writers', () => {
@@ -31,6 +33,50 @@ describe('connector config writers', () => {
     expect(parsed.plugins.allow).toEqual(['existing-plugin', 'openclaw-shadowob'])
     expect(parsed.plugins.entries.other.enabled).toBe(true)
     expect(parsed.plugins.entries['openclaw-shadowob'].enabled).toBe(true)
+  })
+
+  it('keeps separate OpenClaw Shadow accounts for multiple Buddies', () => {
+    const first = mergeOpenClawConfigContent('', {
+      projectName: 'claude_buddy',
+      token: 'tok-1',
+      serverUrl: 'https://shadow.example.com',
+      buddyId: 'agent-1',
+      buddyName: 'Claude Buddy',
+      agentId: 'agent-1',
+    })
+    const next = mergeOpenClawConfigContent(first, {
+      projectName: 'opencode_buddy',
+      token: 'tok-2',
+      serverUrl: 'https://shadow.example.com',
+      buddyId: 'agent-2',
+      buddyName: 'OpenCode Buddy',
+      agentId: 'agent-2',
+    })
+
+    const parsed = JSON.parse(next)
+    expect(parsed.channels.shadowob.token).toBeUndefined()
+    expect(parsed.channels.shadowob.accounts.claude_buddy.token).toBe('tok-1')
+    expect(parsed.channels.shadowob.accounts.claude_buddy.agentId).toBe('agent-1')
+    expect(parsed.channels.shadowob.accounts.claude_buddy.buddyName).toBe('Claude Buddy')
+    expect(parsed.channels.shadowob.accounts.opencode_buddy.token).toBe('tok-2')
+    expect(parsed.channels.shadowob.accounts.opencode_buddy.agentId).toBe('agent-2')
+    expect(parsed.channels.shadowob.accounts.opencode_buddy.buddyName).toBe('OpenCode Buddy')
+  })
+
+  it('removes one OpenClaw Shadow account without dropping other Buddies', () => {
+    const first = mergeOpenClawConfigContent('', {
+      projectName: 'claude_buddy',
+      token: 'tok-1',
+      serverUrl: 'https://shadow.example.com',
+    })
+    const second = mergeOpenClawConfigContent(first, {
+      projectName: 'codex_buddy',
+      token: 'tok-2',
+      serverUrl: 'https://shadow.example.com',
+    })
+    const parsed = JSON.parse(removeOpenClawAccountConfigContent(second, 'claude_buddy'))
+    expect(parsed.channels.shadowob.accounts.claude_buddy).toBeUndefined()
+    expect(parsed.channels.shadowob.accounts.codex_buddy.token).toBe('tok-2')
   })
 
   it('adds the official OpenAI-compatible model provider to OpenClaw config and env', () => {
@@ -71,10 +117,12 @@ describe('connector config writers', () => {
     const env = mergeEnvContent('DEEPSEEK_API_KEY=keep\nSHADOW_TOKEN=old\n', {
       token: 'new token',
       serverUrl: 'http://localhost:3000',
+      agentId: 'agent-1',
     })
     expect(env).toContain('DEEPSEEK_API_KEY=keep')
     expect(env).toContain('SHADOW_TOKEN="new token"')
     expect(env).toContain('SHADOW_BASE_URL=http://localhost:3000')
+    expect(env).toContain('SHADOW_AGENT_ID=agent-1')
 
     const yaml = mergeHermesConfigContent(
       [
@@ -88,7 +136,7 @@ describe('connector config writers', () => {
         '    extra:',
         '      mention_only: true',
       ].join('\n'),
-      { token: 'tok', serverUrl: 'https://shadow.example.com' },
+      { token: 'tok', serverUrl: 'https://shadow.example.com', agentId: 'agent-1' },
     )
     const parsed = parseYaml(yaml) as any
     expect(parsed.plugins.enabled).toEqual(['existing', 'shadowob'])
@@ -96,6 +144,7 @@ describe('connector config writers', () => {
     expect(parsed.platforms.shadowob.enabled).toBe(true)
     expect(parsed.platforms.shadowob.token).toBe('tok')
     expect(parsed.platforms.shadowob.extra.base_url).toBe('https://shadow.example.com')
+    expect(parsed.platforms.shadowob.extra.agent_id).toBe('agent-1')
     expect(parsed.platforms.shadowob.extra.mention_only).toBe(true)
   })
 
@@ -166,5 +215,78 @@ describe('connector config writers', () => {
       'https://shadow.example.com/api/ai/v1',
     )
     expect(parsed.projects[0].agent.providers[0].models[0].model).toBe('deepseek-v4-flash')
+  })
+
+  it('removes the generated official provider when no model provider is requested', () => {
+    const first = mergeCcConnectConfigContent('', {
+      projectName: 'buddy',
+      workDir: '/repo',
+      agentType: 'claudecode',
+      token: 'tok',
+      serverUrl: 'https://shadow.example.com',
+      modelProvider: {
+        id: 'shadow-official',
+        baseUrl: 'https://shadow.example.com/api/ai/v1',
+        apiKey: 'mp_test',
+        model: 'deepseek-v4-flash',
+      },
+    })
+    const next = mergeCcConnectConfigContent(first, {
+      projectName: 'buddy',
+      workDir: '/repo',
+      agentType: 'claudecode',
+      token: 'tok-2',
+      serverUrl: 'https://shadow.example.com',
+    })
+
+    const parsed = parseToml(next) as any
+    expect(parsed.projects[0].agent.options.provider).toBeUndefined()
+    expect(parsed.projects[0].agent.options.model).toBeUndefined()
+    expect(parsed.projects[0].agent.providers).toBeUndefined()
+  })
+
+  it('keeps separate cc-connect Buddy projects with the same work directory', () => {
+    const first = mergeCcConnectConfigContent('', {
+      projectName: 'claude_buddy',
+      workDir: '.',
+      agentType: 'claudecode',
+      token: 'tok-1',
+      serverUrl: 'https://shadow.example.com',
+    })
+    const next = mergeCcConnectConfigContent(first, {
+      projectName: 'opencode_buddy',
+      workDir: '.',
+      agentType: 'opencode',
+      token: 'tok-2',
+      serverUrl: 'https://shadow.example.com',
+    })
+
+    const parsed = parseToml(next) as any
+    expect(parsed.projects.map((item: any) => item.name)).toEqual([
+      'claude_buddy',
+      'opencode_buddy',
+    ])
+    expect(parsed.projects[0].platforms[0].options.token).toBe('tok-1')
+    expect(parsed.projects[1].platforms[0].options.token).toBe('tok-2')
+  })
+
+  it('removes one cc-connect Buddy project without dropping other projects', () => {
+    const first = mergeCcConnectConfigContent('', {
+      projectName: 'claude_buddy',
+      workDir: '.',
+      agentType: 'claudecode',
+      token: 'tok-1',
+      serverUrl: 'https://shadow.example.com',
+    })
+    const second = mergeCcConnectConfigContent(first, {
+      projectName: 'codex_buddy',
+      workDir: '.',
+      agentType: 'codex',
+      token: 'tok-2',
+      serverUrl: 'https://shadow.example.com',
+    })
+    const parsed = parseToml(removeCcConnectProjectConfigContent(second, 'claude_buddy')) as any
+    expect(parsed.projects.map((item: any) => item.name)).toEqual(['codex_buddy'])
+    expect(parsed.projects[0].platforms[0].options.token).toBe('tok-2')
   })
 })

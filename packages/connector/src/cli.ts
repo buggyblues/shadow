@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from 'node:child_process'
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFile as readFileAsync, rm } from 'node:fs/promises'
 import { arch, homedir, hostname, platform } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +13,8 @@ import {
   mergeEnvContent,
   mergeHermesConfigContent,
   mergeOpenClawConfigContent,
+  removeCcConnectProjectConfigContent,
+  removeOpenClawAccountConfigContent,
 } from './config-writers.js'
 import { createConnectorPlan, type ShadowConnectorTarget } from './index.js'
 import {
@@ -21,6 +24,13 @@ import {
   connectorRuntimeById,
   connectorRuntimeInstallCommands,
 } from './runtime-catalog.js'
+import {
+  diffRuntimeSessionSnapshots,
+  type RuntimeSessionSnapshot,
+  renderRuntimeSessionPanel,
+  scanRuntimeSessions,
+  sendRuntimeSessionMessage,
+} from './runtime-sessions.js'
 import {
   CONNECTOR_MANAGED_NODE_VERSION,
   commandExistsOnConnectorPath,
@@ -43,8 +53,14 @@ interface CliOptions {
     | 'daemon'
     | 'runtime-scan'
     | 'runtime-install'
+    | 'runtime-watch'
+    | 'session-list'
+    | 'session-send'
   target?: ShadowConnectorTarget
   runtimeId?: string
+  sessionId?: string
+  message?: string
+  opencodeUrl?: string
   serverUrl: string
   token: string
   apiKey?: string
@@ -53,6 +69,10 @@ interface CliOptions {
   workDir?: string
   workDirMapFile?: string
   projectName?: string
+  buddyId?: string
+  buddyName?: string
+  buddyDescription?: string
+  shadowAgentId?: string
   agentType?: string
   modelProviderId?: string
   modelProviderLabel?: string
@@ -65,6 +85,7 @@ interface CliOptions {
   start: boolean
   dryRun: boolean
   once: boolean
+  sessions: boolean
   pollIntervalMs: number
 }
 
@@ -80,6 +101,9 @@ const COMMANDS = new Set([
   'daemon',
   'runtime-scan',
   'runtime-install',
+  'runtime-watch',
+  'session-list',
+  'session-send',
 ])
 const ALL_TARGETS = ['openclaw', 'hermes', 'cc-connect'] as const
 const SHADOW_CLI_PACKAGE = '@shadowob/cli@latest'
@@ -109,7 +133,10 @@ function usage(): string {
     '  shadowob-connector update --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
     '  shadowob-connector fix --target <openclaw|hermes|cc-connect> --server-url <url> --token <token>',
     '  shadowob-connector scan [--target <openclaw|hermes|cc-connect>] [--server-url <url>] [--token <token>]',
-    '  shadowob-connector runtime-scan [--json]',
+    '  shadowob-connector runtime-scan [--sessions] [--json]',
+    '  shadowob-connector runtime-watch [--runtime <runtime-id>] [--json] [--once]',
+    '  shadowob-connector session-list --runtime <runtime-id> [--json]',
+    '  shadowob-connector session-send --runtime <runtime-id> --session <session-id> --message <text|-|stdin>',
     '  shadowob-connector runtime-install --runtime <runtime-id> [--dry-run]',
     '  shadowob-connector --daemon --server-url <url> --api-key <machine-key>',
     '  shadowob-connector daemon --server-url <url> --api-key <machine-key>',
@@ -120,6 +147,9 @@ function usage(): string {
     '  --server-url <url>      Shadow server URL, default https://shadowob.com',
     '  --api-key <key>         Connector daemon machine key',
     '  --runtime <id>          Agent runtime id for runtime-install',
+    '  --session <id>          Runtime session id for session-send',
+    '  --message <text>        Runtime session message; use - or omit to read stdin',
+    '  --opencode-url <url>    OpenCode server URL, default http://127.0.0.1:4096',
     '  --openclaw-config <path> OpenClaw JSON config, default $OPENCLAW_CONFIG or ~/.openclaw/openclaw.json',
     '  --hermes-home <path>    Hermes config directory, default $HERMES_HOME or ~/.hermes',
     '  --work-dir <path>       cc-connect project work directory',
@@ -137,7 +167,8 @@ function usage(): string {
     '  --start                 Start Hermes gateway or cc-connect after setup',
     '  --dry-run               Show what would be applied without changing files',
     '  --once                  Daemon mode: heartbeat, process one job batch, then exit',
-    '  --poll-interval-ms <n>  Daemon mode polling interval, default 5000',
+    '  --sessions              Include runtime session snapshots in runtime-scan',
+    '  --poll-interval-ms <n>  Daemon/watch polling interval, default 5000',
   ].join('\n')
 }
 
@@ -172,7 +203,10 @@ function parseArgs(args: string[]): CliOptions {
     command !== 'scan' &&
     command !== 'daemon' &&
     command !== 'runtime-scan' &&
-    command !== 'runtime-install'
+    command !== 'runtime-install' &&
+    command !== 'runtime-watch' &&
+    command !== 'session-list' &&
+    command !== 'session-send'
   ) {
     throw new Error('Missing or invalid --target')
   }
@@ -187,6 +221,9 @@ function parseArgs(args: string[]): CliOptions {
     command,
     target,
     runtimeId: readOption(optionArgs, '--runtime'),
+    sessionId: readOption(optionArgs, '--session'),
+    message: readOption(optionArgs, '--message'),
+    opencodeUrl: readOption(optionArgs, '--opencode-url'),
     serverUrl: readOption(optionArgs, '--server-url') ?? 'https://shadowob.com',
     token: readOption(optionArgs, '--token') ?? '',
     apiKey: readOption(optionArgs, '--api-key'),
@@ -207,6 +244,7 @@ function parseArgs(args: string[]): CliOptions {
     start: hasFlag(optionArgs, '--start'),
     dryRun: hasFlag(optionArgs, '--dry-run'),
     once: hasFlag(optionArgs, '--once'),
+    sessions: hasFlag(optionArgs, '--sessions'),
     pollIntervalMs:
       Number.parseInt(readOption(optionArgs, '--poll-interval-ms') ?? '', 10) ||
       DEFAULT_DAEMON_POLL_INTERVAL_MS,
@@ -267,6 +305,28 @@ function runShellQuiet(
   }
 }
 
+async function runShellAsync(
+  command: string,
+  dryRun: boolean,
+  env: NodeJS.ProcessEnv = connectorProcessEnv(),
+): Promise<void> {
+  if (dryRun) {
+    console.log(`[dry-run] ${command}`)
+    return
+  }
+  await new Promise<void>((resolveRun, rejectRun) => {
+    const child = spawn(command, { shell: true, stdio: 'inherit', env })
+    child.once('error', rejectRun)
+    child.once('close', (code) => {
+      if (code === 0) {
+        resolveRun()
+        return
+      }
+      rejectRun(new Error(`Command failed with exit code ${code ?? 'unknown'}: ${command}`))
+    })
+  })
+}
+
 async function envForShellCommand(command: string, dryRun: boolean): Promise<NodeJS.ProcessEnv> {
   if (shellCommandNeedsNpm(command) && !commandExists('npm')) {
     await ensureManagedNodeRuntime({ dryRun, log: (message) => console.log(message) })
@@ -286,6 +346,169 @@ function runBinary(binaryPath: string, args: string[], dryRun: boolean): void {
   if (result.status !== 0) {
     throw new Error(`Command failed with exit code ${result.status ?? 'unknown'}: ${rendered}`)
   }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs = 4000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) return
+    await delay(150)
+  }
+}
+
+interface ProcessView {
+  pid: number
+  command: string
+}
+
+function processCommand(pid: number): Promise<string | null> {
+  return new Promise((resolveCommand) => {
+    const child = spawn('ps', ['-p', String(pid), '-o', 'command='], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    let output = ''
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', (chunk) => {
+      output += chunk
+    })
+    child.on('error', () => resolveCommand(null))
+    child.on('close', (code) => {
+      const command = output.trim()
+      resolveCommand(code === 0 && command ? command : null)
+    })
+  })
+}
+
+function listProcesses(): Promise<ProcessView[]> {
+  return new Promise((resolveProcesses) => {
+    const child = spawn('ps', ['-axo', 'pid=,command='], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    let output = ''
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', (chunk) => {
+      output += chunk
+    })
+    child.on('error', () => resolveProcesses([]))
+    child.on('close', (code) => {
+      if (code !== 0) {
+        resolveProcesses([])
+        return
+      }
+      resolveProcesses(
+        output
+          .split(/\r?\n/)
+          .flatMap((line): ProcessView[] => {
+            const match = /^\s*(\d+)\s+(.+)$/.exec(line)
+            if (!match) return []
+            const pid = Number.parseInt(match[1] ?? '', 10)
+            const command = match[2]?.trim() ?? ''
+            return Number.isFinite(pid) && command ? [{ pid, command }] : []
+          })
+          .filter((processView) => processView.pid > 0),
+      )
+    })
+  })
+}
+
+function commandExecutable(command: string): string {
+  return command.trim().split(/\s+/, 1)[0] ?? ''
+}
+
+function isManagedCcConnectCommand(command: string, binaryPath?: string | null): boolean {
+  const executable = commandExecutable(command)
+  if (binaryPath && executable === binaryPath) return true
+  return (
+    executable.includes('/.shadowob/connector/cc-connect/') && executable.endsWith('/cc-connect')
+  )
+}
+
+async function isManagedCcConnectProcess(
+  pid: number,
+  binaryPath?: string | null,
+): Promise<boolean> {
+  const command = await processCommand(pid)
+  return command ? isManagedCcConnectCommand(command, binaryPath) : false
+}
+
+async function listManagedCcConnectProcesses(binaryPath?: string | null): Promise<ProcessView[]> {
+  return (await listProcesses()).filter(
+    (processView) =>
+      processView.pid !== process.pid && isManagedCcConnectCommand(processView.command, binaryPath),
+  )
+}
+
+async function stopManagedProcess(
+  processView: ProcessView,
+  binaryPath: string | null | undefined,
+  dryRun: boolean,
+): Promise<void> {
+  if (dryRun) {
+    console.log(`[dry-run] stop cc-connect pid ${processView.pid}`)
+    return
+  }
+  try {
+    process.kill(processView.pid, 'SIGTERM')
+  } catch {
+    return
+  }
+  await waitForProcessExit(processView.pid, 5000)
+  if (
+    isProcessAlive(processView.pid) &&
+    (await isManagedCcConnectProcess(processView.pid, binaryPath))
+  ) {
+    try {
+      process.kill(processView.pid, 'SIGKILL')
+    } catch {
+      // The process may have exited after the final check.
+    }
+    await waitForProcessExit(processView.pid, 1500)
+  }
+}
+
+async function releaseCcConnectConfigLock(
+  dryRun: boolean,
+  binaryPath?: string | null,
+): Promise<void> {
+  const lockPath = resolve(homedir(), '.cc-connect/.config.toml.lock')
+  let pid: number | null = null
+  try {
+    const raw = (await readFileAsync(lockPath, 'utf8')).trim()
+    const parsed = Number.parseInt(raw, 10)
+    pid = Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  } catch {
+    pid = null
+  }
+
+  const candidates = await listManagedCcConnectProcesses(binaryPath)
+  const byPid = new Map(candidates.map((processView) => [processView.pid, processView]))
+  if (
+    pid &&
+    pid !== process.pid &&
+    !byPid.has(pid) &&
+    isProcessAlive(pid) &&
+    (await isManagedCcConnectProcess(pid, binaryPath))
+  ) {
+    const command = await processCommand(pid)
+    byPid.set(pid, { pid, command: command ?? 'cc-connect' })
+  }
+  for (const processView of byPid.values()) {
+    await stopManagedProcess(processView, binaryPath, dryRun)
+  }
+  if (dryRun) {
+    console.log(`[dry-run] remove cc-connect lock ${lockPath}`)
+    return
+  }
+  await rm(lockPath, { force: true }).catch(() => undefined)
 }
 
 function writeFile(path: string, content: string, dryRun: boolean): void {
@@ -809,11 +1032,19 @@ function diagnoseCcConnect(options: CliOptions): DiagnosticCheck[] {
   try {
     const root = parseToml(readExisting(configPath)) as Record<string, unknown>
     const projects = Array.isArray(root.projects) ? root.projects : []
-    const projectName = options.projectName?.trim() || 'shadow-buddy'
+    const requestedProjectName = options.projectName?.trim()
     const workDir = options.workDir?.trim() || '.'
-    const project =
-      projects.find((item) => asObject(item).name === projectName) ??
-      projects.find((item) => asObject(asObject(asObject(item).agent).options).work_dir === workDir)
+    const project = requestedProjectName
+      ? projects.find((item) => asObject(item).name === requestedProjectName)
+      : (projects.find((item) => {
+          const platformsValue = asObject(item).platforms
+          const platforms = Array.isArray(platformsValue) ? platformsValue : []
+          return platforms.some((platform) => asObject(platform).type === 'shadowob')
+        }) ??
+        projects.find(
+          (item) => asObject(asObject(asObject(item).agent).options).work_dir === workDir,
+        ))
+    const projectName = requestedProjectName || String(asObject(project).name || 'shadow-buddy')
     const projectPlatforms = asObject(project).platforms
     const platforms = Array.isArray(projectPlatforms) ? projectPlatforms : []
     const shadow = platforms.find((item) => asObject(item).type === 'shadowob')
@@ -1084,6 +1315,14 @@ interface DaemonJob {
   }
 }
 
+interface AppliedDaemonJob {
+  runtimeId: string
+  projectName: string
+  target: ShadowConnectorTarget
+  agentType?: string
+  bridgeStart: boolean
+}
+
 function stringRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const result: Record<string, string> = {}
@@ -1154,32 +1393,64 @@ function packageVersion(): string {
 function commandVersionWithArgs(
   command: string,
   args: string[] = ['--version'],
-): { ok: boolean; version?: string | null } {
-  const result = spawnSync(command, args, { encoding: 'utf8', env: connectorProcessEnv() })
-  if (result.status !== 0) return { ok: false }
-  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
-  return { ok: true, version: output.split(/\r?\n/)[0]?.slice(0, 120) || null }
+): Promise<{ ok: boolean; version?: string | null }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      env: connectorProcessEnv(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const finish = (value: { ok: boolean; version?: string | null }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolve(value)
+    }
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM')
+      finish({ ok: false })
+    }, 3500)
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk
+    })
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk
+    })
+    child.on('error', () => finish({ ok: false }))
+    child.on('close', (code) => {
+      if (code !== 0) {
+        finish({ ok: false })
+        return
+      }
+      const output = `${stdout}${stderr}`.trim()
+      finish({ ok: true, version: output.split(/\r?\n/)[0]?.slice(0, 120) || null })
+    })
+  })
 }
 
-function commandVersion(command: string): { ok: boolean; version?: string | null } {
+async function commandVersion(command: string): Promise<{ ok: boolean; version?: string | null }> {
   const candidates = [['--version'], ['version'], ['-v']]
   for (const args of candidates) {
-    const result = commandVersionWithArgs(command, args)
+    const result = await commandVersionWithArgs(command, args)
     if (result.ok) return result
   }
   return { ok: false }
 }
 
-function commandVersionForRuntime(
+async function commandVersionForRuntime(
   command: string,
   preferredArgs?: string[],
-): { ok: boolean; version?: string | null } {
+): Promise<{ ok: boolean; version?: string | null }> {
   if (!preferredArgs) return commandVersion(command)
-  const result = commandVersionWithArgs(command, preferredArgs)
+  const result = await commandVersionWithArgs(command, preferredArgs)
   return result.ok ? result : commandVersion(command)
 }
 
-function detectRuntime(input: {
+async function detectRuntime(input: {
   id: string
   label: string
   kind: ConnectorRuntimeKind
@@ -1190,10 +1461,10 @@ function detectRuntime(input: {
   installCommands?: string[]
   helpUrl?: string
   versionArgs?: string[]
-}): DaemonRuntime {
+}): Promise<DaemonRuntime> {
   const commands = input.commands ?? [input.command]
   for (const command of commands) {
-    const version = commandVersionForRuntime(command, input.versionArgs)
+    const version = await commandVersionForRuntime(command, input.versionArgs)
     if (!version.ok) continue
     return {
       id: input.id,
@@ -1224,7 +1495,7 @@ function detectRuntime(input: {
   }
 }
 
-function detectCatalogRuntime(runtime: ConnectorRuntimeCatalogEntry): DaemonRuntime {
+function detectCatalogRuntime(runtime: ConnectorRuntimeCatalogEntry): Promise<DaemonRuntime> {
   const installCommands = connectorRuntimeInstallCommands(runtime.id)
   return detectRuntime({
     id: runtime.id,
@@ -1240,14 +1511,21 @@ function detectCatalogRuntime(runtime: ConnectorRuntimeCatalogEntry): DaemonRunt
   })
 }
 
-function scanDaemonRuntimes(): DaemonRuntime[] {
-  return CONNECTOR_RUNTIME_CATALOG.map(detectCatalogRuntime)
+function scanDaemonRuntimes(): Promise<DaemonRuntime[]> {
+  return Promise.all(CONNECTOR_RUNTIME_CATALOG.map(detectCatalogRuntime))
 }
 
-function printRuntimeScan(options: CliOptions): void {
-  const runtimes = scanDaemonRuntimes()
+async function printRuntimeScan(options: CliOptions): Promise<void> {
+  const runtimes = await scanDaemonRuntimes()
+  const sessionSnapshot = options.sessions
+    ? await scanRuntimeSessions({
+        runtimeId: options.runtimeId,
+        opencodeUrl: options.opencodeUrl,
+        env: connectorProcessEnv(),
+      })
+    : null
   if (options.json) {
-    console.log(JSON.stringify({ runtimes }, null, 2))
+    console.log(JSON.stringify({ runtimes, runtimeSessions: sessionSnapshot }, null, 2))
     return
   }
 
@@ -1259,6 +1537,10 @@ function printRuntimeScan(options: CliOptions): void {
       if (runtime.installCommand) console.log(`       install: ${runtime.installCommand}`)
       if (runtime.helpUrl) console.log(`       help: ${runtime.helpUrl}`)
     }
+  }
+  if (sessionSnapshot) {
+    console.log('')
+    console.log(renderRuntimeSessionPanel(sessionSnapshot))
   }
 }
 
@@ -1282,7 +1564,7 @@ async function installRuntime(options: CliOptions): Promise<void> {
   } else {
     runShell(command, options.dryRun, env)
   }
-  const detected = detectCatalogRuntime(runtime)
+  const detected = await detectCatalogRuntime(runtime)
   if (options.json) {
     console.log(
       JSON.stringify(
@@ -1301,6 +1583,92 @@ async function installRuntime(options: CliOptions): Promise<void> {
   console.log(
     `${runtime.label}: ${detected.status === 'available' ? 'installed' : 'install command completed'}`,
   )
+}
+
+async function printSessionList(options: CliOptions): Promise<void> {
+  const snapshot = await scanRuntimeSessions({
+    runtimeId: options.runtimeId,
+    opencodeUrl: options.opencodeUrl,
+    env: connectorProcessEnv(),
+  })
+  if (options.json) {
+    console.log(JSON.stringify(snapshot, null, 2))
+    return
+  }
+  console.log(renderRuntimeSessionPanel(snapshot))
+}
+
+function readStdinText(): Promise<string> {
+  if (process.stdin.isTTY) return Promise.resolve('')
+  return new Promise((resolve, reject) => {
+    let text = ''
+    process.stdin.setEncoding('utf8')
+    process.stdin.on('data', (chunk) => {
+      text += chunk
+    })
+    process.stdin.once('error', reject)
+    process.stdin.once('end', () => resolve(text.trim()))
+    process.stdin.resume()
+  })
+}
+
+async function messageFromOptions(options: CliOptions): Promise<string> {
+  if (options.message && options.message !== '-') return options.message
+  const piped = await readStdinText()
+  if (piped) return piped
+  throw new Error('Missing --message. Pass --message <text>, --message -, or pipe stdin.')
+}
+
+async function sendSessionMessage(options: CliOptions): Promise<void> {
+  if (!options.runtimeId?.trim()) throw new Error('Missing --runtime')
+  if (!options.sessionId?.trim()) throw new Error('Missing --session')
+  const result = await sendRuntimeSessionMessage({
+    runtimeId: options.runtimeId,
+    sessionId: options.sessionId,
+    message: await messageFromOptions(options),
+    opencodeUrl: options.opencodeUrl,
+    env: connectorProcessEnv(),
+  })
+  if (options.json) {
+    console.log(JSON.stringify(result, null, 2))
+    return
+  }
+  console.log(
+    `${result.runtimeId} session ${result.sessionId}: ${result.accepted ? 'accepted' : 'failed'} (${result.mode})`,
+  )
+  if (!result.accepted && result.stderr) console.error(result.stderr.trim())
+}
+
+async function watchRuntimeSessions(options: CliOptions): Promise<void> {
+  let stopped = false
+  const stop = () => {
+    stopped = true
+  }
+  process.once('SIGINT', stop)
+  process.once('SIGTERM', stop)
+
+  let previous: RuntimeSessionSnapshot | null = null
+  do {
+    const snapshot = await scanRuntimeSessions({
+      runtimeId: options.runtimeId,
+      opencodeUrl: options.opencodeUrl,
+      env: connectorProcessEnv(),
+    })
+    const events = diffRuntimeSessionSnapshots(previous, snapshot)
+    if (options.json) {
+      for (const event of events) console.log(JSON.stringify(event))
+    } else {
+      process.stdout.write('\x1b[2J\x1b[H')
+      console.log(renderRuntimeSessionPanel(snapshot))
+      console.log('')
+      console.log(
+        `Polling every ${Math.max(1000, options.pollIntervalMs)}ms. Press Ctrl-C to stop.`,
+      )
+    }
+    previous = snapshot
+    if (options.once) break
+    await delay(Math.max(1000, options.pollIntervalMs))
+  } while (!stopped)
 }
 
 function daemonHeaders(options: CliOptions): Record<string, string> {
@@ -1331,7 +1699,7 @@ async function apiJson<T>(options: CliOptions, path: string, init?: RequestInit)
 }
 
 async function heartbeat(options: CliOptions): Promise<void> {
-  const runtimes = scanDaemonRuntimes()
+  const runtimes = await scanDaemonRuntimes()
   const available = runtimes.filter((runtime) => runtime.status === 'available')
   await apiJson(options, '/api/connector/daemon/heartbeat', {
     method: 'POST',
@@ -1360,7 +1728,97 @@ function ccAgentTypeForRuntime(runtimeId: string): string {
   return map[runtimeId] ?? runtimeId
 }
 
-function startDetached(binaryPath: string, args: string[], dryRun: boolean): void {
+function daemonModelProviderForRuntime(
+  runtimeId: string,
+  provider: DaemonJob['payload']['modelProvider'],
+): DaemonJob['payload']['modelProvider'] | undefined {
+  if (!provider) return undefined
+  if (provider.id === 'shadow-official' && runtimeId !== 'openclaw' && runtimeId !== 'hermes') {
+    console.log(
+      `[daemon] ignoring default Shadow model provider for local ${runtimeId}; using the runtime's native auth`,
+    )
+    return undefined
+  }
+  return provider
+}
+
+function safeConnectorProfileName(value: string): string {
+  const safe = value
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 96)
+  return safe || 'shadow-buddy'
+}
+
+function connectorHermesHome(projectName: string): string {
+  return resolve(homedir(), '.shadowob/connector/hermes', safeConnectorProfileName(projectName))
+}
+
+const DAEMON_BRIDGE_READY_TIMEOUT_MS = 12_000
+const DAEMON_BRIDGE_PROJECT_READY_TIMEOUT_MS = 45_000
+const DAEMON_BRIDGE_LOG_LIMIT = 80
+const daemonBridgeProcesses = new Map<
+  string,
+  {
+    child: ReturnType<typeof spawn>
+    logs: string[]
+  }
+>()
+
+function appendDaemonBridgeLog(key: string, logs: string[], chunk: Buffer | string): string[] {
+  const lines = String(chunk)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  for (const line of lines) {
+    logs.push(line)
+    if (
+      /level=(WARN|ERROR)/.test(line) ||
+      /^Error:/.test(line) ||
+      line.includes('cc-connect is running') ||
+      line.includes('api server started') ||
+      line.includes('shutting down')
+    ) {
+      console.log(`[daemon:${key}] ${line}`)
+    }
+  }
+  while (logs.length > DAEMON_BRIDGE_LOG_LIMIT) logs.shift()
+  return lines
+}
+
+function readyProjectFromBridgeLog(line: string): string | null {
+  if (!line.includes('platform ready') || !line.includes('platform=shadowob')) return null
+  const match = /\bproject=([^\s]+)/.exec(line)
+  return match?.[1] ?? null
+}
+
+async function stopDaemonBridgeProcesses(): Promise<void> {
+  const entries = [...daemonBridgeProcesses.entries()]
+  daemonBridgeProcesses.clear()
+  for (const [key, entry] of entries) {
+    if (entry.child.exitCode !== null || entry.child.killed) continue
+    try {
+      entry.child.kill('SIGTERM')
+    } catch {
+      continue
+    }
+    const deadline = Date.now() + 4000
+    while (Date.now() < deadline && entry.child.exitCode === null && !entry.child.killed) {
+      await delay(150)
+    }
+    if (entry.child.exitCode === null && !entry.child.killed) {
+      try {
+        entry.child.kill('SIGKILL')
+      } catch {
+        // Process may have exited between checks.
+      }
+    }
+    console.log(`[daemon] stopped ${key} bridge`)
+  }
+}
+
+async function startDetached(binaryPath: string, args: string[], dryRun: boolean): Promise<void> {
   if (dryRun) {
     console.log(`[dry-run] start detached ${[binaryPath, ...args].join(' ')}`)
     return
@@ -1371,12 +1829,244 @@ function startDetached(binaryPath: string, args: string[], dryRun: boolean): voi
     stdio: 'ignore',
   })
   child.unref()
+  await new Promise<void>((resolveStart, rejectStart) => {
+    let settled = false
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolveStart()
+    }, 2000)
+    const cleanup = () => {
+      clearTimeout(timeout)
+      child.off('error', onError)
+      child.off('exit', onExit)
+    }
+    const onError = (error: Error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      rejectStart(error)
+    }
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      rejectStart(
+        new Error(
+          `${binaryPath} exited during startup${code !== null ? ` with code ${code}` : ''}${signal ? ` (${signal})` : ''}`,
+        ),
+      )
+    }
+    child.once('error', onError)
+    child.once('exit', onExit)
+  })
 }
 
-async function applyDaemonJob(
+async function startDaemonManagedBridge(
+  key: string,
+  binaryPath: string,
+  args: string[],
+  dryRun: boolean,
+  bridgeOptions: {
+    expectedProjects?: string[]
+    env?: NodeJS.ProcessEnv
+    readyPatterns?: RegExp[]
+    aliveFallbackMs?: number
+  } = {},
+): Promise<void> {
+  const existing = daemonBridgeProcesses.get(key)
+  if (existing && existing.child.exitCode === null && !existing.child.killed) return
+
+  if (dryRun) {
+    console.log(`[dry-run] start managed ${key} bridge ${[binaryPath, ...args].join(' ')}`)
+    return
+  }
+
+  const logs: string[] = []
+  const expectedProjects = bridgeOptions.expectedProjects ?? []
+  const child = spawn(binaryPath, args, {
+    env: bridgeOptions.env ?? connectorProcessEnv(),
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+  daemonBridgeProcesses.set(key, { child, logs })
+
+  await new Promise<void>((resolveStart, rejectStart) => {
+    let settled = false
+    let processReady = false
+    const pendingProjects = new Set(expectedProjects.filter(Boolean))
+    const aliveFallback =
+      bridgeOptions.aliveFallbackMs && bridgeOptions.aliveFallbackMs > 0
+        ? setTimeout(() => {
+            if (settled || child.exitCode !== null || child.killed) return
+            processReady = true
+            maybeReady()
+          }, bridgeOptions.aliveFallbackMs)
+        : null
+    const settle = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (aliveFallback) clearTimeout(aliveFallback)
+      child.off('error', onError)
+      child.off('exit', onExit)
+      callback()
+    }
+    const maybeReady = () => {
+      if (processReady && pendingProjects.size === 0) settle(resolveStart)
+    }
+    const onOutput = (chunk: Buffer | string) => {
+      const lines = appendDaemonBridgeLog(key, logs, chunk)
+      if (
+        lines.some(
+          (line) => line.includes('cc-connect is running') || line.includes('api server started'),
+        ) ||
+        lines.some((line) => bridgeOptions.readyPatterns?.some((pattern) => pattern.test(line)))
+      ) {
+        processReady = true
+      }
+      for (const line of lines) {
+        const projectName = readyProjectFromBridgeLog(line)
+        if (projectName) pendingProjects.delete(projectName)
+      }
+      maybeReady()
+    }
+    const onError = (error: Error) => {
+      daemonBridgeProcesses.delete(key)
+      settle(() => rejectStart(error))
+    }
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      daemonBridgeProcesses.delete(key)
+      settle(() =>
+        rejectStart(
+          new Error(
+            `${key} bridge exited during startup${code !== null ? ` with code ${code}` : ''}${signal ? ` (${signal})` : ''}: ${logs.slice(-8).join('\n')}`,
+          ),
+        ),
+      )
+    }
+    const timeout = setTimeout(
+      () => {
+        if (
+          child.exitCode === null &&
+          !child.killed &&
+          processReady &&
+          pendingProjects.size === 0
+        ) {
+          settle(resolveStart)
+          return
+        }
+        settle(() =>
+          rejectStart(
+            new Error(
+              `${key} bridge did not become ready${pendingProjects.size > 0 ? ` for projects ${[...pendingProjects].join(', ')}` : ''}: ${logs.slice(-12).join('\n')}`,
+            ),
+          ),
+        )
+      },
+      expectedProjects.length > 0
+        ? DAEMON_BRIDGE_PROJECT_READY_TIMEOUT_MS
+        : DAEMON_BRIDGE_READY_TIMEOUT_MS,
+    )
+
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+    child.stdout?.on('data', onOutput)
+    child.stderr?.on('data', onOutput)
+    child.once('error', onError)
+    child.once('exit', onExit)
+  })
+
+  child.once('exit', (code, signal) => {
+    const current = daemonBridgeProcesses.get(key)
+    if (current?.child === child) daemonBridgeProcesses.delete(key)
+    console.error(
+      `[daemon] ${key} bridge exited${code !== null ? ` with code ${code}` : ''}${signal ? ` (${signal})` : ''}`,
+    )
+    if (logs.length > 0) {
+      console.error(
+        logs
+          .slice(-12)
+          .map((line) => `[daemon:${key}] ${line}`)
+          .join('\n'),
+      )
+    }
+  })
+}
+
+async function stopDaemonBridgeProcess(key: string): Promise<void> {
+  const entry = daemonBridgeProcesses.get(key)
+  if (!entry || entry.child.exitCode !== null || entry.child.killed) return
+  daemonBridgeProcesses.delete(key)
+  try {
+    entry.child.kill('SIGTERM')
+  } catch {
+    return
+  }
+  const deadline = Date.now() + 4000
+  while (Date.now() < deadline && entry.child.exitCode === null && !entry.child.killed) {
+    await delay(150)
+  }
+  if (entry.child.exitCode === null && !entry.child.killed) {
+    try {
+      entry.child.kill('SIGKILL')
+    } catch {
+      // Process may have already exited.
+    }
+  }
+}
+
+async function applyRemoveDaemonJob(
   job: DaemonJob,
   baseOptions: CliOptions,
-): Promise<Record<string, unknown>> {
+): Promise<AppliedDaemonJob> {
+  const payload = job.payload
+  const runtimeId = payload.runtimeId
+  const projectName = payload.projectName?.trim() || payload.buddy?.username || 'shadow-buddy'
+
+  if (runtimeId === 'openclaw') {
+    const configPath = resolveOpenClawConfigPath(baseOptions)
+    console.log(`Applying: Remove OpenClaw Shadow account ${projectName}`)
+    writeFile(
+      configPath,
+      removeOpenClawAccountConfigContent(readExisting(configPath), projectName),
+      baseOptions.dryRun,
+    )
+    return { runtimeId, projectName, target: 'openclaw', bridgeStart: true }
+  }
+
+  if (runtimeId === 'hermes') {
+    const key = `hermes:${safeConnectorProfileName(projectName)}`
+    console.log(`Applying: Remove Hermes profile ${projectName}`)
+    await stopDaemonBridgeProcess(key)
+    if (baseOptions.dryRun) {
+      console.log(`[dry-run] remove ${connectorHermesHome(projectName)}`)
+    } else {
+      await rm(connectorHermesHome(projectName), { recursive: true, force: true })
+    }
+    return { runtimeId, projectName, target: 'hermes', bridgeStart: false }
+  }
+
+  const configPath = resolve(homedir(), '.cc-connect/config.toml')
+  console.log(`Applying: Remove cc-connect project ${projectName}`)
+  writeFile(
+    configPath,
+    removeCcConnectProjectConfigContent(readExisting(configPath), projectName),
+    baseOptions.dryRun,
+  )
+  return {
+    runtimeId,
+    projectName,
+    target: 'cc-connect',
+    agentType: ccAgentTypeForRuntime(runtimeId),
+    bridgeStart: true,
+  }
+}
+
+async function applyDaemonJob(job: DaemonJob, baseOptions: CliOptions): Promise<AppliedDaemonJob> {
+  if (job.type === 'remove-buddy') {
+    return applyRemoveDaemonJob(job, baseOptions)
+  }
   if (job.type !== 'configure-buddy') {
     throw new Error(`Unsupported daemon job type: ${job.type}`)
   }
@@ -1385,6 +2075,7 @@ async function applyDaemonJob(
   const runtimeId = payload.runtimeId
   const projectName = payload.projectName?.trim() || payload.buddy?.username || 'shadow-buddy'
   const workDir = resolveDaemonWorkDir(job, baseOptions)
+  const modelProvider = daemonModelProviderForRuntime(runtimeId, payload.modelProvider)
 
   if (runtimeId === 'openclaw') {
     await applyOpenClaw(
@@ -1395,16 +2086,19 @@ async function applyDaemonJob(
         token: payload.token,
         projectName,
         workDir,
-        modelProviderId: payload.modelProvider?.id,
-        modelProviderLabel: payload.modelProvider?.label,
-        modelProviderBaseUrl: payload.modelProvider?.baseUrl,
-        modelProviderApiKey: payload.modelProvider?.apiKey,
-        modelProviderModel: payload.modelProvider?.model,
+        buddyId: payload.buddy?.id,
+        buddyName: payload.buddy?.displayName ?? payload.buddy?.username,
+        shadowAgentId: job.agentId ?? payload.buddy?.id,
+        modelProviderId: modelProvider?.id,
+        modelProviderLabel: modelProvider?.label,
+        modelProviderBaseUrl: modelProvider?.baseUrl,
+        modelProviderApiKey: modelProvider?.apiKey,
+        modelProviderModel: modelProvider?.model,
         install: true,
       },
-      { restart: true },
+      { restart: false },
     )
-    return { runtimeId, target: 'openclaw' }
+    return { runtimeId, projectName, target: 'openclaw', bridgeStart: true }
   }
 
   if (runtimeId === 'hermes') {
@@ -1414,17 +2108,20 @@ async function applyDaemonJob(
       serverUrl: payload.serverUrl,
       token: payload.token,
       projectName,
+      hermesHome: connectorHermesHome(projectName),
       workDir,
-      modelProviderId: payload.modelProvider?.id,
-      modelProviderLabel: payload.modelProvider?.label,
-      modelProviderBaseUrl: payload.modelProvider?.baseUrl,
-      modelProviderApiKey: payload.modelProvider?.apiKey,
-      modelProviderModel: payload.modelProvider?.model,
+      buddyId: payload.buddy?.id,
+      buddyName: payload.buddy?.displayName ?? payload.buddy?.username,
+      shadowAgentId: job.agentId ?? payload.buddy?.id,
+      modelProviderId: modelProvider?.id,
+      modelProviderLabel: modelProvider?.label,
+      modelProviderBaseUrl: modelProvider?.baseUrl,
+      modelProviderApiKey: modelProvider?.apiKey,
+      modelProviderModel: modelProvider?.model,
       install: true,
       start: false,
     })
-    startDetached('hermes', ['gateway'], baseOptions.dryRun)
-    return { runtimeId, target: 'hermes' }
+    return { runtimeId, projectName, target: 'hermes', bridgeStart: true }
   }
 
   await applyCcConnect({
@@ -1435,44 +2132,148 @@ async function applyDaemonJob(
     projectName,
     workDir,
     agentType: ccAgentTypeForRuntime(runtimeId),
-    modelProviderId: payload.modelProvider?.id,
-    modelProviderLabel: payload.modelProvider?.label,
-    modelProviderBaseUrl: payload.modelProvider?.baseUrl,
-    modelProviderApiKey: payload.modelProvider?.apiKey,
-    modelProviderModel: payload.modelProvider?.model,
+    modelProviderId: modelProvider?.id,
+    modelProviderLabel: modelProvider?.label,
+    modelProviderBaseUrl: modelProvider?.baseUrl,
+    modelProviderApiKey: modelProvider?.apiKey,
+    modelProviderModel: modelProvider?.model,
     install: true,
     start: false,
   })
-  const installed = await ensureCcConnectFork({
-    dryRun: baseOptions.dryRun,
-    log: (message) => console.log(message),
+  return {
+    runtimeId,
+    projectName,
+    target: 'cc-connect',
+    agentType: ccAgentTypeForRuntime(runtimeId),
+    bridgeStart: true,
+  }
+}
+
+function daemonBridgeKey(result: AppliedDaemonJob): string {
+  if (result.target === 'hermes') return `hermes:${safeConnectorProfileName(result.projectName)}`
+  return result.target
+}
+
+async function startDaemonBridge(
+  result: AppliedDaemonJob,
+  options: CliOptions,
+  expectedProjects: string[] = [],
+): Promise<void> {
+  if (!result.bridgeStart) return
+  if (result.target === 'openclaw') {
+    await runShellAsync('openclaw gateway restart', options.dryRun)
+    return
+  }
+  if (result.target === 'hermes') {
+    const hermesHome = connectorHermesHome(result.projectName)
+    await startDaemonManagedBridge(daemonBridgeKey(result), 'hermes', ['gateway'], options.dryRun, {
+      env: { ...connectorProcessEnv(), HERMES_HOME: hermesHome },
+      readyPatterns: [
+        /Shadow bot connected as/i,
+        /gateway .*started/i,
+        /gateway .*running/i,
+        /platform .*shadow/i,
+      ],
+      aliveFallbackMs: 5000,
+    })
+    return
+  }
+  if (result.target === 'cc-connect') {
+    const installed = await ensureCcConnectFork({
+      dryRun: options.dryRun,
+      log: (message) => console.log(message),
+    })
+    await releaseCcConnectConfigLock(options.dryRun, installed.binaryPath)
+    await startDaemonManagedBridge(
+      'cc-connect',
+      installed.binaryPath ?? 'cc-connect',
+      [],
+      options.dryRun,
+      { expectedProjects },
+    )
+  }
+}
+
+async function completeDaemonJob(
+  options: CliOptions,
+  job: DaemonJob,
+  status: 'completed' | 'failed',
+  result: Record<string, unknown> | null,
+  error?: string,
+): Promise<void> {
+  await apiJson(options, `/api/connector/daemon/jobs/${job.id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify(
+      status === 'completed' ? { status, result: result ?? {} } : { status, error },
+    ),
   })
-  startDetached(installed.binaryPath ?? 'cc-connect', [], baseOptions.dryRun)
-  return { runtimeId, target: 'cc-connect', agentType: ccAgentTypeForRuntime(runtimeId) }
+}
+
+function appliedDaemonJobResult(result: AppliedDaemonJob): Record<string, unknown> {
+  return {
+    runtimeId: result.runtimeId,
+    projectName: result.projectName,
+    target: result.target,
+    ...(result.agentType ? { agentType: result.agentType } : {}),
+  }
+}
+
+async function applyDaemonJobsBatch(jobs: DaemonJob[], options: CliOptions): Promise<void> {
+  const applied: Array<{ job: DaemonJob; result: AppliedDaemonJob }> = []
+  for (const job of jobs) {
+    try {
+      console.log(`[daemon] configuring job ${job.id} (${job.type})`)
+      const result = await applyDaemonJob(job, options)
+      applied.push({ job, result })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await completeDaemonJob(options, job, 'failed', null, message).catch(() => {})
+      console.error(`[daemon] failed job ${job.id}: ${message}`)
+    }
+  }
+
+  const bridgeResults = new Map<string, AppliedDaemonJob[]>()
+  for (const item of applied) {
+    if (!item.result.bridgeStart) continue
+    const key = daemonBridgeKey(item.result)
+    bridgeResults.set(key, [...(bridgeResults.get(key) ?? []), item.result])
+  }
+
+  const bridgeErrors = new Map<string, string>()
+  for (const [key, results] of bridgeResults) {
+    const result = results[0]
+    if (!result) continue
+    try {
+      console.log(`[daemon] starting ${result.target} bridge`)
+      await startDaemonBridge(
+        result,
+        options,
+        results.map((item) => item.projectName),
+      )
+    } catch (error) {
+      bridgeErrors.set(key, error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  for (const item of applied) {
+    const bridgeError = item.result.bridgeStart
+      ? bridgeErrors.get(daemonBridgeKey(item.result))
+      : undefined
+    if (bridgeError) {
+      await completeDaemonJob(options, item.job, 'failed', null, bridgeError).catch(() => {})
+      console.error(`[daemon] failed job ${item.job.id}: ${bridgeError}`)
+      continue
+    }
+    await completeDaemonJob(options, item.job, 'completed', appliedDaemonJobResult(item.result))
+    console.log(`[daemon] completed job ${item.job.id}`)
+  }
 }
 
 async function pollJobs(options: CliOptions): Promise<void> {
   const response = await apiJson<{ jobs: DaemonJob[] }>(options, '/api/connector/daemon/jobs')
   if (response.jobs.length === 0) return
 
-  for (const job of response.jobs) {
-    try {
-      console.log(`[daemon] running job ${job.id} (${job.type})`)
-      const result = await applyDaemonJob(job, options)
-      await apiJson(options, `/api/connector/daemon/jobs/${job.id}/complete`, {
-        method: 'POST',
-        body: JSON.stringify({ status: 'completed', result }),
-      })
-      console.log(`[daemon] completed job ${job.id}`)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      await apiJson(options, `/api/connector/daemon/jobs/${job.id}/complete`, {
-        method: 'POST',
-        body: JSON.stringify({ status: 'failed', error: message }),
-      }).catch(() => {})
-      console.error(`[daemon] failed job ${job.id}: ${message}`)
-    }
-  }
+  await applyDaemonJobsBatch(response.jobs, options)
 }
 
 function delay(ms: number): Promise<void> {
@@ -1489,13 +2290,17 @@ async function runDaemon(options: CliOptions): Promise<void> {
   process.once('SIGTERM', stop)
 
   console.log(`[daemon] connecting to ${normalizeServerUrl(options.serverUrl)}`)
-  do {
-    await heartbeat(options)
-    await pollJobs(options)
-    if (options.once) break
-    await delay(Math.max(1000, options.pollIntervalMs))
-  } while (!stopped)
-  console.log('[daemon] stopped')
+  try {
+    do {
+      await heartbeat(options)
+      await pollJobs(options)
+      if (options.once) break
+      await delay(Math.max(1000, options.pollIntervalMs))
+    } while (!stopped)
+  } finally {
+    await stopDaemonBridgeProcesses()
+    console.log('[daemon] stopped')
+  }
 }
 
 function hermesPluginSource(): string {
@@ -1523,19 +2328,24 @@ async function applyOpenClaw(
   const next = mergeOpenClawConfigContent(readExisting(configPath), {
     token: options.token,
     serverUrl: normalizeServerUrl(options.serverUrl),
+    projectName: options.projectName,
+    buddyId: options.buddyId,
+    buddyName: options.buddyName,
+    buddyDescription: options.buddyDescription,
+    agentId: options.shadowAgentId,
     modelProvider,
   })
   writeFile(configPath, next, options.dryRun)
 
   if (options.install) {
     console.log('Applying: Install plugin')
-    runShell('openclaw plugins install @shadowob/openclaw-shadowob', options.dryRun)
+    await runShellAsync('openclaw plugins install @shadowob/openclaw-shadowob', options.dryRun)
   }
 
   const restart = plan.commands.find((step) => step.label === 'Restart gateway')
   if (restart && behavior.restart) {
     console.log(`Applying: ${restart.label}`)
-    runShell(restart.command, options.dryRun)
+    await runShellAsync(restart.command, options.dryRun)
   }
 }
 
@@ -1564,6 +2374,11 @@ async function applyHermes(options: CliOptions): Promise<void> {
     : mergeEnvContent(readExisting(envPath), {
         token: options.token,
         serverUrl: normalizeServerUrl(options.serverUrl),
+        projectName: options.projectName,
+        buddyId: options.buddyId,
+        buddyName: options.buddyName,
+        buddyDescription: options.buddyDescription,
+        agentId: options.shadowAgentId,
         modelProvider,
       })
   writeFile(envPath, nextEnv, options.dryRun)
@@ -1571,20 +2386,25 @@ async function applyHermes(options: CliOptions): Promise<void> {
   const nextConfig = mergeHermesConfigContent(options.force ? '' : readExisting(configPath), {
     token: options.token,
     serverUrl: normalizeServerUrl(options.serverUrl),
+    projectName: options.projectName,
+    buddyId: options.buddyId,
+    buddyName: options.buddyName,
+    buddyDescription: options.buddyDescription,
+    agentId: options.shadowAgentId,
     modelProvider,
   })
   writeFile(configPath, nextConfig, options.dryRun)
 
   if (options.install) {
-    runShell(
+    await runShellAsync(
       `python -m pip install -r "${resolve(pluginTarget, 'requirements.txt')}"`,
       options.dryRun,
     )
-    runShell('hermes plugins enable shadowob', options.dryRun)
+    await runShellAsync('hermes plugins enable shadowob', options.dryRun)
   }
 
   if (options.start) {
-    runShell('hermes gateway', options.dryRun)
+    await runShellAsync('hermes gateway', options.dryRun)
   }
 }
 
@@ -1621,6 +2441,7 @@ async function applyCcConnect(options: CliOptions): Promise<void> {
   }
 
   if (options.start) {
+    await releaseCcConnectConfigLock(options.dryRun, binaryPath)
     runBinary(binaryPath ?? 'cc-connect', [], options.dryRun)
   }
 }
@@ -1666,9 +2487,15 @@ async function main(): Promise<void> {
   } else if (options.command === 'scan') {
     printScan(options)
   } else if (options.command === 'runtime-scan') {
-    printRuntimeScan(options)
+    await printRuntimeScan(options)
   } else if (options.command === 'runtime-install') {
     await installRuntime(options)
+  } else if (options.command === 'runtime-watch') {
+    await watchRuntimeSessions(options)
+  } else if (options.command === 'session-list') {
+    await printSessionList(options)
+  } else if (options.command === 'session-send') {
+    await sendSessionMessage(options)
   } else {
     printPlan(options)
   }

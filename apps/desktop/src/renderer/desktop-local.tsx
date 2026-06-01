@@ -21,6 +21,11 @@ function DesktopLocalApp() {
   return <PetApp />
 }
 
+const desktopLocalView = new URLSearchParams(window.location.search).get('view')
+if (desktopLocalView !== 'settings' && desktopLocalView !== 'reader') {
+  document.documentElement.classList.add('desktop-pet-window')
+}
+
 const root = document.getElementById('root')
 if (root) {
   ReactDOM.createRoot(root).render(

@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { app, BrowserWindow, ipcMain, net, shell } from 'electron'
 
 const RELEASE_LATEST_API_URL = 'https://api.github.com/repos/buggyblues/shadow/releases/latest'
@@ -50,9 +50,9 @@ function normalizeUpdateChannel(channel: unknown): UpdateChannel {
   return channel === 'beta' ? 'beta' : 'production'
 }
 
-function loadSettings(): UpdateSettings {
+async function loadSettings(): Promise<UpdateSettings> {
   try {
-    const raw = readFileSync(settingsFilePath(), 'utf8')
+    const raw = await readFile(settingsFilePath(), 'utf8')
     const parsed = JSON.parse(raw) as Partial<UpdateSettings>
     return {
       autoCheckOnLaunch: parsed.autoCheckOnLaunch ?? defaultSettings.autoCheckOnLaunch,
@@ -63,8 +63,10 @@ function loadSettings(): UpdateSettings {
   }
 }
 
-function saveSettings(settings: UpdateSettings): void {
-  writeFileSync(settingsFilePath(), JSON.stringify(settings, null, 2), 'utf8')
+async function saveSettings(settings: UpdateSettings): Promise<void> {
+  const path = settingsFilePath()
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, JSON.stringify(settings, null, 2), 'utf8')
 }
 
 function sendUpdateState(): void {
@@ -166,7 +168,7 @@ async function fetchRelease(channel: UpdateChannel): Promise<GithubRelease | nul
 }
 
 async function checkForUpdateInternal(): Promise<UpdateInfo> {
-  const settings = loadSettings()
+  const settings = await loadSettings()
   const channel = settings.channel
   const currentVersion = app.getVersion()
 
@@ -221,14 +223,14 @@ export function setupAutoUpdater(): void {
   ipcMain.handle('desktop:getUpdateState', () => updateState)
   ipcMain.handle('desktop:getUpdateSettings', () => loadSettings())
 
-  ipcMain.handle('desktop:setUpdateSettings', (_event, incoming: Partial<UpdateSettings>) => {
-    const current = loadSettings()
+  ipcMain.handle('desktop:setUpdateSettings', async (_event, incoming: Partial<UpdateSettings>) => {
+    const current = await loadSettings()
     const next: UpdateSettings = {
       autoCheckOnLaunch: incoming.autoCheckOnLaunch ?? current.autoCheckOnLaunch,
       channel:
         incoming.channel === undefined ? current.channel : normalizeUpdateChannel(incoming.channel),
     }
-    saveSettings(next)
+    await saveSettings(next)
     updateState = { ...updateState, channel: next.channel }
     sendUpdateState()
     return next
@@ -261,10 +263,14 @@ export function setupAutoUpdater(): void {
     app.exit(0)
   })
 
-  const settings = loadSettings()
-  if (settings.autoCheckOnLaunch) {
-    setTimeout(() => {
-      checkForUpdateInternal().catch(() => {})
-    }, 6000)
-  }
+  loadSettings()
+    .then((settings) => {
+      updateState = { ...updateState, channel: settings.channel }
+      if (settings.autoCheckOnLaunch) {
+        setTimeout(() => {
+          checkForUpdateInternal().catch(() => {})
+        }, 6000)
+      }
+    })
+    .catch(() => {})
 }

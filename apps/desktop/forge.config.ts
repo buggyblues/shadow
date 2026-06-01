@@ -97,6 +97,12 @@ const config: ForgeConfig = {
     // Ensure icon is referenced in Info.plist
     extendInfo: {
       CFBundleIconFile: 'icon',
+      CFBundleURLTypes: [
+        {
+          CFBundleURLName: 'Shadow',
+          CFBundleURLSchemes: ['shadow'],
+        },
+      ],
       NSCameraUseContinuityCameraDeviceType: true,
       NSCameraUsageDescription:
         'Shadow uses camera access only when a community or runtime feature requests it.',

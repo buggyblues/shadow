@@ -62,6 +62,11 @@ function markAuthenticated(user: AuthenticatedUser, accessToken: string) {
   queryClient.setQueryData(['me'], user)
 }
 
+function isCurrentAuthenticatedSession(accessToken: string): boolean {
+  const state = useAuthStore.getState()
+  return Boolean(state.isAuthenticated && state.user && state.accessToken === accessToken)
+}
+
 async function fetchCurrentUser(accessToken: string): Promise<AuthenticatedUser | null> {
   const response = await fetch(getApiUrl('/api/auth/me'), {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -203,8 +208,10 @@ export function installDesktopCommunityAuthStateListener(): void {
       })
       return
     }
+    const alreadyAuthenticated = isCurrentAuthenticatedSession(detail.accessToken)
     authStorage()?.setItem('accessToken', detail.accessToken)
     if (detail.refreshToken) authStorage()?.setItem('refreshToken', detail.refreshToken)
+    if (alreadyAuthenticated) return
     void ensureAuthenticatedSession()
   })
 }

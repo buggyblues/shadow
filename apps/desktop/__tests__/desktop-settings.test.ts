@@ -53,15 +53,46 @@ describe('desktop settings', () => {
 
     expect(settings.readDesktopSettings().serverBaseUrl).toBe('')
     expect(settings.resolveDesktopServerBaseUrl()).toBe('https://shadowob.com')
+    expect(settings.resolveDesktopAppBaseUrl()).toBe('https://shadowob.com/app')
   })
 
-  it('normalizes configured server url to origin only', async () => {
+  it('preserves configured app base path while resolving api origin separately', async () => {
     const settings = await loadDesktopSettings()
 
-    settings.saveDesktopSettings({ serverBaseUrl: 'https://shadowob.com/app/discover' })
+    settings.saveDesktopSettings({ serverBaseUrl: 'https://shadowob.com/app' })
 
-    expect(settings.readDesktopSettings().serverBaseUrl).toBe('https://shadowob.com')
+    expect(settings.readDesktopSettings().serverBaseUrl).toBe('https://shadowob.com/app')
     expect(settings.resolveDesktopServerBaseUrl()).toBe('https://shadowob.com')
+    expect(settings.resolveDesktopAppBaseUrl()).toBe('https://shadowob.com/app')
+  })
+
+  it('allows global shortcuts to be cleared', async () => {
+    const settings = await loadDesktopSettings()
+
+    settings.saveDesktopSettings({
+      shortcuts: {
+        ...settings.defaultDesktopShortcuts,
+        petChat: '',
+      },
+    })
+
+    expect(settings.readDesktopSettings().shortcuts.petChat).toBe('')
+  })
+
+  it('migrates legacy conflicting shortcut defaults', async () => {
+    const settings = await loadDesktopSettings()
+
+    settings.saveDesktopSettings({
+      shortcuts: {
+        openCommunity: 'CommandOrControl+Shift+S',
+        togglePet: 'CommandOrControl+Shift+P',
+        petVoice: 'CommandOrControl+Shift+V',
+        petChat: 'CommandOrControl+Shift+C',
+        showNotifications: 'CommandOrControl+Shift+N',
+      },
+    })
+
+    expect(settings.readDesktopSettings().shortcuts).toEqual(settings.defaultDesktopShortcuts)
   })
 
   it('applies saved network settings through the same runtime path', async () => {
@@ -81,7 +112,7 @@ describe('desktop settings', () => {
 
     await settings.applyDesktopNetworkSettings(saved)
 
-    expect(electronState.setProxy).toHaveBeenCalledWith({ mode: 'direct' })
+    expect(electronState.setProxy).toHaveBeenCalledWith({ mode: 'system' })
     expect(win.webContents.send).toHaveBeenCalledWith('desktop:settingsChanged', saved)
     expect(applied).toEqual(['https://self-hosted.example'])
   })

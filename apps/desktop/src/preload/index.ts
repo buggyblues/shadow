@@ -55,7 +55,12 @@ function normalizeDesktopRuntimeSettings(settings: unknown): DesktopRuntimeSetti
 function normalizeDesktopServerBaseUrl(value: string): string {
   try {
     const url = new URL(value.trim() || DEFAULT_DESKTOP_SERVER_BASE_URL)
-    if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      url.search = ''
+      url.hash = ''
+      const path = url.pathname.replace(/\/+$/, '')
+      return path && path !== '/' ? `${url.origin}${path}` : url.origin
+    }
   } catch {
     // Fall through to the hosted community.
   }
@@ -70,14 +75,6 @@ function persistDesktopRuntimeSettings(settings: unknown): void {
     window.dispatchEvent(new CustomEvent('shadow:desktop-runtime-settings-changed'))
   } catch {
     // Ignore origins where localStorage is unavailable.
-  }
-}
-
-function syncDesktopRuntimeSettingsSync(): void {
-  try {
-    persistDesktopRuntimeSettings(ipcRenderer.sendSync('desktop:getSettingsSync'))
-  } catch {
-    // The sync channel is best-effort so Web startup can read the desktop origin immediately.
   }
 }
 
@@ -97,6 +94,33 @@ let lastSyncedCommunityAuthSnapshot: string | null = null
 
 function readCommunityAuthSnapshot(): { accessToken: string; refreshToken: string } {
   return readCommunityAuthTokensFromStorage((key) => window.localStorage?.getItem(key))
+}
+
+async function injectCommunityAuthSnapshot(): Promise<void> {
+  try {
+    const tokens = (await ipcRenderer.invoke('desktop:getCommunityAuthTokens')) as {
+      accessToken?: unknown
+      refreshToken?: unknown
+    }
+    const accessToken = normalizeCommunityAccessToken(tokens?.accessToken)
+    const refreshToken = normalizeCommunityAccessToken(tokens?.refreshToken)
+    if (!accessToken && !refreshToken) return
+    if (accessToken) window.localStorage?.setItem('accessToken', accessToken)
+    if (refreshToken) window.localStorage?.setItem('refreshToken', refreshToken)
+    lastSyncedCommunityAuthSnapshot = `${accessToken}\n${refreshToken}`
+    window.dispatchEvent(
+      new CustomEvent('shadow:desktop-community-auth-updated', {
+        detail: {
+          accessToken,
+          refreshToken,
+          authenticated: Boolean(accessToken),
+          reason: 'startup',
+        },
+      }),
+    )
+  } catch {
+    // The remote community page can still complete login through the browser callback.
+  }
 }
 
 function syncCommunityAuthSnapshot(
@@ -234,6 +258,9 @@ const desktopAPI = {
   },
   showCommunity: (path?: string) => {
     return ipcRenderer.invoke('desktop:showCommunity', { path }) as Promise<void>
+  },
+  openCommunityLogin: (redirect?: string) => {
+    return ipcRenderer.invoke('desktop:openCommunityLogin', { redirect }) as Promise<boolean>
   },
   showCreateBuddy: () => {
     return ipcRenderer.invoke('desktop:showCreateBuddy') as Promise<void>
@@ -531,6 +558,7 @@ const desktopAPI = {
       connectorAutoStart: boolean
       connectorWorkDir: string
       connectorBuddyWorkDirs: Record<string, string>
+      connectorRuntimeNotifications: Record<string, boolean>
       ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
       asrProvider: 'sherpa-local' | 'web-speech'
       shortcuts: {
@@ -551,6 +579,7 @@ const desktopAPI = {
     connectorAutoStart?: boolean
     connectorWorkDir?: string
     connectorBuddyWorkDirs?: Record<string, string>
+    connectorRuntimeNotifications?: Record<string, boolean>
     ttsProvider?: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
     asrProvider?: 'sherpa-local' | 'web-speech'
     shortcuts?: {
@@ -571,6 +600,7 @@ const desktopAPI = {
       connectorAutoStart: boolean
       connectorWorkDir: string
       connectorBuddyWorkDirs: Record<string, string>
+      connectorRuntimeNotifications: Record<string, boolean>
       ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
       asrProvider: 'sherpa-local' | 'web-speech'
       shortcuts: {
@@ -605,8 +635,8 @@ const desktopAPI = {
     }) => ipcRenderer.invoke('desktop:connector:start', settings),
     stop: () => ipcRenderer.invoke('desktop:connector:stop'),
     scan: () => ipcRenderer.invoke('desktop:connector:scan') as Promise<{ output: string }>,
-    scanRuntimes: () =>
-      ipcRenderer.invoke('desktop:connector:scanRuntimes') as Promise<{
+    scanRuntimes: (input?: { force?: boolean }) =>
+      ipcRenderer.invoke('desktop:connector:scanRuntimes', input) as Promise<{
         runtimes: Array<{
           id: string
           label: string
@@ -620,6 +650,83 @@ const desktopAPI = {
           helpUrl?: string | null
           detectedAt?: string | null
         }>
+        runtimeSessions?: {
+          scannedAt: string
+          runtimeIds: string[]
+          instances: Array<{
+            runtimeId: string
+            instanceId: string
+            label: string
+            status: 'running' | 'available' | 'stopped' | 'missing' | 'error'
+            endpoint?: string | null
+            capabilities: string[]
+            error?: string | null
+            metadata?: Record<string, unknown>
+          }>
+          sessions: Array<{
+            runtimeId: string
+            instanceId: string
+            sessionId: string
+            title?: string | null
+            workDir?: string | null
+            state:
+              | 'idle'
+              | 'running'
+              | 'streaming'
+              | 'waiting_for_approval'
+              | 'blocked'
+              | 'completed'
+              | 'failed'
+              | 'stopped'
+              | 'unknown'
+            model?: string | null
+            lastActivityAt?: string | null
+            startedAt?: string | null
+            source: string
+            native?: Record<string, unknown>
+          }>
+        } | null
+        cached?: boolean
+      }>,
+    scanRuntimeSessions: (input?: { force?: boolean }) =>
+      ipcRenderer.invoke('desktop:connector:scanRuntimeSessions', input) as Promise<{
+        runtimes?: Array<{
+          id: string
+          label: string
+          status: 'available' | 'missing'
+        }>
+        runtimeSessions: {
+          scannedAt: string
+          runtimeIds: string[]
+          instances: Array<{
+            runtimeId: string
+            instanceId: string
+            label: string
+            status: 'running' | 'available' | 'stopped' | 'missing' | 'error'
+            endpoint?: string | null
+            capabilities: string[]
+            error?: string | null
+            metadata?: Record<string, unknown>
+          }>
+          sessions: Array<{
+            runtimeId: string
+            instanceId: string
+            sessionId: string
+            title?: string | null
+            lastActivityAt?: string | null
+            state:
+              | 'idle'
+              | 'running'
+              | 'streaming'
+              | 'waiting_for_approval'
+              | 'blocked'
+              | 'completed'
+              | 'failed'
+              | 'stopped'
+              | 'unknown'
+          }>
+        }
+        cached?: boolean
       }>,
     installRuntime: (input: { runtimeId: string }) =>
       ipcRenderer.invoke('desktop:connector:installRuntime', input) as Promise<{
@@ -637,9 +744,45 @@ const desktopAPI = {
           detectedAt?: string | null
         }>
       }>,
+    createBuddy: (input: {
+      runtimeId: string
+      name: string
+      username: string
+      description?: string
+      avatarUrl?: string | null
+    }) =>
+      ipcRenderer.invoke('desktop:connector:createBuddy', input) as Promise<{
+        connections: Array<{
+          agentId: string
+          label: string
+          username?: string | null
+          displayName?: string | null
+          avatarUrl?: string | null
+          runtimeId: string
+          runtimeLabel: string
+          computerId: string
+          computerName: string
+          workDir: string
+          status: 'running' | 'stopped' | 'error'
+        }>
+        connectionError?: string | null
+        agent?: {
+          id?: string | null
+          userId?: string | null
+          buddyUserId?: string | null
+          botUser?: {
+            id?: string | null
+            username?: string | null
+            displayName?: string | null
+            avatarUrl?: string | null
+          } | null
+        } | null
+      }>,
     getConnections: () => ipcRenderer.invoke('desktop:connector:getConnections'),
     setConnectionEnabled: (input: { agentId: string; enabled: boolean }) =>
       ipcRenderer.invoke('desktop:connector:setConnectionEnabled', input),
+    deleteConnection: (input: { agentId: string; deleteCloudBuddy?: boolean }) =>
+      ipcRenderer.invoke('desktop:connector:deleteConnection', input),
     setConnectionWorkDir: (input: { agentId: string; workDir: string }) =>
       ipcRenderer.invoke('desktop:connector:setConnectionWorkDir', input),
   },
@@ -702,6 +845,7 @@ const desktopAPI = {
       connectorAutoStart: boolean
       connectorWorkDir: string
       connectorBuddyWorkDirs: Record<string, string>
+      connectorRuntimeNotifications: Record<string, boolean>
       shortcuts: {
         openCommunity: string
         togglePet: string
@@ -723,6 +867,7 @@ const desktopAPI = {
         connectorAutoStart: boolean
         connectorWorkDir: string
         connectorBuddyWorkDirs: Record<string, string>
+        connectorRuntimeNotifications: Record<string, boolean>
         ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
         asrProvider: 'sherpa-local' | 'web-speech'
         shortcuts: {
@@ -744,6 +889,11 @@ const desktopAPI = {
     ipcRenderer.on('desktop:connectorState', handler)
     return () => ipcRenderer.removeListener('desktop:connectorState', handler)
   },
+  onConnectorRuntimeState: (callback: (state: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
+    ipcRenderer.on('desktop:connectorRuntimeState', handler)
+    return () => ipcRenderer.removeListener('desktop:connectorRuntimeState', handler)
+  },
   onSettingsTabRequest: (
     callback: (
       tab: 'general' | 'connector' | 'shortcuts' | 'voice' | 'pet' | 'network' | 'about',
@@ -761,13 +911,15 @@ const desktopAPI = {
   resumeShortcuts: () => ipcRenderer.invoke('desktop:shortcuts:resume'),
 }
 
-syncDesktopRuntimeSettingsSync()
 contextBridge.exposeInMainWorld('desktopAPI', desktopAPI)
 applyDesktopDocumentClasses()
 void syncDesktopRuntimeSettings()
-forceSyncCommunityAuthToken()
+void injectCommunityAuthSnapshot().then(() => forceSyncCommunityAuthToken())
 window.addEventListener('DOMContentLoaded', () => void syncDesktopRuntimeSettings())
-window.addEventListener('DOMContentLoaded', forceSyncCommunityAuthToken)
+window.addEventListener(
+  'DOMContentLoaded',
+  () => void injectCommunityAuthSnapshot().then(() => forceSyncCommunityAuthToken()),
+)
 window.addEventListener('load', () => void syncDesktopRuntimeSettings())
 window.addEventListener('load', forceSyncCommunityAuthToken)
 window.addEventListener('focus', () => void syncDesktopRuntimeSettings())

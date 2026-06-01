@@ -54,6 +54,10 @@ const configureBuddySchema = z.object({
   serverUrl: z.string().url().max(500),
 })
 
+const removeBuddySchema = z.object({
+  deleteCloudBuddy: z.boolean().optional().default(false),
+})
+
 const completeJobSchema = z.object({
   status: z.enum(['completed', 'failed']),
   result: z.record(z.unknown()).optional(),
@@ -170,6 +174,45 @@ export function createConnectorHandler(container: AppContainer) {
       }
     },
   )
+
+  handler.delete('/connector/computers/:id/buddies/:agentId', authMiddleware, async (c) => {
+    const user = c.get('user')
+    const computerId = c.req.param('id')
+    const agentId = c.req.param('agentId')
+    if (!computerId || !agentId)
+      return c.json({ ok: false, error: 'Connector binding not found' }, 404)
+    try {
+      const removeInput = removeBuddySchema.safeParse((await c.req.json().catch(() => ({}))) ?? {})
+      if (!removeInput.success) {
+        return c.json({ ok: false, error: removeInput.error.message }, 400)
+      }
+      const result = await container
+        .resolve('connectorService')
+        .removeBuddyFromComputer(user.userId, computerId, agentId, {
+          deleteCloudBuddy: removeInput.data.deleteCloudBuddy,
+        })
+      container
+        .resolve('io')
+        .to(`user:${user.userId}`)
+        .emit('connector:job-created', {
+          computerId,
+          jobId: result.job?.id ?? null,
+          agentId: result.agent?.id ?? agentId,
+        })
+      return c.json({
+        agent: result.agent,
+        job: result.job
+          ? { id: result.job.id, status: result.job.status, type: result.job.type }
+          : null,
+      })
+    } catch (err) {
+      const status = (err as { status?: number }).status ?? 500
+      return c.json(
+        { ok: false, error: (err as Error).message || 'Internal Server Error' },
+        status as 400,
+      )
+    }
+  })
 
   handler.get('/connector/jobs/:id', authMiddleware, async (c) => {
     const user = c.get('user')

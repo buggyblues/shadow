@@ -311,6 +311,28 @@ export class AgentService {
     return this.getById(id)
   }
 
+  async clearConnectorBinding(id: string, ownerId: string) {
+    const agent = await this.deps.agentDao.findById(id)
+    if (!agent) {
+      throw Object.assign(new Error('Agent not found'), { status: 404 })
+    }
+    if (agent.ownerId !== ownerId) {
+      throw Object.assign(new Error('Not the owner of this agent'), { status: 403 })
+    }
+
+    const config = { ...((agent.config as Record<string, unknown>) ?? {}) }
+    delete config.connectorComputerId
+    delete config.connectorRuntimeId
+    delete config.connectorRuntimeLabel
+    delete config.connectorServerUrl
+    delete config.connectorWorkDir
+    delete config.connectorConfiguredAt
+    await this.deps.agentDao.updateConfig(id, config)
+    await this.deps.agentDao.updateStatus(id, 'stopped')
+
+    return this.getById(id)
+  }
+
   async getAll() {
     return this.deps.agentDao.findAll()
   }

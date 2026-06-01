@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-router'
 import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
+import { useTranslation } from 'react-i18next'
 import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
 import { fetchApi } from './lib/api'
@@ -112,6 +113,40 @@ function marketplaceDetailSearch(search: Record<string, unknown>) {
   return {
     from: search.from === 'discover' ? 'discover' : undefined,
   }
+}
+
+function safeDesktopCallbackRedirect(value: string | null): string {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || /[\r\n\\]/.test(value)) {
+    return '/app/discover'
+  }
+  if (value === '/app') return '/app'
+  return value.startsWith('/app/') ? value : `/app${value === '/' ? '' : value}`
+}
+
+function DesktopAuthCallbackPage() {
+  const { t } = useTranslation()
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const redirect = safeDesktopCallbackRedirect(params.get('redirect'))
+    const accessToken = window.localStorage.getItem('accessToken') ?? ''
+    const refreshToken = window.localStorage.getItem('refreshToken') ?? ''
+    if (!accessToken || !refreshToken) {
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      window.location.replace(`/app/login?redirect=${encodeURIComponent(current)}`)
+      return
+    }
+    const callbackUrl = new URL('shadow://oauth-callback')
+    callbackUrl.searchParams.set('access_token', accessToken)
+    callbackUrl.searchParams.set('refresh_token', refreshToken)
+    callbackUrl.searchParams.set('redirect', redirect)
+    window.location.replace(callbackUrl.toString())
+  }, [])
+
+  return (
+    <div className="grid min-h-screen place-items-center bg-bg-deep px-6 text-center text-text-primary">
+      <p className="text-sm font-semibold text-text-secondary">{t('auth.authenticating')}</p>
+    </div>
+  )
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -255,6 +290,12 @@ const oauthCallbackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/oauth-callback',
   component: OAuthCallbackPage,
+})
+
+const desktopAuthCallbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/desktop-auth-callback',
+  component: DesktopAuthCallbackPage,
 })
 
 const oauthAuthorizeRoute = createRoute({
@@ -611,6 +652,7 @@ const routeTree = rootRoute.addChildren([
   resetPasswordRoute,
   inviteRoute,
   oauthCallbackRoute,
+  desktopAuthCallbackRoute,
   oauthAuthorizeRoute,
   appRoute.addChildren([
     serverLayoutRoute.addChildren([
@@ -655,14 +697,22 @@ const routeTree = rootRoute.addChildren([
 
 const router = createRouter({ routeTree, basepath: '/app' })
 
+function isDesktopRuntime(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    Boolean((window as Window & { desktopAPI?: { isDesktop?: boolean } }).desktopAPI?.isDesktop)
+  )
+}
+
 // Render
 const root = document.getElementById('root')
 if (root) {
+  const appTree = (
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  )
   ReactDOM.createRoot(root).render(
-    <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </React.StrictMode>,
+    isDesktopRuntime() ? appTree : <React.StrictMode>{appTree}</React.StrictMode>,
   )
 }

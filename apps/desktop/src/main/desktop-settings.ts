@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { constants, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 
@@ -57,6 +58,7 @@ export interface DesktopRuntimeSettings {
   connectorAutoStart: boolean
   connectorWorkDir: string
   connectorBuddyWorkDirs: Record<string, string>
+  connectorRuntimeNotifications: Record<string, boolean>
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
   shortcuts: DesktopShortcutSettings
@@ -76,12 +78,20 @@ export type DesktopShortcutSettings = Record<DesktopShortcutAction, string>
 export const DEFAULT_SERVER_BASE_URL = 'https://shadowob.com'
 const desktopSettingsAppliedListeners = new Set<(settings: DesktopRuntimeSettings) => void>()
 
+const legacyDefaultDesktopShortcuts: Record<DesktopShortcutAction, string[]> = {
+  openCommunity: ['CommandOrControl+Shift+S', 'CommandOrControl+Alt+Shift+S'],
+  togglePet: ['CommandOrControl+Shift+P', 'CommandOrControl+Alt+Shift+P'],
+  petVoice: ['CommandOrControl+Shift+V', 'CommandOrControl+Alt+Shift+V'],
+  petChat: ['CommandOrControl+Shift+C', 'CommandOrControl+Alt+Shift+C'],
+  showNotifications: ['CommandOrControl+Shift+N', 'CommandOrControl+Alt+Shift+N'],
+}
+
 export const defaultDesktopShortcuts: DesktopShortcutSettings = {
-  openCommunity: 'CommandOrControl+Alt+Shift+S',
-  togglePet: 'CommandOrControl+Alt+Shift+P',
-  petVoice: 'CommandOrControl+Alt+Shift+V',
-  petChat: 'CommandOrControl+Alt+Shift+C',
-  showNotifications: 'CommandOrControl+Alt+Shift+N',
+  openCommunity: 'CommandOrControl+Alt+Shift+1',
+  togglePet: 'CommandOrControl+Alt+Shift+2',
+  petVoice: 'CommandOrControl+Alt+Shift+3',
+  petChat: 'CommandOrControl+Alt+Shift+4',
+  showNotifications: 'CommandOrControl+Alt+Shift+5',
 }
 
 const defaultSettings: DesktopRuntimeSettings = {
@@ -92,6 +102,7 @@ const defaultSettings: DesktopRuntimeSettings = {
   connectorAutoStart: false,
   connectorWorkDir: '',
   connectorBuddyWorkDirs: {},
+  connectorRuntimeNotifications: {},
   ttsProvider: 'system',
   asrProvider: 'sherpa-local',
   shortcuts: defaultDesktopShortcuts,
@@ -107,14 +118,17 @@ export function connectorWorkDirMapFilePath(): string {
   return join(app.getPath('userData'), 'connector-workdirs.json')
 }
 
-function normalizeServerBaseUrl(value: unknown): string | null {
+function normalizeConfiguredBaseUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const input = value.trim()
   if (!input) return null
   try {
     const url = new URL(input)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
-    return url.origin
+    url.search = ''
+    url.hash = ''
+    const path = url.pathname.replace(/\/+$/, '')
+    return path && path !== '/' ? `${url.origin}${path}` : url.origin
   } catch {
     return null
   }
@@ -125,13 +139,23 @@ function normalizeConfiguredServerBaseUrl(value: unknown, fallback: string): str
   if (typeof value !== 'string') return fallback
   const input = value.trim()
   if (!input) return ''
-  return normalizeServerBaseUrl(input) ?? fallback
+  return normalizeConfiguredBaseUrl(input) ?? fallback
+}
+
+export function resolveDesktopAppBaseUrl(
+  settings: Pick<DesktopRuntimeSettings, 'serverBaseUrl'> = readDesktopSettings(),
+): string {
+  const configured = normalizeConfiguredBaseUrl(settings.serverBaseUrl)
+  if (!configured) return `${DEFAULT_SERVER_BASE_URL}/app`
+  const url = new URL(configured)
+  return url.pathname && url.pathname !== '/' ? configured : `${url.origin}/app`
 }
 
 export function resolveDesktopServerBaseUrl(
   settings: Pick<DesktopRuntimeSettings, 'serverBaseUrl'> = readDesktopSettings(),
 ): string {
-  return normalizeServerBaseUrl(settings.serverBaseUrl) ?? DEFAULT_SERVER_BASE_URL
+  const configured = normalizeConfiguredBaseUrl(settings.serverBaseUrl)
+  return configured ? new URL(configured).origin : DEFAULT_SERVER_BASE_URL
 }
 
 function normalizeHttpProxy(value: unknown): string {
@@ -162,6 +186,17 @@ function normalizeConnectorBuddyWorkDirs(value: unknown): Record<string, string>
   return result
 }
 
+function normalizeConnectorRuntimeNotifications(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const next: Record<string, boolean> = {}
+  for (const [key, enabled] of Object.entries(value)) {
+    const id = key.trim()
+    if (!id || id.length > 80) continue
+    next[id] = enabled !== false
+  }
+  return next
+}
+
 export function normalizeConnectorApiKey(value: unknown): string {
   if (typeof value !== 'string') return ''
   const input = value.trim()
@@ -184,30 +219,24 @@ function normalizeAsrProvider(value: unknown): DesktopRuntimeSettings['asrProvid
   return value === 'web-speech' || value === 'sherpa-local' ? value : defaultSettings.asrProvider
 }
 
+function normalizeShortcutValue(action: DesktopShortcutAction, value: unknown): string {
+  if (typeof value !== 'string') return defaultDesktopShortcuts[action]
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  return legacyDefaultDesktopShortcuts[action].includes(trimmed)
+    ? defaultDesktopShortcuts[action]
+    : trimmed
+}
+
 function normalizeShortcuts(value: unknown): DesktopShortcutSettings {
   const incoming =
     value && typeof value === 'object' ? (value as Partial<DesktopShortcutSettings>) : {}
   return {
-    openCommunity:
-      typeof incoming.openCommunity === 'string' && incoming.openCommunity.trim()
-        ? incoming.openCommunity.trim()
-        : defaultDesktopShortcuts.openCommunity,
-    togglePet:
-      typeof incoming.togglePet === 'string' && incoming.togglePet.trim()
-        ? incoming.togglePet.trim()
-        : defaultDesktopShortcuts.togglePet,
-    petVoice:
-      typeof incoming.petVoice === 'string' && incoming.petVoice.trim()
-        ? incoming.petVoice.trim()
-        : defaultDesktopShortcuts.petVoice,
-    petChat:
-      typeof incoming.petChat === 'string' && incoming.petChat.trim()
-        ? incoming.petChat.trim()
-        : defaultDesktopShortcuts.petChat,
-    showNotifications:
-      typeof incoming.showNotifications === 'string' && incoming.showNotifications.trim()
-        ? incoming.showNotifications.trim()
-        : defaultDesktopShortcuts.showNotifications,
+    openCommunity: normalizeShortcutValue('openCommunity', incoming.openCommunity),
+    togglePet: normalizeShortcutValue('togglePet', incoming.togglePet),
+    petVoice: normalizeShortcutValue('petVoice', incoming.petVoice),
+    petChat: normalizeShortcutValue('petChat', incoming.petChat),
+    showNotifications: normalizeShortcutValue('showNotifications', incoming.showNotifications),
   }
 }
 
@@ -323,42 +352,34 @@ function toProxyRules(httpProxy: string, httpsProxy: string): string {
   return rules.join(';')
 }
 
-export function readDesktopSettings(): DesktopRuntimeSettings {
-  try {
-    const path = settingsFilePath()
-    if (!existsSync(path)) return defaultSettings
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<DesktopRuntimeSettings>
-    return {
-      serverBaseUrl: normalizeConfiguredServerBaseUrl(
-        parsed.serverBaseUrl,
-        defaultSettings.serverBaseUrl,
-      ),
-      httpProxy: normalizeHttpProxy(parsed.httpProxy),
-      httpsProxy: normalizeHttpProxy(parsed.httpsProxy),
-      connectorApiKey: normalizeConnectorApiKey(parsed.connectorApiKey),
-      connectorAutoStart: parsed.connectorAutoStart === true,
-      connectorWorkDir: normalizeWorkDir(parsed.connectorWorkDir),
-      connectorBuddyWorkDirs: normalizeConnectorBuddyWorkDirs(parsed.connectorBuddyWorkDirs),
-      ttsProvider: normalizeTtsProvider(parsed.ttsProvider),
-      asrProvider: normalizeAsrProvider(parsed.asrProvider),
-      shortcuts: normalizeShortcuts(parsed.shortcuts),
-      desktopPetPacks: normalizeDesktopPetPacks(parsed.desktopPetPacks),
-      desktopPetActivePackId:
-        typeof parsed.desktopPetActivePackId === 'string' ? parsed.desktopPetActivePackId : '',
-    }
-  } catch {
-    return defaultSettings
+function normalizeDesktopSettings(parsed: Partial<DesktopRuntimeSettings>): DesktopRuntimeSettings {
+  return {
+    serverBaseUrl: normalizeConfiguredServerBaseUrl(
+      parsed.serverBaseUrl,
+      defaultSettings.serverBaseUrl,
+    ),
+    httpProxy: normalizeHttpProxy(parsed.httpProxy),
+    httpsProxy: normalizeHttpProxy(parsed.httpsProxy),
+    connectorApiKey: normalizeConnectorApiKey(parsed.connectorApiKey),
+    connectorAutoStart: parsed.connectorAutoStart === true,
+    connectorWorkDir: normalizeWorkDir(parsed.connectorWorkDir),
+    connectorBuddyWorkDirs: normalizeConnectorBuddyWorkDirs(parsed.connectorBuddyWorkDirs),
+    connectorRuntimeNotifications: normalizeConnectorRuntimeNotifications(
+      parsed.connectorRuntimeNotifications,
+    ),
+    ttsProvider: normalizeTtsProvider(parsed.ttsProvider),
+    asrProvider: normalizeAsrProvider(parsed.asrProvider),
+    shortcuts: normalizeShortcuts(parsed.shortcuts),
+    desktopPetPacks: normalizeDesktopPetPacks(parsed.desktopPetPacks),
+    desktopPetActivePackId:
+      typeof parsed.desktopPetActivePackId === 'string' ? parsed.desktopPetActivePackId : '',
   }
 }
 
-export function getDesktopServerBaseUrl(): string {
-  return resolveDesktopServerBaseUrl()
-}
-
-export function saveDesktopSettings(
+function mergeDesktopSettings(
+  current: DesktopRuntimeSettings,
   incoming: Partial<DesktopRuntimeSettings>,
 ): DesktopRuntimeSettings {
-  const current = readDesktopSettings()
   const next: DesktopRuntimeSettings = {
     serverBaseUrl: normalizeConfiguredServerBaseUrl(incoming.serverBaseUrl, current.serverBaseUrl),
     httpProxy:
@@ -383,6 +404,10 @@ export function saveDesktopSettings(
       incoming.connectorBuddyWorkDirs === undefined
         ? current.connectorBuddyWorkDirs
         : normalizeConnectorBuddyWorkDirs(incoming.connectorBuddyWorkDirs),
+    connectorRuntimeNotifications:
+      incoming.connectorRuntimeNotifications === undefined
+        ? current.connectorRuntimeNotifications
+        : normalizeConnectorRuntimeNotifications(incoming.connectorRuntimeNotifications),
     ttsProvider:
       incoming.ttsProvider === undefined
         ? current.ttsProvider
@@ -410,16 +435,86 @@ export function saveDesktopSettings(
   ) {
     next.desktopPetActivePackId = ''
   }
+  return next
+}
 
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function readDesktopSettings(): DesktopRuntimeSettings {
+  try {
+    const path = settingsFilePath()
+    if (!existsSync(path)) return defaultSettings
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<DesktopRuntimeSettings>
+    return normalizeDesktopSettings(parsed)
+  } catch {
+    return defaultSettings
+  }
+}
+
+export async function readDesktopSettingsAsync(): Promise<DesktopRuntimeSettings> {
+  try {
+    const path = settingsFilePath()
+    if (!(await fileExists(path))) return defaultSettings
+    const parsed = JSON.parse(await readFile(path, 'utf8')) as Partial<DesktopRuntimeSettings>
+    return normalizeDesktopSettings(parsed)
+  } catch {
+    return defaultSettings
+  }
+}
+
+export function getDesktopServerBaseUrl(): string {
+  return resolveDesktopServerBaseUrl()
+}
+
+export function saveDesktopSettings(
+  incoming: Partial<DesktopRuntimeSettings>,
+): DesktopRuntimeSettings {
+  const current = readDesktopSettings()
+  const next = mergeDesktopSettings(current, incoming)
   mkdirSync(app.getPath('userData'), { recursive: true })
   writeFileSync(settingsFilePath(), JSON.stringify(next, null, 2), 'utf8')
   writeConnectorWorkDirMap(next)
   return next
 }
 
+export async function saveDesktopSettingsAsync(
+  incoming: Partial<DesktopRuntimeSettings>,
+): Promise<DesktopRuntimeSettings> {
+  const current = await readDesktopSettingsAsync()
+  const next = mergeDesktopSettings(current, incoming)
+  await mkdir(app.getPath('userData'), { recursive: true })
+  await writeFile(settingsFilePath(), JSON.stringify(next, null, 2), 'utf8')
+  await writeConnectorWorkDirMapAsync(next)
+  return next
+}
+
 export function writeConnectorWorkDirMap(settings = readDesktopSettings()): void {
   mkdirSync(app.getPath('userData'), { recursive: true })
   writeFileSync(
+    connectorWorkDirMapFilePath(),
+    JSON.stringify(
+      {
+        buddies: settings.connectorBuddyWorkDirs,
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  )
+}
+
+export async function writeConnectorWorkDirMapAsync(
+  settings: DesktopRuntimeSettings,
+): Promise<void> {
+  await mkdir(app.getPath('userData'), { recursive: true })
+  await writeFile(
     connectorWorkDirMapFilePath(),
     JSON.stringify(
       {
@@ -447,29 +542,28 @@ export function onDesktopSettingsApplied(
   return () => desktopSettingsAppliedListeners.delete(listener)
 }
 
-export async function applyDesktopNetworkSettings(settings = readDesktopSettings()): Promise<void> {
-  if (settings.httpProxy || settings.httpsProxy) {
+export async function applyDesktopNetworkSettings(
+  settings?: DesktopRuntimeSettings,
+): Promise<void> {
+  const resolvedSettings = settings ?? (await readDesktopSettingsAsync())
+  if (resolvedSettings.httpProxy || resolvedSettings.httpsProxy) {
     await session.defaultSession.setProxy({
-      proxyRules: toProxyRules(settings.httpProxy, settings.httpsProxy),
+      proxyRules: toProxyRules(resolvedSettings.httpProxy, resolvedSettings.httpsProxy),
     })
   } else {
-    await session.defaultSession.setProxy({ mode: 'direct' })
+    await session.defaultSession.setProxy({ mode: 'system' })
   }
-  broadcastDesktopSettings(settings)
-  for (const listener of desktopSettingsAppliedListeners) listener(settings)
+  broadcastDesktopSettings(resolvedSettings)
+  for (const listener of desktopSettingsAppliedListeners) listener(resolvedSettings)
 }
 
 export function setupDesktopSettingsHandlers(): void {
-  ipcMain.on('desktop:getSettingsSync', (event) => {
-    event.returnValue = readDesktopSettings()
-  })
-
-  ipcMain.handle('desktop:getSettings', () => readDesktopSettings())
+  ipcMain.handle('desktop:getSettings', () => readDesktopSettingsAsync())
 
   ipcMain.handle(
     'desktop:setSettings',
     async (_event, incoming: Partial<DesktopRuntimeSettings>) => {
-      const next = saveDesktopSettings(incoming)
+      const next = await saveDesktopSettingsAsync(incoming)
       await applyDesktopNetworkSettings(next)
       return next
     },

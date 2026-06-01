@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from '@rsbuild/core'
 import { pluginReact } from '@rsbuild/plugin-react'
@@ -6,9 +5,7 @@ import { pluginReact } from '@rsbuild/plugin-react'
 // Absolute path to @shadowob/cloud-ui source
 const cloudUiRoot = path.resolve(__dirname, '../cloud/packages/ui')
 const cloudUiSrc = path.resolve(__dirname, '../cloud/packages/ui/src')
-const defaultHostedApiTarget = 'https://shadowob.com'
 const defaultStandaloneDevApiTarget = 'http://127.0.0.1:3002'
-const useDesktopSettingsProxy = process.env.SHADOW_DESKTOP_DYNAMIC_PROXY === '1'
 
 function normalizeHttpOrigin(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -23,19 +20,7 @@ function normalizeHttpOrigin(value: unknown): string | null {
   }
 }
 
-function readDesktopSettingsApiTarget(): string {
-  const settingsPath = process.env.SHADOW_DESKTOP_SETTINGS_PATH
-  if (!settingsPath || !existsSync(settingsPath)) return defaultHostedApiTarget
-  try {
-    const parsed = JSON.parse(readFileSync(settingsPath, 'utf8')) as { serverBaseUrl?: unknown }
-    return normalizeHttpOrigin(parsed.serverBaseUrl) ?? defaultHostedApiTarget
-  } catch {
-    return defaultHostedApiTarget
-  }
-}
-
 function getDevApiTarget(): string {
-  if (useDesktopSettingsProxy) return readDesktopSettingsApiTarget()
   return normalizeHttpOrigin(process.env.SHADOW_DEV_API_BASE) ?? defaultStandaloneDevApiTarget
 }
 
@@ -51,7 +36,6 @@ function handleDevProxyError(error: NodeJS.ErrnoException) {
 function apiProxyOptions(options: { ws?: boolean } = {}) {
   return {
     target: devApiTarget,
-    router: useDesktopSettingsProxy ? () => getDevApiTarget() : undefined,
     ws: options.ws,
     changeOrigin: true,
     onError: handleDevProxyError,
