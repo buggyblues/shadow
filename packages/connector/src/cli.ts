@@ -56,6 +56,7 @@ interface CliOptions {
     | 'runtime-watch'
     | 'session-list'
     | 'session-send'
+    | 'remove-buddy'
   target?: ShadowConnectorTarget
   runtimeId?: string
   sessionId?: string
@@ -104,6 +105,7 @@ const COMMANDS = new Set([
   'runtime-watch',
   'session-list',
   'session-send',
+  'remove-buddy',
 ])
 const ALL_TARGETS = ['openclaw', 'hermes', 'cc-connect'] as const
 const SHADOW_CLI_PACKAGE = '@shadowob/cli@latest'
@@ -206,7 +208,8 @@ function parseArgs(args: string[]): CliOptions {
     command !== 'runtime-install' &&
     command !== 'runtime-watch' &&
     command !== 'session-list' &&
-    command !== 'session-send'
+    command !== 'session-send' &&
+    command !== 'remove-buddy'
   ) {
     throw new Error('Missing or invalid --target')
   }
@@ -1873,10 +1876,14 @@ async function startDaemonManagedBridge(
     env?: NodeJS.ProcessEnv
     readyPatterns?: RegExp[]
     aliveFallbackMs?: number
+    restart?: boolean
   } = {},
 ): Promise<void> {
   const existing = daemonBridgeProcesses.get(key)
-  if (existing && existing.child.exitCode === null && !existing.child.killed) return
+  if (existing && existing.child.exitCode === null && !existing.child.killed) {
+    if (!bridgeOptions.restart) return
+    await stopDaemonBridgeProcess(key)
+  }
 
   if (dryRun) {
     console.log(`[dry-run] start managed ${key} bridge ${[binaryPath, ...args].join(' ')}`)
@@ -2049,6 +2056,8 @@ async function applyRemoveDaemonJob(
 
   const configPath = resolve(homedir(), '.cc-connect/config.toml')
   console.log(`Applying: Remove cc-connect project ${projectName}`)
+  await stopDaemonBridgeProcess('cc-connect')
+  await releaseCcConnectConfigLock(baseOptions.dryRun)
   writeFile(
     configPath,
     removeCcConnectProjectConfigContent(readExisting(configPath), projectName),
@@ -2149,6 +2158,45 @@ async function applyDaemonJob(job: DaemonJob, baseOptions: CliOptions): Promise<
   }
 }
 
+async function removeLocalBuddy(options: CliOptions): Promise<void> {
+  const runtimeId = options.runtimeId?.trim()
+  const projectName = options.projectName?.trim()
+  if (!runtimeId) throw new Error('Missing --runtime')
+  if (!projectName) throw new Error('Missing --project-name')
+
+  let target: ShadowConnectorTarget = 'cc-connect'
+  if (runtimeId === 'openclaw') {
+    target = 'openclaw'
+    const configPath = resolveOpenClawConfigPath(options)
+    writeFile(
+      configPath,
+      removeOpenClawAccountConfigContent(readExisting(configPath), projectName),
+      options.dryRun,
+    )
+  } else if (runtimeId === 'hermes') {
+    target = 'hermes'
+    if (options.dryRun) {
+      console.log(`[dry-run] remove ${connectorHermesHome(projectName)}`)
+    } else {
+      await rm(connectorHermesHome(projectName), { recursive: true, force: true })
+    }
+  } else {
+    const configPath = resolve(homedir(), '.cc-connect/config.toml')
+    await releaseCcConnectConfigLock(options.dryRun)
+    writeFile(
+      configPath,
+      removeCcConnectProjectConfigContent(readExisting(configPath), projectName),
+      options.dryRun,
+    )
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify({ ok: true, runtimeId, projectName, target }, null, 2))
+    return
+  }
+  console.log(`Removed ${projectName} from ${target}`)
+}
+
 function daemonBridgeKey(result: AppliedDaemonJob): string {
   if (result.target === 'hermes') return `hermes:${safeConnectorProfileName(result.projectName)}`
   return result.target
@@ -2175,6 +2223,7 @@ async function startDaemonBridge(
         /platform .*shadow/i,
       ],
       aliveFallbackMs: 5000,
+      restart: true,
     })
     return
   }
@@ -2189,7 +2238,7 @@ async function startDaemonBridge(
       installed.binaryPath ?? 'cc-connect',
       [],
       options.dryRun,
-      { expectedProjects },
+      { expectedProjects, restart: true },
     )
   }
 }
@@ -2496,6 +2545,8 @@ async function main(): Promise<void> {
     await printSessionList(options)
   } else if (options.command === 'session-send') {
     await sendSessionMessage(options)
+  } else if (options.command === 'remove-buddy') {
+    await removeLocalBuddy(options)
   } else {
     printPlan(options)
   }

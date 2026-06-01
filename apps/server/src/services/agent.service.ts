@@ -171,6 +171,7 @@ export class AgentService {
     buddyMode?: BuddyMode
     allowedServerIds?: string[]
     ownerId: string
+    initialStatus?: 'running' | 'stopped'
   }) {
     // Create a bot user for the agent with the provided username.
     let botUser: Awaited<ReturnType<typeof this.deps.agentDao.createBotUser>>
@@ -217,12 +218,12 @@ export class AgentService {
       ownerId: data.ownerId,
     })
 
-    // Set initial status to running
-    await this.deps.agentDao.updateStatus(agent!.id, 'running')
+    const initialStatus = data.initialStatus ?? 'running'
+    await this.deps.agentDao.updateStatus(agent!.id, initialStatus)
 
     return {
       ...agent,
-      status: 'running' as const,
+      status: initialStatus,
       botUser: { ...botUser, avatarUrl: data.avatarUrl ?? botUser.avatarUrl },
     }
   }
@@ -434,8 +435,26 @@ export class AgentService {
 
     // TODO: Stop Docker container via AgentRuntime
     await this.deps.agentDao.updateStatus(id, 'stopped')
+    await this.deps.userDao.updateStatus(agent.userId, 'offline')
     this.deps.logger.info({ agentId: id }, 'Agent stopped')
 
+    return this.deps.agentDao.findById(id)
+  }
+
+  async markError(id: string, message?: string) {
+    const agent = await this.deps.agentDao.findById(id)
+    if (!agent) {
+      throw Object.assign(new Error('Agent not found'), { status: 404 })
+    }
+    const config = { ...((agent.config as Record<string, unknown>) ?? {}) }
+    if (message?.trim()) {
+      config.connectorLastError = message.trim().slice(0, 1000)
+      config.connectorLastErrorAt = new Date().toISOString()
+      await this.deps.agentDao.updateConfig(id, config)
+    }
+    await this.deps.agentDao.updateStatus(id, 'error')
+    await this.deps.userDao.updateStatus(agent.userId, 'offline')
+    this.deps.logger.warn({ agentId: id, error: message }, 'Agent marked error')
     return this.deps.agentDao.findById(id)
   }
 
