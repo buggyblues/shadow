@@ -8,6 +8,7 @@ import {
   mergeOpenClawConfigContent,
   removeCcConnectProjectConfigContent,
   removeOpenClawAccountConfigContent,
+  removeShadowOfficialCcConnectProviders,
 } from '../src/config-writers'
 
 describe('connector config writers', () => {
@@ -288,5 +289,27 @@ describe('connector config writers', () => {
     const parsed = parseToml(removeCcConnectProjectConfigContent(second, 'claude_buddy')) as any
     expect(parsed.projects.map((item: any) => item.name)).toEqual(['codex_buddy'])
     expect(parsed.projects[0].platforms[0].options.token).toBe('tok-2')
+  })
+
+  it('removes stale Shadow official providers from cc-connect native projects', () => {
+    const first = mergeCcConnectConfigContent('', {
+      projectName: 'codex_buddy',
+      workDir: '.',
+      agentType: 'codex',
+      token: 'tok-1',
+      serverUrl: 'https://shadow.example.com',
+      modelProvider: {
+        id: 'shadow-official',
+        label: 'Shadow official',
+        baseUrl: 'https://shadow.example.com/api/ai/v1',
+        apiKey: 'sk-test',
+        model: 'deepseek-v4-flash',
+      },
+    })
+    const next = removeShadowOfficialCcConnectProviders(first)
+    const parsed = parseToml(next) as any
+    expect(parsed.projects[0].agent.options.provider).toBeUndefined()
+    expect(parsed.projects[0].agent.options.model).toBeUndefined()
+    expect(parsed.projects[0].agent.providers).toBeUndefined()
   })
 })
