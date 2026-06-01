@@ -4065,6 +4065,7 @@
     "connectorConnectionDeleteUnavailable": "目前版本的桌面端還不能刪除本機連線，請更新後再試。",
     "connectorConnectionRunningState": "已連接",
     "connectorConnectionStoppedState": "已關閉",
+    "connectorConnectionErrorState": "異常",
     "connectorConnectionDeleteConfirm": "要從這台電腦刪除 {{name}} 的本機連線嗎？Buddy 會保留在社群裡，只移除本機執行環境連線。",
     "connectorDeleteLocalTitle": "刪除本機連線",
     "connectorDeleteLocalDesc": "將 {{name}} 從這台電腦的執行環境設定中移除。社群裡的 Buddy 會保留。",

@@ -4065,6 +4065,7 @@
     "connectorConnectionDeleteUnavailable": "This desktop build cannot remove local connections yet. Update the app and try again.",
     "connectorConnectionRunningState": "Connected",
     "connectorConnectionStoppedState": "Off",
+    "connectorConnectionErrorState": "Error",
     "connectorConnectionDeleteConfirm": "Remove {{name}} from this computer? The Buddy stays in the community, but this local runtime connection will be removed.",
     "connectorDeleteLocalTitle": "Remove local connection",
     "connectorDeleteLocalDesc": "Remove {{name}} from this computer's runtime configuration. The community Buddy will stay available.",

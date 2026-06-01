@@ -4065,6 +4065,7 @@
     "connectorConnectionDeleteUnavailable": "当前版本的桌面端还不能删除本地连接，请更新后重试。",
     "connectorConnectionRunningState": "已连接",
     "connectorConnectionStoppedState": "已关闭",
+    "connectorConnectionErrorState": "异常",
     "connectorConnectionDeleteConfirm": "要从这台电脑删除 {{name}} 的本地连接吗？Buddy 会保留在社区里，只移除本机运行时连接。",
     "connectorDeleteLocalTitle": "删除本地连接",
     "connectorDeleteLocalDesc": "将 {{name}} 从这台电脑的运行时配置中移除。社区里的 Buddy 会保留。",
