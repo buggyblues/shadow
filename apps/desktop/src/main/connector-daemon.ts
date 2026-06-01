@@ -376,7 +376,9 @@ function computerName(computer: ConnectorComputerView | undefined, fallback: str
 }
 
 export async function refreshConnectorConnections(): Promise<ConnectorConnection[]> {
-  const localWorkDirs = (await readDesktopSettingsAsync()).connectorBuddyWorkDirs
+  const settings = await readDesktopSettingsAsync()
+  const localWorkDirs = settings.connectorBuddyWorkDirs
+  const locallyDeleted = new Set(settings.connectorDeletedConnectionIds)
   const [computerData, agents] = await Promise.all([
     fetchCommunityJson<{ computers: ConnectorComputerView[] }>('/api/connector/computers'),
     fetchCommunityJson<CommunityAgentView[]>('/api/agents'),
@@ -409,6 +411,7 @@ export async function refreshConnectorConnections(): Promise<ConnectorConnection
       }
     })
     .filter((connection): connection is ConnectorConnection => Boolean(connection))
+    .filter((connection) => !locallyDeleted.has(connection.agentId))
   broadcastConnectorState()
   return connectorConnections
 }
@@ -501,6 +504,37 @@ function connectorTargetForRuntime(runtimeId: string): 'openclaw' | 'hermes' | '
   if (runtimeId === 'openclaw') return 'openclaw'
   if (runtimeId === 'hermes') return 'hermes'
   return 'cc-connect'
+}
+
+function isCommunityRouteNotFound(error: unknown): boolean {
+  return error instanceof Error && /\bfailed \(404\)\b/.test(error.message)
+}
+
+async function removeLocalConnectorRuntimeConfig(connection: ConnectorConnection): Promise<void> {
+  const projectName = connection.username?.trim() || connection.label.trim()
+  if (!projectName) throw new Error('Missing local Connector project name')
+  await runConnectorCliJson<{ ok: boolean }>(
+    ['remove-buddy', '--runtime', connection.runtimeId, '--project-name', projectName, '--json'],
+    30_000,
+  )
+}
+
+async function rememberDeletedConnectorConnection(agentId: string): Promise<void> {
+  const settings = await readDesktopSettingsAsync()
+  if (settings.connectorDeletedConnectionIds.includes(agentId)) return
+  await saveDesktopSettingsAsync({
+    connectorDeletedConnectionIds: [...settings.connectorDeletedConnectionIds, agentId],
+  })
+}
+
+async function forgetDeletedConnectorConnection(agentId: string): Promise<void> {
+  const settings = await readDesktopSettingsAsync()
+  if (!settings.connectorDeletedConnectionIds.includes(agentId)) return
+  await saveDesktopSettingsAsync({
+    connectorDeletedConnectionIds: settings.connectorDeletedConnectionIds.filter(
+      (item) => item !== agentId,
+    ),
+  })
 }
 
 function summarizeConnectorDiagnostics(diagnostics: ConnectorDiagnosticsView | null): string {
