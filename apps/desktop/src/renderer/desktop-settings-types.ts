@@ -8,6 +8,7 @@ export interface DesktopRuntimeSettings {
   connectorAutoStart: boolean
   connectorWorkDir: string
   connectorBuddyWorkDirs: Record<string, string>
+  connectorDeletedConnectionIds: string[]
   connectorRuntimeNotifications: Record<string, boolean>
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
