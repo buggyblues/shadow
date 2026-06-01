@@ -72,9 +72,9 @@ describe('process-manager', () => {
     const handler = mockIpcHandlers.get('desktop:startAgent')!
     const mockEvent = { sender: { send: vi.fn() } }
 
-    expect(() => handler(mockEvent, { name: 'test', scriptPath: '/malicious/script.js' })).toThrow(
-      'Agent script must be within the application directory',
-    )
+    await expect(
+      handler(mockEvent, { name: 'test', scriptPath: '/malicious/script.js' }),
+    ).rejects.toThrow('Agent script must be within the application directory')
   })
 
   it('should return agent status for running process', async () => {
