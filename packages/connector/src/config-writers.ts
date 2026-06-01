@@ -387,3 +387,34 @@ export function removeCcConnectProjectConfigContent(existing: string, projectNam
   )
   return ensureTrailingNewline(stringifyToml(root))
 }
+
+export function removeShadowOfficialCcConnectProviders(existing: string): string {
+  const root = parseTomlRoot(existing, 'cc-connect')
+  let changed = false
+  const projects = tomlArray(root.projects).map((project) => {
+    const agent = asTomlTable(project.agent)
+    const options = asTomlTable(agent.options)
+    if (options.provider === 'shadow-official') {
+      delete options.provider
+      delete options.model
+      changed = true
+    }
+    agent.options = options
+    const providers = tomlArray(agent.providers).filter((provider) => {
+      const keep = provider.name !== 'shadow-official'
+      if (!keep) changed = true
+      return keep
+    })
+    if (providers.length > 0) {
+      agent.providers = providers
+    } else if (agent.providers !== undefined) {
+      delete agent.providers
+      changed = true
+    }
+    project.agent = agent
+    return project
+  })
+  if (!changed) return ensureTrailingNewline(existing)
+  root.projects = projects
+  return ensureTrailingNewline(stringifyToml(root))
+}

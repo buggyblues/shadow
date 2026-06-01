@@ -4065,6 +4065,7 @@
     "connectorConnectionDeleteUnavailable": "このデスクトップ版ではまだローカル接続を削除できません。アプリを更新してから再試行してください。",
     "connectorConnectionRunningState": "接続済み",
     "connectorConnectionStoppedState": "オフ",
+    "connectorConnectionErrorState": "エラー",
     "connectorConnectionDeleteConfirm": "{{name}} をこのコンピューターから削除しますか？Buddy はコミュニティに残り、このローカルランタイム接続だけが削除されます。",
     "connectorDeleteLocalTitle": "ローカル接続を削除",
     "connectorDeleteLocalDesc": "{{name}} をこのコンピューターのランタイム設定から削除します。コミュニティの Buddy は残ります。",

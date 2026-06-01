@@ -15,6 +15,7 @@ import {
   mergeOpenClawConfigContent,
   removeCcConnectProjectConfigContent,
   removeOpenClawAccountConfigContent,
+  removeShadowOfficialCcConnectProviders,
 } from './config-writers.js'
 import { createConnectorPlan, type ShadowConnectorTarget } from './index.js'
 import {
@@ -1324,6 +1325,7 @@ interface AppliedDaemonJob {
   target: ShadowConnectorTarget
   agentType?: string
   bridgeStart: boolean
+  waitForProjectReady?: boolean
 }
 
 function stringRecord(value: unknown): Record<string, string> {
@@ -2039,7 +2041,13 @@ async function applyRemoveDaemonJob(
       removeOpenClawAccountConfigContent(readExisting(configPath), projectName),
       baseOptions.dryRun,
     )
-    return { runtimeId, projectName, target: 'openclaw', bridgeStart: true }
+    return {
+      runtimeId,
+      projectName,
+      target: 'openclaw',
+      bridgeStart: true,
+      waitForProjectReady: false,
+    }
   }
 
   if (runtimeId === 'hermes') {
@@ -2069,6 +2077,7 @@ async function applyRemoveDaemonJob(
     target: 'cc-connect',
     agentType: ccAgentTypeForRuntime(runtimeId),
     bridgeStart: true,
+    waitForProjectReady: false,
   }
 }
 
@@ -2197,6 +2206,18 @@ async function removeLocalBuddy(options: CliOptions): Promise<void> {
   console.log(`Removed ${projectName} from ${target}`)
 }
 
+async function sanitizeCcConnectNativeProviders(options: CliOptions): Promise<boolean> {
+  const configPath = resolve(homedir(), '.cc-connect/config.toml')
+  const existing = readExisting(configPath)
+  if (!existing.trim()) return false
+  const next = removeShadowOfficialCcConnectProviders(existing)
+  if (next === existing || next.trim() === existing.trim()) return false
+  await releaseCcConnectConfigLock(options.dryRun)
+  writeFile(configPath, next, options.dryRun)
+  console.log('[daemon] removed stale Shadow official provider from cc-connect native projects')
+  return true
+}
+
 function daemonBridgeKey(result: AppliedDaemonJob): string {
   if (result.target === 'hermes') return `hermes:${safeConnectorProfileName(result.projectName)}`
   return result.target
@@ -2297,7 +2318,9 @@ async function applyDaemonJobsBatch(jobs: DaemonJob[], options: CliOptions): Pro
       await startDaemonBridge(
         result,
         options,
-        results.map((item) => item.projectName),
+        results
+          .filter((item) => item.waitForProjectReady !== false)
+          .map((item) => item.projectName),
       )
     } catch (error) {
       bridgeErrors.set(key, error instanceof Error ? error.message : String(error))
@@ -2340,6 +2363,13 @@ async function runDaemon(options: CliOptions): Promise<void> {
 
   console.log(`[daemon] connecting to ${normalizeServerUrl(options.serverUrl)}`)
   try {
+    await sanitizeCcConnectNativeProviders(options).catch((error) => {
+      console.warn(
+        `[daemon] cc-connect provider cleanup failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    })
     do {
       await heartbeat(options)
       await pollJobs(options)

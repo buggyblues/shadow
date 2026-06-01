@@ -617,6 +617,7 @@ export async function createConnectorBuddy(input: CreateConnectorBuddyInput): Pr
   })
   const agentId = result?.agent?.id
   let connectionError: string | null = null
+  if (agentId) await forgetDeletedConnectorConnection(agentId)
   if (result?.job?.id) {
     try {
       await waitForConnectorJob(result.job.id)
@@ -646,6 +647,7 @@ export async function setConnectorConnectionEnabled(
   const normalizedAgentId = typeof agentId === 'string' ? agentId.trim() : ''
   if (!normalizedAgentId) throw new Error('Missing Buddy id')
   if (enabled) {
+    await forgetDeletedConnectorConnection(normalizedAgentId)
     if (!daemonProcess || daemonProcess.killed) {
       throw new Error('Connector is not running. Start the Connector before connecting this Buddy.')
     }
@@ -687,6 +689,23 @@ export async function setConnectorConnectionEnabled(
   return refreshConnectorConnections()
 }
 
+async function reconnectRunningConnectorConnections(): Promise<void> {
+  await delay(1500)
+  const connections = await refreshConnectorConnections()
+  for (const connection of connections.filter((item) => item.status === 'running')) {
+    try {
+      appendLog(`[desktop] reconnecting ${connection.label} on ${connection.runtimeLabel}`)
+      await setConnectorConnectionEnabled(connection.agentId, true)
+    } catch (error) {
+      appendLog(
+        `[desktop] reconnect failed for ${connection.label}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    }
+  }
+}
+
 export async function deleteConnectorConnection(input: {
   agentId: string
   deleteCloudBuddy?: boolean
@@ -702,19 +721,37 @@ export async function deleteConnectorConnection(input: {
     throw new Error('This Buddy is not bound to a local Connector runtime yet.')
   }
 
-  const result = await fetchCommunityJson<{
-    job?: ConnectorJobView | null
-  }>(
-    `/api/connector/computers/${encodeURIComponent(connection.computerId)}/buddies/${encodeURIComponent(normalizedAgentId)}`,
-    {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deleteCloudBuddy }),
-    },
-  )
-  if (!result) throw new Error('Community authorization is required to delete this connection.')
-  if (result?.job?.id && daemonProcess && !daemonProcess.killed) {
-    await waitForConnectorJob(result.job.id, 45_000)
+  try {
+    const result = await fetchCommunityJson<{
+      job?: ConnectorJobView | null
+    }>(
+      `/api/connector/computers/${encodeURIComponent(connection.computerId)}/buddies/${encodeURIComponent(normalizedAgentId)}`,
+      {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteCloudBuddy }),
+      },
+    )
+    if (!result) throw new Error('Community authorization is required to delete this connection.')
+    if (result?.job?.id && daemonProcess && !daemonProcess.killed) {
+      await waitForConnectorJob(result.job.id, 45_000)
+    }
+  } catch (error) {
+    if (!isCommunityRouteNotFound(error)) throw error
+    appendLog(
+      '[desktop] server does not support connector delete route yet; removing local runtime config directly',
+    )
+    await removeLocalConnectorRuntimeConfig(connection)
+    if (deleteCloudBuddy) {
+      await fetchCommunityJson(`/api/agents/${encodeURIComponent(normalizedAgentId)}`, {
+        method: 'DELETE',
+      })
+    } else {
+      await fetchCommunityJson(`/api/agents/${encodeURIComponent(normalizedAgentId)}/stop`, {
+        method: 'POST',
+      }).catch(() => null)
+      await rememberDeletedConnectorConnection(normalizedAgentId)
+    }
   }
 
   const connectorBuddyWorkDirs = { ...settings.connectorBuddyWorkDirs }
@@ -722,6 +759,9 @@ export async function deleteConnectorConnection(input: {
   await saveDesktopSettingsAsync({ connectorBuddyWorkDirs })
   connectorConnections = connectorConnections.filter((item) => item.agentId !== normalizedAgentId)
   broadcastConnectorState()
+  void reconnectRunningConnectorConnections().catch((error) => {
+    appendLog(`[desktop] reconnect pass failed: ${error instanceof Error ? error.message : error}`)
+  })
   return refreshConnectorConnections()
 }
 
@@ -879,6 +919,11 @@ export async function startConnectorDaemon(
   if (daemonProcess && !daemonProcess.killed) {
     setConnectorProgress('running', 100, 'Connector is running')
     void refreshConnectorConnections().catch(() => null)
+    void reconnectRunningConnectorConnections().catch((error) => {
+      appendLog(
+        `[desktop] reconnect pass failed: ${error instanceof Error ? error.message : error}`,
+      )
+    })
     return getConnectorDaemonState()
   }
 
@@ -947,6 +992,9 @@ export async function startConnectorDaemon(
 
   setConnectorProgress('running', 100, 'Connector is running')
   void refreshConnectorConnections().catch(() => null)
+  void reconnectRunningConnectorConnections().catch((error) => {
+    appendLog(`[desktop] reconnect pass failed: ${error instanceof Error ? error.message : error}`)
+  })
   return getConnectorDaemonState()
 }
 

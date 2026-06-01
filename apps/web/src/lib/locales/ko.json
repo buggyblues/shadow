@@ -4065,6 +4065,7 @@
     "connectorConnectionDeleteUnavailable": "이 데스크톱 빌드에서는 아직 로컬 연결을 삭제할 수 없습니다. 앱을 업데이트한 뒤 다시 시도하세요.",
     "connectorConnectionRunningState": "연결됨",
     "connectorConnectionStoppedState": "꺼짐",
+    "connectorConnectionErrorState": "오류",
     "connectorConnectionDeleteConfirm": "{{name}}의 로컬 연결을 이 컴퓨터에서 삭제할까요? Buddy는 커뮤니티에 남고 이 로컬 런타임 연결만 제거됩니다.",
     "connectorDeleteLocalTitle": "로컬 연결 삭제",
     "connectorDeleteLocalDesc": "{{name}}을(를) 이 컴퓨터의 런타임 설정에서 제거합니다. 커뮤니티 Buddy는 유지됩니다.",

@@ -570,6 +570,7 @@ export function ConnectorSettingsPanel({
           <div className="grid gap-3">
             {connectorConnections.map((connection) => {
               const connectionRunning = connection.status === 'running'
+              const connectionErrored = connection.status === 'error'
               const connectionBusy = connectorConnectionBusyId === connection.agentId
               const connectionError = connectorConnectionErrors[connection.agentId]
               const workDir = connectionWorkDirs[connection.agentId] ?? connection.workDir
@@ -656,9 +657,11 @@ export function ConnectorSettingsPanel({
                     </Button>
                     <label className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-3 text-xs font-semibold text-text-secondary">
                       <span>
-                        {connectionRunning
-                          ? t('desktop.connectorConnectionRunningState')
-                          : t('desktop.connectorConnectionStoppedState')}
+                        {connectionErrored
+                          ? t('desktop.connectorConnectionErrorState')
+                          : connectionRunning
+                            ? t('desktop.connectorConnectionRunningState')
+                            : t('desktop.connectorConnectionStoppedState')}
                       </span>
                       <Switch
                         checked={connectionRunning}
