@@ -325,6 +325,9 @@ function errorResponse(c: Context, error: unknown) {
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
 app.get('/assets/*', serveStatic({ root: './dist/client' }))
+if (process.env.WARBUDDY_VITE_DEV_SERVER_URL) {
+  app.get('/src/client/assets/*', serveStatic({ root: '.' }))
+}
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/maps', (c) => c.json({ maps: listMaps() }))
