@@ -138,7 +138,7 @@ export const useUIStore = create<UIState>((set) => ({
 applyTheme(savedTheme)
 
 // Listen for system theme changes when in "system" mode
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+window.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener('change', () => {
   const currentTheme = useUIStore.getState().theme
   if (currentTheme === 'system') {
     applyTheme('system')

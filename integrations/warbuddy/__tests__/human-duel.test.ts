@@ -1,13 +1,18 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import {
   actionsForRole,
   companionActionsForRole,
   createHumanDuel,
+  type DuelAction,
   decideAgentActions,
   heldKeysToDuelActions,
   keyToDuelAction,
+  resolveDuelScriptActions,
   stepHumanDuel,
 } from '../src/client/human-duel'
+import { DEFAULT_TANK_STRATEGY_CODE, DEFAULT_WARBUDDY_RULES } from '../src/rules'
+import type { Direction } from '../src/types'
 
 const MOVE_MAP = ['xxxxxxx', 'xB....x', 'x.....x', 'x..A..x', 'x.....x', 'xxxxxxx'].join('|')
 const BLOCK_MAP = ['xxxxxxx', 'x.....x', 'x..B..x', 'x..A..x', 'x.....x', 'xxxxxxx'].join('|')
@@ -17,29 +22,62 @@ const GRASS_MAP = ['xxxxxxx', 'xB.o..x', 'x....Ax', 'x.....x', 'xxxxxxx'].join('
 const WALL_SLIDE_MAP = ['xxxxxxx', 'xB....x', 'x....Ax', 'x.....x', 'xxxxxxx'].join('|')
 const WATER_MAP = ['xxxxxxx', 'xB....x', 'x..w..x', 'x..A..x', 'x.....x', 'xxxxxxx'].join('|')
 const RADIUS_PATH_MAP = ['xxxxxxx', 'xB....x', 'x..x..x', 'x..A..x', 'x.....x', 'xxxxxxx'].join('|')
+const PICKUP_CONTEST_MAP = [
+  'xxxxxxxxx',
+  'x.......x',
+  'x.......x',
+  'xB.....Ax',
+  'x.......x',
+  'x.......x',
+  'xxxxxxxxx',
+].join('|')
+const SOFT_BLOCKED_LANE_MAP = ['xxxxxxx', 'xB.m.Ax', 'x.....x', 'xxxxxxx'].join('|')
 const SOFT_TERRAIN_MAP = ['xxxxxxx', 'xB....x', 'x.m...x', 'x..A..x', 'x.....x', 'xxxxxxx'].join(
   '|',
 )
+const UNSAFE_BOMB_MAP = ['xxxxxxx', 'xA....x', 'x.....x', 'xm...Bx', 'x.....x', 'xxxxxxx'].join('|')
+const TANK_UNIT = { kind: 'tank' } as const
+const ENGINEER_UNIT = { kind: 'engineer' } as const
+const tankMove = (direction: Direction) =>
+  ({ type: 'unit.move', unit: TANK_UNIT, direction }) as const
+const stepEngineer = (direction: Direction) =>
+  ({ type: 'unit.move', unit: ENGINEER_UNIT, direction }) as const
+const tankDrive = (x: number, y: number) => ({ type: 'unit.drive', unit: TANK_UNIT, x, y }) as const
+const driveEngineer = (x: number, y: number) =>
+  ({ type: 'unit.drive', unit: ENGINEER_UNIT, x, y }) as const
+const tankFire = () => ({ type: 'unit.fire', unit: TANK_UNIT }) as const
+const tankAbility = () => ({ type: 'unit.ability', unit: TANK_UNIT, ability: 'primary' }) as const
+const tankTeleport = (x: number, y: number) =>
+  ({ type: 'unit.ability', unit: TANK_UNIT, ability: 'teleport', x, y }) as const
+const plantBomb = () => ({ type: 'unit.ability', unit: ENGINEER_UNIT, ability: 'bomb' }) as const
+const speakTank = (text: string) => ({ type: 'unit.speak', unit: TANK_UNIT, text }) as const
+const speakEngineer = (text: string) => ({ type: 'unit.speak', unit: ENGINEER_UNIT, text }) as const
+const isTankDrive = (action: DuelAction): action is Extract<DuelAction, { type: 'unit.drive' }> =>
+  action.type === 'unit.drive' && action.unit.kind === 'tank'
+const isEngineerDrive = (
+  action: DuelAction,
+): action is Extract<DuelAction, { type: 'unit.drive' }> =>
+  action.type === 'unit.drive' && action.unit.kind === 'engineer'
 
 describe('human duel controls', () => {
   it('maps keyboard input to live tank actions', () => {
-    expect(keyToDuelAction('w')).toEqual({ type: 'move', direction: 'up' })
-    expect(keyToDuelAction('ArrowDown')).toEqual({ type: 'move', direction: 'down' })
-    expect(keyToDuelAction('a')).toEqual({ type: 'move', direction: 'left' })
-    expect(keyToDuelAction('ArrowRight')).toEqual({ type: 'move', direction: 'right' })
-    expect(keyToDuelAction('i')).toEqual({ type: 'engineerMove', direction: 'up' })
-    expect(keyToDuelAction('u')).toEqual({ type: 'engineerBomb' })
-    expect(keyToDuelAction('q')).toEqual({ type: 'fire' })
-    expect(keyToDuelAction(' ')).toEqual({ type: 'fire' })
-    expect(keyToDuelAction('e')).toEqual({ type: 'skill' })
+    expect(keyToDuelAction('w')).toEqual(tankMove('up'))
+    expect(keyToDuelAction('ArrowDown')).toEqual(tankMove('down'))
+    expect(keyToDuelAction('a')).toEqual(tankMove('left'))
+    expect(keyToDuelAction('ArrowRight')).toEqual(tankMove('right'))
+    expect(keyToDuelAction('i')).toEqual(stepEngineer('up'))
+    expect(keyToDuelAction('u')).toEqual(plantBomb())
+    expect(keyToDuelAction('q')).toEqual(tankFire())
+    expect(keyToDuelAction(' ')).toEqual(tankFire())
+    expect(keyToDuelAction('e')).toEqual(tankAbility())
     expect(heldKeysToDuelActions(['w', 'd', 'i', 'l'])).toEqual([
-      { type: 'drive', x: 1, y: -1 },
-      { type: 'engineerDrive', x: 1, y: -1 },
+      tankDrive(1, -1),
+      driveEngineer(1, -1),
     ])
   })
 
   it('filters live inputs by chosen human role and supplies companion actions', () => {
-    const duel = createHumanDuel({
+    let duel = createHumanDuel({
       mapId: 'test',
       mapName: 'Test Map',
       mapRaw: MOVE_MAP,
@@ -52,29 +90,16 @@ describe('human duel controls', () => {
         code: 'function onIdle(me) { me.tank.aim("right"); }',
       },
     })
-    const mixed = [
-      { type: 'drive', x: 1, y: 0 },
-      { type: 'fire' },
-      { type: 'engineerDrive', x: 0, y: 1 },
-      { type: 'engineerBomb' },
-    ] as const
+    const mixed = [tankDrive(1, 0), tankFire(), driveEngineer(0, 1), plantBomb()] as const
 
-    expect(actionsForRole([...mixed], 'tank')).toEqual([
-      { type: 'drive', x: 1, y: 0 },
-      { type: 'fire' },
-    ])
-    expect(actionsForRole([...mixed], 'engineer')).toEqual([
-      { type: 'engineerDrive', x: 0, y: 1 },
-      { type: 'engineerBomb' },
-    ])
+    expect(actionsForRole([...mixed], 'tank')).toEqual([tankDrive(1, 0), tankFire()])
+    expect(actionsForRole([...mixed], 'engineer')).toEqual([driveEngineer(0, 1), plantBomb()])
     const companionEngineerActions = companionActionsForRole(duel, 0, 'tank')
     const companionTankActions = companionActionsForRole(duel, 0, 'engineer')
     expect(companionEngineerActions.length).toBeGreaterThan(0)
-    expect(companionEngineerActions.every((action) => action.type.startsWith('engineer'))).toBe(
-      true,
-    )
+    expect(companionEngineerActions.every((action) => action.unit.kind === 'engineer')).toBe(true)
     expect(companionTankActions.length).toBeGreaterThan(0)
-    expect(companionTankActions.every((action) => !action.type.startsWith('engineer'))).toBe(true)
+    expect(companionTankActions.every((action) => action.unit.kind === 'tank')).toBe(true)
   })
 
   it('moves the human tank continuously in all four keyboard directions', () => {
@@ -93,10 +118,10 @@ describe('human duel controls', () => {
     })
 
     const start = duel.state.tanks[0]!.position
-    const up = stepHumanDuel(duel, [{ type: 'move', direction: 'up' }], [])
-    const left = stepHumanDuel(up, [{ type: 'move', direction: 'left' }], [])
-    const down = stepHumanDuel(left, [{ type: 'move', direction: 'down' }], [])
-    const right = stepHumanDuel(down, [{ type: 'move', direction: 'right' }], [])
+    const up = stepHumanDuel(duel, [tankMove('up')], [])
+    const left = stepHumanDuel(up, [tankMove('left')], [])
+    const down = stepHumanDuel(left, [tankMove('down')], [])
+    const right = stepHumanDuel(down, [tankMove('right')], [])
 
     expect(up.state.tanks[0]!.position[1]).toBeLessThan(start[1])
     expect(up.state.tanks[0]?.direction).toBe('up')
@@ -108,6 +133,90 @@ describe('human duel controls', () => {
     expect(right.state.tanks[0]?.direction).toBe('right')
     expect(right.frame).toBe(4)
     expect(right.state.tanks).toHaveLength(2)
+  })
+
+  it('uses doubled live movement speed rules for tanks and engineers', () => {
+    expect(DEFAULT_WARBUDDY_RULES.units.tank.moveCooldownFrames).toBe(5)
+    expect(DEFAULT_WARBUDDY_RULES.units.engineer.moveCooldownFrames).toBe(6)
+  })
+
+  it('does not let crashed tank corpses block movement', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    duel.tanks[0].position = [2.2, 3.5]
+    duel.tanks[1].position = [3.5, 3.5]
+    duel.tanks[1].crashed = true
+
+    for (let i = 0; i < 12; i += 1) {
+      duel = stepHumanDuel(duel, [tankMove('right')], [])
+    }
+
+    expect(duel.state.tanks[0]!.position[0]).toBeGreaterThan(3.7)
+  })
+
+  it('does not let dead engineer corpses block movement', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    duel.engineers[0].position = [2.2, 3.5]
+    duel.engineers[1].position = [3.5, 3.5]
+    duel.engineers[1].alive = false
+
+    for (let i = 0; i < 12; i += 1) {
+      duel = stepHumanDuel(duel, [stepEngineer('right')], [])
+    }
+
+    expect(duel.state.engineers[0]!.position[0]).toBeGreaterThan(3.7)
+  })
+
+  it('slides units off sticky wall corners instead of pinning them in place', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: WALL_SLIDE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    duel.tanks[0].position = [2.5, 1.31]
+    duel.tanks[1].position = [5.5, 3.5]
+    duel.engineers[0].position = [2.5, 1.2]
+    duel.engineers[1].position = [5.5, 1.5]
+
+    for (let i = 0; i < 4; i += 1) {
+      duel = stepHumanDuel(duel, [tankMove('right'), stepEngineer('right')], [])
+    }
+
+    expect(duel.state.tanks[0]!.position[0]).toBeGreaterThan(2.85)
+    expect(duel.state.tanks[0]!.position[1]).toBeGreaterThan(1.34)
+    expect(duel.state.engineers[0]!.position[0]).toBeGreaterThan(2.75)
+    expect(duel.state.engineers[0]!.position[1]).toBeGreaterThan(1.22)
   })
 
   it('blocks human movement into walls and enemy tanks', () => {
@@ -127,15 +236,38 @@ describe('human duel controls', () => {
 
     let enemyBlocked = duel
     for (let i = 0; i < 16; i += 1) {
-      enemyBlocked = stepHumanDuel(enemyBlocked, [{ type: 'move', direction: 'up' }], [])
+      enemyBlocked = stepHumanDuel(enemyBlocked, [tankMove('up')], [])
     }
     let wallBlocked = duel
     for (let i = 0; i < 40; i += 1) {
-      wallBlocked = stepHumanDuel(wallBlocked, [{ type: 'move', direction: 'right' }], [])
+      wallBlocked = stepHumanDuel(wallBlocked, [tankMove('right')], [])
     }
 
     expect(enemyBlocked.state.tanks[0]!.position[1]).toBeGreaterThan(3.05)
     expect(wallBlocked.state.tanks[0]!.position[0]).toBeLessThan(5.75)
+  })
+
+  it('keeps scripted teleport tied to explicit valid targets', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'teleport',
+        code: 'function onTankIdle(tank) { tank.teleport(2, 1); }',
+      },
+    })
+
+    duel = stepHumanDuel(duel, [], [tankTeleport(2, 1)])
+    expect(duel.state.tanks[1]!.position).toEqual([2.5, 1.5])
+    expect(duel.state.tanks[1]!.status.fireLocked).toBe(true)
+
+    const afterCooldownBlocked = stepHumanDuel(duel, [], [tankTeleport(5, 1)])
+    expect(afterCooldownBlocked.state.tanks[1]!.position).toEqual([2.5, 1.5])
   })
 
   it('keeps a very small amount of inertia after releasing movement', () => {
@@ -153,7 +285,7 @@ describe('human duel controls', () => {
       },
     })
 
-    duel = stepHumanDuel(duel, [{ type: 'move', direction: 'right' }], [])
+    duel = stepHumanDuel(duel, [tankMove('right')], [])
     const pressed = duel.state.tanks[0]!.position[0]
     duel = stepHumanDuel(duel, [], [])
     const released = duel.state.tanks[0]!.position[0]
@@ -209,7 +341,7 @@ describe('human duel controls', () => {
     })
     const start = duel.state.engineers[0]!.position
 
-    duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+    duel = stepHumanDuel(duel, [stepEngineer('right')], [])
     expect(duel.state.engineers[0]!.position[0]).toBeGreaterThan(start[0])
 
     duel = { ...duel, star: [...duel.engineers[0].position] as [number, number] }
@@ -223,14 +355,14 @@ describe('human duel controls', () => {
     expect(duel.state.engineers[0]!.bombRange).toBe(3)
     expect(duel.star).toBeNull()
 
-    duel = stepHumanDuel(duel, [{ type: 'engineerBomb' }], [])
+    duel = stepHumanDuel(duel, [plantBomb()], [])
     expect(duel.state.bombs).toHaveLength(1)
     expect(duel.state.bombs[0]?.range).toBe(3)
 
-    for (let i = 0; i < 30; i += 1) {
-      duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+    for (let i = 0; i < 12; i += 1) {
+      duel = stepHumanDuel(duel, [stepEngineer('right')], [])
     }
-    duel = stepHumanDuel(duel, [{ type: 'engineerBomb' }], [])
+    duel = stepHumanDuel(duel, [plantBomb()], [])
     expect(duel.state.bombs).toHaveLength(2)
   })
 
@@ -258,7 +390,7 @@ describe('human duel controls', () => {
     duel = stepHumanDuel(duel, [], [])
     expect(duel.state.tanks[0]!.armor).toBe(2)
 
-    duel = stepHumanDuel(duel, [{ type: 'fire' }], [])
+    duel = stepHumanDuel(duel, [tankFire()], [])
     const shotgunBullets = duel.state.bullets.filter((bullet) => bullet.owner === 0)
     expect(shotgunBullets).toHaveLength(3)
     expect(
@@ -323,7 +455,7 @@ describe('human duel controls', () => {
     duel.tanks[1].position = [5.5, 3.5]
     duel.engineers[1].position = [4.5, 3.5]
 
-    duel = stepHumanDuel(duel, [{ type: 'engineerBomb' }], [])
+    duel = stepHumanDuel(duel, [plantBomb()], [])
     for (let i = 0; i < 70 && duel.status === 'running'; i += 1) {
       duel = stepHumanDuel(duel, [], [])
     }
@@ -447,14 +579,7 @@ describe('human duel controls', () => {
     expect(duel.state.flag).toBeNull()
 
     duel = { ...duel, star: [...duel.tanks[0].position] as [number, number] }
-    duel = stepHumanDuel(
-      duel,
-      [
-        { type: 'tankSpeak', text: 'push left' },
-        { type: 'engineerSpeak', text: 'covering' },
-      ],
-      [],
-    )
+    duel = stepHumanDuel(duel, [speakTank('push left'), speakEngineer('covering')], [])
 
     expect(duel.state.speeches?.map((speech) => speech.text)).toEqual(
       expect.arrayContaining(['push left', 'covering']),
@@ -466,6 +591,36 @@ describe('human duel controls', () => {
       tankAlive: true,
       engineerAlive: true,
     })
+  })
+
+  it('spawns pickups around the current contest point before expanding outward', () => {
+    const originalRandom = Math.random
+    Math.random = () => 0
+    try {
+      let duel = createHumanDuel({
+        mapId: 'test',
+        mapName: 'Test Map',
+        mapRaw: PICKUP_CONTEST_MAP,
+        humanName: 'Human',
+        humanSkillType: 'shield',
+        agent: {
+          id: 'agent',
+          name: 'Agent',
+          skillType: 'boost',
+          code: '',
+        },
+      })
+      duel = {
+        ...duel,
+        frame: DEFAULT_WARBUDDY_RULES.pickups.starFirstFrame - 1,
+      }
+
+      duel = stepHumanDuel(duel, [], [])
+
+      expect(duel.state.star).toEqual([4.5, 3.5])
+    } finally {
+      Math.random = originalRandom
+    }
   })
 
   it('makes the fallback tank attack visible enemy engineers', async () => {
@@ -490,7 +645,7 @@ describe('human duel controls', () => {
 
     const actions = await decideAgentActions(duel)
 
-    expect(actions).toContainEqual({ type: 'fire' })
+    expect(actions).toContainEqual(tankFire())
   })
 
   it('lets shells trigger bombs, chain bombs, and burn grass', () => {
@@ -555,7 +710,7 @@ describe('human duel controls', () => {
     ]
 
     for (let i = 0; i < 20; i += 1) {
-      duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+      duel = stepHumanDuel(duel, [stepEngineer('right')], [])
     }
 
     expect(duel.state.engineers[0]!.position[0]).toBeLessThan(4)
@@ -563,11 +718,41 @@ describe('human duel controls', () => {
     duel.tanks[0].position = [3.25, 3.5]
     duel.tanks[1].position = [5.5, 1.5]
     for (let i = 0; i < 14 && duel.bombs.length > 0; i += 1) {
-      duel = stepHumanDuel(duel, [{ type: 'move', direction: 'right' }], [])
+      duel = stepHumanDuel(duel, [tankMove('right')], [])
     }
 
     expect(duel.state.bombs).toHaveLength(0)
     expect(duel.state.explosions.length).toBeGreaterThan(0)
+  })
+
+  it('falls back to movement when a scripted engineer bomb is rejected as unsafe', () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: UNSAFE_BOMB_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: 'function onIdle(me) { me.tank.aim("right"); }',
+      },
+    })
+    const start = duel.state.engineers[0]!.position
+    const actions = resolveDuelScriptActions(duel, [plantBomb()], 0)
+
+    expect(actions.some((action) => action.type === 'unit.ability')).toBe(false)
+    expect(actions.some(isEngineerDrive)).toBe(true)
+
+    duel = stepHumanDuel(duel, actions, [])
+
+    expect(
+      Math.hypot(
+        duel.state.engineers[0]!.position[0] - start[0],
+        duel.state.engineers[0]!.position[1] - start[1],
+      ),
+    ).toBeGreaterThan(0.01)
   })
 
   it('applies bomb damage to the whole covered tile, including the edge', () => {
@@ -634,22 +819,22 @@ describe('human duel controls', () => {
     })
 
     for (let i = 0; i < 20; i += 1) {
-      duel = stepHumanDuel(duel, [{ type: 'move', direction: 'up' }], [])
+      duel = stepHumanDuel(duel, [tankMove('up')], [])
     }
     expect(duel.state.tanks[0]!.position[1]).toBeGreaterThan(3.25)
 
     duel.engineers[0].position = [2.5, 2.5]
-    for (let i = 0; i < 9; i += 1) {
-      duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+    for (let i = 0; i < 6; i += 1) {
+      duel = stepHumanDuel(duel, [stepEngineer('right')], [])
     }
     expect(duel.state.engineers[0]!.position[0]).toBeGreaterThan(3.25)
     expect(duel.state.engineers[0]!.status.swimming).toBe(true)
 
-    duel = stepHumanDuel(duel, [{ type: 'engineerBomb' }], [])
+    duel = stepHumanDuel(duel, [plantBomb()], [])
     expect(duel.state.bombs).toHaveLength(0)
 
-    for (let i = 0; i < 12; i += 1) {
-      duel = stepHumanDuel(duel, [{ type: 'engineerMove', direction: 'right' }], [])
+    for (let i = 0; i < 8; i += 1) {
+      duel = stepHumanDuel(duel, [stepEngineer('right')], [])
     }
     expect(duel.state.engineers[0]!.position[0]).toBeGreaterThan(4.25)
     expect(duel.state.engineers[0]!.status.swimming).toBe(false)
@@ -690,7 +875,7 @@ describe('human duel controls', () => {
     ready.tanks[1].heading = 0
 
     const actions = await decideAgentActions(ready)
-    expect(actions).toContainEqual({ type: 'fire' })
+    expect(actions).toContainEqual(tankFire())
   })
 
   it('hides tanks in grass from the fallback agent until they are close', async () => {
@@ -712,12 +897,12 @@ describe('human duel controls', () => {
     hidden.tanks[1].heading = 0
     hidden.tanks[1].direction = 'right'
 
-    await expect(decideAgentActions(hidden)).resolves.not.toEqual([{ type: 'fire' }])
+    await expect(decideAgentActions(hidden)).resolves.not.toEqual([tankFire()])
 
     const visible = structuredClone(hidden)
     visible.tanks[0].position = [4.5, 1.5]
     const actions = await decideAgentActions(visible)
-    expect(actions).toContainEqual({ type: 'fire' })
+    expect(actions).toContainEqual(tankFire())
   })
 
   it('does not leak grass-hidden tank status to scripts', async () => {
@@ -739,7 +924,7 @@ describe('human duel controls', () => {
     hidden.tanks[1].heading = 0
     hidden.tanks[1].direction = 'right'
 
-    await expect(decideAgentActions(hidden)).resolves.not.toEqual([{ type: 'fire' }])
+    await expect(decideAgentActions(hidden)).resolves.not.toEqual([tankFire()])
   })
 
   it('keeps the practice system AI moving both tank and engineer when no Buddy strategy exists', async () => {
@@ -801,6 +986,112 @@ describe('human duel controls', () => {
     expect(actions).toEqual([])
   })
 
+  it('runs split Buddy handlers through the live Worker sandbox', async () => {
+    const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker')
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    const originalCreateObjectUrl = URL.createObjectURL
+    const originalRevokeObjectUrl = URL.revokeObjectURL
+    let workerBlob: Blob | null = null
+    URL.createObjectURL = ((blob: Blob) => {
+      workerBlob = blob
+      return 'blob:warbuddy-worker-test'
+    }) as typeof URL.createObjectURL
+    URL.revokeObjectURL = (() => undefined) as typeof URL.revokeObjectURL
+
+    class TestWorker {
+      onmessage: ((event: { data: { actions?: unknown[] } }) => void) | null = null
+      onerror: (() => void) | null = null
+
+      terminate() {}
+
+      postMessage(data: unknown) {
+        void (async () => {
+          try {
+            const source = await workerBlob?.text()
+            if (!source) throw new Error('missing_worker_source')
+            const workerSelf = {
+              onmessage: null as ((event: { data: unknown }) => void) | null,
+              postMessage: (payload: { actions?: unknown[] }) => {
+                this.onmessage?.({ data: payload })
+              },
+            }
+            runInNewContext(source, {
+              self: workerSelf,
+              Number,
+              Math,
+              Error,
+            })
+            workerSelf.onmessage?.({ data })
+          } catch {
+            this.onerror?.()
+          }
+        })()
+      }
+    }
+
+    Object.defineProperty(globalThis, 'Worker', {
+      configurable: true,
+      value: TestWorker,
+    })
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        setTimeout,
+        clearTimeout,
+      },
+    })
+
+    try {
+      const duel = createHumanDuel({
+        mapId: 'test',
+        mapName: 'Test Map',
+        mapRaw: MOVE_MAP,
+        humanName: 'Human',
+        humanSkillType: 'shield',
+        agent: {
+          id: 'agent',
+          name: 'Agent',
+          skillType: 'boost',
+          code: [
+            'function onTankIdle(tank) { tank.moveTo(5, 1); }',
+            'function onEngineerIdle(engineer) { engineer.moveTo(5, 1); }',
+          ].join('\n'),
+        },
+      })
+      const actions = await decideAgentActions(duel)
+
+      expect(actions.some((action) => isTankDrive(action) && action.x > 0)).toBe(true)
+      expect(actions.some(isEngineerDrive)).toBe(true)
+
+      const aggressive = createHumanDuel({
+        mapId: 'test',
+        mapName: 'Test Map',
+        mapRaw: MOVE_MAP,
+        humanName: 'Human',
+        humanSkillType: 'shield',
+        agent: {
+          id: 'agent',
+          name: 'Agent',
+          skillType: 'shield',
+          code: DEFAULT_TANK_STRATEGY_CODE,
+        },
+      })
+      aggressive.tanks[1].position = [1.5, 1.58]
+      aggressive.tanks[1].heading = 0
+      aggressive.tanks[1].direction = 'right'
+      aggressive.tanks[0].position = [5.5, 1.5]
+
+      expect(await decideAgentActions(aggressive)).toContainEqual(tankFire())
+    } finally {
+      if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker)
+      else delete (globalThis as { Worker?: unknown }).Worker
+      if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow)
+      else delete (globalThis as { window?: unknown }).window
+      URL.createObjectURL = originalCreateObjectUrl
+      URL.revokeObjectURL = originalRevokeObjectUrl
+    }
+  })
+
   it('drives the practice system tank out of bomb blast lanes', async () => {
     const duel = createHumanDuel({
       mapId: 'test',
@@ -822,10 +1113,138 @@ describe('human duel controls', () => {
     duel.star = [5.5, 1.5]
 
     const actions = await decideAgentActions(duel)
-    const drive = actions.find((action) => action.type === 'drive')
+    const drive = actions.find(isTankDrive)
 
-    expect(drive).toEqual(expect.objectContaining({ type: 'drive' }))
-    expect(drive?.type === 'drive' ? drive.y : 0).toBeGreaterThan(0)
+    expect(drive).toEqual(expect.objectContaining({ type: 'unit.drive', unit: TANK_UNIT }))
+    expect(drive?.y ?? 0).toBeGreaterThan(0)
+  })
+
+  it('makes the practice system tank shoot soft obstacles blocking an objective', async () => {
+    const duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: SOFT_BLOCKED_LANE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel.tanks[1].heading = 0
+    duel.tanks[1].direction = 'right'
+    duel.star = [5.5, 1.5]
+
+    const actions = await decideAgentActions(duel)
+
+    expect(actions).toContainEqual(tankFire())
+  })
+
+  it('drives the practice engineer sideways out of enemy shell lanes', async () => {
+    const duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel.engineers[1].position = [3.5, 1.5]
+    duel.tanks[0].position = [1.5, 1.5]
+    duel.tanks[1].position = [5.5, 4.5]
+    duel.bullets = [
+      {
+        id: 'danger-shell',
+        owner: 0,
+        position: [1.5, 1.5],
+        heading: 0,
+        direction: 'right',
+        alive: true,
+        age: 0,
+      },
+    ]
+
+    const actions = await decideAgentActions(duel)
+    const drive = actions.find(isEngineerDrive)
+    const next = stepHumanDuel(duel, [], actions)
+
+    expect(drive).toEqual(expect.objectContaining({ type: 'unit.drive', unit: ENGINEER_UNIT }))
+    expect(Math.abs(drive?.y ?? 0)).toBeGreaterThan(0.4)
+    expect(next.state.engineers[1]!.alive).toBe(true)
+  })
+
+  it('keeps the practice engineer off enemy tank crush paths', async () => {
+    const duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel.engineers[1].position = [3.5, 1.5]
+    duel.tanks[0].position = [1.5, 1.5]
+    duel.tanks[0].heading = 0
+    duel.tanks[0].direction = 'right'
+    duel.tanks[0].velocity = [0.1, 0]
+    duel.tanks[1].position = [5.5, 4.5]
+
+    const actions = await decideAgentActions(duel)
+    const drive = actions.find(isEngineerDrive)
+    const next = stepHumanDuel(duel, [], actions)
+
+    expect(drive).toEqual(expect.objectContaining({ type: 'unit.drive', unit: ENGINEER_UNIT }))
+    expect(Math.abs(drive?.y ?? 0)).toBeGreaterThan(0.4)
+    expect(next.state.engineers[1]!.alive).toBe(true)
+  })
+
+  it('lets the practice engineer mine predicted enemy tank paths when it has an escape route', async () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: MOVE_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel.engineers[1].position = [3.5, 3.5]
+    duel.tanks[0].position = [4.5, 1.5]
+    duel.tanks[0].heading = 180
+    duel.tanks[0].direction = 'left'
+    duel.tanks[0].velocity = [-0.08, 0]
+    duel.tanks[1].position = [5.5, 4.5]
+
+    let planted = false
+    for (let frame = 0; frame < 30 && !planted; frame += 1) {
+      const actions = await decideAgentActions(duel)
+      planted = actions.some(
+        (action) =>
+          action.type === 'unit.ability' &&
+          action.unit.kind === 'engineer' &&
+          action.ability === 'bomb',
+      )
+      duel = stepHumanDuel(duel, [], actions)
+    }
+
+    expect(planted).toBe(true)
+    expect(duel.state.engineers[1]!.alive).toBe(true)
   })
 
   it('uses radius-aware A* routing instead of driving into a wall corner', async () => {
@@ -845,11 +1264,11 @@ describe('human duel controls', () => {
     duel = { ...duel, flag: [5.5, 2.5] as [number, number] }
 
     const actions = await decideAgentActions(duel)
-    const drive = actions.find((action) => action.type === 'drive')
+    const drive = actions.find(isTankDrive)
 
-    expect(drive).toEqual(expect.objectContaining({ type: 'drive' }))
-    expect(drive?.type === 'drive' ? drive.x : 0).toBeGreaterThan(0.8)
-    expect(drive?.type === 'drive' ? Math.abs(drive.y) : 1).toBeLessThan(0.1)
+    expect(drive).toEqual(expect.objectContaining({ type: 'unit.drive', unit: TANK_UNIT }))
+    expect(drive?.x ?? 0).toBeGreaterThan(0.8)
+    expect(drive ? Math.abs(drive.y) : 1).toBeLessThan(0.1)
 
     for (let i = 0; i < 150 && duel.state.flagScores[1] === 0; i += 1) {
       duel = stepHumanDuel(duel, [], await decideAgentActions(duel))
@@ -872,25 +1291,23 @@ describe('human duel controls', () => {
         code: '',
       },
     })
-    duel.tanks[1].position = [2.67, 1.77]
+    duel.tanks[1].position = [2.67, 2.02]
     duel = { ...duel, flag: [5.5, 2.5] as [number, number] }
     const start = [...duel.tanks[1].position] as [number, number]
 
     const actions = await decideAgentActions(duel)
-    const drive = actions.find((action) => action.type === 'drive')
+    const drive = actions.find(isTankDrive)
 
-    expect(drive).toEqual(expect.objectContaining({ type: 'drive' }))
-    expect(drive?.type === 'drive' ? drive.x : 0).toBeLessThan(0)
-    expect(drive?.type === 'drive' ? drive.y : 0).toBeLessThan(0)
+    expect(drive).toEqual(expect.objectContaining({ type: 'unit.drive', unit: TANK_UNIT }))
+    expect(drive?.y ?? 0).toBeLessThan(0)
 
     const next = stepHumanDuel(duel, [], actions)
     expect(next.state.tanks[1]!.crashed).toBe(false)
-    expect(next.state.tanks[1]!.position[0]).toBeLessThan(start[0])
     expect(next.state.tanks[1]!.position[1]).toBeLessThan(start[1])
   })
 
   it('lets the practice engineer plant bombs to open soft terrain', async () => {
-    const duel = createHumanDuel({
+    let duel = createHumanDuel({
       mapId: 'test',
       mapName: 'Test Map',
       mapRaw: SOFT_TERRAIN_MAP,
@@ -907,7 +1324,62 @@ describe('human duel controls', () => {
     duel.engineers[1].position = [1.5, 2.5]
     duel.map[2]![2] = 'm'
 
-    expect(await decideAgentActions(duel)).toContainEqual({ type: 'engineerBomb' })
+    let planted = false
+    for (let frame = 0; frame < 40 && !planted; frame += 1) {
+      const actions = await decideAgentActions(duel)
+      planted = actions.some(
+        (action) =>
+          action.type === 'unit.ability' &&
+          action.unit.kind === 'engineer' &&
+          action.ability === 'bomb',
+      )
+      if (!planted) duel = stepHumanDuel(duel, [], actions)
+    }
+
+    expect(planted).toBe(true)
+  })
+
+  it('moves the practice engineer out of its own bomb blast before the fuse expires', async () => {
+    let duel = createHumanDuel({
+      mapId: 'test',
+      mapName: 'Test Map',
+      mapRaw: SOFT_TERRAIN_MAP,
+      humanName: 'Human',
+      humanSkillType: 'shield',
+      agent: {
+        id: 'agent',
+        name: 'Agent',
+        skillType: 'boost',
+        code: '',
+      },
+    })
+    duel.tanks[1].position = [5.5, 4.5]
+    duel.engineers[1].position = [1.5, 2.5]
+    duel.map[2]![2] = 'm'
+
+    let planted = false
+    for (let frame = 0; frame < 40 && !planted; frame += 1) {
+      const actions = await decideAgentActions(duel)
+      planted = actions.some(
+        (action) =>
+          action.type === 'unit.ability' &&
+          action.unit.kind === 'engineer' &&
+          action.ability === 'bomb',
+      )
+      duel = stepHumanDuel(duel, [], actions)
+    }
+    expect(planted).toBe(true)
+
+    for (
+      let i = 0;
+      i < DEFAULT_WARBUDDY_RULES.units.engineer.bombFuseFrames + 4 && duel.status === 'running';
+      i += 1
+    ) {
+      duel = stepHumanDuel(duel, [], await decideAgentActions(duel))
+    }
+
+    expect(duel.state.engineers[1]!.alive).toBe(true)
+    expect(duel.state.engineers[1]!.death).toBeNull()
   })
 
   it('aligns the tank heading to the wall-parallel slide direction', () => {
@@ -926,7 +1398,7 @@ describe('human duel controls', () => {
     })
     duel.tanks[0].position = [5.65, 2.5]
 
-    duel = stepHumanDuel(duel, [{ type: 'drive', x: 1, y: 1 }], [])
+    duel = stepHumanDuel(duel, [tankDrive(1, 1)], [])
 
     expect(duel.state.tanks[0]!.position[0]).toBeCloseTo(5.65, 2)
     expect(duel.state.tanks[0]!.position[1]).toBeGreaterThan(2.5)

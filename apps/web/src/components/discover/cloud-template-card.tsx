@@ -1,14 +1,9 @@
-import {
-  TemplateCardMetric,
-  TemplateGalleryCard,
-} from '@shadowob/cloud-ui/components/TemplateGalleryCard'
 import type {
   TemplateCatalogSummary,
   TemplateCategoryId,
   TemplateDifficulty,
 } from '@shadowob/cloud-ui/lib/api'
-import { Badge } from '@shadowob/ui'
-import { Rocket, Sparkles, Users } from 'lucide-react'
+import { Cloud, Users } from 'lucide-react'
 
 const TEMPLATE_CATEGORIES = new Set<TemplateCategoryId>([
   'devops',
@@ -33,13 +28,7 @@ export interface CloudTemplateSource {
 
 interface DiscoverCloudTemplateCardProps {
   template: TemplateCatalogSummary
-  locale: string
-  categoryLabel: string
-  difficultyLabel: string
-  cashbackLabel: string
-  deployLabel: string
   agentCountLabel: string
-  popularityLabel: string
   summaryFallback: string
 }
 
@@ -74,13 +63,6 @@ function getTemplateMeta(template: CloudTemplateSource) {
   }
 }
 
-function formatCompact(value: number, locale: string) {
-  return new Intl.NumberFormat(locale, {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value)
-}
-
 export function toTemplateCatalogSummary(template: CloudTemplateSource): TemplateCatalogSummary {
   const meta = getTemplateMeta(template)
   const features = meta.features
@@ -106,61 +88,47 @@ export function toTemplateCatalogSummary(template: CloudTemplateSource): Templat
 
 export function DiscoverCloudTemplateCard({
   template,
-  locale,
-  categoryLabel,
-  difficultyLabel,
-  cashbackLabel,
-  deployLabel,
-  agentCountLabel,
-  popularityLabel,
   summaryFallback,
+  agentCountLabel,
 }: DiscoverCloudTemplateCardProps) {
   const slug = encodeURIComponent(template.name)
   const summary = template.description || template.overview[0] || summaryFallback
+  const detailHref = `/cloud/store/${slug}`
+  const openDetail = () => {
+    window.location.assign(detailHref)
+  }
 
   return (
-    <TemplateGalleryCard
-      template={template}
-      detailHref={`/cloud/store/${slug}`}
-      title={template.title}
-      summary={summary}
-      categoryLabel={categoryLabel}
-      difficultyLabel={difficultyLabel}
-      headerBadges={
-        <Badge variant="success" size="sm">
-          {cashbackLabel}
-        </Badge>
-      }
-      metrics={[
-        {
-          icon: <Users size={13} className="text-primary" />,
-          value: template.agentCount,
-          label: agentCountLabel,
-        },
-        {
-          icon: <Sparkles size={13} className="text-primary" />,
-          value: formatCompact(template.popularity, locale),
-          label: popularityLabel,
-        },
-      ]}
-      metadata={
-        template.highlights.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {template.highlights.slice(0, 2).map((highlight: string) => (
-              <TemplateCardMetric
-                key={highlight}
-                icon={<Sparkles size={12} className="text-primary" />}
-                value={highlight}
-              />
-            ))}
-          </div>
-        ) : null
-      }
-      primaryAction={{
-        href: `/cloud/store/${slug}/deploy`,
-        label: deployLabel,
-        icon: <Rocket size={14} />,
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={openDetail}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        openDetail()
       }}
-    />
+      className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/55 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+    >
+      <div className="flex min-h-[180px] flex-col gap-4 p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-white/15 bg-bg-primary/55 text-primary shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
+            <Cloud size={24} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="line-clamp-2 text-lg font-black leading-tight text-white transition-colors group-hover:text-primary">
+              {template.title}
+            </h3>
+          </div>
+        </div>
+        <p className="h-[72px] min-h-[72px] max-h-[72px] overflow-hidden text-sm font-semibold leading-6 text-text-secondary line-clamp-3">
+          {summary}
+        </p>
+        <div className="inline-flex items-center gap-1.5 border-t border-white/10 pt-3 text-xs font-black text-text-muted">
+          <Users size={13} className="text-primary" />
+          {template.agentCount} {agentCountLabel}
+        </div>
+      </div>
+    </article>
   )
 }

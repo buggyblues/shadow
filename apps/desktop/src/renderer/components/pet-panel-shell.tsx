@@ -1,3 +1,6 @@
+import { Button, cn } from '@shadowob/ui'
+import { ChevronLeft, X } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { tabIcons } from '../lib/pet-tabs'
 import type { AppTab } from '../pet-types'
@@ -13,14 +16,18 @@ export function PetPanelShell({
   unreadSubscriptionCount,
   serviceAlertCount,
   careAttentionCount,
+  avatar,
   onTabChange,
+  onCollapse,
 }: {
   tab: AppTab
   unreadNotificationCount: number
   unreadSubscriptionCount: number
   serviceAlertCount: number
   careAttentionCount: number
+  avatar?: ReactNode
   onTabChange: (tab: AppTab) => void
+  onCollapse?: () => void
 }) {
   const { t } = useTranslation()
 
@@ -43,6 +50,7 @@ export function PetPanelShell({
   return (
     <aside className="desktop-pet-panel-sidebar">
       <div className="desktop-pet-panel-drag-buffer" aria-hidden="true" />
+      {avatar ? <div className="desktop-pet-panel-avatar-slot">{avatar}</div> : null}
       <nav className="desktop-pet-panel-nav" aria-label={t('desktopPet.app.title')}>
         {tabGroups.map((group) => (
           <div
@@ -57,15 +65,15 @@ export function PetPanelShell({
               const label = t(`desktopPet.tabs.${item}`)
               const attentionLabel = tabAttentionLabel(item)
               return (
-                <button
+                <Button
                   key={item}
                   type="button"
                   role="tab"
+                  variant="ghost"
+                  size="sm"
                   aria-selected={tab === item}
                   aria-label={label}
-                  className={
-                    tab === item ? 'desktop-pet-tab-button active' : 'desktop-pet-tab-button'
-                  }
+                  className={cn('desktop-pet-tab-button', tab === item && 'active')}
                   title={label}
                   onClick={() => onTabChange(item)}
                 >
@@ -74,17 +82,39 @@ export function PetPanelShell({
                   {attentionLabel ? (
                     <span className="desktop-pet-tab-dot" aria-label={attentionLabel} />
                   ) : null}
-                </button>
+                </Button>
               )
             })}
           </div>
         ))}
       </nav>
+      {onCollapse ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="desktop-pet-panel-collapse"
+          aria-label={t('desktopPet.app.compact')}
+          title={t('desktopPet.app.compact')}
+          onClick={onCollapse}
+        >
+          <ChevronLeft size={16} />
+          <span>{t('desktopPet.app.compact')}</span>
+        </Button>
+      ) : null}
     </aside>
   )
 }
 
-export function PetPanelTopBar({ tab, petName }: { tab: AppTab; petName: string }) {
+export function PetPanelTopBar({
+  tab,
+  petName,
+  onClose,
+}: {
+  tab: AppTab
+  petName: string
+  onClose?: () => void
+}) {
   const { t } = useTranslation()
   return (
     <header className="desktop-pet-panel-topbar">
@@ -92,6 +122,19 @@ export function PetPanelTopBar({ tab, petName }: { tab: AppTab; petName: string 
         <strong>{t(`desktopPet.tabs.${tab}`)}</strong>
         <span>{t(`desktopPet.panelSubtitle.${tab}`, { name: petName })}</span>
       </div>
+      {onClose ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="desktop-pet-panel-close"
+          aria-label={t('desktopPet.app.compact')}
+          title={t('desktopPet.app.compact')}
+          onClick={onClose}
+        >
+          <X size={16} />
+        </Button>
+      ) : null}
       <i aria-hidden="true" />
     </header>
   )

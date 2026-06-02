@@ -49,6 +49,20 @@ export interface TankProfile {
   updatedAt: string
 }
 
+export type BattleTankProfile = Pick<TankProfile, 'id' | 'name' | 'skillType' | 'code' | 'codeHash'>
+
+export interface RunBattleInput {
+  challenger: BattleTankProfile
+  defender: BattleTankProfile
+  mapId?: string
+  seed?: number
+  fps?: number
+  durationSeconds?: number
+  rules?: import('./rules.js').WarbuddyRules
+  /** @deprecated Use durationSeconds and fps so replays match real-time pacing. */
+  maxFrames?: number
+}
+
 export interface BattleMap {
   id: string
   name: string
@@ -202,6 +216,10 @@ export interface BattleReplay {
     mapId: string
     mapName: string
     matchSeed: number
+    fps: number
+    durationSeconds: number
+    maxFrames: number
+    coordinateSpace?: 'grid' | 'world'
     players: Array<{
       tankId: string
       name: string

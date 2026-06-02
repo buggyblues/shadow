@@ -1637,7 +1637,7 @@
   "discover": {
     "title": "发现",
     "subtitle": "找 Buddy、买内容、逛店铺和服务器",
-    "searchPlaceholder": "搜索 Buddy、服务、店铺或服务器...",
+    "searchPlaceholder": "搜索",
     "searchHints": {
       "buddy": "搜索能聊天和接单的 Buddy...",
       "service": "搜索付费文件、服务券或会员权益...",
@@ -1710,6 +1710,24 @@
     "eyebrow": "发现",
     "heroTitle": "今天想找点什么？",
     "heroSubtitle": "找 Buddy、买内容、逛店铺，或者加入一个有趣的服务器。",
+    "hero": {
+      "browse": {
+        "title": "找到可以一起做的事情",
+        "subtitle": "订阅内容、应用卡片和频道动态会集中在这里，像逛 Discord Discover 一样快速发现新内容。"
+      },
+      "explore": {
+        "title": "在虾豆更轻松地找到你的社区",
+        "subtitle": "从玩法入口到公开服务器，快速筛出值得加入、可以持续交流的地方。"
+      },
+      "market": {
+        "title": "让你更快找到喜欢的创作者和内容",
+        "subtitle": "按分类浏览 Buddy、服务、内容商品和公开店铺，选中后即可直接进入使用场景。"
+      },
+      "cloud": {
+        "title": "用 DIY Cloud 部署 Buddy 团队",
+        "subtitle": "挑选模板，一键在云端部署可协作的 Buddy 团队，把能力直接带回服务器与频道。"
+      }
+    },
     "communityModelTitle": "服务器里有什么",
     "communityShelfTitle": "推荐服务器",
     "communityShelfHint": "加入后可以进频道聊天、看店铺、找 Buddy。",
@@ -1794,13 +1812,13 @@
       "communities": "服务器"
     },
     "lanes": {
-      "feed": "订阅时间线",
+      "feed": "我的订阅",
       "plays": "现在能玩的玩法",
       "buddies": "推荐 Buddy",
       "market": "网络商城",
       "products": "今天可买",
       "shops": "值得逛的店",
-      "cloud": "虾豆云模板返现",
+      "cloud": "虾豆云模板",
       "communities": "推荐服务器"
     },
     "laneDescriptions": {
@@ -1809,7 +1827,7 @@
       "buddies": "能接单、陪聊或提供服务的 Buddy。",
       "market": "虚拟商品、素材包、测试和服务券统一上架。",
       "shops": "公开个人店铺和公开服务器店铺。",
-      "cloud": "可部署的 Buddy 服务模板和云端工作流。",
+      "cloud": "可部署 Buddy 团队模板，在云端快速搭建协作能力。",
       "communities": "公开服务器入口，适合继续逛频道、店铺和成员。"
     },
     "emptyLane": {
@@ -1863,13 +1881,13 @@
       "commentFailed": "评论发送失败"
     },
     "playsEntry": "玩法入口",
-    "cashbackBadge": "模板返现",
-    "cashbackTitle": "发布虾豆云模板赚返现",
-    "cashbackDesc": "把可复用的 Buddy 服务打包成模板，别人部署后可为发布者沉淀虾币收益。",
-    "cashbackAction": "去做模板",
+    "cashbackBadge": "模板奖励",
+    "cashbackTitle": "DIY Cloud",
+    "cashbackDesc": "发布可复用的 Buddy 团队模板，邀请他人一键部署，持续沉淀虾币奖励。",
+    "cashbackAction": "去创建模板",
     "cloudTemplateBadge": "虾豆云模板",
     "cloudTemplateFallback": "一键部署带 Buddy 的服务器、频道和工具。",
-    "templateCashbackHint": "部署返现",
+    "templateCashbackHint": "部署奖励",
     "cloudTemplateAction": "部署模板",
     "cloudMetricAgents": "Agent",
     "cloudMetricPopularity": "热度",

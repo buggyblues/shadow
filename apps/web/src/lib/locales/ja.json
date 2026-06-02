@@ -1451,7 +1451,7 @@
   "discover": {
     "title": "見つける",
     "subtitle": "Buddy、コンテンツ、ショップ、サーバーを探す",
-    "searchPlaceholder": "Buddy、サービス、ショップ、サーバーを検索...",
+    "searchPlaceholder": "検索",
     "noServers": "公開サーバーはありません",
     "noChannels": "アクティブなチャンネルはありません",
     "noRentals": "レンタル中のBuddyはありません",
@@ -1517,6 +1517,24 @@
     "eyebrow": "見つける",
     "heroTitle": "今日は何を探しますか？",
     "heroSubtitle": "Buddy、内容、ショップ、面白いサーバーを探せます。",
+    "hero": {
+      "browse": {
+        "title": "一緒に楽しめるものを見つける",
+        "subtitle": "購読コンテンツ、アプリカード、チャンネルの投稿をここに集約し、Discord Discover のように素早く探せます。"
+      },
+      "explore": {
+        "title": "Shadow で自分のコミュニティを見つける",
+        "subtitle": "遊べる体験や公開サーバーから、参加して会話を続けたくなる場所を探せます。"
+      },
+      "market": {
+        "title": "クリエイターとサービス棚を発見",
+        "subtitle": "Buddy、サービス、コンテンツ商品、公開ショップを見つけ、購入後すぐ利用シーンへ進めます。"
+      },
+      "cloud": {
+        "title": "テンプレートから Cloud Buddy を開始",
+        "subtitle": "テンプレートを選び、ワークフローをデプロイして、実行可能な能力をサーバーやチャンネルへ戻せます。"
+      }
+    },
     "communityModelTitle": "サーバーの中身",
     "communityShelfTitle": "おすすめサーバー",
     "communityShelfHint": "参加するとチャンネル、ショップ、Buddy を使えます。",

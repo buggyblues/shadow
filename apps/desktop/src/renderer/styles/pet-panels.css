@@ -3,7 +3,7 @@
   min-width: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 156px minmax(0, 1fr);
   border: 1px solid rgba(0, 243, 255, 0.2);
   border-radius: 28px;
   background: #05080c;
@@ -13,6 +13,13 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   overflow: hidden;
+  opacity: 1;
+  transition: opacity 150ms ease;
+}
+
+.desktop-pet.panel-closing .desktop-pet-panel {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .desktop-pet-panel.auth-only {
@@ -22,11 +29,11 @@
 .desktop-pet-panel-sidebar {
   min-height: 0;
   min-width: 0;
-  padding: 22px 8px 10px;
+  padding: 10px 10px 12px;
   border-right: 1px solid rgba(0, 243, 255, 0.12);
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
   background: linear-gradient(180deg, rgba(0, 243, 255, 0.04), rgba(255, 255, 255, 0.02));
   cursor: grab;
   -webkit-app-region: drag;
@@ -44,6 +51,29 @@
 .desktop-pet-panel-sidebar button {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+.desktop-pet-panel-avatar-slot {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 0 4px;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.desktop-pet-panel-avatar {
+  position: relative;
+  width: 136px;
+  height: 148px;
+  display: block;
+  margin: 0 auto;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .desktop-pet-panel-content {
@@ -65,7 +95,7 @@
   border-bottom: 1px solid rgba(0, 243, 255, 0.08);
   background: rgba(255, 255, 255, 0.015);
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   cursor: grab;
@@ -101,6 +131,35 @@
 
 .desktop-pet-panel-topbar i {
   display: none;
+}
+
+.desktop-pet-panel-close {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid rgba(217, 252, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(217, 252, 255, 0.82);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: none;
+  letter-spacing: 0;
+  text-transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.desktop-pet-panel-close:hover {
+  transform: none;
+  border-color: rgba(0, 243, 255, 0.34);
+  background: rgba(0, 243, 255, 0.1);
+  color: #f7fbff;
 }
 
 .desktop-pet-panel-nav {
@@ -179,22 +238,43 @@
   width: 100%;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .desktop-pet-panel {
+    transition: none;
+  }
+}
+
 .desktop-pet-tab-button {
   position: relative;
+  width: 100%;
   min-width: 0;
-  min-height: 54px;
-  padding: 7px 4px;
+  height: auto;
+  min-height: 44px;
+  padding: 8px 10px;
   border: 1px solid transparent;
-  border-radius: 16px;
+  border-radius: 14px;
   background: transparent;
   color: rgba(217, 252, 255, 0.72);
-  display: grid;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
+  justify-content: flex-start;
+  gap: 10px;
   overflow: hidden;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 850;
+  text-align: left;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.desktop-pet-tab-button:hover {
+  transform: none;
+  border-color: rgba(0, 243, 255, 0.18);
+  background: rgba(0, 243, 255, 0.07);
+  color: #d9fcff;
 }
 
 .desktop-pet-tab-button > span:not(.desktop-pet-tab-dot) {
@@ -230,11 +310,71 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+.desktop-pet-panel-collapse {
+  width: 100%;
+  height: auto;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid rgba(217, 252, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(5, 5, 8, 0.42);
+  color: rgba(217, 252, 255, 0.78);
+  justify-content: flex-start;
+  gap: 10px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.desktop-pet-panel-collapse:hover {
+  transform: none;
+  border-color: rgba(0, 243, 255, 0.28);
+  background: rgba(0, 243, 255, 0.08);
+  color: #d9fcff;
+}
+
 .desktop-pet-ui-button {
   min-width: 0;
   border-style: solid;
   font-weight: 850;
+  letter-spacing: 0;
+  text-transform: none;
   white-space: nowrap;
+}
+
+.desktop-pet-ui-card {
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.desktop-pet-ui-input,
+.desktop-pet-ui-select {
+  letter-spacing: 0;
+}
+
+.desktop-pet-chat-form > div,
+.desktop-pet-profile-fields label > div,
+.desktop-pet-subscription-selects > div {
+  min-width: 0;
+}
+
+.desktop-pet-chat-form > div,
+.desktop-pet-chat-form > div > div {
+  height: 34px;
+  min-height: 0;
+}
+
+.desktop-pet-subscription-selects > div {
+  height: 38px;
 }
 
 .desktop-pet-ui-button-xs {
@@ -343,24 +483,118 @@
 .desktop-pet-services {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 10px;
 }
 
 .desktop-pet-services {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.desktop-pet-care-action-shelf,
+.desktop-pet-care-overview,
+.desktop-pet-care-profile,
+.desktop-pet-care-vitals,
+.desktop-pet-care-journal,
 .desktop-pet-service-action-board {
   min-width: 0;
   border: 1px solid rgba(0, 243, 255, 0.16);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 8% 0%, rgba(0, 243, 255, 0.12), transparent 42%),
-    rgba(255, 255, 255, 0.055);
-  padding: 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
   display: grid;
-  gap: 9px;
+  gap: 12px;
+}
+
+.desktop-pet-care-overview {
+  grid-template-columns: minmax(260px, 0.9fr) minmax(420px, 1.1fr);
+  align-items: stretch;
+  background:
+    linear-gradient(105deg, rgba(0, 243, 255, 0.11), transparent 44%), rgba(255, 255, 255, 0.045);
+}
+
+.desktop-pet-care-copy {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+}
+
+.desktop-pet-care-copy > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.desktop-pet-care-phase {
+  color: rgba(217, 252, 255, 0.64);
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.desktop-pet-care-copy strong {
+  color: #f7fbff;
+  font-size: 16px;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.desktop-pet-care-copy p {
+  max-width: 64ch;
+  margin: 0;
+  color: rgba(217, 252, 255, 0.66);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.desktop-pet-care-action-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.desktop-pet-care-action-grid .desktop-pet-care-action {
+  min-width: 0;
+  min-height: 50px;
+  border: 1px solid rgba(0, 243, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(5, 5, 8, 0.58);
+  color: #d9fcff;
+  cursor: pointer;
+}
+
+.desktop-pet-care-action-grid .desktop-pet-care-action:hover {
+  border-color: rgba(0, 243, 255, 0.32);
+  background: rgba(0, 243, 255, 0.08);
+  transform: none;
+}
+
+.desktop-pet-care-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.1fr);
+  gap: 10px;
+}
+
+.desktop-pet-care-section-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.desktop-pet-care-section-heading strong {
+  min-width: 0;
+  color: #f7fbff;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.desktop-pet-care-section-heading span {
+  color: rgba(217, 252, 255, 0.54);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .desktop-pet-service-action-board {
@@ -373,28 +607,17 @@
   grid-column: 1 / -1;
 }
 
-.desktop-pet-profile-card,
-.desktop-pet-care-status-card,
-.desktop-pet-event-card,
-.desktop-pet-game-card,
-.desktop-pet-progress-card,
 .desktop-pet-service-settings-card,
 .desktop-pet-service-card {
   border: 1px solid rgba(0, 243, 255, 0.14);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.07);
-}
-
-.desktop-pet-profile-card {
-  padding: 10px;
-  display: grid;
-  gap: 8px;
 }
 
 .desktop-pet-profile-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 7px;
+  gap: 8px;
 }
 
 .desktop-pet-profile-fields label {
@@ -412,26 +635,16 @@
 .desktop-pet-profile-fields input,
 .desktop-pet-profile-fields select {
   min-width: 0;
-  height: 30px;
+  height: 34px;
   border: 1px solid rgba(0, 243, 255, 0.18);
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(5, 5, 8, 0.56);
   color: #f7fbff;
-  padding: 0 8px;
+  padding: 0 10px;
   font-size: 12px;
   font-weight: 750;
 }
 
-.desktop-pet-care-status-card {
-  display: grid;
-  gap: 3px;
-  padding: 10px 2px 0;
-  border: 0;
-  background: transparent;
-}
-
-.desktop-pet-care-status-card span,
-.desktop-pet-event-card span,
 .desktop-pet-service-card small,
 .desktop-pet-service-copy small {
   color: rgba(217, 252, 255, 0.66);
@@ -439,25 +652,13 @@
   line-height: 1.35;
 }
 
-.desktop-pet-care-status-card strong {
-  color: #f7fbff;
-  font-size: 15px;
-}
-
-.desktop-pet-game-card,
-.desktop-pet-progress-card {
-  padding: 10px;
-  display: grid;
-  gap: 8px;
-}
-
-.desktop-pet-game-summary {
+.desktop-pet-care-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
-.desktop-pet-game-summary span {
+.desktop-pet-care-metrics span {
   min-width: 0;
   display: flex;
   align-items: center;
@@ -474,7 +675,7 @@
 }
 
 .desktop-pet-xp-bar,
-.desktop-pet-stat-grid i {
+.desktop-pet-stat-list i {
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
@@ -482,105 +683,159 @@
 }
 
 .desktop-pet-xp-bar i,
-.desktop-pet-stat-grid b {
+.desktop-pet-stat-list b {
   display: block;
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #00f3ff, #baff6a);
 }
 
-.desktop-pet-stat-grid {
+.desktop-pet-stat-list {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
-.desktop-pet-stat-grid span {
+.desktop-pet-stat-list span {
+  min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 5px;
 }
 
-.desktop-pet-stat-grid small {
+.desktop-pet-stat-list small {
   color: rgba(217, 252, 255, 0.64);
   font-size: 10px;
   font-weight: 800;
   text-align: center;
 }
 
-.desktop-pet-progress-card {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.desktop-pet-care-journal {
+  grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.05fr);
+  gap: 18px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.desktop-pet-progress-card div {
+.desktop-pet-care-list {
   min-width: 0;
   display: grid;
   align-content: start;
-  gap: 5px;
+  gap: 7px;
 }
 
-.desktop-pet-progress-card strong {
-  color: #d9fcff;
-  font-size: 11px;
-}
-
-.desktop-pet-progress-card span {
+.desktop-pet-care-list-header {
   min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 3px;
-  overflow: hidden;
-  color: rgba(217, 252, 255, 0.68);
-  font-size: 10px;
-  font-weight: 750;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.desktop-pet-progress-card span.completed {
-  color: #baff6a;
-}
-
-.desktop-pet-event-card {
-  padding: 10px;
-}
-
-.desktop-pet-event-card div {
-  display: grid;
-  gap: 4px;
-}
-
-.desktop-pet-event-card strong {
+.desktop-pet-care-list-header strong {
   color: #d9fcff;
   font-size: 12px;
 }
 
-.desktop-pet-care-actions {
+.desktop-pet-care-list-header span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(217, 252, 255, 0.52);
+  font-size: 10px;
+  font-weight: 820;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pet-routine-list > div:not(.desktop-pet-care-list-header) {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  color: rgba(217, 252, 255, 0.68);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.desktop-pet-routine-list > div.completed {
+  color: #baff6a;
+}
+
+.desktop-pet-routine-list > div > i {
+  width: 10px;
+  height: 10px;
+  justify-self: center;
+  border: 1px solid rgba(217, 252, 255, 0.26);
+  border-radius: 999px;
+}
+
+.desktop-pet-routine-list em {
+  grid-column: 2 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(217, 252, 255, 0.08);
+}
+
+.desktop-pet-routine-list em span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00f3ff, #baff6a);
+}
+
+.desktop-pet-today-action-grid {
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
 }
 
-.desktop-pet-care-actions-primary {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+.desktop-pet-today-action-grid span {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid rgba(217, 252, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(5, 5, 8, 0.42);
+  color: rgba(217, 252, 255, 0.56);
+  padding: 7px 8px;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 7px;
+  row-gap: 2px;
 }
 
-.desktop-pet-care-actions .desktop-pet-care-action,
-.desktop-pet-service-card {
-  min-width: 0;
-  border: 1px solid rgba(0, 243, 255, 0.18);
-  background: rgba(5, 5, 8, 0.68);
+.desktop-pet-today-action-grid span.active {
+  border-color: rgba(0, 243, 255, 0.22);
+  background: rgba(0, 243, 255, 0.08);
   color: #d9fcff;
 }
 
-.desktop-pet-care-actions .desktop-pet-care-action {
-  cursor: pointer;
+.desktop-pet-today-action-grid svg {
+  grid-row: 1 / 3;
+}
+
+.desktop-pet-care-list b {
+  min-width: 0;
+  overflow: hidden;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pet-care-list small {
+  color: rgba(217, 252, 255, 0.52);
+  font-size: 10px;
+  font-weight: 820;
 }
 
 .desktop-pet-action-dot {
   position: absolute;
-  top: 8px;
-  right: 9px;
+  top: 7px;
+  right: 8px;
   width: 8px;
   height: 8px;
   border-radius: 999px;
@@ -1459,17 +1714,24 @@
     justify-self: stretch;
   }
 
-  .desktop-pet-care-actions-primary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .desktop-pet-progress-card {
+  .desktop-pet-care-overview,
+  .desktop-pet-care-grid,
+  .desktop-pet-care-journal {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .desktop-pet-game-summary,
-  .desktop-pet-stat-grid {
+  .desktop-pet-care-action-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .desktop-pet-care-metrics,
+  .desktop-pet-stat-list,
+  .desktop-pet-today-action-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .desktop-pet-profile-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

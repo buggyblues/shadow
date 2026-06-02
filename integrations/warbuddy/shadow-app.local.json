@@ -196,7 +196,6 @@
           },
           "code": {
             "type": "string",
-            "minLength": 1,
             "maxLength": 12000
           },
           "notes": {
@@ -251,6 +250,16 @@
           },
           "seed": {
             "type": "integer"
+          },
+          "fps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "durationSeconds": {
+            "type": "number",
+            "minimum": 4,
+            "maximum": 120
           }
         },
         "additionalProperties": false
@@ -284,6 +293,16 @@
           },
           "seed": {
             "type": "integer"
+          },
+          "fps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "durationSeconds": {
+            "type": "number",
+            "minimum": 4,
+            "maximum": 120
           },
           "announceChannelName": {
             "type": "string",
@@ -517,7 +536,7 @@
   "help": {
     "overview": "WarBuddy Arena is a squad-based combined-arms tank battle integration. A human or Buddy can field a tank and engineer squad, run deterministic matches, join live rooms, and review frame-by-frame replays.",
     "usage": "Players create squads in the Server App, then delegate improvement work with battle.brief. Buddies inspect tanks and replays, submit strategy versions with tanks.saveCode, simulate privately, and challenge when ready.",
-    "details": "Buddy runtime contract: define function onIdle(me, enemy, game). Use me.tank.drive(x,y), me.tank.drive(direction), me.tank.aim(angle), me.tank.aim(direction), me.tank.fire(), me.engineer.move(x,y), me.engineer.move(direction), me.engineer.bomb(), me.speak(\"text\"), speak(\"text\"), print(...args), plus the tank skill method on me.tank that matches me.skill.type. Positions are arrays [x, y]. Map values are \"x\" wall, \"m\" destructible dirt mound, \"o\" grass, \"w\" water, and \".\" open ground. Grass and cloak can hide enemy units; enemy bullets are visible only through line of sight."
+    "details": "Buddy runtime contract: prefer separate handlers onTankIdle(tank, enemy, game, squad) and onEngineerIdle(engineer, enemy, game, squad). Use tank.moveTo(x,y) or engineer.moveTo(x,y) for built-in pathing, step(direction) for cardinal steps, moveVector(x,y) for one-step vectors, tank.face(direction|angle), tank.faceAngle(angle), tank.fire(), tank.speak(text), engineer.speak(text), engineer.bomb(), print(...args), plus the tank skill method on tank that matches squad.skill.type. Legacy onIdle, drive, aim, and engineer.move still work. Positions are arrays [x, y]. Map values are \"x\" wall, \"m\" destructible dirt mound, \"o\" grass, \"w\" water, and \".\" open ground. Grass and cloak can hide enemy units; enemy bullets are visible only through line of sight."
   },
   "realtime": {
     "transports": ["sse"],

@@ -2,6 +2,7 @@ import { cn } from '@shadowob/ui'
 import { AppWindow, Award, FileText, Gem, Package, ShieldCheck, Ticket } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { isDesktopPetPackTag } from '../../../lib/desktop-pet-marketplace'
+import { DiscoverPlaceholderVisual } from '../../discover/discover-placeholder'
 
 type VisualMedia = {
   type?: string | null
@@ -140,7 +141,7 @@ export function ProductVisual({
         {showLabel && (
           <span
             className={cn(
-              'absolute left-2 top-2 rounded-full bg-bg-deep/55 px-2 py-1 text-[10px] font-black text-white backdrop-blur-xl',
+              'absolute left-2 top-2 rounded-full bg-bg-deep/55 px-2 py-1 text-[10px] font-black text-white',
               labelClassName,
             )}
           >
@@ -160,11 +161,11 @@ export function ProductVisual({
       )}
       aria-label={name ?? label}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.10),transparent_48%),radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.14),transparent_26%),radial-gradient(circle_at_12%_88%,rgba(0,198,209,0.14),transparent_34%)]" />
+      <DiscoverPlaceholderVisual className="absolute inset-0" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/18 to-transparent" />
       <div
         className={cn(
-          'relative flex h-14 w-14 items-center justify-center rounded-2xl ring-1 backdrop-blur-xl sm:h-16 sm:w-16',
+          'relative flex h-14 w-14 items-center justify-center rounded-2xl ring-1 sm:h-16 sm:w-16',
           config.iconClassName,
           iconClassName,
         )}

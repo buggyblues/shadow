@@ -1637,7 +1637,7 @@
   "discover": {
     "title": "Discover",
     "subtitle": "Find Buddies, buy content, browse shops and servers",
-    "searchPlaceholder": "Search Buddies, services, shops, or servers...",
+    "searchPlaceholder": "Search",
     "searchHints": {
       "buddy": "Search Buddies who can chat and take orders...",
       "service": "Search paid files, service tickets, or memberships...",
@@ -1710,6 +1710,24 @@
     "eyebrow": "Discover",
     "heroTitle": "What are you looking for today?",
     "heroSubtitle": "Find Buddies, buy content, browse shops, or join an interesting server.",
+    "hero": {
+      "browse": {
+        "title": "Find things to do together",
+        "subtitle": "Subscription posts, app cards, and channel content live here so discovery feels as direct as Discord Discover."
+      },
+      "explore": {
+        "title": "Find your community in Shadow",
+        "subtitle": "Browse playable experiences and public servers worth joining, chatting in, and returning to."
+      },
+      "market": {
+        "title": "Discover creators and service shelves",
+        "subtitle": "Browse Buddies, services, content products, and public shops, then open the real use context after purchase."
+      },
+      "cloud": {
+        "title": "Start cloud Buddies from templates",
+        "subtitle": "Pick templates, deploy workflows, and bring runnable capabilities back to servers and channels."
+      }
+    },
     "communityModelTitle": "Inside servers",
     "communityShelfTitle": "Recommended servers",
     "communityShelfHint": "Join to chat in channels, browse shops, and find Buddies.",

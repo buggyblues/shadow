@@ -34,6 +34,7 @@ import {
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { DEFAULT_WARBUDDY_RULES } from '../rules.js'
 import type {
   BattleFrameState,
   BattleReplay,
@@ -82,6 +83,7 @@ import {
   type HumanDuelState,
   heldKeysToDuelActions,
   keyToDuelAction,
+  sanitizeDuelActions,
   stepHumanDuel,
 } from './human-duel.js'
 import './styles.css'
@@ -89,14 +91,21 @@ import './styles.css'
 const queryClient = new QueryClient()
 
 const ENGINEER_SPRITE_BASE_HEADING = 90
-const REPLAY_FRAME_MS = 420
+const WARBUDDY_FRAME_MS = Math.round(1000 / DEFAULT_WARBUDDY_RULES.timing.fps)
+const REPLAY_FRAME_MS = WARBUDDY_FRAME_MS
 
 type BattleSound = 'shoot' | 'dirt' | 'star' | 'flag' | 'skill' | 'crash' | 'clash' | 'settled'
 type Locale = 'en' | 'zh'
 type RoomSocketMessage = {
   type?: string
   peers?: Array<{ displayName: string; mode?: string | null }>
-  payload?: { type?: string; frame?: number; status?: string }
+  payload?: {
+    type?: string
+    frame?: number
+    status?: string
+    action?: unknown
+    actions?: unknown[]
+  }
   from?: { displayName?: string }
 }
 type ArenaFlow =
@@ -262,6 +271,7 @@ const UI_COPY: Record<Locale, Record<string, string>> = {
     noReplayLoaded: 'No game loaded',
     flags: 'Flags',
     frame: 'Frame',
+    time: 'Time',
     fire: 'Fire',
     skillAction: 'Skill',
     bomb: 'Bomb',
@@ -497,6 +507,7 @@ const UI_COPY: Record<Locale, Record<string, string>> = {
     noReplayLoaded: '还没选择游戏',
     flags: '旗帜',
     frame: '帧',
+    time: '时间',
     fire: '开火',
     skillAction: '技能',
     bomb: '炸弹',
@@ -1422,6 +1433,13 @@ function useWarbuddyAppModel() {
         return
       }
       if (message.type === 'room.message' && message.payload?.type) {
+        if (message.payload.type === 'battle.action' || message.payload.type === 'battle.actions') {
+          const incoming = Array.isArray(message.payload.actions)
+            ? message.payload.actions
+            : [message.payload.action]
+          const actions = sanitizeDuelActions(incoming)
+          if (actions.length > 0) agentActionsRef.current.push(...actions)
+        }
         const source = message.from?.displayName ?? 'Peer'
         setRoomEvents((current) =>
           [
@@ -1456,12 +1474,8 @@ function useWarbuddyAppModel() {
       unlockBattleAudio()
       const [playerAction] = liveMode === 'manual' ? [action] : actionsForRole([action], humanRole)
       if (!playerAction) return
-      if (playerAction.type === 'move' || playerAction.type === 'engineerMove')
-        pressedKeysRef.current.add(event.key)
+      if (playerAction.type === 'unit.move') pressedKeysRef.current.add(event.key)
       else humanActionsRef.current.push(playerAction)
-      if (sessionMode === 'room') {
-        sendRoomMessage({ type: 'battle.action', action: playerAction, key: event.key })
-      }
     }
     const onKeyUp = (event: KeyboardEvent) => {
       pressedKeysRef.current.delete(event.key)
@@ -1481,17 +1495,25 @@ function useWarbuddyAppModel() {
       setHumanDuel((current) => {
         if (!current || current.status !== 'running') return current
         const rawHeldActions = heldKeysToDuelActions(pressedKeysRef.current)
-        const rawQueuedActions = humanActionsRef.current.splice(0, 3)
+        const rawQueuedActions = humanActionsRef.current.splice(0, 4)
         const heldActions =
           liveMode === 'manual' ? rawHeldActions : actionsForRole(rawHeldActions, humanRole)
         const queuedActions =
           liveMode === 'manual' ? rawQueuedActions : actionsForRole(rawQueuedActions, humanRole)
         const companionActions =
           liveMode === 'coop' ? companionActionsForRole(current, 0, humanRole) : []
+        const playerActions = [...heldActions, ...queuedActions]
+        if (sessionMode === 'room' && playerActions.length > 0) {
+          sendRoomMessage({
+            type: 'battle.actions',
+            frame: current.frame,
+            actions: playerActions,
+          })
+        }
         const next = stepHumanDuel(
           current,
-          [...heldActions, ...queuedActions, ...companionActions],
-          agentActionsRef.current.splice(0, 3),
+          [...playerActions, ...companionActions],
+          agentActionsRef.current.splice(0, 4),
         )
         if (next.status === 'running' && !agentThinkingRef.current) {
           agentThinkingRef.current = true
@@ -1512,7 +1534,7 @@ function useWarbuddyAppModel() {
         }
         return next
       })
-    }, 50)
+    }, WARBUDDY_FRAME_MS)
     return () => window.clearInterval(timer)
   }, [humanDuel?.id, humanDuel?.status, humanRole, liveMode, sessionMode])
 
@@ -2065,7 +2087,8 @@ function ActiveBattleStrip() {
         <strong>{app.t('battleRunning')}</strong>
         <span>
           {app.displayHumanDuel.tanks[0].name} {app.t('vs')} {app.displayHumanDuel.tanks[1].name} ·{' '}
-          {app.t('frame')} {app.displayHumanDuel.frame}
+          {app.t('time')}{' '}
+          {formatBattleClock(app.displayHumanDuel.frame, DEFAULT_WARBUDDY_RULES.timing.fps)}
         </span>
       </div>
       <div className="button-row compact-row">
@@ -2434,6 +2457,7 @@ function BuddyPage() {
 function ArenaPanelView() {
   const app = useWarbuddyApp()
   const duel = app.displayHumanDuel
+  const usesWorldCoordinates = Boolean(duel) || app.replay?.meta.coordinateSpace === 'world'
   return (
     <div ref={app.arenaFocusRef}>
       <Panel className="arena-panel">
@@ -2452,7 +2476,7 @@ function ArenaPanelView() {
         </div>
         <Arena
           state={app.activeBoardState}
-          continuous={!!duel}
+          continuous={usesWorldCoordinates}
           endLabel={app.arenaEndLabel}
           teamColor={app.myTeam?.color ?? app.teamColor}
         />
@@ -3412,6 +3436,16 @@ function Arena({
   const width = state.map.length
   const height = state.map[0]?.length ?? 0
   const endLines = endLabel?.split('\n') ?? null
+  const tankMoveMs = continuous
+    ? WARBUDDY_FRAME_MS
+    : WARBUDDY_FRAME_MS * DEFAULT_WARBUDDY_RULES.units.tank.moveCooldownFrames
+  const engineerMotionMs = continuous
+    ? WARBUDDY_FRAME_MS
+    : WARBUDDY_FRAME_MS * DEFAULT_WARBUDDY_RULES.units.engineer.moveCooldownFrames
+  const entityMotionStyle = {
+    '--tank-move-ms': `${tankMoveMs}ms`,
+    '--engineer-motion-ms': `${engineerMotionMs}ms`,
+  } as CSSProperties
   return (
     <div className="arena-wrap">
       {state.scoreboard || endLines ? (
@@ -3433,7 +3467,10 @@ function Arena({
         {cells.map((cell) => {
           return <div key={`${cell.x}:${cell.y}`} className={clsx('tile', `tile-${cell.tile}`)} />
         })}
-        <div className={clsx('arena-entities', continuous ? 'live-motion' : 'replay-motion')}>
+        <div
+          className={clsx('arena-entities', continuous ? 'motion-live' : 'motion-replay')}
+          style={entityMotionStyle}
+        >
           {state.flag ? (
             <span
               className="arena-entity flag-anchor"
@@ -3540,7 +3577,7 @@ function Arena({
               <span
                 key={`${explosion.id}:${index}`}
                 className="arena-entity explosion-anchor"
-                style={entityStyle(position, width, height, 1.04, 0, true)}
+                style={entityStyle(position, width, height, 1.04, 0, continuous)}
               >
                 <span className="explosion" />
               </span>
@@ -3550,7 +3587,7 @@ function Arena({
             <span
               key={speech.id}
               className="arena-entity speech-anchor"
-              style={entityStyle(speech.position, width, height, 1.2, 0, true)}
+              style={entityStyle(speech.position, width, height, 1.2, 0, continuous)}
             >
               <span className={clsx('speech-bubble', speech.owner === 0 ? 'red' : 'blue')}>
                 {speech.text}
@@ -3768,24 +3805,41 @@ function HumanDuelControls({
           </strong>
         </span>
         <span>
-          {app.t('frame')}{' '}
+          {app.t('time')}{' '}
           <strong>
-            {Math.min(duel.frame, duel.maxFrames)}/{duel.maxFrames}
+            {formatBattleClock(
+              Math.min(duel.frame, duel.maxFrames),
+              DEFAULT_WARBUDDY_RULES.timing.fps,
+            )}
+            /{formatBattleClock(duel.maxFrames, DEFAULT_WARBUDDY_RULES.timing.fps)}
           </strong>
         </span>
       </div>
       <div className="duel-buttons">
         {role === 'tank' ? (
           <>
-            <Button onClick={() => sendAction({ type: 'fire' })} icon={<Swords size={14} />}>
+            <Button
+              onClick={() => sendAction({ type: 'unit.fire', unit: { kind: 'tank' } })}
+              icon={<Swords size={14} />}
+            >
               Q {app.t('fire')}
             </Button>
-            <Button onClick={() => sendAction({ type: 'skill' })} icon={<Shield size={14} />}>
+            <Button
+              onClick={() =>
+                sendAction({ type: 'unit.ability', unit: { kind: 'tank' }, ability: 'primary' })
+              }
+              icon={<Shield size={14} />}
+            >
               E {app.t('skillAction')}
             </Button>
           </>
         ) : (
-          <Button onClick={() => sendAction({ type: 'engineerBomb' })} icon={<Bomb size={14} />}>
+          <Button
+            onClick={() =>
+              sendAction({ type: 'unit.ability', unit: { kind: 'engineer' }, ability: 'bomb' })
+            }
+            icon={<Bomb size={14} />}
+          >
             U {app.t('bomb')}
           </Button>
         )}
@@ -3831,6 +3885,13 @@ function replayEndLabel(
   t: (key: string, values?: Record<string, string | number>) => string,
 ) {
   return resultEndLabel(replay.summary.result.winner ?? null, replay.summary.result.reason, t)
+}
+
+function formatBattleClock(frame: number, fps: number) {
+  const seconds = Math.max(0, Math.floor(frame / Math.max(1, fps)))
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
 function resultEndLabel(
@@ -3885,6 +3946,7 @@ function ReplayControls({
 }) {
   const app = useWarbuddyApp()
   const max = Math.max(0, (replay?.frames.length ?? 1) - 1)
+  const fps = replay?.meta.fps ?? DEFAULT_WARBUDDY_RULES.timing.fps
   return (
     <div className="replay-controls">
       <Button onClick={() => onFrame(0)} disabled={!replay} icon={<SkipBack size={16} />}>
@@ -3909,7 +3971,9 @@ function ReplayControls({
         disabled={!replay}
       />
       <span>
-        {replay ? `${Math.min(frame + 1, replay.frames.length)}/${replay.frames.length}` : '0/0'}
+        {replay
+          ? `${formatBattleClock(Math.min(frame + 1, replay.meta.maxFrames), fps)}/${formatBattleClock(replay.meta.maxFrames, fps)}`
+          : '0:00/0:00'}
       </span>
     </div>
   )

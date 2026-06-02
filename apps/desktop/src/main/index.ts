@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join, resolve, sep } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import {
   app,
   BrowserWindow,
@@ -39,6 +39,7 @@ import {
   applyDesktopNetworkSettings,
   getDesktopServerBaseUrl,
   onDesktopSettingsApplied,
+  readDesktopSettings,
   resolveDesktopAppBaseUrl,
   setupDesktopSettingsHandlers,
 } from './desktop-settings'
@@ -497,17 +498,18 @@ app.on('open-url', (event, rawUrl) => {
 app.on('second-instance', (_event, argv) => {
   const deepLink = findDesktopDeepLink(argv)
   if (deepLink && handleDesktopDeepLinkWhenReady(deepLink)) return
-  showMainWindow()
+  showCommunityWindow()
 })
 
 async function applyDockIcon(): Promise<void> {
   if (process.platform !== 'darwin') return
+  app.setActivationPolicy('regular')
   const iconPath = await resolveDesktopIconPath()
   if (iconPath) {
     const dockIcon = nativeImage.createFromPath(iconPath)
     if (!dockIcon.isEmpty()) app.dock?.setIcon(dockIcon)
   }
-  void app.dock?.show()
+  await app.dock?.show()
 }
 
 function sanitizeFileName(value: string): string {
@@ -801,7 +803,7 @@ app.on('ready', async () => {
     const relativePath = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
     const filePath = resolveDesktopPetAssetPath(packId, relativePath)
     if (!filePath) return new Response('Not Found', { status: 404 })
-    return net.fetch(pathToFileURL(filePath).toString())
+    return serveStaticFile(filePath, request)
   })
 
   setupDesktopSettingsHandlers()
@@ -828,6 +830,7 @@ app.on('ready', async () => {
       })
       .catch(() => undefined)
   })
+  if (readDesktopSettings().desktopPetVisible) createPetWindow()
   createTray()
   createAppMenu()
   registerGlobalShortcuts()
@@ -961,6 +964,7 @@ app.on('ready', async () => {
         method?: string
         body?: unknown
         headers?: Record<string, string>
+        optional?: boolean
       },
     ) => {
       const path = normalizeCommunityApiPath(input.path)
@@ -973,7 +977,12 @@ app.on('ready', async () => {
         body: input.body === undefined ? undefined : JSON.stringify(input.body),
       })
       const text = await response.text()
-      if (!response.ok) throw new Error(text || `REQUEST_FAILED_${response.status}`)
+      if (!response.ok) {
+        if (input.optional === true && response.status === 404) {
+          return { __desktopCommunityNotFound: true }
+        }
+        throw new Error(text || `REQUEST_FAILED_${response.status}`)
+      }
       return text ? (JSON.parse(text) as unknown) : null
     },
   )
@@ -1061,7 +1070,7 @@ app.on('ready', async () => {
     showDesktopContextMenu(BrowserWindow.fromWebContents(event.sender))
   })
   ipcMain.handle('desktop:pet:panel-mode', (_event, mode: 'compact' | 'expanded') => {
-    setPetPanelMode(mode)
+    return setPetPanelMode(mode)
   })
   ipcMain.handle('desktop:pet:move-window', (_event, delta: { x: number; y: number }) => {
     movePetWindow(delta)
@@ -1075,12 +1084,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('activate', () => {
-  // On macOS, re-create a window when dock icon is clicked and no windows open.
-  if (!getMainWindow() || getMainWindow()?.isDestroyed()) {
-    createWindow()
-  } else {
-    getMainWindow()?.show()
-  }
+  showCommunityWindow()
 })
 
 app.on('before-quit', () => {

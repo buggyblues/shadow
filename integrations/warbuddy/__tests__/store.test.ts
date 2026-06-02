@@ -188,8 +188,10 @@ describe('warbuddy community store', () => {
     expect(firstTask?.idempotencyKey).not.toBe(secondTask?.idempotencyKey)
     expect(firstTask?.body).toContain(`Assigned squad id: ${team.id}`)
     expect(firstTask?.body).toContain(`Assigned tank id: ${team.tankId}`)
-    expect(firstTask?.body).toContain('me.tank.speak(text)')
-    expect(firstTask?.body).toContain('me.engineer.speak(text)')
+    expect(firstTask?.body).toContain('onTankIdle(tank, enemy, game, squad)')
+    expect(firstTask?.body).toContain('onEngineerIdle(engineer, enemy, game, squad)')
+    expect(firstTask?.body).toContain('tank.moveTo(x,y)')
+    expect(firstTask?.body).toContain('engineer.speak(text)')
     expect(firstTask?.body).not.toContain('me.speak()')
   })
 

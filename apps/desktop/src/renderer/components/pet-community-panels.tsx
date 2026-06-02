@@ -1,4 +1,4 @@
-import { CheckCheck, FileText, Mic, RefreshCcw, Send, Store } from 'lucide-react'
+import { CheckCheck, FileText, Mic, RefreshCcw, Send } from 'lucide-react'
 import type { FormEvent, RefObject } from 'react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -10,10 +10,18 @@ import type {
   ChannelSubscription,
   CommunityChannelOption,
   CommunityServerOption,
+  DesktopPetAssetSettings,
   NotificationItem,
   SubscriptionFile,
 } from '../pet-types'
-import { PetPanelButton, PetPanelIconButton } from './pet-ui'
+import { DesktopPetAssetsManager, type PetAssetSettingsApi } from './desktop-pet-assets-settings'
+import {
+  PetPanelButton,
+  PetPanelCard,
+  PetPanelIconButton,
+  PetPanelInput,
+  PetPanelSelect,
+} from './pet-ui'
 
 function formatPanelTime(value?: number | string | null) {
   const date =
@@ -38,7 +46,7 @@ export function PetLoginGuide({
 }) {
   const { t } = useTranslation()
   return (
-    <section className="desktop-pet-login-guide">
+    <PetPanelCard className="desktop-pet-login-guide">
       <div>
         <strong>{t('desktopPet.auth.title')}</strong>
         <p>{t(descriptionKey)}</p>
@@ -48,7 +56,7 @@ export function PetLoginGuide({
           {t('desktopPet.auth.openMain')}
         </PetPanelButton>
       </div>
-    </section>
+    </PetPanelCard>
   )
 }
 
@@ -111,7 +119,7 @@ export function ChatPanel({
         </div>
       ) : (
         <form className="desktop-pet-chat-form" onSubmit={onSubmit}>
-          <input
+          <PetPanelInput
             ref={inputRef}
             value={chatInput}
             onChange={(event) => onInput(event.target.value)}
@@ -162,14 +170,16 @@ export function ChatPanel({
 }
 
 export function PetStorePanel({
+  api,
+  settings,
   authRequired,
-  onOpenSettings,
-  onOpenStore,
+  onSettings,
   onOpenMainWindow,
 }: {
+  api: PetAssetSettingsApi | null
+  settings: DesktopPetAssetSettings
   authRequired?: boolean
-  onOpenSettings: () => void
-  onOpenStore: () => void
+  onSettings: (settings: DesktopPetAssetSettings) => void
   onOpenMainWindow: () => void
 }) {
   const { t } = useTranslation()
@@ -187,33 +197,12 @@ export function PetStorePanel({
           descriptionKey="desktopPet.auth.storeDescription"
         />
       ) : null}
-      <div className="desktop-pet-inventory-item">
-        <span className="desktop-pet-subscription-file-icon" aria-hidden="true">
-          <Store size={16} />
-        </span>
-        <span className="desktop-pet-subscription-file-copy">
-          <strong>{t('desktopPet.store.petAssets')}</strong>
-          <small>{t('desktopPet.store.petAssetsHint')}</small>
-        </span>
-        <div className="desktop-pet-subscription-actions">
-          <PetPanelButton
-            type="button"
-            size="sm"
-            className="desktop-pet-subscription-open"
-            onClick={onOpenSettings}
-          >
-            {t('desktopPet.store.manage')}
-          </PetPanelButton>
-          <PetPanelButton
-            type="button"
-            size="sm"
-            className="desktop-pet-subscription-open"
-            onClick={onOpenStore}
-          >
-            {t('desktopPet.store.open')}
-          </PetPanelButton>
-        </div>
-      </div>
+      <DesktopPetAssetsManager
+        api={api}
+        settings={settings}
+        onSettings={onSettings}
+        variant="panel"
+      />
     </div>
   )
 }
@@ -284,7 +273,7 @@ export function CommunityPanel({
             <p className="desktop-pet-empty">{t('desktopPet.community.empty')}</p>
           ) : null}
           {notifications.map((notification) => (
-            <article
+            <PetPanelCard
               key={notification.id}
               className={
                 notification.isRead ? 'desktop-pet-notification read' : 'desktop-pet-notification'
@@ -315,7 +304,7 @@ export function CommunityPanel({
                   </PetPanelButton>
                 ) : null}
               </div>
-            </article>
+            </PetPanelCard>
           ))}
         </div>
       ) : null}
@@ -396,7 +385,7 @@ export function SubscriptionsPanel({
       {state !== 'auth' ? (
         <div className="desktop-pet-subscription-picker">
           <div className="desktop-pet-subscription-selects">
-            <select
+            <PetPanelSelect
               value={selectedServerId}
               onChange={(event) => onSelectServer(event.target.value)}
               disabled={servers.length === 0 || state === 'loading'}
@@ -408,8 +397,8 @@ export function SubscriptionsPanel({
                   {server.name}
                 </option>
               ))}
-            </select>
-            <select
+            </PetPanelSelect>
+            <PetPanelSelect
               value={selectedChannelId}
               onChange={(event) => onSelectChannel(event.target.value)}
               disabled={visibleChannels.length === 0 || state === 'loading'}
@@ -421,7 +410,7 @@ export function SubscriptionsPanel({
                   {channel.name}
                 </option>
               ))}
-            </select>
+            </PetPanelSelect>
           </div>
           <PetPanelButton
             type="button"
@@ -471,7 +460,7 @@ export function SubscriptionsPanel({
       ) : null}
       {state !== 'auth'
         ? files.map((file) => (
-            <div key={file.id} className="desktop-pet-inventory-item">
+            <PetPanelCard key={file.id} className="desktop-pet-inventory-item">
               <span className="desktop-pet-subscription-file-icon" aria-hidden="true">
                 <FileText size={16} />
               </span>
@@ -495,7 +484,7 @@ export function SubscriptionsPanel({
                     : t('desktopPet.subscriptions.openDefault')}
                 </PetPanelButton>
               </div>
-            </div>
+            </PetPanelCard>
           ))
         : null}
     </div>

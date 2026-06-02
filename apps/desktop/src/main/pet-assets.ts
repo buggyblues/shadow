@@ -10,13 +10,14 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, dirname, join, normalize, relative, sep } from 'node:path'
-import { app, dialog, ipcMain, nativeImage, net } from 'electron'
+import { basename, dirname, extname, join, normalize, relative, sep } from 'node:path'
+import { app, dialog, ipcMain, net } from 'electron'
 import JSZip from 'jszip'
 import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../shared/community-auth'
 import { fetchCommunityWithAuth, forgetCommunityAccessToken } from './connector-daemon'
 import {
   broadcastDesktopSettings,
+  type CodexPetAnimationKey,
   type DesktopPetAssetPack,
   type DesktopPetAssetSprite,
   getDesktopServerBaseUrl,
@@ -24,32 +25,56 @@ import {
   saveDesktopSettings,
 } from './desktop-settings'
 
-const PET_PACK_SCHEMA_VERSION = 'shadow.desktopPet.pack.v1'
-const METADATA_MAX_BYTES = 128 * 1024
-const PACK_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$/
-const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:[-+][0-9A-Za-z.-]+)?$/
+const PET_JSON_MAX_BYTES = 64 * 1024
+const PACK_ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/
 const IMAGE_EXTENSIONS = new Set(['.png', '.webp'])
-const PREVIEW_EXTENSIONS = new Set(['.png', '.webp', '.jpg', '.jpeg'])
-const PACK_ARCHIVE_EXTENSIONS = new Set(['.zip', '.shadowpet'])
-const STANDARD_EMOTIONS = new Set([
-  'excited',
-  'content',
-  'calm',
-  'lonely',
-  'hungry',
-  'sleepy',
-  'sick',
-])
-const STANDARD_INTERACTIONS = new Set([
-  'tap',
-  'drag',
-  'voice',
-  'feed',
-  'pet',
-  'play',
-  'rest',
-  'explore',
-  'tea',
+const PACK_ARCHIVE_EXTENSIONS = new Set(['.zip'])
+const CODEX_ATLAS_COLUMNS = 8
+const CODEX_ATLAS_ROWS = 9
+const CODEX_CELL_WIDTH = 192
+const CODEX_CELL_HEIGHT = 208
+const CODEX_SPRITESHEET_WIDTH = CODEX_ATLAS_COLUMNS * CODEX_CELL_WIDTH
+const CODEX_SPRITESHEET_HEIGHT = CODEX_ATLAS_ROWS * CODEX_CELL_HEIGHT
+const CODEX_PET_STATES: CodexPetAnimationKey[] = [
+  'idle',
+  'running-right',
+  'running-left',
+  'waving',
+  'jumping',
+  'failed',
+  'waiting',
+  'running',
+  'review',
+]
+const CODEX_STATE_FPS: Record<CodexPetAnimationKey, number> = {
+  idle: 5,
+  'running-right': 8,
+  'running-left': 8,
+  waving: 6,
+  jumping: 6,
+  failed: 7,
+  waiting: 6,
+  running: 7,
+  review: 6,
+}
+const CODEX_STATE_FRAME_COUNTS: Record<CodexPetAnimationKey, number> = {
+  idle: 6,
+  'running-right': 8,
+  'running-left': 8,
+  waving: 4,
+  jumping: 5,
+  failed: 8,
+  waiting: 6,
+  running: 6,
+  review: 6,
+}
+const CODEX_LOOPING_STATES = new Set<CodexPetAnimationKey>([
+  'idle',
+  'running-right',
+  'running-left',
+  'waiting',
+  'running',
+  'review',
 ])
 const BLOCKED_EXTENSIONS = new Set([
   '.app',
@@ -96,16 +121,6 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
-function asLocaleMap(value: unknown): Record<string, string> {
-  const record = asRecord(value)
-  const result: Record<string, string> = {}
-  for (const [locale, text] of Object.entries(record)) {
-    if (typeof text === 'string' && locale.trim() && text.trim())
-      result[locale.trim()] = text.trim()
-  }
-  return result
-}
-
 function safeRelativePath(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null
   const trimmed = value.trim().replace(/\\/g, '/')
@@ -124,10 +139,93 @@ function resolvePackFile(packDir: string, relativePath: string): string | null {
   return resolved
 }
 
+function readUInt24LE(buffer: Buffer, offset: number): number | null {
+  if (offset + 3 > buffer.byteLength) return null
+  return buffer[offset]! | (buffer[offset + 1]! << 8) | (buffer[offset + 2]! << 16)
+}
+
+function pngImageSize(buffer: Buffer): { width: number; height: number } | null {
+  if (
+    buffer.byteLength < 24 ||
+    buffer[0] !== 0x89 ||
+    buffer.toString('ascii', 1, 4) !== 'PNG' ||
+    buffer[4] !== 0x0d ||
+    buffer[5] !== 0x0a ||
+    buffer[6] !== 0x1a ||
+    buffer[7] !== 0x0a ||
+    buffer.toString('ascii', 12, 16) !== 'IHDR'
+  ) {
+    return null
+  }
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  }
+}
+
+function webpImageSize(buffer: Buffer): { width: number; height: number } | null {
+  if (
+    buffer.byteLength < 20 ||
+    buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+    buffer.toString('ascii', 8, 12) !== 'WEBP'
+  ) {
+    return null
+  }
+
+  let offset = 12
+  while (offset + 8 <= buffer.byteLength) {
+    const chunkType = buffer.toString('ascii', offset, offset + 4)
+    const chunkSize = buffer.readUInt32LE(offset + 4)
+    const dataOffset = offset + 8
+    const chunkEnd = dataOffset + chunkSize
+    if (chunkEnd > buffer.byteLength) return null
+
+    if (chunkType === 'VP8X') {
+      if (chunkSize < 10) return null
+      const width = readUInt24LE(buffer, dataOffset + 4)
+      const height = readUInt24LE(buffer, dataOffset + 7)
+      return width === null || height === null ? null : { width: width + 1, height: height + 1 }
+    }
+
+    if (chunkType === 'VP8L') {
+      if (chunkSize < 5 || buffer[dataOffset] !== 0x2f) return null
+      const width = 1 + (((buffer[dataOffset + 2]! & 0x3f) << 8) | buffer[dataOffset + 1]!)
+      const height =
+        1 +
+        (((buffer[dataOffset + 4]! & 0x0f) << 10) |
+          (buffer[dataOffset + 3]! << 2) |
+          ((buffer[dataOffset + 2]! & 0xc0) >> 6))
+      return { width, height }
+    }
+
+    if (chunkType === 'VP8 ') {
+      if (
+        chunkSize < 10 ||
+        buffer[dataOffset + 3] !== 0x9d ||
+        buffer[dataOffset + 4] !== 0x01 ||
+        buffer[dataOffset + 5] !== 0x2a
+      ) {
+        return null
+      }
+      return {
+        width: buffer.readUInt16LE(dataOffset + 6) & 0x3fff,
+        height: buffer.readUInt16LE(dataOffset + 8) & 0x3fff,
+      }
+    }
+
+    offset = chunkEnd + (chunkSize % 2)
+  }
+
+  return null
+}
+
 function imageSize(path: string): { width: number; height: number } | null {
-  const image = nativeImage.createFromPath(path)
-  if (image.isEmpty()) return null
-  return image.getSize()
+  try {
+    const buffer = readFileSync(path)
+    return pngImageSize(buffer) ?? webpImageSize(buffer)
+  } catch {
+    return null
+  }
 }
 
 function validateReferencedFile(
@@ -147,147 +245,37 @@ function validateReferencedFile(
   return relativePath
 }
 
-function parseSprite(packDir: string, key: string, value: unknown): DesktopPetAssetSprite {
-  const record = asRecord(value)
-  const src = validateReferencedFile(packDir, record.src, IMAGE_EXTENSIONS, `sprites.${key}.src`)
-  const frame = asRecord(record.frame)
-  const width = Math.floor(Number(frame.width))
-  const height = Math.floor(Number(frame.height))
-  const count = Math.floor(Number(frame.count))
-  const fps = Math.floor(Number(frame.fps))
-  if (width <= 0 || height <= 0 || count <= 0 || fps <= 0) {
-    throw new Error(`sprites.${key}.frame width, height, count, and fps are required`)
-  }
-  if (count > 60 || fps > 30) throw new Error(`sprites.${key}.frame exceeds animation caps`)
+function validateCodexSpritesheet(packDir: string, value: unknown): string {
+  const src = validateReferencedFile(packDir, value, IMAGE_EXTENSIONS, 'spritesheetPath')
   const fullPath = resolvePackFile(packDir, src)
   const size = fullPath ? imageSize(fullPath) : null
-  if (!size) throw new Error(`sprites.${key}.src is not a readable image`)
-  if (size.width !== width * count || size.height !== height) {
-    throw new Error(
-      `sprites.${key} sheet is ${size.width}x${size.height}; expected ${width * count}x${height}`,
-    )
+  if (!size) throw new Error('spritesheetPath is not a readable image')
+  if (size.width !== CODEX_SPRITESHEET_WIDTH || size.height !== CODEX_SPRITESHEET_HEIGHT) {
+    throw new Error(`spritesheet must be ${CODEX_SPRITESHEET_WIDTH}x${CODEX_SPRITESHEET_HEIGHT}`)
   }
-  return {
-    src,
-    frame: { width, height, count, fps },
-    loop: typeof record.loop === 'boolean' ? record.loop : key === 'idle',
-  }
+  return src
 }
 
-function referencedSpriteKey(value: unknown): string | null {
-  if (typeof value === 'string') return value.trim() || null
-  const record = asRecord(value)
-  for (const key of ['sprite', 'motion']) {
-    const candidate = record[key]
-    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
-  }
-  return null
-}
-
-function parseExpressionMap(
-  value: unknown,
-  sprites: Record<string, DesktopPetAssetSprite>,
-): Record<string, unknown> | undefined {
-  const input = asRecord(value)
-  const result: Record<string, unknown> = {}
-  for (const [rawKey, rawEntry] of Object.entries(input)) {
-    const key = rawKey.trim()
-    if (!key) continue
-    if (!STANDARD_EMOTIONS.has(key)) throw new Error(`expressions.${key} is not supported`)
-    const spriteKey = referencedSpriteKey(rawEntry)
-    if (spriteKey && !sprites[spriteKey]) {
-      throw new Error(`expressions.${key}.sprite references unknown sprite: ${spriteKey}`)
+function codexSprites(src: string): Record<string, DesktopPetAssetSprite> {
+  const sprites: Record<string, DesktopPetAssetSprite> = {}
+  for (const [row, state] of CODEX_PET_STATES.entries()) {
+    sprites[state] = {
+      src,
+      frame: {
+        width: CODEX_CELL_WIDTH,
+        height: CODEX_CELL_HEIGHT,
+        count: CODEX_STATE_FRAME_COUNTS[state],
+        fps: CODEX_STATE_FPS[state],
+      },
+      atlas: {
+        columns: CODEX_ATLAS_COLUMNS,
+        rows: CODEX_ATLAS_ROWS,
+        row,
+      },
+      loop: CODEX_LOOPING_STATES.has(state),
     }
-    result[key] = typeof rawEntry === 'string' ? { sprite: spriteKey } : asRecord(rawEntry)
   }
-  return Object.keys(result).length ? result : undefined
-}
-
-function parseInteractionMap(
-  value: unknown,
-  sprites: Record<string, DesktopPetAssetSprite>,
-): Record<string, unknown> | undefined {
-  const input = asRecord(value)
-  const result: Record<string, unknown> = {}
-  for (const [rawKey, rawEntry] of Object.entries(input)) {
-    const key = rawKey.trim()
-    if (!key) continue
-    if (!STANDARD_INTERACTIONS.has(key)) {
-      throw new Error(`interactionMap.${key} is not a supported interaction`)
-    }
-    const spriteKey = referencedSpriteKey(rawEntry)
-    if (spriteKey && !sprites[spriteKey]) {
-      throw new Error(`interactionMap.${key}.sprite references unknown sprite: ${spriteKey}`)
-    }
-    result[key] = typeof rawEntry === 'string' ? { sprite: spriteKey } : asRecord(rawEntry)
-  }
-  return Object.keys(result).length ? result : undefined
-}
-
-function parseHitAreas(value: unknown): Record<string, unknown> | undefined {
-  const input = asRecord(value)
-  const result: Record<string, unknown> = {}
-  for (const [rawKey, rawEntry] of Object.entries(input)) {
-    const key = rawKey.trim()
-    const entry = asRecord(rawEntry)
-    const x = Number(entry.x)
-    const y = Number(entry.y)
-    const width = Number(entry.width)
-    const height = Number(entry.height)
-    if (!key) continue
-    if (![x, y, width, height].every((part) => Number.isFinite(part))) {
-      throw new Error(`hitAreas.${key} requires x, y, width, and height`)
-    }
-    if (width <= 0 || height <= 0 || x < 0 || y < 0 || x + width > 1 || y + height > 1) {
-      throw new Error(`hitAreas.${key} must stay within normalized 0..1 bounds`)
-    }
-    const actions = Array.isArray(entry.actions)
-      ? entry.actions.filter(
-          (action): action is string =>
-            typeof action === 'string' && STANDARD_INTERACTIONS.has(action),
-        )
-      : []
-    result[key] = actions.length ? { x, y, width, height, actions } : { x, y, width, height }
-  }
-  return Object.keys(result).length ? result : undefined
-}
-
-function parseEntry(value: unknown): DesktopPetAssetPack['entry'] {
-  const entry = asRecord(value)
-  if (entry.renderer !== 'sprite-sheet') {
-    throw new Error('only sprite-sheet packs are supported now')
-  }
-  const result: NonNullable<DesktopPetAssetPack['entry']> = { renderer: 'sprite-sheet' }
-  const pixelRatio = Number(entry.pixelRatio)
-  if (Number.isFinite(pixelRatio) && pixelRatio > 0 && pixelRatio <= 4) {
-    result.pixelRatio = pixelRatio
-  }
-  const canvas = asRecord(entry.canvas)
-  const canvasWidth = Math.floor(Number(canvas.width))
-  const canvasHeight = Math.floor(Number(canvas.height))
-  if (canvasWidth > 0 && canvasHeight > 0) {
-    if (canvasWidth > 1024 || canvasHeight > 1024) {
-      throw new Error('entry.canvas exceeds 1024 px per side')
-    }
-    result.canvas = { width: canvasWidth, height: canvasHeight }
-  }
-  const anchor = asRecord(entry.anchor)
-  const anchorX = Number(anchor.x)
-  const anchorY = Number(anchor.y)
-  if (Number.isFinite(anchorX) || Number.isFinite(anchorY)) {
-    if (
-      !Number.isFinite(anchorX) ||
-      !Number.isFinite(anchorY) ||
-      anchorX < 0 ||
-      anchorY < 0 ||
-      anchorX > 1 ||
-      anchorY > 1
-    ) {
-      throw new Error('entry.anchor must use normalized 0..1 coordinates')
-    }
-    result.anchor = { x: anchorX, y: anchorY }
-  }
-  return result
+  return sprites
 }
 
 function scanPackSurface(packDir: string): void {
@@ -314,65 +302,32 @@ function scanPackSurface(packDir: string): void {
   if (totalSize > 80 * 1024 * 1024) throw new Error('pet pack exceeds 80 MB')
 }
 
-function parsePetPackMetadata(
+function parseCodexPetManifest(
   packDir: string,
   sourcePath: string,
   importSource: PetPackImportSource = { source: 'local' },
 ): DesktopPetAssetPack {
-  const metadataPath = join(packDir, 'metadata.json')
-  if (!existsSync(metadataPath)) throw new Error('metadata.json is required')
-  if (statSync(metadataPath).size > METADATA_MAX_BYTES) {
-    throw new Error('metadata.json exceeds 128 KB')
+  const manifestPath = join(packDir, 'pet.json')
+  if (!existsSync(manifestPath)) throw new Error('pet.json is required')
+  if (statSync(manifestPath).size > PET_JSON_MAX_BYTES) {
+    throw new Error('pet.json exceeds 64 KB')
   }
-  const metadata = asRecord(JSON.parse(readFileSync(metadataPath, 'utf8')))
-  if (metadata.schemaVersion !== PET_PACK_SCHEMA_VERSION) {
-    throw new Error(`schemaVersion must be ${PET_PACK_SCHEMA_VERSION}`)
-  }
-  const id = typeof metadata.id === 'string' ? metadata.id.trim() : ''
-  const version = typeof metadata.version === 'string' ? metadata.version.trim() : ''
-  if (!PACK_ID_PATTERN.test(id)) throw new Error('id must be a lowercase pet pack slug')
-  if (!SEMVER_PATTERN.test(version)) throw new Error('version must be semver')
-  const displayName = asLocaleMap(metadata.displayName)
-  if (!displayName.en) throw new Error('displayName.en is required')
-  const compatibility = asRecord(metadata.compatibility)
-  if (!Object.keys(compatibility).length) throw new Error('compatibility is required')
-  const compatibilityRenderers = Array.isArray(compatibility.renderer) ? compatibility.renderer : []
-  if (!compatibilityRenderers.includes('sprite-sheet')) {
-    throw new Error('compatibility.renderer must include sprite-sheet')
-  }
-  const entry = parseEntry(metadata.entry)
-  const spritesInput = asRecord(metadata.sprites)
-  const sprites: Record<string, DesktopPetAssetSprite> = {}
-  for (const [key, sprite] of Object.entries(spritesInput)) {
-    if (key.trim()) sprites[key.trim()] = parseSprite(packDir, key.trim(), sprite)
-  }
-  if (!sprites.idle) throw new Error('sprites.idle is required')
-
-  const files = asRecord(metadata.files)
-  const cover = files.cover
-    ? validateReferencedFile(packDir, files.cover, PREVIEW_EXTENSIONS, 'files.cover')
-    : undefined
-  const thumbnail = files.thumbnail
-    ? validateReferencedFile(packDir, files.thumbnail, PREVIEW_EXTENSIONS, 'files.thumbnail')
-    : undefined
+  const manifest = asRecord(JSON.parse(readFileSync(manifestPath, 'utf8')))
+  const id = typeof manifest.id === 'string' ? manifest.id.trim() : ''
+  if (!PACK_ID_PATTERN.test(id)) throw new Error('id must be a lowercase Codex pet slug')
+  const displayName = typeof manifest.displayName === 'string' ? manifest.displayName.trim() : ''
+  if (!displayName) throw new Error('displayName is required')
+  const description = typeof manifest.description === 'string' ? manifest.description.trim() : ''
+  const spritesheetPath = validateCodexSpritesheet(packDir, manifest.spritesheetPath)
+  const version = typeof manifest.version === 'string' ? manifest.version.trim() : undefined
 
   return {
     id,
     version,
-    displayName,
-    description:
-      typeof metadata.description === 'string'
-        ? metadata.description
-        : asLocaleMap(metadata.description),
-    author: asRecord(metadata.author),
-    license: asRecord(metadata.license),
-    compatibility: compatibility as DesktopPetAssetPack['compatibility'],
-    entry,
-    files: { cover, thumbnail },
-    sprites,
-    expressions: parseExpressionMap(metadata.expressions, sprites),
-    hitAreas: parseHitAreas(metadata.hitAreas),
-    interactionMap: parseInteractionMap(metadata.interactionMap, sprites),
+    displayName: { en: displayName },
+    description,
+    spritesheetPath,
+    sprites: codexSprites(spritesheetPath),
     importedAt: new Date().toISOString(),
     source: importSource.source,
     sourcePath,
@@ -391,12 +346,12 @@ function importPetPackFromDirectory(
     throw new Error('pet pack directory does not exist')
   }
   scanPackSurface(sourceDir)
-  const draft = parsePetPackMetadata(sourceDir, sourceDir, importSource)
-  const targetDir = join(petPackRoot(), sanitizeFolderName(`${draft.id}-${draft.version}`))
+  const draft = parseCodexPetManifest(sourceDir, sourceDir, importSource)
+  const targetDir = join(petPackRoot(), sanitizeFolderName(draft.id))
   mkdirSync(petPackRoot(), { recursive: true })
   if (existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true })
   cpSync(sourceDir, targetDir, { recursive: true })
-  return parsePetPackMetadata(targetDir, targetDir, importSource)
+  return parseCodexPetManifest(targetDir, targetDir, importSource)
 }
 
 async function extractPetPackArchive(buffer: Buffer): Promise<string> {
@@ -432,11 +387,11 @@ async function extractPetPackArchive(buffer: Buffer): Promise<string> {
 }
 
 function resolveExtractedPetPackDir(tempDir: string): string {
-  if (existsSync(join(tempDir, 'metadata.json'))) return tempDir
+  if (existsSync(join(tempDir, 'pet.json'))) return tempDir
   const entries = readdirSync(tempDir)
     .map((entry) => join(tempDir, entry))
     .filter((entryPath) => lstatSync(entryPath).isDirectory())
-  if (entries.length === 1 && existsSync(join(entries[0]!, 'metadata.json'))) return entries[0]!
+  if (entries.length === 1 && existsSync(join(entries[0]!, 'pet.json'))) return entries[0]!
   return tempDir
 }
 
@@ -450,6 +405,46 @@ async function importPetPackFromArchive(
   } finally {
     rmSync(tempDir, { recursive: true, force: true })
   }
+}
+
+async function importPetPackFromPath(
+  inputPath: string,
+  importSource: PetPackImportSource = { source: 'local' },
+): Promise<DesktopPetAssetPack> {
+  const sourcePath = normalize(inputPath)
+  if (!existsSync(sourcePath)) throw new Error('pet pack path does not exist')
+  const stats = statSync(sourcePath)
+  if (stats.isDirectory()) return importPetPackFromDirectory(sourcePath, importSource)
+  if (!stats.isFile()) throw new Error('pet pack path must be a file or directory')
+  const extension = extname(sourcePath).toLowerCase()
+  if (!PACK_ARCHIVE_EXTENSIONS.has(extension)) {
+    throw new Error('pet pack file must be a .zip archive')
+  }
+  if (stats.size > 80 * 1024 * 1024) throw new Error('pet pack exceeds 80 MB')
+  return importPetPackFromArchive(readFileSync(sourcePath), importSource)
+}
+
+function bufferFromIpc(value: unknown): Buffer {
+  if (Buffer.isBuffer(value)) return value
+  if (value instanceof ArrayBuffer) return Buffer.from(value)
+  if (ArrayBuffer.isView(value)) {
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength)
+  }
+  throw new Error('pet pack archive data is required')
+}
+
+async function importPetPackFromArchiveData(
+  input?: { name?: unknown; data?: unknown },
+  importSource: PetPackImportSource = { source: 'local' },
+): Promise<DesktopPetAssetPack> {
+  const fileName = typeof input?.name === 'string' ? input.name : 'pet.codex-pet.zip'
+  const extension = extname(fileName).toLowerCase()
+  if (!PACK_ARCHIVE_EXTENSIONS.has(extension)) {
+    throw new Error('pet pack file must be a .zip archive')
+  }
+  const buffer = bufferFromIpc(input?.data)
+  if (buffer.byteLength > 80 * 1024 * 1024) throw new Error('pet pack exceeds 80 MB')
+  return importPetPackFromArchive(buffer, importSource)
 }
 
 async function fetchMarketplaceJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -529,14 +524,15 @@ export function setupDesktopPetAssetHandlers(): void {
       let packDir = typeof input?.path === 'string' ? input.path : ''
       if (!packDir) {
         const result = await dialog.showOpenDialog({
-          title: 'Import Desktop Pet Pack',
-          properties: ['openDirectory'],
+          title: 'Import Codex Pet Package',
+          properties: ['openFile', 'openDirectory'],
+          filters: [{ name: 'Codex Pet Package', extensions: ['zip'] }],
         })
         if (result.canceled) return readDesktopSettings()
         packDir = result.filePaths[0] ?? ''
       }
       if (!packDir) return readDesktopSettings()
-      return savePetPack(importPetPackFromDirectory(packDir))
+      return savePetPack(await importPetPackFromPath(packDir))
     },
   )
 
@@ -555,6 +551,12 @@ export function setupDesktopPetAssetHandlers(): void {
       })
       return savePetPack(pack)
     },
+  )
+
+  ipcMain.handle(
+    'desktop:petAssets:importArchiveBuffer',
+    async (_event, input?: { name?: unknown; data?: unknown }) =>
+      savePetPack(await importPetPackFromArchiveData(input)),
   )
 
   ipcMain.handle('desktop:petAssets:setActive', (_event, input: { packId?: unknown }) => {
@@ -588,8 +590,10 @@ export function setupDesktopPetAssetHandlers(): void {
 
 export const __desktopPetAssetTestHooks = {
   importPetPackFromArchive,
+  importPetPackFromArchiveData,
   importPetPackFromDirectory,
-  parsePetPackMetadata,
+  importPetPackFromPath,
+  parseCodexPetManifest,
   resolveExtractedPetPackDir,
   safeRelativePath,
 }

@@ -13,6 +13,7 @@ export interface DesktopRuntimeSettings {
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
   shortcuts: DesktopShortcutSettings
+  desktopPetVisible: boolean
   desktopPetActivePackId: string
   desktopPetPacks: DesktopPetAssetPack[]
 }
@@ -203,6 +204,7 @@ export interface DesktopSettingsAPI {
     method?: string
     body?: unknown
     headers?: Record<string, string>
+    optional?: boolean
   }) => Promise<T>
   openExternal?: (url: string) => Promise<boolean>
   selectDirectory?: (defaultPath?: string) => Promise<string | null>
@@ -258,6 +260,7 @@ export interface DesktopSettingsAPI {
   setDesktopSettings: (settings: Partial<DesktopRuntimeSettings>) => Promise<DesktopRuntimeSettings>
   petAssets?: {
     importDirectory?: (path?: string) => Promise<DesktopPetAssetSettings>
+    importFile?: (file: File) => Promise<DesktopPetAssetSettings>
     importMarketplace?: (input: {
       entitlementId: string
       fileId: string

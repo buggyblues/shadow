@@ -550,12 +550,18 @@ h2 {
   will-change: left, top, transform;
 }
 
-.arena-entities.replay-motion .tank-anchor,
-.arena-entities.replay-motion .engineer-anchor {
+.arena-entities .tank-anchor {
   transition:
-    left 360ms linear,
-    top 360ms linear,
-    transform 360ms cubic-bezier(0.19, 0.88, 0.26, 1);
+    left var(--tank-move-ms, 56ms) linear,
+    top var(--tank-move-ms, 56ms) linear,
+    transform 96ms cubic-bezier(0.19, 0.88, 0.26, 1);
+}
+
+.arena-entities .engineer-anchor {
+  transition:
+    left var(--engineer-motion-ms, 56ms) linear,
+    top var(--engineer-motion-ms, 56ms) linear,
+    transform 96ms cubic-bezier(0.19, 0.88, 0.26, 1);
 }
 
 .star-anchor {

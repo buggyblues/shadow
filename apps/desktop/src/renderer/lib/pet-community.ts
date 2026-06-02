@@ -20,9 +20,13 @@ export {
 
 const SHADOW_WEB_ORIGIN = 'https://shadowob.com'
 const DESKTOP_SETTINGS_STORAGE_KEY = 'shadow:desktop-runtime-settings:v1'
+const DESKTOP_COMMUNITY_NOT_FOUND_PAYLOAD = { __desktopCommunityNotFound: true } as const
 
 type ShadowCommunityAuthApi = Pick<DesktopPetApi, 'getCommunityAuthToken'>
 type ShadowCommunityApi = ShadowCommunityAuthApi & Pick<DesktopPetApi, 'communityFetchJson'>
+type DesktopCommunityFetchOptions = RequestInit & {
+  optionalNotFound?: boolean
+}
 
 function metaString(source: { metadata?: Record<string, unknown> | null }, key: string) {
   const value = source.metadata?.[key]
@@ -82,7 +86,7 @@ export async function readShadowAccessToken(api: ShadowCommunityAuthApi | null):
 export async function fetchShadow<T>(
   api: ShadowCommunityApi | null,
   path: string,
-  options?: RequestInit,
+  options?: DesktopCommunityFetchOptions,
 ): Promise<T> {
   if (api?.communityFetchJson) {
     const headers =
@@ -104,21 +108,30 @@ export async function fetchShadow<T>(
       method: options?.method,
       body,
       headers,
+      ...(options?.optionalNotFound === true ? { optional: true } : {}),
     })
   }
 
+  const { optionalNotFound, ...requestOptions } = options ?? {}
   const token = await readShadowAccessToken(api)
   if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
   const response = await fetch(getShadowUrl(path), {
-    ...options,
+    ...requestOptions,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
-      ...(options?.headers ?? {}),
+      ...(requestOptions.headers ?? {}),
     },
   })
+  if (optionalNotFound && response.status === 404) {
+    return DESKTOP_COMMUNITY_NOT_FOUND_PAYLOAD as T
+  }
   if (!response.ok) throw new Error(`REQUEST_FAILED_${response.status}`)
   return response.json() as Promise<T>
+}
+
+function isDesktopCommunityNotFoundPayload(payload: unknown) {
+  return asRecord(payload).__desktopCommunityNotFound === true
 }
 
 export function onCommunityAuthRequired(callback: () => void) {
@@ -143,7 +156,12 @@ export async function loadCommunityChannelOptions(api: DesktopPetApi | null) {
           channelPayload = await fetchShadow<unknown>(
             api,
             `/api/servers/${encodeURIComponent(serverRouteId)}/channels`,
+            { optionalNotFound: true },
           )
+          if (isDesktopCommunityNotFoundPayload(channelPayload)) {
+            lastError = new Error('REQUEST_FAILED_404')
+            continue
+          }
           lastError = null
           break
         } catch (error) {
@@ -167,59 +185,55 @@ export async function loadCommunityChannelOptions(api: DesktopPetApi | null) {
   return [...byId.values()]
 }
 
+export async function loadContentSubscriptions(api: DesktopPetApi | null) {
+  const payload = await fetchShadow<unknown>(api, '/api/content-subscriptions', {
+    optionalNotFound: true,
+  })
+  if (isDesktopCommunityNotFoundPayload(payload)) return []
+  return normalizeContentSubscriptions(payload)
+}
+
+export async function subscribeContentChannel(
+  api: DesktopPetApi | null,
+  channel: CommunityChannelOption,
+) {
+  const payload = await fetchShadow<unknown>(
+    api,
+    `/api/channels/${encodeURIComponent(channel.id)}/content-subscription`,
+    { method: 'POST' },
+  )
+  return normalizeContentSubscription(payload, channel)
+}
+
+export async function unsubscribeContentChannel(
+  api: DesktopPetApi | null,
+  subscription: ChannelSubscription,
+) {
+  if (!subscription.id) return { ok: true }
+  return fetchShadow<{ ok: true }>(
+    api,
+    `/api/content-subscriptions/${encodeURIComponent(subscription.id)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function markContentFeedOpened(api: DesktopPetApi | null, feedItemId: string) {
+  return fetchShadow<unknown>(api, `/api/content-feed/${encodeURIComponent(feedItemId)}/events`, {
+    method: 'POST',
+    body: JSON.stringify({ state: 'opened' }),
+    optionalNotFound: true,
+  })
+}
+
 export async function loadSubscriptionFiles(
   api: DesktopPetApi | null,
-  subscriptions: ChannelSubscription[],
+  _subscriptions: ChannelSubscription[],
 ) {
-  const files: SubscriptionFile[] = []
-  await Promise.allSettled(
-    subscriptions.map(async (subscription) => {
-      const payload = await fetchShadow<unknown>(
-        api,
-        `/api/channels/${encodeURIComponent(subscription.channelId)}/messages?limit=40`,
-      )
-      const messages = asArray(asRecord(payload).messages ?? payload)
-      for (const message of messages) {
-        const messageRecord = asRecord(message)
-        const createdAt = firstString(messageRecord.createdAt, messageRecord.updatedAt)
-        for (const rawAttachment of asArray(messageRecord.attachments)) {
-          const attachment = asRecord(rawAttachment)
-          const url = await resolveAttachmentUrl(api, attachment)
-          if (!url) continue
-          const title =
-            firstString(
-              attachment.filename,
-              attachment.fileName,
-              attachment.name,
-              attachment.title,
-            ) ||
-            new URL(url).pathname.split('/').pop() ||
-            'file'
-          const contentType = firstString(
-            attachment.contentType,
-            attachment.mimeType,
-            attachment.type,
-          )
-          files.push({
-            id: firstString(attachment.id) || `${subscription.channelId}:${url}`,
-            attachmentId: firstString(attachment.id) || undefined,
-            title,
-            url,
-            contentType,
-            channelId: subscription.channelId,
-            channelName: subscription.channelName,
-            serverName: subscription.serverName,
-            createdAt,
-            unread: Boolean(
-              createdAt &&
-                (!subscription.lastSeenAt ||
-                  new Date(createdAt).getTime() > new Date(subscription.lastSeenAt).getTime()),
-            ),
-          })
-        }
-      }
-    }),
-  )
+  const payload = await fetchShadow<unknown>(api, '/api/content-feed?limit=50&sort=latest', {
+    optionalNotFound: true,
+  })
+  if (isDesktopCommunityNotFoundPayload(payload)) return []
+  const files = await normalizeContentFeedFiles(api, payload)
   return files.sort((left, right) => {
     const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0
     const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0
@@ -228,6 +242,7 @@ export async function loadSubscriptionFiles(
 }
 
 export function canOpenInElectronReader(file: SubscriptionFile) {
+  if (file.kind === 'card') return false
   const contentType = file.contentType.toLowerCase()
   const path = new URL(file.url).pathname.toLowerCase()
   return (
@@ -249,6 +264,122 @@ export function canOpenInElectronReader(file: SubscriptionFile) {
     path.endsWith('.txt') ||
     path.endsWith('.pdf')
   )
+}
+
+function normalizeContentSubscriptions(payload: unknown): ChannelSubscription[] {
+  const rows = asArray(asRecord(payload).subscriptions ?? payload)
+  return rows
+    .map((row) => normalizeContentSubscription(row))
+    .filter((subscription): subscription is ChannelSubscription => Boolean(subscription))
+}
+
+function normalizeContentSubscription(
+  row: unknown,
+  fallbackChannel?: CommunityChannelOption,
+): ChannelSubscription | null {
+  const record = asRecord(row)
+  const subscription = Object.keys(asRecord(record.subscription)).length
+    ? asRecord(record.subscription)
+    : record
+  const channel = Object.keys(asRecord(record.channel)).length
+    ? asRecord(record.channel)
+    : fallbackChannel
+      ? {
+          id: fallbackChannel.id,
+          name: fallbackChannel.name,
+          serverId: fallbackChannel.serverId,
+        }
+      : {}
+  const server = Object.keys(asRecord(record.server)).length
+    ? asRecord(record.server)
+    : fallbackChannel
+      ? {
+          id: fallbackChannel.serverId,
+          slug: fallbackChannel.serverSlug,
+          name: fallbackChannel.serverName,
+        }
+      : {}
+  const channelId = firstString(subscription.channelId, channel.id, fallbackChannel?.id)
+  const serverId = firstString(subscription.serverId, server.id, fallbackChannel?.serverId)
+  if (!channelId || !serverId) return null
+  return {
+    id: firstString(subscription.id) || undefined,
+    channelId,
+    channelName: firstString(channel.name, fallbackChannel?.name, channelId),
+    serverId,
+    serverSlug: firstString(server.slug, fallbackChannel?.serverSlug) || null,
+    serverName: firstString(server.name, fallbackChannel?.serverName, serverId),
+    lastSeenAt: firstString(subscription.lastReadAt, subscription.updatedAt) || undefined,
+    isDefault: Boolean(subscription.isDefault),
+  }
+}
+
+async function normalizeContentFeedFiles(
+  api: DesktopPetApi | null,
+  payload: unknown,
+): Promise<SubscriptionFile[]> {
+  const rows = asArray(asRecord(payload).items ?? payload)
+  const results = await Promise.allSettled(rows.map((row) => normalizeContentFeedFile(api, row)))
+  return results
+    .map((result) => (result.status === 'fulfilled' ? result.value : null))
+    .filter((file): file is SubscriptionFile => Boolean(file))
+}
+
+async function normalizeContentFeedFile(
+  api: DesktopPetApi | null,
+  row: unknown,
+): Promise<SubscriptionFile | null> {
+  const item = asRecord(row)
+  const channel = asRecord(item.channel)
+  const server = asRecord(item.server)
+  const channelId = firstString(item.channelId, channel.id)
+  const serverId = firstString(item.serverId, server.id)
+  if (!channelId || !serverId) return null
+
+  const kinds = asArray(item.contentKinds).filter(
+    (value): value is string => typeof value === 'string',
+  )
+  const primaryAttachmentId = firstString(item.primaryAttachmentId)
+  const card = asArray(item.cardRefs)
+    .map(asRecord)
+    .find((entry) => entry.kind === 'server_app' && firstString(entry.appKey))
+  const appKey = card ? firstString(card.appKey) : ''
+  const appPath = card ? firstString(asRecord(card.action).path) : ''
+  const serverSlug = firstString(server.slug) || null
+  const serverRouteId = serverSlug ?? serverId
+  const kind = (
+    primaryAttachmentId ? kinds[0] : appKey ? 'card' : kinds[0]
+  ) as SubscriptionFile['kind']
+  const url = primaryAttachmentId
+    ? await resolveAttachmentUrl(api, { id: primaryAttachmentId })
+    : appKey
+      ? `/servers/${encodeURIComponent(serverRouteId)}/apps/${encodeURIComponent(appKey)}${
+          appPath.startsWith('/') ? `#${appPath}` : ''
+        }`
+      : `/servers/${encodeURIComponent(serverRouteId)}/channels/${encodeURIComponent(channelId)}`
+  if (!url) return null
+
+  return {
+    id: firstString(item.id) || `${channelId}:${url}`,
+    feedItemId: firstString(item.id) || undefined,
+    messageId: firstString(item.messageId) || undefined,
+    attachmentId: primaryAttachmentId || undefined,
+    title: firstString(card?.title, item.title) || 'Content',
+    url,
+    contentType:
+      firstString(item.primaryAttachmentContentType) ||
+      (kind === 'card' ? 'application/vnd.shadow.server-app' : 'application/octet-stream'),
+    kind,
+    appKey: appKey || undefined,
+    appPath: appPath || undefined,
+    channelId,
+    channelName: firstString(channel.name, channelId),
+    serverId,
+    serverSlug,
+    serverName: firstString(server.name, serverId),
+    createdAt: firstString(item.publishedAt, item.createdAt, item.updatedAt) || undefined,
+    unread: item.readState === 'unread',
+  }
 }
 
 function normalizeCommunityServers(payload: unknown): CommunityServerOption[] {

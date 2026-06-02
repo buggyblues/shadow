@@ -3,7 +3,16 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 
-export type DesktopPetAssetRenderer = 'sprite-sheet' | 'live2d-cubism'
+export type CodexPetAnimationKey =
+  | 'idle'
+  | 'running-right'
+  | 'running-left'
+  | 'waving'
+  | 'jumping'
+  | 'failed'
+  | 'waiting'
+  | 'running'
+  | 'review'
 
 export interface DesktopPetAssetSprite {
   src: string
@@ -13,35 +22,21 @@ export interface DesktopPetAssetSprite {
     count: number
     fps: number
   }
+  atlas?: {
+    columns: number
+    rows: number
+    row: number
+  }
   loop?: boolean
 }
 
 export interface DesktopPetAssetPack {
   id: string
-  version: string
+  version?: string
   displayName: Record<string, string>
   description?: Record<string, string> | string
-  author?: { name?: string; url?: string }
-  license?: { kind?: string; summary?: string }
-  compatibility?: {
-    shadowDesktop?: string
-    renderer?: DesktopPetAssetRenderer[]
-    features?: string[]
-  }
-  entry?: {
-    renderer?: DesktopPetAssetRenderer
-    pixelRatio?: number
-    canvas?: { width?: number; height?: number }
-    anchor?: { x?: number; y?: number }
-  }
-  files?: {
-    cover?: string
-    thumbnail?: string
-  }
+  spritesheetPath: string
   sprites: Record<string, DesktopPetAssetSprite>
-  expressions?: Record<string, unknown>
-  hitAreas?: Record<string, unknown>
-  interactionMap?: Record<string, unknown>
   importedAt: string
   source: 'local' | 'marketplace'
   sourcePath: string
@@ -63,6 +58,7 @@ export interface DesktopRuntimeSettings {
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
   shortcuts: DesktopShortcutSettings
+  desktopPetVisible: boolean
   desktopPetActivePackId: string
   desktopPetPacks: DesktopPetAssetPack[]
 }
@@ -108,6 +104,7 @@ const defaultSettings: DesktopRuntimeSettings = {
   ttsProvider: 'system',
   asrProvider: 'sherpa-local',
   shortcuts: defaultDesktopShortcuts,
+  desktopPetVisible: false,
   desktopPetActivePackId: '',
   desktopPetPacks: [],
 }
@@ -281,6 +278,15 @@ function normalizeDesktopPetSprite(value: unknown): DesktopPetAssetSprite | null
       sprite.frame = { width, height, count, fps }
     }
   }
+  const atlas = record.atlas
+  if (atlas && typeof atlas === 'object') {
+    const columns = Math.floor(Number(atlas.columns))
+    const rows = Math.floor(Number(atlas.rows))
+    const row = Math.floor(Number(atlas.row))
+    if (columns > 0 && rows > 0 && row >= 0 && row < rows) {
+      sprite.atlas = { columns, rows, row }
+    }
+  }
   if (typeof record.loop === 'boolean') sprite.loop = record.loop
   return sprite
 }
@@ -293,8 +299,10 @@ function normalizeDesktopPetPacks(value: unknown): DesktopPetAssetPack[] {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const record = item as Partial<DesktopPetAssetPack>
     const id = typeof record.id === 'string' ? record.id.trim() : ''
-    const version = typeof record.version === 'string' ? record.version.trim() : ''
+    const version = typeof record.version === 'string' ? record.version.trim() : undefined
     const sourcePath = typeof record.sourcePath === 'string' ? record.sourcePath.trim() : ''
+    const spritesheetPath =
+      typeof record.spritesheetPath === 'string' ? record.spritesheetPath.trim() : ''
     const displayName = normalizeLocaleMap(record.displayName)
     const sprites: Record<string, DesktopPetAssetSprite> = {}
     if (record.sprites && typeof record.sprites === 'object' && !Array.isArray(record.sprites)) {
@@ -303,7 +311,14 @@ function normalizeDesktopPetPacks(value: unknown): DesktopPetAssetPack[] {
         if (key.trim() && normalized) sprites[key.trim()] = normalized
       }
     }
-    if (!id || !version || !sourcePath || !displayName.en || !sprites.idle || seen.has(id)) {
+    if (
+      !id ||
+      !sourcePath ||
+      !spritesheetPath ||
+      !displayName.en ||
+      !sprites.idle?.atlas ||
+      seen.has(id)
+    ) {
       continue
     }
     seen.add(id)
@@ -315,25 +330,8 @@ function normalizeDesktopPetPacks(value: unknown): DesktopPetAssetPack[] {
         typeof record.description === 'string'
           ? record.description
           : normalizeLocaleMap(record.description),
-      author: record.author && typeof record.author === 'object' ? record.author : undefined,
-      license: record.license && typeof record.license === 'object' ? record.license : undefined,
-      compatibility:
-        record.compatibility && typeof record.compatibility === 'object'
-          ? record.compatibility
-          : undefined,
-      entry: record.entry && typeof record.entry === 'object' ? record.entry : undefined,
-      files: record.files && typeof record.files === 'object' ? record.files : undefined,
+      spritesheetPath,
       sprites,
-      expressions:
-        record.expressions && typeof record.expressions === 'object'
-          ? record.expressions
-          : undefined,
-      hitAreas:
-        record.hitAreas && typeof record.hitAreas === 'object' ? record.hitAreas : undefined,
-      interactionMap:
-        record.interactionMap && typeof record.interactionMap === 'object'
-          ? record.interactionMap
-          : undefined,
       importedAt:
         typeof record.importedAt === 'string' && record.importedAt.trim()
           ? record.importedAt.trim()
@@ -387,6 +385,7 @@ function normalizeDesktopSettings(parsed: Partial<DesktopRuntimeSettings>): Desk
     ttsProvider: normalizeTtsProvider(parsed.ttsProvider),
     asrProvider: normalizeAsrProvider(parsed.asrProvider),
     shortcuts: normalizeShortcuts(parsed.shortcuts),
+    desktopPetVisible: parsed.desktopPetVisible === true,
     desktopPetPacks: normalizeDesktopPetPacks(parsed.desktopPetPacks),
     desktopPetActivePackId:
       typeof parsed.desktopPetActivePackId === 'string' ? parsed.desktopPetActivePackId : '',
@@ -439,6 +438,10 @@ function mergeDesktopSettings(
         : normalizeAsrProvider(incoming.asrProvider),
     shortcuts:
       incoming.shortcuts === undefined ? current.shortcuts : normalizeShortcuts(incoming.shortcuts),
+    desktopPetVisible:
+      incoming.desktopPetVisible === undefined
+        ? current.desktopPetVisible
+        : incoming.desktopPetVisible === true,
     desktopPetPacks:
       incoming.desktopPetPacks === undefined
         ? current.desktopPetPacks

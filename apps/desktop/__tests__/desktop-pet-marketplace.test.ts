@@ -27,7 +27,7 @@ function entitlement(overrides: Record<string, unknown> = {}) {
     },
     paidFile: {
       id: 'file-1',
-      name: 'lazy.shadowpet.zip',
+      name: 'lazy-codex-pet.zip',
       mime: 'application/zip',
       sizeBytes: 1024,
     },
@@ -61,7 +61,7 @@ describe('desktop pet marketplace entitlements', () => {
         entitlement({
           id: 'filename',
           product: { id: 'product-3', name: 'Filename Pack', tags: [] },
-          paidFile: { id: 'file-3', name: 'bundle.shadowpet' },
+          paidFile: { id: 'file-3', name: 'bundle.codex-pet.zip' },
           metadata: {},
         }),
       ]).map((item) => item.id),
@@ -90,7 +90,14 @@ describe('desktop pet marketplace entitlements', () => {
           source: 'marketplace',
           marketplaceProductId: 'product-1',
           marketplacePaidFileId: 'file-1',
-          sprites: { idle: { src: 'sprites/idle.png' } },
+          spritesheetPath: 'spritesheet.webp',
+          sprites: {
+            idle: {
+              src: 'spritesheet.webp',
+              frame: { width: 192, height: 208, count: 6, fps: 5 },
+              atlas: { columns: 8, rows: 9, row: 0 },
+            },
+          },
         },
       ],
     }

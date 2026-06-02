@@ -20,8 +20,8 @@ describe('desktop pet marketplace helpers', () => {
   })
 
   it('accepts desktop pet archive filenames only', () => {
-    expect(isDesktopPetPackFilename('lazy.shadowpet')).toBe(true)
-    expect(isDesktopPetPackFilename('lazy.shadowpet.zip')).toBe(true)
+    expect(isDesktopPetPackFilename('lazy.shadowpet')).toBe(false)
+    expect(isDesktopPetPackFilename('lazy-codex-pet.zip')).toBe(true)
     expect(isDesktopPetPackFilename('lazy.zip')).toBe(true)
     expect(isDesktopPetPackFilename('lazy.png')).toBe(false)
   })

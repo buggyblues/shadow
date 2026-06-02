@@ -64,6 +64,7 @@ export function usePetServices({
   const [connectorSnapshot, setConnectorSnapshot] = useState<ConnectorSnapshot>({
     running: false,
     onlineCount: 0,
+    runtimeSessionStates: [],
     readySessions: [],
   })
 
@@ -203,10 +204,15 @@ export function usePetServices({
           new Set(runtimeScan.runtimeSessions.runtimeIds ?? []),
         )
       }
+      const runtimeSessionStates =
+        watchingRuntimes && runtimeScan?.runtimeSessions?.sessions
+          ? runtimeScan.runtimeSessions.sessions.map((session) => session.state)
+          : []
       const readySessions = buddyReadySessions
       setConnectorSnapshot({
-        running: state.running || readySessions.length > 0,
+        running: state.running || readySessions.length > 0 || runtimeSessionStates.length > 0,
         onlineCount: readySessions.length,
+        runtimeSessionStates,
         readySessions,
       })
     }

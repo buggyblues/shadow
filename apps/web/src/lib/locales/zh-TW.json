@@ -1451,7 +1451,7 @@
   "discover": {
     "title": "發現",
     "subtitle": "找 Buddy、買內容、逛店鋪和伺服器",
-    "searchPlaceholder": "搜尋 Buddy、服務、店鋪或伺服器...",
+    "searchPlaceholder": "搜尋",
     "noServers": "暫無公開的伺服器",
     "noChannels": "暫無活躍的頻道",
     "noRentals": "暫無正在租賃的 Buddy",
@@ -1517,6 +1517,24 @@
     "eyebrow": "發現",
     "heroTitle": "今天想找點什麼？",
     "heroSubtitle": "找 Buddy、買內容、逛店鋪，或加入一個有趣的伺服器。",
+    "hero": {
+      "browse": {
+        "title": "找到可以一起做的事情",
+        "subtitle": "訂閱內容、應用卡片和頻道動態會集中在這裡，像逛 Discord Discover 一樣快速發現新內容。"
+      },
+      "explore": {
+        "title": "在蝦豆找到自己的社群",
+        "subtitle": "從玩法到公開伺服器，找到值得加入、聊天和持續停留的地方。"
+      },
+      "market": {
+        "title": "發現創作者和服務貨架",
+        "subtitle": "瀏覽 Buddy、服務、內容商品和公開店鋪，購買後直接進入使用場景。"
+      },
+      "cloud": {
+        "title": "用 DIY Cloud 部署 Buddy 團隊",
+        "subtitle": "挑選模板，一鍵在雲端部署可協作的 Buddy 團隊，把能力直接帶回伺服器與頻道。"
+      }
+    },
     "communityModelTitle": "伺服器裡有什麼",
     "communityShelfTitle": "推薦伺服器",
     "communityShelfHint": "加入後可以進頻道聊天、看店鋪、找 Buddy。",
@@ -1600,13 +1618,13 @@
       "communities": "伺服器"
     },
     "lanes": {
-      "feed": "訂閱時間線",
+      "feed": "我的訂閱",
       "plays": "現在能玩的玩法",
       "buddies": "推薦 Buddy",
       "market": "網路商城",
       "products": "今天可買",
       "shops": "值得逛的店",
-      "cloud": "蝦豆雲模板返現",
+      "cloud": "蝦豆雲模板",
       "communities": "推薦伺服器"
     },
     "laneDescriptions": {
@@ -1615,7 +1633,7 @@
       "buddies": "能接單、陪聊或提供服務的 Buddy。",
       "market": "虛擬商品、素材包、測試和服務券統一上架。",
       "shops": "公開個人店鋪和公開伺服器店鋪。",
-      "cloud": "可部署的 Buddy 服務模板和雲端工作流。",
+      "cloud": "可部署 Buddy 團隊模板，在雲端快速建置協作能力。",
       "communities": "公開伺服器入口，適合繼續逛頻道、店鋪和成員。"
     },
     "emptyLane": {
@@ -1669,13 +1687,13 @@
       "commentFailed": "評論送出失敗"
     },
     "playsEntry": "玩法入口",
-    "cashbackBadge": "模板返現",
-    "cashbackTitle": "發布蝦豆雲模板賺返現",
-    "cashbackDesc": "把可複用的 Buddy 服務打包成模板，別人部署後可為發布者沉澱蝦幣收益。",
-    "cashbackAction": "去做模板",
+    "cashbackBadge": "模板獎勵",
+    "cashbackTitle": "DIY Cloud",
+    "cashbackDesc": "發布可複用的 Buddy 團隊模板，邀請他人一鍵部署，持續為發布者沉澱蝦幣獎勵。",
+    "cashbackAction": "去建立模板",
     "cloudTemplateBadge": "蝦豆雲模板",
     "cloudTemplateFallback": "一鍵部署帶 Buddy 的伺服器、頻道和工具。",
-    "templateCashbackHint": "部署返現",
+    "templateCashbackHint": "部署獎勵",
     "cloudTemplateAction": "部署模板",
     "badges": {
       "buddy": "Buddy"
