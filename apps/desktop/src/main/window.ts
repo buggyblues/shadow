@@ -1,6 +1,10 @@
 import { join } from 'node:path'
 import { BrowserWindow, screen, shell } from 'electron'
-import { readDesktopSettings, resolveDesktopAppBaseUrl } from './desktop-settings'
+import {
+  readDesktopSettings,
+  resolveDesktopAppBaseUrl,
+  saveDesktopSettings,
+} from './desktop-settings'
 import { readPetWindowState, savePetWindowState } from './pet-window-state'
 import { getWindowState, saveWindowState } from './window-state'
 
@@ -10,10 +14,15 @@ let petWindow: BrowserWindow | null = null
 let connectorAuthWindow: BrowserWindow | null = null
 let readerWindow: BrowserWindow | null = null
 let allowPetClose = false
+let petPanelMode: 'compact' | 'expanded' = 'compact'
+let petStageOffsetY = 0
 
 const isDev = process.env.NODE_ENV === 'development'
 const PET_COMPACT_SIZE = { width: 240, height: 240 }
 const PET_EXPANDED_SIZE = { width: 960, height: 600 }
+const PET_WINDOW_PADDING = 8
+const PET_STAGE_VISUAL_RADIUS = 112
+const PET_WINDOW_ANIMATE = true
 const WINDOW_STATE_SAVE_DEBOUNCE_MS = 500
 const SETTINGS_TABS = new Set([
   'general',
@@ -28,9 +37,17 @@ const SETTINGS_TABS = new Set([
 let mainWindowStateSaveTimer: ReturnType<typeof setTimeout> | null = null
 let petWindowStateSaveTimer: ReturnType<typeof setTimeout> | null = null
 
-function applyPetWindowLevel(mode: 'compact' | 'expanded'): void {
+type PetPanelLayout = {
+  stageOffsetY: number
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+function applyPetWindowLevel(_mode: 'compact' | 'expanded'): void {
   if (!petWindow || petWindow.isDestroyed()) return
-  const level = mode === 'compact' ? 'screen-saver' : 'floating'
+  const level = 'floating'
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   petWindow.setAlwaysOnTop(true, level)
 }
@@ -334,6 +351,8 @@ export function createPetWindow(): BrowserWindow {
   if (petWindow && !petWindow.isDestroyed()) return petWindow
 
   const savedState = readPetWindowState()
+  petPanelMode = 'compact'
+  petStageOffsetY = 0
 
   petWindow = new BrowserWindow({
     ...savedState,
@@ -403,6 +422,7 @@ export function createPetWindow(): BrowserWindow {
     savePetState()
     if (allowPetClose) return
     event.preventDefault()
+    saveDesktopSettings({ desktopPetVisible: false })
     petWindow?.hide()
   })
   petWindow.on('closed', () => {
@@ -418,12 +438,13 @@ export function getPetWindow(): BrowserWindow | null {
 
 export function showPetWindow(): void {
   const win = createPetWindow()
+  saveDesktopSettings({ desktopPetVisible: true })
   applyPetWindowLevel('compact')
   win.show()
   win.focus()
 }
 
-export function setPetPanelMode(mode: 'compact' | 'expanded'): void {
+export function setPetPanelMode(mode: 'compact' | 'expanded'): PetPanelLayout {
   const win = createPetWindow()
   const requestedSize = mode === 'expanded' ? PET_EXPANDED_SIZE : PET_COMPACT_SIZE
   const display = screen.getDisplayMatching(win.getBounds())
@@ -433,23 +454,44 @@ export function setPetPanelMode(mode: 'compact' | 'expanded'): void {
     width: Math.min(requestedSize.width, bounds.width),
     height: Math.min(requestedSize.height, bounds.height),
   }
-  const stageCenterX = currentBounds.x + PET_COMPACT_SIZE.width / 2
-  const stageCenterY = currentBounds.y + currentBounds.height / 2
+  const currentStageCenterOffset =
+    petPanelMode === 'expanded'
+      ? PET_WINDOW_PADDING + Math.min(PET_COMPACT_SIZE.width, currentBounds.width) / 2
+      : currentBounds.width / 2
+  const nextStageCenterOffset =
+    mode === 'expanded'
+      ? PET_WINDOW_PADDING + Math.min(PET_COMPACT_SIZE.width, size.width) / 2
+      : size.width / 2
+  const stageCenterX = currentBounds.x + currentStageCenterOffset
+  const stageCenterY =
+    currentBounds.y + currentBounds.height / 2 + (petPanelMode === 'expanded' ? petStageOffsetY : 0)
   const x = Math.min(
-    Math.max(stageCenterX - PET_COMPACT_SIZE.width / 2, bounds.x),
+    Math.max(stageCenterX - nextStageCenterOffset, bounds.x),
     bounds.x + bounds.width - size.width,
   )
-  const y = Math.min(
-    Math.max(stageCenterY - size.height / 2, bounds.y),
-    bounds.y + bounds.height - size.height,
-  )
-  win.setBounds({ x, y, ...size }, true)
+  const desiredY = stageCenterY - size.height / 2
+  const y = Math.min(Math.max(desiredY, bounds.y), bounds.y + bounds.height - size.height)
+  const maxStageOffsetY =
+    mode === 'expanded'
+      ? Math.max(0, size.height / 2 - PET_WINDOW_PADDING - PET_STAGE_VISUAL_RADIUS)
+      : 0
+  const nextStageOffsetY =
+    mode === 'expanded'
+      ? Math.round(
+          clampNumber(stageCenterY - (y + size.height / 2), -maxStageOffsetY, maxStageOffsetY),
+        )
+      : 0
+  petPanelMode = mode
+  petStageOffsetY = nextStageOffsetY
+  win.setBounds({ x, y, ...size }, PET_WINDOW_ANIMATE)
   applyPetWindowLevel(mode)
+  return { stageOffsetY: nextStageOffsetY }
 }
 
 export function hidePetWindow(): void {
   const win = getPetWindow()
   if (!win || win.isDestroyed()) return
+  saveDesktopSettings({ desktopPetVisible: false })
   win.hide()
 }
 
@@ -465,9 +507,11 @@ export function sendPetShortcut(
 export function togglePetWindow(): void {
   const win = createPetWindow()
   if (win.isVisible()) {
+    saveDesktopSettings({ desktopPetVisible: false })
     win.hide()
     return
   }
+  saveDesktopSettings({ desktopPetVisible: true })
   applyPetWindowLevel('compact')
   win.showInactive()
 }

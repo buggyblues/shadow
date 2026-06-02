@@ -17,13 +17,11 @@ import {
   Bookmark,
   Bot,
   Cloud,
-  Coins,
   Compass,
   Heart,
   Loader2,
   type LucideIcon,
   MessageCircle,
-  Play,
   Repeat2,
   Rss,
   Search,
@@ -59,7 +57,7 @@ import {
   DiscoverCloudTemplateCard,
   toTemplateCatalogSummary,
 } from '../components/discover/cloud-template-card'
-import { DiscoverPlayCard, type DiscoverPlayCardData } from '../components/discover/play-card'
+import { DiscoverPlaceholderVisual } from '../components/discover/discover-placeholder'
 import { DiscoverShopCard, type DiscoverShopCardData } from '../components/discover/shop-card'
 import { PriceDisplay } from '../components/shop/ui/currency'
 import type { ProductCardProduct } from '../components/shop/ui/product-card'
@@ -72,25 +70,10 @@ import { getApiErrorMessage } from '../lib/api-errors'
 import { copyToClipboardSilent } from '../lib/clipboard'
 import { showToast } from '../lib/toast'
 
-type HubSection =
-  | 'all'
-  | 'feed'
-  | 'plays'
-  | 'buddies'
-  | 'market'
-  | 'shops'
-  | 'cloud'
-  | 'communities'
+type HubSection = 'all' | 'feed' | 'buddies' | 'market' | 'shops' | 'cloud' | 'communities'
 
 type DiscoverView = 'browse' | 'explore' | 'market' | 'cloud'
-type DiscoverModuleId =
-  | 'subscriptions'
-  | 'plays'
-  | 'communities'
-  | 'cloud'
-  | 'products'
-  | 'buddies'
-  | 'shops'
+type DiscoverModuleId = 'subscriptions' | 'communities' | 'cloud' | 'products' | 'buddies' | 'shops'
 
 interface DiscoverViewConfig {
   id: DiscoverView
@@ -187,30 +170,6 @@ interface HubCommunity {
   memberCount: number
   inviteCode: string
   heatScore: number
-}
-
-type PlayAvailability = 'available' | 'gated' | 'coming_soon' | 'misconfigured'
-
-interface PlayCatalogItem {
-  id: string
-  image: string
-  title: string
-  titleEn: string
-  desc: string
-  descEn: string
-  category: string
-  categoryEn: string
-  starts: string
-  accentColor: string
-  hot?: boolean
-  status: PlayAvailability
-  action?: {
-    kind: 'public_channel' | 'private_room' | 'cloud_deploy' | 'external_oauth_app' | 'landing_page'
-    templateSlug?: string
-  }
-  template?: {
-    slug: string
-  }
 }
 
 interface DiscoverCommerceResponse {
@@ -357,7 +316,6 @@ interface PreviewAttachment {
 
 const HUB_SECTIONS: Array<{ key: HubSection; icon: LucideIcon }> = [
   { key: 'feed', icon: Rss },
-  { key: 'plays', icon: Play },
   { key: 'buddies', icon: Bot },
   { key: 'market', icon: ShoppingBag },
   { key: 'shops', icon: Store },
@@ -376,7 +334,7 @@ const DISCOVER_CONFIG_SCHEMA_NAME = 'discover-page'
 const DEFAULT_DISCOVER_LAYOUT: DiscoverLayoutConfig = {
   views: [
     { id: 'browse', enabled: true, modules: ['subscriptions'] },
-    { id: 'explore', enabled: true, modules: ['plays', 'communities'] },
+    { id: 'explore', enabled: true, modules: ['communities'] },
     { id: 'market', enabled: true, modules: ['products', 'buddies', 'shops'] },
     { id: 'cloud', enabled: true, modules: ['cloud'] },
   ],
@@ -384,7 +342,7 @@ const DEFAULT_DISCOVER_LAYOUT: DiscoverLayoutConfig = {
 const DISCOVER_VIEW_ORDER = DISCOVER_VIEWS.map((view) => view.key)
 const DISCOVER_MODULE_BY_VIEW: Record<DiscoverView, DiscoverModuleId[]> = {
   browse: ['subscriptions'],
-  explore: ['plays', 'communities'],
+  explore: ['communities'],
   market: ['products', 'buddies', 'shops'],
   cloud: ['cloud'],
 }
@@ -395,6 +353,24 @@ const DISCOVER_VIEW_PATH = {
   cloud: '/discover/cloud',
 } as const satisfies Record<DiscoverView, string>
 
+const DISCOVER_MODULE_ICON: Record<DiscoverModuleId, LucideIcon> = {
+  subscriptions: Rss,
+  communities: Server,
+  cloud: Cloud,
+  products: ShoppingBag,
+  buddies: Bot,
+  shops: Store,
+}
+
+const DISCOVER_MODULE_ANCHOR_ID: Record<DiscoverModuleId, string> = {
+  subscriptions: 'discover-module-subscriptions',
+  communities: 'discover-module-communities',
+  products: 'discover-module-products',
+  buddies: 'discover-module-buddies',
+  shops: 'discover-module-shops',
+  cloud: 'discover-module-cloud',
+}
+
 const SECTION_PAGE_SIZE = 12
 const DISCOVER_STALE_MS = 60_000
 const DISCOVER_GC_MS = 10 * 60 * 1000
@@ -402,7 +378,6 @@ const DISCOVER_GC_MS = 10 * 60 * 1000
 const initialSectionPages: Record<HubSection, number> = {
   all: 1,
   feed: 1,
-  plays: 1,
   buddies: 1,
   market: 1,
   shops: 1,
@@ -419,7 +394,7 @@ function parseDiscoverView(value: unknown): DiscoverView | null {
   if (directView) return directView
   const section = parseHubSection(value)
   if (section === 'all' || section === 'feed') return 'browse'
-  if (section === 'plays' || section === 'communities') return 'explore'
+  if (section === 'communities') return 'explore'
   if (section === 'cloud') return 'cloud'
   if (section === 'buddies' || section === 'market' || section === 'shops') return 'market'
   return null
@@ -440,7 +415,6 @@ function normalizeDiscoverViewId(value: unknown): DiscoverView | null {
 function isDiscoverModule(value: unknown): value is DiscoverModuleId {
   return (
     value === 'subscriptions' ||
-    value === 'plays' ||
     value === 'communities' ||
     value === 'cloud' ||
     value === 'products' ||
@@ -508,6 +482,7 @@ export function DiscoverPage() {
   const [sectionPages, setSectionPages] = useState<Record<HubSection, number>>(initialSectionPages)
   const [showCreateBuddy, setShowCreateBuddy] = useState(false)
   const [previewFile, setPreviewFile] = useState<PreviewAttachment | null>(null)
+  const [activeModule, setActiveModule] = useState<DiscoverModuleId | null>(null)
   const normalizedSearch = searchQuery.trim()
   const effectiveSearch = normalizedSearch.length >= 2 ? normalizedSearch : ''
   useAppStatus({
@@ -631,14 +606,6 @@ export function DiscoverPage() {
     gcTime: DISCOVER_GC_MS,
   })
 
-  const { data: playData } = useQuery({
-    queryKey: ['discover-plays'],
-    queryFn: ({ signal }) =>
-      fetchApi<{ plays: PlayCatalogItem[] }>('/api/play/catalog', { signal }),
-    staleTime: DISCOVER_STALE_MS,
-    gcTime: DISCOVER_GC_MS,
-  })
-
   const { data: cloudTemplates = [], isLoading: isCloudTemplatesLoading } = useQuery({
     queryKey: ['discover-cloud-templates', i18n.language, effectiveSearch],
     queryFn: ({ signal }) =>
@@ -691,10 +658,6 @@ export function DiscoverPage() {
     () => filterContentFeed(rawFeedItems, effectiveSearch),
     [effectiveSearch, rawFeedItems],
   )
-  const plays = useMemo(
-    () => sortPlays(filterPlays(playData?.plays ?? [], effectiveSearch)),
-    [effectiveSearch, playData?.plays],
-  )
   const buddies = useMemo(() => sortBuddies(hub.buddies), [hub.buddies])
   const products = useMemo(
     () => sortProducts(marketplaceData?.products ?? []),
@@ -714,8 +677,6 @@ export function DiscoverPage() {
     () => cloudTemplates.map(toTemplateCatalogSummary).sort(sortCloudTemplates),
     [cloudTemplates],
   )
-  const isZh = i18n.language.startsWith('zh')
-
   const joinMutation = useMutation({
     mutationFn: ({ inviteCode }: { inviteCode: string }) =>
       fetchApi<{ id: string; slug?: string | null }>('/api/servers/_/join', {
@@ -742,7 +703,6 @@ export function DiscoverPage() {
     items.slice(0, sectionPages[section] * SECTION_PAGE_SIZE)
 
   const visibleFeedItems = feedItems
-  const visiblePlays = sectionItems(plays, 'plays')
   const visibleBuddies = sectionItems(buddies, 'buddies')
   const visibleShops = sectionItems(shops, 'shops')
   const visibleCommunities = sectionItems(communities, 'communities')
@@ -820,10 +780,43 @@ export function DiscoverPage() {
     }
   }
 
+  const handleModuleSelect = (module: DiscoverModuleId) => {
+    setActiveModule(module)
+    const anchorId = DISCOVER_MODULE_ANCHOR_ID[module]
+    document.getElementById(anchorId)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
+
   const handleDiscoverScroll = (event: UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget
+    let nextActiveModule: DiscoverModuleId | null = null
+    let bestOffset = Number.NEGATIVE_INFINITY
+    const topAnchor = target.getBoundingClientRect().top + 96
+
+    sectionAnchors.forEach(({ module, ids }) => {
+      ids.forEach((id) => {
+        const sectionElement = document.getElementById(id)
+        if (!sectionElement) return
+        const sectionTop = sectionElement.getBoundingClientRect().top - topAnchor
+        if (sectionTop <= 0 && sectionTop >= bestOffset) {
+          bestOffset = sectionTop
+          nextActiveModule = module
+        }
+      })
+    })
+
+    if (!nextActiveModule && sectionAnchors[0]) {
+      const first = sectionAnchors[0]
+      if (first.ids.some((id) => Boolean(document.getElementById(id)))) {
+        nextActiveModule = first.module
+      }
+    }
+
+    if (nextActiveModule && nextActiveModule !== activeModule) {
+      setActiveModule(nextActiveModule)
+    }
+
     if (activeView !== 'browse') return
     if (!hasNextContentFeedPage || isFetchingNextContentFeedPage) return
-    const target = event.currentTarget
     const remaining = target.scrollHeight - target.scrollTop - target.clientHeight
     if (remaining < 720) void fetchNextContentFeedPage()
   }
@@ -832,7 +825,6 @@ export function DiscoverPage() {
   const moduleCounts = useMemo(
     () => ({
       subscriptions: feedItems.length,
-      plays: plays.length,
       communities: communities.length,
       cloud: cloudCards.length,
       products: products.length,
@@ -844,7 +836,6 @@ export function DiscoverPage() {
       cloudCards.length,
       communities.length,
       feedItems.length,
-      plays.length,
       products.length,
       shops.length,
     ],
@@ -860,7 +851,52 @@ export function DiscoverPage() {
   )
   const activeViewConfig = visibleViews.find((view) => view.id === activeView)
   const activeModules = activeViewConfig?.modules ?? []
+  const visibleModules = useMemo(
+    () => activeModules.filter((module) => enabledModuleIds.has(module)),
+    [activeModules, enabledModuleIds],
+  )
   const activeViewHasContent = activeModules.some((module) => enabledModuleIds.has(module))
+  const sectionAnchors = useMemo(() => {
+    const anchors: Array<{ module: DiscoverModuleId; ids: string[] }> = []
+
+    if (activeView === 'browse' && visibleModules.includes('subscriptions')) {
+      anchors.push({ module: 'subscriptions', ids: ['discover-module-subscriptions'] })
+    }
+    if (activeView === 'explore' && visibleModules.includes('communities')) {
+      anchors.push({ module: 'communities', ids: ['discover-module-communities'] })
+    }
+    if (activeView === 'market') {
+      if (visibleModules.includes('products')) {
+        anchors.push({
+          module: 'products',
+          ids: [
+            'discover-module-products',
+            ...productSections.slice(1).map((section) => `discover-module-products-${section.key}`),
+          ],
+        })
+      }
+      if (visibleModules.includes('buddies')) {
+        anchors.push({ module: 'buddies', ids: ['discover-module-buddies'] })
+      }
+      if (visibleModules.includes('shops')) {
+        anchors.push({ module: 'shops', ids: ['discover-module-shops'] })
+      }
+    }
+    if (activeView === 'cloud' && visibleModules.includes('cloud')) {
+      anchors.push({ module: 'cloud', ids: ['discover-module-cloud'] })
+    }
+
+    return anchors
+  }, [activeView, productSections, visibleModules])
+  const visibleModuleKey = visibleModules.join('|')
+  useEffect(() => {
+    setActiveModule((current) => {
+      const fallback = visibleModules[0] ?? null
+      if (current && visibleModules.includes(current)) return current
+      return fallback
+    })
+  }, [visibleModuleKey])
+
   const isActiveViewLoading =
     activeView === 'browse'
       ? isContentFeedLoading
@@ -872,43 +908,72 @@ export function DiscoverPage() {
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="grid h-full min-h-0 w-full grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 md:grid-cols-[184px_minmax(0,1fr)] md:grid-rows-[56px_minmax(0,1fr)] lg:grid-cols-[196px_minmax(0,1fr)]">
-          <MarketplaceSearchHeader
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchPlaceholder={t('discover.searchPlaceholder')}
-            className="md:col-span-2"
-          />
-
-          <GlassPanel className="min-h-0 overflow-hidden !rounded-[18px] border-white/10 bg-[#050508]/58 p-2 md:p-3">
+      <div className="flex h-full min-h-0 gap-3 overflow-hidden bg-transparent px-3 text-text-primary md:gap-4 md:px-4">
+        <GlassPanel
+          as="aside"
+          className="hidden w-[248px] shrink-0 flex-col overflow-hidden p-0 md:flex"
+        >
+          <div className="flex h-16 items-center border-b border-[var(--glass-line)] px-5">
+            <h1 className="truncate text-xl font-black leading-none text-white">
+              {t('discover.title')}
+            </h1>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
             <DiscoverViewTabs
               t={t}
               views={visibleViews}
               activeView={activeView}
               onSelect={selectView}
             />
-          </GlassPanel>
+          </div>
+        </GlassPanel>
 
-          <GlassPanel className="min-h-0 overflow-hidden !rounded-[18px] border-white/10 bg-[#050508]/62 shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
-            <div
-              className="h-full overflow-y-auto px-3 py-2 md:px-5 md:py-4"
-              onScroll={handleDiscoverScroll}
-            >
-              {isActiveViewLoading ? (
-                <ContentMartSkeleton />
-              ) : !activeViewHasContent ? (
-                <DashboardEmptyState
-                  icon={Search}
-                  title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
-                  description={
-                    isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')
-                  }
+        <GlassPanel as="main" className="flex min-w-0 flex-1 flex-col overflow-hidden p-0">
+          <div className="flex min-h-16 shrink-0 items-center gap-3 bg-bg-secondary/20 px-4 backdrop-blur-xl md:h-16 lg:px-5">
+            <DiscoverModuleTabs
+              t={t}
+              modules={visibleModules}
+              activeModule={activeModule}
+              onModuleSelect={handleModuleSelect}
+            />
+            <MarketplaceSearchHeader
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder={t('discover.searchPlaceholder')}
+              className="ml-auto shrink-0"
+            />
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="h-full overflow-y-auto px-3 md:px-4" onScroll={handleDiscoverScroll}>
+              {activeView !== 'browse' ? (
+                <DiscoverHero
+                  t={t}
+                  activeView={activeView}
+                  onDiyCloudOpen={() => {
+                    navigate({ to: '/cloud/diy' })
+                  }}
                 />
+              ) : null}
+              {isActiveViewLoading ? (
+                <div className="py-5">
+                  <ContentMartSkeleton />
+                </div>
+              ) : !activeViewHasContent ? (
+                <div className="py-5">
+                  <DashboardEmptyState
+                    icon={Search}
+                    title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
+                    description={
+                      isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')
+                    }
+                  />
+                </div>
               ) : (
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-8 py-5">
                   {activeView === 'browse' && enabledModuleIds.has('subscriptions') && (
                     <HubLane
+                      id="discover-module-subscriptions"
                       icon={Rss}
                       layout="timeline"
                       hasMore={Boolean(hasNextContentFeedPage)}
@@ -947,33 +1012,9 @@ export function DiscoverPage() {
 
                   {activeView === 'explore' && (
                     <>
-                      {enabledModuleIds.has('plays') && (
-                        <HubLane
-                          icon={Play}
-                          title={t('discover.lanes.plays')}
-                          description={t('discover.laneDescriptions.plays')}
-                          hasMore={hasMore(visiblePlays.length, plays.length)}
-                          loadMoreLabel={t('discover.loadMoreItems')}
-                          onLoadMore={() => loadMore('plays')}
-                        >
-                          {visiblePlays.map((play) => (
-                            <DiscoverPlayCard
-                              key={play.id}
-                              play={toDiscoverPlayCardData(play, isZh, t)}
-                              actionLabel={t('discover.startPlay')}
-                              onOpen={() =>
-                                navigate({
-                                  to: '/play/launch',
-                                  search: { play: play.id },
-                                })
-                              }
-                            />
-                          ))}
-                        </HubLane>
-                      )}
-
                       {enabledModuleIds.has('communities') && (
                         <HubLane
+                          id="discover-module-communities"
                           icon={Server}
                           title={t('discover.lanes.communities')}
                           description={t('discover.laneDescriptions.communities')}
@@ -986,7 +1027,6 @@ export function DiscoverPage() {
                               key={community.id}
                               community={community}
                               joined={joinedServerIds.has(community.id)}
-                              pending={joinMutation.isPending}
                               t={t}
                               onEnter={() =>
                                 navigate({
@@ -1007,10 +1047,15 @@ export function DiscoverPage() {
                   {activeView === 'market' && (
                     <>
                       {enabledModuleIds.has('products') &&
-                        productSections.map((section) => {
+                        productSections.map((section, index) => {
                           const visibleSectionProducts = sectionItems(section.products, 'market')
                           return (
                             <HubLane
+                              id={
+                                index === 0
+                                  ? 'discover-module-products'
+                                  : `discover-module-products-${section.key}`
+                              }
                               key={section.key}
                               icon={ShoppingBag}
                               title={
@@ -1044,6 +1089,7 @@ export function DiscoverPage() {
 
                       {enabledModuleIds.has('buddies') && (
                         <HubLane
+                          id="discover-module-buddies"
                           icon={Bot}
                           title={t('discover.lanes.buddies')}
                           description={t('discover.laneDescriptions.buddies')}
@@ -1069,6 +1115,7 @@ export function DiscoverPage() {
 
                       {enabledModuleIds.has('shops') && (
                         <HubLane
+                          id="discover-module-shops"
                           icon={Store}
                           title={t('discover.lanes.shops')}
                           description={t('discover.laneDescriptions.shops')}
@@ -1091,30 +1138,19 @@ export function DiscoverPage() {
 
                   {activeView === 'cloud' && enabledModuleIds.has('cloud') && (
                     <HubLane
+                      id="discover-module-cloud"
                       icon={Cloud}
                       title={t('discover.lanes.cloud')}
                       description={t('discover.laneDescriptions.cloud')}
-                      hasMore={hasMore(visibleCloudCards.length + 1, cloudCards.length + 1)}
+                      hasMore={hasMore(visibleCloudCards.length, cloudCards.length)}
                       loadMoreLabel={t('discover.loadMoreItems')}
                       onLoadMore={() => loadMore('cloud')}
                     >
-                      <CloudCashbackCard
-                        t={t}
-                        onOpen={() => {
-                          navigate({ to: '/cloud/diy' })
-                        }}
-                      />
                       {visibleCloudCards.map((template) => (
                         <DiscoverCloudTemplateCard
                           key={template.name}
                           template={template}
-                          locale={i18n.language}
-                          categoryLabel={template.category}
-                          difficultyLabel={t(`discover.cloudDifficulty.${template.difficulty}`)}
-                          cashbackLabel={t('discover.templateCashbackHint')}
-                          deployLabel={t('discover.cloudTemplateAction')}
                           agentCountLabel={t('discover.cloudMetricAgents')}
-                          popularityLabel={t('discover.cloudMetricPopularity')}
                           summaryFallback={t('discover.cloudTemplateFallback')}
                         />
                       ))}
@@ -1123,8 +1159,8 @@ export function DiscoverPage() {
                 </div>
               )}
             </div>
-          </GlassPanel>
-        </div>
+          </div>
+        </GlassPanel>
       </div>
       <QuickCreateBuddyModal
         open={showCreateBuddy}
@@ -1154,21 +1190,21 @@ function MarketplaceSearchHeader({
   className?: string
 }) {
   return (
-    <GlassPanel
+    <label
       className={cn(
-        'flex h-14 items-center gap-3 !rounded-[18px] px-5 transition-shadow focus-within:shadow-[0_0_0_3px_rgba(0,198,209,0.20),var(--nf-shadow-card,var(--shadow-soft))]',
+        'flex h-11 min-w-[220px] items-center gap-2 rounded-[18px] border border-[var(--glass-line)] bg-bg-primary/45 px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl transition focus-within:border-primary/45 focus-within:shadow-[0_0_0_3px_rgba(0,243,255,0.12),inset_0_1px_0_rgba(255,255,255,0.08)] sm:w-[min(360px,32vw)]',
         className,
       )}
     >
-      <Search size={20} className="shrink-0 text-text-muted" strokeWidth={2.5} />
+      <Search size={17} className="shrink-0 text-text-muted" strokeWidth={2.4} />
       <input
         type="search"
         value={searchQuery}
         onChange={(event) => onSearchChange(event.target.value)}
         placeholder={searchPlaceholder}
-        className="min-w-0 flex-1 bg-transparent text-sm font-bold text-text-primary outline-none placeholder:text-text-muted/70"
+        className="min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-text-muted"
       />
-    </GlassPanel>
+    </label>
   )
 }
 
@@ -1184,31 +1220,113 @@ function DiscoverViewTabs({
   onSelect: (view: DiscoverView) => void
 }) {
   return (
+    <nav className="space-y-2" aria-label={t('discover.title')}>
+      {views.map((viewConfig) => {
+        const view = DISCOVER_VIEWS.find((item) => item.key === viewConfig.id)
+        if (!view) return null
+        const Icon = view.icon
+        const active = view.key === activeView
+        return (
+          <button
+            key={view.key}
+            type="button"
+            onClick={() => onSelect(view.key)}
+            className={cn(
+              'flex h-12 w-full items-center gap-3 rounded-[18px] px-3.5 text-left text-base font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+              active
+                ? 'bg-primary text-bg-primary shadow-[0_16px_32px_rgba(0,243,255,0.18)]'
+                : 'text-text-secondary hover:bg-white/[0.07] hover:text-white',
+            )}
+          >
+            <Icon size={22} className="shrink-0" />
+            <span className="min-w-0 truncate">
+              {t(`discover.views.${view.key}`, view.labelFallback)}
+            </span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+function DiscoverModuleTabs({
+  t,
+  modules,
+  activeModule,
+  onModuleSelect,
+}: {
+  t: TFunction
+  modules: DiscoverModuleId[]
+  activeModule: DiscoverModuleId | null
+  onModuleSelect: (module: DiscoverModuleId) => void
+}) {
+  if (!modules.length) return null
+  const selectedModule = activeModule && modules.includes(activeModule) ? activeModule : modules[0]
+
+  return (
     <Tabs
-      value={activeView}
-      onChange={(value) => onSelect(value as DiscoverView)}
-      className="block"
+      value={selectedModule ?? modules[0]}
+      onValueChange={(value) => {
+        if (!isDiscoverModule(value)) return
+        if (selectedModule === value) return
+        onModuleSelect(value)
+      }}
+      className="min-w-0 overflow-x-auto pr-2"
     >
-      <TabsList className="!contents !h-auto !rounded-none !border-0 !bg-transparent !p-0 !shadow-none !backdrop-blur-0">
-        {views.map((viewConfig) => {
-          const view = DISCOVER_VIEWS.find((item) => item.key === viewConfig.id)
-          if (!view) return null
-          const Icon = view.icon
+      <TabsList
+        aria-label={t('discover.title')}
+        className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[var(--glass-line)]/40 bg-bg-secondary/25 px-1 py-1"
+      >
+        {modules.map((module) => {
+          const Icon = DISCOVER_MODULE_ICON[module]
           return (
             <TabsTrigger
-              key={view.key}
-              value={view.key}
-              className="h-11 min-w-[104px] justify-start gap-2 rounded-xl px-3 text-sm font-bold normal-case tracking-normal text-text-secondary data-[state=active]:!border-transparent data-[state=active]:bg-primary data-[state=active]:text-bg-primary data-[state=active]:!shadow-none md:w-full md:min-w-0"
+              key={module}
+              value={module}
+              className={cn(
+                'group relative inline-flex h-9 shrink-0 items-center gap-2 rounded-full border-0 bg-transparent px-4 py-1.5 text-sm font-semibold normal-case tracking-normal text-text-secondary transition-colors',
+                'data-[state=active]:bg-bg-primary/15 data-[state=active]:text-text-primary data-[state=active]:shadow-[inset_0_2px_8px_rgba(255,255,255,0.35)] data-[state=active]:ring-0',
+                'hover:text-text-primary hover:bg-bg-primary/8',
+              )}
             >
-              <Icon size={16} />
-              <span className="truncate">
-                {t(`discover.views.${view.key}`, view.labelFallback)}
-              </span>
+              <Icon size={18} />
+              {t(`discover.lanes.${module === 'subscriptions' ? 'feed' : module}`)}
             </TabsTrigger>
           )
         })}
       </TabsList>
     </Tabs>
+  )
+}
+
+function DiscoverHero({
+  t,
+  activeView,
+  onDiyCloudOpen,
+}: {
+  t: TFunction
+  activeView: DiscoverView
+  onDiyCloudOpen: () => void
+}) {
+  return (
+    <section className="relative -mx-3 min-h-[240px] overflow-hidden border-y border-white/10 bg-[linear-gradient(120deg,rgba(0,243,255,0.28)_0%,rgba(72,103,167,0.40)_28%,rgba(35,45,74,0.70)_65%,rgba(8,11,24,0.95)_100%] px-5 py-9 md:-mx-4 md:px-8 md:py-12 lg:py-14">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_48%),linear-gradient(90deg,rgba(255,255,255,0.08),transparent_45%,rgba(255,255,255,0.02))]" />
+      <div className="relative">
+        <h2 className="max-w-3xl text-[clamp(1.9rem,5vw,3rem)] font-black leading-[1.02] text-white">
+          {t(`discover.hero.${activeView}.title`)}
+        </h2>
+        <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-white/78 md:text-lg">
+          {t(`discover.hero.${activeView}.subtitle`)}
+        </p>
+        {activeView === 'cloud' ? (
+          <div className="mt-7">
+            <Button type="button" size="sm" onClick={onDiyCloudOpen}>
+              {t('discover.cashbackAction')}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </section>
   )
 }
 
@@ -1278,32 +1396,6 @@ function filterContentFeed(items: ContentFeedItem[], query: string) {
       .filter((value): value is string => typeof value === 'string' && value.length > 0)
       .some((value) => value.toLowerCase().includes(normalized)),
   )
-}
-
-function filterPlays(plays: PlayCatalogItem[], query: string) {
-  const normalized = query.trim().toLowerCase()
-  const visible = plays.filter((play) => play.status !== 'misconfigured')
-  if (!normalized) return visible
-  return visible.filter((play) =>
-    [play.title, play.titleEn, play.desc, play.descEn, play.category, play.categoryEn]
-      .filter(Boolean)
-      .some((value) => value.toLowerCase().includes(normalized)),
-  )
-}
-
-function sortPlays(plays: PlayCatalogItem[]) {
-  const statusRank: Record<PlayAvailability, number> = {
-    available: 0,
-    gated: 1,
-    coming_soon: 2,
-    misconfigured: 3,
-  }
-  return [...plays].sort((a, b) => {
-    const statusDelta = statusRank[a.status] - statusRank[b.status]
-    if (statusDelta !== 0) return statusDelta
-    if (a.hot !== b.hot) return a.hot ? -1 : 1
-    return a.title.localeCompare(b.title)
-  })
 }
 
 function sortBuddies(buddies: HubBuddy[]) {
@@ -1438,24 +1530,6 @@ function sortCloudTemplates(
   return b.popularity - a.popularity || a.title.localeCompare(b.title)
 }
 
-function toDiscoverPlayCardData(
-  play: PlayCatalogItem,
-  isZh: boolean,
-  t: TFunction,
-): DiscoverPlayCardData {
-  return {
-    id: play.id,
-    title: isZh ? play.title : play.titleEn,
-    description: isZh ? play.desc : play.descEn,
-    category: isZh ? play.category : play.categoryEn,
-    image: play.image,
-    accentColor: play.accentColor,
-    statusLabel: play.status === 'gated' ? t('discover.memberPlay') : t('discover.readyPlay'),
-    statusTone: play.status === 'gated' ? 'warning' : 'success',
-    startsLabel: play.starts,
-  }
-}
-
 function toDiscoverShopCardData(shop: HubShop, t: TFunction): DiscoverShopCardData {
   const ownerName =
     shop.server?.name ?? shop.owner?.displayName ?? shop.owner?.username ?? t('common.unknown')
@@ -1477,9 +1551,8 @@ function toDiscoverShopCardData(shop: HubShop, t: TFunction): DiscoverShopCardDa
 }
 
 function HubLane({
-  icon: Icon,
+  id,
   title,
-  description,
   layout = 'grid',
   action,
   onAction,
@@ -1489,6 +1562,7 @@ function HubLane({
   onLoadMore,
   children,
 }: {
+  id?: string
   icon: LucideIcon
   title?: string
   description?: string
@@ -1502,16 +1576,12 @@ function HubLane({
   children: ReactNode
 }) {
   return (
-    <section className="py-3">
+    <section id={id} className="scroll-mt-4">
       {layout === 'grid' ? (
-        <div className="mb-4 flex items-end justify-between gap-3 px-1 md:px-2">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-primary/20 bg-primary/10 text-primary shadow-[0_12px_34px_rgba(0,198,209,0.10)]">
-              <Icon size={18} />
-            </span>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex min-w-0">
             <div className="min-w-0">
-              <h2 className="text-2xl font-black tracking-[-0.03em] text-text-primary">{title}</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-text-muted">{description}</p>
+              <h2 className="text-xl font-black leading-7 text-white">{title}</h2>
             </div>
           </div>
           {action && (
@@ -1529,8 +1599,8 @@ function HubLane({
       <div
         className={
           layout === 'timeline'
-            ? 'mx-auto flex w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-white/10 bg-[#050508]/42'
-            : 'grid gap-4 xl:grid-cols-2 min-[2400px]:grid-cols-3'
+            ? 'mx-auto flex w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/40 shadow-[0_18px_54px_rgba(0,0,0,0.20)]'
+            : 'grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]'
         }
       >
         {children}
@@ -1719,7 +1789,7 @@ function ContentFeedCard({
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(event) => handleCardKey(event, onOpen)}
-      className="group cursor-pointer border-b border-white/10 px-4 py-4 transition hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 md:px-5"
+      className="group cursor-pointer border-b border-black/25 px-4 py-4 transition hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 md:px-5"
     >
       <div className="flex min-w-0 gap-3">
         <SourceAvatar item={item} centered={!hasTextContent} onOpen={onOpenServer} />
@@ -2243,9 +2313,9 @@ function MarketplaceProductTile({
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(event) => handleCardKey(event, onOpen)}
-      className="group cursor-pointer overflow-hidden rounded-[24px] border border-white/10 bg-[#050508]/55 shadow-[0_18px_50px_rgba(0,0,0,0.18)] transition hover:-translate-y-1 hover:border-primary/35 hover:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+      className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-bg-tertiary/40">
+      <div className="relative aspect-[16/9] overflow-hidden bg-bg-primary/55">
         <ProductVisual
           name={product.name}
           imageUrl={product.imageUrl}
@@ -2258,7 +2328,7 @@ function MarketplaceProductTile({
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3">
           <PriceDisplay amount={product.price} size={18} showFree />
-          <span className="rounded-full border border-white/10 bg-white/12 px-2.5 py-1 text-[11px] font-black text-white backdrop-blur-xl">
+          <span className="rounded bg-black/55 px-2.5 py-1 text-[11px] font-black text-white">
             {t('discover.openProduct')}
           </span>
         </div>
@@ -2290,56 +2360,15 @@ function MarketplaceProductTile({
   )
 }
 
-function CloudCashbackCard({ t, onOpen }: { t: TFunction; onOpen: () => void }) {
-  return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => handleCardKey(event, onOpen)}
-      className="cursor-pointer overflow-hidden rounded-[18px] border border-border-subtle bg-bg-secondary/60 shadow-[0_16px_42px_rgba(0,0,0,0.14)] transition hover:border-primary/35 hover:bg-bg-secondary/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-    >
-      <div className="relative h-36 overflow-hidden border-b border-border-subtle/70 bg-[#10242c] p-4">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,rgba(255,51,102,0.28),transparent_27%),radial-gradient(circle_at_18%_18%,rgba(0,209,255,0.22),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent)]" />
-        <Badge variant="warning" size="sm" className="relative">
-          {t('discover.cashbackBadge')}
-        </Badge>
-        <div className="relative mt-8 flex h-12 w-12 items-center justify-center rounded-[14px] bg-primary/10 text-primary ring-1 ring-primary/25">
-          <Coins size={28} />
-        </div>
-      </div>
-      <div className="flex min-h-[184px] flex-col p-4">
-        <h3 className="text-base font-black text-text-primary">{t('discover.cashbackTitle')}</h3>
-        <p className="mt-2 line-clamp-3 flex-1 text-sm leading-6 text-text-secondary">
-          {t('discover.cashbackDesc')}
-        </p>
-        <div className="mt-4 border-t border-border-subtle/60 pt-3">
-          <Button
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation()
-              onOpen()
-            }}
-          >
-            {t('discover.cashbackAction')}
-          </Button>
-        </div>
-      </div>
-    </article>
-  )
-}
-
 function CommunityHubCard({
   community,
   joined,
-  pending,
   t,
   onEnter,
   onJoin,
 }: {
   community: HubCommunity
   joined: boolean
-  pending: boolean
   t: TFunction
   onEnter: () => void
   onJoin: () => void
@@ -2350,20 +2379,16 @@ function CommunityHubCard({
       tabIndex={0}
       onClick={joined ? onEnter : onJoin}
       onKeyDown={(event) => handleCardKey(event, joined ? onEnter : onJoin)}
-      className="cursor-pointer overflow-hidden rounded-[18px] border border-border-subtle bg-bg-secondary/60 shadow-[0_16px_42px_rgba(0,0,0,0.14)] transition hover:border-primary/35 hover:bg-bg-secondary/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+      className="cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
     >
-      <CardVisual
-        imageUrl={community.bannerUrl}
-        icon={<Server size={26} />}
-        label={community.name}
-      />
-      <div className="flex min-h-[168px] flex-col p-4">
-        <div className="mb-3 flex items-start gap-3">
-          <AvatarImage
-            imageUrl={community.iconUrl}
-            label={community.name}
-            icon={<Server size={20} />}
-          />
+      <div className="relative">
+        <CardVisual imageUrl={community.bannerUrl} label={community.name} />
+        <div className="pointer-events-none absolute left-4 -bottom-7">
+          <AvatarImage imageUrl={community.iconUrl} label={community.name} />
+        </div>
+      </div>
+      <div className="flex min-h-[172px] flex-col px-4 pb-4 pt-9">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-base font-black text-text-primary">{community.name}</h3>
             <p className="mt-1 text-xs font-bold text-text-muted">
@@ -2374,63 +2399,25 @@ function CommunityHubCard({
             {joined ? t('discover.joined') : t('discover.public')}
           </Badge>
         </div>
-        <p className="line-clamp-2 flex-1 text-sm leading-5 text-text-secondary">
+        <p className="h-16 min-h-16 max-h-16 overflow-hidden text-sm leading-5 text-text-secondary">
           {community.description || t('discover.noDescription')}
         </p>
-        <Button
-          className="mt-4 w-full"
-          variant={joined ? 'glass' : 'primary'}
-          onClick={(event) => {
-            event.stopPropagation()
-            if (joined) onEnter()
-            else onJoin()
-          }}
-          disabled={pending}
-        >
-          {pending && <Loader2 size={15} className="animate-spin" />}
-          {joined ? t('discover.enterButton') : t('discover.joinButton')}
-        </Button>
       </div>
     </article>
   )
 }
 
-function AvatarImage({
-  imageUrl,
-  label,
-  icon,
-}: {
-  imageUrl?: string | null
-  label: string
-  icon: ReactNode
-}) {
-  return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-border-subtle bg-bg-primary text-primary">
-      {imageUrl ? <img src={imageUrl} alt={label} className="h-full w-full object-cover" /> : icon}
-    </div>
-  )
+function AvatarImage({ imageUrl, label }: { imageUrl?: string | null; label: string }) {
+  return <ServerAvatar iconUrl={imageUrl} name={label} className="w-[56px] h-[56px] rounded-3xl" />
 }
 
-function CardVisual({
-  imageUrl,
-  icon,
-  label,
-}: {
-  imageUrl?: string | null
-  icon: ReactNode
-  label: string
-}) {
+function CardVisual({ imageUrl, label }: { imageUrl?: string | null; label: string }) {
   return (
-    <div className="relative h-28 overflow-hidden border-b border-border-subtle/70 bg-bg-tertiary">
+    <div className="relative h-40 overflow-hidden border-b border-white/10 bg-bg-primary/55">
       {imageUrl ? (
         <img src={imageUrl} alt={label} className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-end justify-between bg-[radial-gradient(circle_at_82%_18%,rgba(255,255,255,0.22),transparent_28%),linear-gradient(135deg,rgba(0,243,255,0.24),rgba(71,85,105,0.18)_48%,rgba(255,42,85,0.16))] p-4 text-primary">
-          <span className="max-w-[70%] truncate text-lg font-black text-text-primary">{label}</span>
-          <span className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/15 bg-bg-primary/55">
-            {icon}
-          </span>
-        </div>
+        <DiscoverPlaceholderVisual />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-bg-secondary/85 via-transparent to-transparent" />
     </div>

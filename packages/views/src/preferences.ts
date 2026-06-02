@@ -53,7 +53,7 @@ export function persistThemePreference(
 export function effectiveThemePreference(
   theme: ShadowThemePreference,
   prefersDark = typeof window !== 'undefined'
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true)
     : true,
 ): 'dark' | 'light' {
   if (theme === 'system') return prefersDark ? 'dark' : 'light'

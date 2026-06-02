@@ -20,9 +20,5 @@ export function withDesktopPetPackTags(tags: readonly string[]) {
 
 export function isDesktopPetPackFilename(name: string) {
   const normalized = name.trim().toLowerCase()
-  return (
-    normalized.endsWith('.shadowpet') ||
-    normalized.endsWith('.shadowpet.zip') ||
-    normalized.endsWith('.zip')
-  )
+  return normalized.endsWith('.zip')
 }

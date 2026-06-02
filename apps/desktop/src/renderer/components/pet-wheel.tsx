@@ -33,8 +33,10 @@ import type {
 const WHEEL_SIZE = 220
 const WHEEL_CENTER = WHEEL_SIZE / 2
 const WHEEL_OUTER_RADIUS = 106
-const WHEEL_INNER_RADIUS = 58
+const WHEEL_INNER_RADIUS = 66
 const WHEEL_SECTOR_GAP = 0.4
+const SERVICE_STATUS_ROTATE_MS = 2200
+const SERVICE_STATUS_PRIORITY: PetServiceId[] = ['focus', 'water', 'fitness', 'coding']
 
 const wheelItems: Array<{
   id: WheelCommand
@@ -151,13 +153,6 @@ export function PetWheel({
     if (rest === 0) return t('desktopPet.services.hoursShort', { count: hours })
     return t('desktopPet.services.hoursMinutesShort', { hours, minutes: rest })
   }
-  const servicesLabel = serviceAttention
-    ? t('desktopPet.services.wheelAttention')
-    : services.focus && focusRemaining > 0
-      ? t('desktopPet.services.wheelFocusRemaining', {
-          time: formatWheelDuration(focusRemaining),
-        })
-      : t('desktopPet.services.wheelServices')
   const serviceWheelLabel = (serviceId: PetServiceId) => {
     if (serviceAlertFlags[serviceId]) return t(`desktopPet.services.${serviceId}`)
     if (serviceId === 'focus' && services.focus && focusRemaining > 0) {
@@ -174,6 +169,63 @@ export function PetWheel({
     if (serviceCompletions[serviceId]) return t(`desktopPet.services.${serviceId}Completed`)
     return t(`desktopPet.services.${serviceId}`)
   }
+  const serviceStatusCandidates = [
+    {
+      id: 'focus' as const,
+      Icon: Timer,
+      active: services.focus || serviceCompletions.focus || serviceAlertFlags.focus,
+      attention: serviceAlertFlags.focus,
+      label: serviceWheelLabel('focus'),
+    },
+    {
+      id: 'water' as const,
+      Icon: Waves,
+      active: services.water || serviceCompletions.water || serviceAlertFlags.water || waterDue,
+      attention: serviceAlertFlags.water || waterDue,
+      label: serviceWheelLabel('water'),
+    },
+    {
+      id: 'fitness' as const,
+      Icon: Dumbbell,
+      active:
+        services.fitness || serviceCompletions.fitness || serviceAlertFlags.fitness || fitnessDue,
+      attention: serviceAlertFlags.fitness || fitnessDue,
+      label: serviceWheelLabel('fitness'),
+    },
+    {
+      id: 'coding' as const,
+      Icon: Code2,
+      active: serviceAlertFlags.coding,
+      attention: serviceAlertFlags.coding,
+      label: serviceWheelLabel('coding'),
+    },
+  ].filter((item) => item.active || item.attention)
+  const serviceStatusById = new Map(serviceStatusCandidates.map((item) => [item.id, item]))
+  const pinnedServiceStatus =
+    SERVICE_STATUS_PRIORITY.map((id) => serviceStatusById.get(id)).find(
+      (item) => item?.attention,
+    ) ?? null
+  const rotatingServiceStatusCandidates = serviceStatusCandidates.filter(
+    (item) => item.id !== 'coding' && !item.attention,
+  )
+  const rotatingServiceStatus =
+    pinnedServiceStatus ??
+    (rotatingServiceStatusCandidates.length > 0
+      ? rotatingServiceStatusCandidates[
+          Math.floor(now / SERVICE_STATUS_ROTATE_MS) % rotatingServiceStatusCandidates.length
+        ]
+      : null)
+  const shouldCompleteServiceFromMain =
+    layer === 'main' && Boolean(pinnedServiceStatus?.attention) && Boolean(rotatingServiceStatus)
+  const rotatingServiceCommand = rotatingServiceStatus?.id ?? null
+  const servicesIcon =
+    rotatingServiceStatus?.Icon ??
+    (serviceAttention ? (serviceStatusById.get('coding')?.Icon ?? Timer) : Timer)
+  const servicesLabel =
+    rotatingServiceStatus?.label ??
+    (serviceAttention
+      ? t('desktopPet.services.wheelAttention')
+      : t('desktopPet.services.wheelServices'))
 
   return (
     <div
@@ -187,18 +239,21 @@ export function PetWheel({
       >
         <title>{t('desktopPet.app.actions')}</title>
         {items.map((item) => {
+          const serviceOverviewItem =
+            item.id === 'services' && rotatingServiceStatus ? { ...item, Icon: servicesIcon } : item
           const currentItem =
-            item.id === 'panel' && panelOpen
-              ? { ...item, Icon: ChevronLeft, labelKey: 'desktopPet.app.compact' }
-              : item.id === 'community' && communityAuthRequired
-                ? { ...item, Icon: LogIn, labelKey: 'desktopPet.auth.loginAction' }
-                : item
+            serviceOverviewItem.id === 'panel' && panelOpen
+              ? { ...serviceOverviewItem, Icon: ChevronLeft, labelKey: 'desktopPet.app.compact' }
+              : serviceOverviewItem.id === 'community' && communityAuthRequired
+                ? { ...serviceOverviewItem, Icon: LogIn, labelKey: 'desktopPet.auth.loginAction' }
+                : serviceOverviewItem
           const hasRecommendedCare = recommendedActions.length > 0
           const hasAttention =
             layer === 'main'
               ? (item.id === 'interact' && hasRecommendedCare) ||
                 (item.id === 'community' && communityAttention) ||
-                (item.id === 'services' && serviceAttention)
+                (item.id === 'services' &&
+                  (serviceAttention || Boolean(rotatingServiceStatus?.attention)))
               : layer === 'services'
                 ? (item.id === 'serviceFocus' && serviceAlertFlags.focus) ||
                   (item.id === 'serviceWater' && (serviceAlertFlags.water || waterDue)) ||
@@ -208,13 +263,15 @@ export function PetWheel({
           const serviceId = serviceIdFromWheelCommand(item.id)
           const serviceCompleted = serviceId ? serviceCompletions[serviceId] : false
           const serviceActive =
-            item.id === 'serviceFocus'
-              ? services.focus || serviceCompleted
-              : item.id === 'serviceCoding'
-                ? services.coding || serviceCompleted
-                : serviceId
-                  ? services[serviceId] || serviceCompleted
-                  : serviceCompleted
+            item.id === 'services'
+              ? Boolean(rotatingServiceStatus?.active)
+              : item.id === 'serviceFocus'
+                ? services.focus || serviceCompleted
+                : item.id === 'serviceCoding'
+                  ? services.coding || serviceCompleted
+                  : serviceId
+                    ? services[serviceId] || serviceCompleted
+                    : serviceCompleted
           const label =
             item.id === 'services'
               ? servicesLabel
@@ -249,6 +306,10 @@ export function PetWheel({
                   return
                 }
                 if (item.id === 'services') {
+                  if (shouldCompleteServiceFromMain && rotatingServiceCommand) {
+                    onServiceAction(rotatingServiceCommand)
+                    return
+                  }
                   onLayerChange('services')
                   return
                 }
@@ -277,7 +338,7 @@ export function PetWheel({
             />
           )
         })}
-        <circle className="desktop-pet-radial-inner" cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={56} />
+        <circle className="desktop-pet-radial-inner" cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={64} />
       </svg>
     </div>
   )

@@ -7,6 +7,7 @@ import {
   parsePetState,
   selectAnimation,
   selectPetEmotion,
+  selectRuntimeAnimation,
   serializePetState,
   settlePetAction,
   tickPet,
@@ -26,26 +27,23 @@ describe('renderer pet game state', () => {
     const state = createDefaultPetState(1_700_000_000_000)
 
     expect(state.stats.level).toBe(1)
-    expect(state.game.shells).toBe(12)
-    expect(state.inventory.map((item) => item.id)).toEqual([
-      'shrimpSnack',
-      'moonShell',
-      'coralTea',
-      'starMap',
-    ])
+    expect(state.game.shells).toBe(0)
+    expect(state.inventory).toEqual([])
+    expect(state.game.achievements).toEqual([])
     expect(selectAnimation(state)).toBe('idle')
   })
 
-  it('applies care actions and progresses matching quests', () => {
+  it('applies care actions and progresses matching habits without item rewards', () => {
     const initial = createDefaultPetState(1_700_000_000_000)
     const next = applyPetAction(initial, 'feed', 1_700_000_060_000)
     const snackQuest = next.game.quests.find((quest) => quest.id === 'snackRoutine')
 
     expect(next.lastAction).toBe('feed')
     expect(next.stats.hunger).toBeGreaterThan(initial.stats.hunger)
-    expect(next.inventory.find((item) => item.id === 'shrimpSnack')?.count).toBe(2)
+    expect(next.inventory).toEqual([])
+    expect(next.game.shells).toBe(0)
     expect(snackQuest?.progress).toBe(1)
-    expect(selectAnimation(next)).toBe('feed')
+    expect(selectAnimation(next)).toBe('waving')
   })
 
   it('decays needs on tick and keeps values in bounds', () => {
@@ -70,7 +68,15 @@ describe('renderer pet game state', () => {
     expect(getPetDayPhase(morning)).toBe('morning')
     expect(getPetDayPhase(night)).toBe('night')
     expect(next.stats.energy).toBeGreaterThan(state.stats.energy)
-    expect(selectAnimation(next)).toBe('rest')
+    expect(selectAnimation(next)).toBe('waiting')
+  })
+
+  it('maps runtime session states to Codex pet animations', () => {
+    expect(selectRuntimeAnimation(['streaming'])).toBe('running')
+    expect(selectRuntimeAnimation(['waiting_for_approval'])).toBe('waiting')
+    expect(selectRuntimeAnimation(['failed'])).toBe('failed')
+    expect(selectRuntimeAnimation(['completed'])).toBe('review')
+    expect(selectRuntimeAnimation([])).toBeNull()
   })
 
   it('generates a daily random event and resolves it through the matching action', () => {

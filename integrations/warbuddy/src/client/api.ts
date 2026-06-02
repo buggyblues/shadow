@@ -87,6 +87,8 @@ export function simulate(input: {
   candidateSkillType?: SkillType
   opponentId?: string
   mapId?: string
+  fps?: number
+  durationSeconds?: number
 }) {
   return command<{
     replay: BattleReplay
@@ -99,6 +101,8 @@ export function challenge(input: {
   challengerTankId: string
   defenderTankId: string
   mapId?: string
+  fps?: number
+  durationSeconds?: number
   announceChannelName?: string
 }) {
   return command<{ match: MatchRecord; shadow?: ShadowServerAppResultShadow }>(

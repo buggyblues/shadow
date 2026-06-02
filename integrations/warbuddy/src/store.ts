@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
 import { type ShadowServerAppActorRef, ShadowServerAppOutbox } from '@shadowob/sdk'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
-import { BATTLE_MAPS, battleResultReasonLabel, runBattle } from './game.js'
+import { BATTLE_MAPS, battleResultReasonLabel, runRealtimeBattle } from './game.js'
+import { DEFAULT_TANK_STRATEGY_CODE } from './rules.js'
 import {
   type MatchRecord,
   type OwnerKind,
@@ -20,70 +21,8 @@ import {
 const now = () => new Date().toISOString()
 const id = (prefix: string) => `${prefix}_${randomUUID()}`
 
-export const DEFAULT_TANK_CODE = `function aligned(a, b) {
-  return a && b && (a[0] === b[0] || a[1] === b[1]);
-}
-
-var DIRS = ["up", "right", "down", "left"];
-var DELTAS = { up: [0, -1], right: [1, 0], down: [0, 1], left: [-1, 0] };
-
-function open(game, position) {
-  var column = game.map[position[0]];
-  var tile = column && column[position[1]];
-  return tile === "." || tile === "o";
-}
-
-function ahead(me) {
-  var delta = DELTAS[me.tank.direction];
-  return [me.tank.position[0] + delta[0], me.tank.position[1] + delta[1]];
-}
-
-function turnTo(me, direction) {
-  me.tank.aim(direction);
-}
-
-function directionTo(me, target) {
-  var dx = target[0] - me.tank.position[0];
-  var dy = target[1] - me.tank.position[1];
-  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "right" : "left";
-  if (dy !== 0) return dy > 0 ? "down" : "up";
-  if (dx !== 0) return dx > 0 ? "right" : "left";
-  return me.tank.direction;
-}
-
-function advance(me, game) {
-  if (open(game, ahead(me))) me.tank.drive();
-  else me.tank.aim("right");
-}
-
-function turnToward(me, target, game) {
-  if (!target) return me.tank.aim("right");
-  var direction = directionTo(me, target);
-  if (direction === me.tank.direction) advance(me, game);
-  else turnTo(me, direction);
-}
-
-function onIdle(me, enemy, game) {
-  if (enemy.tank && aligned(me.tank.position, enemy.tank.position) && !enemy.status.shielded) {
-    me.tank.fire();
-    return;
-  }
-  if (me.skill.remainingCooldownFrames === 0 && me.skill.type === "shield" && enemy.bullet) {
-    me.tank.shield();
-    return;
-  }
-  if (game.flag) {
-    turnToward(me, game.flag, game);
-    return;
-  }
-  if (game.star) {
-    turnToward(me, game.star, game);
-    return;
-  }
-  advance(me, game);
-}`
-
-export const SYSTEM_STRATEGY_CODE = ''
+export const DEFAULT_TANK_CODE = DEFAULT_TANK_STRATEGY_CODE
+export const SYSTEM_STRATEGY_CODE = DEFAULT_TANK_STRATEGY_CODE
 
 const BRAWLER_CODE = `function aligned(a, b) {
   return a && b && (a[0] === b[0] || a[1] === b[1]);
@@ -575,6 +514,8 @@ export function simulateBattle(input: {
   opponentId?: string
   mapId?: string
   seed?: number
+  fps?: number
+  durationSeconds?: number
 }) {
   const challenger = input.candidate
     ? temporaryCandidateTank(input.candidate)
@@ -584,7 +525,14 @@ export function simulateBattle(input: {
     getTank(input.opponentId ?? '') ??
     state.tanks.find((tank) => tank.id !== challenger.id) ??
     state.tanks[0]!
-  const replay = runBattle({ challenger, defender, mapId: input.mapId, seed: input.seed })
+  const replay = runRealtimeBattle({
+    challenger,
+    defender,
+    mapId: input.mapId,
+    seed: input.seed,
+    fps: input.fps,
+    durationSeconds: input.durationSeconds,
+  })
   return {
     type: 'warbuddy.match_simulation',
     maps: listMaps(),
@@ -599,6 +547,8 @@ export function recordChallenge(input: {
   defenderTankId: string
   mapId?: string
   seed?: number
+  fps?: number
+  durationSeconds?: number
 }) {
   const challenger = getTank(input.challengerTankId)
   const defender = getTank(input.defenderTankId)
@@ -607,7 +557,14 @@ export function recordChallenge(input: {
     throw Object.assign(new Error('tanks_must_be_different'), { status: 400 })
   }
 
-  const replay = runBattle({ challenger, defender, mapId: input.mapId, seed: input.seed })
+  const replay = runRealtimeBattle({
+    challenger,
+    defender,
+    mapId: input.mapId,
+    seed: input.seed,
+    fps: input.fps,
+    durationSeconds: input.durationSeconds,
+  })
   const winnerIndex = replay.meta.result.winner
   const winner = winnerIndex === null ? null : winnerIndex === 0 ? challenger : defender
   const match: MatchRecord = {
@@ -890,7 +847,7 @@ export function buildBattleBrief(input: {
           : null,
         'Workflow: inspect the assigned squad with teams.list and tanks.get, submit strategy updates with tanks.saveCode, run matches.simulate, then use matches.challenge when ready.',
         'Mission: compete with combined arms. Your tank provides fire support while your engineer captures pickups, plants delayed bombs, and contests flags.',
-        'Runtime: positions are [x, y]; map values are x wall, m dirt, o grass, w water, . open. Use me.tank.drive(targetX,targetY) or me.engineer.move(targetX,targetY) for built-in pathing, drive/move(direction) for a cardinal step, small vectors like drive(1,0) for one-step motion, plus me.tank.aim(angle|direction), me.tank.fire(), me.tank.speak(text), me.engineer.speak(text), me.engineer.bomb(), and your tank skill function on me.tank.',
+        'Runtime: prefer separate handlers onTankIdle(tank, enemy, game, squad) and onEngineerIdle(engineer, enemy, game, squad). Positions are [x, y]; map values are x wall, m dirt, o grass, w water, . open. Use tank.moveTo(x,y) or engineer.moveTo(x,y) for built-in pathing, step(direction) for a cardinal step, moveVector(x,y) for one-step vectors, tank.face(direction|angle), tank.faceAngle(angle), tank.fire(), tank.speak(text), engineer.speak(text), engineer.bomb(), print(...args), plus the tank skill function on tank. Legacy onIdle, drive, aim, and engineer.move still work.',
         'Rules: grass hides units from enemy perception, water blocks tanks but not engineers, bombs chain-detonate, and the first side to three flags wins.',
         input.mapId ? `Preferred map: ${input.mapId}.` : null,
         input.opponentHint ? `Opponent hint: ${input.opponentHint}.` : null,
@@ -1060,7 +1017,7 @@ function updateTankRecord(
   tank: TankProfile,
   score: number,
   match: MatchRecord,
-  summary: ReturnType<typeof runBattle>['summary']['tanks'][string] | undefined,
+  summary: MatchRecord['replay']['summary']['tanks'][string] | undefined,
 ) {
   if (score === 1) tank.wins += 1
   else if (score === 0) tank.losses += 1

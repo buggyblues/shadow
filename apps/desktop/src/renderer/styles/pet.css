@@ -34,6 +34,12 @@ html.desktop-pet-window #root {
   padding: 8px;
 }
 
+.desktop-pet.expanded.panel-open {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+}
+
 .desktop-pet button,
 .desktop-pet input,
 .desktop-pet select,
@@ -57,14 +63,35 @@ html.desktop-pet-window #root {
   align-self: stretch;
 }
 
-.desktop-pet-button {
+.desktop-pet.expanded.panel-open .desktop-pet-stage {
+  display: none;
+}
+
+.desktop-pet-stage-anchor {
   position: relative;
-  width: min(50%, 112px);
-  height: min(76%, 174px);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.desktop-pet.compact .desktop-pet-stage-anchor {
+  animation: desktop-pet-stage-fade-in 150ms ease-out;
+}
+
+.desktop-pet-button {
+  --desktop-pet-frame-aspect: 192 / 208;
+  --desktop-pet-frame-width-ratio: 0.9230769231;
+  --desktop-pet-visual-lift: -16px;
+  position: relative;
+  width: min(66%, calc(68vh * var(--desktop-pet-frame-width-ratio)), 136px);
+  height: auto;
+  aspect-ratio: var(--desktop-pet-frame-aspect);
   border: 0;
   outline: 0;
   padding: 0;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.001);
   display: grid;
   place-items: center;
   cursor: grab;
@@ -188,8 +215,7 @@ html.desktop-pet-window #root {
 }
 
 .desktop-pet.expanded .desktop-pet-button {
-  width: min(50%, 112px);
-  height: min(76%, 174px);
+  width: min(68%, calc(70vh * var(--desktop-pet-frame-width-ratio)), 140px);
 }
 
 .desktop-pet.expanded .desktop-pet-button::before {
@@ -201,12 +227,29 @@ html.desktop-pet-window #root {
   cursor: grabbing;
 }
 
+.desktop-pet.asset-drop-active .desktop-pet-button::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: 4;
+  border: 2px dashed rgba(68, 255, 228, 0.78);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgba(0, 243, 255, 0.22),
+    0 0 28px rgba(0, 243, 255, 0.24);
+  pointer-events: none;
+}
+
+.desktop-pet.asset-drop-busy .desktop-pet-button {
+  cursor: progress;
+}
+
 .desktop-pet-sprite {
   position: absolute;
-  inset: 0;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
+  left: calc(50% + var(--desktop-pet-content-offset-x, 0px));
+  top: calc(50% + var(--desktop-pet-content-offset-y, 0px) + var(--desktop-pet-visual-lift, 0px));
+  width: var(--desktop-pet-frame-width, 192px);
+  height: var(--desktop-pet-frame-height, 208px);
   object-fit: contain;
   background: transparent;
   mix-blend-mode: normal;
@@ -214,44 +257,51 @@ html.desktop-pet-window #root {
   pointer-events: none;
   border: 0;
   outline: 0;
+  transform: translate(-50%, -50%) scale(var(--desktop-pet-frame-scale, 1));
+  transform-origin: center;
+}
+
+.desktop-pet-sprite-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
   animation: desktop-pet-quiet-breathe 5.8s ease-in-out infinite;
 }
 
 .desktop-pet-sprite-sheet {
   background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  image-rendering: pixelated;
 }
 
-.desktop-pet.emotion-excited .desktop-pet-sprite {
+.desktop-pet.emotion-excited .desktop-pet-sprite-shell {
   animation:
     desktop-pet-quiet-breathe 3.2s ease-in-out infinite,
     desktop-pet-happy-bob 1.6s ease-in-out infinite;
 }
 
-.desktop-pet.emotion-hungry .desktop-pet-sprite {
-  filter: saturate(0.82) brightness(0.94);
+.desktop-pet.emotion-hungry .desktop-pet-sprite-shell {
   transform: translateY(2px);
 }
 
 .desktop-pet.emotion-sleepy .desktop-pet-sprite,
 .desktop-pet.phase-night .desktop-pet-sprite {
-  filter: saturate(0.72) brightness(0.86);
+  filter: none;
 }
 
 .desktop-pet.emotion-sick .desktop-pet-sprite {
-  filter: grayscale(0.16) saturate(0.72) brightness(0.92);
+  filter: none;
 }
 
 .desktop-pet.emotion-lonely .desktop-pet-sprite {
-  filter: saturate(0.72);
-  opacity: 0.92;
+  filter: none;
+  opacity: 1;
 }
 
 .desktop-pet-speech-bubble {
   position: absolute;
   left: 50%;
-  top: 4px;
+  top: max(14px, calc(50% - 106px));
   z-index: 5;
   box-sizing: border-box;
   width: min(172px, calc(100% - 18px));
@@ -309,7 +359,7 @@ html.desktop-pet-window #root {
 
 .desktop-pet.expanded .desktop-pet-speech-bubble {
   left: 50%;
-  top: 6px;
+  top: calc(50% - 118px);
   width: min(190px, calc(100% - 18px));
   max-height: 74px;
 }
@@ -332,8 +382,8 @@ html.desktop-pet-window #root {
 
 .desktop-pet-attention-indicator {
   position: absolute;
-  right: calc(50% - 70px);
-  top: calc(50% - 90px);
+  right: calc(50% - 58px);
+  top: calc(50% - 72px);
   z-index: 7;
   width: 24px;
   height: 24px;
@@ -378,8 +428,8 @@ html.desktop-pet-window #root {
 }
 
 .desktop-pet.expanded .desktop-pet-attention-indicator {
-  right: calc(50% - 78px);
-  top: calc(50% - 104px);
+  right: calc(50% - 66px);
+  top: calc(50% - 86px);
 }
 
 .desktop-pet-radial {
@@ -390,6 +440,7 @@ html.desktop-pet-window #root {
   height: min(100%, 220px);
   z-index: 3;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   transform: translate(-50%, -50%) scale(0.98);
   transition:
@@ -399,6 +450,7 @@ html.desktop-pet-window #root {
 
 .desktop-pet-radial.visible {
   opacity: 1;
+  visibility: visible;
   transform: translate(-50%, -50%) scale(1);
 }
 
@@ -414,8 +466,8 @@ html.desktop-pet-window #root {
     inset 0 -1px 0 rgba(0, 243, 255, 0.1);
   backdrop-filter: blur(18px) saturate(170%);
   -webkit-backdrop-filter: blur(18px) saturate(170%);
-  -webkit-mask: radial-gradient(circle, transparent 0 60px, #000 61px 100%);
-  mask: radial-gradient(circle, transparent 0 60px, #000 61px 100%);
+  -webkit-mask: radial-gradient(circle, transparent 0 68px, #000 69px 100%);
+  mask: radial-gradient(circle, transparent 0 68px, #000 69px 100%);
   pointer-events: none;
 }
 
@@ -429,8 +481,12 @@ html.desktop-pet-window #root {
 
 .desktop-pet-sector {
   cursor: pointer;
-  pointer-events: auto;
+  pointer-events: none;
   outline: none;
+}
+
+.desktop-pet-radial.visible .desktop-pet-sector {
+  pointer-events: auto;
 }
 
 .desktop-pet-sector-shape {
@@ -557,4 +613,20 @@ html.desktop-pet-window #root {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+@keyframes desktop-pet-stage-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-pet.compact .desktop-pet-stage-anchor {
+    animation: none;
+  }
 }

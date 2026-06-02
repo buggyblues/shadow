@@ -1,3 +1,4 @@
+import { DEFAULT_TANK_STRATEGY_CODE, DEFAULT_WARBUDDY_RULES } from '../rules.js'
 import type {
   BattleBombState,
   BattleBulletState,
@@ -13,21 +14,66 @@ import type {
   UnitDeathState,
 } from '../types.js'
 
+export type DuelUnitKind = 'tank' | 'engineer'
+
+export interface DuelUnitRef {
+  kind: DuelUnitKind
+  id?: string
+  owner?: 0 | 1
+}
+
 export type DuelAction =
-  | { type: 'go' }
-  | { type: 'drive'; x: number; y: number; target?: boolean }
-  | { type: 'move'; direction: Direction }
-  | { type: 'engineerDrive'; x: number; y: number; target?: boolean }
-  | { type: 'engineerMove'; direction: Direction }
-  | { type: 'engineerBomb' }
-  | { type: 'turn'; side: 'left' | 'right' }
-  | { type: 'aim'; angle: number }
-  | { type: 'fire' }
-  | { type: 'skill' }
-  | { type: 'tankSpeak'; text: string }
-  | { type: 'engineerSpeak'; text: string }
+  | { type: 'unit.drive'; unit: DuelUnitRef; x: number; y: number; target?: boolean }
+  | { type: 'unit.move'; unit: DuelUnitRef; direction: Direction }
+  | { type: 'unit.aim'; unit: DuelUnitRef; angle: number }
+  | { type: 'unit.fire'; unit: DuelUnitRef }
+  | { type: 'unit.ability'; unit: DuelUnitRef; ability: string; x?: number; y?: number }
+  | { type: 'unit.speak'; unit: DuelUnitRef; text: string }
 
 export type DuelRole = 'tank' | 'engineer'
+
+const TANK_UNIT = { kind: 'tank' } satisfies DuelUnitRef
+const ENGINEER_UNIT = { kind: 'engineer' } satisfies DuelUnitRef
+const PRIMARY_ABILITY = 'primary'
+
+const tankDriveAction = (x: number, y: number, target?: boolean): DuelAction => ({
+  type: 'unit.drive',
+  unit: TANK_UNIT,
+  x,
+  y,
+  ...(target === undefined ? {} : { target }),
+})
+const driveEngineerAction = (x: number, y: number, target?: boolean): DuelAction => ({
+  type: 'unit.drive',
+  unit: ENGINEER_UNIT,
+  x,
+  y,
+  ...(target === undefined ? {} : { target }),
+})
+const tankMoveAction = (direction: Direction): DuelAction => ({
+  type: 'unit.move',
+  unit: TANK_UNIT,
+  direction,
+})
+const stepEngineerAction = (direction: Direction): DuelAction => ({
+  type: 'unit.move',
+  unit: ENGINEER_UNIT,
+  direction,
+})
+const tankAimAction = (angle: number): DuelAction => ({ type: 'unit.aim', unit: TANK_UNIT, angle })
+const tankFireAction = (): DuelAction => ({ type: 'unit.fire', unit: TANK_UNIT })
+const tankAbilityAction = (ability = PRIMARY_ABILITY, x?: number, y?: number): DuelAction => ({
+  type: 'unit.ability',
+  unit: TANK_UNIT,
+  ability,
+  ...(x === undefined ? {} : { x }),
+  ...(y === undefined ? {} : { y }),
+})
+const plantBombAction = (): DuelAction => ({
+  type: 'unit.ability',
+  unit: ENGINEER_UNIT,
+  ability: 'bomb',
+})
 
 interface DuelTank {
   id: string
@@ -83,6 +129,7 @@ interface DuelEngineer {
   bombCooldown: number
   powerGlowRemaining: number
   death: UnitDeathState | null
+  stuckFrames: number
 }
 
 interface DuelBomb {
@@ -137,16 +184,18 @@ export interface HumanDuelState {
   agentCode: string
 }
 
-export const HUMAN_DUEL_MAX_FRAMES = 900
+export const HUMAN_DUEL_MAX_FRAMES = Math.round(
+  DEFAULT_WARBUDDY_RULES.timing.durationSeconds * DEFAULT_WARBUDDY_RULES.timing.fps,
+)
 
-const STAR_FIRST_FRAME = 240
-const STAR_SPAWN_INTERVAL = 310
-const FLAG_TARGET = 3
-const FLAG_FIRST_FRAME = 360
-const FLAG_SPAWN_INTERVAL = 430
+const STAR_FIRST_FRAME = DEFAULT_WARBUDDY_RULES.pickups.starFirstFrame
+const STAR_SPAWN_INTERVAL = DEFAULT_WARBUDDY_RULES.pickups.starSpawnIntervalFrames
+const FLAG_TARGET = DEFAULT_WARBUDDY_RULES.pickups.flagTarget
+const FLAG_FIRST_FRAME = DEFAULT_WARBUDDY_RULES.pickups.flagFirstFrame
+const FLAG_SPAWN_INTERVAL = DEFAULT_WARBUDDY_RULES.pickups.flagSpawnIntervalFrames
 const TANK_RADIUS = 0.34
-const TANK_SPEED = 0.102
-const TANK_BOOST_MULTIPLIER = 1.58
+const TANK_SPEED = 1 / DEFAULT_WARBUDDY_RULES.units.tank.moveCooldownFrames
+const TANK_BOOST_MULTIPLIER = 2
 const BULLET_SPEED = 0.24
 const BULLET_RADIUS = 0.12
 const BULLET_TTL = 150
@@ -156,27 +205,33 @@ const GRASS_REVEAL_RADIUS = 1.45
 const FIRE_LOCK_FRAMES = 18
 const SHOT_ALIGNMENT_DEGREES = 13
 const TANK_ACCELERATION_BLEND = 0.84
-const TANK_INERTIA_FRICTION = 0.48
+const TANK_INERTIA_FRICTION = 0.24
 const TANK_STOP_SPEED = 0.006
 const ENGINEER_RADIUS = 0.23
-const ENGINEER_SPEED = 0.092
+const ENGINEER_SPEED = 1 / DEFAULT_WARBUDDY_RULES.units.engineer.moveCooldownFrames
 const ENGINEER_ACCELERATION_BLEND = 0.82
-const ENGINEER_INERTIA_FRICTION = 0.42
+const ENGINEER_INERTIA_FRICTION = 0.21
 const ENGINEER_STOP_SPEED = 0.005
-const ENGINEER_BOMB_COOLDOWN = 26
-const BOMB_FUSE_FRAMES = 58
-const EXPLOSION_TTL = 15
-const SPEECH_TTL = 96
-const STAR_POWER_GLOW_FRAMES = 180
-const INITIAL_BOMB_RANGE = 2
-const MAX_BOMB_RANGE = 5
-const MAX_ENGINEER_BOMBS = 3
-const TANK_CRUSH_RADIUS = TANK_RADIUS + ENGINEER_RADIUS + 0.08
+const ENGINEER_BOMB_COOLDOWN = DEFAULT_WARBUDDY_RULES.units.engineer.bombCooldownFrames
+const BOMB_FUSE_FRAMES = DEFAULT_WARBUDDY_RULES.units.engineer.bombFuseFrames
+const EXPLOSION_TTL = DEFAULT_WARBUDDY_RULES.units.explosion.ttlFrames
+const SPEECH_TTL = DEFAULT_WARBUDDY_RULES.engine.speechTtlFrames
+const STAR_POWER_GLOW_FRAMES = DEFAULT_WARBUDDY_RULES.pickups.starPowerGlowFrames
+const INITIAL_BOMB_RANGE = DEFAULT_WARBUDDY_RULES.units.engineer.initialBombRange
+const MAX_BOMB_RANGE = DEFAULT_WARBUDDY_RULES.units.engineer.maxBombRange
+const MAX_ENGINEER_BOMBS = DEFAULT_WARBUDDY_RULES.units.engineer.maxBombs
+const TANK_CRUSH_RADIUS = DEFAULT_WARBUDDY_RULES.units.tank.crushRadius
 const BOMB_TILE_DANGER = 100
 const BOMB_NEAR_DANGER_RADIUS = 1.04
 const PICKUP_MIN_SEPARATION = 4.2
 const PICKUP_MIN_UNIT_DISTANCE = 2.4
+const PICKUP_CONTEST_FALLOFF = 2.1
 const TANK_DODGE_LOOKAHEAD_FRAMES = 9
+const ENGINEER_DANGER_THRESHOLD = 16
+const ENGINEER_DODGE_LOOKAHEAD_FRAMES = 14
+const ENGINEER_TANK_AVOID_RADIUS = 1.48
+const ENGINEER_BOMB_ESCAPE_MARGIN_FRAMES = 6
+const ENGINEER_BLAST_SAFE_RADIUS = 1.08
 const DIRECTIONS: Direction[] = ['up', 'right', 'down', 'left']
 const DIR_DELTA: Record<Direction, [number, number]> = {
   up: [0, -1],
@@ -205,6 +260,28 @@ export function createHumanDuel(input: {
   humanSkillType: SkillType
   agent: Pick<TankProfile, 'id' | 'name' | 'skillType' | 'code'>
 }) {
+  return createComputerDuel({
+    mapId: input.mapId,
+    mapName: input.mapName,
+    mapRaw: input.mapRaw,
+    challenger: {
+      id: 'human',
+      name: input.humanName.trim() || 'Human Pilot',
+      skillType: input.humanSkillType,
+      code: '',
+    },
+    defender: input.agent,
+  })
+}
+
+export function createComputerDuel(input: {
+  mapId: string
+  mapName: string
+  mapRaw: string
+  challenger: Pick<TankProfile, 'id' | 'name' | 'skillType' | 'code'>
+  defender: Pick<TankProfile, 'id' | 'name' | 'skillType' | 'code'>
+  maxFrames?: number
+}) {
   const parsed = parseMap(input.mapRaw)
   const duel: Omit<HumanDuelState, 'state'> = {
     id: `duel_${Date.now().toString(36)}`,
@@ -212,37 +289,37 @@ export function createHumanDuel(input: {
     mapName: input.mapName,
     map: parsed.map,
     frame: 0,
-    maxFrames: HUMAN_DUEL_MAX_FRAMES,
+    maxFrames: input.maxFrames ?? HUMAN_DUEL_MAX_FRAMES,
     status: 'running',
     result: { winner: null, reason: 'draw' },
     tanks: [
       createTank({
-        id: 'human',
-        name: input.humanName.trim() || 'Human Pilot',
-        skillType: input.humanSkillType,
+        id: input.challenger.id,
+        name: input.challenger.name,
+        skillType: input.challenger.skillType,
         position: parsed.spawns[0].position,
         direction: parsed.spawns[0].direction,
       }),
       createTank({
-        id: input.agent.id,
-        name: input.agent.name,
-        skillType: input.agent.skillType,
+        id: input.defender.id,
+        name: input.defender.name,
+        skillType: input.defender.skillType,
         position: parsed.spawns[1].position,
         direction: parsed.spawns[1].direction,
       }),
     ],
     engineers: [
       createEngineer({
-        id: 'human_engineer',
+        id: `${input.challenger.id}_engineer`,
         owner: 0,
-        name: 'Human Engineer',
+        name: `${input.challenger.name} Engineer`,
         position: findEngineerSpawn(parsed.map, parsed.spawns[0].position, 0),
         direction: 'right',
       }),
       createEngineer({
-        id: `${input.agent.id}_engineer`,
+        id: `${input.defender.id}_engineer`,
         owner: 1,
-        name: `${input.agent.name} Engineer`,
+        name: `${input.defender.name} Engineer`,
         position: findEngineerSpawn(parsed.map, parsed.spawns[1].position, 1),
         direction: 'left',
       }),
@@ -255,26 +332,26 @@ export function createHumanDuel(input: {
     flag: null,
     flagScores: [0, 0],
     bulletClashes: 0,
-    log: [`Human Pilot entered ${input.mapName}`],
-    agentTankId: input.agent.id,
-    agentCode: input.agent.code,
+    log: [`${input.challenger.name} entered ${input.mapName}`],
+    agentTankId: input.defender.id,
+    agentCode: input.defender.code,
   }
   return withFrameState(duel)
 }
 
 export function keyToDuelAction(key: string): DuelAction | null {
   const normalized = key.toLowerCase()
-  if (normalized === 'arrowup' || normalized === 'w') return { type: 'move', direction: 'up' }
-  if (normalized === 'arrowdown' || normalized === 's') return { type: 'move', direction: 'down' }
-  if (normalized === 'arrowleft' || normalized === 'a') return { type: 'move', direction: 'left' }
-  if (normalized === 'arrowright' || normalized === 'd') return { type: 'move', direction: 'right' }
-  if (normalized === 'i') return { type: 'engineerMove', direction: 'up' }
-  if (normalized === 'k') return { type: 'engineerMove', direction: 'down' }
-  if (normalized === 'j') return { type: 'engineerMove', direction: 'left' }
-  if (normalized === 'l') return { type: 'engineerMove', direction: 'right' }
-  if (normalized === 'u' || normalized === 'o') return { type: 'engineerBomb' }
-  if (normalized === ' ' || normalized === 'spacebar' || normalized === 'q') return { type: 'fire' }
-  if (normalized === 'e' || normalized === 'shift') return { type: 'skill' }
+  if (normalized === 'arrowup' || normalized === 'w') return tankMoveAction('up')
+  if (normalized === 'arrowdown' || normalized === 's') return tankMoveAction('down')
+  if (normalized === 'arrowleft' || normalized === 'a') return tankMoveAction('left')
+  if (normalized === 'arrowright' || normalized === 'd') return tankMoveAction('right')
+  if (normalized === 'i') return stepEngineerAction('up')
+  if (normalized === 'k') return stepEngineerAction('down')
+  if (normalized === 'j') return stepEngineerAction('left')
+  if (normalized === 'l') return stepEngineerAction('right')
+  if (normalized === 'u' || normalized === 'o') return plantBombAction()
+  if (normalized === ' ' || normalized === 'spacebar' || normalized === 'q') return tankFireAction()
+  if (normalized === 'e' || normalized === 'shift') return tankAbilityAction()
   return null
 }
 
@@ -285,20 +362,18 @@ export function heldKeysToDuelActions(keys: Iterable<string>): DuelAction[] {
   let engineerY = 0
   for (const key of keys) {
     const action = keyToDuelAction(key)
-    if (action?.type === 'move') {
+    if (action?.type === 'unit.move' && action.unit.kind === 'tank') {
       x += DIR_DELTA[action.direction][0]
       y += DIR_DELTA[action.direction][1]
     }
-    if (action?.type === 'engineerMove') {
+    if (action?.type === 'unit.move' && action.unit.kind === 'engineer') {
       engineerX += DIR_DELTA[action.direction][0]
       engineerY += DIR_DELTA[action.direction][1]
     }
   }
   return [
-    ...(x || y ? ([{ type: 'drive', x, y }] satisfies DuelAction[]) : []),
-    ...(engineerX || engineerY
-      ? ([{ type: 'engineerDrive', x: engineerX, y: engineerY }] satisfies DuelAction[])
-      : []),
+    ...(x || y ? [tankDriveAction(x, y)] : []),
+    ...(engineerX || engineerY ? [driveEngineerAction(engineerX, engineerY)] : []),
   ]
 }
 
@@ -321,23 +396,11 @@ export function companionActionsForRole(
 }
 
 function isTankDuelAction(action: DuelAction) {
-  return (
-    action.type === 'go' ||
-    action.type === 'drive' ||
-    action.type === 'move' ||
-    action.type === 'turn' ||
-    action.type === 'aim' ||
-    action.type === 'fire' ||
-    action.type === 'skill'
-  )
+  return action.unit.kind === 'tank'
 }
 
 function isEngineerDuelAction(action: DuelAction) {
-  return (
-    action.type === 'engineerDrive' ||
-    action.type === 'engineerMove' ||
-    action.type === 'engineerBomb'
-  )
+  return action.unit.kind === 'engineer'
 }
 
 export function stepHumanDuel(
@@ -369,8 +432,8 @@ export function stepHumanDuel(
   )
     next.flag = spawnFlag(next)
 
-  for (const action of humanActions.slice(0, 4)) executeAction(next, 0, action)
-  for (const action of agentActions.slice(0, 4)) executeAction(next, 1, action)
+  for (const action of sanitizeDuelActions(humanActions)) executeAction(next, 0, action)
+  for (const action of sanitizeDuelActions(agentActions)) executeAction(next, 1, action)
 
   applyTankMotion(next)
   triggerBombsUnderTanks(next)
@@ -382,14 +445,16 @@ export function stepHumanDuel(
   collectFlag(next)
   settleIfNeeded(next)
   tickDown(next)
-  updateTankStuckCounters(next)
+  updateStuckCounters(next)
   return withFrameState(next)
 }
 
 export async function decideAgentActions(state: HumanDuelState): Promise<DuelAction[]> {
-  if (!hasStrategyCode(state.agentCode)) return fallbackAgentActions(state)
+  const code = effectiveStrategyCode(state.agentCode)
+  if (!hasStrategyCode(state.agentCode) && typeof Worker === 'undefined')
+    return fallbackDuelActions(state, 1)
   if (typeof Worker === 'undefined') return []
-  if (BLOCKED_SCRIPT_TOKENS.test(state.agentCode)) return []
+  if (BLOCKED_SCRIPT_TOKENS.test(code)) return []
 
   const snapshot = createAgentSnapshot(state)
   const workerSource = `
@@ -407,47 +472,96 @@ self.onmessage = (event) => {
   const { code, snapshot } = event.data;
   const actions = [];
   const queue = (action) => {
-    if (actions.length < 3) actions.push(action);
+    if (actions.length < 4) actions.push(action);
   };
   const tank = {
     ...snapshot.me.tank,
     drive(x, y) {
-      if (DIRECTIONS.includes(x)) {
-        const vector = VECTOR_BY_DIRECTION[x];
-        queue({ type: 'drive', x: vector[0], y: vector[1] });
+      if (arguments.length === 0) {
+        tank.step(tank.direction);
+      } else if (DIRECTIONS.includes(x)) {
+        tank.step(x);
       } else if (finiteVector(x, y)) {
-        queue({ type: 'drive', x, y, target: coordinateTarget(x, y) });
+        queue({ type: 'unit.drive', unit: { kind: 'tank' }, x, y, target: coordinateTarget(x, y) });
       }
     },
+    moveTo(x, y) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+      queue({ type: 'unit.drive', unit: { kind: 'tank' }, x, y, target: true });
+      return true;
+    },
+    step(direction) {
+      const requested = direction || tank.direction;
+      if (!DIRECTIONS.includes(requested)) return false;
+      queue({ type: 'unit.move', unit: { kind: 'tank' }, direction: requested });
+      return true;
+    },
+    moveVector(x, y) {
+      if (!finiteVector(x, y)) return false;
+      queue({ type: 'unit.drive', unit: { kind: 'tank' }, x, y });
+      return true;
+    },
+    face(angle) {
+      if (DIRECTIONS.includes(angle)) queue({ type: 'unit.aim', unit: { kind: 'tank' }, angle: ANGLE_BY_DIRECTION[angle] });
+      else if (Number.isFinite(angle)) queue({ type: 'unit.aim', unit: { kind: 'tank' }, angle });
+    },
+    faceAngle(angle) {
+      if (Number.isFinite(angle)) queue({ type: 'unit.aim', unit: { kind: 'tank' }, angle });
+    },
     aim(angle) {
-      if (DIRECTIONS.includes(angle)) queue({ type: 'aim', angle: ANGLE_BY_DIRECTION[angle] });
-      else if (Number.isFinite(angle)) queue({ type: 'aim', angle });
+      tank.face(angle);
     },
     fire() {
       if (snapshot.me.bullet || snapshot.me.status.fireLocked) return;
-      queue({ type: 'fire' });
+      queue({ type: 'unit.fire', unit: { kind: 'tank' } });
     },
     speak(text) {
-      if (typeof text === 'string' && text.trim()) queue({ type: 'tankSpeak', text });
+      if (typeof text === 'string' && text.trim()) queue({ type: 'unit.speak', unit: { kind: 'tank' }, text });
     },
   };
   const engineer = snapshot.me.engineer
     ? {
         ...snapshot.me.engineer,
         move(x, y) {
-          if (DIRECTIONS.includes(x)) queue({ type: 'engineerMove', direction: x });
-          else if (finiteVector(x, y)) queue({ type: 'engineerDrive', x, y, target: coordinateTarget(x, y) });
+          if (arguments.length === 0) engineer.step(engineer.direction);
+          else if (DIRECTIONS.includes(x)) engineer.step(x);
+          else if (finiteVector(x, y)) queue({ type: 'unit.drive', unit: { kind: 'engineer' }, x, y, target: coordinateTarget(x, y) });
+        },
+        moveTo(x, y) {
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+          queue({ type: 'unit.drive', unit: { kind: 'engineer' }, x, y, target: true });
+          return true;
+        },
+        step(direction) {
+          const requested = direction || engineer.direction;
+          if (!DIRECTIONS.includes(requested)) return false;
+          queue({ type: 'unit.move', unit: { kind: 'engineer' }, direction: requested });
+          return true;
+        },
+        moveVector(x, y) {
+          if (!finiteVector(x, y)) return false;
+          queue({ type: 'unit.drive', unit: { kind: 'engineer' }, x, y });
+          return true;
         },
         bomb() {
-          queue({ type: 'engineerBomb' });
+          queue({ type: 'unit.ability', unit: { kind: 'engineer' }, ability: 'bomb' });
         },
         speak(text) {
-          if (typeof text === 'string' && text.trim()) queue({ type: 'engineerSpeak', text });
+          if (typeof text === 'string' && text.trim()) queue({ type: 'unit.speak', unit: { kind: 'engineer' }, text });
         },
       }
     : null;
-  const castSkill = () => queue({ type: 'skill' });
+  const castSkill = (x, y) => {
+    if (snapshot.me.skill.type === 'teleport') {
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        queue({ type: 'unit.ability', unit: { kind: 'tank' }, ability: 'teleport', x: Math.trunc(x), y: Math.trunc(y) });
+      }
+      return;
+    }
+    queue({ type: 'unit.ability', unit: { kind: 'tank' }, ability: 'primary' });
+  };
   tank[snapshot.me.skill.type] = castSkill;
+  tank.skill = castSkill;
   const me = {
     tank,
     engineer,
@@ -459,9 +573,15 @@ self.onmessage = (event) => {
   };
   try {
     if (BLOCKED.test(code)) throw new Error('blocked_token');
-    const factory = new Function('"use strict";\\n' + code + '\\n; return typeof onIdle === "function" ? onIdle : null;');
-    const onIdle = factory();
-    if (typeof onIdle === 'function') onIdle(me, snapshot.enemy, snapshot.game);
+    const factory = new Function('"use strict";\\n' + code + '\\n; return { onIdle: typeof onIdle === "function" ? onIdle : null, onTankIdle: typeof onTankIdle === "function" ? onTankIdle : null, onEngineerIdle: typeof onEngineerIdle === "function" ? onEngineerIdle : null };');
+    const handlers = factory() || {};
+    const hasUnitHandlers = typeof handlers.onTankIdle === 'function' || typeof handlers.onEngineerIdle === 'function';
+    if (hasUnitHandlers) {
+      if (typeof handlers.onTankIdle === 'function') handlers.onTankIdle(tank, snapshot.enemy, snapshot.game, me);
+      if (engineer && typeof handlers.onEngineerIdle === 'function') handlers.onEngineerIdle(engineer, snapshot.enemy, snapshot.game, me);
+    } else if (typeof handlers.onIdle === 'function') {
+      handlers.onIdle(me, snapshot.enemy, snapshot.game);
+    }
     self.postMessage({ actions });
   } catch {
     self.postMessage({ actions: [] });
@@ -482,15 +602,15 @@ self.onmessage = (event) => {
     worker.onmessage = (event: MessageEvent<{ actions?: DuelAction[] }>) => {
       window.clearTimeout(timeout)
       cleanup()
-      const actions = sanitizeActions(event.data.actions ?? [])
-      resolve(scriptedAgentActions(state, actions))
+      const actions = sanitizeDuelActions(event.data.actions ?? [])
+      resolve(resolveDuelScriptActions(state, actions, 1))
     }
     worker.onerror = () => {
       window.clearTimeout(timeout)
       cleanup()
       resolve([])
     }
-    worker.postMessage({ code: state.agentCode, snapshot })
+    worker.postMessage({ code, snapshot })
   })
 }
 
@@ -555,6 +675,7 @@ function createEngineer(input: {
     bombCooldown: 0,
     powerGlowRemaining: 0,
     death: null,
+    stuckFrames: 0,
   }
 }
 
@@ -609,73 +730,65 @@ function parseMap(raw: string) {
 }
 
 function executeAction(state: Omit<HumanDuelState, 'state'>, index: 0 | 1, action: DuelAction) {
-  if (action.type === 'tankSpeak') {
-    const tank = state.tanks[index]
-    if (!tank.crashed) addSpeech(state, index, 'tank', tank.name, action.text)
-    return
-  }
-  if (action.type === 'engineerSpeak') {
-    const engineer = state.engineers[index]
-    if (engineer.alive) addSpeech(state, index, 'engineer', engineer.name, action.text)
-    return
-  }
-  if (
-    action.type === 'engineerMove' ||
-    action.type === 'engineerDrive' ||
-    action.type === 'engineerBomb'
-  ) {
+  if (action.unit.kind === 'engineer') {
     executeEngineerAction(state, index, action)
     return
   }
 
   const tank = state.tanks[index]
+  if (action.type === 'unit.speak') {
+    if (!tank.crashed) addSpeech(state, index, 'tank', tank.name, action.text)
+    return
+  }
   if (tank.crashed || tank.freezeRemaining > 0) return
   if (tank.poisonRemaining > 0 && state.frame % 2 === 0) return
 
-  if (action.type === 'turn') {
-    setHeading(tank, tank.heading + (action.side === 'right' ? 90 : -90))
-    return
-  }
-  if (action.type === 'aim') {
+  if (action.type === 'unit.aim') {
     setHeading(tank, action.angle)
     return
   }
-  if (action.type === 'move') {
+  if (action.type === 'unit.move') {
     moveTankVector(state, index, DIR_DELTA[action.direction])
     return
   }
-  if (action.type === 'drive') {
+  if (action.type === 'unit.drive') {
     moveTankVector(state, index, [action.x, action.y])
     return
   }
-  if (action.type === 'go') {
-    moveTankVector(state, index, vectorFromAngle(tank.heading))
-    return
+  if (action.type === 'unit.fire') fire(state, index)
+  if (action.type === 'unit.ability') {
+    if (action.ability === 'teleport') {
+      if (Number.isFinite(action.x) && Number.isFinite(action.y)) {
+        teleport(state, index, action.x, action.y)
+      }
+      return
+    }
+    if (action.ability === PRIMARY_ABILITY || action.ability === tank.skillType)
+      castSkill(state, index)
   }
-  if (action.type === 'fire') fire(state, index)
-  if (action.type === 'skill') castSkill(state, index)
 }
 
 function executeEngineerAction(
   state: Omit<HumanDuelState, 'state'>,
   index: 0 | 1,
-  action: Extract<
-    DuelAction,
-    { type: 'engineerMove' | 'engineerDrive' | 'engineerBomb' | 'engineerSpeak' }
-  >,
+  action: DuelAction,
 ) {
   const engineer = state.engineers[index]
+  if (action.type === 'unit.speak') {
+    if (engineer.alive) addSpeech(state, index, 'engineer', engineer.name, action.text)
+    return
+  }
   if (!engineer.alive) return
 
-  if (action.type === 'engineerMove') {
+  if (action.type === 'unit.move') {
     moveEngineerVector(state, index, DIR_DELTA[action.direction])
     return
   }
-  if (action.type === 'engineerDrive') {
+  if (action.type === 'unit.drive') {
     moveEngineerVector(state, index, [action.x, action.y])
     return
   }
-  placeEngineerBomb(state, index)
+  if (action.type === 'unit.ability' && action.ability === 'bomb') placeEngineerBomb(state, index)
 }
 
 function moveTankVector(
@@ -703,6 +816,82 @@ function tankMoveSpeed(tank: DuelTank) {
   return TANK_SPEED * (tank.boostRemaining > 0 ? TANK_BOOST_MULTIPLIER : 1) * stunMultiplier
 }
 
+function slidePosition(
+  position: [number, number],
+  dx: number,
+  dy: number,
+  radius: number,
+  canOccupy: (position: [number, number]) => boolean,
+): [number, number] {
+  const target: [number, number] = [position[0] + dx, position[1] + dy]
+  if (canOccupy(target)) return target
+
+  const primaryAxis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y'
+  const firstSlide = slideByAxes(position, dx, dy, primaryAxis, canOccupy)
+  if (distance(position, firstSlide) > 0.0001) return firstSlide
+
+  const secondSlide = slideByAxes(position, dx, dy, primaryAxis === 'x' ? 'y' : 'x', canOccupy)
+  if (distance(position, secondSlide) > 0.0001) return secondSlide
+
+  return nudgeAwayFromWall(position, dx, dy, radius, canOccupy)
+}
+
+function slideByAxes(
+  position: [number, number],
+  dx: number,
+  dy: number,
+  firstAxis: 'x' | 'y',
+  canOccupy: (position: [number, number]) => boolean,
+) {
+  let next = [...position] as [number, number]
+  const axes: Array<'x' | 'y'> = [firstAxis, firstAxis === 'x' ? 'y' : 'x']
+  for (const axis of axes) {
+    if (axis === 'x' && Math.abs(dx) > 0.0001) {
+      const candidate: [number, number] = [next[0] + dx, next[1]]
+      if (canOccupy(candidate)) next = candidate
+    }
+    if (axis === 'y' && Math.abs(dy) > 0.0001) {
+      const candidate: [number, number] = [next[0], next[1] + dy]
+      if (canOccupy(candidate)) next = candidate
+    }
+  }
+  return next
+}
+
+function nudgeAwayFromWall(
+  position: [number, number],
+  dx: number,
+  dy: number,
+  radius: number,
+  canOccupy: (position: [number, number]) => boolean,
+) {
+  const center = centerOf(cellAt(position))
+  const toCenter = subtract(center, position)
+  const maxNudge = radius * 0.22
+  const nudges: [number, number][] = []
+  if (Math.abs(dx) > 0.0001 && Math.abs(toCenter[1]) > 0.018) {
+    nudges.push([0, Math.sign(toCenter[1]) * Math.min(Math.abs(toCenter[1]), maxNudge)])
+  }
+  if (Math.abs(dy) > 0.0001 && Math.abs(toCenter[0]) > 0.018) {
+    nudges.push([Math.sign(toCenter[0]) * Math.min(Math.abs(toCenter[0]), maxNudge), 0])
+  }
+  if (Math.abs(toCenter[0]) > 0.018 || Math.abs(toCenter[1]) > 0.018) {
+    const centerVector = normalizeVector(toCenter)
+    if (centerVector) nudges.push([centerVector[0] * maxNudge, centerVector[1] * maxNudge])
+  }
+
+  for (const nudge of nudges) {
+    const nudged: [number, number] = [position[0] + nudge[0], position[1] + nudge[1]]
+    if (!canOccupy(nudged)) continue
+    const target: [number, number] = [nudged[0] + dx, nudged[1] + dy]
+    if (canOccupy(target)) return target
+    const slid = slideByAxes(nudged, dx, dy, Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y', canOccupy)
+    if (distance(nudged, slid) > 0.0001) return slid
+    return nudged
+  }
+  return position
+}
+
 function moveWithCollision(
   state: Pick<HumanDuelState, 'map'>,
   tank: DuelTank,
@@ -711,11 +900,14 @@ function moveWithCollision(
   dy: number,
 ) {
   const before = [...tank.position] as [number, number]
-  const nextX: [number, number] = [tank.position[0] + dx, tank.position[1]]
-  if (canTankOccupy(state, nextX, opponent.position)) tank.position = nextX
-
-  const nextY: [number, number] = [tank.position[0], tank.position[1] + dy]
-  if (canTankOccupy(state, nextY, opponent.position)) tank.position = nextY
+  const opponentPosition = opponent.crashed ? null : opponent.position
+  const totalDistance = Math.hypot(dx, dy)
+  const steps = Math.max(1, Math.ceil(totalDistance / 0.08))
+  for (let step = 0; step < steps; step += 1) {
+    tank.position = slidePosition(tank.position, dx / steps, dy / steps, TANK_RADIUS, (position) =>
+      canTankOccupy(state, position, opponentPosition),
+    )
+  }
   return subtract(tank.position, before)
 }
 
@@ -801,11 +993,17 @@ function moveEngineerWithCollision(
   dy: number,
 ) {
   const before = [...engineer.position] as [number, number]
-  const nextX: [number, number] = [engineer.position[0] + dx, engineer.position[1]]
-  if (canEngineerOccupy(state, nextX, index, before)) engineer.position = nextX
-
-  const nextY: [number, number] = [engineer.position[0], engineer.position[1] + dy]
-  if (canEngineerOccupy(state, nextY, index, before)) engineer.position = nextY
+  const totalDistance = Math.hypot(dx, dy)
+  const steps = Math.max(1, Math.ceil(totalDistance / 0.08))
+  for (let step = 0; step < steps; step += 1) {
+    engineer.position = slidePosition(
+      engineer.position,
+      dx / steps,
+      dy / steps,
+      ENGINEER_RADIUS,
+      (position) => canEngineerOccupy(state, position, index, before),
+    )
+  }
   return subtract(engineer.position, before)
 }
 
@@ -963,6 +1161,16 @@ function positionInExplosionTile(position: [number, number], explosionCenter: [n
   )
 }
 
+function positionInEngineerUnsafeBlast(
+  position: [number, number],
+  explosionCenter: [number, number],
+) {
+  return (
+    sameCell(cellAt(position), cellAt(explosionCenter)) ||
+    distance(position, explosionCenter) <= ENGINEER_BLAST_SAFE_RADIUS
+  )
+}
+
 function damageTank(
   state: Omit<HumanDuelState, 'state'>,
   tank: DuelTank,
@@ -1044,6 +1252,10 @@ function castSkill(state: Omit<HumanDuelState, 'state'>, index: 0 | 1) {
   const tank = state.tanks[index]
   const enemy = state.tanks[otherIndex(index)]
   if (tank.cooldown > 0) return
+  if (tank.skillType === 'teleport') {
+    teleport(state, index)
+    return
+  }
   tank.cooldown = SKILL_COOLDOWNS[tank.skillType]
   addLog(state, `${tank.name} used ${tank.skillType}`)
   switch (tank.skillType) {
@@ -1065,28 +1277,42 @@ function castSkill(state: Omit<HumanDuelState, 'state'>, index: 0 | 1) {
     case 'poison':
       enemy.poisonRemaining = 54
       break
-    case 'teleport':
-      teleport(state, index)
-      break
     case 'boost':
       tank.boostRemaining = 42
       break
   }
 }
 
-function teleport(state: Omit<HumanDuelState, 'state'>, index: 0 | 1) {
+function teleport(state: Omit<HumanDuelState, 'state'>, index: 0 | 1, x?: number, y?: number) {
   const tank = state.tanks[index]
   const enemy = state.tanks[otherIndex(index)]
-  const candidates = [
-    state.flag,
-    state.star,
-    add(enemy.position, [1.8, 0]),
-    add(enemy.position, [-1.8, 0]),
-    add(enemy.position, [0, 1.8]),
-    add(enemy.position, [0, -1.8]),
-  ].filter(Boolean) as [number, number][]
-  const target = candidates.find((position) => canTankOccupy(state, position, enemy.position))
-  if (target) tank.position = [...target]
+  if (tank.skillType !== 'teleport' || tank.cooldown > 0) return false
+  const explicitTarget =
+    Number.isFinite(x) && Number.isFinite(y) ? centerOf(cellAt([x as number, y as number])) : null
+  const candidates = (
+    explicitTarget
+      ? [explicitTarget]
+      : [
+          state.flag,
+          state.star,
+          add(enemy.position, [1.8, 0]),
+          add(enemy.position, [-1.8, 0]),
+          add(enemy.position, [0, 1.8]),
+          add(enemy.position, [0, -1.8]),
+        ]
+  ).filter(Boolean) as [number, number][]
+  const target = candidates.find((position) =>
+    canTankOccupy(state, position, enemy.crashed ? null : enemy.position),
+  )
+  if (!target) return false
+  tank.cooldown = SKILL_COOLDOWNS.teleport
+  tank.position = [...target]
+  tank.lastPosition = [...target]
+  tank.velocity = [0, 0]
+  tank.driveIntent = false
+  tank.fireLocked = Math.max(tank.fireLocked, distance(target, enemy.position) <= 4 ? 2 : 0)
+  addLog(state, `${tank.name} used teleport`)
+  return true
 }
 
 function moveBullets(state: Omit<HumanDuelState, 'state'>) {
@@ -1283,7 +1509,7 @@ function tickSpeeches(state: Omit<HumanDuelState, 'state'>) {
     .filter((speech) => speech.remainingFrames > 0)
 }
 
-function updateTankStuckCounters(state: Omit<HumanDuelState, 'state'>) {
+function updateStuckCounters(state: Omit<HumanDuelState, 'state'>) {
   for (const tank of state.tanks) {
     if (tank.crashed) {
       tank.stuckFrames = 0
@@ -1295,76 +1521,189 @@ function updateTankStuckCounters(state: Omit<HumanDuelState, 'state'>) {
       tank.stuckFrames = 0
     }
   }
+  for (const engineer of state.engineers) {
+    if (!engineer.alive) {
+      engineer.stuckFrames = 0
+      continue
+    }
+    const moved = Math.hypot(engineer.velocity[0], engineer.velocity[1])
+    if (moved < 0.018 && engineer.driveIntent) {
+      engineer.stuckFrames += 1
+    } else if (moved > 0.03) {
+      engineer.stuckFrames = 0
+    }
+  }
 }
 
 function hasStrategyCode(code: string) {
   return code.trim().length > 0
 }
 
-function scriptedAgentActions(state: HumanDuelState, scripted: DuelAction[]): DuelAction[] {
-  return scripted
-    .map((action) => resolveScriptedTargetAction(state, action))
-    .filter((action): action is DuelAction => Boolean(action))
-    .filter((action) => scriptedActionCanExecute(state, action))
-    .slice(0, 4)
+export function effectiveStrategyCode(code: string) {
+  return hasStrategyCode(code) ? code : DEFAULT_TANK_STRATEGY_CODE
 }
 
-function resolveScriptedTargetAction(state: HumanDuelState, action: DuelAction): DuelAction | null {
-  if (action.type === 'drive' && action.target) {
-    const tank = state.tanks[1]
-    const target: [number, number] = [Math.trunc(action.x), Math.trunc(action.y)]
-    const pathPoint = nextPathPoint(state, tank.position, target, state.tanks[0].position, 1)
-    if (!pathPoint) return null
-    const vector = subtract(pathPoint, tank.position)
-    return { type: 'drive', x: vector[0], y: vector[1] }
+export function resolveDuelScriptActions(
+  state: HumanDuelState,
+  scripted: DuelAction[],
+  index: 0 | 1,
+): DuelAction[] {
+  const resolved = scripted
+    .map((action) => resolveScriptedTargetAction(state, action, index))
+    .filter((action): action is DuelAction => Boolean(action))
+  const actions = resolved
+    .filter((action) => scriptedActionCanExecute(state, action, index))
+    .slice(0, 4)
+  const engineerEmergency = dodgeEngineerDangerAction(state, index)
+  if (engineerEmergency) {
+    return [
+      ...actions.filter((action) => action.unit.kind !== 'engineer'),
+      engineerEmergency,
+    ].slice(0, 4)
   }
-  if (action.type === 'engineerDrive' && action.target) {
-    const engineer = state.engineers[1]
+  const hadEngineerAction = resolved.some(isEngineerDuelAction)
+  const hasEngineerAction = actions.some(isEngineerDuelAction)
+  if (hadEngineerAction && !hasEngineerAction) {
+    const engineerFallback = fallbackEngineerAction(state, index)
+    if (engineerFallback && scriptedActionCanExecute(state, engineerFallback, index)) {
+      return [
+        ...actions.filter((action) => action.unit.kind !== 'engineer'),
+        engineerFallback,
+      ].slice(0, 4)
+    }
+    const recovery = engineerRecoveryAction(state, index)
+    if (recovery) {
+      return [...actions.filter((action) => action.unit.kind !== 'engineer'), recovery].slice(0, 4)
+    }
+  }
+  return actions
+}
+
+function resolveScriptedTargetAction(
+  state: HumanDuelState,
+  action: DuelAction,
+  index: 0 | 1,
+): DuelAction | null {
+  if (action.type === 'unit.drive' && action.unit.kind === 'tank' && action.target) {
+    const tank = state.tanks[index]
+    const target: [number, number] = [Math.trunc(action.x), Math.trunc(action.y)]
+    const pathPoint = nextPathPoint(
+      state,
+      tank.position,
+      target,
+      blockingTankPosition(state, index),
+      index,
+    )
+    if (!pathPoint) {
+      const clearObstacle = clearSoftObstacleAction(state, index, centerOf(target))
+      if (clearObstacle) return clearObstacle
+      const roam = bestOpenNeighborVector(state, index, tank.position, centerOf(target))
+      return roam ? tankDriveAction(roam[0], roam[1]) : null
+    }
+    const vector = subtract(pathPoint, tank.position)
+    if (!canMoveVector(state, index, vector)) {
+      const roam = bestOpenNeighborVector(state, index, tank.position, centerOf(target))
+      return roam ? tankDriveAction(roam[0], roam[1]) : null
+    }
+    return tankDriveAction(vector[0], vector[1])
+  }
+  if (action.type === 'unit.drive' && action.unit.kind === 'engineer' && action.target) {
+    const engineer = state.engineers[index]
     if (!engineer.alive) return null
     const target: [number, number] = [Math.trunc(action.x), Math.trunc(action.y)]
-    const pathPoint = nextEngineerPathPoint(
-      state,
-      engineer.position,
-      target,
-      state.engineers[0].position,
-    )
-    if (!pathPoint) return null
-    const vector = subtract(pathPoint, engineer.position)
-    return { type: 'engineerDrive', x: vector[0], y: vector[1] }
+    const pathPoint = nextEngineerPathPoint(state, index, engineer.position, target)
+    if (!pathPoint) {
+      const miningTarget = softObstacleMiningTarget(state, index, centerOf(target))
+      if (!miningTarget) {
+        const fallback = bestEngineerVectorTowardPoint(state, index, centerOf(target))
+        return fallback ? driveEngineerAction(fallback[0], fallback[1]) : null
+      }
+      const miningPathPoint = nextEngineerPathPoint(state, index, engineer.position, miningTarget)
+      if (!miningPathPoint) {
+        const fallback = bestEngineerVectorTowardPoint(state, index, miningTarget)
+        return fallback ? driveEngineerAction(fallback[0], fallback[1]) : null
+      }
+      const miningVector = routedEngineerVector(state, index, miningPathPoint)
+      if (!canMoveEngineerVector(state, index, miningVector)) {
+        const fallback = bestEngineerVectorTowardPoint(state, index, miningTarget)
+        return fallback ? driveEngineerAction(fallback[0], fallback[1]) : null
+      }
+      return driveEngineerAction(miningVector[0], miningVector[1])
+    }
+    const vector = routedEngineerVector(state, index, pathPoint)
+    if (!canMoveEngineerVector(state, index, vector)) {
+      const fallback = bestEngineerVectorTowardPoint(state, index, centerOf(target))
+      return fallback ? driveEngineerAction(fallback[0], fallback[1]) : null
+    }
+    return driveEngineerAction(vector[0], vector[1])
   }
   return action
 }
 
-function scriptedActionCanExecute(state: HumanDuelState, action: DuelAction) {
-  const agent = state.tanks[1]
-  if (action.type === 'fire') {
-    return agent.fireLocked === 0 && !state.bullets.some((bullet) => bullet.owner === 1)
+function scriptedActionCanExecute(state: HumanDuelState, action: DuelAction, index: 0 | 1) {
+  const agent = state.tanks[index]
+  if (action.type === 'unit.fire' && action.unit.kind === 'tank') {
+    return agent.fireLocked === 0 && !state.bullets.some((bullet) => bullet.owner === index)
   }
-  if (action.type === 'aim' || action.type === 'turn') return true
-  if (action.type === 'go') return canMoveVector(state, 1, vectorFromAngle(agent.heading))
-  if (action.type === 'move') return canMoveVector(state, 1, DIR_DELTA[action.direction])
-  if (action.type === 'drive') return canMoveVector(state, 1, [action.x, action.y])
-  if (action.type === 'engineerMove')
-    return canMoveEngineerVector(state, 1, DIR_DELTA[action.direction])
-  if (action.type === 'engineerDrive') return canMoveEngineerVector(state, 1, [action.x, action.y])
-  if (action.type === 'engineerBomb') {
-    const engineer = state.engineers[1]
-    const activeBombs = state.bombs.filter((bomb) => bomb.owner === 1).length
+  if (action.type === 'unit.aim') return true
+  if (action.type === 'unit.move' && action.unit.kind === 'tank')
+    return canMoveVector(state, index, DIR_DELTA[action.direction])
+  if (action.type === 'unit.drive' && action.unit.kind === 'tank')
+    return canMoveVector(state, index, [action.x, action.y])
+  if (action.type === 'unit.move' && action.unit.kind === 'engineer')
+    return canMoveEngineerVector(state, index, DIR_DELTA[action.direction])
+  if (action.type === 'unit.drive' && action.unit.kind === 'engineer')
+    return canMoveEngineerVector(state, index, [action.x, action.y])
+  if (
+    action.type === 'unit.ability' &&
+    action.unit.kind === 'engineer' &&
+    action.ability === 'bomb'
+  ) {
+    const engineer = state.engineers[index]
+    const activeBombs = state.bombs.filter((bomb) => bomb.owner === index).length
+    const bombPosition = centerOf(cellAt(engineer.position))
+    const plannedBlast = explosionPositions(
+      state.map.map((column) => [...column]),
+      bombPosition,
+      engineer.bombRange,
+    )
     return (
       engineer.bombCooldown === 0 &&
       activeBombs < engineer.maxBombs &&
-      canPlaceBombOnTile(state.map, cellAt(engineer.position))
+      canPlaceBombOnTile(state.map, cellAt(engineer.position)) &&
+      !bombWouldThreatenOwnTank(state, index, engineer.position, engineer.bombRange) &&
+      engineerHasBombEscape(state, index, plannedBlast, bombPosition) &&
+      !plannedBombCanBeTriggeredBeforeEscape(state, index, bombPosition)
     )
   }
-  if (action.type === 'skill') {
-    return agent.cooldown === 0
+  if (
+    action.type === 'unit.ability' &&
+    action.unit.kind === 'tank' &&
+    action.ability === 'teleport'
+  ) {
+    const x = action.x
+    const y = action.y
+    if (typeof x !== 'number' || typeof y !== 'number') return false
+    return (
+      agent.skillType === 'teleport' &&
+      agent.cooldown === 0 &&
+      Number.isFinite(x) &&
+      Number.isFinite(y) &&
+      canTankOccupy(state, centerOf(cellAt([x, y])), blockingTankPosition(state, index))
+    )
   }
-  if (action.type === 'tankSpeak' || action.type === 'engineerSpeak') return true
+  if (action.type === 'unit.ability' && action.unit.kind === 'tank') {
+    return (
+      agent.cooldown === 0 &&
+      (action.ability === PRIMARY_ABILITY || action.ability === agent.skillType)
+    )
+  }
+  if (action.type === 'unit.speak') return true
   return true
 }
 
-function fallbackAgentActions(state: HumanDuelState): DuelAction[] {
-  return combineActions(fallbackTankActions(state, 1), fallbackEngineerAction(state, 1))
+export function fallbackDuelActions(state: HumanDuelState, index: 0 | 1): DuelAction[] {
+  return combineActions(fallbackTankActions(state, index), fallbackEngineerAction(state, index))
 }
 
 function fallbackTankActions(state: HumanDuelState, index: 0 | 1): DuelAction[] {
@@ -1378,7 +1717,7 @@ function fallbackTankActions(state: HumanDuelState, index: 0 | 1): DuelAction[] 
   const dodge = dodgeBulletAction(state, index)
   if (dodge) return [dodge]
 
-  const enemyVisible = !isTankHiddenFromAgent(state, enemy, tank)
+  const enemyVisible = !enemy.crashed && !isTankHiddenFromAgent(state, enemy, tank)
   const enemyEngineer = state.engineers[otherIndex(index)]
   const engineerVisible =
     enemyEngineer.alive && !isEngineerHiddenFromAgent(state, enemyEngineer, tank)
@@ -1388,7 +1727,11 @@ function fallbackTankActions(state: HumanDuelState, index: 0 | 1): DuelAction[] 
     ? clearShotAngle(state, tank.position, enemyEngineer.position)
     : null
   const objectiveTarget = state.flag ?? state.star
-  if (objectiveTarget) return [driveTowardPoint(state, index, objectiveTarget)]
+  if (objectiveTarget) {
+    const clearObstacle = clearSoftObstacleAction(state, index, objectiveTarget)
+    if (clearObstacle) return [clearObstacle]
+    return [driveTowardPoint(state, index, objectiveTarget)]
+  }
 
   const pressureEngineer =
     engineerVisible &&
@@ -1411,20 +1754,24 @@ function fallbackTankActions(state: HumanDuelState, index: 0 | 1): DuelAction[] 
       tank.fireLocked === 0 &&
       !state.bullets.some((bullet) => bullet.owner === index && bullet.alive)
     if (tank.cooldown === 0 && tank.skillType === 'overload' && enemy.shieldRemaining <= 0)
-      return [{ type: 'skill' }]
+      return [tankAbilityAction()]
     if (
       angleDistance(tank.heading, shotAngle) <= SHOT_ALIGNMENT_DEGREES &&
       canFireNow &&
       enemy.shieldRemaining <= 0
     )
-      return [{ type: 'fire' }]
-    return [{ type: 'aim', angle: shotAngle }]
+      return [tankFireAction()]
+    return [tankAimAction(shotAngle)]
   }
 
-  if (combatTarget) return [driveTowardPoint(state, index, combatTarget)]
+  if (combatTarget) {
+    const clearObstacle = clearSoftObstacleAction(state, index, combatTarget)
+    if (clearObstacle) return [clearObstacle]
+    return [driveTowardPoint(state, index, combatTarget)]
+  }
 
   const roam = bestOpenNeighborVector(state, index, tank.position, enemy.position)
-  return roam ? [{ type: 'drive', x: roam[0], y: roam[1] }] : [{ type: 'turn', side: 'right' }]
+  return roam ? [tankDriveAction(roam[0], roam[1])] : [tankAimAction(tank.heading + 90)]
 }
 
 function combineActions(tankActions: DuelAction[], engineerAction: DuelAction | null) {
@@ -1434,6 +1781,9 @@ function combineActions(tankActions: DuelAction[], engineerAction: DuelAction | 
 function fallbackEngineerAction(state: HumanDuelState, index: 0 | 1): DuelAction | null {
   const engineer = state.engineers[index]
   if (!engineer.alive) return null
+  const dangerDodge = dodgeEngineerDangerAction(state, index)
+  if (dangerDodge) return dangerDodge
+
   const enemyTank = state.tanks[otherIndex(index)]
   const enemyEngineer = state.engineers[otherIndex(index)]
   const visibleEnemy = !isTankHiddenFromAgent(state, enemyTank, state.tanks[index])
@@ -1457,17 +1807,20 @@ function fallbackEngineerAction(state: HumanDuelState, index: 0 | 1): DuelAction
     activeBombs < engineer.maxBombs &&
     canPlaceBombOnTile(state.map, cellAt(engineer.position)) &&
     !bombWouldThreatenOwnTank(state, index, engineer.position, engineer.bombRange) &&
+    engineerHasBombEscape(state, index, plannedBlast, bombPosition) &&
     !plannedBombCanBeTriggeredBeforeEscape(state, index, bombPosition)
-  const combatBomb = combatTarget
-    ? plannedBlast.some((position) => positionInExplosionTile(combatTarget, position))
-    : false
+  const combatBomb =
+    (combatTarget
+      ? plannedBlast.some((position) => positionInExplosionTile(combatTarget, position))
+      : false) || bombWouldTrapEnemyTank(state, index, plannedBlast, bombPosition)
   const terrainBomb = bombWouldOpenSoftTerrain(state, engineer.position, engineer.bombRange)
 
   if (canPlantBomb && (combatBomb || terrainBomb)) {
-    return { type: 'engineerBomb' }
+    return plantBombAction()
   }
   if (!target) return null
-  return driveEngineerTowardPoint(state, index, target)
+  const miningTarget = softObstacleMiningTarget(state, index, target)
+  return driveEngineerTowardPoint(state, index, miningTarget ?? target)
 }
 
 function bombWouldOpenSoftTerrain(
@@ -1491,6 +1844,44 @@ function bombWouldOpenSoftTerrain(
   return false
 }
 
+function softObstacleMiningTarget(
+  state: HumanDuelState,
+  index: 0 | 1,
+  target: [number, number],
+): [number, number] | null {
+  const engineer = state.engineers[index]
+  const obstacle = softObstacleBetween(state.map, engineer.position, target)
+  if (!obstacle) return null
+  const obstacleCell = cellAt(obstacle)
+  const startCell = cellAt(engineer.position)
+  const candidates: Array<{ position: [number, number]; score: number }> = []
+  for (const direction of DIRECTIONS) {
+    const delta = DIR_DELTA[direction]
+    for (let step = 1; step <= engineer.bombRange; step += 1) {
+      const cell: [number, number] = [
+        obstacleCell[0] - delta[0] * step,
+        obstacleCell[1] - delta[1] * step,
+      ]
+      if (!isEngineerOpenCell(state, cell, startCell)) break
+      const position = centerOf(cell)
+      if (!nextEngineerPathPoint(state, index, engineer.position, position)) continue
+      const plannedBlast = explosionPositions(
+        state.map.map((column) => [...column]),
+        position,
+        engineer.bombRange,
+      )
+      if (!plannedBlast.some((blast) => sameCell(cellAt(blast), obstacleCell))) continue
+      if (!engineerHasBombEscape(state, index, plannedBlast, position)) continue
+      candidates.push({
+        position,
+        score: distance(engineer.position, position) + distance(position, target) * 0.35,
+      })
+    }
+  }
+  candidates.sort((a, b) => a.score - b.score)
+  return candidates[0]?.position ?? null
+}
+
 function bombWouldThreatenOwnTank(
   state: HumanDuelState,
   index: 0 | 1,
@@ -1504,6 +1895,104 @@ function bombWouldThreatenOwnTank(
   )
   return positions.some((position) =>
     positionInExplosionTile(state.tanks[index].position, position),
+  )
+}
+
+function engineerHasBombEscape(
+  state: HumanDuelState,
+  index: 0 | 1,
+  plannedBlast: Array<[number, number]>,
+  bombPosition = centerOf(cellAt(state.engineers[index].position)),
+) {
+  const engineer = state.engineers[index]
+  const away = subtract(engineer.position, bombPosition)
+  if (normalizeVector(away)) {
+    const frames = Math.max(1, BOMB_FUSE_FRAMES - ENGINEER_BOMB_ESCAPE_MARGIN_FRAMES)
+    const escaped = simulateEngineerEscape(state, index, away, frames, bombPosition)
+    return (
+      canMoveEngineerVector(state, index, away) &&
+      !plannedBlast.some((blast) => positionInEngineerUnsafeBlast(escaped, blast)) &&
+      engineerDangerScore(state, index, escaped) < ENGINEER_DANGER_THRESHOLD
+    )
+  }
+  return false
+}
+
+function simulateEngineerEscape(
+  state: HumanDuelState,
+  index: 0 | 1,
+  vector: [number, number],
+  frames: number,
+  bombPosition: [number, number],
+): [number, number] {
+  const engineer = state.engineers[index]
+  const normalized = normalizeVector(vector)
+  if (!normalized) return [...engineer.position] as [number, number]
+  const virtualState: Pick<HumanDuelState, 'map' | 'engineers' | 'bombs'> = {
+    map: state.map,
+    engineers: state.engineers,
+    bombs: state.bombs.some((bomb) => sameCell(cellAt(bomb.position), cellAt(bombPosition)))
+      ? state.bombs
+      : [
+          ...state.bombs,
+          {
+            id: 'planned_escape_bomb',
+            owner: index,
+            position: bombPosition,
+            range: engineer.bombRange,
+            remainingFrames: BOMB_FUSE_FRAMES,
+          },
+        ],
+  }
+  let position = [...engineer.position] as [number, number]
+  let velocity = [...engineer.velocity] as [number, number]
+  for (let frame = 0; frame < frames; frame += 1) {
+    const targetVelocity: [number, number] = [
+      normalized[0] * ENGINEER_SPEED,
+      normalized[1] * ENGINEER_SPEED,
+    ]
+    velocity = [
+      velocity[0] + (targetVelocity[0] - velocity[0]) * ENGINEER_ACCELERATION_BLEND,
+      velocity[1] + (targetVelocity[1] - velocity[1]) * ENGINEER_ACCELERATION_BLEND,
+    ]
+    const before = [...position] as [number, number]
+    const nextX: [number, number] = [position[0] + velocity[0], position[1]]
+    if (canEngineerOccupy(virtualState, nextX, index, before)) position = nextX
+    const nextY: [number, number] = [position[0], position[1] + velocity[1]]
+    if (canEngineerOccupy(virtualState, nextY, index, before)) position = nextY
+    velocity = subtract(position, before)
+  }
+  return position
+}
+
+function bombWouldTrapEnemyTank(
+  state: HumanDuelState,
+  index: 0 | 1,
+  plannedBlast: Array<[number, number]>,
+  bombPosition: [number, number],
+) {
+  const enemy = state.tanks[otherIndex(index)]
+  if (enemy.crashed) return false
+
+  const enemyPath = projectedEnemyTankPath(enemy)
+  if (
+    enemyPath.some((position) =>
+      plannedBlast.some((blast) => positionInExplosionTile(position, blast)),
+    )
+  ) {
+    return true
+  }
+
+  const toBomb = subtract(bombPosition, enemy.position)
+  const heading = vectorFromAngle(enemy.heading)
+  const along = dot(toBomb, heading)
+  const lateral = Math.abs(cross(toBomb, heading))
+  return (
+    distance(enemy.position, bombPosition) <= 2.25 ||
+    (along > 0 &&
+      along <= 4.2 &&
+      lateral <= 0.82 &&
+      lineOfFireClear(state.map, enemy.position, bombPosition))
   )
 }
 
@@ -1543,10 +2032,20 @@ function bulletWillReachPosition(
   target: [number, number],
 ) {
   const vector = vectorFromAngle(bullet.heading)
+  const next: [number, number] = [
+    bullet.position[0] + vector[0] * BULLET_SPEED,
+    bullet.position[1] + vector[1] * BULLET_SPEED,
+  ]
+  if (
+    pointToSegmentDistance(target, bullet.position, next) <= 0.52 &&
+    lineOfFireClear(state.map, bullet.position, target)
+  ) {
+    return true
+  }
   const toTarget = subtract(target, bullet.position)
   const along = dot(toTarget, vector)
   const lateral = Math.abs(cross(toTarget, vector))
-  if (along <= 0 || lateral > 0.38 || !lineOfFireClear(state.map, bullet.position, target)) {
+  if (along <= 0 || lateral > 0.52 || !lineOfFireClear(state.map, bullet.position, target)) {
     return false
   }
   return sampleLine(bullet.position, target, 0.2)
@@ -1581,7 +2080,7 @@ function nearestSafeTarget(state: HumanDuelState, index: 0 | 1, target: [number,
 
 function canTankOccupySafely(state: HumanDuelState, index: 0 | 1, position: [number, number]) {
   return (
-    canTankOccupy(state, position, state.tanks[otherIndex(index)].position) &&
+    canTankOccupy(state, position, blockingTankPosition(state, index)) &&
     !tankBombDangerAt(state, position)
   )
 }
@@ -1625,6 +2124,80 @@ function distanceToNearestBombHazard(state: HumanDuelState, position: [number, n
   return nearestPositionDistance(hazardPositions, position)
 }
 
+function engineerDangerScore(state: HumanDuelState, index: 0 | 1, position: [number, number]) {
+  let score = 0
+  for (const explosion of state.explosions) {
+    const nearest = nearestPositionDistance(explosion.positions, position)
+    if (explosion.positions.some((point) => positionInEngineerUnsafeBlast(position, point))) {
+      score += 220 + Math.max(0, BOMB_NEAR_DANGER_RADIUS - nearest) * 18
+    } else if (nearest < BOMB_NEAR_DANGER_RADIUS) {
+      score += (BOMB_NEAR_DANGER_RADIUS - nearest) * 10
+    }
+  }
+
+  for (const bomb of state.bombs) {
+    const positions = bombBlastPositions(state, bomb)
+    const nearest = nearestPositionDistance(positions, position)
+    const inBlast = positions.some((point) => positionInEngineerUnsafeBlast(position, point))
+    if (inBlast) {
+      const urgency =
+        bomb.remainingFrames <= ENGINEER_DODGE_LOOKAHEAD_FRAMES
+          ? 82
+          : Math.max(0, BOMB_FUSE_FRAMES - bomb.remainingFrames) * 0.52
+      score += BOMB_TILE_DANGER + urgency + Math.max(0, BOMB_NEAR_DANGER_RADIUS - nearest) * 12
+    } else if (nearest < BOMB_NEAR_DANGER_RADIUS) {
+      score += (BOMB_NEAR_DANGER_RADIUS - nearest) * 8
+    }
+  }
+
+  for (const bullet of state.bullets) {
+    if (bullet.owner !== otherIndex(index) || !bullet.alive) continue
+    if (!lineOfFireClear(state.map, bullet.position, position)) continue
+    score += bulletThreatScore(bullet, position, ENGINEER_RADIUS + 0.08, 4.8) * 26
+  }
+
+  const enemyTank = state.tanks[otherIndex(index)]
+  if (!enemyTank.crashed) {
+    const enemyDistance = distance(enemyTank.position, position)
+    if (enemyDistance < ENGINEER_TANK_AVOID_RADIUS) {
+      score += (ENGINEER_TANK_AVOID_RADIUS - enemyDistance) * 95 + 42
+    }
+
+    const heading = vectorFromAngle(enemyTank.heading)
+    const toEngineer = subtract(position, enemyTank.position)
+    const along = dot(toEngineer, heading)
+    const lateral = Math.abs(cross(toEngineer, heading))
+    if (along > 0 && along < 3.3 && lateral < TANK_CRUSH_RADIUS + ENGINEER_RADIUS + 0.36) {
+      score += (3.3 - along) * 18 + (TANK_CRUSH_RADIUS + ENGINEER_RADIUS + 0.36 - lateral) * 55
+    }
+
+    const future = projectedEnemyTankPath(enemyTank)
+    const pathDistance = Math.min(
+      ...future.map((futurePosition) => distance(futurePosition, position)),
+    )
+    if (pathDistance < TANK_CRUSH_RADIUS + ENGINEER_RADIUS + 0.3) {
+      score += (TANK_CRUSH_RADIUS + ENGINEER_RADIUS + 0.3 - pathDistance) * 72
+    }
+  }
+
+  return score
+}
+
+function projectedEnemyTankPath(tank: DuelTank) {
+  const speed = Math.hypot(tank.velocity[0], tank.velocity[1])
+  const vector =
+    speed > TANK_STOP_SPEED ? normalizeVector(tank.velocity) : vectorFromAngle(tank.heading)
+  if (!vector) return [tank.position]
+  return Array.from({ length: 6 }, (_, step) => {
+    const frames = (step + 1) * 2
+    const distanceScale = speed > TANK_STOP_SPEED ? speed * frames : TANK_SPEED * frames
+    return [
+      tank.position[0] + vector[0] * distanceScale,
+      tank.position[1] + vector[1] * distanceScale,
+    ] as [number, number]
+  })
+}
+
 function nearestPositionDistance(positions: Array<[number, number]>, position: [number, number]) {
   return Math.min(...positions.map((point) => distance(point, position)))
 }
@@ -1658,13 +2231,49 @@ function tacticalSkillAction(
   const tank = state.tanks[index]
   const enemy = state.tanks[otherIndex(index)]
   if (tank.cooldown > 0) return null
-  if (tank.skillType === 'boost' && (state.flag || state.star)) return { type: 'skill' }
+  if (tank.skillType === 'boost' && (state.flag || state.star)) return tankAbilityAction()
   if (
     enemyVisible &&
     (tank.skillType === 'freeze' || tank.skillType === 'stun' || tank.skillType === 'poison') &&
     distance(tank.position, enemy.position) <= 4.8
   ) {
-    return { type: 'skill' }
+    return tankAbilityAction()
+  }
+  return null
+}
+
+function clearSoftObstacleAction(
+  state: HumanDuelState,
+  index: 0 | 1,
+  target: [number, number],
+): DuelAction | null {
+  const tank = state.tanks[index]
+  if (tank.crashed) return null
+  const obstacle = softObstacleBetween(state.map, tank.position, target)
+  if (!obstacle) return null
+  const angle = angleFromVector(subtract(obstacle, tank.position))
+  const canFireNow =
+    tank.fireLocked === 0 && !state.bullets.some((bullet) => bullet.owner === index && bullet.alive)
+  if (angleDistance(tank.heading, angle) <= SHOT_ALIGNMENT_DEGREES && canFireNow) {
+    return tankFireAction()
+  }
+  return tankAimAction(angle)
+}
+
+function softObstacleBetween(
+  map: Tile[][],
+  from: [number, number],
+  to: [number, number],
+): [number, number] | null {
+  const seen = new Set<string>()
+  for (const point of sampleLine(from, to, 0.12).slice(1)) {
+    const cell = cellAt(point)
+    const key = positionKey(cell)
+    if (seen.has(key)) continue
+    seen.add(key)
+    const tile = map[cell[0]]?.[cell[1]]
+    if (!tile || tile === 'x') return null
+    if (tile === 'm') return centerOf(cell)
   }
   return null
 }
@@ -1681,20 +2290,20 @@ function driveTowardPoint(
     tankLineWalkable(state, index, tank.position, safeTarget) &&
     canMoveTankVectorSafely(state, index, directVector)
   ) {
-    return { type: 'drive', x: directVector[0], y: directVector[1] }
+    return tankDriveAction(directVector[0], directVector[1])
   }
 
   const pathPoint = nextPathPoint(
     state,
     tank.position,
     safeTarget,
-    state.tanks[otherIndex(index)].position,
+    blockingTankPosition(state, index),
     index,
   )
   const vector = pathPoint
     ? routedTankVector(state, index, pathPoint)
     : (bestOpenNeighborVector(state, index, tank.position, safeTarget) ?? directVector)
-  return { type: 'drive', x: vector[0], y: vector[1] }
+  return tankDriveAction(vector[0], vector[1])
 }
 
 function routedTankVector(
@@ -1733,18 +2342,364 @@ function driveEngineerTowardPoint(
 ): DuelAction {
   const engineer = state.engineers[index]
   const directVector = subtract(target, engineer.position)
-  if (engineerLineWalkable(state, engineer.position, target)) {
-    return { type: 'engineerDrive', x: directVector[0], y: directVector[1] }
+  if (
+    engineerLineWalkable(state, index, engineer.position, target) &&
+    canMoveEngineerVectorSafely(state, index, directVector)
+  ) {
+    return driveEngineerAction(directVector[0], directVector[1])
   }
 
-  const pathPoint = nextEngineerPathPoint(
-    state,
-    engineer.position,
-    target,
-    state.engineers[otherIndex(index)].position,
+  const pathPoint = nextEngineerPathPoint(state, index, engineer.position, target)
+  const vector = pathPoint
+    ? routedEngineerVector(state, index, pathPoint)
+    : (bestEngineerVectorTowardPoint(state, index, target) ?? directVector)
+  return driveEngineerAction(vector[0], vector[1])
+}
+
+function routedEngineerVector(
+  state: HumanDuelState,
+  index: 0 | 1,
+  pathPoint: [number, number],
+): [number, number] {
+  const engineer = state.engineers[index]
+  const primary = dominantAxisVector(engineer.position, pathPoint)
+  if (primary && canMoveEngineerVectorSafely(state, index, primary)) return primary
+
+  const centerVector = subtract(centerOf(cellAt(engineer.position)), engineer.position)
+  if (
+    Math.hypot(centerVector[0], centerVector[1]) > 0.04 &&
+    canMoveEngineerVectorSafely(state, index, centerVector)
+  ) {
+    return centerVector
+  }
+
+  const waypointVector = subtract(pathPoint, engineer.position)
+  if (canMoveEngineerVectorSafely(state, index, waypointVector)) return waypointVector
+  return bestEngineerVectorTowardPoint(state, index, pathPoint) ?? waypointVector
+}
+
+function dodgeEngineerDangerAction(state: HumanDuelState, index: 0 | 1): DuelAction | null {
+  const engineer = state.engineers[index]
+  if (!engineer.alive) return null
+  const bombEscape = dodgeEngineerBombBlastAction(state, index)
+  if (bombEscape) return bombEscape
+
+  const currentDanger = engineerDangerScore(state, index, engineer.position)
+  if (currentDanger < ENGINEER_DANGER_THRESHOLD) return null
+
+  const candidates = candidateDriveVectors()
+    .map((vector) => {
+      const nextPosition = projectedEngineerPosition(state, index, vector)
+      if (!canEngineerOccupy(state, nextPosition, index, engineer.position)) return null
+      const nextDanger = engineerDangerScore(state, index, nextPosition)
+      const enemyTank = state.tanks[otherIndex(index)]
+      return {
+        vector,
+        danger: nextDanger,
+        score:
+          currentDanger -
+          nextDanger +
+          distance(nextPosition, enemyTank.position) * 0.42 +
+          engineerOpenNeighborCount(state, cellAt(nextPosition), cellAt(engineer.position)) * 0.18,
+      }
+    })
+    .filter((item): item is { vector: [number, number]; danger: number; score: number } =>
+      Boolean(item),
+    )
+    .sort((a, b) => b.score - a.score)
+
+  const best = candidates.find((candidate) => candidate.danger < currentDanger)
+  return best ? driveEngineerAction(best.vector[0], best.vector[1]) : null
+}
+
+function dodgeEngineerBombBlastAction(state: HumanDuelState, index: 0 | 1): DuelAction | null {
+  const engineer = state.engineers[index]
+  const threats = state.bombs
+    .map((bomb) => ({ bomb, positions: bombBlastPositions(state, bomb) }))
+    .filter(({ positions }) =>
+      positions.some((position) => positionInEngineerUnsafeBlast(engineer.position, position)),
+    )
+  if (!threats.length) return null
+
+  const escapeFrames = Math.max(
+    1,
+    Math.min(...threats.map(({ bomb }) => bomb.remainingFrames)) -
+      ENGINEER_BOMB_ESCAPE_MARGIN_FRAMES,
   )
-  const vector = pathPoint ? subtract(pathPoint, engineer.position) : directVector
-  return { type: 'engineerDrive', x: vector[0], y: vector[1] }
+  const currentDanger = engineerDangerScore(state, index, engineer.position)
+  const allBlastPositions = threats.flatMap(({ positions }) => positions)
+  const nearestThreat = threats
+    .map((threat) => ({
+      ...threat,
+      distance: distance(engineer.position, threat.bomb.position),
+    }))
+    .sort((a, b) => a.distance - b.distance)[0]
+  const perpendicularEscape = perpendicularBlastEscapeVector(
+    state,
+    index,
+    threats,
+    allBlastPositions,
+    escapeFrames,
+  )
+  if (perpendicularEscape)
+    return driveEngineerAction(perpendicularEscape[0], perpendicularEscape[1])
+
+  const nearestBlastPosition = allBlastPositions
+    .map((position) => ({ position, distance: distance(engineer.position, position) }))
+    .sort((a, b) => a.distance - b.distance)[0]?.position
+  if (nearestThreat && nearestBlastPosition) {
+    const away = subtract(engineer.position, nearestBlastPosition)
+    const awayFinal = simulateEngineerEscape(
+      state,
+      index,
+      away,
+      escapeFrames,
+      nearestThreat.bomb.position,
+    )
+    if (
+      canMoveEngineerVector(state, index, away) &&
+      !allBlastPositions.some((position) => positionInEngineerUnsafeBlast(awayFinal, position))
+    ) {
+      return driveEngineerAction(away[0], away[1])
+    }
+  }
+  const candidates = candidateDriveVectors()
+    .map((vector) => {
+      const nextPosition = projectedEngineerPosition(state, index, vector)
+      if (!canEngineerOccupy(state, nextPosition, index, engineer.position)) return null
+      const finalPosition = simulateEngineerEscape(
+        state,
+        index,
+        vector,
+        escapeFrames,
+        threats[0]!.bomb.position,
+      )
+      const finalInBlast = allBlastPositions.some((position) =>
+        positionInEngineerUnsafeBlast(finalPosition, position),
+      )
+      const nextDanger = engineerDangerScore(state, index, nextPosition)
+      return {
+        vector,
+        finalInBlast,
+        score:
+          (finalInBlast ? -400 : 120) +
+          nearestPositionDistance(allBlastPositions, finalPosition) * 18 +
+          (currentDanger - nextDanger) * 1.5,
+      }
+    })
+    .filter(
+      (
+        candidate,
+      ): candidate is { vector: [number, number]; finalInBlast: boolean; score: number } =>
+        Boolean(candidate),
+    )
+    .sort((a, b) => b.score - a.score)
+
+  const bestSafe = candidates.find((candidate) => !candidate.finalInBlast)
+  if (bestSafe) return driveEngineerAction(bestSafe.vector[0], bestSafe.vector[1])
+  const escapePoint = nearestEngineerBlastEscapePoint(state, index, allBlastPositions)
+  if (escapePoint) {
+    const vector = subtract(escapePoint, engineer.position)
+    if (canMoveEngineerVector(state, index, vector)) {
+      return driveEngineerAction(vector[0], vector[1])
+    }
+  }
+  const best = bestSafe ?? candidates[0]
+  return best ? driveEngineerAction(best.vector[0], best.vector[1]) : null
+}
+
+function perpendicularBlastEscapeVector(
+  state: HumanDuelState,
+  index: 0 | 1,
+  threats: Array<{ bomb: DuelBomb; positions: Array<[number, number]> }>,
+  allBlastPositions: Array<[number, number]>,
+  escapeFrames: number,
+): [number, number] | null {
+  const engineer = state.engineers[index]
+  const vectors: [number, number][] = []
+  for (const threat of threats) {
+    for (const blast of threat.positions) {
+      if (!positionInEngineerUnsafeBlast(engineer.position, blast)) continue
+      const sameColumn = Math.abs(blast[0] - threat.bomb.position[0]) < 0.1
+      const sameRow = Math.abs(blast[1] - threat.bomb.position[1]) < 0.1
+      if (sameColumn && Math.abs(blast[1] - threat.bomb.position[1]) > 0.1) {
+        const sign = engineer.position[0] >= blast[0] ? 1 : -1
+        const verticalSign = engineer.position[1] >= threat.bomb.position[1] ? 1 : -1
+        vectors.push([sign, verticalSign], [sign, -verticalSign], [sign, 0], [-sign, 0])
+      } else if (sameRow && Math.abs(blast[0] - threat.bomb.position[0]) > 0.1) {
+        const sign = engineer.position[1] >= blast[1] ? 1 : -1
+        const horizontalSign = engineer.position[0] >= threat.bomb.position[0] ? 1 : -1
+        vectors.push([horizontalSign, sign], [-horizontalSign, sign], [0, sign], [0, -sign])
+      } else {
+        const away = normalizeVector(subtract(engineer.position, threat.bomb.position))
+        if (away && Math.abs(away[0]) >= Math.abs(away[1])) {
+          const x = Math.sign(away[0]) || 1
+          const y = Math.sign(away[1]) || 1
+          vectors.push([x, y], [x, 0], [0, y])
+        } else if (away) {
+          const x = Math.sign(away[0]) || 1
+          const y = Math.sign(away[1]) || 1
+          vectors.push([x, y], [0, y], [x, 0])
+        }
+      }
+    }
+  }
+
+  const seen = new Set<string>()
+  const candidates = vectors
+    .filter((vector) => {
+      const key = `${vector[0]}:${vector[1]}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return canMoveEngineerVector(state, index, vector)
+    })
+    .map((vector) => {
+      const nearestThreat = threats
+        .map((threat) => ({
+          bomb: threat.bomb,
+          distance: distance(engineer.position, threat.bomb.position),
+        }))
+        .sort((a, b) => a.distance - b.distance)[0]
+      if (!nearestThreat) return null
+      const finalPosition = simulateEngineerEscape(
+        state,
+        index,
+        vector,
+        escapeFrames,
+        nearestThreat.bomb.position,
+      )
+      const finalInBlast = allBlastPositions.some((position) =>
+        positionInEngineerUnsafeBlast(finalPosition, position),
+      )
+      return {
+        vector,
+        score:
+          (finalInBlast ? -80 : 120) +
+          nearestPositionDistance(allBlastPositions, finalPosition) * 12 +
+          nearestPositionDistance(
+            allBlastPositions,
+            projectedEngineerPosition(state, index, vector),
+          ),
+      }
+    })
+    .filter((candidate): candidate is { vector: [number, number]; score: number } =>
+      Boolean(candidate),
+    )
+    .sort((a, b) => b.score - a.score)
+  return candidates[0]?.vector ?? null
+}
+
+function nearestEngineerBlastEscapePoint(
+  state: HumanDuelState,
+  index: 0 | 1,
+  blastPositions: Array<[number, number]>,
+): [number, number] | null {
+  const engineer = state.engineers[index]
+  const startCell = cellAt(engineer.position)
+  const candidates: [number, number][] = []
+  for (let radius = 1; radius <= 5; radius += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue
+        const cell: [number, number] = [startCell[0] + dx, startCell[1] + dy]
+        const position = centerOf(cell)
+        if (!isEngineerOpenCell(state, cell, startCell)) continue
+        if (blastPositions.some((blast) => positionInEngineerUnsafeBlast(position, blast))) continue
+        candidates.push(cell)
+      }
+    }
+    const score = (cell: [number, number]) =>
+      distance(centerOf(cell), engineer.position) -
+      nearestPositionDistance(blastPositions, centerOf(cell)) * 0.08
+    candidates.sort((a, b) => score(a) - score(b))
+    for (const candidate of candidates) {
+      const pathPoint = nextAStarPathPoint({
+        state,
+        start: engineer.position,
+        target: centerOf(candidate),
+        blocked: blockingEngineerPosition(state, index),
+        canEnterCell: (cell, start) => isEngineerOpenCell(state, cell, start),
+      })
+      if (pathPoint) return pathPoint
+    }
+  }
+  return null
+}
+
+function bestEngineerVectorTowardPoint(
+  state: HumanDuelState,
+  index: 0 | 1,
+  target: [number, number],
+): [number, number] | null {
+  const engineer = state.engineers[index]
+  const fromCell = cellAt(engineer.position)
+  const currentDistance = distance(engineer.position, target)
+  const heading = vectorFromAngle(engineer.heading)
+  const options = candidateDriveVectors()
+    .map((vector) => {
+      const nextPosition = projectedEngineerPosition(state, index, vector)
+      if (!canEngineerOccupy(state, nextPosition, index, engineer.position)) return null
+      const danger = engineerDangerScore(state, index, nextPosition)
+      if (danger >= ENGINEER_DANGER_THRESHOLD * 2) return null
+      const cell = cellAt(nextPosition)
+      const repeatPenalty =
+        engineer.stuckFrames >= 8 && dot(vector, heading) > 0.7
+          ? Math.min(1.8, engineer.stuckFrames * 0.12)
+          : 0
+      const centerVector = subtract(centerOf(fromCell), engineer.position)
+      const centerBonus =
+        engineer.stuckFrames >= 8 && dot(normalizeVector(centerVector) ?? [0, 0], vector) > 0.45
+          ? 0.75
+          : 0
+      return {
+        vector,
+        score:
+          (currentDistance - distance(nextPosition, target)) * 3.6 +
+          engineerOpenNeighborCount(state, cell, fromCell) * 0.24 +
+          centerBonus -
+          danger * 0.35 -
+          repeatPenalty,
+      }
+    })
+    .filter((item): item is { vector: [number, number]; score: number } => Boolean(item))
+    .sort((a, b) => b.score - a.score)
+  return options[0]?.vector ?? null
+}
+
+function engineerRecoveryAction(state: HumanDuelState, index: 0 | 1): DuelAction | null {
+  const engineer = state.engineers[index]
+  if (!engineer.alive) return null
+  const enemyTank = state.tanks[otherIndex(index)]
+  const enemyEngineer = state.engineers[otherIndex(index)]
+  const target =
+    state.flag ??
+    state.star ??
+    (!enemyTank.crashed
+      ? enemyTank.position
+      : enemyEngineer.alive
+        ? enemyEngineer.position
+        : centerOf(cellAt(engineer.position)))
+  const fromCell = cellAt(engineer.position)
+  const currentDistance = distance(engineer.position, target)
+  const options = candidateDriveVectors()
+    .map((vector) => {
+      const nextPosition = projectedEngineerPosition(state, index, vector)
+      if (!canEngineerOccupy(state, nextPosition, index, engineer.position)) return null
+      const cell = cellAt(nextPosition)
+      const danger = engineerDangerScore(state, index, nextPosition)
+      return {
+        vector,
+        score:
+          (currentDistance - distance(nextPosition, target)) * 2.2 +
+          engineerOpenNeighborCount(state, cell, fromCell) * 0.2 +
+          distance(nextPosition, enemyTank.position) * 0.22 -
+          danger * 0.18,
+      }
+    })
+    .filter((option): option is { vector: [number, number]; score: number } => Boolean(option))
+    .sort((a, b) => b.score - a.score)
+  const best = options[0]?.vector
+  return best ? driveEngineerAction(best[0], best[1]) : null
 }
 
 function dodgeBulletAction(state: HumanDuelState, index: 0 | 1): DuelAction | null {
@@ -1762,7 +2717,7 @@ function dodgeBulletAction(state: HumanDuelState, index: 0 | 1): DuelAction | nu
     [bulletVector[1], -bulletVector[0]],
   ]
   const safe = candidates.find((vector) => canMoveTankVectorSafely(state, index, vector))
-  return safe ? { type: 'drive', x: safe[0], y: safe[1] } : null
+  return safe ? tankDriveAction(safe[0], safe[1]) : null
 }
 
 function dodgeBombAction(state: HumanDuelState, index: 0 | 1): DuelAction | null {
@@ -1773,15 +2728,17 @@ function dodgeBombAction(state: HumanDuelState, index: 0 | 1): DuelAction | null
   const candidates = candidateDriveVectors()
     .map((vector) => {
       const nextPosition = projectedTankPosition(state, index, vector)
-      if (!canTankOccupy(state, nextPosition, state.tanks[otherIndex(index)].position)) return null
+      if (!canTankOccupy(state, nextPosition, blockingTankPosition(state, index))) return null
       const nextDanger = tankBombDangerScore(state, nextPosition)
-      if (nextDanger >= currentDanger && nextDanger > 0) return null
+      if (nextDanger > currentDanger + 12) return null
       return {
         vector,
         score:
           currentDanger -
           nextDanger +
           distanceToNearestBombHazard(state, nextPosition) * 0.35 +
+          tankBombEscapeScore(state, tank.position, nextPosition) +
+          edgeSafetyScore(state.map, nextPosition) * 0.16 +
           openNeighborCount(state.map, cellAt(nextPosition)) * 0.08,
       }
     })
@@ -1789,35 +2746,65 @@ function dodgeBombAction(state: HumanDuelState, index: 0 | 1): DuelAction | null
     .sort((a, b) => b.score - a.score)
 
   const best = candidates[0]?.vector
-  return best ? { type: 'drive', x: best[0], y: best[1] } : null
+  return best ? tankDriveAction(best[0], best[1]) : null
 }
 
-function bulletThreatScore(bullet: DuelBullet, target: [number, number]) {
+function tankBombEscapeScore(
+  state: HumanDuelState,
+  current: [number, number],
+  next: [number, number],
+) {
+  let score = 0
+  for (const bomb of state.bombs) {
+    const blast = bombBlastPositions(state, bomb)
+    if (!blast.some((position) => positionInExplosionTile(current, position))) continue
+
+    const sameRow = Math.abs(current[1] - bomb.position[1]) < 0.5
+    const sameColumn = Math.abs(current[0] - bomb.position[0]) < 0.5
+    if (sameRow)
+      score += (Math.abs(next[1] - bomb.position[1]) - Math.abs(current[1] - bomb.position[1])) * 42
+    if (sameColumn)
+      score += (Math.abs(next[0] - bomb.position[0]) - Math.abs(current[0] - bomb.position[0])) * 42
+    score += (distance(next, bomb.position) - distance(current, bomb.position)) * 5
+  }
+  return score
+}
+
+function edgeSafetyScore(map: Tile[][], position: [number, number]) {
+  const width = map.length
+  const height = map[0]?.length ?? 0
+  return Math.min(position[0], position[1], width - position[0], height - position[1])
+}
+
+function bulletThreatScore(
+  bullet: DuelBullet,
+  target: [number, number],
+  radius = TANK_RADIUS,
+  maxAlong = 3.8,
+) {
   const vector = vectorFromAngle(bullet.heading)
   const toTarget = subtract(target, bullet.position)
   const along = dot(toTarget, vector)
   const lateral = Math.abs(cross(toTarget, vector))
-  if (along <= 0 || along > 3.8 || lateral > TANK_RADIUS + BULLET_RADIUS) return 0
-  return 4 - along + (TANK_RADIUS + BULLET_RADIUS - lateral)
+  if (along <= 0 || along > maxAlong || lateral > radius + BULLET_RADIUS) return 0
+  return maxAlong + 0.2 - along + (radius + BULLET_RADIUS - lateral)
 }
 
 function canMoveVector(state: HumanDuelState, index: 0 | 1, rawVector: [number, number]) {
   const tank = state.tanks[index]
-  const opponent = state.tanks[otherIndex(index)]
   const vector = normalizeVector(rawVector)
   if (!vector) return false
-  const speed = tankMoveSpeed(tank)
-  return canTankOccupy(
-    state,
-    [tank.position[0] + vector[0] * speed, tank.position[1] + vector[1] * speed],
-    opponent.position,
-  )
+  return distance(tank.position, projectedTankPosition(state, index, vector)) > 0.0001
 }
 
 function canMoveTankVectorSafely(state: HumanDuelState, index: 0 | 1, rawVector: [number, number]) {
   const vector = normalizeVector(rawVector)
   if (!vector) return false
-  return canTankOccupySafely(state, index, projectedTankPosition(state, index, vector))
+  const nextPosition = projectedTankPosition(state, index, vector)
+  return (
+    distance(state.tanks[index].position, nextPosition) > 0.0001 &&
+    canTankOccupySafely(state, index, nextPosition)
+  )
 }
 
 function projectedTankPosition(
@@ -1826,22 +2813,53 @@ function projectedTankPosition(
   vector: [number, number],
 ): [number, number] {
   const tank = state.tanks[index]
+  const normalized = normalizeVector(vector) ?? vector
   const speed = tankMoveSpeed(tank)
-  return [tank.position[0] + vector[0] * speed, tank.position[1] + vector[1] * speed]
+  return slidePosition(
+    tank.position,
+    normalized[0] * speed,
+    normalized[1] * speed,
+    TANK_RADIUS,
+    (position) => canTankOccupy(state, position, blockingTankPosition(state, index)),
+  )
 }
 
 function canMoveEngineerVector(state: HumanDuelState, index: 0 | 1, rawVector: [number, number]) {
   const engineer = state.engineers[index]
   const vector = normalizeVector(rawVector)
   if (!engineer.alive || !vector) return false
-  return canEngineerOccupy(
-    state,
-    [
-      engineer.position[0] + vector[0] * ENGINEER_SPEED,
-      engineer.position[1] + vector[1] * ENGINEER_SPEED,
-    ],
-    index,
+  return distance(engineer.position, projectedEngineerPosition(state, index, vector)) > 0.0001
+}
+
+function canMoveEngineerVectorSafely(
+  state: HumanDuelState,
+  index: 0 | 1,
+  rawVector: [number, number],
+) {
+  const engineer = state.engineers[index]
+  const vector = normalizeVector(rawVector)
+  if (!engineer.alive || !vector) return false
+  const nextPosition = projectedEngineerPosition(state, index, vector)
+  return (
+    distance(engineer.position, nextPosition) > 0.0001 &&
+    canEngineerOccupy(state, nextPosition, index, engineer.position) &&
+    engineerDangerScore(state, index, nextPosition) < ENGINEER_DANGER_THRESHOLD * 2
+  )
+}
+
+function projectedEngineerPosition(
+  state: HumanDuelState,
+  index: 0 | 1,
+  vector: [number, number],
+): [number, number] {
+  const engineer = state.engineers[index]
+  const normalized = normalizeVector(vector) ?? vector
+  return slidePosition(
     engineer.position,
+    normalized[0] * ENGINEER_SPEED,
+    normalized[1] * ENGINEER_SPEED,
+    ENGINEER_RADIUS,
+    (position) => canEngineerOccupy(state, position, index, engineer.position),
   )
 }
 
@@ -1862,9 +2880,11 @@ function tankLineWalkable(
 ) {
   const opponent = state.tanks[otherIndex(index)]
   const targetCell = cellAt(to)
-  const opponentCell = cellAt(opponent.position)
+  const opponentCell = opponent.crashed ? null : cellAt(opponent.position)
   return sampleLine(from, to, 0.18).every((point, pointIndex, points) => {
-    if (pointIndex === points.length - 1 && sameCell(targetCell, opponentCell)) return false
+    if (opponentCell && pointIndex === points.length - 1 && sameCell(targetCell, opponentCell)) {
+      return false
+    }
     return canTankOccupySafely(state, index, point)
   })
 }
@@ -1873,7 +2893,7 @@ function nextPathPoint(
   state: HumanDuelState,
   start: [number, number],
   target: [number, number],
-  blocked: [number, number],
+  blocked: [number, number] | null,
   index: 0 | 1,
 ): [number, number] | null {
   return nextAStarPathPoint({
@@ -1887,16 +2907,17 @@ function nextPathPoint(
 
 function nextEngineerPathPoint(
   state: HumanDuelState,
+  index: 0 | 1,
   start: [number, number],
   target: [number, number],
-  blocked: [number, number],
 ): [number, number] | null {
+  const blocked = blockingEngineerPosition(state, index)
   return nextAStarPathPoint({
     state,
     start,
     target,
     blocked,
-    canEnterCell: (cell, startCell) => isEngineerOpenCell(state, cell, startCell),
+    canEnterCell: (cell, startCell) => canEngineerEnterPathCell(state, index, cell, startCell),
   })
 }
 
@@ -1904,13 +2925,19 @@ function nextAStarPathPoint(input: {
   state: HumanDuelState
   start: [number, number]
   target: [number, number]
-  blocked: [number, number]
+  blocked: [number, number] | null
   canEnterCell: (cell: [number, number], startCell: [number, number]) => boolean
 }): [number, number] | null {
   const { state, start, target, blocked, canEnterCell } = input
   const startCell = cellAt(start)
   const targetCell = cellAt(target)
-  const targetCells = pathTargetCells(state, targetCell, cellAt(blocked), startCell, canEnterCell)
+  const targetCells = pathTargetCells(
+    state,
+    targetCell,
+    blocked ? cellAt(blocked) : null,
+    startCell,
+    canEnterCell,
+  )
   if (!targetCells.length) return null
   const targetKeys = new Set(targetCells.map(positionKey))
   const startKey = positionKey(startCell)
@@ -1946,18 +2973,20 @@ function nextAStarPathPoint(input: {
 function pathTargetCells(
   state: HumanDuelState,
   targetCell: [number, number],
-  blockedCell: [number, number],
+  blockedCell: [number, number] | null,
   startCell: [number, number],
   canEnterCell: (cell: [number, number], startCell: [number, number]) => boolean,
 ) {
-  if (!sameCell(targetCell, blockedCell) && canEnterCell(targetCell, startCell)) {
+  if ((!blockedCell || !sameCell(targetCell, blockedCell)) && canEnterCell(targetCell, startCell)) {
     return [targetCell]
   }
   return DIRECTIONS.map((direction) => {
     const delta = DIR_DELTA[direction]
     return [targetCell[0] + delta[0], targetCell[1] + delta[1]] as [number, number]
   })
-    .filter((cell) => !sameCell(cell, blockedCell) && canEnterCell(cell, startCell))
+    .filter(
+      (cell) => (!blockedCell || !sameCell(cell, blockedCell)) && canEnterCell(cell, startCell),
+    )
     .sort(
       (a, b) =>
         distance(centerOf(a), centerOf(targetCell)) - distance(centerOf(b), centerOf(targetCell)),
@@ -1974,14 +3003,27 @@ function canTankEnterPathCell(
   state: HumanDuelState,
   index: 0 | 1,
   cell: [number, number],
-  blocked: [number, number],
+  blocked: [number, number] | null,
   startCell: [number, number],
 ) {
   return (
     isOpenTile(state.map, cell) &&
-    !sameCell(cell, cellAt(blocked)) &&
+    (!blocked || !sameCell(cell, cellAt(blocked))) &&
     canTankOccupy(state, centerOf(cell), blocked) &&
     (sameCell(cell, startCell) || !tankBombDangerAt(state, centerOf(cell)))
+  )
+}
+
+function canEngineerEnterPathCell(
+  state: HumanDuelState,
+  index: 0 | 1,
+  cell: [number, number],
+  startCell: [number, number],
+) {
+  if (!isEngineerOpenCell(state, cell, startCell)) return false
+  return (
+    sameCell(cell, startCell) ||
+    engineerDangerScore(state, index, centerOf(cell)) < ENGINEER_DANGER_THRESHOLD * 2
   )
 }
 
@@ -1992,12 +3034,12 @@ function bestOpenNeighborVector(
   target: [number, number],
 ): [number, number] | null {
   const current = cellAt(position)
-  const blocked = state.tanks[otherIndex(index)].position
+  const blocked = blockingTankPosition(state, index)
   const options = candidateDriveVectors()
     .map((vector) => {
       const nextPosition = projectedTankPosition(state, index, vector)
       const cell = cellAt(nextPosition)
-      if (!isOpenTile(state.map, cell) || sameCell(cell, cellAt(blocked))) return null
+      if (!isOpenTile(state.map, cell) || (blocked && sameCell(cell, cellAt(blocked)))) return null
       if (!canTankOccupySafely(state, index, nextPosition)) return null
       const nextDistance = distance(nextPosition, target)
       const currentDistance = distance(position, target)
@@ -2075,38 +3117,46 @@ function hiddenStatus(): RuntimeTankState['status'] {
   }
 }
 
-function sanitizeActions(actions: DuelAction[]) {
+export function sanitizeDuelActions(actions: unknown[]): DuelAction[] {
   return actions
     .filter((action): action is DuelAction => {
       if (!action || typeof action !== 'object') return false
-      if (
-        action.type === 'go' ||
-        action.type === 'fire' ||
-        action.type === 'skill' ||
-        action.type === 'engineerBomb'
-      )
-        return true
-      if (action.type === 'move') return DIRECTIONS.includes(action.direction)
-      if (action.type === 'engineerMove') return DIRECTIONS.includes(action.direction)
-      if (action.type === 'drive')
-        return (
-          Number.isFinite(action.x) &&
-          Number.isFinite(action.y) &&
-          Boolean(normalizeVector([action.x, action.y]))
-        )
-      if (action.type === 'engineerDrive')
-        return (
-          Number.isFinite(action.x) &&
-          Number.isFinite(action.y) &&
-          Boolean(normalizeVector([action.x, action.y]))
-        )
-      if (action.type === 'aim') return Number.isFinite(action.angle)
-      if (action.type === 'tankSpeak' || action.type === 'engineerSpeak') {
-        return typeof action.text === 'string' && action.text.trim().length > 0
+      const candidate = action as Partial<DuelAction> & {
+        unit?: Partial<DuelUnitRef>
+        ability?: unknown
+        angle?: unknown
+        direction?: unknown
+        text?: unknown
+        x?: unknown
+        y?: unknown
       }
-      return action.type === 'turn' && (action.side === 'left' || action.side === 'right')
+      if (!candidate.unit || typeof candidate.unit !== 'object') return false
+      if (candidate.unit.kind !== 'tank' && candidate.unit.kind !== 'engineer') return false
+      if (candidate.type === 'unit.fire') return true
+      if (candidate.type === 'unit.move')
+        return DIRECTIONS.includes(candidate.direction as Direction)
+      if (candidate.type === 'unit.drive') {
+        return (
+          Number.isFinite(candidate.x) &&
+          Number.isFinite(candidate.y) &&
+          Boolean(normalizeVector([Number(candidate.x), Number(candidate.y)]))
+        )
+      }
+      if (candidate.type === 'unit.aim') return Number.isFinite(candidate.angle)
+      if (candidate.type === 'unit.ability') {
+        return (
+          typeof candidate.ability === 'string' &&
+          candidate.ability.trim().length > 0 &&
+          (candidate.x === undefined || Number.isFinite(candidate.x)) &&
+          (candidate.y === undefined || Number.isFinite(candidate.y))
+        )
+      }
+      if (candidate.type === 'unit.speak') {
+        return typeof candidate.text === 'string' && candidate.text.trim().length > 0
+      }
+      return false
     })
-    .slice(0, 3)
+    .slice(0, 4)
 }
 
 function withFrameState(state: Omit<HumanDuelState, 'state'>): HumanDuelState {
@@ -2345,7 +3395,8 @@ function spawnPickup(
   state: Omit<HumanDuelState, 'state'>,
   avoid: [number, number] | null,
 ): [number, number] | null {
-  const open: [number, number][] = []
+  const contest = contestPoint(state)
+  const candidates: Array<{ position: [number, number]; weight: number }> = []
   for (let x = 0; x < state.map.length; x += 1) {
     for (let y = 0; y < (state.map[x]?.length ?? 0); y += 1) {
       const position = centerOf([x, y])
@@ -2363,11 +3414,52 @@ function spawnPickup(
             engineer.alive && distance(engineer.position, position) < PICKUP_MIN_UNIT_DISTANCE,
         )
       ) {
-        open.push(position)
+        const contestDistance = distance(position, contest)
+        candidates.push({
+          position,
+          weight: 1 / (1 + (contestDistance / PICKUP_CONTEST_FALLOFF) ** 2),
+        })
       }
     }
   }
-  return open[Math.floor(Math.random() * open.length)] ?? null
+  candidates.sort(
+    (a, b) =>
+      b.weight - a.weight ||
+      distance(a.position, contest) - distance(b.position, contest) ||
+      a.position[1] - b.position[1] ||
+      a.position[0] - b.position[0],
+  )
+  const total = candidates.reduce((sum, candidate) => sum + candidate.weight, 0)
+  let roll = Math.random() * total
+  for (const candidate of candidates) {
+    roll -= candidate.weight
+    if (roll <= 0) return candidate.position
+  }
+  return candidates[0]?.position ?? null
+}
+
+function contestPoint(state: Pick<HumanDuelState, 'tanks' | 'engineers'>): [number, number] {
+  const sides = [0, 1].map((side) => sideCentroid(state, side as 0 | 1)) as [
+    [number, number],
+    [number, number],
+  ]
+  return [(sides[0][0] + sides[1][0]) / 2, (sides[0][1] + sides[1][1]) / 2]
+}
+
+function sideCentroid(
+  state: Pick<HumanDuelState, 'tanks' | 'engineers'>,
+  side: 0 | 1,
+): [number, number] {
+  const positions: Array<[number, number]> = []
+  const tank = state.tanks[side]
+  const engineer = state.engineers[side]
+  if (!tank.crashed) positions.push(tank.position)
+  if (engineer.alive) positions.push(engineer.position)
+  if (!positions.length) return tank.position
+  return [
+    positions.reduce((sum, position) => sum + position[0], 0) / positions.length,
+    positions.reduce((sum, position) => sum + position[1], 0) / positions.length,
+  ]
 }
 
 function isTankHiddenFromAgent(
@@ -2394,10 +3486,20 @@ function isEngineerHiddenFromAgent(
   )
 }
 
+function blockingTankPosition(state: Pick<HumanDuelState, 'tanks'>, index: 0 | 1) {
+  const opponent = state.tanks[otherIndex(index)]
+  return opponent.crashed ? null : opponent.position
+}
+
+function blockingEngineerPosition(state: Pick<HumanDuelState, 'engineers'>, index: 0 | 1) {
+  const other = state.engineers[otherIndex(index)]
+  return other.alive ? other.position : null
+}
+
 function canTankOccupy(
   state: Pick<HumanDuelState, 'map'>,
   position: [number, number],
-  opponentPosition: [number, number],
+  opponentPosition: [number, number] | null,
 ) {
   const width = state.map.length
   const height = state.map[0]?.length ?? 0
@@ -2409,7 +3511,7 @@ function canTankOccupy(
   ) {
     return false
   }
-  if (distance(position, opponentPosition) < TANK_RADIUS * 1.75) return false
+  if (opponentPosition && distance(position, opponentPosition) < TANK_RADIUS * 1.75) return false
 
   const samples: [number, number][] = [
     position,
@@ -2454,6 +3556,10 @@ function canEngineerOccupy(
     [position[0] - ENGINEER_RADIUS, position[1]],
     [position[0], position[1] + ENGINEER_RADIUS],
     [position[0], position[1] - ENGINEER_RADIUS],
+    [position[0] + ENGINEER_RADIUS * 0.72, position[1] + ENGINEER_RADIUS * 0.72],
+    [position[0] - ENGINEER_RADIUS * 0.72, position[1] + ENGINEER_RADIUS * 0.72],
+    [position[0] + ENGINEER_RADIUS * 0.72, position[1] - ENGINEER_RADIUS * 0.72],
+    [position[0] - ENGINEER_RADIUS * 0.72, position[1] - ENGINEER_RADIUS * 0.72],
   ]
   const candidateCell = cellAt(position)
   const fromCell = fromPosition ? cellAt(fromPosition) : null
@@ -2477,14 +3583,19 @@ function lineWalkable(map: Tile[][], from: [number, number], to: [number, number
 }
 
 function engineerLineWalkable(
-  state: Pick<HumanDuelState, 'map' | 'bombs'>,
+  state: HumanDuelState,
+  index: 0 | 1,
   from: [number, number],
   to: [number, number],
 ) {
   const fromCell = cellAt(from)
   return sampleLine(from, to, 0.18).every((point) => {
     const cell = cellAt(point)
-    return isEngineerOpenCell(state, cell, fromCell)
+    return (
+      isEngineerOpenCell(state, cell, fromCell) &&
+      (sameCell(cell, fromCell) ||
+        engineerDangerScore(state, index, point) < ENGINEER_DANGER_THRESHOLD * 2)
+    )
   })
 }
 
@@ -2654,6 +3765,17 @@ function openNeighborCount(map: Tile[][], cell: [number, number]) {
   return DIRECTIONS.filter((direction) => {
     const delta = DIR_DELTA[direction]
     return isOpenTile(map, [cell[0] + delta[0], cell[1] + delta[1]])
+  }).length
+}
+
+function engineerOpenNeighborCount(
+  state: HumanDuelState,
+  cell: [number, number],
+  fromCell: [number, number],
+) {
+  return DIRECTIONS.filter((direction) => {
+    const delta = DIR_DELTA[direction]
+    return isEngineerOpenCell(state, [cell[0] + delta[0], cell[1] + delta[1]], fromCell)
   }).length
 }
 

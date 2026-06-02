@@ -9,34 +9,34 @@ export type DesktopPetAssetSprite = {
     count: number
     fps: number
   }
+  atlas?: {
+    columns: number
+    rows: number
+    row: number
+  }
   loop?: boolean
 }
 
+export type CodexPetAnimationKey =
+  | 'idle'
+  | 'running-right'
+  | 'running-left'
+  | 'waving'
+  | 'jumping'
+  | 'failed'
+  | 'waiting'
+  | 'running'
+  | 'review'
+
 export type DesktopPetAssetPack = {
   id: string
-  version: string
+  version?: string
   displayName: Record<string, string>
   description?: Record<string, string> | string
-  author?: { name?: string; url?: string }
-  license?: { kind?: string; summary?: string }
-  compatibility?: {
-    shadowDesktop?: string
-    renderer?: Array<'sprite-sheet' | 'live2d-cubism'>
-    features?: string[]
-  }
-  entry?: {
-    renderer?: 'sprite-sheet' | 'live2d-cubism'
-    pixelRatio?: number
-    canvas?: { width?: number; height?: number }
-    anchor?: { x?: number; y?: number }
-  }
-  files?: { cover?: string; thumbnail?: string }
+  spritesheetPath: string
   sprites: Record<string, DesktopPetAssetSprite>
-  expressions?: Record<string, unknown>
-  hitAreas?: Record<string, unknown>
-  interactionMap?: Record<string, unknown>
   importedAt: string
-  source: 'local' | 'marketplace'
+  source: 'builtin' | 'local' | 'marketplace'
   sourcePath?: string
   marketplaceProductId?: string
   marketplaceEntitlementId?: string
@@ -50,6 +50,10 @@ export type DesktopPetAssetSettings = {
 
 export type DesktopPetRuntimeSettings = DesktopPetAssetSettings & {
   connectorRuntimeNotifications?: Record<string, boolean>
+}
+
+export type DesktopPetPanelModeLayout = {
+  stageOffsetY: number
 }
 
 export type DesktopPetApi = {
@@ -67,6 +71,7 @@ export type DesktopPetApi = {
     method?: string
     body?: unknown
     headers?: Record<string, string>
+    optional?: boolean
   }) => Promise<T>
   openExternal?: (url: string) => Promise<boolean>
   openReader?: (input: {
@@ -87,6 +92,7 @@ export type DesktopPetApi = {
   onDesktopSettingsChanged?: (callback: (settings: DesktopPetRuntimeSettings) => void) => () => void
   petAssets?: {
     importDirectory?: (path?: string) => Promise<DesktopPetAssetSettings>
+    importFile?: (file: File) => Promise<DesktopPetAssetSettings>
     importMarketplace?: (input: {
       entitlementId: string
       fileId: string
@@ -97,7 +103,7 @@ export type DesktopPetApi = {
   }
   pet?: {
     hide?: () => Promise<void>
-    setPanelMode?: (mode: 'compact' | 'expanded') => Promise<void>
+    setPanelMode?: (mode: 'compact' | 'expanded') => Promise<DesktopPetPanelModeLayout>
     moveWindow?: (delta: { x: number; y: number }) => Promise<void>
     modelProxyStream?: (
       input: { requestId: string; body: Record<string, unknown> },
@@ -256,6 +262,17 @@ export type PetServiceHistoryDay = {
 export type ConnectorSnapshot = {
   running: boolean
   onlineCount: number
+  runtimeSessionStates: Array<
+    | 'idle'
+    | 'running'
+    | 'streaming'
+    | 'waiting_for_approval'
+    | 'blocked'
+    | 'completed'
+    | 'failed'
+    | 'stopped'
+    | 'unknown'
+  >
   readySessions: Array<{
     id: string
     label: string
@@ -274,11 +291,14 @@ export type PetServiceAlert = {
 export type { PetProfile }
 
 export type ChannelSubscription = {
+  id?: string
   channelId: string
   channelName: string
   serverId: string
+  serverSlug?: string | null
   serverName: string
   lastSeenAt?: string
+  isDefault?: boolean
 }
 
 export type CommunityChannelOption = {
@@ -297,12 +317,19 @@ export type CommunityServerOption = {
 
 export type SubscriptionFile = {
   id: string
+  feedItemId?: string
+  messageId?: string
   attachmentId?: string
   title: string
   url: string
   contentType: string
+  kind?: 'image' | 'html' | 'pdf' | 'file' | 'voice' | 'card'
+  appKey?: string
+  appPath?: string
   channelId: string
   channelName: string
+  serverId?: string
+  serverSlug?: string | null
   serverName: string
   createdAt?: string
   unread: boolean

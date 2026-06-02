@@ -67,14 +67,11 @@ export function BuddyListingCard({ listing, onOpen, className }: BuddyListingCar
       onKeyDown={(event) => handleCardKey(event, onOpen)}
       aria-label={`${t('marketplace.viewDetails', '查看详情')} · ${listing.title}`}
       className={cn(
-        'group block h-full cursor-pointer overflow-hidden rounded-[32px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+        'group block h-full cursor-pointer overflow-hidden rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
         className,
       )}
     >
-      <Card
-        variant="glass"
-        className="relative h-full border border-border-subtle transition duration-300 hover:border-primary/45 hover:shadow-[0_12px_36px_rgba(0,209,255,0.22)]"
-      >
+      <Card className="relative h-full rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition duration-300 hover:border-primary/45 hover:bg-bg-tertiary/55">
         <CardContent className="space-y-3 p-0">
           <div className="p-4 pb-3">
             <div className="flex items-start gap-3">
@@ -156,7 +153,7 @@ export function BuddyListingCard({ listing, onOpen, className }: BuddyListingCar
           </div>
 
           <div className="px-4 pb-4">
-            <div className="mt-2 grid grid-cols-3 divide-x divide-border-subtle/70 rounded-xl border border-border-subtle bg-bg-secondary/20 px-1 py-2.5 text-xs text-text-secondary">
+            <div className="mt-2 grid grid-cols-3 divide-x divide-white/10 rounded-[16px] border border-white/10 bg-bg-primary/45 px-1 py-2.5 text-xs text-text-secondary">
               <div className="flex min-w-0 items-center gap-1.5 px-3">
                 <Clock size={12} className="shrink-0 text-text-muted" />
                 <span className="truncate">{t('marketplace.totalOnline', '累计在线')}</span>

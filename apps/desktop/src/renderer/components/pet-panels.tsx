@@ -9,9 +9,9 @@ import {
   Dumbbell,
   Gamepad2,
   Hand,
+  Heart,
   type LucideIcon,
   Package,
-  Shell,
   Shuffle,
   Timer,
   Waves,
@@ -26,11 +26,19 @@ import type {
   PetServiceIntervalId,
   PetServiceState,
 } from '../pet-types'
-import { PetPanelButton } from './pet-ui'
+import { PetPanelButton, PetPanelCard, PetPanelInput, PetPanelSelect } from './pet-ui'
 
 const SERVICE_INTERVAL_STEP_MINUTES = 5
 const SERVICE_INTERVAL_MINUTES_MIN = 5
 const SERVICE_INTERVAL_MINUTES_MAX = 180
+
+function careDateKey(now = Date.now()) {
+  const date = new Date(now)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 export {
   ChatPanel,
@@ -67,8 +75,7 @@ export function CarePanel({
     { id: 'energy', value: petState.stats.energy },
     { id: 'health', value: petState.stats.health },
   ] as const
-  const visibleInventory = petState.inventory.filter((item) => item.count > 0)
-  const visibleAchievements = petState.game.achievements.slice(-3)
+  const visibleQuests = petState.game.quests.slice(0, 4)
   const actions: Array<{ id: PetAction; Icon: LucideIcon }> = [
     { id: 'pet', Icon: Hand },
     { id: 'feed', Icon: Apple },
@@ -77,23 +84,41 @@ export function CarePanel({
     { id: 'explore', Icon: Compass },
     { id: 'tea', Icon: Coffee },
   ]
+  const todayKey = careDateKey()
+  const todayActions = actions.map(({ id, Icon }) => {
+    const entry = petState.game.dailyActions[id]
+    return {
+      id,
+      Icon,
+      count: entry?.date === todayKey ? entry.count : 0,
+    }
+  })
+  const completedQuestCount = visibleQuests.filter((quest) => quest.completed).length
 
   return (
     <div className="desktop-pet-panel-body desktop-pet-care">
-      <section className="desktop-pet-care-action-shelf">
-        <div className="desktop-pet-care-status-card">
-          <span>{t(`desktopPet.phase.${emotion.phase}`)}</span>
-          <strong>
-            {t('desktopPet.profile.statusLine', {
-              name: profile.name,
-              emotion: t(`desktopPet.emotions.${emotion.state}`),
-            })}
-          </strong>
+      <PetPanelCard className="desktop-pet-care-overview">
+        <div className="desktop-pet-care-copy">
+          <span className="desktop-pet-care-phase">{t(`desktopPet.phase.${emotion.phase}`)}</span>
+          <div>
+            <strong>
+              {t('desktopPet.profile.statusLine', {
+                name: profile.name,
+                emotion: t(`desktopPet.emotions.${emotion.state}`),
+              })}
+            </strong>
+            <p>
+              {event
+                ? t(
+                    event.resolved
+                      ? `desktopPet.events.${event.id}.resolved`
+                      : `desktopPet.events.${event.id}.hint`,
+                  )
+                : t('desktopPet.care.noEvent')}
+            </p>
+          </div>
         </div>
-        <div
-          className="desktop-pet-care-actions desktop-pet-care-actions-primary"
-          aria-label={t('desktopPet.actions.interact')}
-        >
+        <div className="desktop-pet-care-action-grid" aria-label={t('desktopPet.actions.interact')}>
           {actions.map(({ id, Icon }) => (
             <PetPanelButton
               key={id}
@@ -113,131 +138,136 @@ export function CarePanel({
             </PetPanelButton>
           ))}
         </div>
-      </section>
+      </PetPanelCard>
 
-      <section className="desktop-pet-event-card">
-        <div>
-          <strong>{t('desktopPet.care.todayEvent')}</strong>
-          <span>
-            {event
-              ? t(
-                  event.resolved
-                    ? `desktopPet.events.${event.id}.resolved`
-                    : `desktopPet.events.${event.id}.hint`,
-                )
-              : t('desktopPet.care.noEvent')}
-          </span>
-        </div>
-      </section>
-
-      <section className="desktop-pet-profile-card">
-        <div className="desktop-pet-profile-fields">
-          <label>
-            <span>{t('desktopPet.profile.name')}</span>
-            <input
-              value={profile.name}
-              maxLength={18}
-              onChange={(event) => onProfileChange({ ...profile, name: event.target.value })}
-              onBlur={() => onProfileChange(profile)}
-              aria-label={t('desktopPet.profile.name')}
-            />
-          </label>
-          <label>
-            <span>{t('desktopPet.profile.personality')}</span>
-            <select
-              value={profile.personality}
-              onChange={(event) =>
-                onProfileChange({
-                  ...profile,
-                  personality: event.target.value as PetPersonalityId,
-                })
-              }
-              aria-label={t('desktopPet.profile.personality')}
+      <div className="desktop-pet-care-grid">
+        <PetPanelCard className="desktop-pet-care-profile">
+          <div className="desktop-pet-care-section-heading">
+            <strong>{t('desktopPet.care.profileTitle')}</strong>
+            <PetPanelButton
+              type="button"
+              variant="warm"
+              size="xs"
+              className="desktop-pet-profile-random"
+              onClick={onRandomProfile}
             >
-              {PET_PERSONALITIES.map((personality) => (
-                <option key={personality} value={personality}>
-                  {t(`desktopPet.profile.personality_${personality}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <PetPanelButton
-          type="button"
-          variant="warm"
-          size="sm"
-          className="desktop-pet-profile-random"
-          onClick={onRandomProfile}
-        >
-          <Shuffle size={14} />
-          <span>{t('desktopPet.profile.random')}</span>
-        </PetPanelButton>
-      </section>
+              <Shuffle size={13} />
+              <span>{t('desktopPet.profile.random')}</span>
+            </PetPanelButton>
+          </div>
+          <div className="desktop-pet-profile-fields">
+            <label>
+              <span>{t('desktopPet.profile.name')}</span>
+              <PetPanelInput
+                value={profile.name}
+                maxLength={18}
+                onChange={(event) => onProfileChange({ ...profile, name: event.target.value })}
+                onBlur={() => onProfileChange(profile)}
+                aria-label={t('desktopPet.profile.name')}
+              />
+            </label>
+            <label>
+              <span>{t('desktopPet.profile.personality')}</span>
+              <PetPanelSelect
+                value={profile.personality}
+                onChange={(event) =>
+                  onProfileChange({
+                    ...profile,
+                    personality: event.target.value as PetPersonalityId,
+                  })
+                }
+                aria-label={t('desktopPet.profile.personality')}
+              >
+                {PET_PERSONALITIES.map((personality) => (
+                  <option key={personality} value={personality}>
+                    {t(`desktopPet.profile.personality_${personality}`)}
+                  </option>
+                ))}
+              </PetPanelSelect>
+            </label>
+          </div>
+        </PetPanelCard>
 
-      <section className="desktop-pet-game-card">
-        <div className="desktop-pet-game-summary">
-          <span>
-            <Shell size={13} />
-            {t('desktopPet.game.shells')} {petState.game.shells}
-          </span>
-          <span>
-            <Award size={13} />
-            {t('desktopPet.game.streak')}{' '}
-            {t('desktopPet.game.days', { count: petState.game.streakDays })}
-          </span>
-          <span>
-            <Package size={13} />
-            {t('desktopPet.game.level', { level: petState.stats.level })}
-          </span>
-        </div>
-        <div className="desktop-pet-xp-bar" aria-label={t('desktopPet.game.xp')}>
-          <i style={{ width: `${xpProgress}%` }} />
-        </div>
-        <div className="desktop-pet-stat-grid">
-          {statBars.map((stat) => (
-            <span key={stat.id}>
-              <small>{t(`desktopPet.stats.${stat.id}`)}</small>
-              <i>
-                <b style={{ width: `${Math.max(3, Math.round(stat.value))}%` }} />
-              </i>
+        <PetPanelCard className="desktop-pet-care-vitals">
+          <div className="desktop-pet-care-section-heading">
+            <strong>{t('desktopPet.care.vitalsTitle')}</strong>
+            <span>{t('desktopPet.game.xp')}</span>
+          </div>
+          <div className="desktop-pet-care-metrics">
+            <span>
+              <Heart size={13} />
+              {t('desktopPet.stats.loyalty')} {Math.round(petState.stats.loyalty)}
             </span>
-          ))}
-        </div>
-      </section>
-
-      <section className="desktop-pet-progress-card">
-        <div>
-          <strong>{t('desktopPet.game.quests')}</strong>
-          {petState.game.quests.slice(0, 4).map((quest) => (
-            <span key={quest.id} className={quest.completed ? 'completed' : ''}>
-              {quest.completed ? <CheckCircle2 size={12} /> : null}
-              {t(`desktopPet.quests.${quest.id}`)} {quest.progress}/{quest.goal}
+            <span>
+              <Award size={13} />
+              {t('desktopPet.game.streak')}{' '}
+              {t('desktopPet.game.days', { count: petState.game.streakDays })}
             </span>
-          ))}
-        </div>
-        <div>
-          <strong>{t('desktopPet.game.inventory')}</strong>
-          {visibleInventory.length ? (
-            visibleInventory.slice(0, 4).map((item) => (
-              <span key={item.id}>
-                {t(`desktopPet.inventory.${item.id}`)} x{item.count}
+            <span>
+              <Package size={13} />
+              {t('desktopPet.game.level', { level: petState.stats.level })}
+            </span>
+          </div>
+          <div className="desktop-pet-xp-bar" aria-label={t('desktopPet.game.xp')}>
+            <i style={{ width: `${xpProgress}%` }} />
+          </div>
+          <div className="desktop-pet-stat-list">
+            {statBars.map((stat) => (
+              <span key={stat.id}>
+                <small>{t(`desktopPet.stats.${stat.id}`)}</small>
+                <i>
+                  <b style={{ width: `${Math.max(3, Math.round(stat.value))}%` }} />
+                </i>
               </span>
-            ))
-          ) : (
-            <span>{t('desktopPet.inventory.empty')}</span>
-          )}
+            ))}
+          </div>
+        </PetPanelCard>
+      </div>
+
+      <PetPanelCard className="desktop-pet-care-journal">
+        <div className="desktop-pet-care-list desktop-pet-routine-list">
+          <div className="desktop-pet-care-list-header">
+            <strong>{t('desktopPet.care.routinesTitle')}</strong>
+            <span>
+              {t('desktopPet.care.routinesProgress', {
+                done: completedQuestCount,
+                total: visibleQuests.length,
+              })}
+            </span>
+          </div>
+          {visibleQuests.map((quest) => (
+            <div key={quest.id} className={quest.completed ? 'completed' : ''}>
+              {quest.completed ? <CheckCircle2 size={12} /> : <i aria-hidden="true" />}
+              <b>{t(`desktopPet.quests.${quest.id}`)}</b>
+              <small>
+                {quest.progress}/{quest.goal}
+              </small>
+              <em aria-hidden="true">
+                <span style={{ width: `${Math.max(4, (quest.progress / quest.goal) * 100)}%` }} />
+              </em>
+            </div>
+          ))}
         </div>
-        <div>
-          <strong>{t('desktopPet.game.achievements')}</strong>
-          {visibleAchievements.length ? (
-            visibleAchievements.map((id) => (
-              <span key={id}>{t(`desktopPet.achievements.${id}`)}</span>
-            ))
-          ) : (
-            <span>{t('desktopPet.game.noAchievements')}</span>
-          )}
+        <div className="desktop-pet-care-list desktop-pet-today-list">
+          <div className="desktop-pet-care-list-header">
+            <strong>{t('desktopPet.care.todayRhythmTitle')}</strong>
+            <span>{t('desktopPet.care.todayRhythmSubtitle')}</span>
+          </div>
+          <div className="desktop-pet-today-action-grid">
+            {todayActions.map(({ id, Icon, count }) => (
+              <span key={id} className={count > 0 ? 'active' : ''}>
+                <Icon size={13} />
+                <b>{t(`desktopPet.actions.${id}`)}</b>
+                <small>
+                  {count > 0
+                    ? t('desktopPet.care.actionCount', { count })
+                    : t('desktopPet.care.actionNotYet')}
+                </small>
+              </span>
+            ))}
+          </div>
         </div>
-      </section>
+      </PetPanelCard>
     </div>
   )
 }
@@ -330,23 +360,27 @@ export function ServicesPanel({
       <div className="desktop-pet-service-stepper">
         <span className="desktop-pet-service-stepper-label">{label}</span>
         <div>
-          <button
+          <PetPanelButton
             type="button"
+            variant="ghost"
+            size="xs"
             disabled={minutes <= SERVICE_INTERVAL_MINUTES_MIN}
             onClick={() => changeInterval(service, valueMs, -SERVICE_INTERVAL_STEP_MINUTES)}
             aria-label={t('desktopPet.services.decreaseInterval')}
           >
             -
-          </button>
+          </PetPanelButton>
           <strong>{minutes}</strong>
-          <button
+          <PetPanelButton
             type="button"
+            variant="ghost"
+            size="xs"
             disabled={minutes >= SERVICE_INTERVAL_MINUTES_MAX}
             onClick={() => changeInterval(service, valueMs, SERVICE_INTERVAL_STEP_MINUTES)}
             aria-label={t('desktopPet.services.increaseInterval')}
           >
             +
-          </button>
+          </PetPanelButton>
         </div>
       </div>
     )
@@ -371,7 +405,7 @@ export function ServicesPanel({
     onPrimary: () => void
   }) => {
     return (
-      <article
+      <PetPanelCard
         className={['desktop-pet-timer-tile', active ? 'active' : '', due ? 'attention' : '']
           .filter(Boolean)
           .join(' ')}
@@ -402,13 +436,13 @@ export function ServicesPanel({
             <span>{primaryLabel}</span>
           </PetPanelButton>
         </div>
-      </article>
+      </PetPanelCard>
     )
   }
 
   return (
     <div className="desktop-pet-panel-body desktop-pet-services">
-      <section
+      <PetPanelCard
         className="desktop-pet-service-action-board"
         aria-label={t('desktopPet.services.actionTitle')}
       >
@@ -496,7 +530,7 @@ export function ServicesPanel({
                 : () => onToggle('fitness')
               : () => onToggle('fitness'),
           })}
-          <section
+          <PetPanelCard
             className={
               services.coding ? 'desktop-pet-runtime-tile active' : 'desktop-pet-runtime-tile'
             }
@@ -525,11 +559,11 @@ export function ServicesPanel({
                 {services.coding ? t('desktopPet.services.stop') : t('desktopPet.services.start')}
               </span>
             </PetPanelButton>
-          </section>
+          </PetPanelCard>
         </div>
-      </section>
+      </PetPanelCard>
 
-      <section
+      <PetPanelCard
         className="desktop-pet-service-history"
         aria-label={t('desktopPet.services.historyTitle')}
       >
@@ -567,7 +601,7 @@ export function ServicesPanel({
           {historyDays.map((day, index) => {
             const completed = dayCompletionCount(day)
             return (
-              <article
+              <PetPanelCard
                 key={day.date}
                 className={
                   completed > 0 ? 'desktop-pet-service-day done' : 'desktop-pet-service-day'
@@ -595,7 +629,7 @@ export function ServicesPanel({
                     {day.fitnessCount > 0 ? day.fitnessCount : '-'}
                   </span>
                 </div>
-              </article>
+              </PetPanelCard>
             )
           })}
         </div>
@@ -604,7 +638,7 @@ export function ServicesPanel({
             {t('desktopPet.services.historyEmpty')}
           </p>
         ) : null}
-      </section>
+      </PetPanelCard>
     </div>
   )
 }

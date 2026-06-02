@@ -118,7 +118,6 @@
   }
 
   .desktop-pet.expanded .desktop-pet-button {
-    width: min(50%, 108px);
-    height: min(76%, 168px);
+    width: min(64%, calc(66vh * var(--desktop-pet-frame-width-ratio)), 132px);
   }
 }

@@ -94,8 +94,8 @@ export function isDesktopPetPackEntitlement(entitlement: MarketplacePetPackEntit
     (desktopPetPack.kind === 'desktop_pet_pack' ||
       metadata.productAssetType === 'desktop_pet_pack' ||
       tags.some((tag) => DESKTOP_PET_PACK_TAGS.has(tag)) ||
-      fileName.endsWith('.shadowpet.zip') ||
-      fileName.endsWith('.shadowpet'))
+      fileName.endsWith('.codex-pet.zip') ||
+      fileName.endsWith('.codexpet.zip'))
   )
 }
 

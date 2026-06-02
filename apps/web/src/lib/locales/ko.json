@@ -1451,7 +1451,7 @@
   "discover": {
     "title": "발견",
     "subtitle": "Buddy, 콘텐츠, 상점, 서버를 찾아보세요",
-    "searchPlaceholder": "Buddy, 서비스, 상점 또는 서버 검색...",
+    "searchPlaceholder": "검색",
     "noServers": "공개 서버가 없습니다",
     "noChannels": "활성 채널이 없습니다",
     "noRentals": "대여 중인 Buddy가 없습니다",
@@ -1517,6 +1517,24 @@
     "eyebrow": "발견",
     "heroTitle": "오늘 무엇을 찾아볼까요?",
     "heroSubtitle": "Buddy, 콘텐츠, 상점 또는 흥미로운 서버를 찾아보세요.",
+    "hero": {
+      "browse": {
+        "title": "함께 할 수 있는 일을 찾기",
+        "subtitle": "구독 콘텐츠, 앱 카드, 채널 게시물을 한곳에 모아 Discord Discover처럼 빠르게 둘러볼 수 있습니다."
+      },
+      "explore": {
+        "title": "Shadow에서 나만의 커뮤니티 찾기",
+        "subtitle": "플레이 가능한 경험과 공개 서버를 둘러보고 참여하고 대화할 곳을 찾아보세요."
+      },
+      "market": {
+        "title": "크리에이터와 서비스 진열대 발견",
+        "subtitle": "Buddy, 서비스, 콘텐츠 상품, 공개 상점을 둘러보고 구매 후 바로 사용할 수 있습니다."
+      },
+      "cloud": {
+        "title": "템플릿으로 Cloud Buddy 시작",
+        "subtitle": "템플릿을 선택하고 워크플로를 배포해 실행 가능한 기능을 서버와 채널로 가져오세요."
+      }
+    },
     "communityModelTitle": "서버 안에서",
     "communityShelfTitle": "추천 서버",
     "communityShelfHint": "참가하면 채널, 상점, Buddy를 이용할 수 있습니다.",

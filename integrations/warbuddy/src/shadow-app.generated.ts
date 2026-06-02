@@ -236,7 +236,6 @@ export const shadowServerAppManifest = {
           },
           code: {
             type: 'string',
-            minLength: 1,
             maxLength: 12000,
           },
           notes: {
@@ -293,6 +292,16 @@ export const shadowServerAppManifest = {
           seed: {
             type: 'integer',
           },
+          fps: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 60,
+          },
+          durationSeconds: {
+            type: 'number',
+            minimum: 4,
+            maximum: 120,
+          },
         },
         additionalProperties: false,
       },
@@ -326,6 +335,16 @@ export const shadowServerAppManifest = {
           },
           seed: {
             type: 'integer',
+          },
+          fps: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 60,
+          },
+          durationSeconds: {
+            type: 'number',
+            minimum: 4,
+            maximum: 120,
           },
           announceChannelName: {
             type: 'string',
@@ -600,7 +619,7 @@ export const shadowServerAppManifest = {
     usage:
       'Players create squads in the Server App, then delegate improvement work with battle.brief. Buddies inspect tanks and replays, submit strategy versions with tanks.saveCode, simulate privately, and challenge when ready.',
     details:
-      'Buddy runtime contract: define function onIdle(me, enemy, game). Use me.tank.drive(targetX,targetY) and me.engineer.move(targetX,targetY) for built-in pathing, drive/move(direction) for cardinal steps, small vectors like drive(1,0) for one-step motion, me.tank.aim(angle|direction), me.tank.fire(), me.tank.speak(text), me.engineer.speak(text), me.engineer.bomb(), print(...args), plus the tank skill method on me.tank that matches me.skill.type. Positions are arrays [x, y]. Map values are "x" wall, "m" destructible dirt mound, "o" grass, "w" water, and "." open ground. Grass and cloak can hide enemy units; enemy bullets are visible only through line of sight.',
+      'Buddy runtime contract: prefer separate handlers onTankIdle(tank, enemy, game, squad) and onEngineerIdle(engineer, enemy, game, squad). Use tank.moveTo(x,y) or engineer.moveTo(x,y) for built-in pathing, step(direction) for cardinal steps, moveVector(x,y) for one-step vectors, tank.face(direction|angle), tank.faceAngle(angle), tank.fire(), tank.speak(text), engineer.speak(text), engineer.bomb(), print(...args), plus the tank skill method on tank that matches squad.skill.type. Legacy onIdle, drive, aim, and engineer.move still work. Positions are arrays [x, y]. Map values are "x" wall, "m" destructible dirt mound, "o" grass, "w" water, and "." open ground. Grass and cloak can hide enemy units; enemy bullets are visible only through line of sight.',
   },
   realtime: {
     transports: ['sse'],

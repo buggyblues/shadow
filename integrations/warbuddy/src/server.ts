@@ -221,6 +221,8 @@ const commands = shadowApp.defineCommands({
         opponentId: input.opponentId,
         mapId: input.mapId,
         seed: input.seed,
+        fps: input.fps,
+        durationSeconds: input.durationSeconds,
         candidate: input.candidateCode
           ? {
               actor,
@@ -238,6 +240,8 @@ const commands = shadowApp.defineCommands({
         defenderTankId: input.defenderTankId,
         mapId: input.mapId,
         seed: input.seed,
+        fps: input.fps,
+        durationSeconds: input.durationSeconds,
       })
       const result = { match }
       if (!input.announceChannelName) return result

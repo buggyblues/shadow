@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   DESKTOP_COMMUNITY_AUTH_REQUIRED_EVENT,
   isCommunityAuthRequiredError,
@@ -163,6 +163,126 @@ function syncCommunityAuthTokenOnStorage(): void {
   syncCommunityAuthSnapshot({ reason: 'storage' })
 }
 
+const CODEX_PET_ARCHIVE_PATTERN = /\.zip$/i
+const PRELOAD_HANDLED_PET_ASSET_DROP = '__shadowPetAssetDropHandled'
+const DESKTOP_PET_ASSET_DROP_EVENT = 'shadow:desktop-pet-asset-drop'
+
+type PreloadHandledDragEvent = DragEvent & {
+  [PRELOAD_HANDLED_PET_ASSET_DROP]?: boolean
+}
+
+function isDesktopPetAssetDropTarget(): boolean {
+  const params = new URLSearchParams(window.location.search)
+  const view = params.get('view')
+  if (!view || view === 'pet') return true
+  return view === 'settings' && params.get('tab') === 'pet'
+}
+
+function isDesktopPetAssetDragEvent(event: DragEvent): boolean {
+  const types = Array.from(event.dataTransfer?.types ?? [])
+  return types.some((type) => {
+    const normalized = type.toLowerCase()
+    return (
+      normalized === 'files' ||
+      normalized === 'text/uri-list' ||
+      normalized === 'public.file-url' ||
+      normalized.includes('file')
+    )
+  })
+}
+
+function codexPetArchiveFile(files: FileList): File | null {
+  return Array.from(files).find((file) => CODEX_PET_ARCHIVE_PATTERN.test(file.name)) ?? null
+}
+
+function filePathFromFileUri(value: string): string {
+  if (value.startsWith('/')) return value
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'file:') return ''
+    return decodeURIComponent(url.pathname)
+  } catch {
+    return ''
+  }
+}
+
+function codexPetArchiveUriPath(event: DragEvent): string {
+  const transfer = event.dataTransfer
+  for (const type of ['text/uri-list', 'public.file-url', 'text/plain']) {
+    const uriList = transfer?.getData(type) ?? ''
+    for (const line of uriList.split(/\r?\n/)) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const path = filePathFromFileUri(trimmed)
+      if (path && CODEX_PET_ARCHIVE_PATTERN.test(path)) return path
+    }
+  }
+  return ''
+}
+
+function markPetAssetDropHandled(event: DragEvent): void {
+  ;(event as PreloadHandledDragEvent)[PRELOAD_HANDLED_PET_ASSET_DROP] = true
+}
+
+function dispatchDesktopPetAssetDropStatus(status: 'started' | 'imported' | 'failed'): void {
+  window.dispatchEvent(new CustomEvent(DESKTOP_PET_ASSET_DROP_EVENT, { detail: { status } }))
+}
+
+async function importDesktopPetAssetFile(file: File): Promise<unknown> {
+  const path = webUtils.getPathForFile(file)
+  if (path) return ipcRenderer.invoke('desktop:petAssets:importDirectory', { path })
+  return ipcRenderer.invoke('desktop:petAssets:importArchiveBuffer', {
+    name: file.name,
+    data: await file.arrayBuffer(),
+  })
+}
+
+function installDesktopPetAssetDropFallback(): void {
+  if (!isDesktopPetAssetDropTarget()) return
+
+  window.addEventListener(
+    'dragenter',
+    (event) => {
+      if (!isDesktopPetAssetDragEvent(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    },
+    true,
+  )
+
+  window.addEventListener(
+    'dragover',
+    (event) => {
+      if (!isDesktopPetAssetDragEvent(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    },
+    true,
+  )
+
+  window.addEventListener(
+    'drop',
+    (event) => {
+      if (!isDesktopPetAssetDragEvent(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+      const file = event.dataTransfer?.files ? codexPetArchiveFile(event.dataTransfer.files) : null
+      const uriPath = file ? '' : codexPetArchiveUriPath(event)
+      if (!file && !uriPath) return
+      markPetAssetDropHandled(event)
+      event.stopImmediatePropagation()
+      dispatchDesktopPetAssetDropStatus('started')
+      const importTask = file
+        ? importDesktopPetAssetFile(file)
+        : ipcRenderer.invoke('desktop:petAssets:importDirectory', { path: uriPath })
+      void importTask
+        .then(() => dispatchDesktopPetAssetDropStatus('imported'))
+        .catch(() => dispatchDesktopPetAssetDropStatus('failed'))
+    },
+    true,
+  )
+}
+
 function dispatchCommunityAuthRequired(): void {
   try {
     window.dispatchEvent(new CustomEvent(DESKTOP_COMMUNITY_AUTH_REQUIRED_EVENT))
@@ -250,6 +370,7 @@ const desktopAPI = {
     method?: string
     body?: unknown
     headers?: Record<string, string>
+    optional?: boolean
   }) => {
     return invokeCommunityIpc('desktop:community:fetchJson', input)
   },
@@ -365,7 +486,7 @@ const desktopAPI = {
       return ipcRenderer.invoke('desktop:pet:hide') as Promise<void>
     },
     setPanelMode: (mode: 'compact' | 'expanded') => {
-      return ipcRenderer.invoke('desktop:pet:panel-mode', mode) as Promise<void>
+      return ipcRenderer.invoke('desktop:pet:panel-mode', mode) as Promise<{ stageOffsetY: number }>
     },
     moveWindow: (delta: { x: number; y: number }) => {
       return ipcRenderer.invoke('desktop:pet:move-window', delta) as Promise<void>
@@ -568,6 +689,7 @@ const desktopAPI = {
         petChat: string
         showNotifications: string
       }
+      desktopPetVisible: boolean
       desktopPetActivePackId: string
       desktopPetPacks: Array<Record<string, unknown>>
     }>,
@@ -589,6 +711,7 @@ const desktopAPI = {
       petChat?: string
       showNotifications?: string
     }
+    desktopPetVisible?: boolean
     desktopPetActivePackId?: string
     desktopPetPacks?: Array<Record<string, unknown>>
   }) =>
@@ -610,12 +733,14 @@ const desktopAPI = {
         petChat: string
         showNotifications: string
       }
+      desktopPetVisible: boolean
       desktopPetActivePackId: string
       desktopPetPacks: Array<Record<string, unknown>>
     }>,
   petAssets: {
     importDirectory: (path?: string) =>
       ipcRenderer.invoke('desktop:petAssets:importDirectory', { path }) as Promise<unknown>,
+    importFile: (file: File) => importDesktopPetAssetFile(file),
     importMarketplace: (input: { entitlementId: string; fileId: string; productId?: string }) =>
       invokeCommunityIpc('desktop:petAssets:importMarketplace', input),
     setActive: (packId: string) =>
@@ -853,6 +978,7 @@ const desktopAPI = {
         petChat: string
         showNotifications: string
       }
+      desktopPetVisible: boolean
       desktopPetActivePackId: string
       desktopPetPacks: Array<Record<string, unknown>>
     }) => void,
@@ -877,6 +1003,7 @@ const desktopAPI = {
           petChat: string
           showNotifications: string
         }
+        desktopPetVisible: boolean
         desktopPetActivePackId: string
         desktopPetPacks: Array<Record<string, unknown>>
       },
@@ -913,6 +1040,7 @@ const desktopAPI = {
 
 contextBridge.exposeInMainWorld('desktopAPI', desktopAPI)
 applyDesktopDocumentClasses()
+installDesktopPetAssetDropFallback()
 void syncDesktopRuntimeSettings()
 void injectCommunityAuthSnapshot().then(() => forceSyncCommunityAuthToken())
 window.addEventListener('DOMContentLoaded', () => void syncDesktopRuntimeSettings())

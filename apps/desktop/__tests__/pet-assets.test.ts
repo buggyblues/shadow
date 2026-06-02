@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import JSZip from 'jszip'
@@ -20,9 +20,8 @@ vi.mock('electron', () => ({
     createFromPath: vi.fn((path: string) => ({
       isEmpty: () => false,
       getSize: () => {
-        if (path.endsWith('idle.png')) return { width: 512, height: 320 }
-        if (path.endsWith('cover.webp')) return { width: 600, height: 400 }
-        return { width: 256, height: 320 }
+        if (path.endsWith('spritesheet.webp')) return { width: 1536, height: 1872 }
+        return { width: 1, height: 1 }
       },
     })),
   },
@@ -48,39 +47,38 @@ vi.mock('../src/main/desktop-settings', () => ({
   })),
 }))
 
-function metadata() {
+function petManifest() {
   return {
-    schemaVersion: 'shadow.desktopPet.pack.v1',
     id: 'creator.lazy',
-    version: '1.0.0',
-    displayName: { en: 'Lazy Buddy', 'zh-CN': '小懒伙伴' },
-    compatibility: {
-      shadowDesktop: '>=0.2.1',
-      renderer: ['sprite-sheet'],
-      features: ['emotion-overrides'],
-    },
-    entry: {
-      renderer: 'sprite-sheet',
-      pixelRatio: 2,
-      canvas: { width: 256, height: 320 },
-      anchor: { x: 0.5, y: 0.88 },
-    },
-    files: { cover: 'preview/cover.webp' },
-    sprites: {
-      idle: {
-        src: 'sprites/idle.png',
-        frame: { width: 256, height: 320, count: 2, fps: 6 },
-        loop: true,
-      },
-    },
+    displayName: 'Lazy Buddy',
+    description: 'A Codex pet package.',
+    spritesheetPath: 'spritesheet.webp',
+    kind: 'animal',
   }
+}
+
+function codexVp8lSpritesheetHeader() {
+  const widthMinusOne = 1535
+  const heightMinusOne = 1871
+  const buffer = Buffer.alloc(26)
+  buffer.write('RIFF', 0, 'ascii')
+  buffer.writeUInt32LE(buffer.byteLength - 8, 4)
+  buffer.write('WEBP', 8, 'ascii')
+  buffer.write('VP8L', 12, 'ascii')
+  buffer.writeUInt32LE(5, 16)
+  buffer[20] = 0x2f
+  buffer[21] = widthMinusOne & 0xff
+  buffer[22] = ((widthMinusOne >> 8) & 0x3f) | ((heightMinusOne & 0x03) << 6)
+  buffer[23] = (heightMinusOne >> 2) & 0xff
+  buffer[24] = (heightMinusOne >> 10) & 0x0f
+  return buffer
 }
 
 async function packArchive(prefix = '') {
   const zip = new JSZip()
-  zip.file(`${prefix}metadata.json`, JSON.stringify(metadata()))
-  zip.file(`${prefix}preview/cover.webp`, 'cover')
-  zip.file(`${prefix}sprites/idle.png`, 'sprite')
+  zip.file(`${prefix}pet.json`, JSON.stringify(petManifest()))
+  zip.file(`${prefix}spritesheet.webp`, codexVp8lSpritesheetHeader())
+  zip.file(`${prefix}preview.webp`, 'preview')
   return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
 }
 
@@ -106,13 +104,18 @@ describe('desktop pet asset pack import', () => {
 
     expect(pack).toMatchObject({
       id: 'creator.lazy',
-      version: '1.0.0',
+      displayName: { en: 'Lazy Buddy' },
+      description: 'A Codex pet package.',
+      spritesheetPath: 'spritesheet.webp',
       source: 'marketplace',
       marketplaceEntitlementId: 'entitlement-1',
       marketplacePaidFileId: 'file-1',
       marketplaceProductId: 'product-1',
     })
-    expect(pack.sprites.idle?.frame).toEqual({ width: 256, height: 320, count: 2, fps: 6 })
+    expect(pack.sprites.idle?.frame).toEqual({ width: 192, height: 208, count: 6, fps: 5 })
+    expect(pack.sprites.idle?.atlas).toEqual({ columns: 8, rows: 9, row: 0 })
+    expect(pack.sprites.waving?.frame).toEqual({ width: 192, height: 208, count: 4, fps: 6 })
+    expect(pack.sprites.review?.atlas).toEqual({ columns: 8, rows: 9, row: 8 })
     expect(pack.sourcePath).toContain('desktop-pet-packs')
   })
 
@@ -127,10 +130,44 @@ describe('desktop pet asset pack import', () => {
     expect(pack.id).toBe('creator.lazy')
   })
 
+  it('imports a local codex-pet zip path without requiring manual extraction', async () => {
+    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const archivePath = join(testRoot, 'lazy.codex-pet.zip')
+    writeFileSync(archivePath, await packArchive())
+
+    const pack = await __desktopPetAssetTestHooks.importPetPackFromPath(archivePath, {
+      source: 'local',
+    })
+
+    expect(pack).toMatchObject({
+      id: 'creator.lazy',
+      displayName: { en: 'Lazy Buddy' },
+      source: 'local',
+      spritesheetPath: 'spritesheet.webp',
+    })
+    expect(pack.sourcePath).toContain('desktop-pet-packs')
+  })
+
+  it('imports a dropped codex-pet zip from archive bytes when no file path is available', async () => {
+    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+
+    const pack = await __desktopPetAssetTestHooks.importPetPackFromArchiveData({
+      name: 'lazy.codex-pet.zip',
+      data: await packArchive(),
+    })
+
+    expect(pack).toMatchObject({
+      id: 'creator.lazy',
+      displayName: { en: 'Lazy Buddy' },
+      source: 'local',
+      spritesheetPath: 'spritesheet.webp',
+    })
+  })
+
   it('rejects unsafe archive paths before writing outside the temp folder', async () => {
     const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
     const zip = new JSZip()
-    zip.file('C:/metadata.json', JSON.stringify(metadata()))
+    zip.file('C:/pet.json', JSON.stringify(petManifest()))
 
     await expect(
       __desktopPetAssetTestHooks.importPetPackFromArchive(
@@ -143,8 +180,8 @@ describe('desktop pet asset pack import', () => {
   it('rejects executable files in archives', async () => {
     const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
     const zip = new JSZip()
-    zip.file('metadata.json', JSON.stringify(metadata()))
-    zip.file('sprites/idle.png', 'sprite')
+    zip.file('pet.json', JSON.stringify(petManifest()))
+    zip.file('spritesheet.webp', codexVp8lSpritesheetHeader())
     zip.file('scripts/install.sh', 'echo unsafe')
 
     await expect(
@@ -153,5 +190,19 @@ describe('desktop pet asset pack import', () => {
         { source: 'local' },
       ),
     ).rejects.toThrow('blocked file extension')
+  })
+
+  it('rejects archives with unreadable spritesheet bytes', async () => {
+    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const zip = new JSZip()
+    zip.file('pet.json', JSON.stringify(petManifest()))
+    zip.file('spritesheet.webp', 'not a webp image')
+
+    await expect(
+      __desktopPetAssetTestHooks.importPetPackFromArchive(
+        Buffer.from(await zip.generateAsync({ type: 'uint8array' })),
+        { source: 'local' },
+      ),
+    ).rejects.toThrow('spritesheetPath is not a readable image')
   })
 })

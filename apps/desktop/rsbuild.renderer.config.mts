@@ -39,12 +39,8 @@ export default defineConfig({
     },
     copy: [
       {
-        from: resolve(__dirname, 'assets/pet/animations'),
-        to: 'pet/animations',
-      },
-      {
-        from: resolve(__dirname, 'assets/pet/manifest.json'),
-        to: 'pet/manifest.json',
+        from: resolve(__dirname, 'assets/pet/codex'),
+        to: 'pet/codex',
       },
     ],
   },
