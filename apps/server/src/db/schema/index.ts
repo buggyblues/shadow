@@ -47,6 +47,16 @@ export {
   connectorJobs,
 } from './connector'
 export {
+  type ContentDigestMode,
+  type ContentFeedEventState,
+  type ContentFeedKind,
+  type ContentSubscriptionStatus,
+  channelContentSubscriptions,
+  contentFeedEvents,
+  contentFeedItems,
+  contentSubscriptionPreferences,
+} from './content-feed'
+export {
   commerceFulfillmentRecordStatusEnum,
   commerceFulfillmentRecords,
   communityAssetDefinitionStatusEnum,

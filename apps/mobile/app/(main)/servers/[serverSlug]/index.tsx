@@ -18,6 +18,7 @@ import {
   Megaphone,
   MessageSquare,
   Plus,
+  Rss,
   Search,
   Send,
   Settings,
@@ -72,6 +73,13 @@ import {
 interface ServerChannel extends Channel {
   categoryId?: string | null
   isPrivate?: boolean
+}
+
+interface ContentSubscription {
+  id: string
+  channelId: string
+  status: 'active' | 'paused'
+  isDefault?: boolean
 }
 
 interface Category {
@@ -247,6 +255,24 @@ export default function ServerHomeScreen() {
     enabled: !!server?.id,
   })
 
+  const { data: contentSubscriptions = [] } = useQuery({
+    queryKey: ['content-subscriptions', server?.id],
+    queryFn: () =>
+      fetchApi<ContentSubscription[]>(
+        `/api/content-subscriptions?serverId=${encodeURIComponent(server!.id)}`,
+      ),
+    enabled: isServerMember && !!server?.id,
+    staleTime: 30_000,
+  })
+
+  const contentSubscriptionByChannel = useMemo(() => {
+    const map = new Map<string, ContentSubscription>()
+    for (const subscription of contentSubscriptions) {
+      if (subscription.status === 'active') map.set(subscription.channelId, subscription)
+    }
+    return map
+  }, [contentSubscriptions])
+
   const ensureInboxMutation = useMutation({
     mutationFn: async (entry: BuddyInboxEntry) => {
       if (entry.channel) return entry.channel
@@ -324,6 +350,29 @@ export default function ServerHomeScreen() {
       setEditChannelName('')
     },
     onError: (err: Error) => showToast(err?.message || t('common.error'), 'error'),
+  })
+
+  const toggleContentSubscriptionMutation = useMutation({
+    mutationFn: ({
+      channel,
+      subscription,
+    }: {
+      channel: ServerChannel
+      subscription?: ContentSubscription
+    }) =>
+      subscription
+        ? fetchApi(`/api/content-subscriptions/${subscription.id}`, { method: 'DELETE' })
+        : fetchApi(`/api/channels/${channel.id}/content-subscription`, { method: 'POST' }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['content-subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: ['content-feed'] })
+      showToast(
+        variables.subscription ? t('channel.contentUnsubscribed') : t('channel.contentSubscribed'),
+        'success',
+      )
+    },
+    onError: (err: Error) =>
+      showToast(err?.message || t('channel.contentSubscriptionFailed'), 'error'),
   })
 
   // ── Channel grouping ──────────────────────────
@@ -469,6 +518,10 @@ export default function ServerHomeScreen() {
   }
 
   if (isServerAccessError || !server) return <LoadingScreen />
+
+  const contextContentSubscription = contextChannel
+    ? contentSubscriptionByChannel.get(contextChannel.id)
+    : undefined
 
   return (
     <BackgroundSurface>
@@ -729,6 +782,23 @@ export default function ServerHomeScreen() {
         onClose={() => setContextChannel(null)}
         title={contextChannel?.name}
       >
+        <MenuItem
+          icon={Rss}
+          title={
+            contextContentSubscription
+              ? t('channel.unsubscribeContent')
+              : t('channel.subscribeContent')
+          }
+          disabled={toggleContentSubscriptionMutation.isPending}
+          onPress={() => {
+            const ch = contextChannel
+            const subscription = contextContentSubscription
+            setContextChannel(null)
+            if (ch) {
+              toggleContentSubscriptionMutation.mutate({ channel: ch, subscription })
+            }
+          }}
+        />
         <MenuItem
           icon={UserPlus}
           title={t('channel.inviteMember')}

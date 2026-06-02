@@ -19,7 +19,13 @@ import { TaskSettings } from './tasks'
 import { WalletSettings, type WalletSettingsSection } from './wallet'
 
 type SettingsTab = 'dm' | 'buddy' | 'tasks' | 'wallet' | 'shop'
-type SettingsModalTab = 'profile' | 'account' | 'appearance' | 'notification' | 'developer'
+type SettingsModalTab =
+  | 'profile'
+  | 'account'
+  | 'appearance'
+  | 'notification'
+  | 'subscriptions'
+  | 'developer'
 type MergedSettingsSection =
   | 'invite'
   | 'entitlements'
@@ -127,6 +133,7 @@ function resolveSettingsLocationFromPath(pathname: string): {
     path === '/settings/account' ||
     path === '/settings/appearance' ||
     path === '/settings/notification' ||
+    path === '/settings/subscriptions' ||
     path === '/settings/friends' ||
     path === '/settings/quickstart'
   ) {
@@ -142,6 +149,7 @@ function resolveModalTabFromPath(pathname: string): SettingsModalTab | undefined
   if (path === '/settings/account') return 'account'
   if (path === '/settings/appearance') return 'appearance'
   if (path === '/settings/notification') return 'notification'
+  if (path === '/settings/subscriptions') return 'subscriptions'
   return undefined
 }
 

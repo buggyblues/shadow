@@ -1,3 +1,4 @@
+import { cn } from '@shadowob/ui'
 import {
   Code2,
   Download,
@@ -15,6 +16,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchApi } from '../../lib/api'
 import { getApiErrorMessage } from '../../lib/api-errors'
+import { getApiUrl } from '../../lib/api-url'
 import { useUIStore } from '../../stores/ui.store'
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -33,6 +35,23 @@ interface FilePreviewPanelProps {
   onClose: () => void
   presentation?: 'inline' | 'overlay'
 }
+
+type PdfDocumentLike = {
+  numPages: number
+  destroy?: () => Promise<void> | void
+  getPage: (pageNumber: number) => Promise<PdfPageLike>
+}
+
+type PdfPageLike = {
+  getViewport: (options: { scale: number }) => { width: number; height: number }
+  render: (options: {
+    canvas: HTMLCanvasElement
+    canvasContext: CanvasRenderingContext2D
+    viewport: unknown
+  }) => { cancel?: () => void; promise: Promise<void> }
+}
+
+let pdfJsPromise: Promise<typeof import('pdfjs-dist')> | null = null
 
 // ── Utilities ──────────────────────────────────────────────────────────
 
@@ -174,6 +193,34 @@ function getFileCategory(ct: string, ext: string) {
 /** Whether a file category supports the Preview/Code toggle */
 function hasPreviewMode(category: string): boolean {
   return ['markdown', 'html', 'csv', 'xlsx'].includes(category)
+}
+
+function loadPdfJs() {
+  if (!pdfJsPromise) {
+    pdfJsPromise = import('pdfjs-dist').then((mod) => {
+      mod.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url,
+      ).toString()
+      return mod
+    })
+  }
+  return pdfJsPromise
+}
+
+function previewErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isAttachmentId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
+function shouldRefreshSignedMediaUrl(error: unknown) {
+  const message = previewErrorMessage(error)
+  return /Unexpected server response \((401|404)\)|Expired media token|Invalid media token/i.test(
+    message,
+  )
 }
 
 // ── CSV Parser ─────────────────────────────────────────────────────────
@@ -671,6 +718,253 @@ function HTMLPreview({ text, url }: { text?: string; url: string }) {
   )
 }
 
+function PdfPreview({ attachment }: { attachment: PreviewAttachment }) {
+  const { t } = useTranslation()
+  const [document, setDocument] = useState<PdfDocumentLike | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    let loadingTask: {
+      destroy?: () => Promise<void> | void
+      promise: Promise<PdfDocumentLike>
+    } | null = null
+    let loadedDocument: PdfDocumentLike | null = null
+
+    setDocument(null)
+    setError(null)
+    setLoading(true)
+
+    loadPdfJs()
+      .then(async (pdfjs) => {
+        if (cancelled) return null
+        let task = pdfjs.getDocument({ url: getApiUrl(attachment.url) }) as unknown as {
+          destroy?: () => Promise<void> | void
+          promise: Promise<PdfDocumentLike>
+        }
+        loadingTask = task
+        try {
+          return await task.promise
+        } catch (err) {
+          if (!isAttachmentId(attachment.id) || !shouldRefreshSignedMediaUrl(err)) throw err
+          void task.destroy?.()
+          const refreshed = await fetchApi<{ url: string }>(
+            `/api/attachments/${attachment.id}/media-url?disposition=inline`,
+          )
+          if (cancelled) return null
+          task = pdfjs.getDocument({ url: getApiUrl(refreshed.url) }) as unknown as {
+            destroy?: () => Promise<void> | void
+            promise: Promise<PdfDocumentLike>
+          }
+          loadingTask = task
+          return task.promise
+        }
+      })
+      .then((pdfDocument) => {
+        if (!pdfDocument) return
+        if (cancelled) {
+          void pdfDocument.destroy?.()
+          return
+        }
+        loadedDocument = pdfDocument
+        setDocument(pdfDocument)
+        setLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(previewErrorMessage(err))
+        setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+      void loadingTask?.destroy?.()
+      void loadedDocument?.destroy?.()
+    }
+  }, [attachment.url])
+
+  if (loading) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-3 bg-bg-deep p-3">
+        <div className="h-full min-h-72 animate-pulse rounded-xl bg-bg-tertiary/70" />
+      </div>
+    )
+  }
+
+  if (error || !document) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-bg-deep p-6 text-center">
+        <File size={28} className="text-text-muted" />
+        <p className="max-w-sm text-sm font-semibold text-text-muted">
+          {error ? t('chat.previewError', { error }) : t('chat.previewUnsupported')}
+        </p>
+        <a
+          href={attachment.url}
+          download={attachment.filename}
+          className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-bold text-white transition hover:bg-primary-hover"
+        >
+          <Download size={15} />
+          {t('chat.downloadFile')}
+        </a>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto bg-bg-deep px-3 py-3">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
+        {Array.from({ length: document.numPages }, (_, index) => {
+          const pageNumber = index + 1
+          return (
+            <PdfPageCanvas
+              key={`${attachment.id}:${pageNumber}`}
+              document={document}
+              pageCount={document.numPages}
+              pageNumber={pageNumber}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function PdfPageCanvas({
+  document,
+  pageNumber,
+  pageCount,
+}: {
+  document: PdfDocumentLike
+  pageNumber: number
+  pageCount: number
+}) {
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [visible, setVisible] = useState(pageNumber <= 2)
+  const [containerWidth, setContainerWidth] = useState(0)
+  const [pageRatio, setPageRatio] = useState<number | null>(null)
+  const [rendered, setRendered] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+
+    const updateWidth = () => {
+      setContainerWidth(Math.floor(wrapper.clientWidth))
+    }
+    updateWidth()
+
+    if (typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(wrapper)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper || visible) return
+
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisible(true)
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '900px 0px' },
+    )
+    observer.observe(wrapper)
+    return () => observer.disconnect()
+  }, [visible])
+
+  useEffect(() => {
+    if (!visible || containerWidth < 120) return
+
+    let cancelled = false
+    let renderTask: { cancel?: () => void; promise: Promise<void> } | null = null
+
+    setRendered(false)
+    setFailed(false)
+
+    document
+      .getPage(pageNumber)
+      .then((page) => {
+        if (cancelled) return null
+        const baseViewport = page.getViewport({ scale: 1 })
+        setPageRatio(baseViewport.height / baseViewport.width)
+
+        const cssWidth = Math.max(260, containerWidth)
+        const scale = cssWidth / baseViewport.width
+        const viewport = page.getViewport({ scale })
+        const canvas = canvasRef.current
+        const context = canvas?.getContext('2d')
+        if (!canvas || !context) return null
+
+        const outputScale =
+          typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 2)
+        canvas.width = Math.floor(viewport.width * outputScale)
+        canvas.height = Math.floor(viewport.height * outputScale)
+        canvas.style.width = `${Math.floor(viewport.width)}px`
+        canvas.style.height = `${Math.floor(viewport.height)}px`
+        context.setTransform(outputScale, 0, 0, outputScale, 0, 0)
+        renderTask = page.render({ canvas, canvasContext: context, viewport })
+        return renderTask.promise
+      })
+      .then(() => {
+        if (!cancelled) setRendered(true)
+      })
+      .catch((err) => {
+        if (cancelled || err?.name === 'RenderingCancelledException') return
+        setFailed(true)
+      })
+
+    return () => {
+      cancelled = true
+      renderTask?.cancel?.()
+    }
+  }, [containerWidth, document, pageNumber, visible])
+
+  const placeholderHeight =
+    pageRatio && containerWidth > 0 ? Math.round(containerWidth * pageRatio) : 720
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="relative w-full overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/25"
+      style={{ minHeight: placeholderHeight }}
+    >
+      <canvas
+        ref={canvasRef}
+        className={cn(
+          'block h-auto w-full bg-white transition-opacity',
+          rendered ? '' : 'opacity-0',
+        )}
+      />
+      {!rendered ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-bg-tertiary/40">
+          <span className="h-8 w-8 animate-pulse rounded-full border border-border-subtle" />
+        </div>
+      ) : null}
+      {failed ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-bg-tertiary text-xs font-bold text-text-muted">
+          {pageNumber} / {pageCount}
+        </div>
+      ) : null}
+      <span className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold text-white">
+        {pageNumber} / {pageCount}
+      </span>
+    </div>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────────────
 
 /**
@@ -683,7 +977,7 @@ function HTMLPreview({ text, url }: { text?: string; url: string }) {
  * - Markdown rich preview with GFM tables
  * - HTML sandboxed preview
  * - ZIP archive file listing
- * - Image / Audio / Video / PDF native preview
+ * - Image / Audio / Video / PDF preview
  */
 export function FilePreviewPanel({
   attachment,
@@ -766,6 +1060,12 @@ export function FilePreviewPanel({
   const category = getFileCategory(currentAttachment.contentType, ext)
   const showToggle =
     hasPreviewMode(category) && !(category === 'html' && currentAttachment.paidFileId)
+
+  useEffect(() => {
+    if (presentation !== 'overlay' || category !== 'pdf') return
+    const maxWidth = Math.max(320, viewportWidth - 24)
+    setPanelWidth((current) => Math.max(current, Math.min(1040, maxWidth)))
+  }, [category, presentation, viewportWidth])
 
   // Fetch text content for text-based files
   useEffect(() => {
@@ -873,17 +1173,9 @@ export function FilePreviewPanel({
       )
     }
 
-    // PDF — iframe
+    // PDF
     if (category === 'pdf') {
-      return (
-        <div className="flex-1 overflow-hidden p-2">
-          <iframe
-            src={currentAttachment.url}
-            title={currentAttachment.filename}
-            className="w-full h-full rounded-lg border border-border-subtle"
-          />
-        </div>
-      )
+      return <PdfPreview attachment={currentAttachment} />
     }
 
     // Archive / ZIP
@@ -1008,7 +1300,9 @@ export function FilePreviewPanel({
   const isNarrowSheet = shouldUseSheet && viewportWidth < 720
   const maxInlineWidth = Math.min(680, Math.max(420, viewportWidth - 1040))
   const inlineWidth = Math.max(420, Math.min(panelWidth, maxInlineWidth))
-  const sheetWidth = Math.min(panelWidth, Math.max(320, viewportWidth - 24))
+  const maxSheetWidth = Math.max(320, viewportWidth - 24)
+  const sheetWidth = Math.min(panelWidth, maxSheetWidth)
+  const fullBleedPreview = category === 'pdf'
   const panelClasses = isFullscreen
     ? `fixed inset-2 z-50 rounded-3xl animate-fade-in ${panelBaseClasses}`
     : shouldUseSheet
@@ -1094,8 +1388,15 @@ export function FilePreviewPanel({
         </div>
 
         {/* Preview content */}
-        <div className="min-h-0 flex-1 p-1.5">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-border-subtle/70 bg-bg-primary/45">
+        <div className={cn('min-h-0 flex-1', fullBleedPreview ? 'p-0' : 'p-1.5')}>
+          <div
+            className={cn(
+              'flex h-full min-h-0 flex-col overflow-hidden',
+              fullBleedPreview
+                ? 'bg-bg-deep'
+                : 'rounded-[20px] border border-border-subtle/70 bg-bg-primary/45',
+            )}
+          >
             {renderContent()}
           </div>
         </div>

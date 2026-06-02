@@ -47,6 +47,9 @@
     "docs": "文档",
     "login": "登录",
     "launch": "启动！",
+    "home": "主页",
+    "notifications": "通知",
+    "subscriptions": "订阅",
     "servers": "服务器",
     "community": "社区",
     "me": "我"
@@ -406,6 +409,40 @@
     "byLastMessage": "最新消息",
     "byLastAccessed": "访问时间"
   },
+  "contentFeed": {
+    "title": "订阅",
+    "empty": "暂无订阅内容",
+    "emptyDesc": "订阅频道后，带附件的消息和 Server App 卡片会出现在这里。",
+    "markAllRead": "全部标为已读",
+    "open": "打开",
+    "card": "应用卡片",
+    "voice": "语音",
+    "image": "图片",
+    "html": "HTML",
+    "pdf": "PDF",
+    "file": "文件",
+    "source": "{{server}} / {{channel}}",
+    "attachment": "附件",
+    "like": "点赞",
+    "comment": "评论",
+    "save": "收藏",
+    "share": "转发",
+    "sendComment": "发送",
+    "commentPlaceholder": "写评论",
+    "placeholderImage": "创作了一组图片",
+    "placeholderVideo": "创作了一段视频",
+    "placeholderAudio": "创作了一段音频",
+    "placeholderHtml": "创作了一个网页",
+    "placeholderMarkdown": "创作了一篇 Markdown",
+    "placeholderPdf": "创作了一份 PDF",
+    "placeholderApp": "发布了一个应用卡片",
+    "placeholderFile": "分享了一个文件",
+    "shareCopied": "链接已复制",
+    "likeFailed": "点赞更新失败",
+    "saveFailed": "收藏更新失败",
+    "commentFailed": "评论发送失败",
+    "openFailed": "打开订阅内容失败"
+  },
   "channel": {
     "serverSettings": "服务器设置",
     "announcement": "公告频道",
@@ -426,6 +463,11 @@
     "publicServer": "公开服务器",
     "publicServerDesc": "开启后，该服务器将出现在探索页面中",
     "editChannel": "编辑频道",
+    "subscribeContent": "订阅频道内容",
+    "unsubscribeContent": "暂停内容订阅",
+    "contentSubscribed": "已订阅频道内容",
+    "contentUnsubscribed": "已暂停频道内容订阅",
+    "contentSubscriptionFailed": "订阅操作失败",
     "copyChannelLink": "复制频道链接",
     "linkCopied": "频道链接已复制",
     "deleteChannel": "删除频道",
@@ -1087,7 +1129,11 @@
     "views": {
       "all": "全部",
       "joined": "已加入",
-      "open": "可加入"
+      "open": "可加入",
+      "browse": "浏览",
+      "explore": "探索",
+      "market": "市场",
+      "cloud": "云"
     },
     "metrics": {
       "publicCommunities": "公开服务器",
@@ -1116,6 +1162,11 @@
     },
     "businessTitle": "今天想找点什么？",
     "businessSubtitle": "逛 Buddy、买服务和内容、进店铺，或者加入一个好玩的服务器。",
+    "mobile": {
+      "eyebrow": "发现",
+      "title": "探索 Shadow",
+      "subtitle": "找玩法、服务器和云模板；需要购买内容时切到市场。"
+    },
     "supermarket": {
       "eyebrow": "内容超市",
       "title": "像逛超市一样发现 Shadow 里的内容",
@@ -1207,7 +1258,7 @@
     "marketAisles": {
       "desktopPets": {
         "title": "桌宠素材",
-        "subtitle": "桌宠皮肤、动作帧、语音和可导入素材包。"
+        "subtitle": "Codex 宠物包、状态图集、语音和可导入桌宠。"
       },
       "gameAssets": {
         "title": "游戏素材",

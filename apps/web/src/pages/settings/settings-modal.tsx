@@ -4,18 +4,25 @@
  */
 import { cn, Modal, ModalBody, ModalContent, ModalHeader } from '@shadowob/ui'
 import { useNavigate } from '@tanstack/react-router'
-import { Bell, Code2, LogOut, Paintbrush, Shield, User } from 'lucide-react'
+import { Bell, Code2, LogOut, Paintbrush, Rss, Shield, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { disconnectSocket } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
 import { AccountSettings } from './account'
 import { AppearanceSettings } from './appearance'
+import { ContentSubscriptionsSettings } from './content-subscriptions'
 import { DeveloperSettings } from './developer'
 import { NotificationSettings } from './notification'
 import { ProfileSettings } from './profile'
 
-type ModalTab = 'profile' | 'account' | 'appearance' | 'notification' | 'developer'
+type ModalTab =
+  | 'profile'
+  | 'account'
+  | 'appearance'
+  | 'notification'
+  | 'subscriptions'
+  | 'developer'
 
 const MODAL_TABS: {
   id: ModalTab
@@ -36,6 +43,12 @@ const MODAL_TABS: {
     icon: Bell,
     labelKey: 'settings.tabNotification',
     labelFallback: '通知',
+  },
+  {
+    id: 'subscriptions',
+    icon: Rss,
+    labelKey: 'settings.tabSubscriptions',
+    labelFallback: '内容订阅',
   },
   {
     id: 'developer',
@@ -134,6 +147,7 @@ export function SettingsModal({
             {activeTab === 'account' && <AccountSettings />}
             {activeTab === 'appearance' && <AppearanceSettings />}
             {activeTab === 'notification' && <NotificationSettings />}
+            {activeTab === 'subscriptions' && <ContentSubscriptionsSettings />}
             {activeTab === 'developer' && <DeveloperSettings />}
           </div>
         </ModalBody>

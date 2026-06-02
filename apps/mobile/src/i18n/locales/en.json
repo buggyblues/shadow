@@ -47,6 +47,9 @@
     "docs": "Docs",
     "login": "Login",
     "launch": "Launch",
+    "home": "Home",
+    "notifications": "Notifications",
+    "subscriptions": "Subscriptions",
     "servers": "Servers",
     "community": "Community",
     "me": "Me"
@@ -407,6 +410,40 @@
     "byLastMessage": "Last Message",
     "byLastAccessed": "Last Accessed"
   },
+  "contentFeed": {
+    "title": "Subscriptions",
+    "empty": "No subscribed content",
+    "emptyDesc": "Subscribe to channels and messages with attachments or Server App cards will appear here.",
+    "markAllRead": "Mark all read",
+    "open": "Open",
+    "card": "App card",
+    "voice": "Voice",
+    "image": "Image",
+    "html": "HTML",
+    "pdf": "PDF",
+    "file": "File",
+    "source": "{{server}} / {{channel}}",
+    "attachment": "Attachment",
+    "like": "Like",
+    "comment": "Comment",
+    "save": "Save",
+    "share": "Repost",
+    "sendComment": "Send",
+    "commentPlaceholder": "Write a comment",
+    "placeholderImage": "Created a set of images",
+    "placeholderVideo": "Created a video",
+    "placeholderAudio": "Created an audio clip",
+    "placeholderHtml": "Created a web page",
+    "placeholderMarkdown": "Created a Markdown post",
+    "placeholderPdf": "Created a PDF",
+    "placeholderApp": "Published an app card",
+    "placeholderFile": "Shared a file",
+    "shareCopied": "Link copied",
+    "likeFailed": "Failed to update like",
+    "saveFailed": "Failed to update save",
+    "commentFailed": "Failed to send comment",
+    "openFailed": "Failed to open subscribed content"
+  },
   "channel": {
     "serverSettings": "Server Settings",
     "announcement": "Announcements",
@@ -427,6 +464,11 @@
     "publicServer": "Public Server",
     "publicServerDesc": "When enabled, this server will appear on the Discover page",
     "editChannel": "Edit Channel",
+    "subscribeContent": "Subscribe to Content",
+    "unsubscribeContent": "Pause content subscription",
+    "contentSubscribed": "Subscribed to channel content",
+    "contentUnsubscribed": "Channel content subscription paused",
+    "contentSubscriptionFailed": "Content subscription failed",
     "copyChannelLink": "Copy Channel Link",
     "linkCopied": "Channel link copied",
     "deleteChannel": "Delete Channel",
@@ -1088,7 +1130,11 @@
     "views": {
       "all": "All",
       "joined": "Joined",
-      "open": "Open"
+      "open": "Open",
+      "browse": "Browse",
+      "explore": "Explore",
+      "market": "Market",
+      "cloud": "Cloud"
     },
     "metrics": {
       "publicCommunities": "Public servers",
@@ -1117,6 +1163,11 @@
     },
     "businessTitle": "What are you looking for today?",
     "businessSubtitle": "Browse Buddies, buy services and content, visit shops, or join a server worth staying in.",
+    "mobile": {
+      "eyebrow": "Discover",
+      "title": "Explore Shadow",
+      "subtitle": "Find plays, servers, and Cloud templates. Switch to Market when you want to buy."
+    },
     "supermarket": {
       "eyebrow": "Content supermarket",
       "title": "Browse Shadow like a content supermarket",
@@ -1208,7 +1259,7 @@
     "marketAisles": {
       "desktopPets": {
         "title": "Desktop pet assets",
-        "subtitle": "Skins, action frames, voices, and importable pet packs."
+        "subtitle": "Codex pet packages, state atlases, voices, and importable companions."
       },
       "gameAssets": {
         "title": "Game assets",

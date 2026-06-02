@@ -44,6 +44,8 @@ function normalizeMetadata(metadata?: Record<string, unknown>) {
     'interactive',
     'interactiveResponse',
     'mentions',
+    // Deprecated compatibility inputs retained for existing commerce messages.
+    // New card-like protocols must use metadata.cards[] and should not add keys here.
     'commerceOfferId',
     'commerceCards',
     'paidFileCards',

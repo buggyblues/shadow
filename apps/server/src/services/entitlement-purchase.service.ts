@@ -58,7 +58,7 @@ function productDesktopPetPackMetadata(product: {
   if (!tags.some(isDesktopPetPackTag)) return null
   return {
     kind: 'desktop_pet_pack',
-    schemaVersion: 'shadow.desktopPet.pack.v1',
+    format: 'codex-pet',
     marketplaceTag: 'desktop-pet-pack',
   }
 }

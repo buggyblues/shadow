@@ -420,6 +420,25 @@ export class MessageDao {
     return result[0] ?? null
   }
 
+  async findThreadByParentMessageId(parentMessageId: string) {
+    const result = await this.db
+      .select()
+      .from(threads)
+      .where(and(eq(threads.parentMessageId, parentMessageId), eq(threads.isArchived, false)))
+      .orderBy(asc(threads.createdAt), asc(threads.id))
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async moveRepliesToThread(parentMessageId: string, threadId: string) {
+    const result = await this.db
+      .update(messages)
+      .set({ threadId, replyToId: null, updatedAt: new Date() })
+      .where(and(eq(messages.replyToId, parentMessageId), isNull(messages.threadId)))
+      .returning({ id: messages.id })
+    return result.length
+  }
+
   async findThreadsByChannelId(channelId: string) {
     return this.db
       .select()

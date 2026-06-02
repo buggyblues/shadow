@@ -32,6 +32,13 @@ import type {
   ShadowCommunityAssetGrant,
   ShadowConnectorBootstrapResult,
   ShadowConnectorComputer,
+  ShadowContentDigestMode,
+  ShadowContentFeedEventState,
+  ShadowContentFeedKind,
+  ShadowContentFeedPage,
+  ShadowContentSubscription,
+  ShadowContentSubscriptionPreferences,
+  ShadowContentSubscriptionStatus,
   ShadowContract,
   ShadowDiyCloudGenerateInput,
   ShadowDiyCloudRun,
@@ -1485,6 +1492,13 @@ export class ShadowClient {
     return this.request(`/api/channels/${channelId}/threads`)
   }
 
+  async ensureMessageThread(messageId: string, data?: { name?: string }): Promise<ShadowThread> {
+    return this.request(`/api/messages/${messageId}/thread`, {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
+    })
+  }
+
   async createThread(
     channelId: string,
     name: string,
@@ -2319,6 +2333,116 @@ export class ShadowClient {
     })
   }
 
+  // ── Content Subscriptions / Feed ─────────────────────────────────────
+
+  async listContentSubscriptions(params?: {
+    serverId?: string
+  }): Promise<ShadowContentSubscription[]> {
+    const query = new URLSearchParams()
+    if (params?.serverId) query.set('serverId', params.serverId)
+    const suffix = query.toString()
+    return this.request(`/api/content-subscriptions${suffix ? `?${suffix}` : ''}`)
+  }
+
+  async getContentSubscriptionDefaults(): Promise<ShadowContentSubscriptionPreferences> {
+    return this.request('/api/content-subscriptions/defaults')
+  }
+
+  async updateContentSubscriptionDefaults(
+    data: Partial<{
+      includeKinds: ShadowContentFeedKind[]
+      pushEnabled: boolean
+      digestMode: ShadowContentDigestMode
+    }>,
+  ): Promise<ShadowContentSubscriptionPreferences> {
+    return this.request('/api/content-subscriptions/defaults', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getChannelContentSubscription(
+    channelId: string,
+  ): Promise<ShadowContentSubscription | null> {
+    return this.request(`/api/channels/${channelId}/content-subscription`)
+  }
+
+  async subscribeChannelContent(channelId: string): Promise<ShadowContentSubscription> {
+    return this.request(`/api/channels/${channelId}/content-subscription`, {
+      method: 'POST',
+    })
+  }
+
+  async updateContentSubscription(
+    id: string,
+    data: Partial<{
+      status: ShadowContentSubscriptionStatus
+      includeKinds: ShadowContentFeedKind[]
+      excludeMimeTypes: string[]
+      minAttachmentSize: number | null
+      maxAttachmentSize: number | null
+      pushEnabled: boolean
+      digestMode: ShadowContentDigestMode
+      lastReadAt: string | null
+      resetRules: boolean
+    }>,
+  ): Promise<ShadowContentSubscription> {
+    return this.request(`/api/content-subscriptions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteContentSubscription(id: string): Promise<{ ok: true }> {
+    return this.request(`/api/content-subscriptions/${id}`, { method: 'DELETE' })
+  }
+
+  async getContentFeed(params?: {
+    cursor?: string
+    limit?: number
+    kinds?: ShadowContentFeedKind[]
+    channelId?: string
+    serverId?: string
+    unreadOnly?: boolean
+    sort?: 'latest' | 'recommended'
+  }): Promise<ShadowContentFeedPage> {
+    const qs = new URLSearchParams()
+    if (params?.cursor) qs.set('cursor', params.cursor)
+    if (params?.limit != null) qs.set('limit', String(params.limit))
+    if (params?.kinds?.length) qs.set('kinds', params.kinds.join(','))
+    if (params?.channelId) qs.set('channelId', params.channelId)
+    if (params?.serverId) qs.set('serverId', params.serverId)
+    if (params?.unreadOnly) qs.set('unreadOnly', 'true')
+    if (params?.sort) qs.set('sort', params.sort)
+    const query = qs.toString()
+    return this.request(`/api/content-feed${query ? `?${query}` : ''}`)
+  }
+
+  async recordContentFeedEvent(
+    feedItemId: string,
+    data: {
+      state: ShadowContentFeedEventState
+      lastPosition?: Record<string, unknown> | null
+    },
+  ): Promise<Record<string, unknown>> {
+    return this.request(`/api/content-feed/${feedItemId}/events`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async markContentFeedRead(scope: {
+    feedItemId?: string
+    channelId?: string
+    serverId?: string
+    all?: boolean
+  }): Promise<{ updated: number }> {
+    return this.request('/api/content-feed/read-scope', {
+      method: 'POST',
+      body: JSON.stringify(scope),
+    })
+  }
+
   // ── OAuth Apps ────────────────────────────────────────────────────────
 
   async createOAuthApp(data: {
@@ -2404,7 +2528,15 @@ export class ShadowClient {
   async sendOAuthChannelMessage(
     channelId: string,
     content: string,
-    opts?: { metadata?: { oauthLinkCards?: ShadowOAuthLinkCard[] } },
+    opts?: {
+      metadata?: {
+        /**
+         * @deprecated Compatibility-only OAuth link card array.
+         * New card-like protocols must use metadata.cards[].
+         */
+        oauthLinkCards?: ShadowOAuthLinkCard[]
+      }
+    },
   ): Promise<ShadowMessage> {
     return this.request<ShadowMessage>(`/api/oauth/channels/${channelId}/messages`, {
       method: 'POST',
@@ -2420,7 +2552,13 @@ export class ShadowClient {
     data: {
       channelId: string
       content: string
-      metadata?: { oauthLinkCards?: ShadowOAuthLinkCard[] }
+      metadata?: {
+        /**
+         * @deprecated Compatibility-only OAuth link card array.
+         * New card-like protocols must use metadata.cards[].
+         */
+        oauthLinkCards?: ShadowOAuthLinkCard[]
+      }
     },
   ): Promise<ShadowMessage> {
     return this.request<ShadowMessage>(`/api/oauth/buddies/${buddyId}/messages`, {

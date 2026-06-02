@@ -19,6 +19,7 @@ import { CloudEnvVarDao } from './dao/cloud-envvar.dao'
 import { CloudTemplateDao } from './dao/cloud-template.dao'
 import { CloudUsageDao } from './dao/cloud-usage.dao'
 import { ConnectorDao } from './dao/connector.dao'
+import { ContentFeedDao } from './dao/content-feed.dao'
 import { EntitlementDao } from './dao/entitlement.dao'
 import { FriendshipDao } from './dao/friendship.dao'
 import { InviteCodeDao } from './dao/invite-code.dao'
@@ -72,6 +73,7 @@ import { CommerceFulfillmentService } from './services/commerce-fulfillment.serv
 import { CommerceOfferService } from './services/commerce-offer.service'
 import { CommunityAssetService } from './services/community-asset.service'
 import { ConnectorService } from './services/connector.service'
+import { ContentFeedService } from './services/content-feed.service'
 import { DiyCloudRunService } from './services/diy-cloud-run.service'
 import { EconomyAuditService } from './services/economy-audit.service'
 import { EconomyIdempotencyService } from './services/economy-idempotency.service'
@@ -217,11 +219,13 @@ export interface Cradle {
   cloudActivityDao: CloudActivityDao
   cloudUsageDao: CloudUsageDao
   connectorDao: ConnectorDao
+  contentFeedDao: ContentFeedDao
   // Cloud Service
   cloudService: CloudService
   cloudUsageService: CloudUsageService
   diyCloudRunService: DiyCloudRunService
   connectorService: ConnectorService
+  contentFeedService: ContentFeedService
 
   // Profile Comment DAOs
   profileCommentDao: ProfileCommentDao
@@ -385,6 +389,7 @@ export function createAppContainer(db: Database): AppContainer {
     cloudActivityDao: asClass(CloudActivityDao).singleton(),
     cloudUsageDao: asClass(CloudUsageDao).singleton(),
     connectorDao: asClass(ConnectorDao).singleton(),
+    contentFeedDao: asClass(ContentFeedDao).singleton(),
     // Profile Comment DAOs
     profileCommentDao: asClass(ProfileCommentDao).singleton(),
 
@@ -456,6 +461,7 @@ export function createAppContainer(db: Database): AppContainer {
     cloudUsageService: asClass(CloudUsageService).singleton(),
     diyCloudRunService: asClass(DiyCloudRunService).singleton(),
     connectorService: asClass(ConnectorService).singleton(),
+    contentFeedService: asClass(ContentFeedService).singleton(),
     membershipService: asClass(MembershipService).singleton(),
     greetingService: asClass(GreetingService).singleton(),
     playLaunchService: asClass(PlayLaunchService).singleton(),

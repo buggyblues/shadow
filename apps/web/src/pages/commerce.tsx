@@ -2427,7 +2427,7 @@ export function PersonalShopPage({
                             type="file"
                             accept={
                               deliveryPreset === 'desktop_pet_pack'
-                                ? '.zip,.shadowpet,.shadowpet.zip,application/zip,application/x-zip-compressed'
+                                ? '.zip,application/zip,application/x-zip-compressed'
                                 : undefined
                             }
                             disabled={paidFileUploading || !paidFileServerId}

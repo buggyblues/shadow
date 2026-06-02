@@ -508,6 +508,30 @@ const discoverRoute = createRoute({
   component: DiscoverPage,
 })
 
+const discoverBrowseRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/discover/browse',
+  component: DiscoverPage,
+})
+
+const discoverExploreRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/discover/explore',
+  component: DiscoverPage,
+})
+
+const discoverMarketRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/discover/market',
+  component: DiscoverPage,
+})
+
+const discoverCloudRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/discover/cloud',
+  component: DiscoverPage,
+})
+
 const marketplaceRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/marketplace',
@@ -674,6 +698,10 @@ const routeTree = rootRoute.addChildren([
     settingsDmRoute,
     buddyMgmtRoute,
     discoverRoute,
+    discoverBrowseRoute,
+    discoverExploreRoute,
+    discoverMarketRoute,
+    discoverCloudRoute,
     marketplaceRoute,
     myRentalsRoute,
     contractDetailRoute,

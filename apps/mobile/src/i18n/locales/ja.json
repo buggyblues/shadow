@@ -47,6 +47,9 @@
     "docs": "ドキュメント",
     "login": "ログイン",
     "launch": "スタート！",
+    "home": "ホーム",
+    "notifications": "通知",
+    "subscriptions": "購読",
     "servers": "サーバー",
     "community": "コミュニティ",
     "me": "マイ"
@@ -407,6 +410,40 @@
     "byLastMessage": "最新メッセージ",
     "byLastAccessed": "アクセス日時"
   },
+  "contentFeed": {
+    "title": "購読",
+    "empty": "購読コンテンツはありません",
+    "emptyDesc": "チャンネルを購読すると、添付ファイル付きメッセージや Server App カードがここに表示されます。",
+    "markAllRead": "すべて既読にする",
+    "open": "開く",
+    "card": "アプリカード",
+    "voice": "音声",
+    "image": "画像",
+    "html": "HTML",
+    "pdf": "PDF",
+    "file": "ファイル",
+    "source": "{{server}} / {{channel}}",
+    "attachment": "添付",
+    "like": "いいね",
+    "comment": "コメント",
+    "save": "保存",
+    "share": "リポスト",
+    "sendComment": "送信",
+    "commentPlaceholder": "コメントを書く",
+    "placeholderImage": "画像を作成しました",
+    "placeholderVideo": "動画を作成しました",
+    "placeholderAudio": "音声を作成しました",
+    "placeholderHtml": "Webページを作成しました",
+    "placeholderMarkdown": "Markdown記事を作成しました",
+    "placeholderPdf": "PDFを作成しました",
+    "placeholderApp": "アプリカードを公開しました",
+    "placeholderFile": "ファイルを共有しました",
+    "shareCopied": "リンクをコピーしました",
+    "likeFailed": "いいねを更新できませんでした",
+    "saveFailed": "保存を更新できませんでした",
+    "commentFailed": "コメントを送信できませんでした",
+    "openFailed": "購読コンテンツを開けませんでした"
+  },
   "channel": {
     "serverSettings": "サーバー設定",
     "announcement": "お知らせ",
@@ -427,6 +464,11 @@
     "publicServer": "公開サーバー",
     "publicServerDesc": "有効にすると、このサーバーが探索ページに表示されます",
     "editChannel": "チャンネルを編集",
+    "subscribeContent": "チャンネルのコンテンツを購読",
+    "unsubscribeContent": "コンテンツ購読を停止",
+    "contentSubscribed": "チャンネルのコンテンツを購読しました",
+    "contentUnsubscribed": "チャンネルのコンテンツ購読を停止しました",
+    "contentSubscriptionFailed": "コンテンツ購読の操作に失敗しました",
     "copyChannelLink": "チャンネルリンクをコピー",
     "linkCopied": "チャンネルリンクをコピーしました",
     "deleteChannel": "チャンネルを削除",
@@ -1088,7 +1130,11 @@
     "views": {
       "all": "すべて",
       "joined": "参加済み",
-      "open": "参加可能"
+      "open": "参加可能",
+      "browse": "閲覧",
+      "explore": "探索",
+      "market": "マーケット",
+      "cloud": "クラウド"
     },
     "metrics": {
       "publicCommunities": "公開サーバー",
@@ -1117,6 +1163,11 @@
     },
     "businessTitle": "今日は何を探しますか？",
     "businessSubtitle": "Buddy を見つけ、サービスやコンテンツを買い、ショップを見て、楽しいサーバーに参加できます。",
+    "mobile": {
+      "eyebrow": "発見",
+      "title": "Shadow を探索",
+      "subtitle": "プレイ、サーバー、Cloud テンプレートを探せます。購入したいときはマーケットへ。"
+    },
     "supermarket": {
       "eyebrow": "コンテンツスーパー",
       "title": "Shadow の中身をスーパーの売り場のように探す",
@@ -1208,7 +1259,7 @@
     "marketAisles": {
       "desktopPets": {
         "title": "デスクトップペット素材",
-        "subtitle": "スキン、アクションフレーム、音声、インポート可能な素材パック。"
+        "subtitle": "Codex ペットパッケージ、状態アトラス、音声、インポート可能なペット。"
       },
       "gameAssets": {
         "title": "ゲーム素材",

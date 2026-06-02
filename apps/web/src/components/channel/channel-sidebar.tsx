@@ -34,6 +34,7 @@ import {
   PawPrint,
   PhoneOff,
   Plus,
+  Rss,
   Settings,
   ShieldCheck,
   Trash2,
@@ -49,6 +50,7 @@ import { type VoiceParticipant, type VoiceState } from '../../hooks/use-voice-ch
 import { fetchApi } from '../../lib/api'
 import { scheduleIdleAfterNextPaint } from '../../lib/schedule'
 import { joinChannel } from '../../lib/socket'
+import { showToast } from '../../lib/toast'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
@@ -72,6 +74,13 @@ interface Channel {
   createdAt?: string
   updatedAt?: string
   lastMessageAt?: string | null
+}
+
+interface ContentSubscription {
+  id: string
+  channelId: string
+  status: 'active' | 'paused'
+  isDefault?: boolean
 }
 
 interface Server {
@@ -491,6 +500,24 @@ export function ChannelSidebar({
     staleTime: 60_000,
   })
 
+  const { data: contentSubscriptions = [] } = useQuery({
+    queryKey: ['content-subscriptions', server?.id],
+    queryFn: () =>
+      fetchApi<ContentSubscription[]>(
+        `/api/content-subscriptions?serverId=${encodeURIComponent(server!.id)}`,
+      ),
+    enabled: loadNotifications && !!server?.id,
+    staleTime: 30_000,
+  })
+
+  const contentSubscriptionByChannel = useMemo(() => {
+    const map = new Map<string, ContentSubscription>()
+    for (const subscription of contentSubscriptions) {
+      if (subscription.status === 'active') map.set(subscription.channelId, subscription)
+    }
+    return map
+  }, [contentSubscriptions])
+
   const updateNotificationPreference = useMutation({
     mutationFn: (payload: Partial<NotificationPreference>) =>
       fetchApi<NotificationPreference>('/api/notifications/preferences', {
@@ -502,6 +529,41 @@ export function ChannelSidebar({
       queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+
+  const toggleContentSubscription = useMutation<
+    unknown,
+    Error,
+    { channel: Channel; subscription?: ContentSubscription }
+  >({
+    mutationFn: ({
+      channel,
+      subscription,
+    }: {
+      channel: Channel
+      subscription?: ContentSubscription
+    }) =>
+      subscription
+        ? fetchApi<{ ok: true }>(`/api/content-subscriptions/${subscription.id}`, {
+            method: 'DELETE',
+          })
+        : fetchApi<ContentSubscription>(`/api/channels/${channel.id}/content-subscription`, {
+            method: 'POST',
+          }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['content-subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: ['content-feed'] })
+      showToast(
+        variables.subscription ? t('channel.contentUnsubscribed') : t('channel.contentSubscribed'),
+        'success',
+      )
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error ? error.message : t('channel.contentSubscriptionFailed'),
+        'error',
+      )
     },
   })
 
@@ -1260,6 +1322,10 @@ export function ChannelSidebar({
     }))
   }
 
+  const contextContentSubscription = contextMenu
+    ? contentSubscriptionByChannel.get(contextMenu.channel.id)
+    : undefined
+
   return (
     <GlassPanel className="w-full h-full overflow-hidden flex flex-col shrink-0 relative z-20">
       {/* Server name header — glassmorphic bar */}
@@ -2004,6 +2070,19 @@ export function ChannelSidebar({
             },
             {
               items: [
+                {
+                  icon: Rss,
+                  label: contextContentSubscription
+                    ? t('channel.unsubscribeContent')
+                    : t('channel.subscribeContent'),
+                  disabled: toggleContentSubscription.isPending,
+                  onClick: () => {
+                    toggleContentSubscription.mutate({
+                      channel: contextMenu.channel,
+                      subscription: contextContentSubscription,
+                    })
+                  },
+                },
                 {
                   icon: Volume2,
                   label: (notificationPreference?.mutedChannelIds ?? []).includes(

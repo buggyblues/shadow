@@ -6,6 +6,7 @@ import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deploy
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
   createThreadSchema,
+  ensureThreadSchema,
   interactiveActionSchema,
   reactionSchema,
   sendMessageSchema,
@@ -145,6 +146,18 @@ export function createMessageHandler(container: AppContainer) {
     const result = await getMessageAccess(container, id, user.userId)
     if (!result.ok) return c.json({ ok: false, error: result.error }, result.status)
     return c.json(result.message)
+  })
+
+  // POST /api/messages/:id/thread — ensure the canonical chat thread for a source message.
+  messageHandler.post('/messages/:id/thread', async (c) => {
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const parsedInput = ensureThreadSchema.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsedInput.success) return c.json({ ok: false, error: 'Invalid request body' }, 400)
+    const result = await getMessageAccess(container, id, user.userId)
+    if (!result.ok) return c.json({ ok: false, error: result.error }, result.status)
+    const messageService = container.resolve('messageService')
+    return c.json(await messageService.ensureThreadForMessage(id, user.userId, parsedInput.data))
   })
 
   // GET /api/channels/:channelId/messages
@@ -604,14 +617,16 @@ export function createMessageHandler(container: AppContainer) {
     try {
       const io = container.resolve('io')
       io.to(`thread:${id}`).emit('message:new', message)
+      io.to(`channel:${thread.channelId}`).emit('message:new', message)
     } catch {
       /* io not yet registered */
     }
 
     try {
-      if (preparedInput.replyToId) {
+      const notificationTargetMessageId = preparedInput.replyToId ?? thread.parentMessageId
+      if (notificationTargetMessageId) {
         const notificationTriggerService = container.resolve('notificationTriggerService')
-        const originalMessage = await messageService.getById(preparedInput.replyToId)
+        const originalMessage = await messageService.getById(notificationTargetMessageId)
         if (
           originalMessage &&
           originalMessage.authorId !== user.userId &&

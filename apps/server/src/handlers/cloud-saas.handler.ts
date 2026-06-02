@@ -1474,7 +1474,9 @@ function objectBackupKey(deploymentId: string, agentId: string, stamp: string) {
     .toLowerCase()
     .replace(/[^a-z0-9.-]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  return `backups/cloud/${deploymentId}/${safeAgent}/${stamp}.tar.gz`
+  const agentSegment =
+    safeAgent || `agent-${createHash('sha256').update(agentId).digest('hex').slice(0, 12)}`
+  return `backups/cloud/${deploymentId}/${agentSegment}/${stamp}.tar.gz`
 }
 
 function resolveObjectBackupEncryptionKey(): Buffer | null {

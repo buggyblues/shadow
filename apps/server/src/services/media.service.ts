@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { extname } from 'node:path'
 import { Readable } from 'node:stream'
-import { lookup } from 'mime-types'
+import { lookup, extension as mimeExtension } from 'mime-types'
 import type { Logger } from 'pino'
 import type { MessageDao } from '../dao/message.dao'
 import type { ActorInput } from '../security/actor'
@@ -106,9 +106,42 @@ function canTransformImage(contentType: string): boolean {
   return /^image\/(?:png|jpe?g|webp|avif)$/i.test(contentType)
 }
 
-function contentDisposition(disposition: MediaDisposition, filename?: string) {
-  const safeName = filename?.replace(/["\r\n]/g, '_')
-  return safeName ? `${disposition}; filename="${safeName}"` : disposition
+const SAFE_OBJECT_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*[A-Za-z0-9]$|^[A-Za-z0-9]$/
+const SAFE_EXTENSION_RE = /^\.[a-z0-9]{1,16}$/
+
+export function buildContentDispositionHeader(disposition: MediaDisposition, filename?: string) {
+  if (!filename) return disposition
+  const safeName = filename.replace(/[\0"\\/\r\n]/g, '_')
+  const fallbackName = safeName
+    .replace(/[^\x20-\x7E]/g, '_')
+    .replace(/[;]/g, '_')
+    .trim()
+  const asciiName = fallbackName || `download${safeStorageExtension(safeName)}`
+  return `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`
+}
+
+function safeStorageExtension(filename: string, contentType?: string): string {
+  const rawExt = extname(filename).toLowerCase()
+  if (SAFE_EXTENSION_RE.test(rawExt)) return rawExt
+
+  const mediaType = contentType?.split(';', 1)[0]?.trim().toLowerCase()
+  const inferred = mediaType ? mimeExtension(mediaType) : false
+  if (typeof inferred === 'string' && /^[a-z0-9]{1,16}$/.test(inferred)) return `.${inferred}`
+  return ''
+}
+
+function normalizeWritableObjectKey(key: string): string {
+  const normalizedKey = key.replace(/^\/+/, '')
+  const segments = normalizedKey.split('/')
+  if (
+    !normalizedKey ||
+    normalizedKey.includes('..') ||
+    segments.some((segment) => !segment || segment === '.' || segment === '..') ||
+    !SAFE_OBJECT_KEY_RE.test(normalizedKey)
+  ) {
+    throw Object.assign(new Error('Invalid object key'), { status: 400 })
+  }
+  return normalizedKey
 }
 
 function mediaVariantObjectKey(sourceKey: string, variant: MediaVariant): string {
@@ -202,7 +235,7 @@ export class MediaService {
     }
 
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
-    const ext = extname(filename) || ''
+    const ext = safeStorageExtension(filename, contentType)
     const prefix = options?.kind === 'voice' ? 'voice' : 'uploads'
     const key = `${prefix}/${randomUUID()}${ext}`
 
@@ -232,10 +265,7 @@ export class MediaService {
     if (!this.minioClient) {
       throw Object.assign(new Error('File storage not available'), { status: 503 })
     }
-    const normalizedKey = key.replace(/^\/+/, '')
-    if (!normalizedKey || normalizedKey.includes('..')) {
-      throw Object.assign(new Error('Invalid object key'), { status: 400 })
-    }
+    const normalizedKey = normalizeWritableObjectKey(key)
 
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     await this.minioClient.putObject(bucketName, normalizedKey, file, file.length, {
@@ -516,7 +546,7 @@ export class MediaService {
     const headers: Record<string, string> = {
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'private, max-age=300',
-      'Content-Disposition': contentDisposition(payload.disposition, payload.filename),
+      'Content-Disposition': buildContentDispositionHeader(payload.disposition, payload.filename),
       'Content-Length': String(range ? range.end - range.start + 1 : size),
       'Content-Type': payload.contentType || 'application/octet-stream',
       'X-Content-Type-Options': 'nosniff',

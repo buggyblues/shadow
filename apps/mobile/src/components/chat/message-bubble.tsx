@@ -807,7 +807,14 @@ function MessageBubbleInner({
   const buildLocalFileUri = useCallback((filename: string) => {
     const extMatch = filename.match(/\.[A-Za-z0-9]+$/)
     const ext = extMatch?.[0] ?? ''
-    const safeBase = filename.replace(/\.[A-Za-z0-9]+$/, '').replace(/[/\\?#%:*"<>|\s]/g, '_')
+    const safeBase = filename
+      .replace(/\.[A-Za-z0-9]+$/, '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9._-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^[._-]+|[._-]+$/g, '')
+      .slice(0, 80)
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     return `${FileSystem.cacheDirectory}${safeBase || 'file'}-${unique}${ext}`
   }, [])

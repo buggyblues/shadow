@@ -3,6 +3,7 @@ import { getCookie, setCookie } from 'hono/cookie'
 import { lookup } from 'mime-types'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { buildContentDispositionHeader } from '../services/media.service'
 
 export function createPaidFileHandler(container: AppContainer) {
   const h = new Hono()
@@ -50,7 +51,7 @@ export function createPaidFileHandler(container: AppContainer) {
     const contentType = result.file.mime || lookup(result.file.name) || 'application/octet-stream'
     const headers: Record<string, string> = {
       'Cache-Control': 'private, no-store',
-      'Content-Disposition': `inline; filename="${encodeURIComponent(result.file.name)}"`,
+      'Content-Disposition': buildContentDispositionHeader('inline', result.file.name),
       'Content-Type': String(contentType),
       'X-Content-Type-Options': 'nosniff',
     }
