@@ -15,6 +15,7 @@ import type {
   UpdateThreadInput,
 } from '../validators/message.schema'
 import { parseBuddyInboxAgentId } from './buddy-inbox-protocol'
+import type { ContentFeedService } from './content-feed.service'
 import type { VoiceMessageService } from './voice-message.service'
 import type { WorkspaceService } from './workspace.service'
 
@@ -106,6 +107,7 @@ export class MessageService {
       agentDashboardDao: AgentDashboardDao
       workspaceService?: WorkspaceService
       voiceMessageService?: VoiceMessageService
+      contentFeedService?: ContentFeedService
       io?: SocketIOServer
       logger?: Logger
     },
@@ -403,6 +405,11 @@ export class MessageService {
     const [enrichedResponseMessage] =
       (await this.deps.voiceMessageService?.enrichMessagesForViewer([responseMessage], authorId)) ??
       []
+
+    this.deps.contentFeedService?.indexMessage(message.id).catch((err) => {
+      this.deps.logger?.warn?.({ err, messageId: message.id }, 'Failed to index content feed item')
+    })
+
     return enrichedResponseMessage ?? responseMessage
   }
 
@@ -596,6 +603,37 @@ export class MessageService {
       parentMessageId: input.parentMessageId,
       creatorId: userId,
     })
+  }
+
+  async ensureThreadForMessage(
+    parentMessageId: string,
+    userId: string,
+    input: { name?: string } = {},
+  ) {
+    const message = await this.deps.messageDao.findById(parentMessageId)
+    if (!message) {
+      throw Object.assign(new Error('Parent message not found'), { status: 404 })
+    }
+    if (message.threadId) {
+      throw Object.assign(new Error('Cannot create a thread from a thread message'), {
+        status: 400,
+      })
+    }
+
+    const thread =
+      (await this.deps.messageDao.findThreadByParentMessageId(parentMessageId)) ??
+      (await this.deps.messageDao.createThread({
+        name: input.name?.trim().slice(0, 100) || 'Thread',
+        channelId: message.channelId,
+        parentMessageId,
+        creatorId: userId,
+      }))
+
+    if (!thread) {
+      throw Object.assign(new Error('Failed to create thread'), { status: 500 })
+    }
+    await this.deps.messageDao.moveRepliesToThread(parentMessageId, thread.id)
+    return thread
   }
 
   async getThreadsByChannelId(channelId: string) {

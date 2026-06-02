@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { buildContentDispositionHeader } from '../services/media.service'
 import {
   batchChildrenSchema,
   createFileSchema,
@@ -674,7 +675,10 @@ export function createWorkspaceHandler(container: AppContainer) {
     return new Response(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(workspace.name || 'workspace')}.zip"`,
+        'Content-Disposition': buildContentDispositionHeader(
+          'attachment',
+          `${workspace.name || 'workspace'}.zip`,
+        ),
       },
     })
   })
@@ -735,7 +739,7 @@ export function createWorkspaceHandler(container: AppContainer) {
     return new Response(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(folder.name)}.zip"`,
+        'Content-Disposition': buildContentDispositionHeader('attachment', `${folder.name}.zip`),
       },
     })
   })

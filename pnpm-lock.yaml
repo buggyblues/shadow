@@ -982,6 +982,9 @@ importers:
       lucide-react:
         specifier: ^0.513.0
         version: 0.513.0(react@19.2.5)
+      pdfjs-dist:
+        specifier: 5.7.284
+        version: 5.7.284
       pinyin-pro:
         specifier: ^3.28.1
         version: 3.28.1

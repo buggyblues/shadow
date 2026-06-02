@@ -47,6 +47,9 @@
     "docs": "문서",
     "login": "로그인",
     "launch": "시작!",
+    "home": "홈",
+    "notifications": "알림",
+    "subscriptions": "구독",
     "servers": "서버",
     "community": "커뮤니티",
     "me": "나"
@@ -407,6 +410,40 @@
     "byLastMessage": "최근 메시지",
     "byLastAccessed": "접근 시간"
   },
+  "contentFeed": {
+    "title": "구독",
+    "empty": "구독 콘텐츠가 없습니다",
+    "emptyDesc": "채널을 구독하면 첨부 파일이 있는 메시지와 Server App 카드가 여기에 표시됩니다.",
+    "markAllRead": "모두 읽음",
+    "open": "열기",
+    "card": "앱 카드",
+    "voice": "음성",
+    "image": "이미지",
+    "html": "HTML",
+    "pdf": "PDF",
+    "file": "파일",
+    "source": "{{server}} / {{channel}}",
+    "attachment": "첨부 파일",
+    "like": "좋아요",
+    "comment": "댓글",
+    "save": "저장",
+    "share": "리포스트",
+    "sendComment": "보내기",
+    "commentPlaceholder": "댓글 쓰기",
+    "placeholderImage": "이미지 묶음을 만들었습니다",
+    "placeholderVideo": "동영상을 만들었습니다",
+    "placeholderAudio": "오디오를 만들었습니다",
+    "placeholderHtml": "웹페이지를 만들었습니다",
+    "placeholderMarkdown": "Markdown 글을 만들었습니다",
+    "placeholderPdf": "PDF를 만들었습니다",
+    "placeholderApp": "앱 카드를 게시했습니다",
+    "placeholderFile": "파일을 공유했습니다",
+    "shareCopied": "링크를 복사했습니다",
+    "likeFailed": "좋아요를 업데이트하지 못했습니다",
+    "saveFailed": "저장을 업데이트하지 못했습니다",
+    "commentFailed": "댓글을 보내지 못했습니다",
+    "openFailed": "구독 콘텐츠를 열지 못했습니다"
+  },
   "channel": {
     "serverSettings": "서버 설정",
     "announcement": "공지 채널",
@@ -427,6 +464,11 @@
     "publicServer": "공개 서버",
     "publicServerDesc": "활성화하면 이 서버가 탐색 페이지에 표시됩니다",
     "editChannel": "채널 편집",
+    "subscribeContent": "채널 콘텐츠 구독",
+    "unsubscribeContent": "콘텐츠 구독 일시 중지",
+    "contentSubscribed": "채널 콘텐츠를 구독했습니다",
+    "contentUnsubscribed": "채널 콘텐츠 구독을 일시 중지했습니다",
+    "contentSubscriptionFailed": "콘텐츠 구독 작업에 실패했습니다",
     "copyChannelLink": "채널 링크 복사",
     "linkCopied": "채널 링크가 복사되었습니다",
     "deleteChannel": "채널 삭제",
@@ -1088,7 +1130,11 @@
     "views": {
       "all": "전체",
       "joined": "참여 중",
-      "open": "참여 가능"
+      "open": "참여 가능",
+      "browse": "둘러보기",
+      "explore": "탐색",
+      "market": "마켓",
+      "cloud": "클라우드"
     },
     "metrics": {
       "publicCommunities": "공개 서버",
@@ -1117,6 +1163,11 @@
     },
     "businessTitle": "오늘 무엇을 찾아볼까요?",
     "businessSubtitle": "Buddy를 찾고, 서비스와 콘텐츠를 사고, 상점을 둘러보거나 재미있는 서버에 참가하세요.",
+    "mobile": {
+      "eyebrow": "발견",
+      "title": "Shadow 탐색",
+      "subtitle": "플레이, 서버, Cloud 템플릿을 찾고 구매가 필요하면 마켓으로 전환하세요."
+    },
     "supermarket": {
       "eyebrow": "콘텐츠 슈퍼마켓",
       "title": "Shadow 콘텐츠를 슈퍼마켓처럼 둘러보기",
@@ -1208,7 +1259,7 @@
     "marketAisles": {
       "desktopPets": {
         "title": "데스크톱 펫 에셋",
-        "subtitle": "스킨, 액션 프레임, 음성, 가져올 수 있는 소재 팩입니다."
+        "subtitle": "Codex 펫 패키지, 상태 아틀라스, 음성, 가져올 수 있는 펫입니다."
       },
       "gameAssets": {
         "title": "게임 에셋",

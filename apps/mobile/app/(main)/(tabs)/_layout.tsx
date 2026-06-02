@@ -1,5 +1,7 @@
 import { Image } from 'expo-image'
 import { Tabs } from 'expo-router'
+import { Rss } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { TabBellSvg, TabHomeSvg, TabMeSvg } from '../../../src/components/common/cat-svg'
@@ -19,6 +21,7 @@ import {
 } from '../../../src/theme'
 
 export default function TabsLayout() {
+  const { t } = useTranslation()
   const colors = useColors()
   const currentUser = useAuthStore((s) => s.user)
   const theme = useUIStore((s) => s.effectiveTheme)
@@ -75,7 +78,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           headerShown: false,
-          title: '主页',
+          title: t('nav.home'),
           tabBarIcon: ({ color, focused }) => (
             <TabHomeSvg size={iconSize['4xl']} color={color} focused={focused} />
           ),
@@ -84,7 +87,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: '通知',
+          title: t('nav.notifications'),
           tabBarIcon: ({ color, focused }) => {
             const hasUnread = unreadCount > 0
             return (
@@ -127,9 +130,27 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="subscriptions"
+        options={{
+          title: t('nav.subscriptions'),
+          tabBarIcon: ({ color }) => (
+            <View
+              style={{
+                width: size.controlXs,
+                height: size.controlXs,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Rss size={iconSize['2xl']} color={color} strokeWidth={2.5} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
-          title: '我',
+          title: t('nav.me'),
           tabBarIcon: ({ color, focused }) => {
             const uri = currentUser?.avatarUrl ? getImageUrl(currentUser.avatarUrl) : null
             if (uri) {

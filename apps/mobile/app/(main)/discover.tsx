@@ -17,13 +17,12 @@ import {
   ShoppingBag,
   Sparkles,
   Store,
-  Tags,
   Users,
   X,
 } from 'lucide-react-native'
 import { Children, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   BackgroundSurface,
   Badge,
@@ -32,7 +31,7 @@ import {
   EmptyState,
   GlassPanel,
   IconButton,
-  MobileSwipeTabs,
+  MobileTabBar,
   PageScroll,
   TextField,
 } from '../../src/components/ui'
@@ -52,6 +51,18 @@ import {
 } from '../../src/theme'
 
 type HubSection = 'all' | 'plays' | 'buddies' | 'market' | 'shops' | 'cloud' | 'communities'
+type DiscoverView = 'explore' | 'market'
+type DiscoverModuleId = 'plays' | 'communities' | 'cloud' | 'products' | 'buddies' | 'shops'
+
+interface DiscoverViewConfig {
+  id: DiscoverView
+  enabled: boolean
+  modules: DiscoverModuleId[]
+}
+
+interface DiscoverLayoutConfig {
+  views: DiscoverViewConfig[]
+}
 
 interface ServerEntry {
   server: { id: string; name: string; slug: string | null; iconUrl: string | null }
@@ -200,19 +211,82 @@ interface MarketplaceCategoriesResponse {
   total: number
 }
 
-const HUB_SECTIONS: Array<{ key: HubSection; icon: LucideIcon }> = [
-  { key: 'all', icon: Compass },
-  { key: 'plays', icon: Play },
-  { key: 'buddies', icon: Bot },
+interface MarketplaceProductSection {
+  key: string
+  title: string
+  products: HubProduct[]
+}
+
+const DISCOVER_VIEWS: Array<{ key: DiscoverView; icon: LucideIcon }> = [
+  { key: 'explore', icon: Compass },
   { key: 'market', icon: ShoppingBag },
-  { key: 'shops', icon: Store },
-  { key: 'cloud', icon: Cloud },
-  { key: 'communities', icon: Server },
 ]
 
-const CATEGORY_ICON_POOL: LucideIcon[] = [Sparkles, Package, ShoppingBag, Tags, Store]
-const FEATURED_LIMIT = 6
+const DISCOVER_CONFIG_SCHEMA_NAME = 'discover-page'
+const DEFAULT_DISCOVER_LAYOUT: DiscoverLayoutConfig = {
+  views: [
+    { id: 'explore', enabled: true, modules: ['plays', 'communities'] },
+    { id: 'market', enabled: true, modules: ['cloud', 'products', 'buddies', 'shops'] },
+  ],
+}
+const DISCOVER_VIEW_ORDER: DiscoverView[] = ['explore', 'market']
+const DISCOVER_MODULE_BY_VIEW: Record<DiscoverView, DiscoverModuleId[]> = {
+  explore: ['plays', 'communities'],
+  market: ['cloud', 'products', 'buddies', 'shops'],
+}
 const SECTION_PAGE_SIZE = 12
+
+function isDiscoverView(value: unknown): value is DiscoverView {
+  return DISCOVER_VIEW_ORDER.includes(value as DiscoverView)
+}
+
+function isDiscoverModule(value: unknown): value is DiscoverModuleId {
+  return (
+    value === 'plays' ||
+    value === 'communities' ||
+    value === 'cloud' ||
+    value === 'products' ||
+    value === 'buddies' ||
+    value === 'shops'
+  )
+}
+
+function normalizeDiscoverLayout(value: unknown): DiscoverLayoutConfig {
+  const record =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null
+  const inputViews = Array.isArray(record?.views) ? record.views : DEFAULT_DISCOVER_LAYOUT.views
+  const normalized = new Map<DiscoverView, DiscoverViewConfig>()
+
+  for (const item of inputViews) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const view = item as Record<string, unknown>
+    if (!isDiscoverView(view.id)) continue
+    const allowedModules = DISCOVER_MODULE_BY_VIEW[view.id]
+    const modules = Array.isArray(view.modules)
+      ? view.modules.filter(
+          (module): module is DiscoverModuleId =>
+            isDiscoverModule(module) && allowedModules.includes(module),
+        )
+      : allowedModules
+    normalized.set(view.id, {
+      id: view.id,
+      enabled: view.enabled !== false,
+      modules: modules.length ? [...new Set(modules)] : allowedModules,
+    })
+  }
+
+  for (const fallback of DEFAULT_DISCOVER_LAYOUT.views) {
+    if (!normalized.has(fallback.id)) normalized.set(fallback.id, fallback)
+  }
+
+  return {
+    views: DISCOVER_VIEW_ORDER.map((id) => normalized.get(id)).filter(
+      (view): view is DiscoverViewConfig => Boolean(view),
+    ),
+  }
+}
 
 const initialSectionPages: Record<HubSection, number> = {
   all: 1,
@@ -230,15 +304,14 @@ export default function DiscoverScreen() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeSection, setActiveSection] = useState<HubSection>('all')
-  const [selectedMarketplaceTag, setSelectedMarketplaceTag] = useState('')
+  const [activeView, setActiveView] = useState<DiscoverView>('explore')
   const [sectionPages, setSectionPages] = useState<Record<HubSection, number>>(initialSectionPages)
   const normalizedSearch = searchQuery.trim()
   const effectiveSearch = normalizedSearch.length >= 2 ? normalizedSearch : ''
 
   useEffect(() => {
     setSectionPages(initialSectionPages)
-  }, [effectiveSearch, selectedMarketplaceTag])
+  }, [effectiveSearch])
 
   const { data: myServers = [] } = useQuery({
     queryKey: ['servers'],
@@ -254,12 +327,20 @@ export default function DiscoverScreen() {
       ),
   })
 
+  const { data: discoverConfigData } = useQuery({
+    queryKey: ['discover-page-config'],
+    queryFn: () =>
+      fetchApi<{ data: unknown; version: number; publishedAt: string | null }>(
+        `/api/v1/config/${DISCOVER_CONFIG_SCHEMA_NAME}?env=prod`,
+      ),
+    retry: false,
+  })
+
   const { data: marketplaceData, isLoading: isMarketplaceLoading } = useQuery({
-    queryKey: ['discover-marketplace-products', effectiveSearch, selectedMarketplaceTag],
+    queryKey: ['discover-marketplace-products', effectiveSearch],
     queryFn: () => {
       const params = new URLSearchParams({ limit: '72' })
       if (effectiveSearch) params.set('q', effectiveSearch)
-      if (selectedMarketplaceTag) params.set('tag', selectedMarketplaceTag)
       return fetchApi<MarketplaceProductsResponse>(`/api/discover/marketplace/products?${params}`)
     },
   })
@@ -309,10 +390,27 @@ export default function DiscoverScreen() {
     () => buildMarketplaceCategories(marketplaceCategoriesData?.categories, products),
     [marketplaceCategoriesData?.categories, products],
   )
+  const productSections = useMemo(
+    () => buildProductSections(products, marketplaceCategories),
+    [marketplaceCategories, products],
+  )
   const shops = useMemo(() => sortShops(hub.shops), [hub.shops])
   const communities = useMemo(() => sortCommunities(hub.communities), [hub.communities])
   const cloudCards = useMemo(() => sortCloudTemplates(cloudTemplates), [cloudTemplates])
   const isZh = i18n.language.startsWith('zh')
+  const discoverLayout = useMemo(
+    () => normalizeDiscoverLayout(discoverConfigData?.data),
+    [discoverConfigData?.data],
+  )
+  const visibleViews = useMemo(
+    () => discoverLayout.views.filter((view) => view.enabled),
+    [discoverLayout.views],
+  )
+
+  useEffect(() => {
+    if (visibleViews.some((view) => view.id === activeView)) return
+    setActiveView(visibleViews[0]?.id ?? 'explore')
+  }, [activeView, visibleViews])
 
   const joinMutation = useMutation({
     mutationFn: ({ inviteCode }: { inviteCode: string }) =>
@@ -331,30 +429,45 @@ export default function DiscoverScreen() {
     },
   })
 
-  const counts: Record<HubSection, number> = {
-    all:
-      plays.length +
-      buddies.length +
-      products.length +
-      shops.length +
-      cloudCards.length +
-      communities.length,
-    plays: plays.length,
-    buddies: hub.totals.buddies,
-    market: marketplaceData?.total ?? products.length,
-    shops: hub.totals.shops,
-    cloud: cloudCards.length,
-    communities: hub.totals.communities,
-  }
   const isSearching = effectiveSearch.length > 0
-  const empty = counts.all === 0
   const loadingContent = isLoading || isMarketplaceLoading
+  const moduleCounts = useMemo(
+    () => ({
+      plays: plays.length,
+      communities: communities.length,
+      cloud: cloudCards.length,
+      products: products.length,
+      buddies: buddies.length,
+      shops: shops.length,
+    }),
+    [
+      buddies.length,
+      cloudCards.length,
+      communities.length,
+      plays.length,
+      products.length,
+      shops.length,
+    ],
+  )
+  const enabledModuleIds = useMemo(
+    () =>
+      new Set(
+        visibleViews.flatMap((view) =>
+          view.modules.filter((module) => moduleHasContent(module, moduleCounts)),
+        ),
+      ),
+    [moduleCounts, visibleViews],
+  )
+  const activeViewConfig = visibleViews.find((view) => view.id === activeView)
+  const activeViewHasContent = (activeViewConfig?.modules ?? []).some((module) =>
+    enabledModuleIds.has(module),
+  )
 
-  const selectSection = (section: HubSection) => {
-    if (section !== activeSection) {
+  const selectView = (view: DiscoverView) => {
+    if (view !== activeView) {
       animateNextLayout()
-      setActiveSection(section)
-      setSectionPages((current) => ({ ...current, [section]: 1 }))
+      setActiveView(view)
+      setSectionPages(initialSectionPages)
     }
   }
 
@@ -429,25 +542,12 @@ export default function DiscoverScreen() {
     router.push(`/(main)/servers/${community.slug ?? community.id}`)
   }
 
-  const selectMarketplaceTag = (tag: string) => {
-    animateNextLayout()
-    setSelectedMarketplaceTag(tag)
-    selectSection('market')
-  }
+  const sectionItems = <T,>(items: T[], itemSection: HubSection) =>
+    items.slice(0, sectionPages[itemSection] * SECTION_PAGE_SIZE)
 
-  const sectionItems = <T,>(items: T[], itemSection: HubSection, pageSection: HubSection) =>
-    pageSection === 'all'
-      ? items.slice(0, FEATURED_LIMIT)
-      : items.slice(0, sectionPages[itemSection] * SECTION_PAGE_SIZE)
+  const hasMore = (visibleCount: number, totalCount: number) => visibleCount < totalCount
 
-  const hasMore = (
-    pageSection: HubSection,
-    itemSection: HubSection,
-    visibleCount: number,
-    totalCount: number,
-  ) => pageSection === itemSection && visibleCount < totalCount
-
-  const renderSectionContent = (section: HubSection) => {
+  const renderSectionContent = (view: DiscoverView) => {
     if (loadingContent) {
       return (
         <View style={styles.centerContainer}>
@@ -456,7 +556,7 @@ export default function DiscoverScreen() {
       )
     }
 
-    if (empty) {
+    if (!activeViewHasContent) {
       return (
         <GlassPanel style={styles.emptyPanel}>
           <EmptyState
@@ -468,29 +568,23 @@ export default function DiscoverScreen() {
       )
     }
 
-    const shownPlays = sectionItems(plays, 'plays', section)
-    const shownBuddies = sectionItems(buddies, 'buddies', section)
-    const shownProducts = sectionItems(products, 'market', section)
-    const shownShops = sectionItems(shops, 'shops', section)
-    const shownCommunities = sectionItems(communities, 'communities', section)
-    const cloudLimit =
-      section === 'all'
-        ? Math.max(FEATURED_LIMIT - 1, 0)
-        : Math.max(sectionPages.cloud * SECTION_PAGE_SIZE - 1, 0)
+    const shownPlays = sectionItems(plays, 'plays')
+    const shownBuddies = sectionItems(buddies, 'buddies')
+    const shownShops = sectionItems(shops, 'shops')
+    const shownCommunities = sectionItems(communities, 'communities')
+    const cloudLimit = Math.max(sectionPages.cloud * SECTION_PAGE_SIZE - 1, 0)
     const shownCloud = cloudCards.slice(0, cloudLimit)
 
     return (
       <View style={styles.lanes}>
-        {(section === 'all' || section === 'plays') && (
+        {view === 'explore' && enabledModuleIds.has('plays') && (
           <HubLane
             icon={Play}
             title={t('discover.lanes.plays')}
             description={t('discover.laneDescriptions.plays')}
-            action={section === 'all' ? t('discover.viewAll') : undefined}
-            onAction={() => selectSection('plays')}
             empty={t('discover.emptyLane.plays')}
-            hasContent={shownPlays.length > 0}
-            hasMore={hasMore(section, 'plays', shownPlays.length, plays.length)}
+            hasContent
+            hasMore={hasMore(shownPlays.length, plays.length)}
             loadMoreLabel={t('discover.loadMoreItems')}
             onLoadMore={() => loadMore('plays')}
           >
@@ -500,92 +594,14 @@ export default function DiscoverScreen() {
           </HubLane>
         )}
 
-        {(section === 'all' || section === 'buddies') && (
-          <HubLane
-            icon={Bot}
-            title={t('discover.lanes.buddies')}
-            description={t('discover.laneDescriptions.buddies')}
-            action={section === 'all' ? t('discover.viewAll') : undefined}
-            onAction={() => selectSection('buddies')}
-            empty={t('discover.emptyLane.buddies')}
-            hasContent={shownBuddies.length > 0}
-            hasMore={hasMore(section, 'buddies', shownBuddies.length, buddies.length)}
-            loadMoreLabel={t('discover.loadMoreItems')}
-            onLoadMore={() => loadMore('buddies')}
-          >
-            {shownBuddies.map((item) => (
-              <BuddyCard key={item.id} item={item} onOpen={() => openSeller(item.owner)} />
-            ))}
-          </HubLane>
-        )}
-
-        {(section === 'all' || section === 'market') && (
-          <HubLane
-            icon={ShoppingBag}
-            title={t('discover.lanes.market')}
-            description={t('discover.laneDescriptions.market')}
-            action={section === 'all' ? t('discover.viewAll') : undefined}
-            onAction={() => selectSection('market')}
-            empty={t('discover.emptyLane.market')}
-            hasContent={shownProducts.length > 0}
-            hasMore={hasMore(
-              section,
-              'market',
-              shownProducts.length,
-              marketplaceData?.total ?? products.length,
-            )}
-            loadMoreLabel={t('discover.loadMoreItems')}
-            onLoadMore={() => loadMore('market')}
-            before={
-              <>
-                <MarketplaceAisleCards
-                  categories={marketplaceCategories}
-                  selectedTag={selectedMarketplaceTag}
-                  onSelect={selectMarketplaceTag}
-                />
-                <MarketplaceTagChips
-                  categories={marketplaceCategories}
-                  selectedTag={selectedMarketplaceTag}
-                  onSelect={selectMarketplaceTag}
-                />
-              </>
-            }
-          >
-            {shownProducts.map((item) => (
-              <ProductCard key={item.id} item={item} onOpen={() => openProduct(item)} />
-            ))}
-          </HubLane>
-        )}
-
-        {(section === 'all' || section === 'shops') && (
-          <HubLane
-            icon={Store}
-            title={t('discover.lanes.shops')}
-            description={t('discover.laneDescriptions.shops')}
-            action={section === 'all' ? t('discover.viewAll') : undefined}
-            onAction={() => selectSection('shops')}
-            empty={t('discover.emptyLane.shops')}
-            hasContent={shownShops.length > 0}
-            hasMore={hasMore(section, 'shops', shownShops.length, shops.length)}
-            loadMoreLabel={t('discover.loadMoreItems')}
-            onLoadMore={() => loadMore('shops')}
-          >
-            {shownShops.map((shop) => (
-              <ShopCard key={shop.id} shop={shop} onOpen={() => openShop(shop)} />
-            ))}
-          </HubLane>
-        )}
-
-        {(section === 'all' || section === 'cloud') && (
+        {view === 'market' && enabledModuleIds.has('cloud') && (
           <HubLane
             icon={Cloud}
             title={t('discover.lanes.cloud')}
             description={t('discover.laneDescriptions.cloud')}
-            action={section === 'all' ? t('discover.viewAll') : undefined}
-            onAction={() => selectSection('cloud')}
             empty={t('discover.emptyLane.cloud')}
-            hasContent={true}
-            hasMore={hasMore(section, 'cloud', shownCloud.length + 1, cloudCards.length + 1)}
+            hasContent
+            hasMore={hasMore(shownCloud.length + 1, cloudCards.length + 1)}
             loadMoreLabel={t('discover.loadMoreItems')}
             onLoadMore={() => loadMore('cloud')}
           >
@@ -600,16 +616,71 @@ export default function DiscoverScreen() {
           </HubLane>
         )}
 
-        {(section === 'all' || section === 'communities') && (
+        {view === 'market' &&
+          enabledModuleIds.has('products') &&
+          productSections.map((section) => {
+            const shownProducts = sectionItems(section.products, 'market')
+            return (
+              <HubLane
+                key={section.key}
+                icon={ShoppingBag}
+                title={section.key === 'all-products' ? t(section.title) : section.title}
+                description={t('discover.laneDescriptions.market')}
+                empty={t('discover.emptyLane.market')}
+                hasContent
+                hasMore={hasMore(shownProducts.length, section.products.length)}
+                loadMoreLabel={t('discover.loadMoreItems')}
+                onLoadMore={() => loadMore('market')}
+              >
+                {shownProducts.map((item) => (
+                  <ProductCard key={item.id} item={item} onOpen={() => openProduct(item)} />
+                ))}
+              </HubLane>
+            )
+          })}
+
+        {view === 'market' && enabledModuleIds.has('buddies') && (
+          <HubLane
+            icon={Bot}
+            title={t('discover.lanes.buddies')}
+            description={t('discover.laneDescriptions.buddies')}
+            empty={t('discover.emptyLane.buddies')}
+            hasContent
+            hasMore={hasMore(shownBuddies.length, buddies.length)}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('buddies')}
+          >
+            {shownBuddies.map((item) => (
+              <BuddyCard key={item.id} item={item} onOpen={() => openSeller(item.owner)} />
+            ))}
+          </HubLane>
+        )}
+
+        {view === 'market' && enabledModuleIds.has('shops') && (
+          <HubLane
+            icon={Store}
+            title={t('discover.lanes.shops')}
+            description={t('discover.laneDescriptions.shops')}
+            empty={t('discover.emptyLane.shops')}
+            hasContent
+            hasMore={hasMore(shownShops.length, shops.length)}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('shops')}
+          >
+            {shownShops.map((shop) => (
+              <ShopCard key={shop.id} shop={shop} onOpen={() => openShop(shop)} />
+            ))}
+          </HubLane>
+        )}
+
+        {view === 'explore' && enabledModuleIds.has('communities') && (
           <HubLane
             icon={Server}
             title={t('discover.lanes.communities')}
             description={t('discover.laneDescriptions.communities')}
-            action={section === 'all' ? t('discover.viewAll') : undefined}
-            onAction={() => selectSection('communities')}
             empty={t('discover.emptyLane.communities')}
-            hasContent={shownCommunities.length > 0}
-            hasMore={hasMore(section, 'communities', shownCommunities.length, communities.length)}
+            hasContent
+            hasMore={hasMore(shownCommunities.length, communities.length)}
             loadMoreLabel={t('discover.loadMoreItems')}
             onLoadMore={() => loadMore('communities')}
           >
@@ -637,16 +708,16 @@ export default function DiscoverScreen() {
       <PageScroll compact contentContainerStyle={styles.content}>
         <GlassPanel style={styles.hero}>
           <View style={styles.eyebrow}>
-            <ShoppingBag size={iconSize.sm} color={colors.primary} />
+            <Compass size={iconSize.sm} color={colors.primary} />
             <Text style={[styles.eyebrowText, { color: colors.primary }]}>
-              {t('discover.supermarket.eyebrow')}
+              {t('discover.mobile.eyebrow')}
             </Text>
           </View>
           <Text style={[styles.heroTitle, { color: colors.text }]}>
-            {t('discover.supermarket.title')}
+            {t('discover.mobile.title')}
           </Text>
           <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-            {t('discover.supermarket.subtitle')}
+            {t('discover.mobile.subtitle')}
           </Text>
           <TextField
             value={searchQuery}
@@ -670,77 +741,24 @@ export default function DiscoverScreen() {
             }
             style={styles.searchBox}
           />
-          <MarketplaceCategoryChips
-            categories={marketplaceCategories}
-            selectedTag={selectedMarketplaceTag}
-            onSelect={selectMarketplaceTag}
-          />
         </GlassPanel>
 
-        <MobileSwipeTabs
-          value={activeSection}
-          options={HUB_SECTIONS.map((section) => ({
-            value: section.key,
-            label: t(`discover.sections.${section.key}`),
-            icon: section.icon,
-          }))}
-          onChange={selectSection}
+        <MobileTabBar
+          value={activeView}
+          options={visibleViews
+            .map((viewConfig) => DISCOVER_VIEWS.find((view) => view.key === viewConfig.id))
+            .filter((view): view is (typeof DISCOVER_VIEWS)[number] => Boolean(view))
+            .map((view) => ({
+              value: view.key,
+              label: t(`discover.views.${view.key}`),
+              icon: view.icon,
+            }))}
+          onChange={selectView}
           tone="primary"
-          renderPage={(section) => renderSectionContent(section.value)}
         />
+        {renderSectionContent(activeView)}
       </PageScroll>
     </BackgroundSurface>
-  )
-}
-
-function MarketplaceCategoryChips({
-  categories,
-  selectedTag,
-  onSelect,
-}: {
-  categories: MarketplaceCategory[]
-  selectedTag: string
-  onSelect: (tag: string) => void
-}) {
-  const colors = useColors()
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.heroCategories}
-    >
-      {categories.slice(0, 8).map((category, index) => {
-        const Icon = CATEGORY_ICON_POOL[index % CATEGORY_ICON_POOL.length] ?? ShoppingBag
-        const active = selectedTag === category.tag
-        return (
-          <Pressable
-            key={category.tag}
-            onPress={() => {
-              selectionHaptic()
-              onSelect(category.tag)
-            }}
-            style={[
-              styles.heroCategory,
-              {
-                borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? colors.tonePrimarySurface : colors.inputBackground,
-              },
-            ]}
-          >
-            <Icon size={iconSize.sm} color={active ? colors.primary : colors.textMuted} />
-            <Text
-              style={[
-                styles.heroCategoryText,
-                { color: active ? colors.primary : colors.textSecondary },
-              ]}
-              numberOfLines={1}
-            >
-              {category.title}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </ScrollView>
   )
 }
 
@@ -1301,21 +1319,35 @@ function mergeMarketplaceCategories(
   return [...byTag.values()]
 }
 
-function ensureSelectedCategory(categories: MarketplaceCategory[], selectedTag: string) {
-  if (!selectedTag || categories.some((category) => category.tag === selectedTag)) return categories
+function buildProductSections(
+  products: HubProduct[],
+  categories: MarketplaceCategory[],
+): MarketplaceProductSection[] {
+  if (!products.length) return []
+  const productByCategory = categories
+    .map((category) => ({
+      key: `category:${category.tag}`,
+      title: category.title,
+      products: products.filter((product) =>
+        (product.tags ?? []).some((tag) => tag.trim() === category.tag),
+      ),
+    }))
+    .filter((section) => section.products.length > 0)
+    .slice(0, 6)
+
+  if (productByCategory.length) return productByCategory
+
   return [
     {
-      tag: selectedTag,
-      title: selectedTag,
-      productCount: 0,
-      salesCount: 0,
-      ratingCount: 0,
-      avgRating: 0,
-      score: 0,
-      href: `/app/shop/tags/${encodeURIComponent(selectedTag)}`,
+      key: 'all-products',
+      title: 'discover.lanes.market',
+      products,
     },
-    ...categories,
   ]
+}
+
+function moduleHasContent(module: DiscoverModuleId, counts: Record<DiscoverModuleId, number>) {
+  return counts[module] > 0
 }
 
 function getTemplateMeta(template: CloudTemplateSource) {
@@ -1336,129 +1368,6 @@ function formatCompact(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace('.0', '')}M`
   if (value >= 1_000) return `${(value / 1_000).toFixed(1).replace('.0', '')}K`
   return String(value)
-}
-
-function MarketplaceAisleCards({
-  categories,
-  selectedTag,
-  onSelect,
-}: {
-  categories: MarketplaceCategory[]
-  selectedTag: string
-  onSelect: (tag: string) => void
-}) {
-  const { t } = useTranslation()
-  const colors = useColors()
-  const visibleCategories = selectedTag
-    ? ensureSelectedCategory(categories, selectedTag)
-    : categories
-  if (visibleCategories.length === 0) return null
-  return (
-    <View style={styles.aisleCards}>
-      {visibleCategories.slice(0, 6).map((category, index) => {
-        const Icon = CATEGORY_ICON_POOL[index % CATEGORY_ICON_POOL.length] ?? ShoppingBag
-        const active = selectedTag === category.tag
-        return (
-          <Pressable
-            key={category.tag}
-            onPress={() => {
-              selectionHaptic()
-              onSelect(category.tag)
-            }}
-            style={[
-              styles.aisleCard,
-              {
-                borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? colors.tonePrimarySurface : colors.surface,
-              },
-            ]}
-          >
-            <View style={[styles.aisleIcon, { backgroundColor: colors.inputBackground }]}>
-              <Icon size={iconSize.lg} color={colors.primary} />
-            </View>
-            <View style={styles.aisleCopy}>
-              <Text style={[styles.aisleTitle, { color: colors.text }]} numberOfLines={1}>
-                {category.title}
-              </Text>
-              <Text style={[styles.aisleSubtitle, { color: colors.textMuted }]} numberOfLines={2}>
-                {t('discover.supermarket.categoryProductCount', {
-                  count: category.productCount,
-                })}
-              </Text>
-            </View>
-          </Pressable>
-        )
-      })}
-    </View>
-  )
-}
-
-function MarketplaceTagChips({
-  categories,
-  selectedTag,
-  onSelect,
-}: {
-  categories: MarketplaceCategory[]
-  selectedTag: string
-  onSelect: (tag: string) => void
-}) {
-  const { t } = useTranslation()
-  const colors = useColors()
-  const visibleCategories = selectedTag
-    ? ensureSelectedCategory(categories, selectedTag)
-    : categories
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.tagChips}
-    >
-      <Pressable
-        onPress={() => {
-          selectionHaptic()
-          onSelect('')
-        }}
-        style={[
-          styles.tagChip,
-          {
-            borderColor: selectedTag ? colors.border : colors.primary,
-            backgroundColor: selectedTag ? colors.inputBackground : colors.tonePrimarySurface,
-          },
-        ]}
-      >
-        <Text
-          style={[styles.tagChipText, { color: selectedTag ? colors.textMuted : colors.primary }]}
-        >
-          {t('discover.marketTags.all')}
-        </Text>
-      </Pressable>
-      {visibleCategories.map((category) => {
-        const active = selectedTag === category.tag
-        return (
-          <Pressable
-            key={category.tag}
-            onPress={() => {
-              selectionHaptic()
-              onSelect(category.tag)
-            }}
-            style={[
-              styles.tagChip,
-              {
-                borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? colors.tonePrimarySurface : colors.inputBackground,
-              },
-            ]}
-          >
-            <Text
-              style={[styles.tagChipText, { color: active ? colors.primary : colors.textMuted }]}
-            >
-              {category.title}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </ScrollView>
-  )
 }
 
 const styles = StyleSheet.create({
@@ -1575,55 +1484,6 @@ const styles = StyleSheet.create({
   waterfallColumn: {
     flex: 1,
     gap: spacing.sm,
-  },
-  aisleCards: {
-    gap: spacing.sm,
-  },
-  aisleCard: {
-    minHeight: size.listItemLg,
-    borderWidth: border.hairline,
-    borderRadius: radius.lg,
-    padding: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  aisleIcon: {
-    width: size.controlMd,
-    height: size.controlMd,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aisleCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  aisleTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '900',
-  },
-  aisleSubtitle: {
-    marginTop: spacing.xxs,
-    fontSize: fontSize.xs,
-    lineHeight: lineHeight.xs,
-    fontWeight: '700',
-  },
-  tagChips: {
-    gap: spacing.xs,
-    paddingRight: spacing.md,
-  },
-  tagChip: {
-    height: size.controlSm,
-    borderWidth: border.hairline,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tagChipText: {
-    fontSize: fontSize.xs,
-    fontWeight: '900',
   },
   emptyText: {
     fontSize: fontSize.sm,

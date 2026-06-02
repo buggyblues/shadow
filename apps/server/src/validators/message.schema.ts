@@ -298,12 +298,17 @@ export const metadataSchema = z.object({
   interactiveResponse: interactiveResponseSchema.optional(),
   mentions: messageMentionsSchema.optional(),
   cards: z.array(messageCardSchema).max(8).optional(),
+  // Deprecated compatibility input: agents may still send this and the server
+  // rebuilds it into commerceCards. Do not extend it for new card protocols.
   commerceOfferId: z.string().uuid().optional(),
+  // Deprecated compatibility array. New card-like protocols must use cards[].
   commerceCards: z
     .array(z.union([commerceOfferCardSchema, commerceProductCardSchema]))
     .max(3)
     .optional(),
+  // Deprecated compatibility array. New card-like protocols must use cards[].
   paidFileCards: z.array(paidFileCardSchema).max(3).optional(),
+  // Deprecated compatibility array. New card-like protocols must use cards[].
   oauthLinkCards: z.array(oauthLinkCardSchema).max(3).optional(),
   commerceFulfillment: commerceFulfillmentSchema.optional(),
   greeting: greetingSchema.optional(),
@@ -361,6 +366,10 @@ export const updateMessageSchema = z.object({
 export const createThreadSchema = z.object({
   name: z.string().min(1).max(100),
   parentMessageId: z.string().uuid(),
+})
+
+export const ensureThreadSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
 })
 
 export const updateThreadSchema = z.object({

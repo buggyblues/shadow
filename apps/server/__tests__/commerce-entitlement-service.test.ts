@@ -646,7 +646,7 @@ describe('EntitlementPurchaseService', () => {
         productTags: ['paid_file', 'desktop-pet-pack', '虾豆桌面宠物'],
         desktopPetPack: {
           kind: 'desktop_pet_pack',
-          schemaVersion: 'shadow.desktopPet.pack.v1',
+          format: 'codex-pet',
           marketplaceTag: 'desktop-pet-pack',
         },
       }),

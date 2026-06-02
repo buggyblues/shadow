@@ -146,6 +146,10 @@ export interface MessageMetadata {
   mentions?: MessageMentionMetadata[]
   /** Unified extensible message cards. New card-like surfaces should use this field. */
   cards?: MessageCardMetadata[]
+  /**
+   * @deprecated Compatibility-only commerce card array.
+   * New card-like protocols must use `cards`; do not use this field for new product decisions.
+   */
   commerceCards?: Array<Record<string, unknown>>
   /** Custom metadata extensions */
   [key: string]: unknown

@@ -157,8 +157,17 @@ export interface ShadowMessageMetadata {
   interactive?: ShadowInteractiveBlock
   interactiveResponse?: ShadowInteractiveResponse
   interactiveState?: ShadowInteractiveState
+  /** Unified card protocol. New card-like message surfaces must use this field. */
   cards?: ShadowMessageCard[]
+  /**
+   * @deprecated Compatibility-only commerce card array.
+   * New card-like protocols must use `cards`; do not use this field for new product decisions.
+   */
   commerceCards?: Array<ShadowCommerceProductCard | ShadowCommerceOfferCardInput>
+  /**
+   * @deprecated Compatibility-only OAuth link card array.
+   * New card-like protocols must use `cards`; do not use this field for new product decisions.
+   */
   oauthLinkCards?: ShadowOAuthLinkCard[]
   [key: string]: unknown
 }
@@ -261,6 +270,120 @@ export interface ShadowAttachment {
     lastPositionMs: number
     playedCount?: number
   } | null
+}
+
+export type ShadowContentFeedKind = 'image' | 'html' | 'pdf' | 'file' | 'voice' | 'card'
+export type ShadowContentSubscriptionStatus = 'active' | 'paused'
+export type ShadowContentDigestMode = 'realtime' | 'daily' | 'none'
+export type ShadowContentFeedEventState = 'seen' | 'opened' | 'saved' | 'hidden' | 'dismissed'
+export type ShadowContentFeedReadState =
+  | 'unread'
+  | 'seen'
+  | 'opened'
+  | 'saved'
+  | 'hidden'
+  | 'dismissed'
+
+export interface ShadowContentSubscription {
+  id: string
+  userId: string
+  channelId: string
+  serverId: string
+  status: ShadowContentSubscriptionStatus
+  includeKinds: ShadowContentFeedKind[]
+  excludeMimeTypes: string[]
+  minAttachmentSize: number | null
+  maxAttachmentSize: number | null
+  pushEnabled: boolean
+  digestMode: ShadowContentDigestMode
+  lastReadAt: string | null
+  createdAt: string
+  updatedAt: string
+  isDefault?: boolean
+  isCustomRule?: boolean
+  channel?: {
+    id: string
+    name: string
+    type: string
+    isPrivate?: boolean
+    serverId: string | null
+    lastMessageAt?: string | null
+  }
+  server?: {
+    id: string
+    name: string
+    slug?: string | null
+    iconUrl?: string | null
+  }
+}
+
+export interface ShadowContentSubscriptionPreferences {
+  id: string
+  userId: string
+  includeKinds: ShadowContentFeedKind[]
+  pushEnabled: boolean
+  digestMode: ShadowContentDigestMode
+  createdAt: string
+  updatedAt: string
+  isDefault?: boolean
+}
+
+export interface ShadowContentFeedItem {
+  id: string
+  messageId: string
+  channelId: string
+  serverId: string
+  authorId: string
+  title: string
+  summary: string | null
+  contentKinds: ShadowContentFeedKind[]
+  primaryAttachmentId: string | null
+  primaryAttachmentContentType: string | null
+  primaryAttachmentSize: number | null
+  primaryAttachmentDurationMs?: number | null
+  attachmentIds: string[]
+  cardRefs: Record<string, unknown>[]
+  score: number
+  publishedAt: string
+  createdAt: string
+  updatedAt: string
+  readState: ShadowContentFeedReadState
+  event: {
+    state: ShadowContentFeedEventState
+    lastPosition?: Record<string, unknown> | null
+    updatedAt: string
+  } | null
+  channel: {
+    id: string
+    name: string
+    type: string
+    serverId: string | null
+  }
+  server: {
+    id: string
+    name: string
+    slug?: string | null
+    iconUrl?: string | null
+  }
+  author: {
+    id: string
+    username: string
+    displayName?: string | null
+    avatarUrl?: string | null
+    isBot?: boolean
+  }
+  interactions?: {
+    likeCount: number
+    viewerLiked: boolean
+    commentCount: number
+    viewerSaved: boolean
+  }
+}
+
+export interface ShadowContentFeedPage {
+  items: ShadowContentFeedItem[]
+  hasMore: boolean
+  nextCursor: string | null
 }
 
 export interface ShadowSignedMediaUrl {

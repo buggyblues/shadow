@@ -624,6 +624,27 @@
       "when": 1780318800009,
       "tag": "0088_message_search_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1780318800010,
+      "tag": "0089_content_feed",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1780318800011,
+      "tag": "0090_content_subscription_preferences_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1780318800012,
+      "tag": "0091_channel_subscription_rule_customized_guard",
+      "breakpoints": true
     }
   ]
 }

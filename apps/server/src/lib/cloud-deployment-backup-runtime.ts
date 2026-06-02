@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import {
   applyKubernetesManifestAsync,
   createVolumeSnapshotBackupAsync,
@@ -49,7 +49,9 @@ export function objectBackupKey(deploymentId: string, agentId: string, stamp: st
     .toLowerCase()
     .replace(/[^a-z0-9.-]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  return `backups/cloud/${deploymentId}/${safeAgent}/${stamp}.tar.gz`
+  const agentSegment =
+    safeAgent || `agent-${createHash('sha256').update(agentId).digest('hex').slice(0, 12)}`
+  return `backups/cloud/${deploymentId}/${agentSegment}/${stamp}.tar.gz`
 }
 
 function expiresAtFromRetentionDays(retentionDays?: number): Date | null {

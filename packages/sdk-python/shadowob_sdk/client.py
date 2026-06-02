@@ -1202,6 +1202,14 @@ class ShadowClient:
     def list_threads(self, channel_id: str) -> list[dict[str, Any]]:
         return self._get(f"/api/channels/{channel_id}/threads")
 
+    def ensure_message_thread(
+        self, message_id: str, name: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if name:
+            payload["name"] = name
+        return self._post(f"/api/messages/{message_id}/thread", json=payload)
+
     def create_thread(
         self, channel_id: str, name: str, parent_message_id: str
     ) -> dict[str, Any]:
@@ -1332,6 +1340,136 @@ class ShadowClient:
         if user_agent is not None:
             payload["userAgent"] = user_agent
         return self._post("/api/notifications/web-push-subscriptions", json=payload)
+
+    # ── Content subscriptions / feed ────────────────────────────────────
+
+    def list_content_subscriptions(self, *, server_id: str | None = None) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if server_id is not None:
+            params["serverId"] = server_id
+        return self._get("/api/content-subscriptions", params=params or None)
+
+    def get_content_subscription_defaults(self) -> dict[str, Any]:
+        return self._get("/api/content-subscriptions/defaults")
+
+    def update_content_subscription_defaults(
+        self,
+        *,
+        include_kinds: list[str] | None = None,
+        push_enabled: bool | None = None,
+        digest_mode: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if include_kinds is not None:
+            payload["includeKinds"] = include_kinds
+        if push_enabled is not None:
+            payload["pushEnabled"] = push_enabled
+        if digest_mode is not None:
+            payload["digestMode"] = digest_mode
+        return self._patch("/api/content-subscriptions/defaults", json=payload)
+
+    def get_channel_content_subscription(self, channel_id: str) -> dict[str, Any] | None:
+        return self._get(f"/api/channels/{channel_id}/content-subscription")
+
+    def subscribe_channel_content(self, channel_id: str) -> dict[str, Any]:
+        return self._post(f"/api/channels/{channel_id}/content-subscription")
+
+    def update_content_subscription(
+        self,
+        subscription_id: str,
+        *,
+        status: str | None = None,
+        include_kinds: list[str] | None = None,
+        exclude_mime_types: list[str] | None = None,
+        min_attachment_size: int | None = None,
+        max_attachment_size: int | None = None,
+        push_enabled: bool | None = None,
+        digest_mode: str | None = None,
+        last_read_at: str | None = None,
+        reset_rules: bool | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if status is not None:
+            payload["status"] = status
+        if include_kinds is not None:
+            payload["includeKinds"] = include_kinds
+        if exclude_mime_types is not None:
+            payload["excludeMimeTypes"] = exclude_mime_types
+        if min_attachment_size is not None:
+            payload["minAttachmentSize"] = min_attachment_size
+        if max_attachment_size is not None:
+            payload["maxAttachmentSize"] = max_attachment_size
+        if push_enabled is not None:
+            payload["pushEnabled"] = push_enabled
+        if digest_mode is not None:
+            payload["digestMode"] = digest_mode
+        if last_read_at is not None:
+            payload["lastReadAt"] = last_read_at
+        if reset_rules is not None:
+            payload["resetRules"] = reset_rules
+        return self._patch(f"/api/content-subscriptions/{subscription_id}", json=payload)
+
+    def delete_content_subscription(self, subscription_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/content-subscriptions/{subscription_id}")
+
+    def get_content_feed(
+        self,
+        *,
+        cursor: str | None = None,
+        limit: int | None = None,
+        kinds: list[str] | None = None,
+        channel_id: str | None = None,
+        server_id: str | None = None,
+        unread_only: bool | None = None,
+        sort: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if cursor is not None:
+            params["cursor"] = cursor
+        if limit is not None:
+            params["limit"] = limit
+        if kinds:
+            params["kinds"] = ",".join(kinds)
+        if channel_id is not None:
+            params["channelId"] = channel_id
+        if server_id is not None:
+            params["serverId"] = server_id
+        if unread_only is not None:
+            params["unreadOnly"] = "true" if unread_only else "false"
+        if sort is not None:
+            params["sort"] = sort
+        return self._get("/api/content-feed", params=params)
+
+    def record_content_feed_event(
+        self,
+        feed_item_id: str,
+        *,
+        state: str,
+        last_position: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"state": state}
+        if last_position is not None:
+            payload["lastPosition"] = last_position
+        return self._post(f"/api/content-feed/{feed_item_id}/events", json=payload)
+
+    def mark_content_feed_read(
+        self,
+        *,
+        feed_item_id: str | None = None,
+        channel_id: str | None = None,
+        server_id: str | None = None,
+        all: bool | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if feed_item_id is not None:
+            payload["feedItemId"] = feed_item_id
+        if channel_id is not None:
+            payload["channelId"] = channel_id
+        if server_id is not None:
+            payload["serverId"] = server_id
+        if all is not None:
+            payload["all"] = all
+        return self._post("/api/content-feed/read-scope", json=payload)
 
     # ── Search ───────────────────────────────────────────────────────────
 

@@ -29,11 +29,11 @@ downloads without public object URLs.
   "metadata": {
     "desktopPetPack": {
       "kind": "desktop_pet_pack",
-      "schemaVersion": "shadow.desktopPet.pack.v1"
+      "format": "codex-pet"
     }
   },
   "offer": { "id": "offer-id", "status": "active" },
-  "paidFile": { "id": "file-id", "name": "deliverable.html" },
+  "paidFile": { "id": "file-id", "name": "lazy-codex-pet.zip" },
   "buyer": { "id": "buyer-user-id", "username": "buyer" },
   "order": { "id": "order-id", "orderNo": "SH...", "status": "completed" },
   "fulfillmentJobs": []

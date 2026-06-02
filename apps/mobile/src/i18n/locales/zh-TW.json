@@ -47,6 +47,9 @@
     "docs": "文件",
     "login": "登入",
     "launch": "啟動！",
+    "home": "主頁",
+    "notifications": "通知",
+    "subscriptions": "訂閱",
     "servers": "伺服器",
     "community": "社群",
     "me": "我"
@@ -407,6 +410,40 @@
     "byLastMessage": "最新訊息",
     "byLastAccessed": "存取時間"
   },
+  "contentFeed": {
+    "title": "訂閱",
+    "empty": "暫無訂閱內容",
+    "emptyDesc": "訂閱頻道後，帶附件的訊息和 Server App 卡片會出現在這裡。",
+    "markAllRead": "全部標為已讀",
+    "open": "打開",
+    "card": "應用卡片",
+    "voice": "語音",
+    "image": "圖片",
+    "html": "HTML",
+    "pdf": "PDF",
+    "file": "檔案",
+    "source": "{{server}} / {{channel}}",
+    "attachment": "附件",
+    "like": "按讚",
+    "comment": "評論",
+    "save": "收藏",
+    "share": "轉發",
+    "sendComment": "送出",
+    "commentPlaceholder": "寫評論",
+    "placeholderImage": "創作了一組圖片",
+    "placeholderVideo": "創作了一段影片",
+    "placeholderAudio": "創作了一段音訊",
+    "placeholderHtml": "創作了一個網頁",
+    "placeholderMarkdown": "創作了一篇 Markdown",
+    "placeholderPdf": "創作了一份 PDF",
+    "placeholderApp": "發布了一個應用卡片",
+    "placeholderFile": "分享了一個檔案",
+    "shareCopied": "連結已複製",
+    "likeFailed": "按讚更新失敗",
+    "saveFailed": "收藏更新失敗",
+    "commentFailed": "評論送出失敗",
+    "openFailed": "打開訂閱內容失敗"
+  },
   "channel": {
     "serverSettings": "伺服器設定",
     "announcement": "公告頻道",
@@ -427,6 +464,11 @@
     "publicServer": "公開伺服器",
     "publicServerDesc": "開啟後，該伺服器將出現在探索頁面中",
     "editChannel": "編輯頻道",
+    "subscribeContent": "訂閱頻道內容",
+    "unsubscribeContent": "暫停內容訂閱",
+    "contentSubscribed": "已訂閱頻道內容",
+    "contentUnsubscribed": "已暫停頻道內容訂閱",
+    "contentSubscriptionFailed": "訂閱操作失敗",
     "copyChannelLink": "複製頻道連結",
     "linkCopied": "頻道連結已複製",
     "deleteChannel": "刪除頻道",
@@ -1087,7 +1129,11 @@
     "views": {
       "all": "全部",
       "joined": "已加入",
-      "open": "可加入"
+      "open": "可加入",
+      "browse": "瀏覽",
+      "explore": "探索",
+      "market": "市場",
+      "cloud": "雲"
     },
     "metrics": {
       "publicCommunities": "公開伺服器",
@@ -1116,6 +1162,11 @@
     },
     "businessTitle": "今天想找點什麼？",
     "businessSubtitle": "逛 Buddy、買服務和內容、進店鋪，或加入一個好玩的伺服器。",
+    "mobile": {
+      "eyebrow": "發現",
+      "title": "探索 Shadow",
+      "subtitle": "找玩法、伺服器和雲模板；需要購買內容時切到市場。"
+    },
     "supermarket": {
       "eyebrow": "內容超市",
       "title": "像逛超市一樣發現 Shadow 裡的內容",
@@ -1207,7 +1258,7 @@
     "marketAisles": {
       "desktopPets": {
         "title": "桌寵素材",
-        "subtitle": "桌寵皮膚、動作幀、語音和可匯入素材包。"
+        "subtitle": "Codex 寵物包、狀態圖集、語音和可匯入桌寵。"
       },
       "gameAssets": {
         "title": "遊戲素材",
