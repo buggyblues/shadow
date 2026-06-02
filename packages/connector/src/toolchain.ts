@@ -1,17 +1,20 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
+  accessSync,
   chmodSync,
+  constants,
   existsSync,
   mkdirSync,
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { get as httpsGet } from 'node:https'
-import { homedir, platform } from 'node:os'
-import { dirname, resolve } from 'node:path'
+import { homedir, platform, tmpdir } from 'node:os'
+import { dirname, resolve, sep } from 'node:path'
 
 export const CONNECTOR_MANAGED_NODE_VERSION =
   process.env.SHADOW_CONNECTOR_NODE_VERSION?.trim() || '22.16.0'
@@ -38,6 +41,30 @@ export function expandHome(value: string): string {
 export function connectorHome(): string {
   const override = process.env.SHADOW_CONNECTOR_HOME?.trim()
   return override ? expandHome(override) : resolve(homedir(), '.shadowob/connector')
+}
+
+function tempInstallAllowed(): boolean {
+  return process.env.SHADOW_CONNECTOR_ALLOW_TEMP_HOME === '1'
+}
+
+function isPathInside(path: string, parent: string): boolean {
+  const resolvedPath = resolve(path)
+  const resolvedParent = resolve(parent)
+  return resolvedPath === resolvedParent || resolvedPath.startsWith(`${resolvedParent}${sep}`)
+}
+
+function isSystemTempPath(path: string): boolean {
+  return isPathInside(path, tmpdir())
+}
+
+export function assertDurableConnectorHome(): void {
+  const root = connectorHome()
+  if (!isSystemTempPath(root) || tempInstallAllowed()) return
+  throw new Error(
+    `${root} is under a system temporary directory and may be cleaned by the OS. ` +
+      'Use the default ~/.shadowob/connector location, set SHADOW_CONNECTOR_HOME to a durable directory, ' +
+      'or set SHADOW_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
+  )
 }
 
 export function managedNodeRoot(): string {
@@ -171,7 +198,7 @@ export function findCommandOnConnectorPath(
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
   if (command.includes('/') || (process.platform === 'win32' && command.includes('\\'))) {
-    return existsSync(command) ? command : null
+    return isExecutableFile(command) ? command : null
   }
   const extensions =
     process.platform === 'win32'
@@ -180,10 +207,21 @@ export function findCommandOnConnectorPath(
   for (const dir of splitPath(connectorPath(env))) {
     for (const ext of extensions) {
       const candidate = resolve(dir, process.platform === 'win32' ? `${command}${ext}` : command)
-      if (existsSync(candidate)) return candidate
+      if (isExecutableFile(candidate)) return candidate
     }
   }
   return null
+}
+
+function isExecutableFile(path: string): boolean {
+  try {
+    const stat = statSync(path)
+    if (!stat.isFile()) return false
+    if (process.platform !== 'win32') accessSync(path, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function commandExistsOnConnectorPath(command: string, _args = ['--version']): boolean {
@@ -279,6 +317,7 @@ export async function ensureManagedNodeRuntime(options: {
   dryRun: boolean
   log?: (message: string) => void
 }): Promise<{ binDir: string; root: string }> {
+  if (!options.dryRun) assertDurableConnectorHome()
   const root = managedNodeRoot()
   const binDir = managedNodeBinDir()
   const nodeBinary = resolve(binDir, process.platform === 'win32' ? 'node.exe' : 'node')

@@ -11,8 +11,8 @@ import {
 } from 'node:fs'
 import { get as httpGet } from 'node:http'
 import { get as httpsGet } from 'node:https'
-import { homedir } from 'node:os'
-import { dirname, resolve } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { dirname, resolve, sep } from 'node:path'
 import {
   CC_CONNECT_FORK_PACKAGE_VERSION,
   CC_CONNECT_FORK_REF,
@@ -93,6 +93,29 @@ function binaryName(): string {
 
 function cachedBinaryPath(): string {
   return resolve(installRoot(), CC_CONNECT_FORK_SHORT_REF, 'bin', binaryName())
+}
+
+function tempInstallAllowed(): boolean {
+  return process.env.SHADOW_CONNECTOR_ALLOW_TEMP_HOME === '1'
+}
+
+function isPathInside(path: string, parent: string): boolean {
+  const resolvedPath = resolve(path)
+  const resolvedParent = resolve(parent)
+  return resolvedPath === resolvedParent || resolvedPath.startsWith(`${resolvedParent}${sep}`)
+}
+
+function isSystemTempPath(path: string): boolean {
+  return isPathInside(path, tmpdir())
+}
+
+function assertDurableCcConnectPath(path: string): void {
+  if (!isSystemTempPath(path) || tempInstallAllowed()) return
+  throw new Error(
+    `${path} is under a system temporary directory and may be cleaned by the OS. ` +
+      'Use the default ~/.shadowob/connector/cc-connect location, set SHADOW_CC_CONNECT_HOME to a durable directory, ' +
+      'or set SHADOW_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
+  )
 }
 
 function runCommand(command: string, args: string[], options: RunOptions): void {
@@ -330,10 +353,17 @@ export async function ensureCcConnectFork(
     const binaryPath = expandHome(override)
     if (!existsSync(binaryPath))
       throw new Error(`SHADOW_CC_CONNECT_BIN does not exist: ${binaryPath}`)
+    if (!binaryLooksUsable(binaryPath))
+      throw new Error(
+        `SHADOW_CC_CONNECT_BIN is not a usable Shadow cc-connect binary: ${binaryPath}. ` +
+          'Unset SHADOW_CC_CONNECT_BIN to let Shadow install the pinned fork.',
+      )
+    if (!options.dryRun) assertDurableCcConnectPath(binaryPath)
     return { binaryPath, source: 'env' }
   }
 
   const binaryPath = cachedBinaryPath()
+  if (!options.dryRun) assertDurableCcConnectPath(binaryPath)
   if (binaryLooksUsable(binaryPath)) {
     return { binaryPath, source: 'cache' }
   }

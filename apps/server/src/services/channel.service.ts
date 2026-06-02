@@ -137,11 +137,20 @@ export class ChannelService {
     if (input.name) {
       input = { ...input, name: await this.generateUniqueName(channel.serverId, input.name, id) }
     }
-    return this.deps.channelDao.update(id, input)
+    const updated = await this.deps.channelDao.update(id, input)
+    if (!updated) {
+      throw Object.assign(new Error('Channel not found'), { status: 404 })
+    }
+    return updated
   }
 
   async delete(id: string, actor: ActorInput) {
-    await this.deps.policyService.requireChannelManage(actor, id)
+    const channel = await this.deps.policyService.requireChannelManage(actor, id)
+    if (channel.kind !== 'server' || !channel.serverId) {
+      throw Object.assign(new Error('Direct channels cannot be managed through server routes'), {
+        status: 400,
+      })
+    }
     await this.deps.channelDao.delete(id)
   }
 
@@ -226,19 +235,37 @@ export class ChannelService {
   /** Archive a channel */
   async archive(id: string, actor: ActorInput, _reason?: string) {
     const channel = await this.deps.policyService.requireChannelManage(actor, id)
+    if (channel.kind !== 'server' || !channel.serverId) {
+      throw Object.assign(new Error('Direct channels cannot be managed through server routes'), {
+        status: 400,
+      })
+    }
     if (channel.isArchived) {
       throw Object.assign(new Error('Channel is already archived'), { status: 400 })
     }
-    return this.deps.channelDao.archive(id, actorUserId(actor))
+    const archived = await this.deps.channelDao.archive(id, actorUserId(actor))
+    if (!archived) {
+      throw Object.assign(new Error('Channel not found'), { status: 404 })
+    }
+    return archived
   }
 
   /** Unarchive a channel */
   async unarchive(id: string, actor: ActorInput) {
     const channel = await this.deps.policyService.requireChannelManage(actor, id)
+    if (channel.kind !== 'server' || !channel.serverId) {
+      throw Object.assign(new Error('Direct channels cannot be managed through server routes'), {
+        status: 400,
+      })
+    }
     if (!channel.isArchived) {
       throw Object.assign(new Error('Channel is not archived'), { status: 400 })
     }
-    return this.deps.channelDao.unarchive(id)
+    const unarchived = await this.deps.channelDao.unarchive(id)
+    if (!unarchived) {
+      throw Object.assign(new Error('Channel not found'), { status: 404 })
+    }
+    return unarchived
   }
 
   /** Get archived channels for a server */

@@ -2,8 +2,8 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { readFile as readFileAsync, rm } from 'node:fs/promises'
-import { arch, homedir, hostname, platform } from 'node:os'
-import { dirname, resolve } from 'node:path'
+import { arch, homedir, hostname, platform, tmpdir } from 'node:os'
+import { dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseToml } from 'smol-toml'
 import { parse as parseYaml } from 'yaml'
@@ -33,10 +33,12 @@ import {
   sendRuntimeSessionMessage,
 } from './runtime-sessions.js'
 import {
+  assertDurableConnectorHome,
   CONNECTOR_MANAGED_NODE_VERSION,
   commandExistsOnConnectorPath,
   connectorProcessEnv,
   ensureManagedNodeRuntime,
+  findCommandOnConnectorPath,
   managedNodeBinDir,
   nodeGlobalBinDir,
   shellCommandNeedsNpm,
@@ -532,6 +534,28 @@ function expandHome(value: string): string {
   return value.startsWith('~/') ? resolve(homedir(), value.slice(2)) : resolve(value)
 }
 
+function isPathInside(path: string, parent: string): boolean {
+  const resolvedPath = resolve(path)
+  const resolvedParent = resolve(parent)
+  return resolvedPath === resolvedParent || resolvedPath.startsWith(`${resolvedParent}${sep}`)
+}
+
+function isSystemTempPath(path: string): boolean {
+  return isPathInside(path, tmpdir())
+}
+
+function tempHomeAllowed(): boolean {
+  return process.env.SHADOW_CONNECTOR_ALLOW_TEMP_HOME === '1'
+}
+
+function assertDurableHomeForLocalWrites(): void {
+  if (!isSystemTempPath(homedir()) || tempHomeAllowed()) return
+  throw new Error(
+    `${homedir()} is under a system temporary directory and may be cleaned by the OS. ` +
+      'Run the daemon under a user with a durable HOME, or set SHADOW_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
+  )
+}
+
 function readExisting(path: string): string {
   return existsSync(path) ? readFileSync(path, 'utf8') : ''
 }
@@ -644,6 +668,7 @@ function ensureNpxShim(options: {
 
 async function installShadowNpmPackages(options: CliOptions): Promise<void> {
   if (commandExists('shadowob') && commandExists('shadowob-connector')) return
+  if (!options.dryRun) assertDurableConnectorHome()
   if (!commandExists('npm')) {
     await ensureManagedNodeRuntime({
       dryRun: options.dryRun,
@@ -725,6 +750,7 @@ function shadowobSkillTargets(options: CliOptions): string[] {
 }
 
 async function installShadowCliAndSkills(options: CliOptions): Promise<void> {
+  if (!options.dryRun) assertDurableHomeForLocalWrites()
   await installShadowNpmPackages(options)
   ensureNpxShim({
     command: 'shadowob',
@@ -794,6 +820,58 @@ function asObject(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function temporaryHomeChecks(): DiagnosticCheck[] {
+  const checks: DiagnosticCheck[] = []
+  if (isSystemTempPath(homedir())) {
+    checks.push(
+      check(
+        'common',
+        'warn',
+        'Home directory',
+        `${homedir()} is under the system temp directory`,
+        'Run the daemon under a user with a durable HOME, or set SHADOW_CONNECTOR_HOME to ~/.shadowob/connector.',
+      ),
+    )
+  }
+
+  const connectorHomeOverride = process.env.SHADOW_CONNECTOR_HOME?.trim()
+  if (connectorHomeOverride) {
+    const path = expandHome(connectorHomeOverride)
+    if (isSystemTempPath(path)) {
+      checks.push(
+        check(
+          'common',
+          'warn',
+          'Connector install home',
+          `SHADOW_CONNECTOR_HOME points to ${path}, which may be cleaned by the OS`,
+          'Unset SHADOW_CONNECTOR_HOME or set it to ~/.shadowob/connector.',
+        ),
+      )
+    }
+  }
+  return checks
+}
+
+function ccConnectTemporaryHomeChecks(): DiagnosticCheck[] {
+  const checks: DiagnosticCheck[] = []
+  const ccConnectHomeOverride = process.env.SHADOW_CC_CONNECT_HOME?.trim()
+  if (ccConnectHomeOverride) {
+    const path = expandHome(ccConnectHomeOverride)
+    if (isSystemTempPath(path)) {
+      checks.push(
+        check(
+          'cc-connect',
+          'warn',
+          'cc-connect install home',
+          `SHADOW_CC_CONNECT_HOME points to ${path}, which may be cleaned by the OS`,
+          'Unset SHADOW_CC_CONNECT_HOME or set it to ~/.shadowob/connector/cc-connect.',
+        ),
+      )
+    }
+  }
+  return checks
+}
+
 function diagnoseCommon(options: CliOptions): DiagnosticCheck[] {
   const checks: DiagnosticCheck[] = [
     check(
@@ -813,6 +891,7 @@ function diagnoseCommon(options: CliOptions): DiagnosticCheck[] {
       'Run fix/update to install the ~/.local/bin/shadowob-connector shim.',
     ),
   ]
+  checks.push(...temporaryHomeChecks())
 
   const profilePath = resolve(homedir(), '.shadowob/shadowob.config.json')
   if (!existsSync(profilePath)) {
@@ -1008,7 +1087,12 @@ function diagnoseHermes(options: CliOptions): DiagnosticCheck[] {
 function diagnoseCcConnect(options: CliOptions): DiagnosticCheck[] {
   const configPath = resolve(homedir(), '.cc-connect/config.toml')
   const binary = getCcConnectBinaryStatus()
+  const binaryFix =
+    binary.source === 'env'
+      ? 'Unset SHADOW_CC_CONNECT_BIN or point it to the pinned Shadow fork outside system temp.'
+      : 'Run fix/update with --install.'
   const checks: DiagnosticCheck[] = [
+    ...ccConnectTemporaryHomeChecks(),
     check(
       'cc-connect',
       binary.usable ? 'ok' : 'warn',
@@ -1016,9 +1100,24 @@ function diagnoseCcConnect(options: CliOptions): DiagnosticCheck[] {
       binary.usable
         ? `${binary.binaryPath} passes version check`
         : `${binary.binaryPath} is missing or does not match the pinned Shadow fork`,
-      'Run fix/update with --install.',
+      binaryFix,
     ),
   ]
+  if (isSystemTempPath(binary.binaryPath)) {
+    checks.push(
+      check(
+        'cc-connect',
+        'warn',
+        'cc-connect binary location',
+        `${binary.binaryPath} is under the system temp directory and may be cleaned by the OS`,
+        binary.source === 'env'
+          ? 'Move the binary to a durable path or unset SHADOW_CC_CONNECT_BIN.'
+          : process.env.SHADOW_CC_CONNECT_HOME?.trim()
+            ? 'Unset SHADOW_CC_CONNECT_HOME or use ~/.shadowob/connector/cc-connect.'
+            : 'Run the daemon under a durable HOME or set SHADOW_CC_CONNECT_HOME to ~/.shadowob/connector/cc-connect.',
+      ),
+    )
+  }
 
   if (!existsSync(configPath)) {
     checks.push(
@@ -1395,15 +1494,32 @@ function packageVersion(): string {
   }
 }
 
+function resolveSpawnCommand(command: string, env: NodeJS.ProcessEnv): string | null {
+  return findCommandOnConnectorPath(command.trim(), env)
+}
+
 function commandVersionWithArgs(
   command: string,
   args: string[] = ['--version'],
 ): Promise<{ ok: boolean; version?: string | null }> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      env: connectorProcessEnv(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const env = connectorProcessEnv()
+    const executable = resolveSpawnCommand(command, env)
+    if (!executable) {
+      resolve({ ok: false })
+      return
+    }
+
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(executable, args, {
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+    } catch {
+      resolve({ ok: false })
+      return
+    }
     let stdout = ''
     let stderr = ''
     let settled = false
@@ -1588,6 +1704,34 @@ async function installRuntime(options: CliOptions): Promise<void> {
   console.log(
     `${runtime.label}: ${detected.status === 'available' ? 'installed' : 'install command completed'}`,
   )
+}
+
+async function ensureDaemonRuntimeAvailable(runtimeId: string, options: CliOptions): Promise<void> {
+  const runtime = connectorRuntimeById(runtimeId)
+  if (!runtime) {
+    throw new Error(
+      `Unsupported runtime "${runtimeId}". Supported runtimes: ${CONNECTOR_RUNTIME_CATALOG.map((item) => item.id).join(', ')}`,
+    )
+  }
+
+  const detected = await detectCatalogRuntime(runtime)
+  if (detected.status === 'available') return
+
+  const commands = connectorRuntimeInstallCommands(runtime.id)
+  if (commands.length === 0) {
+    throw new Error(`Missing ${runtime.label}. Install it first: ${runtime.install.helpUrl}`)
+  }
+
+  console.log(`[daemon] ${runtime.label} is missing; installing runtime`)
+  await installRuntime({ ...options, runtimeId: runtime.id, json: false })
+  if (options.dryRun) return
+
+  const afterInstall = await detectCatalogRuntime(runtime)
+  if (afterInstall.status !== 'available') {
+    throw new Error(
+      `${runtime.label} is still missing after install. Try manually: ${commands.join(' && ')}`,
+    )
+  }
 }
 
 async function printSessionList(options: CliOptions): Promise<void> {
@@ -1828,11 +1972,18 @@ async function startDetached(binaryPath: string, args: string[], dryRun: boolean
     console.log(`[dry-run] start detached ${[binaryPath, ...args].join(' ')}`)
     return
   }
-  const child = spawn(binaryPath, args, {
-    detached: true,
-    env: connectorProcessEnv(),
-    stdio: 'ignore',
-  })
+  let child: ReturnType<typeof spawn>
+  try {
+    child = spawn(binaryPath, args, {
+      detached: true,
+      env: connectorProcessEnv(),
+      stdio: 'ignore',
+    })
+  } catch (error) {
+    throw new Error(
+      `Failed to start ${binaryPath}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
   child.unref()
   await new Promise<void>((resolveStart, rejectStart) => {
     let settled = false
@@ -1894,10 +2045,19 @@ async function startDaemonManagedBridge(
 
   const logs: string[] = []
   const expectedProjects = bridgeOptions.expectedProjects ?? []
-  const child = spawn(binaryPath, args, {
-    env: bridgeOptions.env ?? connectorProcessEnv(),
-    stdio: ['pipe', 'pipe', 'pipe'],
-  })
+  let child: ReturnType<typeof spawn>
+  try {
+    child = spawn(binaryPath, args, {
+      env: bridgeOptions.env ?? connectorProcessEnv(),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+  } catch (error) {
+    throw new Error(
+      `Failed to start ${key} bridge (${binaryPath}): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  }
   daemonBridgeProcesses.set(key, { child, logs })
 
   await new Promise<void>((resolveStart, rejectStart) => {
@@ -2094,6 +2254,8 @@ async function applyDaemonJob(job: DaemonJob, baseOptions: CliOptions): Promise<
   const projectName = payload.projectName?.trim() || payload.buddy?.username || 'shadow-buddy'
   const workDir = resolveDaemonWorkDir(job, baseOptions)
   const modelProvider = daemonModelProviderForRuntime(runtimeId, payload.modelProvider)
+
+  await ensureDaemonRuntimeAvailable(runtimeId, baseOptions)
 
   if (runtimeId === 'openclaw') {
     await applyOpenClaw(
@@ -2494,6 +2656,21 @@ async function applyCcConnect(options: CliOptions): Promise<void> {
   const configBlock = plan.configBlocks.find((block) => block.label === '~/.cc-connect/config.toml')
   if (!configBlock) throw new Error('cc-connect plan is missing config block')
 
+  if (!options.dryRun) {
+    assertDurableHomeForLocalWrites()
+    assertDurableConnectorHome()
+  }
+
+  let binaryPath: string | undefined
+  if (options.install || options.start) {
+    const installed = await ensureCcConnectFork({
+      dryRun: options.dryRun,
+      log: (message) => console.log(message),
+    })
+    binaryPath = installed.binaryPath
+    console.log(`cc-connect binary: ${binaryPath}`)
+  }
+
   await installShadowCliAndSkills(options)
 
   const configPath = resolve(homedir(), '.cc-connect/config.toml')
@@ -2508,16 +2685,6 @@ async function applyCcConnect(options: CliOptions): Promise<void> {
         modelProvider,
       })
   writeFile(configPath, nextConfig, options.dryRun)
-
-  let binaryPath: string | undefined
-  if (options.install || options.start) {
-    const installed = await ensureCcConnectFork({
-      dryRun: options.dryRun,
-      log: (message) => console.log(message),
-    })
-    binaryPath = installed.binaryPath
-    console.log(`cc-connect binary: ${binaryPath}`)
-  }
 
   if (options.start) {
     await releaseCcConnectConfigLock(options.dryRun, binaryPath)

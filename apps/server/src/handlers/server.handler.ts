@@ -263,8 +263,7 @@ export function createServerHandler(container: AppContainer) {
     const serverService = container.resolve('serverService')
     const mediaService = container.resolve('mediaService')
     const id = c.req.param('id')
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-    const resolvedId = isUuid ? id : (await serverService.getBySlug(id)).id
+    const resolvedId = await resolveServerId(id)
     const input = c.req.valid('json')
     const server = await serverService.update(
       resolvedId,
@@ -291,8 +290,7 @@ export function createServerHandler(container: AppContainer) {
   serverHandler.delete('/:id', async (c) => {
     const serverService = container.resolve('serverService')
     const id = c.req.param('id')
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-    const resolvedId = isUuid ? id : (await serverService.getBySlug(id)).id
+    const resolvedId = await resolveServerId(id)
     await serverService.delete(resolvedId, c.get('actor'))
     return c.json({ ok: true })
   })

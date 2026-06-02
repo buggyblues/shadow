@@ -92,6 +92,28 @@ export function createChannelHandler(container: AppContainer) {
     return channel.serverId
   }
 
+  async function emitChannelEventToServerMembers(
+    eventName: 'channel:updated' | 'channel:deleted',
+    channel: { id: string; kind: string; serverId: string | null },
+    payload: Record<string, unknown>,
+  ) {
+    const serverId = requireServerChannel(channel)
+    try {
+      const io = container.resolve('io')
+      const serverDao = container.resolve('serverDao')
+      const members = await serverDao.getMembers(serverId)
+      const event = { ...payload, id: channel.id, serverId }
+      io.to(`channel:${channel.id}`).emit(eventName, event)
+      for (const member of members) {
+        if (!member.user?.isBot) {
+          io.to(`user:${member.userId}`).emit(eventName, event)
+        }
+      }
+    } catch {
+      /* non-critical broadcast failure */
+    }
+  }
+
   async function getAccessStatus(channelId: string, userId: string) {
     const channelService = container.resolve('channelService')
     const channelJoinRequestDao = container.resolve('channelJoinRequestDao')
@@ -831,6 +853,7 @@ export function createChannelHandler(container: AppContainer) {
     const id = c.req.param('id')
     const input = c.req.valid('json')
     const channel = await channelService.update(id, input, c.get('actor'))
+    await emitChannelEventToServerMembers('channel:updated', channel, channel)
     return c.json(channel)
   })
 
@@ -838,7 +861,9 @@ export function createChannelHandler(container: AppContainer) {
   channelHandler.delete('/channels/:id', async (c) => {
     const channelService = container.resolve('channelService')
     const id = c.req.param('id')
+    const channel = await channelService.getById(id)
     await channelService.delete(id, c.get('actor'))
+    await emitChannelEventToServerMembers('channel:deleted', channel, {})
     return c.json({ ok: true })
   })
 
@@ -1200,14 +1225,10 @@ export function createChannelHandler(container: AppContainer) {
   // POST /api/channels/:id/archive — archive a channel
   channelHandler.post('/channels/:id/archive', async (c) => {
     const channelService = container.resolve('channelService')
-    const io = container.resolve('io')
     const id = c.req.param('id')
-    const userId = c.get('user').userId
     const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string })
     const channel = await channelService.archive(id, c.get('actor'), body.reason)
-
-    // Broadcast channel update to all users in the channel
-    io.to(`channel:${id}`).emit('channel:updated', { id, isArchived: true })
+    await emitChannelEventToServerMembers('channel:updated', channel, channel)
 
     return c.json({ ok: true, channel })
   })
@@ -1215,12 +1236,9 @@ export function createChannelHandler(container: AppContainer) {
   // POST /api/channels/:id/unarchive — unarchive a channel
   channelHandler.post('/channels/:id/unarchive', async (c) => {
     const channelService = container.resolve('channelService')
-    const io = container.resolve('io')
     const id = c.req.param('id')
     const channel = await channelService.unarchive(id, c.get('actor'))
-
-    // Broadcast channel update to all users in the channel
-    io.to(`channel:${id}`).emit('channel:updated', { id, isArchived: false })
+    await emitChannelEventToServerMembers('channel:updated', channel, channel)
 
     return c.json({ ok: true, channel })
   })
