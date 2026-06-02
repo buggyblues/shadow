@@ -30,7 +30,6 @@ import {
   Compass,
   Copy,
   Globe,
-  Info,
   Lock,
   LogOut,
   MessageCircle,
@@ -39,6 +38,7 @@ import {
   RefreshCw,
   Search,
   Terminal,
+  Trash2,
   UserPlus,
   Volume2,
 } from 'lucide-react'
@@ -47,7 +47,7 @@ import { useTranslation } from 'react-i18next'
 import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
-import { getLastChannelId, setLastChannelId } from '../../lib/last-channel'
+import { clearLastChannelId, getLastChannelId, setLastChannelId } from '../../lib/last-channel'
 import { scheduleIdleAfterDelay } from '../../lib/schedule'
 import { showToast } from '../../lib/toast'
 import { UnifiedContactSidebar } from '../../pages/friends'
@@ -72,6 +72,7 @@ import {
 import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
+import { InvitePanel } from '../common/invite-panel'
 
 const SERVER_NAVIGATION_STALE_MS = 5 * 60 * 1000
 const SERVER_NAVIGATION_GC_MS = 30 * 60 * 1000
@@ -353,6 +354,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const [isPublic, setIsPublic] = useState(true)
   const [joinCode, setJoinCode] = useState('')
   const [copiedId, setCopiedId] = useState(false)
+  const [inviteServerId, setInviteServerId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -674,9 +676,29 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const leaveServer = useMutation({
     mutationFn: (serverId: string) =>
       fetchApi(`/api/servers/${serverId}/leave`, { method: 'POST' }),
-    onSuccess: () => {
+    onSuccess: (_data, serverId) => {
+      clearLastChannelId(serverId)
       queryClient.invalidateQueries({ queryKey: ['servers'] })
+      queryClient.removeQueries({ queryKey: ['server', serverId] })
+      queryClient.removeQueries({ queryKey: ['channels', serverId] })
       setContextMenu(null)
+      setActiveServer(null)
+      navigate({ to: '/' })
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : t('server.deleteServerFailed'), 'error')
+    },
+  })
+
+  const deleteServer = useMutation({
+    mutationFn: (serverId: string) => fetchApi(`/api/servers/${serverId}`, { method: 'DELETE' }),
+    onSuccess: (_data, serverId) => {
+      clearLastChannelId(serverId)
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+      queryClient.removeQueries({ queryKey: ['server', serverId] })
+      queryClient.removeQueries({ queryKey: ['channels', serverId] })
+      setContextMenu(null)
+      setActiveServer(null)
       navigate({ to: '/' })
     },
   })
@@ -1461,6 +1483,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
           </ModalContent>
         </Modal>
 
+        {inviteServerId && (
+          <InvitePanel
+            serverId={inviteServerId}
+            initialTab="members"
+            onClose={() => setInviteServerId(null)}
+          />
+        )}
+
         {/* Server context menu */}
         {contextMenu && (
           <ContextMenu
@@ -1471,16 +1501,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               {
                 items: [
                   {
-                    icon: Info,
-                    label: t('server.serverInfo'),
-                    onClick: () =>
-                      handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug),
-                  },
-                  {
                     icon: UserPlus,
                     label: t('server.inviteMembers'),
-                    onClick: () =>
-                      handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug),
+                    onClick: () => setInviteServerId(contextMenu.server.server.id),
                   },
                 ],
               },
@@ -1514,6 +1537,28 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   },
                 ],
               },
+              ...(user?.id === contextMenu.server.server.ownerId
+                ? [
+                    {
+                      items: [
+                        {
+                          icon: Trash2,
+                          label: t('server.deleteServer'),
+                          danger: true,
+                          disabled: deleteServer.isPending,
+                          onClick: async () => {
+                            const server = contextMenu.server.server
+                            const ok = await useConfirmStore.getState().confirm({
+                              title: t('server.deleteServer'),
+                              message: t('server.deleteServerConfirm'),
+                            })
+                            if (ok) deleteServer.mutate(server.id)
+                          },
+                        },
+                      ],
+                    },
+                  ]
+                : []),
               ...(user?.id !== contextMenu.server.server.ownerId
                 ? [
                     {

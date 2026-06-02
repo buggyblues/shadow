@@ -416,6 +416,24 @@ export function ChannelSidebar({
         channel.topic?.toLowerCase().includes(keyword),
     )
   }, [channels, searchQuery])
+  const updateChannelInCache = useCallback(
+    (channelId: string, patch: Partial<Channel>) => {
+      queryClient.setQueryData<Channel[]>(['channels', serverSlug], (current) =>
+        current?.map((channel) =>
+          channel.id === channelId ? { ...channel, ...patch, id: channel.id } : channel,
+        ),
+      )
+    },
+    [queryClient, serverSlug],
+  )
+  const removeChannelFromCache = useCallback(
+    (channelId: string) => {
+      queryClient.setQueryData<Channel[]>(['channels', serverSlug], (current) =>
+        current?.filter((channel) => channel.id !== channelId),
+      )
+    },
+    [queryClient, serverSlug],
+  )
   const buddyInboxChannelIds = useMemo(
     () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
     [buddyInboxes],
@@ -701,6 +719,7 @@ export function ChannelSidebar({
         method: 'DELETE',
       }),
     onSuccess: (_data, deletedChannelId) => {
+      removeChannelFromCache(deletedChannelId)
       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
       // If the deleted channel was active, navigate to next available channel
       if (activeChannelId === deletedChannelId) {
@@ -721,21 +740,41 @@ export function ChannelSidebar({
 
   const archiveChannel = useMutation({
     mutationFn: (channelId: string) =>
-      fetchApi(`/api/channels/${channelId}/archive`, {
+      fetchApi<{ channel: Channel }>(`/api/channels/${channelId}/archive`, {
         method: 'POST',
       }),
-    onSuccess: () => {
+    onSuccess: (data, channelId) => {
+      updateChannelInCache(channelId, data.channel)
       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      if (activeChannelId === channelId) {
+        setActiveChannel(null)
+        navigate({
+          to: '/servers/$serverSlug',
+          params: { serverSlug: server?.slug ?? serverSlug },
+        })
+      }
+      showToast(t('channel.archiveSuccess'), 'success')
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : t('channel.archiveChannelFailed'), 'error')
     },
   })
 
   const unarchiveChannel = useMutation({
     mutationFn: (channelId: string) =>
-      fetchApi(`/api/channels/${channelId}/unarchive`, {
+      fetchApi<{ channel: Channel }>(`/api/channels/${channelId}/unarchive`, {
         method: 'POST',
       }),
-    onSuccess: () => {
+    onSuccess: (data, channelId) => {
+      updateChannelInCache(channelId, data.channel)
       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      showToast(t('channel.unarchiveSuccess'), 'success')
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error ? error.message : t('channel.unarchiveChannelFailed'),
+        'error',
+      )
     },
   })
 
@@ -875,6 +914,28 @@ export function ChannelSidebar({
   useSocketEvent('channel:created', (data: { serverId: string }) => {
     if (data.serverId === serverSlug || data.serverId === server?.id) {
       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+    }
+  })
+
+  useSocketEvent<Partial<Channel> & { id: string; serverId?: string }>(
+    'channel:updated',
+    (data) => {
+      if (data.serverId && data.serverId !== serverSlug && data.serverId !== server?.id) return
+      updateChannelInCache(data.id, data)
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+    },
+  )
+
+  useSocketEvent<{ id: string; serverId?: string }>('channel:deleted', (data) => {
+    if (data.serverId && data.serverId !== serverSlug && data.serverId !== server?.id) return
+    removeChannelFromCache(data.id)
+    queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+    if (activeChannelId === data.id) {
+      setActiveChannel(null)
+      navigate({
+        to: '/servers/$serverSlug',
+        params: { serverSlug: server?.slug ?? serverSlug },
+      })
     }
   })
 
@@ -2116,6 +2177,7 @@ export function ChannelSidebar({
                   label: contextMenu.channel.isPrivate
                     ? t('channel.setPublic')
                     : t('channel.setPrivate'),
+                  disabled: updateChannel.isPending,
                   onClick: () => {
                     updateChannel.mutate({
                       channelId: contextMenu.channel.id,
@@ -2142,6 +2204,7 @@ export function ChannelSidebar({
                   label: contextMenu.channel.isArchived
                     ? t('channel.unarchiveChannel', { defaultValue: '取消归档' })
                     : t('channel.archiveChannel', { defaultValue: '归档频道' }),
+                  disabled: archiveChannel.isPending || unarchiveChannel.isPending,
                   onClick: async () => {
                     if (contextMenu.channel.isArchived) {
                       const ok = await useConfirmStore.getState().confirm({
@@ -2170,6 +2233,7 @@ export function ChannelSidebar({
                   icon: Trash2,
                   label: t('channel.deleteChannel'),
                   danger: true,
+                  disabled: deleteChannel.isPending,
                   onClick: async () => {
                     const ok = await useConfirmStore.getState().confirm({
                       title: t('channel.deleteChannel'),
