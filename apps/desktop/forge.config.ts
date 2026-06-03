@@ -1,5 +1,4 @@
-import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { MakerDMG } from '@electron-forge/maker-dmg'
@@ -26,14 +25,7 @@ const productName = 'Shadow'
 const companyName = 'ShadowOB Team'
 const copyright = `Copyright © ${new Date().getFullYear()} ${companyName}`
 const desktopUpdateBaseUrl = process.env.DESKTOP_UPDATE_BASE_URL?.replace(/\/+$/, '')
-const localizedAppNames: Record<string, string> = {
-  en: productName,
-  zh: '虾豆',
-  'zh-Hans': '虾豆',
-  'zh-Hant': '虾豆',
-  zh_CN: '虾豆',
-  zh_TW: '虾豆',
-}
+const dmgBackgroundPath = resolve(__dirname, 'assets', 'dmg-background.png')
 
 const extraResource: string[] = []
 extraResource.push(
@@ -50,6 +42,8 @@ if (isMac) {
     resolve(__dirname, 'assets', 'en.lproj'),
     resolve(__dirname, 'assets', 'zh-Hans.lproj'),
     resolve(__dirname, 'assets', 'zh-Hant.lproj'),
+    resolve(__dirname, 'assets', 'zh_CN.lproj'),
+    resolve(__dirname, 'assets', 'zh_TW.lproj'),
     resolve(__dirname, 'assets', 'zh.lproj'),
   )
 }
@@ -95,55 +89,11 @@ function copyDependencyToBuild(buildPath: string, packageName: string) {
   })
 }
 
-function infoPlistStrings(name: string): Buffer {
-  const content = `CFBundleDisplayName = "${name}";\nCFBundleName = "${name}";\n`
-  return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(content, 'utf16le')])
-}
-
-function setPlistValue(infoPlist: string, key: string, value: string) {
-  try {
-    execFileSync('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, infoPlist])
-  } catch {
-    execFileSync('/usr/libexec/PlistBuddy', ['-c', `Add :${key} string ${value}`, infoPlist])
-  }
-}
-
-function normalizePackagedMacApp(outputPath: string) {
-  const appPath = outputPath.endsWith('.app')
-    ? outputPath
-    : resolve(outputPath, `${productName}.app`)
-  const contentsPath = resolve(appPath, 'Contents')
-  const resourcesPath = resolve(contentsPath, 'Resources')
-  const infoPlist = resolve(contentsPath, 'Info.plist')
-  if (!existsSync(infoPlist)) return
-
-  cpSync(resolve(__dirname, 'assets', 'icon.icns'), resolve(resourcesPath, 'icon.icns'), {
-    force: true,
-  })
-  setPlistValue(infoPlist, 'CFBundleIconFile', 'icon.icns')
-
-  for (const [locale, name] of Object.entries(localizedAppNames)) {
-    const localeDir = resolve(resourcesPath, `${locale}.lproj`)
-    mkdirSync(localeDir, { recursive: true })
-    writeFileSync(resolve(localeDir, 'InfoPlist.strings'), infoPlistStrings(name))
-  }
-
-  // Finder caches bundle metadata aggressively. Touching the bundle helps local
-  // package smoke tests pick up the corrected icon and localized names.
-  execFileSync('/usr/bin/touch', [appPath])
-}
-
 const config: ForgeConfig = {
   hooks: {
     packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {
       copyDependencyToBuild(buildPath, 'sherpa-onnx-node')
       copyDependencyToBuild(buildPath, sherpaNativePackageName(platform, arch))
-    },
-    postPackage: async (_config, packageResult) => {
-      if (packageResult.platform !== 'darwin') return
-      for (const outputPath of packageResult.outputPaths) {
-        normalizePackagedMacApp(outputPath)
-      }
     },
   },
   packagerConfig: {
@@ -169,9 +119,12 @@ const config: ForgeConfig = {
     },
     // Ensure icon is referenced in Info.plist
     extendInfo: {
+      CFBundleDevelopmentRegion: 'en',
       CFBundleDisplayName: productName,
-      CFBundleIconFile: 'icon',
+      CFBundleIconFile: 'icon.icns',
+      CFBundleLocalizations: ['en', 'zh', 'zh-Hans', 'zh-Hant', 'zh_CN', 'zh_TW'],
       CFBundleName: productName,
+      LSHasLocalizedDisplayName: true,
       CFBundleURLTypes: [
         {
           CFBundleURLName: productName,
@@ -239,13 +192,17 @@ const config: ForgeConfig = {
     new MakerDMG(
       {
         format: 'ULFO',
+        background: dmgBackgroundPath,
+        iconSize: 96,
         icon: resolve(__dirname, 'assets', 'icon.icns'),
         name: productName,
         title: productName,
         overwrite: true,
+        contents: (opts) => [
+          { x: 176, y: 242, type: 'file', path: opts.appPath },
+          { x: 388, y: 242, type: 'link', path: '/Applications' },
+        ],
         additionalDMGOptions: {
-          'background-color': '#0B1116',
-          'icon-size': 96,
           window: {
             size: { width: 544, height: 408 },
           },
