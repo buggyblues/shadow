@@ -75,6 +75,18 @@ const plantBombAction = (): DuelAction => ({
   ability: 'bomb',
 })
 
+let activeRandom: () => number = () => Math.random()
+
+export function withHumanDuelRandom<T>(rng: () => number, callback: () => T) {
+  const previous = activeRandom
+  activeRandom = rng
+  try {
+    return callback()
+  } finally {
+    activeRandom = previous
+  }
+}
+
 interface DuelTank {
   id: string
   name: string
@@ -3049,7 +3061,7 @@ function bestOpenNeighborVector(
         tank.stuckFrames >= 8 && dot(vector, heading) > 0.7
           ? Math.min(1.4, tank.stuckFrames * 0.08)
           : 0
-      const stuckJitter = tank.stuckFrames >= 8 ? Math.random() * 0.42 : 0
+      const stuckJitter = tank.stuckFrames >= 8 ? activeRandom() * 0.42 : 0
       return {
         vector,
         score:
@@ -3430,7 +3442,7 @@ function spawnPickup(
       a.position[0] - b.position[0],
   )
   const total = candidates.reduce((sum, candidate) => sum + candidate.weight, 0)
-  let roll = Math.random() * total
+  let roll = activeRandom() * total
   for (const candidate of candidates) {
     roll -= candidate.weight
     if (roll <= 0) return candidate.position

@@ -9,6 +9,7 @@ import {
   resolveDuelScriptActions,
   sanitizeDuelActions,
   stepHumanDuel,
+  withHumanDuelRandom,
 } from './client/human-duel.js'
 import { DEFAULT_TANK_STRATEGY_CODE, DEFAULT_WARBUDDY_RULES, type WarbuddyRules } from './rules.js'
 import type {
@@ -51,8 +52,8 @@ export function runRealtimeBattle(input: RunBattleInput): BattleReplay {
   const challenger = input.challenger
   const defender = input.defender
   const brains = [
-    new DuelScriptBrain(challenger, rules, 0),
-    new DuelScriptBrain(defender, rules, 1),
+    new DuelScriptBrain(challenger, rules, 0, rng),
+    new DuelScriptBrain(defender, rules, 1, rng),
   ] as const
   const runtimeMs: [number, number] = [0, 0]
   const compileEvents = brains.flatMap((brain) => brain.compileEvent())
@@ -70,7 +71,7 @@ export function runRealtimeBattle(input: RunBattleInput): BattleReplay {
   frames.push({ frame: duel.frame, events: compileEvents, state: duel.state })
   events.push(...compileEvents.map((event) => ({ ...event, frame: duel.frame })))
 
-  withSeededRandom(rng, () => {
+  withHumanDuelRandom(rng, () => {
     while (duel.status === 'running' && duel.frame < maxFrames) {
       const before = duel
       const decisions = [0, 1].map((index) =>
@@ -156,6 +157,17 @@ function decideActionsForSide(
   }
 }
 
+function createScriptMath(rng: () => number) {
+  const scriptMath = Object.create(Math) as Math
+  Object.defineProperty(scriptMath, 'random', {
+    value: rng,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  })
+  return scriptMath
+}
+
 class DuelScriptBrain {
   private readonly timeoutMs: number
   private readonly context: vm.Context
@@ -180,10 +192,11 @@ class DuelScriptBrain {
     private readonly profile: RealtimeProfile,
     rules: WarbuddyRules,
     private readonly index: 0 | 1,
+    private readonly rng: () => number,
   ) {
     this.timeoutMs = rules.script.timeoutMs
     this.context = vm.createContext({
-      Math,
+      Math: createScriptMath(this.rng),
       Number,
       String,
       Boolean,
@@ -690,16 +703,6 @@ function chooseMap(mapId: string | undefined, rng: () => number) {
     if (map) return map
   }
   return BATTLE_MAPS[Math.floor(rng() * BATTLE_MAPS.length)] ?? BATTLE_MAPS[0]!
-}
-
-function withSeededRandom<T>(rng: () => number, callback: () => T) {
-  const original = Math.random
-  Math.random = rng
-  try {
-    return callback()
-  } finally {
-    Math.random = original
-  }
 }
 
 function countMotionFrames(frames: BattleFrame[], index: number) {

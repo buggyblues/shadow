@@ -449,6 +449,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${SDK_VERSION}"
+          RELEASE_BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           shopt -s nullglob
@@ -465,12 +466,24 @@ jobs:
           else
             git commit -m "chore(release): packages v${VERSION}"
           fi
+
+          git fetch origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}" --tags
+          if ! git merge-base --is-ancestor "origin/${RELEASE_BRANCH}" HEAD; then
+            git rebase "origin/${RELEASE_BRANCH}"
+          fi
+
           if git rev-parse -q --verify "refs/tags/sdk-v${VERSION}" >/dev/null; then
-            echo "Tag sdk-v${VERSION} already exists."
+            existing_tag_sha="$(git rev-list -n 1 "refs/tags/sdk-v${VERSION}")"
+            head_sha="$(git rev-parse HEAD)"
+            if [ "$existing_tag_sha" != "$head_sha" ]; then
+              echo "::error::Tag sdk-v${VERSION} already exists at ${existing_tag_sha}, expected ${head_sha}."
+              exit 1
+            fi
+            echo "Tag sdk-v${VERSION} already exists at HEAD."
           else
             git tag "sdk-v${VERSION}"
           fi
-          git push
+          git push origin "HEAD:${RELEASE_BRANCH}"
           git push origin "sdk-v${VERSION}"
 
       - name: Create GitHub Release
