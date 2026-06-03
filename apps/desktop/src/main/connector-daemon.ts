@@ -375,6 +375,16 @@ function computerName(computer: ConnectorComputerView | undefined, fallback: str
   return detail
 }
 
+function isLocalConnectorComputer(
+  computer: ConnectorComputerView | undefined,
+  settings: DesktopRuntimeSettings,
+): boolean {
+  if (!computer) return false
+  if (settings.connectorComputerId && computer.id === settings.connectorComputerId) return true
+  const localHostname = hostname()
+  return Boolean(localHostname && computer.hostname === localHostname)
+}
+
 export async function refreshConnectorConnections(): Promise<ConnectorConnection[]> {
   const settings = await readDesktopSettingsAsync()
   const localWorkDirs = settings.connectorBuddyWorkDirs
@@ -392,6 +402,7 @@ export async function refreshConnectorConnections(): Promise<ConnectorConnection
       const runtimeId = connectorConfigString(agent.config, 'connectorRuntimeId')
       if (!computerId || !runtimeId) return null
       const computer = computers.get(computerId)
+      if (!isLocalConnectorComputer(computer, settings)) return null
       const runtime = computer?.runtimes.find((item) => item.id === runtimeId)
       const runtimeLabel =
         connectorConfigString(agent.config, 'connectorRuntimeLabel') || runtime?.label || runtimeId
@@ -432,12 +443,14 @@ function onlineComputerScore(computer: ConnectorComputerView, runtimeId: string)
 async function findConnectorComputerForRuntime(
   runtimeId: string,
 ): Promise<ConnectorComputerView | null> {
+  const settings = await readDesktopSettingsAsync()
   const computerData = await fetchCommunityJson<{ computers: ConnectorComputerView[] }>(
     '/api/connector/computers',
   )
   if (!computerData) return null
   return (
     computerData.computers
+      .filter((computer) => isLocalConnectorComputer(computer, settings))
       .map((computer) => ({ computer, score: onlineComputerScore(computer, runtimeId) }))
       .filter((entry) => entry.score >= 0)
       .sort((a, b) => b.score - a.score)[0]?.computer ?? null
@@ -828,10 +841,17 @@ async function bootstrapConnectorApiKey(
       `Connector authorization failed at ${bootstrap.serverBaseUrl} (${bootstrap.response.status}); tried ${bootstrap.attempts.join(', ')}${body ? `: ${body}` : ''}`,
     )
   }
-  const result = (await bootstrap.response.json()) as { apiKey?: unknown }
+  const result = (await bootstrap.response.json()) as {
+    apiKey?: unknown
+    computer?: { id?: unknown } | null
+  }
   const apiKey = normalizeConnectorApiKey(result.apiKey)
   if (!apiKey) throw new Error('Connector authorization did not return a machine key')
-  await saveDesktopSettingsAsync({ connectorApiKey: apiKey })
+  const connectorComputerId = typeof result.computer?.id === 'string' ? result.computer.id : ''
+  await saveDesktopSettingsAsync({
+    connectorApiKey: apiKey,
+    ...(connectorComputerId ? { connectorComputerId } : {}),
+  })
   getConnectorAuthWindow()?.close()
   return { apiKey, serverBaseUrl: bootstrap.serverBaseUrl }
 }
@@ -1150,12 +1170,18 @@ export async function scanAgentRuntimeSessions(
 
 export async function installAgentRuntime(
   runtimeId: string,
-): Promise<{ runtimes: ConnectorRuntimeInfo[]; installed: ConnectorRuntimeInfo | null }> {
+): Promise<ConnectorRuntimeScanResult & { installed: ConnectorRuntimeInfo | null }> {
   const result = await runConnectorCliJson<{
+    ok?: boolean
     runtime?: ConnectorRuntimeInfo
   }>(['runtime-install', '--runtime', runtimeId, '--json'], 10 * 60_000)
+  if (result.ok === false || result.runtime?.status === 'missing') {
+    throw new Error(
+      `${result.runtime?.label ?? runtimeId} install command completed, but the runtime command was not found on PATH.`,
+    )
+  }
   const scan = await scanAgentRuntimes({ force: true })
-  return { runtimes: scan.runtimes, installed: result.runtime ?? null }
+  return { ...scan, installed: result.runtime ?? null }
 }
 
 export function setupConnectorDaemonHandlers(): void {

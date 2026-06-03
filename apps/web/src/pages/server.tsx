@@ -16,6 +16,12 @@ import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
 import {
+  invalidateServerChannelState,
+  seedBuddyInboxSnapshot,
+  seedServerChannelSnapshot,
+  serverChannelCacheKeys,
+} from '../lib/channel-cache'
+import {
   getCopilotChannelIdFromSearch,
   type RouteSearch,
   withCopilotChannelSearch,
@@ -36,6 +42,8 @@ interface ServerMeta {
   isPublic?: boolean
   ownerId?: string
 }
+
+type ServerCacheMeta = ServerMeta & { inviteCode?: string }
 
 interface ChannelMeta {
   id: string
@@ -299,14 +307,23 @@ export function ServerLayout() {
 
     if (channelBootstrap.server) {
       const serverKey = channelBootstrap.server.slug ?? serverSlug
-      queryClient.setQueryData(['server', channelBootstrap.server.id], channelBootstrap.server)
-      queryClient.setQueryData(['server', serverKey], channelBootstrap.server)
-      queryClient.setQueryData(['server', serverSlug], channelBootstrap.server)
-      queryClient.setQueryData(['channels', serverKey], channelBootstrap.channels)
-      queryClient.setQueryData(['channels', serverSlug], channelBootstrap.channels)
+      const serverChannelKeys = serverChannelCacheKeys(
+        serverSlug,
+        serverKey,
+        channelBootstrap.server.id,
+      )
+      const mergeServerCache = (queryKey: unknown[]) => {
+        queryClient.setQueryData<ServerCacheMeta>(queryKey, (current) => ({
+          ...(current ?? {}),
+          ...channelBootstrap.server!,
+        }))
+      }
+      mergeServerCache(['server', channelBootstrap.server.id])
+      mergeServerCache(['server', serverKey])
+      mergeServerCache(['server', serverSlug])
+      seedServerChannelSnapshot(queryClient, serverChannelKeys, channelBootstrap.channels)
       if (channelBootstrap.buddyInboxes) {
-        queryClient.setQueryData(['buddy-inboxes', serverKey], channelBootstrap.buddyInboxes)
-        queryClient.setQueryData(['buddy-inboxes', serverSlug], channelBootstrap.buddyInboxes)
+        seedBuddyInboxSnapshot(queryClient, serverChannelKeys, channelBootstrap.buddyInboxes)
       }
       if (channelBootstrap.appSummaries) {
         queryClient.setQueryData(['server-app-summaries', serverKey], channelBootstrap.appSummaries)
@@ -335,8 +352,10 @@ export function ServerLayout() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['server-access', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
-      queryClient.invalidateQueries({ queryKey: ['server-index-channels', serverSlug] })
+      invalidateServerChannelState(
+        queryClient,
+        serverChannelCacheKeys(serverSlug, serverAccess?.server.id, serverAccess?.server.slug),
+      )
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })

@@ -1,10 +1,12 @@
 import { join } from 'node:path'
 import { BrowserWindow, screen, shell } from 'electron'
+import { ensureDesktopDockIcon, resolveDesktopIconPathSync } from './app-icon'
 import {
   readDesktopSettings,
   resolveDesktopAppBaseUrl,
   saveDesktopSettings,
 } from './desktop-settings'
+import { desktopAppName, desktopText } from './i18n'
 import { readPetWindowState, savePetWindowState } from './pet-window-state'
 import { getWindowState, saveWindowState } from './window-state'
 
@@ -36,6 +38,11 @@ const SETTINGS_TABS = new Set([
 
 let mainWindowStateSaveTimer: ReturnType<typeof setTimeout> | null = null
 let petWindowStateSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function desktopWindowIcon() {
+  const icon = resolveDesktopIconPathSync(['png', 'icns'])
+  return icon ? { icon } : {}
+}
 
 type PetPanelLayout = {
   stageOffsetY: number
@@ -111,10 +118,10 @@ export function createWindow(): BrowserWindow {
     y: savedState?.y,
     minWidth: 940,
     minHeight: 560,
-    title: 'Shadow',
+    title: desktopAppName(),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     ...(process.platform === 'darwin' && { trafficLightPosition: { x: 14, y: 14 } }),
-    icon: join(__dirname, '../../assets/icon.png'),
+    ...desktopWindowIcon(),
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
@@ -183,12 +190,14 @@ export function getMainWindow(): BrowserWindow | null {
 }
 
 export function showMainWindow(): void {
+  ensureDesktopDockIcon()
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createWindow()
   win.show()
   win.focus()
 }
 
 export function showCommunityWindow(path?: string): void {
+  ensureDesktopDockIcon()
   const existingWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
   const win = existingWindow ?? createWindow()
   if (path || !existingWindow) {
@@ -216,10 +225,10 @@ export function showConnectorAuthWindow(): BrowserWindow {
       height: 760,
       minWidth: 520,
       minHeight: 560,
-      title: 'Shadow Connector Authorization',
+      title: `${desktopAppName()} Connector Authorization`,
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       ...(process.platform === 'darwin' && { trafficLightPosition: { x: 14, y: 14 } }),
-      icon: join(__dirname, '../../assets/icon.png'),
+      ...desktopWindowIcon(),
       webPreferences: {
         preload: getPreloadPath(),
         contextIsolation: true,
@@ -255,6 +264,7 @@ export function getConnectorAuthWindow(): BrowserWindow | null {
 }
 
 export function showDesktopSettingsWindow(tab?: string | null): void {
+  ensureDesktopDockIcon()
   const normalizedTab = normalizeSettingsTab(tab)
   let win = settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : null
   if (!win) {
@@ -263,10 +273,10 @@ export function showDesktopSettingsWindow(tab?: string | null): void {
       height: 560,
       minWidth: 680,
       minHeight: 480,
-      title: 'Shadow Desktop Settings',
+      title: desktopText('settings'),
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       ...(process.platform === 'darwin' && { trafficLightPosition: { x: 14, y: 14 } }),
-      icon: join(__dirname, '../../assets/icon.png'),
+      ...desktopWindowIcon(),
       webPreferences: {
         preload: getPreloadPath(),
         contextIsolation: true,
@@ -301,6 +311,7 @@ export function showDesktopSettingsWindow(tab?: string | null): void {
 }
 
 export function showReaderWindow(title = 'Shadow Reader'): BrowserWindow {
+  ensureDesktopDockIcon()
   let win = readerWindow && !readerWindow.isDestroyed() ? readerWindow : null
   if (!win) {
     win = new BrowserWindow({
@@ -311,7 +322,7 @@ export function showReaderWindow(title = 'Shadow Reader'): BrowserWindow {
       title,
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       ...(process.platform === 'darwin' && { trafficLightPosition: { x: 14, y: 14 } }),
-      icon: join(__dirname, '../../assets/icon.png'),
+      ...desktopWindowIcon(),
       webPreferences: {
         preload: getPreloadPath(),
         contextIsolation: true,
@@ -349,6 +360,7 @@ export function getReaderWindow(): BrowserWindow | null {
 
 export function createPetWindow(): BrowserWindow {
   if (petWindow && !petWindow.isDestroyed()) return petWindow
+  ensureDesktopDockIcon()
 
   const savedState = readPetWindowState()
   petPanelMode = 'compact'
@@ -360,7 +372,7 @@ export function createPetWindow(): BrowserWindow {
     minHeight: 180,
     maxWidth: 1080,
     maxHeight: 760,
-    title: 'Shadow Desktop Pet',
+    title: `${desktopAppName()} ${desktopText('desktopPet')}`,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -371,7 +383,7 @@ export function createPetWindow(): BrowserWindow {
     alwaysOnTop: true,
     skipTaskbar: false,
     acceptFirstMouse: true,
-    icon: join(__dirname, '../../assets/icon.png'),
+    ...desktopWindowIcon(),
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
@@ -437,6 +449,7 @@ export function getPetWindow(): BrowserWindow | null {
 }
 
 export function showPetWindow(): void {
+  ensureDesktopDockIcon()
   const win = createPetWindow()
   saveDesktopSettings({ desktopPetVisible: true })
   applyPetWindowLevel('compact')
@@ -498,6 +511,7 @@ export function hidePetWindow(): void {
 export function sendPetShortcut(
   action: 'voice' | 'chat' | 'notifications' | 'services' | 'care',
 ): void {
+  ensureDesktopDockIcon()
   const win = createPetWindow()
   applyPetWindowLevel('expanded')
   win.showInactive()
@@ -505,6 +519,7 @@ export function sendPetShortcut(
 }
 
 export function togglePetWindow(): void {
+  ensureDesktopDockIcon()
   const win = createPetWindow()
   if (win.isVisible()) {
     saveDesktopSettings({ desktopPetVisible: false })

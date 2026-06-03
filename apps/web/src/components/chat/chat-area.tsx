@@ -54,6 +54,10 @@ import { useTranslation } from 'react-i18next'
 import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
+import {
+  invalidateServerChannelState,
+  patchChannelAcrossCachedCollections,
+} from '../../lib/channel-cache'
 import { playReceiveSound } from '../../lib/sounds'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
@@ -136,6 +140,7 @@ export type ChatInitialMessagesPage = MessagesPage
 interface Channel {
   id: string
   name: string
+  serverId?: string | null
   kind?: string
   topic: string | null
   type: string
@@ -590,6 +595,30 @@ export function ChatArea({
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
   const visibleChannelTopic = isInboxChannel ? null : channel?.topic
   const normalizedSearchQuery = debouncedSearchQuery.trim()
+  const syncChannelMutationResult = useCallback(
+    (updatedChannel: Channel) => {
+      patchChannelAcrossCachedCollections(queryClient, updatedChannel.id, updatedChannel)
+      invalidateServerChannelState(queryClient, [])
+    },
+    [queryClient],
+  )
+  const confirmAndUnarchiveActiveChannel = useCallback(async () => {
+    if (!activeChannelId) return
+
+    const ok = await useConfirmStore.getState().confirm({
+      title: t('channel.unarchiveChannel'),
+      message: t('channel.unarchiveChannelConfirm'),
+    })
+    if (!ok) return
+
+    const result = await fetchApi<{ channel: Channel }>(
+      `/api/channels/${activeChannelId}/unarchive`,
+      {
+        method: 'POST',
+      },
+    )
+    syncChannelMutationResult(result.channel)
+  }, [activeChannelId, syncChannelMutationResult, t])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -700,10 +729,39 @@ export function ChatArea({
     return [...data.pages].reverse().flatMap((p) => p.messages)
   }, [data])
 
+  const taskCardMessageIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const message of messages) {
+      if (getMessageTaskStatuses(message).length > 0) ids.add(message.id)
+    }
+    return ids
+  }, [messages])
+
+  const taskRepliesByMessageId = useMemo(() => {
+    const replies = new Map<string, Message[]>()
+    for (const message of messages) {
+      const parentId = message.replyToId
+      if (!parentId || !taskCardMessageIds.has(parentId)) continue
+      const existing = replies.get(parentId) ?? []
+      existing.push(message)
+      replies.set(parentId, existing)
+    }
+    return replies
+  }, [messages, taskCardMessageIds])
+
+  const inboxTimelineBaseMessages = useMemo(() => {
+    if (!isInboxChannel) return messages
+    return messages.filter(
+      (message) => !message.replyToId || !taskCardMessageIds.has(message.replyToId),
+    )
+  }, [isInboxChannel, messages, taskCardMessageIds])
+
   const timelineMessages = useMemo(() => {
-    if (!isInboxChannel || inboxTaskFilter === 'all') return messages
-    return messages.filter((message) => messageMatchesInboxTaskFilter(message, inboxTaskFilter))
-  }, [inboxTaskFilter, isInboxChannel, messages])
+    if (!isInboxChannel || inboxTaskFilter === 'all') return inboxTimelineBaseMessages
+    return inboxTimelineBaseMessages.filter((message) =>
+      messageMatchesInboxTaskFilter(message, inboxTaskFilter),
+    )
+  }, [inboxTaskFilter, inboxTimelineBaseMessages, isInboxChannel])
 
   // O(1) message lookup map — avoids O(n) .find() for replyToMessage
   const messageMap = useMemo(() => {
@@ -904,9 +962,9 @@ export function ChatArea({
   }, [activeChannelId])
 
   useEffect(() => {
-    setRightPanelOpen(Boolean(previewFile || previewOAuthLink || activeThread || showSearchPanel))
+    setRightPanelOpen(Boolean(previewFile || previewOAuthLink || activeThread))
     return () => setRightPanelOpen(false)
-  }, [activeThread, previewFile, previewOAuthLink, setRightPanelOpen, showSearchPanel])
+  }, [activeThread, previewFile, previewOAuthLink, setRightPanelOpen])
 
   const interactiveResponsesBySourceId = useMemo(() => {
     const map = new Map<string, InteractiveResponse>()
@@ -1237,8 +1295,9 @@ export function ChatArea({
   })
 
   // Listen for channel updates (archive/unarchive)
-  useSocketEvent('channel:updated', (data: { id: string; isArchived?: boolean }) => {
+  useSocketEvent('channel:updated', (data: Partial<Channel> & { id: string }) => {
     if (data.id === activeChannelId) {
+      patchChannelAcrossCachedCollections(queryClient, activeChannelId, data)
       queryClient.invalidateQueries({ queryKey: ['channel', activeChannelId] })
     }
   })
@@ -1719,6 +1778,7 @@ export function ChatArea({
           replyToMessage={
             item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
           }
+          taskReplies={taskRepliesByMessageId.get(item.data.id)}
           selectionMode={selectionMode}
           isSelected={selectedMessageIds.has(item.data.id)}
           selectionAnchorId={selectionAnchorId}
@@ -1863,6 +1923,11 @@ export function ChatArea({
               {isInboxChannel && (
                 <Badge variant="primary" size="xs" className="shrink-0">
                   {t('inbox.queueBadge')}
+                </Badge>
+              )}
+              {channel?.isArchived && (
+                <Badge variant="warning" size="xs" className="shrink-0">
+                  {t('channel.archivedTitle')}
                 </Badge>
               )}
               {directPeerIsPrivateBuddy && (
@@ -2059,19 +2124,6 @@ export function ChatArea({
                 serverId={activeServerId}
                 channelId={activeChannelId}
                 isArchived={channel?.isArchived}
-                onUnarchive={async () => {
-                  const ok = await useConfirmStore.getState().confirm({
-                    title: t('channel.unarchiveChannel'),
-                    message: t('channel.unarchiveChannelConfirm'),
-                  })
-                  if (ok) {
-                    await fetchApi(`/api/channels/${activeChannelId}/unarchive`, {
-                      method: 'POST',
-                    })
-                    queryClient.invalidateQueries({ queryKey: ['channel', activeChannelId] })
-                    queryClient.invalidateQueries({ queryKey: ['channels'] })
-                  }
-                }}
               />
             )
           ) : shouldVirtualize ? (
@@ -2201,30 +2253,8 @@ export function ChatArea({
               {t('common.cancel')}
             </Button>
           </div>
-        ) : channel?.isArchived && messages.length > 0 ? (
-          <div className="flex items-center justify-center gap-3 px-4 py-3 bg-bg-deep border-t border-border-subtle">
-            <div className="flex items-center gap-2 text-text-muted">
-              <Archive size={18} />
-              <span>{t('channel.archivedNotice')}</span>
-            </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={async () => {
-                const ok = await useConfirmStore.getState().confirm({
-                  title: t('channel.unarchiveChannel'),
-                  message: t('channel.unarchiveChannelConfirm'),
-                })
-                if (ok) {
-                  await fetchApi(`/api/channels/${activeChannelId}/unarchive`, { method: 'POST' })
-                  queryClient.invalidateQueries({ queryKey: ['channel', activeChannelId] })
-                  queryClient.invalidateQueries({ queryKey: ['channels'] })
-                }
-              }}
-            >
-              {t('channel.unarchive')}
-            </Button>
-          </div>
+        ) : channel?.isArchived ? (
+          <ChannelComposerBlockedState onUnarchive={confirmAndUnarchiveActiveChannel} />
         ) : (
           <MessageInput
             channelId={activeChannelId}
@@ -2240,13 +2270,13 @@ export function ChatArea({
 
       {showSearchPanel && (
         <div
-          className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px] [@media(min-width:1440px)]:hidden"
+          className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]"
           onClick={() => setShowSearchPanel(false)}
         />
       )}
 
       {showSearchPanel && (
-        <GlassPanel className="fixed inset-2 z-40 flex min-w-0 shrink-0 animate-slide-in-right flex-col overflow-hidden rounded-3xl border border-border-subtle bg-bg-secondary/88 shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl [@media(min-width:720px)]:inset-y-3 [@media(min-width:720px)]:left-auto [@media(min-width:720px)]:right-3 [@media(min-width:720px)]:w-[min(92vw,420px)] [@media(min-width:1440px)]:relative [@media(min-width:1440px)]:inset-auto [@media(min-width:1440px)]:z-auto [@media(min-width:1440px)]:ml-2 [@media(min-width:1440px)]:mr-3 [@media(min-width:1440px)]:h-full [@media(min-width:1440px)]:w-[min(34vw,420px)] [@media(min-width:1440px)]:min-w-[360px]">
+        <GlassPanel className="fixed inset-2 z-40 flex min-w-0 shrink-0 animate-slide-in-right flex-col overflow-hidden rounded-3xl border border-border-subtle bg-bg-secondary/88 shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl [@media(min-width:720px)]:inset-y-3 [@media(min-width:720px)]:left-auto [@media(min-width:720px)]:right-3 [@media(min-width:720px)]:w-[min(92vw,420px)]">
           <div className="m-1.5 mb-0 flex h-14 shrink-0 items-center gap-2.5 rounded-[20px] border border-border-subtle/70 bg-bg-primary/45 px-3">
             <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
               <Search size={17} strokeWidth={2.5} />
@@ -2491,13 +2521,11 @@ function EmptyChannelState({
   serverId,
   channelId,
   isArchived,
-  onUnarchive,
 }: {
   channelName?: string
   serverId: string | null
   channelId: string | null
   isArchived?: boolean
-  onUnarchive?: () => void
 }) {
   const { t } = useTranslation()
   const [showInvitePanel, setShowInvitePanel] = useState(false)
@@ -2508,22 +2536,19 @@ function EmptyChannelState({
       <div className="flex flex-col items-center justify-center h-full text-text-muted px-4 mb-16">
         <Hash size={48} className="mb-4 opacity-30" />
         <p className="text-lg font-bold text-primary mb-2">
-          {t('chat.welcomeChannel', {
-            channelName: channelName ?? t('chat.channelFallback'),
-          })}
+          {isArchived
+            ? t('channel.archivedTitle')
+            : t('chat.welcomeChannel', {
+                channelName: channelName ?? t('chat.channelFallback'),
+              })}
         </p>
-        <p className="text-sm text-text-muted mb-6">{t('chat.welcomeStart')}</p>
+        <p className="text-sm text-text-muted mb-6">
+          {isArchived ? t('channel.archivedEmptyDesc') : t('chat.welcomeStart')}
+        </p>
         {isArchived ? (
-          <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center gap-2 text-text-muted">
-              <Archive size={20} />
-              <span>{t('channel.archivedNotice')}</span>
-            </div>
-            {onUnarchive && (
-              <Button variant="primary" size="sm" className="rounded-full" onClick={onUnarchive}>
-                {t('channel.unarchive')}
-              </Button>
-            )}
+          <div className="flex items-center gap-2 text-text-muted">
+            <Archive size={20} />
+            <span>{t('channel.archivedNotice')}</span>
           </div>
         ) : serverId ? (
           <div className="flex items-center justify-center">
@@ -2561,5 +2586,30 @@ function EmptyChannelState({
         />
       )}
     </>
+  )
+}
+
+function ChannelComposerBlockedState({ onUnarchive }: { onUnarchive: () => void }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="border-t border-border-subtle bg-bg-secondary/55 px-4 py-3 backdrop-blur-md">
+      <div className="mx-auto flex max-w-4xl items-center gap-3 rounded-2xl border border-border-subtle bg-bg-primary/65 px-3 py-2.5">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-warning/12 text-warning">
+          <Archive size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-h-10 items-center rounded-xl border border-border-subtle bg-bg-tertiary/45 px-3 text-sm font-bold text-text-muted">
+            {t('channel.archivedComposerPlaceholder')}
+          </div>
+          <p className="mt-1 truncate text-xs font-semibold text-text-muted">
+            {t('channel.archivedComposerDesc')}
+          </p>
+        </div>
+        <Button variant="primary" size="sm" className="shrink-0 rounded-xl" onClick={onUnarchive}>
+          {t('channel.unarchive')}
+        </Button>
+      </div>
+    </div>
   )
 }

@@ -14,6 +14,12 @@ import {
 
 type MobileView = 'servers' | 'channels' | 'chat'
 export type ThemeMode = ShadowThemePreference
+type PendingInvitePanel = {
+  serverSlug: string
+  channelId: string
+  channelName: string
+  initialTab: 'members' | 'buddies'
+} | null
 
 const BACKGROUND_NONE_SENTINEL = 'none'
 const LEGACY_BACKGROUND_NONE_SENTINEL = '__none__'
@@ -37,6 +43,8 @@ interface UIState {
   enableBackgroundMovement: boolean
   /** Pending action for cross-component task triggers (e.g. 'create-server', 'create-buddy') */
   pendingAction: string | null
+  /** Invite panel request that should survive channel route transitions */
+  pendingInvitePanel: PendingInvitePanel
   /** Channel shown beside a server app in Copilot mode */
   copilotChannel: {
     serverSlug: string
@@ -54,6 +62,7 @@ interface UIState {
   setBackgroundImage: (url: string | null) => void
   setEnableBackgroundMovement: (enabled: boolean) => void
   setPendingAction: (action: string | null) => void
+  setPendingInvitePanel: (request: PendingInvitePanel) => void
   openCopilotChannel: (serverSlug: string, channelId: string) => void
   closeCopilotChannel: () => void
 }
@@ -92,6 +101,7 @@ export const useUIStore = create<UIState>((set) => ({
   backgroundImage: savedBgImage,
   enableBackgroundMovement: savedBgMovement,
   pendingAction: null,
+  pendingInvitePanel: null,
   copilotChannel: null,
 
   setMobileView: (view) => set({ mobileView: view, mobileMemberListOpen: false }),
@@ -120,6 +130,7 @@ export const useUIStore = create<UIState>((set) => ({
     set({ enableBackgroundMovement: enabled })
   },
   setPendingAction: (action) => set({ pendingAction: action }),
+  setPendingInvitePanel: (request) => set({ pendingInvitePanel: request }),
   openCopilotChannel: (serverSlug, channelId) =>
     set({
       copilotChannel: { serverSlug, channelId },

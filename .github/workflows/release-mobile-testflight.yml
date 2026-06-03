@@ -37,6 +37,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main' &&
       !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): mobile v') &&
+      !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): desktop v') &&
       !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): apps v'))
     outputs:
       should_release: ${{ steps.gate.outputs.should_release }}
@@ -151,6 +152,7 @@ jobs:
           git fetch origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}" --tags
           git checkout -B "${RELEASE_BRANCH}" "origin/${RELEASE_BRANCH}"
           node scripts/prepare-app-release-version.mjs \
+            --target=mobile \
             --source-sha="${{ needs.gate.outputs.head_sha }}" \
             --force="${FORCE}"
 
@@ -163,13 +165,14 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/mobile/app.config.ts apps/desktop/package.json
+          git add apps/mobile/app.config.ts
           if git diff --cached --quiet; then
-            echo "Unified app version already prepared."
+            echo "Mobile app version already prepared."
           else
             git commit \
-              -m "chore(release): apps v${{ steps.version.outputs.version }}" \
-              -m "Release-Source-SHA: ${{ needs.gate.outputs.head_sha }}"
+              -m "chore(release): mobile v${{ steps.version.outputs.version }}" \
+              -m "Release-Source-SHA: ${{ needs.gate.outputs.head_sha }}" \
+              -m "Release-Target: mobile"
             git push origin "HEAD:${RELEASE_BRANCH}"
           fi
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

@@ -207,6 +207,9 @@ const messageCardSourceSchema = z
     userId: z.string().uuid().optional(),
     agentId: z.string().uuid().optional(),
     appId: z.string().uuid().optional(),
+    appKey: z.string().max(120).optional(),
+    appName: z.string().max(160).nullable().optional(),
+    iconUrl: z.string().max(1000).nullable().optional(),
     serverId: z.string().uuid().optional(),
     channelId: z.string().uuid().optional(),
     command: z.string().max(120).optional(),
@@ -219,6 +222,32 @@ const messageCardSourceSchema = z
       })
       .passthrough()
       .optional(),
+  })
+  .passthrough()
+
+const taskMessageCardTagSchema = z.union([
+  z.string().min(1).max(48),
+  z
+    .object({
+      id: z.string().min(1).max(80).optional(),
+      label: z.string().min(1).max(48),
+      color: z.string().min(1).max(40).optional(),
+    })
+    .passthrough(),
+])
+
+const messageCardAppSchema = z
+  .object({
+    id: z.string().max(160).optional(),
+    appId: z.string().max(160).optional(),
+    appKey: z.string().max(120).optional(),
+    name: z.string().max(160).nullable().optional(),
+    label: z.string().max(160).nullable().optional(),
+    iconUrl: z.string().max(1000).nullable().optional(),
+    logoUrl: z.string().max(1000).nullable().optional(),
+    avatarUrl: z.string().max(1000).nullable().optional(),
+    imageUrl: z.string().max(1000).nullable().optional(),
+    url: z.string().max(1000).nullable().optional(),
   })
   .passthrough()
 
@@ -250,6 +279,8 @@ const taskMessageCardSchema = z
     body: z.string().max(8000).optional(),
     status: messageCardStatusSchema,
     priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+    tags: z.array(taskMessageCardTagSchema).max(12).optional(),
+    app: messageCardAppSchema.optional(),
     assignee: z
       .object({
         agentId: z.string().uuid().optional(),
@@ -269,6 +300,24 @@ const taskMessageCardSchema = z
             status: messageCardStatusSchema,
             note: z.string().max(4000).optional(),
             actor: messageCardSourceSchema.optional(),
+          })
+          .passthrough(),
+      )
+      .max(100)
+      .optional(),
+    replies: z
+      .array(
+        z
+          .object({
+            id: idLikeSchema.optional(),
+            messageId: z.string().uuid().optional(),
+            cardId: idLikeSchema.optional(),
+            authorId: z.string().uuid().optional(),
+            authorLabel: z.string().max(160).optional(),
+            authorAvatarUrl: z.string().max(1000).nullable().optional(),
+            content: z.string().min(1).max(4000),
+            createdAt: z.string().max(64),
+            source: messageCardSourceSchema.optional(),
           })
           .passthrough(),
       )

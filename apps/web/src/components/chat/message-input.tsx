@@ -3,6 +3,7 @@ import type {
   MentionSuggestion,
   MentionSuggestionTrigger,
   MessageMention,
+  TaskMessageCardTag,
 } from '@shadowob/shared'
 import { assignMentionRanges, canonicalMentionToken } from '@shadowob/shared'
 import { Button, cn, InputValley } from '@shadowob/ui'
@@ -48,6 +49,9 @@ interface MessageInputProps {
   threadName?: string
   replyToId?: string | null
   onClearReply?: () => void
+  placeholder?: string
+  hideReplyIndicator?: boolean
+  messageMetadata?: Record<string, unknown>
   externalFiles?: File[]
   onExternalFilesConsumed?: () => void
   enableTaskCards?: boolean
@@ -263,6 +267,10 @@ function mentionsForContent(content: string, mentions: MessageMention[]): Messag
   return assignMentionRanges(content, mentions).slice(0, 20)
 }
 
+type TaskDraftPriority = 'low' | 'normal' | 'high' | 'urgent'
+
+const taskPriorityOptions: TaskDraftPriority[] = ['normal', 'high', 'urgent', 'low']
+
 function taskDraftToInput(value: string): { title: string; body?: string } {
   const lines = value
     .split(/\r?\n/)
@@ -282,6 +290,15 @@ function taskDraftToInput(value: string): { title: string; body?: string } {
   }
 }
 
+function taskTagsToInput(value: string): TaskMessageCardTag[] | undefined {
+  const tags = value
+    .split(/[,，#\s]+/u)
+    .map((tag) => tag.trim().replace(/^#+/u, ''))
+    .filter(Boolean)
+  const unique = [...new Set(tags)].slice(0, 12)
+  return unique.length > 0 ? unique : undefined
+}
+
 export function MessageInput({
   channelId,
   channelName,
@@ -289,6 +306,9 @@ export function MessageInput({
   threadName,
   replyToId,
   onClearReply,
+  placeholder,
+  hideReplyIndicator = false,
+  messageMetadata,
   externalFiles,
   onExternalFilesConsumed,
   enableTaskCards = false,
@@ -306,6 +326,8 @@ export function MessageInput({
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [showTaskComposer, setShowTaskComposer] = useState(false)
   const [taskDraft, setTaskDraft] = useState('')
+  const [taskPriority, setTaskPriority] = useState<TaskDraftPriority>('normal')
+  const [taskTags, setTaskTags] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
   const [productQuery, setProductQuery] = useState('')
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
@@ -323,8 +345,11 @@ export function MessageInput({
   const voiceSpeechCapturingRef = useRef(false)
   const voiceFinalTranscriptRef = useRef<string[]>([])
   const voiceInterimTranscriptRef = useRef('')
+  const dictationRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const dictationBaseContentRef = useRef('')
   const [voiceRecording, setVoiceRecording] = useState(false)
   const [voiceRecordingMs, setVoiceRecordingMs] = useState(0)
+  const [dictationListening, setDictationListening] = useState(false)
   const [useCompactPlaceholder, setUseCompactPlaceholder] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia('(max-width: 420px)').matches,
   )
@@ -351,6 +376,8 @@ export function MessageInput({
       voiceSpeechCapturingRef.current = false
       voiceSpeechRecognitionRef.current?.abort()
       voiceSpeechRecognitionRef.current = null
+      dictationRecognitionRef.current?.abort()
+      dictationRecognitionRef.current = null
       voiceRecorderRef.current?.stop()
       voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
       if (voiceMaxTimerRef.current) clearTimeout(voiceMaxTimerRef.current)
@@ -364,13 +391,15 @@ export function MessageInput({
     'zh-CN'
 
   const composerChannelName = channelName ?? t('chat.channelFallback')
-  const composerPlaceholder = threadId
-    ? t('chat.threadInputPlaceholder', {
-        threadName: threadName ?? t('chat.thread'),
-      })
-    : t(useCompactPlaceholder ? 'chat.inputPlaceholderCompact' : 'chat.inputPlaceholder', {
-        channelName: composerChannelName,
-      })
+  const composerPlaceholder =
+    placeholder ??
+    (threadId
+      ? t('chat.threadInputPlaceholder', {
+          threadName: threadName ?? t('chat.thread'),
+        })
+      : t(useCompactPlaceholder ? 'chat.inputPlaceholderCompact' : 'chat.inputPlaceholder', {
+          channelName: composerChannelName,
+        }))
 
   const focusComposer = useCallback(() => {
     const textarea = textareaRef.current
@@ -724,6 +753,99 @@ export function MessageInput({
     voiceInterimTranscriptRef.current = ''
   }, [])
 
+  const updateDictationContent = useCallback(
+    (finalParts: string[], interimParts: string[]) => {
+      const transcript = [...finalParts, ...interimParts].join(' ').replace(/\s+/g, ' ').trim()
+      const base = dictationBaseContentRef.current
+      const separator = base && transcript && !/\s$/u.test(base) ? ' ' : ''
+      const next = transcript ? `${base}${separator}${transcript}` : base
+      setContent(next)
+      scheduleSave(next)
+      requestAnimationFrame(() => {
+        const el = textareaRef.current
+        if (!el) return
+        el.style.height = 'auto'
+        el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+      })
+    },
+    [scheduleSave],
+  )
+
+  const stopDictation = useCallback(() => {
+    const recognition = dictationRecognitionRef.current
+    if (!recognition) return
+    try {
+      recognition.stop()
+    } catch {
+      dictationRecognitionRef.current = null
+      setDictationListening(false)
+    }
+  }, [])
+
+  const startDictation = useCallback(() => {
+    const SpeechRecognition = getSpeechRecognitionConstructor()
+    if (!SpeechRecognition) {
+      showToast(t('chat.voiceInputUnavailable'), 'error')
+      return
+    }
+
+    setShowAttachMenu(false)
+    setShowEmojiPicker(false)
+    dictationBaseContentRef.current = content
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = speechRecognitionLanguage
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.onresult = (event) => {
+      const finalParts: string[] = []
+      const interimParts: string[] = []
+      for (let index = 0; index < event.results.length; index += 1) {
+        const result = event.results[index]
+        if (!result) continue
+        const text = result?.[0]?.transcript?.trim()
+        if (!text) continue
+        if (result.isFinal) finalParts.push(text)
+        else interimParts.push(text)
+      }
+      updateDictationContent(finalParts, interimParts)
+    }
+    recognition.onerror = (event) => {
+      console.debug('[voice] dictation error', event.error, event.message)
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        showToast(t('chat.voiceInputPermissionDenied'), 'error')
+      } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        showToast(t('chat.voiceInputUnavailable'), 'error')
+      }
+      setDictationListening(false)
+    }
+    recognition.onend = () => {
+      if (dictationRecognitionRef.current === recognition) {
+        dictationRecognitionRef.current = null
+      }
+      setDictationListening(false)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    }
+
+    try {
+      recognition.start()
+      dictationRecognitionRef.current = recognition
+      setDictationListening(true)
+    } catch {
+      dictationRecognitionRef.current = null
+      setDictationListening(false)
+      showToast(t('chat.voiceInputUnavailable'), 'error')
+    }
+  }, [content, speechRecognitionLanguage, t, updateDictationContent])
+
+  const toggleDictation = useCallback(() => {
+    if (dictationListening) {
+      stopDictation()
+      return
+    }
+    startDictation()
+  }, [dictationListening, startDictation, stopDictation])
+
   const stopVoiceRecording = useCallback(
     (cancel = false) => {
       const recorder = voiceRecorderRef.current
@@ -824,6 +946,7 @@ export function MessageInput({
             body: JSON.stringify({
               content: '\u200B',
               ...(savedReplyTo ? { replyToId: savedReplyTo } : {}),
+              ...(messageMetadata ? { metadata: messageMetadata } : {}),
               attachments: [
                 {
                   filename: voice.file.name,
@@ -853,10 +976,20 @@ export function MessageInput({
         requestAnimationFrame(() => textareaRef.current?.focus())
       }
     },
-    [appendCreatedMessage, channelId, onClearReply, replyToId, t, threadId, uploading],
+    [
+      appendCreatedMessage,
+      channelId,
+      messageMetadata,
+      onClearReply,
+      replyToId,
+      t,
+      threadId,
+      uploading,
+    ],
   )
 
   const startVoiceRecording = useCallback(async () => {
+    stopDictation()
     setShowAttachMenu(false)
     if (voiceRecording) {
       stopVoiceRecording(false)
@@ -942,6 +1075,7 @@ export function MessageInput({
     stopVoiceRecording,
     stopVoiceTracks,
     stopVoiceTranscriptCapture,
+    stopDictation,
     t,
     voiceRecording,
   ])
@@ -951,12 +1085,19 @@ export function MessageInput({
     if (!input.title || creatingTask) return
     setCreatingTask(true)
     try {
+      const tags = taskTagsToInput(taskTags)
       await fetchApi(`/api/channels/${channelId}/inbox/tasks`, {
         method: 'POST',
-        body: JSON.stringify(input),
+        body: JSON.stringify({
+          ...input,
+          priority: taskPriority,
+          ...(tags ? { tags } : {}),
+        }),
       })
       await queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
       setTaskDraft('')
+      setTaskPriority('normal')
+      setTaskTags('')
       setShowTaskComposer(false)
       showToast(t('inbox.task.created'), 'success')
     } catch (error) {
@@ -965,7 +1106,7 @@ export function MessageInput({
       setCreatingTask(false)
       requestAnimationFrame(() => textareaRef.current?.focus())
     }
-  }, [channelId, creatingTask, queryClient, t, taskDraft])
+  }, [channelId, creatingTask, queryClient, t, taskDraft, taskPriority, taskTags])
 
   // Scroll active mention item into view
   useEffect(() => {
@@ -1072,8 +1213,9 @@ export function MessageInput({
     setUploading(true)
     const mentionsToSend = mentionsForContent(text, selectedMentions)
     const metadataToSend =
-      mentionsToSend.length > 0 || selectedCommerceCards.length > 0
+      mentionsToSend.length > 0 || selectedCommerceCards.length > 0 || messageMetadata
         ? {
+            ...(messageMetadata ?? {}),
             ...(mentionsToSend.length > 0 ? { mentions: mentionsToSend } : {}),
             ...(selectedCommerceCards.length > 0 ? { commerceCards: selectedCommerceCards } : {}),
           }
@@ -1346,6 +1488,7 @@ export function MessageInput({
     onMessageSent,
     queryClient,
     clearDraft,
+    messageMetadata,
     threadId,
   ])
 
@@ -1751,6 +1894,32 @@ export function MessageInput({
             autoFocus
             className="min-h-24 w-full resize-none rounded-xl border border-border-subtle bg-bg-secondary/70 px-3 py-2 text-sm font-semibold leading-5 text-text-primary outline-none transition focus:border-primary/55 focus:ring-2 focus:ring-primary/10"
           />
+          <div className="mt-3 grid gap-2">
+            <div className="flex flex-wrap gap-1 rounded-xl border border-border-subtle bg-bg-secondary/55 p-1">
+              {taskPriorityOptions.map((priority) => (
+                <button
+                  key={priority}
+                  type="button"
+                  aria-pressed={taskPriority === priority}
+                  onClick={() => setTaskPriority(priority)}
+                  className={cn(
+                    'h-8 rounded-lg px-3 text-xs font-black transition focus:outline-none focus:ring-2 focus:ring-primary/35',
+                    taskPriority === priority
+                      ? 'bg-primary/15 text-primary'
+                      : 'text-text-muted hover:bg-white/5 hover:text-text-primary',
+                  )}
+                >
+                  {t(`inbox.task.priority.${priority}`)}
+                </button>
+              ))}
+            </div>
+            <input
+              value={taskTags}
+              onChange={(event) => setTaskTags(event.target.value)}
+              placeholder={t('inbox.task.tagsPlaceholder')}
+              className="h-10 w-full rounded-xl border border-border-subtle bg-bg-secondary/70 px-3 text-sm font-semibold text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/55 focus:ring-2 focus:ring-primary/10"
+            />
+          </div>
           <div className="mt-3 flex items-center justify-end gap-2">
             <Button
               type="button"
@@ -1778,7 +1947,7 @@ export function MessageInput({
         </div>
       )}
       {/* Reply indicator */}
-      {replyToId && (
+      {replyToId && !hideReplyIndicator && (
         <div className="flex items-center justify-between bg-primary/5 rounded-t-[20px] px-4 py-2 text-xs text-text-secondary border-l-2 border-primary animate-in slide-in-from-top-2 duration-200">
           <div className="flex items-center gap-2">
             <span className="font-bold text-text-muted">{t('chat.replyingTo')}</span>
@@ -1997,6 +2166,22 @@ export function MessageInput({
                       </span>
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => void startVoiceRecording()}
+                    disabled={uploading || voiceRecording}
+                  >
+                    <Mic size={18} className="text-primary" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-text-primary">
+                        {t('chat.voiceRecord')}
+                      </span>
+                      <span className="block truncate text-xs text-text-muted">
+                        {t('chat.addMenuVoiceMessageDesc')}
+                      </span>
+                    </span>
+                  </button>
                   {activeServerId && (
                     <button
                       type="button"
@@ -2072,12 +2257,13 @@ export function MessageInput({
             size="icon"
             className={cn(
               'mb-[2px] h-8 w-8 shrink-0 self-end sm:mb-[3px] sm:h-9 sm:w-9',
-              voiceRecording && 'bg-danger/12 text-danger',
+              dictationListening && 'bg-primary/12 text-primary',
             )}
-            onClick={() => void startVoiceRecording()}
-            title={voiceRecording ? t('chat.voiceStopRecording') : t('chat.voiceRecord')}
-            aria-label={voiceRecording ? t('chat.voiceStopRecording') : t('chat.voiceRecord')}
-            disabled={uploading}
+            onClick={toggleDictation}
+            title={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
+            aria-label={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
+            aria-pressed={dictationListening}
+            disabled={uploading || voiceRecording}
           >
             <Mic size={18} />
           </Button>
@@ -2115,7 +2301,8 @@ export function MessageInput({
                 pendingFiles.length === 0 &&
                 selectedCommerceCards.length === 0) ||
               uploading ||
-              voiceRecording
+              voiceRecording ||
+              dictationListening
             }
           >
             <Send size={16} className="text-white" />

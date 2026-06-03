@@ -9,9 +9,11 @@ import type {
   MentionSuggestion as SharedMentionSuggestion,
   MentionSuggestionTrigger as SharedMentionSuggestionTrigger,
   MessageCard as SharedMessageCard,
+  MessageCardApp as SharedMessageCardApp,
   MessageCardSource as SharedMessageCardSource,
   MessageMention as SharedMessageMention,
   OAuthLinkCard as SharedOAuthLinkCard,
+  TaskMessageCardTag as SharedTaskMessageCardTag,
 } from '@shadowob/shared'
 
 // ─── Unified API Response Types ────────────────────────────────────────────
@@ -180,10 +182,12 @@ export interface ShadowCommerceOfferCardInput {
 
 export type ShadowMessageMention = SharedMessageMention
 export type ShadowMessageCard = SharedMessageCard
+export type ShadowMessageCardApp = SharedMessageCardApp
 export type ShadowMessageCardSource = SharedMessageCardSource
 export type ShadowOAuthLinkCard = SharedOAuthLinkCard
 export type ShadowMentionSuggestion = SharedMentionSuggestion
 export type ShadowMentionSuggestionTrigger = SharedMentionSuggestionTrigger
+export type ShadowTaskMessageCardTag = SharedTaskMessageCardTag
 export type ShadowBuddyInboxAdmissionMode = SharedBuddyInboxAdmissionMode
 export type ShadowBuddyInboxAdmissionSubjectKind = SharedBuddyInboxAdmissionSubjectKind
 export type ShadowBuddyInboxAdmissionRule = SharedBuddyInboxAdmissionRule
@@ -233,6 +237,8 @@ export interface ShadowInboxTaskInput {
   title: string
   body?: string
   priority?: 'low' | 'normal' | 'high' | 'urgent'
+  tags?: ShadowTaskMessageCardTag[]
+  app?: ShadowMessageCardApp
   idempotencyKey?: string
   source?: ShadowMessageCardSource
   data?: Record<string, unknown>
@@ -1135,6 +1141,19 @@ export interface ShadowConnectorBootstrapResult {
   computer: ShadowConnectorComputer
   apiKey: string
   command: string
+}
+
+export interface ShadowDesktopReleaseDownload {
+  id: 'macos-arm64' | 'macos-x64' | 'windows-x64' | 'linux-x64'
+  label: string
+  url: string
+  assetName: string | null
+}
+
+export interface ShadowDesktopReleaseInfo {
+  tagName: string
+  htmlUrl: string
+  downloads: ShadowDesktopReleaseDownload[]
 }
 
 // ─── Socket Event Payloads ──────────────────────────────────────────────────

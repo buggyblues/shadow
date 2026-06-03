@@ -40,6 +40,7 @@ import type {
   ShadowContentSubscriptionPreferences,
   ShadowContentSubscriptionStatus,
   ShadowContract,
+  ShadowDesktopReleaseInfo,
   ShadowDiyCloudGenerateInput,
   ShadowDiyCloudRun,
   ShadowDiyCloudRunEvent,
@@ -473,6 +474,10 @@ export class ShadowClient {
 
   async listConnectorComputers(): Promise<{ computers: ShadowConnectorComputer[] }> {
     return this.request('/api/connector/computers')
+  }
+
+  async getLatestDesktopRelease(): Promise<ShadowDesktopReleaseInfo> {
+    return this.request('/api/desktop/releases/latest')
   }
 
   async createConnectorBootstrap(data: {

@@ -12,6 +12,36 @@ const enqueueTaskSchema = z.object({
   title: z.string().min(1).max(180),
   body: z.string().max(8000).optional(),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  tags: z
+    .array(
+      z.union([
+        z.string().min(1).max(48),
+        z
+          .object({
+            id: z.string().min(1).max(80).optional(),
+            label: z.string().min(1).max(48),
+            color: z.string().min(1).max(40).optional(),
+          })
+          .passthrough(),
+      ]),
+    )
+    .max(12)
+    .optional(),
+  app: z
+    .object({
+      id: z.string().max(160).optional(),
+      appId: z.string().max(160).optional(),
+      appKey: z.string().max(120).optional(),
+      name: z.string().max(160).nullable().optional(),
+      label: z.string().max(160).nullable().optional(),
+      iconUrl: z.string().max(1000).nullable().optional(),
+      logoUrl: z.string().max(1000).nullable().optional(),
+      avatarUrl: z.string().max(1000).nullable().optional(),
+      imageUrl: z.string().max(1000).nullable().optional(),
+      url: z.string().max(1000).nullable().optional(),
+    })
+    .passthrough()
+    .optional(),
   idempotencyKey: z.string().min(1).max(240).optional(),
   source: z.record(z.string(), z.unknown()).optional(),
   data: z.record(z.string(), z.unknown()).optional(),

@@ -33,6 +33,7 @@ interface PreviewAttachment {
 interface FilePreviewPanelProps {
   attachment: PreviewAttachment
   onClose: () => void
+  initialFullscreen?: boolean
   presentation?: 'inline' | 'overlay'
 }
 
@@ -106,6 +107,8 @@ function extToLang(ext: string): string {
     graphql: 'graphql',
     proto: 'proto',
     md: 'markdown',
+    markdown: 'markdown',
+    mdown: 'markdown',
     mdx: 'mdx',
     dockerfile: 'dockerfile',
     makefile: 'makefile',
@@ -125,7 +128,14 @@ function getFileCategory(ct: string, ext: string) {
   if (ct.startsWith('audio/')) return 'audio'
   if (ct.startsWith('video/')) return 'video'
   if (ct === 'application/pdf' || ext === 'pdf') return 'pdf'
-  if (ext === 'md' || ext === 'mdx' || ct === 'text/markdown') return 'markdown'
+  if (
+    ext === 'md' ||
+    ext === 'markdown' ||
+    ext === 'mdown' ||
+    ext === 'mdx' ||
+    ct.includes('markdown')
+  )
+    return 'markdown'
   if (ext === 'html' || ext === 'htm' || ct === 'text/html' || ct.includes('html')) return 'html'
   if (ext === 'csv' || ext === 'tsv' || ct === 'text/csv') return 'csv'
   if (
@@ -718,6 +728,34 @@ function HTMLPreview({ text, url }: { text?: string; url: string }) {
   )
 }
 
+function AutoPlayVideo({ filename, url }: { filename: string; url: string }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    void video.play().catch(() => {
+      video.muted = true
+      void video.play().catch(() => undefined)
+    })
+  }, [url])
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      controls
+      playsInline
+      src={url}
+      className="max-h-full max-w-full rounded-lg"
+      title={filename}
+    >
+      <track kind="captions" />
+    </video>
+  )
+}
+
 function PdfPreview({ attachment }: { attachment: PreviewAttachment }) {
   const { t } = useTranslation()
   const [document, setDocument] = useState<PdfDocumentLike | null>(null)
@@ -981,6 +1019,7 @@ function PdfPageCanvas({
  */
 export function FilePreviewPanel({
   attachment,
+  initialFullscreen = false,
   onClose,
   presentation = 'inline',
 }: FilePreviewPanelProps) {
@@ -990,7 +1029,7 @@ export function FilePreviewPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'preview' | 'code'>('preview')
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(initialFullscreen)
   const setFilePreviewOpen = useUIStore((s) => s.setFilePreviewOpen)
 
   // Drag-to-resize state
@@ -1046,7 +1085,8 @@ export function FilePreviewPanel({
   useEffect(() => {
     paidFileRetryRef.current.clear()
     setCurrentAttachment(attachment)
-  }, [attachment])
+    setIsFullscreen(initialFullscreen)
+  }, [attachment, initialFullscreen])
 
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth)
@@ -1166,9 +1206,7 @@ export function FilePreviewPanel({
     if (category === 'video') {
       return (
         <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-          <video controls src={currentAttachment.url} className="max-w-full max-h-full rounded-lg">
-            <track kind="captions" />
-          </video>
+          <AutoPlayVideo filename={currentAttachment.filename} url={currentAttachment.url} />
         </div>
       )
     }

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -8,7 +8,6 @@ import {
   desktopCapturer,
   dialog,
   ipcMain,
-  nativeImage,
   net,
   protocol,
   session,
@@ -23,6 +22,7 @@ process.on('uncaughtException', (err) => {
   throw err
 })
 
+import { ensureDesktopDockIcon } from './app-icon'
 import { setupAutoUpdater } from './auto-updater'
 import { readCommunityAuthTokens, syncCommunityAuthStateToOpenWindows } from './community-session'
 import {
@@ -43,6 +43,7 @@ import {
   resolveDesktopAppBaseUrl,
   setupDesktopSettingsHandlers,
 } from './desktop-settings'
+import { desktopAppName } from './i18n'
 import { createAppMenu } from './menu'
 import { setupNotificationHandler } from './notifications'
 import { resolveDesktopPetAssetPath, setupDesktopPetAssetHandlers } from './pet-assets'
@@ -147,26 +148,6 @@ type StaticResponseCacheEntry = {
   lastModified: string
   mtimeMs: number
   size: number
-}
-
-async function resolveDesktopIconPath(): Promise<string | null> {
-  const candidates = [
-    join(__dirname, '../../assets/icon.icns'),
-    join(__dirname, '../../assets/icon.png'),
-    join(process.resourcesPath, 'icon.icns'),
-    join(process.resourcesPath, 'icon.png'),
-    join(process.resourcesPath, 'assets/icon.icns'),
-    join(process.resourcesPath, 'assets/icon.png'),
-  ]
-  for (const candidate of candidates) {
-    try {
-      await access(candidate)
-      return candidate
-    } catch {
-      // Try the next packaged icon path.
-    }
-  }
-  return null
 }
 
 function staticContentType(filePath: string): string {
@@ -501,17 +482,6 @@ app.on('second-instance', (_event, argv) => {
   showCommunityWindow()
 })
 
-async function applyDockIcon(): Promise<void> {
-  if (process.platform !== 'darwin') return
-  app.setActivationPolicy('regular')
-  const iconPath = await resolveDesktopIconPath()
-  if (iconPath) {
-    const dockIcon = nativeImage.createFromPath(iconPath)
-    if (!dockIcon.isEmpty()) app.dock?.setIcon(dockIcon)
-  }
-  await app.dock?.show()
-}
-
 function sanitizeFileName(value: string): string {
   const normalized = value
     .trim()
@@ -688,10 +658,10 @@ async function openReaderResourceWithDefaultApp(resource: ReaderResource): Promi
 }
 
 app.on('ready', async () => {
-  app.setName('Shadow')
+  app.setName(desktopAppName())
   app.setAppUserModelId('com.shadowob.app')
   registerDesktopDeepLinkProtocol()
-  void applyDockIcon()
+  ensureDesktopDockIcon()
 
   const localRendererDir = join(__dirname, '../desktop-local')
 

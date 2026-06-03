@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   rowSub: { fontSize: fontSize.xs },
   sheetOverlay: {
     flex: 1,
-    backgroundColor: palette.black,
+    backgroundColor: palette.blackOverlay,
     justifyContent: 'flex-end',
   },
   sheetPanel: {

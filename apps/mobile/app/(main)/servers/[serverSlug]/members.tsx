@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
   sheetOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: palette.black,
+    backgroundColor: palette.blackOverlay,
   },
   sheetContent: {
     borderTopLeftRadius: radius.xl,

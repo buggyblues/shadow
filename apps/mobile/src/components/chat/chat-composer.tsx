@@ -5,6 +5,7 @@ import {
   Camera,
   File,
   Image as ImageIcon,
+  ListTodo,
   Mic,
   Paperclip,
   Plus,
@@ -333,6 +334,8 @@ interface ChatComposerProps {
   onPasteImage?: (imageDataUri: string) => void
   commerceCards?: CommerceProductCard[]
   onOpenProductPicker?: () => void
+  enableTaskCards?: boolean
+  onOpenTaskComposer?: () => void
   onRemoveCommerceCard?: (cardId: string) => void
 }
 
@@ -442,6 +445,8 @@ export const ChatComposer = memo(function ChatComposer({
   onTakePhoto,
   commerceCards = [],
   onOpenProductPicker,
+  enableTaskCards = false,
+  onOpenTaskComposer,
   onRemoveCommerceCard,
 }: ChatComposerProps) {
   const colors = useColors()
@@ -972,6 +977,30 @@ export const ChatComposer = memo(function ChatComposer({
                     />
                     <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
                       {t('chat.productPicker')}
+                    </Text>
+                  </Pressable>
+                )}
+                {enableTaskCards && onOpenTaskComposer && (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.plusPanelItem,
+                      pressed && styles.plusPanelPressed,
+                    ]}
+                    onPress={() => {
+                      selectionHaptic()
+                      animateNextLayout()
+                      setShowPlusMenu(false)
+                      onOpenTaskComposer()
+                    }}
+                  >
+                    <IconBubble
+                      icon={ListTodo}
+                      tone="primary"
+                      size={iconSize['4xl']}
+                      style={styles.plusPanelIcon}
+                    />
+                    <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
+                      {t('inbox.task.new')}
                     </Text>
                   </Pressable>
                 )}

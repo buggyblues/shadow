@@ -1,192 +1,172 @@
 name: release-desktop
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: [post-merge-validation]
+    types: [completed]
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Existing git tag to attach assets to (e.g. v0.1.0-beta)'
-        required: true
-        type: string
+      force:
+        description: 'Publish even if there are no new desktop release changes'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
 
+concurrency:
+  group: desktop-stable-release
+  cancel-in-progress: false
+
 jobs:
-  update-release-notes:
-    name: Update release notes from changelog
+  gate:
+    name: Detect releasable desktop changes
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'desktop-beta-') }}
+    if: |
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): mobile v') &&
+      !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): desktop v') &&
+      !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): apps v'))
+    outputs:
+      should_release: ${{ steps.gate.outputs.should_release }}
+      base: ${{ steps.gate.outputs.base }}
+      head_sha: ${{ steps.gate.outputs.head_sha }}
+      changed_files: ${{ steps.gate.outputs.changed_files }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Extract version from tag
-        id: version
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Read changelog and update release body
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          CHANGELOG="apps/desktop/changelogs/v${{ steps.version.outputs.version }}.md"
-          if [ -f "$CHANGELOG" ]; then
-            echo "Found changelog: $CHANGELOG"
-            # Append changelog to existing release body
-            gh release view "${{ steps.version.outputs.tag }}" --json body -q .body > /tmp/current_body.txt || true
-            {
-              cat /tmp/current_body.txt
-              echo ""
-              echo "---"
-              echo ""
-              cat "$CHANGELOG"
-            } > /tmp/new_body.txt
-            gh release edit "${{ steps.version.outputs.tag }}" --notes-file /tmp/new_body.txt
-            echo "Release notes updated from changelog"
-          else
-            echo "No changelog found at $CHANGELOG — skipping"
-          fi
-
-  build-macos-notarized:
-    name: macOS ${{ matrix.arch }} notarized
-    runs-on: ${{ matrix.runner }}
-    if: ${{ github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'desktop-beta-') }}
-    environment: ShadowOB Mac
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            runner: macos-latest
-          - arch: arm64
-            runner: macos-latest
-    env:
-      APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
-      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-        with:
-          version: 10.19.0
-
-      - name: Install dependencies
-        run: pnpm i --frozen-lockfile
-
-      - name: Prepare App Store Connect API key
-        run: |
-          if [ -n "${APPLE_API_KEY_P8:-}" ]; then
-            mkdir -p ./.secrets
-            printf '%s' "$APPLE_API_KEY_P8" > ./.secrets/AuthKey_${APPLE_API_KEY_ID}.p8
-            echo "APPLE_API_KEY=$PWD/.secrets/AuthKey_${APPLE_API_KEY_ID}.p8" >> "$GITHUB_ENV"
-            echo "Using App Store Connect API key notarization"
-          else
-            echo "APPLE_API_KEY_P8 not provided"
-            echo "API-key notarization requires APPLE_API_KEY_P8, APPLE_API_KEY_ID, APPLE_API_ISSUER"
-            exit 1
-          fi
-
-      - name: Import Apple certificate
-        env:
-          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
-          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
-        run: |
-          security create-keychain -p "build" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "build" build.keychain
-          security set-keychain-settings -t 3600 -u build.keychain
-
-          python3 - <<'PY'
-          import base64, os
-          data = os.environ['APPLE_CERT_P12_BASE64']
-          with open('certificate.p12', 'wb') as f:
-              f.write(base64.b64decode(data))
-          PY
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "build" build.keychain
-
-      - name: Generate icons
-        run: pnpm --dir ./apps/desktop generate-icons
-
-      - name: Build notarized DMG/ZIP
-        run: pnpm --dir ./apps/desktop release:mac:${{ matrix.arch }}
-
-      - name: List make output for debugging
-        if: always()
-        run: find apps/desktop/out/make -type f 2>/dev/null || echo "No make output found"
-
-      - name: Upload release assets
-        if: ${{ github.event_name == 'release' || github.event.inputs.tag != '' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag }}
-          files: |
-            apps/desktop/out/make/**/*.dmg
-            apps/desktop/out/make/**/*.zip
-          fail_on_unmatched_files: true
-
-  build-cross-platform:
-    name: ${{ matrix.platform }} build
-    runs-on: ${{ matrix.runner }}
-    if: ${{ github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'desktop-beta-') }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            runner: windows-latest
-            make_script: release:win
-            files: apps/desktop/out/make/squirrel.windows/**/*.exe
-          - platform: linux
-            runner: ubuntu-latest
-            make_script: release:linux
-            files: apps/desktop/out/make/**/*.zip
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-        with:
-          version: 10.19.0
-
-      - name: Install dependencies
-        run: pnpm i --frozen-lockfile
-
-      - name: Generate icons
-        run: pnpm --dir ./apps/desktop generate-icons
-
-      - name: Build release artifacts
-        run: pnpm --dir ./apps/desktop ${{ matrix.make_script }}
-
-      - name: List make output for debugging
-        if: always()
+      - name: Decide whether to publish
+        id: gate
         shell: bash
-        run: find apps/desktop/out/make -type f 2>/dev/null || echo "No make output found"
+        env:
+          FORCE: ${{ inputs.force || 'false' }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags
 
-      - name: Upload release assets
-        if: ${{ github.event_name == 'release' || github.event.inputs.tag != '' }}
-        uses: softprops/action-gh-release@v2
+          force="${FORCE:-false}"
+          head_sha="$(git rev-parse HEAD)"
+          base="$(git tag --list 'desktop-v*' --sort=-creatordate | head -n 1 || true)"
+
+          if [ -n "$base" ]; then
+            range="${base}..HEAD"
+          elif git rev-parse -q --verify HEAD^ >/dev/null; then
+            range="HEAD^..HEAD"
+          else
+            range="HEAD"
+          fi
+
+          changed="$(
+            git diff --name-only "$range" -- \
+              .github/workflows/release-desktop-artifacts.yml \
+              .github/workflows/release-desktop.yml \
+              apps/desktop \
+              apps/server/src/handlers/desktop-release.handler.ts \
+              packages/connector \
+              packages/openclaw-shadowob \
+              packages/sdk \
+              packages/shared \
+              packages/ui \
+              package.json \
+              pnpm-lock.yaml \
+              pnpm-workspace.yaml \
+              scripts/prepare-app-release-version.mjs \
+            | sed '/^$/d'
+          )"
+
+          if [ -z "$changed" ] && [ "$force" != "true" ]; then
+            should_release=false
+            echo "No desktop release relevant changes since ${base:-previous commit}."
+          else
+            should_release=true
+          fi
+
+          {
+            echo "should_release=${should_release}"
+            echo "base=${base}"
+            echo "head_sha=${head_sha}"
+            echo "changed_files<<EOF"
+            echo "$changed"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  prepare-release-version:
+    name: Prepare stable desktop release version
+    runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.should_release == 'true'
+    concurrency:
+      group: app-release-version-${{ needs.gate.outputs.head_sha }}
+      cancel-in-progress: false
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      desktop_release_tag: ${{ steps.version.outputs.desktop_release_tag }}
+      desktop_version_tag: ${{ steps.version.outputs.desktop_version_tag }}
+      release_sha: ${{ steps.commit.outputs.release_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
-          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag }}
-          files: ${{ matrix.files }}
-          fail_on_unmatched_files: true
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Prepare version commit
+        id: version
+        shell: bash
+        env:
+          FORCE: ${{ inputs.force || 'false' }}
+          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+          git fetch origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}" --tags
+          git checkout -B "${RELEASE_BRANCH}" "origin/${RELEASE_BRANCH}"
+          node scripts/prepare-app-release-version.mjs \
+            --target=desktop \
+            --source-sha="${{ needs.gate.outputs.head_sha }}" \
+            --force="${FORCE}"
+
+      - name: Commit version bump
+        id: commit
+        shell: bash
+        env:
+          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/package.json
+          if git diff --cached --quiet; then
+            echo "Stable desktop version already prepared."
+          else
+            git commit \
+              -m "chore(release): desktop v${{ steps.version.outputs.version }}" \
+              -m "Release-Source-SHA: ${{ needs.gate.outputs.head_sha }}" \
+              -m "Release-Target: desktop"
+            git push origin "HEAD:${RELEASE_BRANCH}"
+          fi
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  publish-release:
+    name: Build and publish stable desktop release
+    needs: [gate, prepare-release-version]
+    if: needs.gate.outputs.should_release == 'true'
+    uses: ./.github/workflows/release-desktop-artifacts.yml
+    with:
+      release_sha: ${{ needs.prepare-release-version.outputs.release_sha }}
+      source_sha: ${{ needs.gate.outputs.head_sha }}
+      version: ${{ needs.prepare-release-version.outputs.version }}
+      release_tag: ${{ needs.prepare-release-version.outputs.desktop_release_tag }}
+      desktop_version_tag: ${{ needs.prepare-release-version.outputs.desktop_version_tag }}
+      release_name: Shadow Desktop v${{ needs.prepare-release-version.outputs.version }}
+      channel: stable
+      prerelease: false
+      base: ${{ needs.gate.outputs.base }}
+      changed_files: ${{ needs.gate.outputs.changed_files }}
+    secrets: inherit

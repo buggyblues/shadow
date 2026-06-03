@@ -512,11 +512,29 @@
     "status": {
       "queued": "排队中",
       "claimed": "已领取",
-      "running": "执行中",
+      "running": "进行中",
       "completed": "已完成",
       "failed": "已失败",
       "canceled": "已取消",
       "transferred": "已转交"
+    },
+    "task": {
+      "new": "新建任务",
+      "quickPlaceholder": "写下任务标题；换行补充验收标准、链接或上下文",
+      "create": "创建任务",
+      "created": "任务已创建",
+      "createFailed": "创建任务失败",
+      "tagsPlaceholder": "标签，用逗号分隔",
+      "noReplies": "暂无回复",
+      "replyPlaceholder": "输入回复内容...",
+      "sendReply": "发送回复",
+      "replyFailed": "发送回复失败",
+      "priority": {
+        "low": "低优",
+        "normal": "普通",
+        "high": "高优",
+        "urgent": "紧急"
+      }
     },
     "action": {
       "start": "开始",

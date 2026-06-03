@@ -225,6 +225,17 @@ export async function markContentFeedOpened(api: DesktopPetApi | null, feedItemI
   })
 }
 
+export async function markContentFeedReadScope(
+  api: DesktopPetApi | null,
+  input: { feedItemId?: string; channelId?: string; serverId?: string; all?: boolean },
+) {
+  return fetchShadow<{ updated?: number }>(api, '/api/content-feed/read-scope', {
+    method: 'POST',
+    body: JSON.stringify(input),
+    optionalNotFound: true,
+  })
+}
+
 export async function loadSubscriptionFiles(
   api: DesktopPetApi | null,
   _subscriptions: ChannelSubscription[],

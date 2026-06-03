@@ -1,6 +1,7 @@
 import { app } from 'electron'
 
 type DesktopTextKey =
+  | 'appName'
   | 'community'
   | 'settings'
   | 'preferences'
@@ -32,6 +33,7 @@ type DesktopTextKey =
 
 const dictionary: Record<string, Record<DesktopTextKey, string>> = {
   en: {
+    appName: 'Shadow',
     community: 'Open Community',
     settings: 'Desktop Settings',
     preferences: 'Preferences',
@@ -62,6 +64,7 @@ const dictionary: Record<string, Record<DesktopTextKey, string>> = {
     readerLoadFailed: 'Could not preview this file.',
   },
   'zh-cn': {
+    appName: '虾豆',
     community: '打开社区',
     settings: '虾豆桌面端设置',
     preferences: '偏好设置',
@@ -92,6 +95,7 @@ const dictionary: Record<string, Record<DesktopTextKey, string>> = {
     readerLoadFailed: '无法预览这个文件。',
   },
   'zh-tw': {
+    appName: '虾豆',
     community: '開啟社群',
     settings: '蝦豆桌面端設定',
     preferences: '偏好設定',
@@ -122,6 +126,7 @@ const dictionary: Record<string, Record<DesktopTextKey, string>> = {
     readerLoadFailed: '無法預覽此檔案。',
   },
   ja: {
+    appName: 'Shadow',
     community: 'コミュニティを開く',
     settings: 'デスクトップ設定',
     preferences: '環境設定',
@@ -152,6 +157,7 @@ const dictionary: Record<string, Record<DesktopTextKey, string>> = {
     readerLoadFailed: 'このファイルをプレビューできません。',
   },
   ko: {
+    appName: 'Shadow',
     community: '커뮤니티 열기',
     settings: '데스크톱 설정',
     preferences: '환경설정',
@@ -196,4 +202,8 @@ function localeKey(): string {
 
 export function desktopText(key: DesktopTextKey): string {
   return dictionary[localeKey()]?.[key] ?? dictionary.en?.[key] ?? key
+}
+
+export function desktopAppName(): string {
+  return desktopText('appName')
 }

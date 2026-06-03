@@ -1,0 +1,323 @@
+name: release-desktop-artifacts
+
+on:
+  workflow_call:
+    inputs:
+      release_sha:
+        required: true
+        type: string
+      source_sha:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+      desktop_version_tag:
+        required: true
+        type: string
+      release_name:
+        required: true
+        type: string
+      channel:
+        required: true
+        type: string
+      prerelease:
+        required: true
+        type: boolean
+      base:
+        required: false
+        type: string
+        default: ''
+      changed_files:
+        required: false
+        type: string
+        default: ''
+      public_base_url:
+        required: false
+        type: string
+        default: 'https://shadowob.com'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-notarized:
+    name: macOS ${{ matrix.arch }} ${{ inputs.channel }}
+    runs-on: macos-latest
+    environment: ShadowOB Mac
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    env:
+      APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10.19.0
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Prepare App Store Connect API key
+        run: |
+          if [ -n "${APPLE_API_KEY_P8:-}" ]; then
+            mkdir -p ./.secrets
+            printf '%s' "$APPLE_API_KEY_P8" > ./.secrets/AuthKey_${APPLE_API_KEY_ID}.p8
+            echo "APPLE_API_KEY=$PWD/.secrets/AuthKey_${APPLE_API_KEY_ID}.p8" >> "$GITHUB_ENV"
+          else
+            echo "APPLE_API_KEY_P8 not provided"
+            exit 1
+          fi
+
+      - name: Import Apple certificate
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          security create-keychain -p "build" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "build" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+          python3 - <<'PY'
+          import base64, os
+          data = os.environ['APPLE_CERT_P12_BASE64']
+          with open('certificate.p12', 'wb') as f:
+              f.write(base64.b64decode(data))
+          PY
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "build" build.keychain
+
+      - name: Generate icons
+        run: pnpm --dir ./apps/desktop generate-icons
+
+      - name: Build notarized artifacts
+        run: pnpm --dir ./apps/desktop release:mac:${{ matrix.arch }}
+
+      - name: Verify packaged icon and metadata
+        run: node ./apps/desktop/scripts/verify-package-assets.mjs --platform=darwin --arch=${{ matrix.arch }}
+
+      - name: List make output
+        if: always()
+        run: find apps/desktop/out/make -type f 2>/dev/null || echo "No make output found"
+
+      - name: Prepare uniquely named desktop assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          upload_dir="apps/desktop/out/release-upload"
+          rm -rf "$upload_dir"
+          mkdir -p "$upload_dir"
+
+          while IFS= read -r file; do
+            filename="$(basename "$file")"
+            extension="${filename##*.}"
+            stem="${filename%.*}"
+            cp "$file" "$upload_dir/${stem}-macos-${{ matrix.arch }}.${extension}"
+          done < <(find apps/desktop/out/make -type f \( -name '*.dmg' -o -name '*.zip' \))
+
+          find "$upload_dir" -type f
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ inputs.channel }}-macos-${{ matrix.arch }}
+          path: apps/desktop/out/release-upload/*
+          if-no-files-found: error
+
+  build-cross-platform:
+    name: ${{ matrix.platform }} ${{ inputs.channel }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            forge_platform: win32
+            runner: windows-latest
+            make_script: release:win
+            artifact_name: windows-x64
+          - platform: linux
+            forge_platform: linux
+            runner: ubuntu-latest
+            make_script: release:linux
+            artifact_name: linux-x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10.19.0
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Generate icons
+        run: pnpm --dir ./apps/desktop generate-icons
+
+      - name: Build release artifacts
+        run: pnpm --dir ./apps/desktop ${{ matrix.make_script }}
+
+      - name: Verify packaged icon and metadata
+        run: node ./apps/desktop/scripts/verify-package-assets.mjs --platform=${{ matrix.forge_platform }} --arch=x64
+
+      - name: List make output
+        if: always()
+        shell: bash
+        run: find apps/desktop/out/make -type f 2>/dev/null || echo "No make output found"
+
+      - name: Prepare uniquely named desktop assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          upload_dir="apps/desktop/out/release-upload"
+          rm -rf "$upload_dir"
+          mkdir -p "$upload_dir"
+
+          while IFS= read -r file; do
+            filename="$(basename "$file")"
+            extension="${filename##*.}"
+            stem="${filename%.*}"
+            cp "$file" "$upload_dir/${stem}-${{ matrix.platform }}-x64.${extension}"
+          done < <(find apps/desktop/out/make -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \))
+
+          find "$upload_dir" -type f
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ inputs.channel }}-${{ matrix.artifact_name }}
+          path: apps/desktop/out/release-upload/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish ${{ inputs.release_name }}
+    runs-on: ubuntu-latest
+    needs: [build-macos-notarized, build-cross-platform]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release_sha }}
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+
+      - name: Create release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ inputs.base }}"
+          public_base_url="${{ inputs.public_base_url }}"
+          public_base_url="${public_base_url%/}"
+          {
+            echo "${{ inputs.release_name }}"
+            echo ""
+            echo "- Version: v${{ inputs.version }}"
+            echo "- Channel: ${{ inputs.channel }}"
+            echo "- Release commit: ${{ inputs.release_sha }}"
+            echo "- Source commit: ${{ inputs.source_sha }}"
+            if [ -n "$base" ]; then
+              echo "- Changes since: ${base}"
+            fi
+            echo ""
+            echo "## Direct desktop downloads"
+            echo ""
+            echo "- macOS Apple Silicon: ${public_base_url}/desktop/download/macos-arm64"
+            echo "- macOS Intel: ${public_base_url}/desktop/download/macos-x64"
+            echo "- Windows x64: ${public_base_url}/desktop/download/windows-x64"
+            echo "- Linux x64: ${public_base_url}/desktop/download/linux-x64"
+            echo ""
+            echo "Changed files:"
+            echo '```'
+            printf '%s\n' "${{ inputs.changed_files }}"
+            echo '```'
+          } > release-notes.md
+
+      - name: Create release tags
+        id: create_tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          created_tags=()
+          for tag in "${{ inputs.release_tag }}" "${{ inputs.desktop_version_tag }}"; do
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              echo "Tag ${tag} already exists"
+            else
+              git tag -a "${tag}" -m "${{ inputs.release_name }}"
+              created_tags+=("${tag}")
+            fi
+          done
+
+          if [ "${#created_tags[@]}" -gt 0 ]; then
+            git push origin "${created_tags[@]}"
+          fi
+
+          {
+            echo "created_tags<<EOF"
+            printf '%s\n' "${created_tags[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        id: publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: ${{ inputs.release_name }}
+          body_path: release-notes.md
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            release-assets/**/*.dmg
+            release-assets/**/*.exe
+            release-assets/**/*.zip
+            release-assets/**/*.AppImage
+            release-assets/**/*.deb
+            release-assets/**/*.rpm
+          fail_on_unmatched_files: true
+
+      - name: Roll back tags on publish failure
+        if: failure() && steps.create_tags.outputs.created_tags != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set +e
+          gh release delete "${{ inputs.release_tag }}" --yes
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && git push --delete origin "$tag"
+          done <<< "${{ steps.create_tags.outputs.created_tags }}"

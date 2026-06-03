@@ -3,6 +3,7 @@ import type {
   MentionSuggestion,
   MentionSuggestionTrigger,
   MessageMention,
+  TaskMessageCardTag,
 } from '@shadowob/shared'
 import { assignMentionRanges, canonicalMentionToken } from '@shadowob/shared'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -25,6 +26,7 @@ import {
   Copy,
   File,
   Hash,
+  ListTodo,
   Lock,
   MessageSquare,
   Search,
@@ -134,6 +136,30 @@ type PendingChatFile = {
   transcriptSource?: 'client' | 'runtime'
 }
 
+type TaskDraftPriority = 'low' | 'normal' | 'high' | 'urgent'
+
+const taskPriorityOptions: TaskDraftPriority[] = ['normal', 'high', 'urgent', 'low']
+
+function taskDraftToInput(value: string) {
+  const lines = value
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const title = lines[0] ?? ''
+  const body = lines.slice(1).join('\n')
+  return { title, body }
+}
+
+function taskTagsToInput(value: string): TaskMessageCardTag[] | undefined {
+  const tags = value
+    .split(/[,\n，]/u)
+    .map((tag) => tag.trim().replace(/^#+/u, ''))
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((label) => ({ label }))
+  return tags.length > 0 ? tags : undefined
+}
+
 type MessagesCache = {
   pages: MessagesPage[]
   pageParams: unknown[]
@@ -175,6 +201,18 @@ interface NotificationEvent {
 function metaString(event: NotificationEvent, key: string) {
   const value = event.metadata?.[key]
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function hasTaskCard(message: Message) {
+  return (message.metadata?.cards ?? []).some(
+    (card) =>
+      card &&
+      typeof card === 'object' &&
+      'kind' in card &&
+      card.kind === 'task' &&
+      'id' in card &&
+      typeof card.id === 'string',
+  )
 }
 
 function getNotificationChannelId(event: NotificationEvent) {
@@ -288,7 +326,7 @@ export default function ChannelViewScreen() {
   const [inputText, setInputText] = useState('')
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState(false)
-  const [typingUsers, setTypingUsers] = useState<string[]>([])
+  const [typingUsers, setTypingUsers] = useState<{ userId: string; name: string }[]>([])
   const [systemEvents, setSystemEvents] = useState<SystemEvent[]>([])
   const [activityUsers, setActivityUsers] = useState<
     { userId: string; username: string; activity: string }[]
@@ -296,6 +334,11 @@ export default function ChannelViewScreen() {
   const [pendingFiles, setPendingFiles] = useState<PendingChatFile[]>([])
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [showTaskComposer, setShowTaskComposer] = useState(false)
+  const [taskDraft, setTaskDraft] = useState('')
+  const [taskPriority, setTaskPriority] = useState<TaskDraftPriority>('normal')
+  const [taskTags, setTaskTags] = useState('')
+  const [creatingTask, setCreatingTask] = useState(false)
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
@@ -648,6 +691,7 @@ export default function ChannelViewScreen() {
   })
   const channel = bootstrap?.channel ?? channelFallback
   const isDirectChannel = channel?.kind === 'dm' || channel?.serverId === null
+  const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
   const { data: accessFallback } = useQuery({
     queryKey: ['channel-access', channelId],
     queryFn: () =>
@@ -1048,6 +1092,32 @@ export default function ChannelViewScreen() {
       .reverse()
   }, [data])
 
+  const taskCardMessageIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const message of messages) {
+      if (hasTaskCard(message)) ids.add(message.id)
+    }
+    return ids
+  }, [messages])
+
+  const taskRepliesByMessageId = useMemo(() => {
+    const replies = new Map<string, Message[]>()
+    for (const message of messages) {
+      const parentId = message.replyToId
+      if (!parentId || !taskCardMessageIds.has(parentId)) continue
+      const existing = replies.get(parentId) ?? []
+      existing.push(message)
+      replies.set(parentId, existing)
+    }
+    return replies
+  }, [messages, taskCardMessageIds])
+
+  const timelineBaseMessages = useMemo(() => {
+    return messages.filter(
+      (message) => !message.replyToId || !taskCardMessageIds.has(message.replyToId),
+    )
+  }, [messages, taskCardMessageIds])
+
   const buildThreadName = useCallback(
     (message: Message) => {
       const content = message.content.trim().replace(/\s+/g, ' ')
@@ -1104,7 +1174,10 @@ export default function ChannelViewScreen() {
   // ---------- Timeline with system events + date separators (inverted: newest first) ----------
   const timeline = useMemo<TimelineItem[]>(() => {
     // Messages are already newest-first
-    const items: TimelineItem[] = messages.map((m) => ({ kind: 'message' as const, data: m }))
+    const items: TimelineItem[] = timelineBaseMessages.map((m) => ({
+      kind: 'message' as const,
+      data: m,
+    }))
 
     // Insert system events at the correct position (also newest first)
     for (const evt of [...systemEvents].reverse()) {
@@ -1189,7 +1262,7 @@ export default function ChannelViewScreen() {
     }
 
     return withDates
-  }, [messages, systemEvents])
+  }, [systemEvents, timelineBaseMessages])
 
   // Scroll to a message
   const scrollToMessage = useCallback(
@@ -1606,17 +1679,33 @@ export default function ChannelViewScreen() {
         channelId: typingChannelId,
         userId,
         username,
+        displayName,
+        typing,
       }: {
         channelId: string
         userId: string
-        username: string
+        username?: string
+        displayName?: string | null
+        typing?: boolean
       }) => {
         if (typingChannelId !== channelId || !userId) return
         if (userId === currentUser?.id) return
-        setTypingUsers((prev) => (prev.includes(username) ? prev : [...prev, username]))
+        const name = displayName?.trim() || username?.trim() || userId
         if (typingUsersTimeout.current[userId]) clearTimeout(typingUsersTimeout.current[userId])
+        if (typing === false) {
+          delete typingUsersTimeout.current[userId]
+          setTypingUsers((prev) => prev.filter((item) => item.userId !== userId))
+          return
+        }
+        setTypingUsers((prev) => {
+          const existing = prev.find((item) => item.userId === userId)
+          if (existing) {
+            return prev.map((item) => (item.userId === userId ? { ...item, name } : item))
+          }
+          return [...prev, { userId, name }]
+        })
         typingUsersTimeout.current[userId] = setTimeout(() => {
-          setTypingUsers((prev) => prev.filter((n) => n !== username))
+          setTypingUsers((prev) => prev.filter((item) => item.userId !== userId))
           delete typingUsersTimeout.current[userId]
         }, TYPING_STATUS_TIMEOUT_MS)
       },
@@ -2162,6 +2251,46 @@ export default function ChannelViewScreen() {
     }
   }
 
+  const openTaskComposer = useCallback(() => {
+    const draft = inputText.trim()
+    setTaskDraft((current) => current || draft)
+    setShowTaskComposer(true)
+  }, [inputText])
+
+  const createTaskCard = useCallback(async () => {
+    if (!channelId || creatingTask) return
+    const input = taskDraftToInput(taskDraft)
+    if (!input.title) return
+    setCreatingTask(true)
+    try {
+      const tags = taskTagsToInput(taskTags)
+      await fetchApi(`/api/channels/${channelId}/inbox/tasks`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: input.title,
+          ...(input.body ? { body: input.body } : {}),
+          priority: taskPriority,
+          ...(tags ? { tags } : {}),
+        }),
+      })
+      setTaskDraft('')
+      setTaskPriority('normal')
+      setTaskTags('')
+      setShowTaskComposer(false)
+      setInputText('')
+      clearDraft()
+      successHaptic()
+      queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
+    } catch (error) {
+      Alert.alert(
+        t('inbox.task.createFailed'),
+        error instanceof Error ? error.message : t('common.error'),
+      )
+    } finally {
+      setCreatingTask(false)
+    }
+  }, [channelId, clearDraft, creatingTask, queryClient, t, taskDraft, taskPriority, taskTags])
+
   const markThreadMessageFailed = useCallback(
     (tempId: string) => {
       if (!activeThreadId) return
@@ -2404,6 +2533,21 @@ export default function ChannelViewScreen() {
     [t],
   )
 
+  const workIndicatorItems = useMemo(
+    () => [
+      ...activityUsers.map((u) => ({
+        id: `activity-${u.userId}`,
+        label: `${u.username} ${formatActivityLabel(u.activity)}`,
+        tone: 'primary' as const,
+      })),
+      ...typingUsers.map((u) => ({
+        id: `typing-${u.userId}`,
+        label: `${u.name} ${t('chat.isTyping')}`,
+      })),
+    ],
+    [activityUsers, formatActivityLabel, t, typingUsers],
+  )
+
   // @mention detection on input text change
   const handleTextChange = useCallback(
     (text: string) => {
@@ -2607,11 +2751,13 @@ export default function ChannelViewScreen() {
       }
       return (
         <View
-          style={
+          style={[
+            styles.messageTimelineItem,
+            isGrouped ? styles.messageTimelineItemGrouped : styles.messageTimelineItemStandalone,
             highlightMessageId === item.data.id
               ? { backgroundColor: colors.surfaceHover }
-              : undefined
-          }
+              : undefined,
+          ]}
         >
           <MessageBubble
             message={item.data}
@@ -2622,6 +2768,7 @@ export default function ChannelViewScreen() {
             channelId={channelId!}
             serverSlug={serverSlug}
             allMessages={messages}
+            taskReplies={taskRepliesByMessageId.get(item.data.id)}
             isGrouped={isGrouped}
             selectionMode={selectionMode}
             isSelected={selectedMessageIds.has(item.data.id)}
@@ -2642,6 +2789,7 @@ export default function ChannelViewScreen() {
       openThreadForMessage,
       threadsByParentId,
       messages,
+      taskRepliesByMessageId,
       timeline,
       highlightMessageId,
       selectionMode,
@@ -2662,15 +2810,22 @@ export default function ChannelViewScreen() {
         !item.replyToId &&
         new Date(item.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60 * 1000
       return (
-        <MessageBubble
-          message={item}
-          onReply={() => setThreadReplyTo(item)}
-          onRetry={handleThreadRetry}
-          channelId={item.channelId}
-          serverSlug={serverSlug}
-          allMessages={threadMessagesWithParent}
-          isGrouped={isGrouped}
-        />
+        <View
+          style={[
+            styles.threadTimelineItem,
+            isGrouped ? styles.threadTimelineItemGrouped : styles.threadTimelineItemStandalone,
+          ]}
+        >
+          <MessageBubble
+            message={item}
+            onReply={() => setThreadReplyTo(item)}
+            onRetry={handleThreadRetry}
+            channelId={item.channelId}
+            serverSlug={serverSlug}
+            allMessages={threadMessagesWithParent}
+            isGrouped={isGrouped}
+          />
+        </View>
       )
     },
     [handleThreadRetry, serverSlug, threadMessages, threadMessagesWithParent],
@@ -2681,6 +2836,7 @@ export default function ChannelViewScreen() {
   }, [])
 
   const getMessageKey = useCallback((item: Message) => item.id, [])
+  const canCreateTask = Boolean(taskDraftToInput(taskDraft).title) && !creatingTask
 
   if (access && !access.canAccess) {
     const gateChannel = access.channel ?? channel
@@ -2829,15 +2985,10 @@ export default function ChannelViewScreen() {
         />
       )}
 
-      {/* Activity indicator */}
-      {activityUsers.length > 0 && (
+      {/* Activity / typing indicator */}
+      {workIndicatorItems.length > 0 && (
         <View style={styles.activityBar}>
-          <ChatWorkIndicator
-            items={activityUsers.map((u) => ({
-              id: u.userId,
-              label: `${u.username} ${formatActivityLabel(u.activity)}`,
-            }))}
-          />
+          <ChatWorkIndicator items={workIndicatorItems} />
         </View>
       )}
 
@@ -2981,7 +3132,7 @@ export default function ChannelViewScreen() {
           onRemovePendingFile={removePendingFile}
           replyTo={replyTo}
           onClearReply={() => setReplyTo(null)}
-          typingUsers={typingUsers}
+          typingUsers={[]}
           isRecording={isRecording}
           isHolding={isHolding}
           isVoiceMessageRecording={isVoiceMessageRecording}
@@ -2996,6 +3147,7 @@ export default function ChannelViewScreen() {
           showAtButton
           onPressAt={() => {
             setInputText((prev) => `${prev}@`)
+            setMentionTrigger('@')
             setMentionQuery('')
             setSlashQuery(null)
             inputRef.current?.focus()
@@ -3010,6 +3162,8 @@ export default function ChannelViewScreen() {
           onTakePhoto={handleTakePhoto}
           commerceCards={selectedCommerceCards}
           onOpenProductPicker={() => setShowProductPicker(true)}
+          enableTaskCards={isInboxChannel}
+          onOpenTaskComposer={openTaskComposer}
           onRemoveCommerceCard={(cardId) =>
             setSelectedCommerceCards((prev) => prev.filter((card) => card.id !== cardId))
           }
@@ -3075,6 +3229,107 @@ export default function ChannelViewScreen() {
             )}
           />
         )}
+      </Sheet>
+
+      <Sheet
+        visible={showTaskComposer && isInboxChannel}
+        onClose={() => setShowTaskComposer(false)}
+        title={t('inbox.task.new')}
+        action={
+          <Button
+            variant="ghost"
+            size="icon"
+            icon={X}
+            iconColor={colors.textMuted}
+            onPress={() => setShowTaskComposer(false)}
+          />
+        }
+      >
+        <View style={styles.taskComposerSheet}>
+          <TextInput
+            value={taskDraft}
+            onChangeText={setTaskDraft}
+            placeholder={t('inbox.task.quickPlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            multiline
+            autoFocus
+            style={[
+              styles.taskComposerInput,
+              {
+                color: colors.text,
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border,
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.taskPriorityRow,
+              { backgroundColor: colors.inputBackground, borderColor: colors.border },
+            ]}
+          >
+            {taskPriorityOptions.map((priority) => {
+              const selected = taskPriority === priority
+              return (
+                <Pressable
+                  key={priority}
+                  onPress={() => {
+                    selectionHaptic()
+                    setTaskPriority(priority)
+                  }}
+                  style={[
+                    styles.taskPriorityButton,
+                    selected && { backgroundColor: colors.surfaceHover },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.taskPriorityButtonText,
+                      { color: selected ? colors.primary : colors.textMuted },
+                    ]}
+                  >
+                    {t(`inbox.task.priority.${priority}`)}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+
+          <TextInput
+            value={taskTags}
+            onChangeText={setTaskTags}
+            placeholder={t('inbox.task.tagsPlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.taskTagsInput,
+              {
+                color: colors.text,
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border,
+              },
+            ]}
+          />
+
+          <View style={styles.taskComposerActions}>
+            <Button variant="glass" size="sm" onPress={() => setShowTaskComposer(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={ListTodo}
+              loading={creatingTask}
+              disabled={!canCreateTask}
+              onPress={() => {
+                selectionHaptic()
+                void createTaskCard()
+              }}
+            >
+              {t('inbox.task.create')}
+            </Button>
+          </View>
+        </View>
       </Sheet>
 
       <Modal
@@ -3735,8 +3990,17 @@ const styles = StyleSheet.create({
   },
   threadMessageList: {
     paddingHorizontal: spacing.xs,
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.md,
+  },
+  threadTimelineItem: {
+    paddingHorizontal: spacing.xs,
+  },
+  threadTimelineItemStandalone: {
+    marginVertical: spacing.xs,
+  },
+  threadTimelineItemGrouped: {
+    marginVertical: spacing.px,
   },
   threadEmpty: {
     flex: 1,
@@ -3764,8 +4028,17 @@ const styles = StyleSheet.create({
   emptyDescription: { fontSize: fontSize.sm, textAlign: 'center', lineHeight: lineHeight.sm },
   messageList: {
     paddingHorizontal: spacing.xs,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  messageTimelineItem: {
+    paddingHorizontal: spacing.xs,
+  },
+  messageTimelineItemStandalone: {
+    marginVertical: spacing.xs,
+  },
+  messageTimelineItemGrouped: {
+    marginVertical: spacing.px,
   },
   loadingMore: {
     flexDirection: 'row',
@@ -3779,7 +4052,7 @@ const styles = StyleSheet.create({
   systemEvent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
   },
@@ -3789,7 +4062,7 @@ const styles = StyleSheet.create({
   newMessageDivider: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
   },
@@ -3799,7 +4072,7 @@ const styles = StyleSheet.create({
   dateSeparator: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
   },
@@ -3809,7 +4082,7 @@ const styles = StyleSheet.create({
   scrollBottomFab: {
     position: 'absolute',
     right: spacing.md,
-    bottom: size.tabBar + spacing['6xl'] + spacing.xl,
+    bottom: size.controlLg + spacing['4xl'],
     width: size.iconButtonMd,
     height: size.iconButtonMd,
     borderRadius: radius.xl,
@@ -3820,7 +4093,8 @@ const styles = StyleSheet.create({
   // Activity
   activityBar: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
   },
   activityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   pulseDot: { width: size.dotMd, height: size.dotMd, borderRadius: radius.sm },
@@ -3989,7 +4263,7 @@ const styles = StyleSheet.create({
   sheetOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: palette.black,
+    backgroundColor: palette.blackOverlay,
   },
   sheetDismiss: {
     flex: 1,
@@ -4065,6 +4339,52 @@ const styles = StyleSheet.create({
     lineHeight: lineHeight.xs,
   },
   productPickerPrice: { fontSize: fontSize.sm, fontWeight: '800' },
+  taskComposerSheet: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  taskComposerInput: {
+    minHeight: size.textareaMin,
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
+    textAlignVertical: 'top',
+  },
+  taskPriorityRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    padding: spacing.xs,
+  },
+  taskPriorityButton: {
+    minHeight: size.controlSm,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskPriorityButtonText: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  taskTagsInput: {
+    height: size.controlLg,
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    fontSize: fontSize.sm,
+  },
+  taskComposerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
   sheetSearchWrap: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -298,6 +298,26 @@ const desktopAuthCallbackRoute = createRoute({
   component: DesktopAuthCallbackPage,
 })
 
+function DesktopDownloadRedirect() {
+  React.useEffect(() => {
+    const target = window.location.pathname.replace(/^\/app(?=\/|$)/, '') + window.location.search
+    window.location.replace(target)
+  }, [])
+  return null
+}
+
+const desktopDownloadRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/desktop/download/$platform',
+  component: DesktopDownloadRedirect,
+})
+
+const desktopReleaseRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/desktop/releases/latest',
+  component: DesktopDownloadRedirect,
+})
+
 const oauthAuthorizeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/oauth/authorize',
@@ -677,6 +697,8 @@ const routeTree = rootRoute.addChildren([
   inviteRoute,
   oauthCallbackRoute,
   desktopAuthCallbackRoute,
+  desktopDownloadRedirectRoute,
+  desktopReleaseRedirectRoute,
   oauthAuthorizeRoute,
   appRoute.addChildren([
     serverLayoutRoute.addChildren([

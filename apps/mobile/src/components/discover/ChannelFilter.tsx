@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: palette.black,
+    backgroundColor: palette.blackOverlay,
   },
   backdrop: {
     flex: 1,

@@ -15,6 +15,7 @@ import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
 import { createConfigHandler } from './handlers/config.handler'
 import { createConnectorHandler } from './handlers/connector.handler'
 import { createContentFeedHandler } from './handlers/content-feed.handler'
+import { createDesktopReleaseHandler } from './handlers/desktop-release.handler'
 import { createDiscoverHandler } from './handlers/discover.handler'
 import { createEconomyHandler } from './handlers/economy.handler'
 import { createFeatureFlagsHandler } from './handlers/feature-flags.handler'
@@ -125,6 +126,10 @@ export function createApp(container: AppContainer) {
 
   // Health check
   app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
+
+  // Public desktop release links. These intentionally live outside /api auth so website,
+  // SDK, and docs can point users to stable platform-specific desktop downloads.
+  app.route('/', createDesktopReleaseHandler())
 
   // Raw object refs, e.g. /shadow/uploads/file.txt, are intentionally not served directly.
   // Private media must be resolved through /api/attachments/:id/media-url or /api/media/signed/:token,

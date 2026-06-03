@@ -9,6 +9,8 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/build/**',
+      '**/.claude/**',
+      '**/.tmp/**',
       '.research',
       'apps/desktop/e2e/**',
       'apps/**',

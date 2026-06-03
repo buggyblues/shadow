@@ -519,6 +519,24 @@
       "canceled": "Canceled",
       "transferred": "Transferred"
     },
+    "task": {
+      "new": "New task",
+      "quickPlaceholder": "Write the task title; add acceptance criteria, links, or context on new lines",
+      "create": "Create task",
+      "created": "Task created",
+      "createFailed": "Failed to create task",
+      "tagsPlaceholder": "Tags, separated by commas",
+      "noReplies": "No replies yet",
+      "replyPlaceholder": "Type a reply...",
+      "sendReply": "Send reply",
+      "replyFailed": "Failed to send reply",
+      "priority": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "urgent": "Urgent"
+      }
+    },
     "action": {
       "start": "Start",
       "complete": "Complete",

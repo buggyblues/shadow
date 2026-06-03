@@ -154,6 +154,8 @@ export type {
   ShadowConnectorComputer,
   ShadowConnectorRuntimeInfo,
   ShadowContract,
+  ShadowDesktopReleaseDownload,
+  ShadowDesktopReleaseInfo,
   ShadowDiyCloudRun,
   ShadowDiyCloudRunEvent,
   ShadowDiyCloudRunStatus,

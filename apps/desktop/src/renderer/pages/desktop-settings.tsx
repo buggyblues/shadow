@@ -207,6 +207,8 @@ export function DesktopSettingsPage() {
   const [runtimesCollapsed, setRuntimesCollapsed] = useState(false)
   const [runtimeScanBusy, setRuntimeScanBusy] = useState(false)
   const [runtimeInstallBusyIds, setRuntimeInstallBusyIds] = useState<string[]>([])
+  const [runtimeInstallErrorIds, setRuntimeInstallErrorIds] = useState<string[]>([])
+  const [runtimeNotificationBusyIds, setRuntimeNotificationBusyIds] = useState<string[]>([])
   const [updateInfo, setUpdateInfo] = useState<{
     hasUpdate: boolean
     version: string
@@ -859,24 +861,34 @@ export function DesktopSettingsPage() {
     async (runtime: ConnectorRuntimeInfo) => {
       if (!api?.connector.installRuntime || runtimeInstallBusyIds.includes(runtime.id)) return
       setRuntimeInstallBusyIds((current) => [...current, runtime.id])
+      setRuntimeInstallErrorIds((current) => current.filter((id) => id !== runtime.id))
       setConnectorError('')
       setConnectorNotice('')
       try {
         const result = await api.connector.installRuntime({ runtimeId: runtime.id })
         setRuntimes(result.runtimes)
         setRuntimeSessions(result.runtimeSessions ?? null)
+        setConnectorNotice(
+          t('desktop.runtimeInstallComplete', {
+            name: result.installed?.label || runtime.label,
+          }),
+        )
       } catch (error) {
+        setRuntimeInstallErrorIds((current) =>
+          current.includes(runtime.id) ? current : [...current, runtime.id],
+        )
         setConnectorError(error instanceof Error ? error.message : String(error))
       } finally {
         setRuntimeInstallBusyIds((current) => current.filter((id) => id !== runtime.id))
       }
     },
-    [api, runtimeInstallBusyIds],
+    [api, runtimeInstallBusyIds, t],
   )
 
   const handleRuntimeNotificationToggle = useCallback(
     async (runtime: ConnectorRuntimeInfo, enabled: boolean) => {
-      if (!api) return
+      if (!api || runtimeNotificationBusyIds.includes(runtime.id)) return
+      setRuntimeNotificationBusyIds((current) => [...current, runtime.id])
       const next = { ...connectorRuntimeNotifications, [runtime.id]: enabled }
       setConnectorRuntimeNotifications(next)
       setConnectorError('')
@@ -884,10 +896,13 @@ export function DesktopSettingsPage() {
         const settings = await api.setDesktopSettings({ connectorRuntimeNotifications: next })
         setConnectorRuntimeNotifications(settings.connectorRuntimeNotifications ?? next)
       } catch (error) {
+        setConnectorRuntimeNotifications(connectorRuntimeNotifications)
         setConnectorError(error instanceof Error ? error.message : String(error))
+      } finally {
+        setRuntimeNotificationBusyIds((current) => current.filter((id) => id !== runtime.id))
       }
     },
-    [api, connectorRuntimeNotifications],
+    [api, connectorRuntimeNotifications, runtimeNotificationBusyIds],
   )
 
   const handleSelectTtsProvider = useCallback(
@@ -1019,6 +1034,8 @@ export function DesktopSettingsPage() {
               runtimesCollapsed={runtimesCollapsed}
               runtimeScanBusy={runtimeScanBusy}
               runtimeInstallBusyIds={runtimeInstallBusyIds}
+              runtimeInstallErrorIds={runtimeInstallErrorIds}
+              runtimeNotificationBusyIds={runtimeNotificationBusyIds}
               openExternal={api?.openExternal}
               onConnectorRunningToggle={handleConnectorRunningToggle}
               onCreateConnectorBuddy={handleCreateConnectorBuddy}

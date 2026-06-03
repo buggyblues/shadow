@@ -60,6 +60,9 @@ export interface MessageCardSourceMetadata {
   userId?: string
   agentId?: string
   appId?: string
+  appKey?: string
+  appName?: string | null
+  iconUrl?: string | null
   serverId?: string
   channelId?: string
   command?: string
@@ -70,6 +73,42 @@ export interface MessageCardSourceMetadata {
     url?: string
     [key: string]: unknown
   }
+  [key: string]: unknown
+}
+
+export type TaskMessageCardTagMetadata =
+  | string
+  | {
+      id?: string
+      label: string
+      color?: string
+      [key: string]: unknown
+    }
+
+export interface MessageCardAppMetadata {
+  id?: string
+  appId?: string
+  appKey?: string
+  name?: string | null
+  label?: string | null
+  iconUrl?: string | null
+  logoUrl?: string | null
+  avatarUrl?: string | null
+  imageUrl?: string | null
+  url?: string | null
+  [key: string]: unknown
+}
+
+export interface TaskMessageCardReplyMetadata {
+  id?: string
+  messageId?: string
+  cardId?: string
+  authorId?: string
+  authorLabel?: string
+  authorAvatarUrl?: string | null
+  content: string
+  createdAt: string
+  source?: MessageCardSourceMetadata
   [key: string]: unknown
 }
 
@@ -101,6 +140,8 @@ export interface TaskMessageCardMetadata {
   body?: string
   status: MessageCardStatus
   priority?: 'low' | 'normal' | 'high' | 'urgent'
+  tags?: TaskMessageCardTagMetadata[]
+  app?: MessageCardAppMetadata
   assignee?: {
     agentId?: string
     userId?: string
@@ -115,6 +156,7 @@ export interface TaskMessageCardMetadata {
     note?: string
     actor?: MessageCardSourceMetadata
   }>
+  replies?: TaskMessageCardReplyMetadata[]
   createdAt: string
   updatedAt?: string
   data?: Record<string, unknown> & {

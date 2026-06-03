@@ -7,7 +7,7 @@ import type {
   ServerAppMessageCard,
   TaskMessageCard,
 } from '@shadowob/shared'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import * as Clipboard from 'expo-clipboard'
@@ -20,6 +20,7 @@ import {
   AlertCircle,
   AppWindow,
   ArrowRight,
+  CalendarClock,
   Check,
   CheckSquare,
   ChevronRight,
@@ -36,8 +37,10 @@ import {
   Radio,
   RefreshCw,
   Save,
+  Send,
   Share2,
   Square as SquareIcon,
+  Tag,
   Ticket,
   Unlock,
   Volume2,
@@ -380,6 +383,94 @@ function isServerAppCard(card: MessageCard): card is ServerAppMessageCard {
   )
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function compactTaskDate(value?: string) {
+  if (!value) return ''
+  try {
+    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
+      new Date(value),
+    )
+  } catch {
+    return ''
+  }
+}
+
+function taskTagLabel(tag: NonNullable<TaskMessageCard['tags']>[number]) {
+  if (typeof tag === 'string') return tag.trim().replace(/^#+/u, '')
+  return tag.label?.trim().replace(/^#+/u, '') ?? ''
+}
+
+function taskSourceMeta(card: TaskMessageCard) {
+  const app = asRecord(card.app)
+  const source = card.source
+  const serverApp = asRecord(card.data?.serverApp)
+  const label =
+    stringValue(app?.name) ??
+    stringValue(app?.label) ??
+    stringValue(source?.appName) ??
+    stringValue(source?.label) ??
+    stringValue(serverApp?.name) ??
+    stringValue(serverApp?.label) ??
+    stringValue(app?.appKey) ??
+    stringValue(source?.appKey) ??
+    stringValue(serverApp?.appKey)
+  const iconUrl =
+    stringValue(app?.iconUrl) ?? stringValue(source?.iconUrl) ?? stringValue(serverApp?.iconUrl)
+  return { label, iconUrl }
+}
+
+function taskCardReplyCardId(message: Message) {
+  const custom = asRecord(message.metadata?.custom)
+  const reply = asRecord(custom?.taskCardReply)
+  return stringValue(reply?.cardId)
+}
+
+function taskReplyItems(card: TaskMessageCard, replies?: Message[]) {
+  const byKey = new Map<
+    string,
+    {
+      key: string
+      authorLabel: string | null
+      authorAvatarUrl: string | null
+      content: string
+      createdAt: string
+    }
+  >()
+  for (const reply of card.replies ?? []) {
+    const key = reply.messageId ?? reply.id ?? `${reply.createdAt}:${reply.content}`
+    byKey.set(key, {
+      key,
+      authorLabel: reply.authorLabel ?? reply.source?.label ?? null,
+      authorAvatarUrl: reply.authorAvatarUrl ?? null,
+      content: reply.content,
+      createdAt: reply.createdAt,
+    })
+  }
+  for (const message of replies ?? []) {
+    const cardId = taskCardReplyCardId(message)
+    if (cardId && cardId !== card.id) continue
+    byKey.set(message.id, {
+      key: message.id,
+      authorLabel: message.author?.displayName ?? message.author?.username ?? null,
+      authorAvatarUrl: message.author?.avatarUrl ?? null,
+      content: message.content,
+      createdAt: message.createdAt,
+    })
+  }
+  return [...byKey.values()].sort(
+    (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+  )
+}
+
 interface LaunchContext {
   iframeEntry: string | null
   launchToken: string
@@ -399,13 +490,29 @@ function withLaunchParams(entry: string, launch: LaunchContext, appPath?: string
   return url.toString()
 }
 
-function TaskCardsView({ cards }: { cards?: MessageCard[] }) {
+function TaskCardsView({
+  cards,
+  channelId,
+  messageId,
+  replies,
+}: {
+  cards?: MessageCard[]
+  channelId: string
+  messageId: string
+  replies?: Message[]
+}) {
   const taskCards = cards?.filter(isTaskMessageCard) ?? []
   if (taskCards.length === 0) return null
   return (
     <View style={styles.taskCards}>
       {taskCards.map((card) => (
-        <TaskCardMobile key={card.id} card={card} />
+        <TaskCardMobile
+          key={card.id}
+          card={card}
+          channelId={channelId}
+          messageId={messageId}
+          replies={replies}
+        />
       ))}
     </View>
   )
@@ -499,9 +606,24 @@ function ServerAppCardMobile({
   )
 }
 
-function TaskCardMobile({ card }: { card: TaskMessageCard }) {
+function TaskCardMobile({
+  card,
+  channelId,
+  messageId,
+  replies,
+}: {
+  card: TaskMessageCard
+  channelId: string
+  messageId: string
+  replies?: Message[]
+}) {
   const { t } = useTranslation()
   const colors = useColors()
+  const queryClient = useQueryClient()
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [repliesOpen, setRepliesOpen] = useState(false)
+  const [replyDraft, setReplyDraft] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
   const statusColor =
     card.status === 'completed'
       ? colors.success
@@ -510,23 +632,65 @@ function TaskCardMobile({ card }: { card: TaskMessageCard }) {
         : card.status === 'running' || card.status === 'claimed'
           ? colors.warning
           : colors.primary
+  const priority = card.priority ?? 'normal'
+  const priorityColor =
+    priority === 'urgent'
+      ? colors.error
+      : priority === 'high'
+        ? colors.warning
+        : priority === 'low'
+          ? colors.textMuted
+          : colors.primary
   const assigneeLabel = card.assignee?.label ?? t('inbox.unassigned')
+  const tags = useMemo(() => (card.tags ?? []).map(taskTagLabel).filter(Boolean), [card.tags])
+  const app = useMemo(() => taskSourceMeta(card), [card])
+  const replyItems = useMemo(() => taskReplyItems(card, replies), [card, replies])
+  const bodyPreview = card.body?.replace(/\s+/g, ' ').trim()
+
+  const sendTaskReply = useCallback(async () => {
+    const content = replyDraft.trim()
+    if (!content || sendingReply) return
+    setSendingReply(true)
+    try {
+      await fetchApi(`/api/channels/${channelId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          content,
+          replyToId: messageId,
+          metadata: {
+            custom: {
+              taskCardReply: {
+                kind: 'task_card_reply',
+                messageId,
+                cardId: card.id,
+              },
+            },
+          },
+        }),
+      })
+      setReplyDraft('')
+      setRepliesOpen(true)
+      successHaptic()
+      queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
+    } catch (error) {
+      errorHaptic()
+      showToast(error instanceof Error ? error.message : t('inbox.task.replyFailed'), 'error')
+    } finally {
+      setSendingReply(false)
+    }
+  }, [card.id, channelId, messageId, queryClient, replyDraft, sendingReply, t])
 
   return (
     <View
-      style={[styles.taskCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      style={[
+        styles.taskCard,
+        {
+          backgroundColor: colors.inputBackground,
+          borderColor: colors.border,
+        },
+      ]}
     >
-      <View style={styles.taskHeader}>
-        <Avatar
-          uri={null}
-          name={assigneeLabel}
-          userId={card.assignee?.userId ?? card.assignee?.agentId ?? assigneeLabel}
-          size={size.iconBubble}
-        />
-        <View style={styles.taskHeaderText}>
-          <Text style={[styles.taskTitle, { color: colors.text }]}>{card.title}</Text>
-          <Text style={[styles.taskAssignee, { color: colors.textMuted }]}>{assigneeLabel}</Text>
-        </View>
+      <View style={styles.taskMetaRow}>
         <Text
           style={[
             styles.taskStatus,
@@ -539,9 +703,169 @@ function TaskCardMobile({ card }: { card: TaskMessageCard }) {
         >
           {t(`inbox.status.${card.status}`)}
         </Text>
+        <Text style={[styles.taskPriority, { color: priorityColor }]}>
+          {t(`inbox.task.priority.${priority}`)}
+        </Text>
+        {tags.slice(0, 2).map((tag) => (
+          <View key={tag} style={styles.taskTag}>
+            <Tag size={iconSize.xs} color={colors.primary} />
+            <Text style={[styles.taskTagText, { color: colors.primary }]}>#{tag}</Text>
+          </View>
+        ))}
+        <Pressable
+          onPress={() => {
+            selectionHaptic()
+            setDetailsOpen((value) => !value)
+          }}
+          style={styles.taskExpandButton}
+        >
+          <ChevronRight
+            size={iconSize.sm}
+            color={colors.textMuted}
+            style={{ transform: [{ rotate: detailsOpen ? '90deg' : '0deg' }] }}
+          />
+        </Pressable>
       </View>
+
+      <Text style={[styles.taskTitle, { color: colors.text }]}>{card.title}</Text>
       {card.body ? (
-        <Text style={[styles.taskBody, { color: colors.textMuted }]}>{card.body}</Text>
+        <Text style={[styles.taskBody, { color: colors.textMuted }]} numberOfLines={2}>
+          {bodyPreview}
+        </Text>
+      ) : null}
+
+      {detailsOpen && card.body ? (
+        <View style={[styles.taskDetailsBox, { borderColor: colors.border }]}>
+          <Text style={[styles.taskDetailsText, { color: colors.textSecondary }]}>{card.body}</Text>
+        </View>
+      ) : null}
+
+      <View style={[styles.taskFooter, { borderTopColor: colors.border }]}>
+        <View style={styles.taskFooterLeft}>
+          <View style={[styles.taskFooterPill, { backgroundColor: colors.inputBackground }]}>
+            <CalendarClock size={iconSize.xs} color={colors.warning} />
+            <Text style={[styles.taskFooterText, { color: colors.textSecondary }]}>
+              {compactTaskDate(card.createdAt)}
+            </Text>
+          </View>
+          {app.label ? (
+            <View style={[styles.taskFooterPill, { backgroundColor: colors.inputBackground }]}>
+              {app.iconUrl ? (
+                <Image
+                  source={{ uri: getImageUrl(app.iconUrl) ?? app.iconUrl }}
+                  style={styles.taskAppIcon}
+                />
+              ) : (
+                <AppWindow size={iconSize.xs} color={colors.primary} />
+              )}
+              <Text
+                style={[styles.taskFooterText, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {app.label}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Pressable
+          onPress={() => {
+            selectionHaptic()
+            setRepliesOpen((value) => !value)
+          }}
+          style={[styles.taskReplyCount, { backgroundColor: colors.inputBackground }]}
+        >
+          <MessageSquare
+            size={iconSize.xs}
+            color={repliesOpen ? colors.primary : colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.taskFooterText,
+              { color: repliesOpen ? colors.primary : colors.textSecondary },
+            ]}
+          >
+            {replyItems.length}
+          </Text>
+        </Pressable>
+        <View style={styles.taskAssigneeWrap}>
+          <Avatar
+            uri={null}
+            name={assigneeLabel}
+            userId={card.assignee?.userId ?? card.assignee?.agentId ?? assigneeLabel}
+            size={size.avatarXs}
+          />
+          <Text style={[styles.taskAssignee, { color: colors.textMuted }]} numberOfLines={1}>
+            {assigneeLabel}
+          </Text>
+        </View>
+      </View>
+
+      {repliesOpen ? (
+        <View style={[styles.taskReplies, { borderTopColor: colors.border }]}>
+          {replyItems.length > 0 ? (
+            replyItems.map((reply) => (
+              <View key={reply.key} style={styles.taskReplyRow}>
+                {reply.authorAvatarUrl ? (
+                  <Image
+                    source={{ uri: getImageUrl(reply.authorAvatarUrl) ?? reply.authorAvatarUrl }}
+                    style={styles.taskReplyAvatar}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.taskReplyAvatarFallback,
+                      { backgroundColor: colors.inputBackground },
+                    ]}
+                  >
+                    <Text style={[styles.taskReplyAvatarText, { color: colors.primary }]}>
+                      {(reply.authorLabel ?? '?').slice(0, 1)}
+                    </Text>
+                  </View>
+                )}
+                <View style={[styles.taskReplyBubble, { backgroundColor: colors.inputBackground }]}>
+                  <Text style={[styles.taskReplyAuthor, { color: colors.textMuted }]}>
+                    {reply.authorLabel ?? t('common.unknownUser')} ·{' '}
+                    {compactTaskDate(reply.createdAt)}
+                  </Text>
+                  <Text style={[styles.taskReplyText, { color: colors.textSecondary }]}>
+                    {reply.content}
+                  </Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={[styles.taskBody, { color: colors.textMuted }]}>
+              {t('inbox.task.noReplies')}
+            </Text>
+          )}
+          <View style={[styles.taskReplyInputRow, { backgroundColor: colors.inputBackground }]}>
+            <TextInput
+              value={replyDraft}
+              onChangeText={setReplyDraft}
+              placeholder={t('inbox.task.replyPlaceholder')}
+              placeholderTextColor={colors.textMuted}
+              style={[styles.taskReplyInput, { color: colors.text }]}
+              multiline
+              returnKeyType="send"
+            />
+            <Pressable
+              disabled={!replyDraft.trim() || sendingReply}
+              onPress={() => {
+                selectionHaptic()
+                void sendTaskReply()
+              }}
+              style={[
+                styles.taskReplySend,
+                { backgroundColor: replyDraft.trim() ? colors.primary : colors.surfaceHover },
+              ]}
+            >
+              <Send
+                size={iconSize.sm}
+                color={replyDraft.trim() ? palette.foundation : colors.textMuted}
+              />
+            </Pressable>
+          </View>
+        </View>
       ) : null}
     </View>
   )
@@ -556,6 +880,7 @@ interface MessageBubbleProps {
   channelId: string
   serverSlug?: string
   allMessages?: Message[]
+  taskReplies?: Message[]
   isGrouped?: boolean
   selectionMode?: boolean
   isSelected?: boolean
@@ -775,9 +1100,10 @@ function MessageBubbleInner({
   onRetry,
   onOpenThread,
   hasThread,
-  channelId: _channelId,
+  channelId,
   serverSlug,
   allMessages = [],
+  taskReplies = [],
   isGrouped = false,
   selectionMode,
   isSelected,
@@ -1342,7 +1668,12 @@ function MessageBubbleInner({
 
           {walletRecharge && <WalletRechargeCard data={walletRecharge} />}
 
-          <TaskCardsView cards={message.metadata?.cards} />
+          <TaskCardsView
+            cards={message.metadata?.cards}
+            channelId={channelId}
+            messageId={message.id}
+            replies={taskReplies}
+          />
           <ServerAppCardsView cards={message.metadata?.cards} serverSlug={serverSlug} />
 
           {/* Attachments */}
@@ -2210,6 +2541,7 @@ export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
     prev.isGrouped === next.isGrouped &&
     prev.hasThread === next.hasThread &&
     prev.allMessages === next.allMessages &&
+    prev.taskReplies === next.taskReplies &&
     prev.onRetry === next.onRetry &&
     prev.onOpenThread === next.onOpenThread &&
     prev.selectionMode === next.selectionMode &&
@@ -2223,13 +2555,13 @@ export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: spacing.xxs,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
-    marginBottom: spacing.px,
+    marginBottom: spacing.xxs,
   },
   containerGrouped: {
-    paddingVertical: spacing.none,
-    marginBottom: spacing.none,
+    paddingVertical: spacing.px,
+    marginBottom: spacing.px,
   },
   // Reply reference
   replyRef: {
@@ -2421,9 +2753,160 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     borderWidth: border.hairline,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  taskMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  taskPriority: {
+    fontSize: fontSize.xs,
+    fontWeight: '900',
+    paddingHorizontal: spacing.xs,
+  },
+  taskTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.xs,
+  },
+  taskTagText: {
+    fontSize: fontSize.xs,
+    fontWeight: '900',
+  },
+  taskExpandButton: {
+    marginLeft: 'auto',
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.full,
+  },
+  taskDetailsBox: {
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     padding: spacing.sm,
+  },
+  taskDetailsText: {
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
+  },
+  taskFooter: {
+    borderTopWidth: border.hairline,
+    paddingTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
+  },
+  taskFooterLeft: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  taskFooterPill: {
+    minHeight: size.controlXs,
+    maxWidth: size.listItemLg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  taskFooterText: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  taskAppIcon: {
+    width: iconSize.xs,
+    height: iconSize.xs,
+    borderRadius: radius.xs,
+  },
+  taskReplyCount: {
+    minHeight: size.controlXs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  taskAssigneeWrap: {
+    maxWidth: size.listItemLg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+  },
+  taskReplies: {
+    borderTopWidth: border.hairline,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  taskReplyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
+  taskReplyAvatar: {
+    width: size.avatarXs,
+    height: size.avatarXs,
+    borderRadius: radius.full,
+  },
+  taskReplyAvatarFallback: {
+    width: size.avatarXs,
+    height: size.avatarXs,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskReplyAvatarText: {
+    fontSize: fontSize.micro,
+    fontWeight: '900',
+  },
+  taskReplyBubble: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  taskReplyAuthor: {
+    fontSize: fontSize.micro,
+    fontWeight: '800',
+    marginBottom: spacing.xxs,
+  },
+  taskReplyText: {
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
+  },
+  taskReplyInputRow: {
+    minHeight: size.controlMd,
+    borderRadius: radius.lg,
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
+  taskReplyInput: {
+    flex: 1,
+    minHeight: size.iconButtonSm,
+    maxHeight: size.panelStateMinHeight,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
+    paddingVertical: 0,
+  },
+  taskReplySend: {
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   serverAppCard: {
     flexDirection: 'row',

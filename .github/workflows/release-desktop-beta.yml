@@ -1,13 +1,6 @@
 name: release-desktop-beta
 
 on:
-  workflow_run:
-    workflows: [post-merge-validation]
-    types: [completed]
-  schedule:
-    # 09:20 Asia/Shanghai. This catches changes that were skipped after the
-    # daily beta release already happened.
-    - cron: '20 1 * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -27,12 +20,6 @@ jobs:
   gate:
     name: Detect releasable desktop beta changes
     runs-on: ubuntu-latest
-    if: |
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): mobile v') &&
-      !startsWith(github.event.workflow_run.head_commit.message || '', 'chore(release): apps v'))
     outputs:
       should_release: ${{ steps.gate.outputs.should_release }}
       base: ${{ steps.gate.outputs.base }}
@@ -43,9 +30,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Decide whether to publish
+      - name: Decide whether to publish beta
         id: gate
         shell: bash
         env:
@@ -68,7 +54,11 @@ jobs:
 
           changed="$(
             git diff --name-only "$range" -- \
+              .github/workflows/release-desktop-artifacts.yml \
+              .github/workflows/release-desktop-beta.yml \
               apps/desktop \
+              apps/server/src/handlers/desktop-release.handler.ts \
+              packages/connector \
               packages/openclaw-shadowob \
               packages/sdk \
               packages/shared \
@@ -76,6 +66,7 @@ jobs:
               package.json \
               pnpm-lock.yaml \
               pnpm-workspace.yaml \
+              scripts/prepare-app-release-version.mjs \
             | sed '/^$/d'
           )"
 
@@ -96,7 +87,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   prepare-release-version:
-    name: Prepare unified app release version
+    name: Prepare beta desktop release version
     runs-on: ubuntu-latest
     needs: gate
     if: needs.gate.outputs.should_release == 'true'
@@ -113,19 +104,19 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Prepare version commit
         id: version
         shell: bash
         env:
           FORCE: ${{ inputs.force || 'false' }}
-          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          RELEASE_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           git fetch origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}" --tags
           git checkout -B "${RELEASE_BRANCH}" "origin/${RELEASE_BRANCH}"
           node scripts/prepare-app-release-version.mjs \
+            --target=desktop \
             --source-sha="${{ needs.gate.outputs.head_sha }}" \
             --force="${FORCE}"
 
@@ -133,269 +124,37 @@ jobs:
         id: commit
         shell: bash
         env:
-          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          RELEASE_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/mobile/app.config.ts apps/desktop/package.json
+          git add apps/desktop/package.json
           if git diff --cached --quiet; then
-            echo "Unified app version already prepared."
+            echo "Beta desktop version already prepared."
           else
             git commit \
-              -m "chore(release): apps v${{ steps.version.outputs.version }}" \
-              -m "Release-Source-SHA: ${{ needs.gate.outputs.head_sha }}"
+              -m "chore(release): desktop v${{ steps.version.outputs.version }}" \
+              -m "Release-Source-SHA: ${{ needs.gate.outputs.head_sha }}" \
+              -m "Release-Target: desktop"
             git push origin "HEAD:${RELEASE_BRANCH}"
           fi
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-  build-macos-notarized:
-    name: macOS ${{ matrix.arch }} notarized beta
-    runs-on: macos-latest
-    needs: [gate, prepare-release-version]
-    if: needs.gate.outputs.should_release == 'true'
-    environment: ShadowOB Mac
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
-    env:
-      APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
-      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare-release-version.outputs.release_sha }}
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-        with:
-          version: 10.19.0
-
-      - name: Install dependencies
-        run: pnpm i --frozen-lockfile
-
-      - name: Prepare App Store Connect API key
-        run: |
-          if [ -n "${APPLE_API_KEY_P8:-}" ]; then
-            mkdir -p ./.secrets
-            printf '%s' "$APPLE_API_KEY_P8" > ./.secrets/AuthKey_${APPLE_API_KEY_ID}.p8
-            echo "APPLE_API_KEY=$PWD/.secrets/AuthKey_${APPLE_API_KEY_ID}.p8" >> "$GITHUB_ENV"
-            echo "Using App Store Connect API key notarization"
-          else
-            echo "APPLE_API_KEY_P8 not provided"
-            echo "API-key notarization requires APPLE_API_KEY_P8, APPLE_API_KEY_ID, APPLE_API_ISSUER"
-            exit 1
-          fi
-
-      - name: Import Apple certificate
-        env:
-          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
-          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
-        run: |
-          security create-keychain -p "build" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "build" build.keychain
-          security set-keychain-settings -t 3600 -u build.keychain
-
-          python3 - <<'PY'
-          import base64, os
-          data = os.environ['APPLE_CERT_P12_BASE64']
-          with open('certificate.p12', 'wb') as f:
-              f.write(base64.b64decode(data))
-          PY
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "build" build.keychain
-
-      - name: Generate icons
-        run: pnpm --dir ./apps/desktop generate-icons
-
-      - name: Build notarized beta artifacts
-        run: pnpm --dir ./apps/desktop release:mac:${{ matrix.arch }}
-
-      - name: List make output
-        if: always()
-        run: find apps/desktop/out/make -type f 2>/dev/null || echo "No make output found"
-
-      - name: Prepare uniquely named beta assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          upload_dir="apps/desktop/out/release-upload"
-          rm -rf "$upload_dir"
-          mkdir -p "$upload_dir"
-
-          while IFS= read -r file; do
-            filename="$(basename "$file")"
-            extension="${filename##*.}"
-            stem="${filename%.*}"
-            cp "$file" "$upload_dir/${stem}-macos-${{ matrix.arch }}.${extension}"
-          done < <(find apps/desktop/out/make -type f \( -name '*.dmg' -o -name '*.zip' \))
-
-          find "$upload_dir" -type f
-
-      - name: Upload desktop beta artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: desktop-beta-macos-${{ matrix.arch }}
-          path: apps/desktop/out/release-upload/*
-          if-no-files-found: error
-
-  build-cross-platform:
-    name: ${{ matrix.platform }} beta
-    runs-on: ${{ matrix.runner }}
-    needs: [gate, prepare-release-version]
-    if: needs.gate.outputs.should_release == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            runner: windows-latest
-            make_script: release:win
-            artifact_name: desktop-beta-windows-x64
-          - platform: linux
-            runner: ubuntu-latest
-            make_script: release:linux
-            artifact_name: desktop-beta-linux-x64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare-release-version.outputs.release_sha }}
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-        with:
-          version: 10.19.0
-
-      - name: Install dependencies
-        run: pnpm i --frozen-lockfile
-
-      - name: Generate icons
-        run: pnpm --dir ./apps/desktop generate-icons
-
-      - name: Build beta artifacts
-        run: pnpm --dir ./apps/desktop ${{ matrix.make_script }}
-
-      - name: List make output
-        if: always()
-        shell: bash
-        run: find apps/desktop/out/make -type f 2>/dev/null || echo "No make output found"
-
-      - name: Prepare uniquely named beta assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          upload_dir="apps/desktop/out/release-upload"
-          rm -rf "$upload_dir"
-          mkdir -p "$upload_dir"
-
-          while IFS= read -r file; do
-            filename="$(basename "$file")"
-            extension="${filename##*.}"
-            stem="${filename%.*}"
-            cp "$file" "$upload_dir/${stem}-${{ matrix.platform }}-x64.${extension}"
-          done < <(find apps/desktop/out/make -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \))
-
-          find "$upload_dir" -type f
-
-      - name: Upload desktop beta artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: apps/desktop/out/release-upload/*
-          if-no-files-found: error
-
   publish-release:
-    name: Publish desktop beta release
-    runs-on: ubuntu-latest
-    needs: [gate, prepare-release-version, build-macos-notarized, build-cross-platform]
+    name: Build and publish desktop beta
+    needs: [gate, prepare-release-version]
     if: needs.gate.outputs.should_release == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.prepare-release-version.outputs.release_sha }}
-
-      - name: Download desktop beta artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: release-assets
-
-      - name: Create release notes
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="${{ needs.gate.outputs.base }}"
-          {
-            echo "Automated desktop beta release."
-            echo ""
-            echo "- Version: v${{ needs.prepare-release-version.outputs.version }}"
-            echo "- Channel: beta"
-            echo "- Release commit: ${{ needs.prepare-release-version.outputs.release_sha }}"
-            echo "- Source commit: ${{ needs.gate.outputs.head_sha }}"
-            if [ -n "$base" ]; then
-              echo "- Changes since: ${base}"
-            fi
-            echo ""
-            echo "Changed files:"
-            echo '```'
-            printf '%s\n' "${{ needs.gate.outputs.changed_files }}"
-            echo '```'
-          } > release-notes.md
-
-      - name: Create release tags
-        id: create_tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --force --tags
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ needs.prepare-release-version.outputs.desktop_beta_tag }}" -m "Shadow Desktop Beta v${{ needs.prepare-release-version.outputs.version }}"
-          git tag -a "${{ needs.prepare-release-version.outputs.desktop_version_tag }}" -m "Desktop app ${{ needs.prepare-release-version.outputs.version }}"
-          git push origin "${{ needs.prepare-release-version.outputs.desktop_beta_tag }}" "${{ needs.prepare-release-version.outputs.desktop_version_tag }}"
-          echo "created=true" >> "$GITHUB_OUTPUT"
-
-      - name: Publish GitHub prerelease
-        id: publish
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare-release-version.outputs.desktop_beta_tag }}
-          name: Shadow Desktop Beta v${{ needs.prepare-release-version.outputs.version }}
-          body_path: release-notes.md
-          prerelease: true
-          files: |
-            release-assets/**/*.dmg
-            release-assets/**/*.exe
-            release-assets/**/*.zip
-            release-assets/**/*.AppImage
-            release-assets/**/*.deb
-            release-assets/**/*.rpm
-          fail_on_unmatched_files: true
-
-      - name: Roll back release markers on publish failure
-        if: failure() && steps.create_tag.outputs.created == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set +e
-          gh release delete "${{ needs.prepare-release-version.outputs.desktop_beta_tag }}" --yes
-          git push --delete origin "${{ needs.prepare-release-version.outputs.desktop_beta_tag }}"
-          git push --delete origin "${{ needs.prepare-release-version.outputs.desktop_version_tag }}"
+    uses: ./.github/workflows/release-desktop-artifacts.yml
+    with:
+      release_sha: ${{ needs.prepare-release-version.outputs.release_sha }}
+      source_sha: ${{ needs.gate.outputs.head_sha }}
+      version: ${{ needs.prepare-release-version.outputs.version }}
+      release_tag: ${{ needs.prepare-release-version.outputs.desktop_beta_tag }}
+      desktop_version_tag: ${{ needs.prepare-release-version.outputs.desktop_version_tag }}
+      release_name: Shadow Desktop Beta v${{ needs.prepare-release-version.outputs.version }}
+      channel: beta
+      prerelease: true
+      base: ${{ needs.gate.outputs.base }}
+      changed_files: ${{ needs.gate.outputs.changed_files }}
+    secrets: inherit

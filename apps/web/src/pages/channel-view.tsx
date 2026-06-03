@@ -14,6 +14,7 @@ import { ServerLandingPanel } from '../components/server/server-landing'
 import { VoiceChannelPanel } from '../components/voice/voice-channel-panel'
 import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
+import { invalidateServerChannelState, serverChannelCacheKeys } from '../lib/channel-cache'
 import { setLastChannelId } from '../lib/last-channel'
 import { scheduleIdleAfterDelay, scheduleIdleAfterNextPaint } from '../lib/schedule'
 import { joinChannel, leaveChannel } from '../lib/socket'
@@ -124,7 +125,7 @@ export function ChannelView({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['channel-access', channelId] })
-      queryClient.invalidateQueries({ queryKey: ['channels'] })
+      invalidateServerChannelState(queryClient, serverChannelCacheKeys(serverSlug, activeServerId))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
     },
@@ -162,9 +163,7 @@ export function ChannelView({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['server-access', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['channel-access', channelId] })
-      queryClient.invalidateQueries({ queryKey: ['channel-bootstrap', channelId] })
-      queryClient.invalidateQueries({ queryKey: ['channels'] })
-      queryClient.invalidateQueries({ queryKey: ['server-index-channels', serverSlug] })
+      invalidateServerChannelState(queryClient, serverChannelCacheKeys(serverSlug, activeServerId))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
     },
