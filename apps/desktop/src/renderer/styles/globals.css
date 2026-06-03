@@ -39,6 +39,35 @@ html.desktop-app .desktop-loading-state {
   color: var(--color-text-muted, rgb(156 163 175));
 }
 
+@keyframes desktop-settings-error-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  22% {
+    transform: translateX(-3px);
+  }
+  44% {
+    transform: translateX(3px);
+  }
+  66% {
+    transform: translateX(-2px);
+  }
+  82% {
+    transform: translateX(2px);
+  }
+}
+
+html.desktop-app .desktop-settings-error-shake {
+  animation: desktop-settings-error-shake 280ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.desktop-app .desktop-settings-error-shake {
+    animation: none;
+  }
+}
+
 /* Exclude interactive elements from drag */
 html.desktop-app .desktop-drag-titlebar button,
 html.desktop-app .desktop-drag-titlebar a,

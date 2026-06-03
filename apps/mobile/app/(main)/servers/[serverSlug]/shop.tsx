@@ -1691,7 +1691,7 @@ const styles = StyleSheet.create({
     borderTopWidth: border.hairline,
   },
   // Detail modal
-  modalOverlay: { flex: 1, backgroundColor: palette.black, justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: palette.blackOverlay, justifyContent: 'flex-end' },
   modalSheet: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, maxHeight: '85%' },
   detailImage: { width: '100%', aspectRatio: 3 / 2 },
   detailBody: { padding: spacing.xl },

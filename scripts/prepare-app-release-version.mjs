@@ -6,10 +6,17 @@ const DESKTOP_PACKAGE_PATH = 'apps/desktop/package.json'
 const MOBILE_VERSION_TAG_PREFIX = 'mobile-version-v'
 const DESKTOP_VERSION_TAG_PREFIX = 'desktop-version-v'
 const DESKTOP_BETA_TAG_PREFIX = 'desktop-beta-v'
+const DESKTOP_RELEASE_TAG_PREFIX = 'desktop-v'
 
 function arg(name) {
   const prefix = `--${name}=`
   return process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length) ?? ''
+}
+
+function releaseTarget() {
+  const target = arg('target') || 'all'
+  if (target === 'mobile' || target === 'desktop' || target === 'all') return target
+  throw new Error(`Unsupported release target: ${target}`)
 }
 
 function parseSemver(version) {
@@ -93,6 +100,7 @@ function output(values) {
 
 const sourceSha = arg('source-sha')
 const force = arg('force') === 'true'
+const target = releaseTarget()
 const mobileContent = readFileSync(MOBILE_APP_CONFIG_PATH, 'utf8')
 const mobileVersion = readMobileVersion(mobileContent)
 const desktopPackage = readDesktopPackage()
@@ -101,29 +109,42 @@ const desktopVersion = desktopPackage.version
 parseSemver(mobileVersion.version)
 parseSemver(desktopVersion)
 
+const releaseCommitBody = latestCommitBody()
 const existingReleaseCommit =
   !force &&
   sourceSha &&
-  latestCommitBody().includes(`Release-Source-SHA: ${sourceSha}`) &&
-  mobileVersion.version === desktopVersion
+  releaseCommitBody.includes(`Release-Source-SHA: ${sourceSha}`) &&
+  (target === 'all' || releaseCommitBody.includes(`Release-Target: ${target}`)) &&
+  (target === 'all' ? mobileVersion.version === desktopVersion : true)
+
+const candidateVersions =
+  target === 'mobile'
+    ? [mobileVersion.version, ...tagVersions(MOBILE_VERSION_TAG_PREFIX)]
+    : target === 'desktop'
+      ? [
+          desktopVersion,
+          ...tagVersions(DESKTOP_VERSION_TAG_PREFIX),
+          ...tagVersions(DESKTOP_BETA_TAG_PREFIX),
+          ...tagVersions(DESKTOP_RELEASE_TAG_PREFIX),
+        ]
+      : [
+          mobileVersion.version,
+          desktopVersion,
+          ...tagVersions(MOBILE_VERSION_TAG_PREFIX),
+          ...tagVersions(DESKTOP_VERSION_TAG_PREFIX),
+          ...tagVersions(DESKTOP_BETA_TAG_PREFIX),
+          ...tagVersions(DESKTOP_RELEASE_TAG_PREFIX),
+        ]
 
 const releaseVersion = existingReleaseCommit
-  ? mobileVersion.version
-  : bumpPatch(
-      [
-        mobileVersion.version,
-        desktopVersion,
-        ...tagVersions(MOBILE_VERSION_TAG_PREFIX),
-        ...tagVersions(DESKTOP_VERSION_TAG_PREFIX),
-        ...tagVersions(DESKTOP_BETA_TAG_PREFIX),
-      ]
-        .sort(compareSemver)
-        .at(-1),
-    )
+  ? target === 'desktop'
+    ? desktopVersion
+    : mobileVersion.version
+  : bumpPatch(candidateVersions.sort(compareSemver).at(-1))
 
 let changed = false
 
-if (mobileVersion.version !== releaseVersion) {
+if ((target === 'mobile' || target === 'all') && mobileVersion.version !== releaseVersion) {
   writeFileSync(
     MOBILE_APP_CONFIG_PATH,
     writeMobileVersion(mobileContent, mobileVersion.match, releaseVersion),
@@ -131,7 +152,7 @@ if (mobileVersion.version !== releaseVersion) {
   changed = true
 }
 
-if (desktopPackage.version !== releaseVersion) {
+if ((target === 'desktop' || target === 'all') && desktopPackage.version !== releaseVersion) {
   desktopPackage.version = releaseVersion
   writeDesktopPackage(desktopPackage)
   changed = true
@@ -139,8 +160,8 @@ if (desktopPackage.version !== releaseVersion) {
 
 console.log(
   existingReleaseCommit
-    ? `App version already prepared for ${sourceSha}: ${releaseVersion}`
-    : `App version: ${mobileVersion.version}/${desktopVersion} -> ${releaseVersion}`,
+    ? `${target} version already prepared for ${sourceSha}: ${releaseVersion}`
+    : `${target} version: ${mobileVersion.version}/${desktopVersion} -> ${releaseVersion}`,
 )
 
 output({
@@ -149,5 +170,6 @@ output({
   mobile_version_tag: `${MOBILE_VERSION_TAG_PREFIX}${releaseVersion}`,
   desktop_version_tag: `${DESKTOP_VERSION_TAG_PREFIX}${releaseVersion}`,
   desktop_beta_tag: `${DESKTOP_BETA_TAG_PREFIX}${releaseVersion}`,
+  desktop_release_tag: `${DESKTOP_RELEASE_TAG_PREFIX}${releaseVersion}`,
   changed: changed ? 'true' : 'false',
 })

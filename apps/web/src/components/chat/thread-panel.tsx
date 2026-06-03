@@ -36,6 +36,7 @@ interface ThreadPanelProps {
   onPreviewFile?: (attachment: Attachment) => void
   onPreviewOAuthLink?: (preview: OAuthLinkPreview) => void
   onSaveToWorkspace?: (attachment: Attachment) => void
+  forceSheet?: boolean
 }
 
 function sortByCreatedAt(messages: Message[]) {
@@ -126,6 +127,7 @@ export function ThreadPanel({
   onPreviewFile,
   onPreviewOAuthLink,
   onSaveToWorkspace,
+  forceSheet = false,
 }: ThreadPanelProps) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
@@ -257,7 +259,7 @@ export function ThreadPanel({
       addSuffix: true,
     })
   }, [i18n.language, parentMessage])
-  const shouldUseSheet = viewportWidth < 1440
+  const shouldUseSheet = forceSheet || viewportWidth < 1440
   const isNarrowSheet = shouldUseSheet && viewportWidth < 720
   const panelClasses = shouldUseSheet
     ? `${isNarrowSheet ? 'fixed inset-2' : 'fixed inset-y-3 right-3 w-[min(92vw,420px)]'} z-40 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl border border-border-subtle shadow-[0_24px_80px_rgba(0,0,0,0.38)] animate-slide-in-right`

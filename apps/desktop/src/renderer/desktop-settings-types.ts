@@ -5,6 +5,7 @@ export interface DesktopRuntimeSettings {
   httpProxy: string
   httpsProxy: string
   connectorApiKey: string
+  connectorComputerId: string
   connectorAutoStart: boolean
   connectorWorkDir: string
   connectorBuddyWorkDirs: Record<string, string>

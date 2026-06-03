@@ -50,6 +50,7 @@ export interface DesktopRuntimeSettings {
   httpProxy: string
   httpsProxy: string
   connectorApiKey: string
+  connectorComputerId: string
   connectorAutoStart: boolean
   connectorWorkDir: string
   connectorBuddyWorkDirs: Record<string, string>
@@ -96,6 +97,7 @@ const defaultSettings: DesktopRuntimeSettings = {
   httpProxy: '',
   httpsProxy: '',
   connectorApiKey: '',
+  connectorComputerId: '',
   connectorAutoStart: false,
   connectorWorkDir: '',
   connectorBuddyWorkDirs: {},
@@ -215,6 +217,10 @@ export function normalizeConnectorApiKey(value: unknown): string {
   const fromCommand = input.match(/--api-key(?:=|\s+)(?:"([^"]+)"|'([^']+)'|(\S+))/)
   const candidate = (fromCommand?.[1] ?? fromCommand?.[2] ?? fromCommand?.[3] ?? input).trim()
   return candidate.startsWith('sk_machine_') ? candidate : ''
+}
+
+function normalizeConnectorComputerId(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
 }
 
 function normalizeTtsProvider(value: unknown): DesktopRuntimeSettings['ttsProvider'] {
@@ -373,6 +379,7 @@ function normalizeDesktopSettings(parsed: Partial<DesktopRuntimeSettings>): Desk
     httpProxy: normalizeHttpProxy(parsed.httpProxy),
     httpsProxy: normalizeHttpProxy(parsed.httpsProxy),
     connectorApiKey: normalizeConnectorApiKey(parsed.connectorApiKey),
+    connectorComputerId: normalizeConnectorComputerId(parsed.connectorComputerId),
     connectorAutoStart: parsed.connectorAutoStart === true,
     connectorWorkDir: normalizeWorkDir(parsed.connectorWorkDir),
     connectorBuddyWorkDirs: normalizeConnectorBuddyWorkDirs(parsed.connectorBuddyWorkDirs),
@@ -408,6 +415,10 @@ function mergeDesktopSettings(
       incoming.connectorApiKey === undefined
         ? current.connectorApiKey
         : normalizeConnectorApiKey(incoming.connectorApiKey),
+    connectorComputerId:
+      incoming.connectorComputerId === undefined
+        ? current.connectorComputerId
+        : normalizeConnectorComputerId(incoming.connectorComputerId),
     connectorAutoStart:
       incoming.connectorAutoStart === undefined
         ? current.connectorAutoStart

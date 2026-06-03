@@ -358,6 +358,12 @@ export function InvitePanel({
   })
 
   useEffect(() => {
+    setActiveTab(initialTab)
+    setSelectedCandidateIds(new Set())
+    setSearch('')
+  }, [initialTab, channelId])
+
+  useEffect(() => {
     if (activeTab === 'members') {
       requestAnimationFrame(() => searchInputRef.current?.focus())
     } else {

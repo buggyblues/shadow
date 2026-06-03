@@ -513,11 +513,29 @@
     "status": {
       "queued": "排隊中",
       "claimed": "已領取",
-      "running": "執行中",
+      "running": "進行中",
       "completed": "已完成",
       "failed": "已失敗",
       "canceled": "已取消",
       "transferred": "已轉交"
+    },
+    "task": {
+      "new": "新建任務",
+      "quickPlaceholder": "寫下任務標題；換行補充驗收標準、連結或上下文",
+      "create": "建立任務",
+      "created": "任務已建立",
+      "createFailed": "建立任務失敗",
+      "tagsPlaceholder": "標籤，用逗號分隔",
+      "noReplies": "暫無回覆",
+      "replyPlaceholder": "輸入回覆內容...",
+      "sendReply": "傳送回覆",
+      "replyFailed": "傳送回覆失敗",
+      "priority": {
+        "low": "低優",
+        "normal": "普通",
+        "high": "高優",
+        "urgent": "緊急"
+      }
     },
     "action": {
       "start": "開始",

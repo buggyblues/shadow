@@ -519,6 +519,24 @@
       "canceled": "취소됨",
       "transferred": "전달됨"
     },
+    "task": {
+      "new": "새 작업",
+      "quickPlaceholder": "작업 제목을 쓰고 줄을 바꿔 완료 기준, 링크, 맥락을 추가",
+      "create": "작업 만들기",
+      "created": "작업이 생성되었습니다",
+      "createFailed": "작업 생성 실패",
+      "tagsPlaceholder": "태그를 쉼표로 구분해 입력",
+      "noReplies": "아직 답글 없음",
+      "replyPlaceholder": "답글 입력...",
+      "sendReply": "답글 보내기",
+      "replyFailed": "답글 전송 실패",
+      "priority": {
+        "low": "낮음",
+        "normal": "보통",
+        "high": "높음",
+        "urgent": "긴급"
+      }
+    },
     "action": {
       "start": "시작",
       "complete": "완료",

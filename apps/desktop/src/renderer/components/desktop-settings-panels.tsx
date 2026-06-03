@@ -342,6 +342,8 @@ export function ConnectorSettingsPanel({
   runtimesCollapsed,
   runtimeScanBusy,
   runtimeInstallBusyIds,
+  runtimeInstallErrorIds,
+  runtimeNotificationBusyIds,
   openExternal,
   onConnectorRunningToggle,
   onConnectorConnectionToggle,
@@ -373,6 +375,8 @@ export function ConnectorSettingsPanel({
   runtimesCollapsed: boolean
   runtimeScanBusy: boolean
   runtimeInstallBusyIds: string[]
+  runtimeInstallErrorIds: string[]
+  runtimeNotificationBusyIds: string[]
   openExternal?: (url: string) => Promise<boolean>
   onConnectorRunningToggle: (enabled: boolean) => void
   onConnectorConnectionToggle: (connection: ConnectorConnection, enabled: boolean) => void
@@ -533,7 +537,10 @@ export function ConnectorSettingsPanel({
           </div>
         ) : null}
         {connectorError || connectorState?.lastError ? (
-          <div className="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-xs font-semibold text-danger">
+          <div
+            key={connectorError || connectorState?.lastError}
+            className="desktop-settings-error-shake rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-xs font-semibold text-danger"
+          >
             {t('desktop.connectorLastError')}: {connectorError || connectorState?.lastError}
           </div>
         ) : null}
@@ -656,12 +663,17 @@ export function ConnectorSettingsPanel({
                       {workDir ? t('desktop.changeFolder') : t('desktop.chooseFolder')}
                     </Button>
                     <label className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-3 text-xs font-semibold text-text-secondary">
+                      {connectionBusy ? (
+                        <RefreshCw size={13} className="animate-spin" aria-hidden="true" />
+                      ) : null}
                       <span>
-                        {connectionErrored
-                          ? t('desktop.connectorConnectionErrorState')
-                          : connectionRunning
-                            ? t('desktop.connectorConnectionRunningState')
-                            : t('desktop.connectorConnectionStoppedState')}
+                        {connectionBusy
+                          ? t('desktop.connectorConnectionWorking')
+                          : connectionErrored
+                            ? t('desktop.connectorConnectionErrorState')
+                            : connectionRunning
+                              ? t('desktop.connectorConnectionRunningState')
+                              : t('desktop.connectorConnectionStoppedState')}
                       </span>
                       <Switch
                         checked={connectionRunning}
@@ -684,7 +696,10 @@ export function ConnectorSettingsPanel({
                     />
                   </div>
                   {connectionError ? (
-                    <div className="rounded-xl border border-danger/25 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger xl:col-span-2">
+                    <div
+                      key={connectionError}
+                      className="desktop-settings-error-shake rounded-xl border border-danger/25 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger xl:col-span-2"
+                    >
                       {connectionError}
                     </div>
                   ) : null}
@@ -754,6 +769,8 @@ export function ConnectorSettingsPanel({
             {runtimes.map((runtime) => {
               const installed = runtime.status === 'available'
               const busy = runtimeInstallBusyIds.includes(runtime.id)
+              const installErrored = runtimeInstallErrorIds.includes(runtime.id)
+              const notificationBusy = runtimeNotificationBusyIds.includes(runtime.id)
               const monitor = summarizeRuntimeMonitor(runtime, runtimeSessions)
               const showMonitorBadge =
                 installed && monitor.statusKey !== 'desktop.runtimeStatusConnectReady'
@@ -769,9 +786,11 @@ export function ConnectorSettingsPanel({
                   key={runtime.id}
                   className={cn(
                     'grid gap-4 rounded-2xl border px-4 py-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,auto)] xl:items-center',
-                    installed
-                      ? 'border-border-subtle bg-bg-primary/35'
-                      : 'border-border-subtle bg-bg-primary/18 opacity-75',
+                    installErrored
+                      ? 'desktop-settings-error-shake border-danger/40 bg-danger/8'
+                      : installed
+                        ? 'border-border-subtle bg-bg-primary/35'
+                        : 'border-border-subtle bg-bg-primary/18 opacity-75',
                   )}
                 >
                   <div className="flex min-w-0 items-start gap-3">
@@ -818,11 +837,15 @@ export function ConnectorSettingsPanel({
                         </span>
                       ) : null}
                       <label className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-3 text-xs font-semibold text-text-secondary">
-                        <Bell size={13} aria-hidden="true" />
+                        {notificationBusy ? (
+                          <RefreshCw size={13} className="animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Bell size={13} aria-hidden="true" />
+                        )}
                         <span className="max-w-[13rem] truncate">{t('desktop.runtimeNotify')}</span>
                         <Switch
                           checked={connectorRuntimeNotifications[runtime.id] !== false}
-                          disabled={connectorBusy}
+                          disabled={connectorBusy || notificationBusy}
                           onCheckedChange={(checked) =>
                             onRuntimeNotificationToggle(runtime, checked)
                           }
@@ -857,11 +880,17 @@ export function ConnectorSettingsPanel({
                         size="sm"
                         icon={Download}
                         loading={busy}
-                        disabled={busy || !runtime.installCommand}
+                        disabled={busy || connectorBusy || !runtime.installCommand}
                         onClick={() => onInstallRuntime(runtime)}
                       >
-                        {t('desktop.runtimeInstall')}
+                        {busy ? t('desktop.runtimeInstalling') : t('desktop.runtimeInstall')}
                       </Button>
+                      {installErrored ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-danger/25 bg-danger/10 px-2.5 py-1 text-xs font-bold text-danger">
+                          <CircleAlert size={13} aria-hidden="true" />
+                          {t('desktop.runtimeInstallFailed')}
+                        </span>
+                      ) : null}
                     </div>
                   )}
                 </div>

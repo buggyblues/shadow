@@ -189,6 +189,8 @@ describe('BuddyInboxService', () => {
       {
         title: 'Review Two Sum submission',
         body: 'Run the sandbox and reply with feedback.',
+        tags: ['review', { label: '算法' }],
+        app: { appKey: 'judge', name: 'Judge', logoUrl: 'https://example.com/judge.png' },
       },
       { kind: 'user', userId: ownerUserId },
     )
@@ -211,6 +213,18 @@ describe('BuddyInboxService', () => {
       ownerUserId,
       expect.objectContaining({
         content: expect.stringContaining('Review Two Sum submission'),
+        metadata: expect.objectContaining({
+          cards: expect.arrayContaining([
+            expect.objectContaining({
+              tags: ['review', { label: '算法' }],
+              app: expect.objectContaining({
+                appKey: 'judge',
+                name: 'Judge',
+                iconUrl: 'https://example.com/judge.png',
+              }),
+            }),
+          ]),
+        }),
       }),
     )
   })

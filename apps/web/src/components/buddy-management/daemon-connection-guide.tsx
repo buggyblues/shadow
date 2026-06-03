@@ -1,12 +1,12 @@
 import { Button, cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
-import { CheckCircle2, RefreshCw, Terminal } from 'lucide-react'
+import { CheckCircle2, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { RuntimeIcon, RuntimeInstallHint } from './agent-dialogs'
-import { ConfigCodeBlock } from './config-code-block'
+import { DesktopConnectorDownloadCard } from './desktop-connector-download-card'
 import {
   type Agent,
   type ConnectorComputer,
@@ -41,12 +41,13 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
   const [connectorCommand, setConnectorCommand] = useState<string | null>(null)
   const [selectedRuntimeKey, setSelectedRuntimeKey] = useState<string | null>(null)
   const [queuedRuntimeId, setQueuedRuntimeId] = useState<string | null>(null)
+  const [isWaitingForDesktopConnector, setIsWaitingForDesktopConnector] = useState(false)
   const bootstrapStartedRef = useRef(false)
 
   const { data: connectorData, isFetching } = useQuery({
     queryKey: ['connector-computers'],
     queryFn: () => fetchApi<{ computers: ConnectorComputer[] }>('/api/connector/computers'),
-    refetchInterval: 5000,
+    refetchInterval: isWaitingForDesktopConnector ? 3000 : false,
   })
 
   const connectorComputers = connectorData?.computers ?? []
@@ -141,7 +142,14 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
   useEffect(() => {
     setQueuedRuntimeId(null)
     setSelectedRuntimeKey(null)
+    setIsWaitingForDesktopConnector(false)
   }, [agent.id])
+
+  useEffect(() => {
+    if (runtimeOptions.length > 0 && isWaitingForDesktopConnector) {
+      setIsWaitingForDesktopConnector(false)
+    }
+  }, [isWaitingForDesktopConnector, runtimeOptions.length])
 
   useEffect(() => {
     if (connectorData === undefined || runtimeOptions.length > 0 || connectorCommand) return
@@ -159,30 +167,12 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
       </div>
 
       {runtimeOptions.length === 0 && (
-        <div className="rounded-2xl border border-border-subtle bg-bg-tertiary/40 px-4 py-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary">
-              <Terminal size={18} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-text-primary">
-                {t('agentMgmt.connectorDaemonTitle')}
-              </div>
-              <div className="mt-1 text-xs leading-5 text-text-muted">
-                {t('agentMgmt.connectorExistingDaemonDesc')}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4">
-            {connectorCommand ? (
-              <ConfigCodeBlock content={connectorCommand} mode="single" t={t} />
-            ) : (
-              <div className="rounded-2xl border border-border-subtle bg-bg-deep/40 px-4 py-3 text-xs leading-5 text-text-muted">
-                {t('agentMgmt.connectorCreating')}
-              </div>
-            )}
-          </div>
-        </div>
+        <DesktopConnectorDownloadCard
+          connectorCommand={connectorCommand}
+          isWaitingForConnector={isWaitingForDesktopConnector}
+          onWaitingForConnectorChange={setIsWaitingForDesktopConnector}
+          t={t}
+        />
       )}
 
       {runtimeOptions.length > 0 && (

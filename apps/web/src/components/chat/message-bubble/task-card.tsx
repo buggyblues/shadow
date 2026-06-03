@@ -1,152 +1,153 @@
-import type { MessageCard, MessageCardStatus, TaskMessageCard } from '@shadowob/shared'
-import { Button, cn } from '@shadowob/ui'
-import { useQueryClient } from '@tanstack/react-query'
+import type { MessageCard, TaskMessageCard } from '@shadowob/shared'
+import { Button, cn, GlassPanel } from '@shadowob/ui'
 import {
-  AlertCircle,
   AppWindow,
-  Bot,
-  CalendarClock,
   CheckCircle2,
   ChevronDown,
   Circle,
-  CircleDashed,
   ClipboardList,
-  ExternalLink,
-  Loader2,
-  type LucideIcon,
-  RotateCw,
-  XCircle,
+  MessageSquare,
+  X,
 } from 'lucide-react'
-import { type ReactNode, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { fetchApi } from '../../../lib/api'
+import { getApiUrl } from '../../../lib/api-url'
+import { MessageInput } from '../message-input'
 import { MessageMarkdown } from './markdown'
+import type { Message } from './types'
 
 export function isTaskCard(card: MessageCard): card is TaskMessageCard {
   return card.kind === 'task' && typeof card.id === 'string' && typeof card.title === 'string'
-}
-
-const statusMeta: Record<
-  MessageCardStatus,
-  {
-    icon: LucideIcon
-    marker: string
-    badge: string
-    border: string
-    checkbox: string
-  }
-> = {
-  queued: {
-    icon: CircleDashed,
-    marker: 'bg-warning',
-    badge: 'border-warning/30 bg-warning/10 text-warning',
-    border: 'border-border-subtle hover:border-warning/35',
-    checkbox: 'border-warning/45 text-warning',
-  },
-  claimed: {
-    icon: Circle,
-    marker: 'bg-primary',
-    badge: 'border-primary/25 bg-primary/10 text-primary',
-    border: 'border-border-subtle hover:border-primary/35',
-    checkbox: 'border-primary/45 text-primary',
-  },
-  running: {
-    icon: Loader2,
-    marker: 'bg-primary',
-    badge: 'border-primary/25 bg-primary/10 text-primary',
-    border: 'border-primary/35',
-    checkbox: 'border-primary/45 text-primary',
-  },
-  completed: {
-    icon: CheckCircle2,
-    marker: 'bg-success',
-    badge: 'border-success/25 bg-success/10 text-success',
-    border: 'border-success/35',
-    checkbox: 'border-success/45 bg-success/15 text-success',
-  },
-  failed: {
-    icon: AlertCircle,
-    marker: 'bg-danger',
-    badge: 'border-danger/25 bg-danger/10 text-danger',
-    border: 'border-danger/35',
-    checkbox: 'border-danger/45 bg-danger/10 text-danger',
-  },
-  canceled: {
-    icon: XCircle,
-    marker: 'bg-text-muted',
-    badge: 'border-text-muted/20 bg-text-muted/10 text-text-muted',
-    border: 'border-border-subtle',
-    checkbox: 'border-text-muted/35 text-text-muted',
-  },
-  transferred: {
-    icon: ExternalLink,
-    marker: 'bg-text-muted',
-    badge: 'border-text-muted/20 bg-text-muted/10 text-text-muted',
-    border: 'border-border-subtle',
-    checkbox: 'border-text-muted/35 text-text-muted',
-  },
 }
 
 function renderNoMentions(children: ReactNode) {
   return children
 }
 
+function resolveImageUrl(value: string | null) {
+  if (!value) return null
+  if (value.startsWith('data:') || /^https?:\/\//u.test(value)) return value
+  return getApiUrl(value.startsWith('/') ? value : `/${value}`)
+}
+
+function TaskAppIcon({ iconUrl }: { iconUrl: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const resolvedIconUrl = resolveImageUrl(iconUrl)
+  const shouldLoadIcon = Boolean(resolvedIconUrl && !failed)
+
+  useEffect(() => {
+    setFailed(false)
+    setLoaded(false)
+  }, [iconUrl])
+
+  if (!shouldLoadIcon) {
+    return <AppWindow size={14} className="shrink-0 text-white/60" />
+  }
+
+  return (
+    <span className="relative h-3.5 w-3.5 shrink-0 overflow-hidden rounded">
+      {!loaded && <AppWindow size={14} className="absolute inset-0 h-3.5 w-3.5 text-white/60" />}
+      <img
+        src={resolvedIconUrl ?? ''}
+        alt=""
+        className={cn('h-full w-full object-cover', !loaded && 'invisible')}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </span>
+  )
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function firstStringValue(...values: unknown[]) {
+  for (const value of values) {
+    const text = stringValue(value)
+    if (text) return text
+  }
+  return null
+}
+
+function imageUrlFromRecord(record: Record<string, unknown> | null) {
+  return firstStringValue(
+    record?.iconUrl,
+    record?.logoUrl,
+    record?.avatarUrl,
+    record?.imageUrl,
+    record?.icon,
+    record?.logo,
+    record?.icon_url,
+    record?.logo_url,
+    record?.avatar_url,
+    record?.image_url,
+  )
+}
+
 function sourceMeta(card: TaskMessageCard): {
   label: string | null
   url: string | null
   appKey: string | null
+  iconUrl: string | null
 } {
   const source = card.source as
-    | (TaskMessageCard['source'] & { appKey?: unknown })
+    | (TaskMessageCard['source'] & {
+        appKey?: unknown
+        icon_url?: unknown
+        avatar_url?: unknown
+        logo_url?: unknown
+        image_url?: unknown
+      })
     | null
     | undefined
-  const resource =
-    source?.resource && typeof source.resource === 'object' && !Array.isArray(source.resource)
-      ? (source.resource as { label?: unknown; kind?: unknown; url?: unknown })
-      : null
-  const resourceLabel = typeof resource?.label === 'string' ? resource.label : null
-  const resourceKind = typeof resource?.kind === 'string' ? resource.kind : null
-  const resourceUrl = typeof resource?.url === 'string' ? resource.url : null
-  const label = typeof source?.label === 'string' ? source.label : null
-  const command = typeof source?.command === 'string' ? source.command : null
-  const appKey =
-    typeof source?.appKey === 'string'
-      ? source.appKey
-      : typeof card.data?.serverApp === 'object' &&
-          card.data.serverApp !== null &&
-          !Array.isArray(card.data.serverApp) &&
-          typeof (card.data.serverApp as { appKey?: unknown }).appKey === 'string'
-        ? ((card.data.serverApp as { appKey: string }).appKey ?? null)
-        : null
+  const app = asRecord(card.app)
+  const resource = asRecord(source?.resource)
+  const serverApp = asRecord(card.data?.serverApp)
+  const resourceLabel = firstStringValue(resource?.label, resource?.name)
+  const resourceKind = stringValue(resource?.kind)
+  const resourceUrl = firstStringValue(resource?.url, resource?.href)
+  const label = firstStringValue(app?.name, app?.label, source?.appName, source?.label) ?? null
+  const command = stringValue(source?.command)
+  const appKey = firstStringValue(app?.appKey, source?.appKey, serverApp?.appKey)
+  const iconUrl =
+    imageUrlFromRecord(app) ??
+    firstStringValue(
+      source?.iconUrl,
+      source?.avatarUrl,
+      source?.logoUrl,
+      source?.imageUrl,
+      source?.icon_url,
+      source?.avatar_url,
+      source?.logo_url,
+      source?.image_url,
+    ) ??
+    imageUrlFromRecord(serverApp) ??
+    imageUrlFromRecord(resource)
   return {
-    label: label ?? command ?? resourceLabel ?? resourceKind,
-    url: resourceUrl,
+    label: label ?? command ?? resourceLabel ?? resourceKind ?? appKey,
+    url: firstStringValue(app?.url, app?.href) ?? resourceUrl,
     appKey,
+    iconUrl,
   }
 }
 
 function compactDate(value?: string) {
   if (!value) return null
   try {
-    return new Intl.DateTimeFormat(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value))
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return null
+    return `${date.getMonth() + 1}/${date.getDate()}`
   } catch {
     return null
   }
-}
-
-function cleanProgressNote(note?: string) {
-  if (!note) return null
-  const cleaned = note
-    .replace(/^Completed by Buddy reply:\s*/i, '')
-    .replace(/^OpenClaw runtime completed with reply:\s*/i, '')
-    .replace(/^Buddy reply:\s*/i, '')
-    .trim()
-  return cleaned || null
 }
 
 function currentServerSegment() {
@@ -164,8 +165,55 @@ function sourceHref(card: TaskMessageCard, source: ReturnType<typeof sourceMeta>
     : null
 }
 
-function assigneeHref(card: TaskMessageCard) {
-  return card.assignee?.userId ? `/app/profile/${card.assignee.userId}` : null
+function taskTagLabel(tag: NonNullable<TaskMessageCard['tags']>[number]) {
+  if (typeof tag === 'string') return tag.trim().replace(/^#+/u, '')
+  return tag.label?.trim().replace(/^#+/u, '') ?? ''
+}
+
+function taskCardReplyCardId(message: Message) {
+  const custom = asRecord(message.metadata?.custom)
+  const reply = asRecord(custom?.taskCardReply)
+  return stringValue(reply?.cardId)
+}
+
+function taskReplyItems(card: TaskMessageCard, replies: Message[] | undefined) {
+  const byKey = new Map<
+    string,
+    {
+      key: string
+      authorLabel: string | null
+      authorAvatarUrl: string | null
+      content: string
+      createdAt: string
+    }
+  >()
+
+  for (const reply of card.replies ?? []) {
+    const key = reply.messageId ?? reply.id ?? `${reply.createdAt}:${reply.content}`
+    byKey.set(key, {
+      key,
+      authorLabel: reply.authorLabel ?? reply.source?.label ?? null,
+      authorAvatarUrl: reply.authorAvatarUrl ?? null,
+      content: reply.content,
+      createdAt: reply.createdAt,
+    })
+  }
+
+  for (const message of replies ?? []) {
+    const cardId = taskCardReplyCardId(message)
+    if (cardId && cardId !== card.id) continue
+    byKey.set(message.id, {
+      key: message.id,
+      authorLabel: message.author?.displayName ?? message.author?.username ?? null,
+      authorAvatarUrl: message.author?.avatarUrl ?? null,
+      content: message.content,
+      createdAt: message.createdAt,
+    })
+  }
+
+  return [...byKey.values()].sort(
+    (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+  )
 }
 
 function plainText(value: string) {
@@ -191,57 +239,37 @@ function extractTodoItems(markdown?: string) {
   return items
 }
 
-function InfoItem({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0 rounded-lg border border-border-subtle/70 bg-bg-primary/24 px-3 py-2.5">
-      <div className="text-[11px] font-bold uppercase text-text-muted">{label}</div>
-      <div className="mt-1 min-w-0 text-sm font-black leading-5 text-text-primary">{children}</div>
-    </div>
-  )
-}
-
-function Section({
-  icon,
-  title,
-  children,
-  action,
-}: {
-  icon: ReactNode
-  title: string
-  children: ReactNode
-  action?: ReactNode
-}) {
-  return (
-    <section className="grid gap-2.5">
-      <header className="flex min-w-0 items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2 text-sm font-black text-text-primary">
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-border-subtle bg-bg-primary/35 text-primary">
-            {icon}
-          </span>
-          <span className="truncate">{title}</span>
-        </div>
-        {action}
-      </header>
-      {children}
-    </section>
-  )
+function stripTodoItems(markdown?: string) {
+  if (!markdown) return ''
+  return markdown
+    .replace(/^\s*[-*]\s+\[[ xX]\]\s+.+?\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 export function TaskCardsView({
   cards,
   messageId,
   channelId,
+  replies,
 }: {
   cards: MessageCard[] | undefined
   messageId: string
   channelId?: string
+  replies?: Message[]
 }) {
   const taskCards = useMemo(() => cards?.filter(isTaskCard) ?? [], [cards])
   if (taskCards.length === 0) return null
   return (
-    <div className="my-2 flex w-full max-w-[860px] flex-col gap-3">
+    <div className="my-2 flex w-full max-w-[min(960px,100%)] flex-col gap-3">
       {taskCards.map((card) => (
-        <TaskCardView key={card.id} card={card} messageId={messageId} channelId={channelId} />
+        <TaskCardView
+          key={card.id}
+          card={card}
+          messageId={messageId}
+          channelId={channelId}
+          replies={replies}
+        />
       ))}
     </div>
   )
@@ -251,219 +279,498 @@ function TaskCardView({
   card,
   messageId,
   channelId,
+  replies,
 }: {
   card: TaskMessageCard
   messageId: string
   channelId?: string
+  replies?: Message[]
 }) {
   const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const [retrying, setRetrying] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const latestProgress = card.progress?.[card.progress.length - 1]
-  const latestProgressNote = cleanProgressNote(latestProgress?.note)
-  const meta = statusMeta[card.status]
-  const StatusIcon = meta.icon
+  const [repliesOpen, setRepliesOpen] = useState(false)
   const statusLabel = t(`inbox.task.status.${card.status}`)
-  const assigneeLabel = card.assignee?.label ?? t('inbox.task.unassigned')
-  const assigneeLink = assigneeHref(card)
-  const createdAt = compactDate(card.createdAt)
+  const priority = card.priority ?? 'normal'
+  const priorityLabel = t(`inbox.task.priority.${priority}`)
   const source = sourceMeta(card)
   const sourceLink = sourceHref(card, source)
+  const tags = useMemo(() => (card.tags ?? []).map(taskTagLabel).filter(Boolean), [card.tags])
   const todoItems = useMemo(() => extractTodoItems(card.body), [card.body])
+  const descriptionMarkdown = useMemo(() => stripTodoItems(card.body), [card.body])
   const doneTodos = todoItems.filter((item) => item.done).length
-  const todoPercent = todoItems.length > 0 ? Math.round((doneTodos / todoItems.length) * 100) : 0
-  const canRetry = card.status === 'failed'
-  const detailPreview = card.body ? plainText(card.body) : ''
+  const detailPreview = descriptionMarkdown ? plainText(descriptionMarkdown) : ''
+  const replyItems = useMemo(() => taskReplyItems(card, replies), [card, replies])
+  const replyCount = replyItems.length
+  const progressLabel =
+    todoItems.length > 0
+      ? t('inbox.task.todoProgress', { done: doneTodos, total: todoItems.length })
+      : t('inbox.task.noProgress')
+  const priorityDot =
+    priority === 'urgent' || priority === 'high'
+      ? 'bg-[#FF2A55] shadow-[0_0_6px_rgba(255,42,85,0.8)]'
+      : priority === 'low'
+        ? 'bg-white/40'
+        : 'bg-[#00F3FF] shadow-[0_0_6px_rgba(0,243,255,0.7)]'
+  const priorityTone =
+    priority === 'urgent' || priority === 'high'
+      ? 'text-[#FF2A55]/90 hover:text-[#FF2A55] hover:drop-shadow-[0_0_8px_rgba(255,42,85,0.4)]'
+      : priority === 'low'
+        ? 'text-white/50 hover:text-white/70'
+        : 'text-[#00F3FF]/90 hover:text-[#00F3FF] hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.35)]'
+  const statusIsDanger =
+    card.status === 'failed' || card.status === 'canceled' || card.status === 'transferred'
+  const statusDot = statusIsDanger ? 'bg-[#FF2A55]' : 'bg-[#00E676]'
+  const statusGlow = statusIsDanger
+    ? 'hover:drop-shadow-[0_0_8px_rgba(255,42,85,0.4)]'
+    : 'hover:drop-shadow-[0_0_8px_rgba(0,230,118,0.4)]'
+  const expanded = detailsOpen
 
-  const retryTask = async () => {
-    setRetrying(true)
-    try {
-      await fetchApi(`/api/messages/${messageId}/cards/${card.id}/retry`, { method: 'POST' })
-      if (channelId) {
-        queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
-      }
-    } finally {
-      setRetrying(false)
+  return (
+    <>
+      <article
+        className={cn(
+          'group relative z-10 w-full overflow-hidden rounded-[40px] border border-white/10 bg-[#12121A]/60 p-7 text-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.05),0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur-[24px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-2 hover:border-white/20 hover:shadow-[0_20px_60px_rgba(0,243,255,0.15)]',
+          expanded ? 'max-w-[min(960px,100%)]' : 'max-w-[420px]',
+        )}
+        style={{ fontFamily: 'Nunito, "Noto Sans SC", sans-serif' }}
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <div className="flex max-w-[85%] flex-wrap items-center gap-3.5 font-mono text-[13px] font-bold tracking-wide">
+            <span
+              className={cn(
+                'flex cursor-default items-center gap-1.5 transition-all drop-shadow-[0_0_8px_rgba(0,230,118,0)]',
+                statusIsDanger
+                  ? 'text-[#FF2A55]/90 hover:text-[#FF2A55]'
+                  : 'text-[#00E676]/90 hover:text-[#00E676]',
+                statusGlow,
+              )}
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span
+                  className={cn(
+                    'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
+                    statusDot,
+                  )}
+                  style={{ animationDuration: '2s' }}
+                />
+                <span className={cn('relative inline-flex h-1.5 w-1.5 rounded-full', statusDot)} />
+              </span>
+              {statusLabel}
+            </span>
+
+            <span
+              className={cn(
+                'flex cursor-help items-center gap-1.5 transition-all drop-shadow-[0_0_8px_rgba(255,42,85,0)]',
+                priorityTone,
+              )}
+            >
+              <span className={cn('h-1.5 w-1.5 rounded-full', priorityDot)} />
+              {priorityLabel}
+            </span>
+
+            {tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="cursor-pointer text-[#00F3FF]/90 transition-all drop-shadow-[0_0_8px_rgba(0,243,255,0)] hover:text-[#00F3FF] hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.4)]"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((value) => !value)}
+            className={cn(
+              '-mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-transparent bg-white/5 p-2 text-white/40 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:border-[#00F3FF]/20 hover:bg-[#00F3FF]/10 hover:text-[#00F3FF] focus:outline-none focus:ring-2 focus:ring-[#00F3FF]/50',
+              detailsOpen && 'border-[#00F3FF]/20 bg-[#00F3FF]/10',
+            )}
+            aria-label={detailsOpen ? t('inbox.task.hideDetails') : t('inbox.task.showDetails')}
+          >
+            <ChevronDown
+              size={20}
+              className={cn(
+                'transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+                detailsOpen && 'rotate-180 text-[#00F3FF]',
+              )}
+            />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setDetailsOpen((value) => !value)}
+          className="mb-5 block w-full cursor-pointer text-left"
+        >
+          <h4 className="break-words text-[22px] font-black leading-[1.7] tracking-[0.05em] text-white transition-colors duration-300 group-hover:text-[#00F3FF] group-hover:drop-shadow-[0_0_12px_rgba(0,243,255,0.4)]">
+            {card.title}
+          </h4>
+          {!detailsOpen && detailPreview ? (
+            <p className="mt-2 line-clamp-2 text-sm font-medium leading-[1.7] tracking-[0.05em] text-white/50">
+              {detailPreview}
+            </p>
+          ) : null}
+        </button>
+
+        <div
+          className={cn(
+            'grid transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+            detailsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className="overflow-hidden">
+            <div className="mb-5 rounded-[22px] border border-white/5 bg-white/[0.025] p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.03)] backdrop-blur-md">
+              {descriptionMarkdown ? (
+                <div className="[&_.contains-task-list]:m-0 [&_.contains-task-list]:list-none [&_.contains-task-list]:pl-0 [&_.msg-markdown]:pt-0 [&_.msg-markdown]:text-sm [&_.msg-markdown]:leading-[1.7] [&_.msg-markdown]:tracking-[0.05em] [&_.msg-markdown]:text-white/70 [&_.msg-markdown_p]:my-1">
+                  <MessageMarkdown
+                    content={descriptionMarkdown}
+                    renderMentions={renderNoMentions}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm leading-[1.7] tracking-[0.05em] text-white/50">
+                  {t('inbox.task.noDetails')}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-2 mt-4 flex items-center justify-between gap-3 text-xs font-mono text-white/60">
+          <span className="flex shrink-0 items-center gap-1.5 font-semibold">
+            <ClipboardList size={16} className="text-[#00F3FF]" />
+            {t('inbox.task.progress')}
+          </span>
+          <span className="min-w-0 max-w-[12rem] truncate text-right font-bold tracking-wider text-[#00F3FF]">
+            {progressLabel}
+          </span>
+        </div>
+
+        {todoItems.length > 0 ? (
+          <div
+            className={cn(
+              'grid transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+              detailsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+            )}
+          >
+            <div className="overflow-hidden">
+              <div className="pb-1 pt-4">
+                <div className="rounded-[20px] border border-white/5 bg-white/[0.02] p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)] backdrop-blur-md">
+                  <ul className="space-y-3 font-mono text-[13px] text-white/60">
+                    {todoItems.map((item) => (
+                      <li
+                        key={`${item.done ? 'done' : 'open'}:${item.text}`}
+                        className="group/todo flex cursor-pointer items-start gap-3"
+                      >
+                        <span className="relative mt-0.5">
+                          {item.done ? (
+                            <CheckCircle2
+                              size={16}
+                              className="text-[#00E676] drop-shadow-[0_0_4px_rgba(0,230,118,0.5)]"
+                            />
+                          ) : (
+                            <Circle
+                              size={16}
+                              className="text-[#F8E71C] transition-colors group-hover/todo:text-[#00F3FF]"
+                            />
+                          )}
+                        </span>
+                        <span
+                          className={cn(
+                            'min-w-0 break-words leading-[1.7] tracking-[0.05em] transition-colors',
+                            item.done
+                              ? 'text-white/30 line-through group-hover/todo:text-white/50'
+                              : 'text-white/90 group-hover/todo:text-[#00F3FF]',
+                          )}
+                        >
+                          {item.text}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <footer className="relative z-10 mt-6 border-t border-white/10 pt-5">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5 font-mono text-[13px] text-white/50">
+              {source.label ? (
+                sourceLink ? (
+                  <a
+                    href={sourceLink}
+                    target={sourceLink.startsWith('http') ? '_blank' : undefined}
+                    rel={sourceLink.startsWith('http') ? 'noopener noreferrer' : undefined}
+                    className={cn(
+                      'group/app flex min-w-0 items-center gap-1.5 rounded-full border border-transparent bg-white/[0.03] px-2.5 py-1.5 transition-all duration-300 hover:border-[#00F3FF]/20 hover:bg-[#00F3FF]/10 focus:outline-none focus:ring-2 focus:ring-[#00F3FF]/50',
+                      expanded ? 'max-w-[220px]' : 'max-w-[120px]',
+                    )}
+                  >
+                    <TaskAppIcon iconUrl={source.iconUrl} />
+                    <span className="min-w-0 truncate pt-px text-[12px] font-medium text-white/60 transition-colors group-hover/app:text-[#00F3FF]">
+                      {source.label}
+                    </span>
+                  </a>
+                ) : (
+                  <div
+                    className={cn(
+                      'flex min-w-0 items-center gap-1.5 rounded-full border border-transparent bg-white/[0.03] px-2.5 py-1.5',
+                      expanded ? 'max-w-[220px]' : 'max-w-[120px]',
+                    )}
+                  >
+                    <TaskAppIcon iconUrl={source.iconUrl} />
+                    <span className="min-w-0 truncate pt-px text-[12px] font-medium text-white/60">
+                      {source.label}
+                    </span>
+                  </div>
+                )
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setRepliesOpen(true)}
+              className={cn(
+                'group/reply flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-white/[0.03] px-3 py-1.5 transition-all duration-300 hover:border-[#7C4DFF]/30 hover:bg-[#7C4DFF]/20 focus:outline-none focus:ring-2 focus:ring-[#7C4DFF]/50',
+                repliesOpen && 'border-[#7C4DFF]/30 bg-[#7C4DFF]/20',
+              )}
+              aria-label={t('inbox.task.replies')}
+            >
+              <MessageSquare
+                size={16}
+                className={cn(
+                  'text-white/50 transition-colors group-hover/reply:text-[#7C4DFF]',
+                  repliesOpen && 'text-[#7C4DFF]',
+                )}
+              />
+              <span
+                className={cn(
+                  'pt-px text-[12px] font-bold text-white/70 transition-colors group-hover/reply:text-[#7C4DFF]',
+                  repliesOpen && 'text-[#7C4DFF]',
+                )}
+              >
+                {replyCount}
+              </span>
+            </button>
+          </div>
+        </footer>
+      </article>
+      <TaskReplyPanel
+        open={repliesOpen}
+        card={card}
+        messageId={messageId}
+        channelId={channelId}
+        source={source}
+        replyItems={replyItems}
+        replyCount={replyCount}
+        onClose={() => setRepliesOpen(false)}
+      />
+    </>
+  )
+}
+
+function TaskReplyPanel({
+  open,
+  card,
+  messageId,
+  channelId,
+  source,
+  replyItems,
+  replyCount,
+  onClose,
+}: {
+  open: boolean
+  card: TaskMessageCard
+  messageId: string
+  channelId?: string
+  source: ReturnType<typeof sourceMeta>
+  replyItems: ReturnType<typeof taskReplyItems>
+  replyCount: number
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const panelRef = useRef<HTMLElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const descriptionMarkdown = useMemo(() => stripTodoItems(card.body), [card.body])
+  const messageMetadata = useMemo(
+    () => ({
+      custom: {
+        taskCardReply: {
+          kind: 'task_card_reply',
+          messageId,
+          cardId: card.id,
+        },
+      },
+    }),
+    [card.id, messageId],
+  )
+
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return
+    const focusComposer = () => {
+      const textarea = panelRef.current?.querySelector('textarea')
+      if (!textarea || textarea.disabled) return
+      textarea.focus({ preventScroll: true })
+      const cursor = textarea.value.length
+      textarea.setSelectionRange(cursor, cursor)
     }
+    const animationFrame = window.requestAnimationFrame(focusComposer)
+    const timers = [80, 220, 520].map((delay) => window.setTimeout(focusComposer, delay))
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      for (const timer of timers) window.clearTimeout(timer)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const element = scrollRef.current
+    if (!element) return
+    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
+  }, [open, replyItems.length])
+
+  if (!open) return null
+
+  const panelStyle = {
+    background: 'var(--color-bg-primary)',
+    backdropFilter: 'none',
+    WebkitBackdropFilter: 'none',
   }
 
   return (
-    <article
-      className={cn(
-        'group relative overflow-hidden rounded-xl border bg-bg-secondary/92 shadow-[0_10px_30px_rgba(0,0,0,0.14)] transition-colors',
-        meta.border,
-      )}
-    >
-      <div className="grid gap-4 p-4 sm:p-5">
-        <header className="flex min-w-0 items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <div
-              className={cn(
-                'mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border bg-bg-primary/45',
-                meta.checkbox,
-              )}
-              aria-hidden
-            >
-              <StatusIcon
-                size={18}
-                className={card.status === 'running' ? 'animate-spin' : undefined}
-              />
-            </div>
-            <div className="min-w-0">
-              <h4 className="min-w-0 break-words text-base font-black leading-6 text-text-primary">
-                {card.title}
-              </h4>
-            </div>
+    <>
+      <div className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]" onClick={onClose} />
+      <GlassPanel
+        ref={panelRef}
+        className="fixed inset-2 z-40 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl border border-border-subtle shadow-[0_24px_80px_rgba(0,0,0,0.38)] animate-slide-in-right sm:inset-y-3 sm:left-auto sm:right-3 sm:w-[min(92vw,420px)]"
+        style={panelStyle}
+      >
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle px-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+            <MessageSquare size={17} strokeWidth={2.5} />
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <span
-              className={cn(
-                'inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-black',
-                meta.badge,
-              )}
-            >
-              <StatusIcon
-                size={13}
-                className={card.status === 'running' ? 'animate-spin' : undefined}
-              />
-              {statusLabel}
-            </span>
-            {canRetry && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                icon={retrying ? Loader2 : RotateCw}
-                disabled={retrying}
-                onClick={() => void retryTask()}
-                className="h-7 rounded-md border border-danger/25 bg-danger/5 px-2 text-xs text-danger hover:bg-danger/10"
-              >
-                {retrying ? t('common.loading') : t('inbox.task.retry')}
-              </Button>
-            )}
-          </div>
-        </header>
-
-        <div className="border-t border-border-subtle/70" />
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          <InfoItem label={t('inbox.task.assignee')}>
-            {assigneeLink ? (
-              <a
-                href={assigneeLink}
-                className="inline-flex max-w-full items-start gap-1 rounded-md text-text-primary transition hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
-              >
-                <Bot size={14} className="mt-0.5 shrink-0" />
-                <span className="line-clamp-2 min-w-0 break-words">{assigneeLabel}</span>
-              </a>
-            ) : (
-              <span className="inline-flex max-w-full items-start gap-1">
-                <Bot size={14} className="mt-0.5 shrink-0 text-text-muted" />
-                <span className="line-clamp-2 min-w-0 break-words">{assigneeLabel}</span>
-              </span>
-            )}
-          </InfoItem>
-          <InfoItem label={t('inbox.task.app')}>
-            {source.label ? (
-              sourceLink ? (
-                <a
-                  href={sourceLink}
-                  target={sourceLink.startsWith('http') ? '_blank' : undefined}
-                  rel={sourceLink.startsWith('http') ? 'noopener noreferrer' : undefined}
-                  className="inline-flex max-w-full items-start gap-1 rounded-md text-primary transition hover:underline focus:outline-none focus:ring-2 focus:ring-primary/35"
-                >
-                  <AppWindow size={14} className="mt-0.5 shrink-0" />
-                  <span className="line-clamp-2 min-w-0 break-words">{source.label}</span>
-                </a>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-black text-text-primary">{card.title}</div>
+            <div className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-text-muted">
+              {source.label ? (
+                <>
+                  <TaskAppIcon iconUrl={source.iconUrl} />
+                  <span className="truncate">{source.label}</span>
+                </>
               ) : (
-                <span className="inline-flex max-w-full items-start gap-1">
-                  <AppWindow size={14} className="mt-0.5 shrink-0 text-text-muted" />
-                  <span className="line-clamp-2 min-w-0 break-words">{source.label}</span>
-                </span>
-              )
-            ) : (
-              t('common.unknown')
-            )}
-          </InfoItem>
-          <InfoItem label={t('inbox.task.createdAt')}>
-            <span className="inline-flex max-w-full items-start gap-1">
-              <CalendarClock size={14} className="mt-0.5 shrink-0 text-text-muted" />
-              <span className="line-clamp-2 min-w-0 break-words">
-                {createdAt ?? t('common.unknown')}
-              </span>
-            </span>
-          </InfoItem>
-          <InfoItem label={t('inbox.task.statusLabel')}>{statusLabel}</InfoItem>
+                <span>{t('inbox.task.replies')}</span>
+              )}
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            onClick={onClose}
+            title={t('common.close')}
+          >
+            <X size={18} />
+          </Button>
         </div>
 
-        <div className="border-t border-border-subtle/70" />
-
-        <Section
-          icon={
-            <span
-              className={cn(
-                'h-2 w-2 rounded-full',
-                statusMeta[latestProgress?.status ?? card.status].marker,
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden py-2">
+          <div className="px-4 pb-3 pt-2">
+            <div className="mb-2 flex items-center gap-2 text-xs font-black text-text-muted">
+              <span className="h-px flex-1 bg-border-subtle" />
+              <span>{t('inbox.task.details')}</span>
+              <span className="h-px flex-1 bg-border-subtle" />
+            </div>
+            <div className="rounded-2xl border border-border-subtle bg-bg-secondary/35 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="break-words text-[15px] font-black leading-[1.5] text-text-primary">
+                {card.title}
+              </div>
+              {descriptionMarkdown ? (
+                <div className="mt-2 [&_.msg-markdown]:pt-0 [&_.msg-markdown]:text-sm [&_.msg-markdown]:leading-6 [&_.msg-markdown]:text-text-secondary [&_.msg-markdown_p]:my-1">
+                  <MessageMarkdown
+                    content={descriptionMarkdown}
+                    renderMentions={renderNoMentions}
+                  />
+                </div>
+              ) : (
+                <p className="mt-2 text-sm leading-6 text-text-muted">
+                  {t('inbox.task.noDetails')}
+                </p>
               )}
-            />
-          }
-          title={t('inbox.task.latestProgress')}
-        >
-          <p className="min-w-0 truncate text-sm leading-6 text-text-secondary">
-            {latestProgressNote ? plainText(latestProgressNote) : t('inbox.task.noProgress')}
-          </p>
-        </Section>
+            </div>
+          </div>
 
-        <div className="border-t border-border-subtle/70" />
+          <div className="mx-4 mb-2 flex items-center gap-2 text-xs font-black text-text-muted">
+            <span className="h-px flex-1 bg-border-subtle" />
+            <span>
+              {t('inbox.task.replies')} {replyCount > 0 ? replyCount : ''}
+            </span>
+            <span className="h-px flex-1 bg-border-subtle" />
+          </div>
 
-        <Section
-          icon={<ClipboardList size={14} />}
-          title={t('inbox.task.details')}
-          action={
-            card.body ? (
-              <button
-                type="button"
-                onClick={() => setDetailsOpen((value) => !value)}
-                className="inline-flex items-center gap-1 rounded-md text-xs font-black text-text-muted transition hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
-              >
-                <ChevronDown
-                  size={14}
-                  className={cn('transition-transform', detailsOpen && 'rotate-180')}
-                />
-                {detailsOpen ? t('inbox.task.hideDetails') : t('inbox.task.showDetails')}
-              </button>
-            ) : null
-          }
-        >
-          {todoItems.length > 0 && (
-            <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-text-muted">
-              <span className="font-black text-text-secondary">
-                {t('inbox.task.todoProgress', { done: doneTodos, total: todoItems.length })}
-              </span>
-              <span className="h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-bg-primary/60">
-                <span
-                  className="block h-full rounded-full bg-success/75 transition-[width]"
-                  style={{ width: `${todoPercent}%` }}
-                />
-              </span>
+          {replyItems.length === 0 ? (
+            <div className="flex h-32 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
+              <MessageSquare size={22} className="text-primary/80" />
+              <span>{t('inbox.task.noReplies')}</span>
+            </div>
+          ) : (
+            <div className="space-y-3 px-4 pb-4">
+              {replyItems.map((reply) => {
+                const avatarUrl = resolveImageUrl(reply.authorAvatarUrl)
+                return (
+                  <div
+                    key={reply.key}
+                    className="rounded-2xl border border-border-subtle bg-bg-secondary/35 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                  >
+                    <div className="mb-2 flex min-w-0 items-center gap-2">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt=""
+                          className="h-7 w-7 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-black text-primary">
+                          {(reply.authorLabel ?? '?').slice(0, 1)}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-black text-text-primary">
+                          {reply.authorLabel ?? t('common.unknownUser')}
+                        </div>
+                        <div className="text-xs font-semibold text-text-muted">
+                          {compactDate(reply.createdAt) ?? ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="[&_.msg-markdown]:pt-0 [&_.msg-markdown]:text-sm [&_.msg-markdown]:leading-6 [&_.msg-markdown]:text-text-secondary [&_.msg-markdown_p]:my-1">
+                      <MessageMarkdown content={reply.content} renderMentions={renderNoMentions} />
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
-          {card.body ? (
-            detailsOpen ? (
-              <div className="rounded-lg border border-border-subtle/70 bg-bg-primary/28 px-3.5 py-3 [&_.contains-task-list]:m-0 [&_.contains-task-list]:list-none [&_.contains-task-list]:pl-0 [&_.msg-markdown]:pt-0 [&_.msg-markdown]:text-sm [&_.msg-markdown]:leading-6 [&_.msg-markdown_h1]:text-lg [&_.msg-markdown_h2]:text-base [&_.msg-markdown_h3]:text-sm [&_.msg-markdown_h3]:leading-5 [&_.msg-markdown_p]:my-1 [&_.task-list-item]:my-1.5 [&_.task-list-item]:flex [&_.task-list-item]:items-start [&_.task-list-item]:gap-2 [&_.task-list-item_input]:mt-1">
-                <MessageMarkdown content={card.body} renderMentions={renderNoMentions} />
-              </div>
-            ) : (
-              <p className="line-clamp-2 text-sm leading-6 text-text-secondary">
-                {detailPreview || t('inbox.task.noDetails')}
-              </p>
-            )
-          ) : (
-            <p className="text-sm leading-6 text-text-muted">{t('inbox.task.noDetails')}</p>
-          )}
-        </Section>
-      </div>
-    </article>
+        </div>
+
+        {channelId ? (
+          <MessageInput
+            channelId={channelId}
+            channelName={source.label ?? t('inbox.task.replies')}
+            replyToId={messageId}
+            placeholder={t('inbox.task.replyPlaceholder')}
+            hideReplyIndicator
+            messageMetadata={messageMetadata}
+            onMessageSent={() => {
+              requestAnimationFrame(() => {
+                const element = scrollRef.current
+                element?.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
+              })
+            }}
+          />
+        ) : null}
+      </GlassPanel>
+    </>
   )
 }

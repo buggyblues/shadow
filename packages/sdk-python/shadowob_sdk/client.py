@@ -348,6 +348,9 @@ class ShadowClient:
     def list_connector_computers(self) -> dict[str, Any]:
         return self._get("/api/connector/computers")
 
+    def get_latest_desktop_release(self) -> dict[str, Any]:
+        return self._get("/api/desktop/releases/latest")
+
     def create_connector_bootstrap(
         self,
         *,
@@ -1021,6 +1024,8 @@ class ShadowClient:
         title: str,
         body: str | None = None,
         priority: str | None = None,
+        tags: list[str | dict[str, Any]] | None = None,
+        app: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
         source: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
@@ -1030,6 +1035,10 @@ class ShadowClient:
             payload["body"] = body
         if priority is not None:
             payload["priority"] = priority
+        if tags is not None:
+            payload["tags"] = tags
+        if app is not None:
+            payload["app"] = app
         if idempotency_key is not None:
             payload["idempotencyKey"] = idempotency_key
         if source is not None:
@@ -1048,6 +1057,8 @@ class ShadowClient:
         title: str,
         body: str | None = None,
         priority: str | None = None,
+        tags: list[str | dict[str, Any]] | None = None,
+        app: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
         source: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
@@ -1057,6 +1068,10 @@ class ShadowClient:
             payload["body"] = body
         if priority is not None:
             payload["priority"] = priority
+        if tags is not None:
+            payload["tags"] = tags
+        if app is not None:
+            payload["app"] = app
         if idempotency_key is not None:
             payload["idempotencyKey"] = idempotency_key
         if source is not None:

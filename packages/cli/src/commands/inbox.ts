@@ -45,6 +45,14 @@ function parseTaskSourceOption(value: string | undefined) {
   return source as ShadowInboxTaskInput['source']
 }
 
+function parseTagOptions(values: string[] | undefined): ShadowInboxTaskInput['tags'] | undefined {
+  const tags = values
+    ?.flatMap((value) => value.split(','))
+    .map((value) => value.trim().replace(/^#+/u, ''))
+    .filter(Boolean)
+  return tags && tags.length > 0 ? [...new Set(tags)].slice(0, 12) : undefined
+}
+
 export function createInboxCommand(): Command {
   const inbox = new Command('inbox').description('Buddy Inbox task-card commands')
 
@@ -100,6 +108,7 @@ export function createInboxCommand(): Command {
     .requiredOption('--title <title>', 'Task title')
     .option('--body <text>', 'Task body')
     .option('--priority <priority>', 'low|normal|high|urgent')
+    .option('--tag <tag...>', 'Task tag; can be repeated or comma-separated')
     .option('--idempotency-key <key>', 'Idempotency key')
     .option('--server <server>', 'Server ID or slug; required with --agent')
     .option('--agent <agent-id>', 'Buddy agent ID')
@@ -113,6 +122,7 @@ export function createInboxCommand(): Command {
         title: string
         body?: string
         priority?: 'low' | 'normal' | 'high' | 'urgent'
+        tag?: string[]
         idempotencyKey?: string
         server?: string
         agent?: string
@@ -129,6 +139,8 @@ export function createInboxCommand(): Command {
           }
           if (options.body) task.body = options.body
           if (options.priority) task.priority = options.priority
+          const tags = parseTagOptions(options.tag)
+          if (tags) task.tags = tags
           if (options.idempotencyKey) task.idempotencyKey = options.idempotencyKey
           const source = parseTaskSourceOption(options.sourceJson)
           if (source) task.source = source

@@ -79,6 +79,14 @@ describe('desktop settings', () => {
     expect(settings.readDesktopSettings().shortcuts.petChat).toBe('')
   })
 
+  it('persists the local connector computer id', async () => {
+    const settings = await loadDesktopSettings()
+
+    settings.saveDesktopSettings({ connectorComputerId: ' computer-1 ' })
+
+    expect(settings.readDesktopSettings().connectorComputerId).toBe('computer-1')
+  })
+
   it('migrates legacy conflicting shortcut defaults', async () => {
     const settings = await loadDesktopSettings()
 

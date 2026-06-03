@@ -357,7 +357,7 @@ export default function BuddyManagementScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingContainer}
         >
-          <View style={[styles.modalOverlay, { backgroundColor: palette.black }]}>
+          <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
             <Reanimated.View
               entering={FadeInUp.duration(300)}
               style={[
@@ -495,7 +495,7 @@ export default function BuddyManagementScreen() {
 
       {/* Agent Detail Modal */}
       <Modal visible={!!selectedAgent} transparent animationType="slide">
-        <View style={[styles.modalOverlay, { backgroundColor: palette.black }]}>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
           <Reanimated.View
             entering={FadeIn.duration(300)}
             style={[

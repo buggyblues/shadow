@@ -58,6 +58,7 @@ import {
   loadContentSubscriptions,
   loadSubscriptionFiles,
   markContentFeedOpened,
+  markContentFeedReadScope,
   onCommunityAuthRequired,
   readShadowAccessToken,
   subscribeContentChannel,
@@ -796,6 +797,27 @@ export function PetApp() {
   useEffect(() => {
     if (tab === 'subscriptions') void refreshSubscriptions()
   }, [refreshSubscriptions, tab])
+
+  useEffect(() => {
+    if (!panelOpen || tab !== 'subscriptions') return
+    if (subscriptionState !== 'idle' || unreadSubscriptionCount === 0) return
+    let cancelled = false
+    void markContentFeedReadScope(api, { all: true })
+      .then(() => {
+        if (cancelled) return
+        const now = new Date().toISOString()
+        setSubscriptions((current) =>
+          current.map((subscription) => ({ ...subscription, lastSeenAt: now })),
+        )
+        setSubscriptionFiles((current) =>
+          current.map((file) => (file.unread ? { ...file, unread: false } : file)),
+        )
+      })
+      .catch(() => null)
+    return () => {
+      cancelled = true
+    }
+  }, [api, panelOpen, subscriptionState, tab, unreadSubscriptionCount])
 
   useEffect(() => {
     if (!isAuthenticated) return

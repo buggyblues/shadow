@@ -30,6 +30,13 @@ export interface ConnectorRuntimeCatalogEntry {
   install: ConnectorRuntimeInstallSpec
 }
 
+const HERMES_INSTALL_SCRIPT =
+  'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup --non-interactive --skip-browser'
+
+const HERMES_LINUX_INSTALL_SCRIPT = [
+  'sh -c \'set -e; if ! command -v xz >/dev/null 2>&1; then if [ "$(id -u)" -eq 0 ]; then SUDO=""; elif command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else echo "Hermes Agent installer requires xz; install xz-utils/xz and retry." >&2; exit 1; fi; if command -v apt-get >/dev/null 2>&1; then $SUDO apt-get update && $SUDO apt-get install -y xz-utils; elif command -v apk >/dev/null 2>&1; then $SUDO apk add --no-cache xz; elif command -v dnf >/dev/null 2>&1; then $SUDO dnf install -y xz; elif command -v yum >/dev/null 2>&1; then $SUDO yum install -y xz; elif command -v pacman >/dev/null 2>&1; then $SUDO pacman -Sy --noconfirm xz; else echo "Hermes Agent installer requires xz; install xz-utils/xz and retry." >&2; exit 1; fi; fi; curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup --non-interactive --skip-browser\'',
+]
+
 export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
   {
     id: 'openclaw',
@@ -57,12 +64,8 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     iconId: 'hermes',
     install: {
       commands: {
-        darwin: [
-          'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash',
-        ],
-        linux: [
-          'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash',
-        ],
+        darwin: [HERMES_INSTALL_SCRIPT],
+        linux: HERMES_LINUX_INSTALL_SCRIPT,
         win32: [
           'powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1)"',
         ],
@@ -179,9 +182,11 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     iconId: 'antigravity',
     install: {
       commands: {
-        darwin: ['open https://www.antigravity.google/product/antigravity-cli'],
-        linux: ['xdg-open https://www.antigravity.google/product/antigravity-cli'],
-        win32: ['start https://www.antigravity.google/product/antigravity-cli'],
+        darwin: ['curl -fsSL https://antigravity.google/cli/install.sh | bash'],
+        linux: ['curl -fsSL https://antigravity.google/cli/install.sh | bash'],
+        win32: [
+          'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://antigravity.google/cli/install.ps1 | iex"',
+        ],
       },
       helpUrl: 'https://www.antigravity.google/product/antigravity-cli',
     },

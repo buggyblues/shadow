@@ -41,7 +41,7 @@ import {
   getBuddyIntroPrompt,
   RuntimeIcon,
 } from '../components/buddy-management/agent-dialogs'
-import { ConfigCodeBlock } from '../components/buddy-management/config-code-block'
+import { DesktopConnectorDownloadCard } from '../components/buddy-management/desktop-connector-download-card'
 import {
   type Agent,
   type BuddyMode,
@@ -288,13 +288,17 @@ function CreateBuddyFlowPanel({
   const [selectedConnectorRuntimeId, setSelectedConnectorRuntimeId] = useState<string | null>(null)
   const [connectorSelectionConfirmed, setConnectorSelectionConfirmed] = useState(false)
   const [connectorCommand, setConnectorCommand] = useState<string | null>(null)
+  const [isWaitingForDesktopConnector, setIsWaitingForDesktopConnector] = useState(false)
   const connectorBootstrapStartedRef = useRef(false)
 
   const { data: connectorData, isFetching: isConnectorFetching } = useQuery({
     queryKey: ['connector-computers'],
     queryFn: () => fetchApi<{ computers: ConnectorComputer[] }>('/api/connector/computers'),
     enabled: createBuddyTarget === 'local' && !connectorSelectionConfirmed,
-    refetchInterval: createBuddyTarget === 'local' && !connectorSelectionConfirmed ? 5000 : false,
+    refetchInterval:
+      createBuddyTarget === 'local' && !connectorSelectionConfirmed && isWaitingForDesktopConnector
+        ? 3000
+        : false,
   })
 
   const connectorComputers = connectorData?.computers ?? []
@@ -396,6 +400,12 @@ function CreateBuddyFlowPanel({
     selectedConnectorRuntimeOption,
   ])
 
+  useEffect(() => {
+    if (connectorRuntimeOptions.length > 0 && isWaitingForDesktopConnector) {
+      setIsWaitingForDesktopConnector(false)
+    }
+  }, [connectorRuntimeOptions.length, isWaitingForDesktopConnector])
+
   if (connectorSelectionConfirmed && canContinue) {
     return (
       <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">
@@ -450,6 +460,7 @@ function CreateBuddyFlowPanel({
               onClick={() => {
                 setCreateBuddyTarget(target)
                 setConnectorSelectionConfirmed(false)
+                setIsWaitingForDesktopConnector(false)
               }}
               className={cn(
                 'flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black transition',
@@ -474,27 +485,12 @@ function CreateBuddyFlowPanel({
       {createBuddyTarget === 'local' ? (
         <>
           {connectorRuntimeOptions.length === 0 && (
-            <div className="rounded-2xl border border-border-subtle bg-bg-tertiary/40 px-4 py-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary">
-                  <Terminal size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-black text-text-primary">
-                    {t('agentMgmt.connectorDaemonTitle')}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4">
-                {connectorCommand ? (
-                  <ConfigCodeBlock content={connectorCommand} mode="single" t={t} />
-                ) : (
-                  <div className="rounded-2xl border border-border-subtle bg-bg-deep/40 px-4 py-3 text-xs leading-5 text-text-muted">
-                    {t('agentMgmt.connectorCreating')}
-                  </div>
-                )}
-              </div>
-            </div>
+            <DesktopConnectorDownloadCard
+              connectorCommand={connectorCommand}
+              isWaitingForConnector={isWaitingForDesktopConnector}
+              onWaitingForConnectorChange={setIsWaitingForDesktopConnector}
+              t={t}
+            />
           )}
 
           {connectorComputers.some((computer) => computer.runtimes.length > 0) && (

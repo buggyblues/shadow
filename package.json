@@ -90,7 +90,7 @@
     "lint": "biome lint . --diagnostic-level=error",
     "lint:fix": "biome check --write . --diagnostic-level=error",
     "format": "biome format --write .",
-    "typecheck": "pnpm -r --parallel typecheck",
+    "typecheck": "pnpm -r --parallel --if-present typecheck",
     "typecheck:staged": "node scripts/typecheck-staged.mjs",
     "check:migrations": "node scripts/check-drizzle-migrations.mjs",
     "check:sdk-versions": "node scripts/check-sdk-version-consistency.mjs",

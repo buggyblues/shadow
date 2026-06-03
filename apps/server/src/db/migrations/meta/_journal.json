@@ -645,6 +645,13 @@
       "when": 1780318800012,
       "tag": "0091_channel_subscription_rule_customized_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1780462513068,
+      "tag": "0092_task_message_card_metadata_contract",
+      "breakpoints": true
     }
   ]
 }

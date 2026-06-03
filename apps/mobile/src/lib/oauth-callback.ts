@@ -1,4 +1,3 @@
-import * as SecureStore from 'expo-secure-store'
 import { fetchApi } from './api'
 
 export type OAuthCallbackParams = {
@@ -78,9 +77,6 @@ export async function completeOAuthCallback(
   if (!params.accessToken || !params.refreshToken) {
     return 'missing'
   }
-
-  await SecureStore.setItemAsync('accessToken', params.accessToken)
-  await SecureStore.setItemAsync('refreshToken', params.refreshToken)
 
   const user = await fetchApi<OAuthUser>('/api/auth/me', {
     headers: { Authorization: `Bearer ${params.accessToken}` },

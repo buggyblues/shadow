@@ -113,6 +113,7 @@ def test_connector_computer_methods(monkeypatch):
     monkeypatch.setattr(client, "_post", fake_post)
 
     assert client.list_connector_computers() == {"computers": []}
+    assert client.get_latest_desktop_release() == {"computers": []}
     assert client.create_connector_bootstrap(server_url="https://shadowob.com", name="Laptop")[
         "command"
     ].startswith("npx")
@@ -131,6 +132,7 @@ def test_connector_computer_methods(monkeypatch):
     )["computer"]["id"] == "pc-1"
     assert calls == [
         ("get", "/api/connector/computers"),
+        ("get", "/api/desktop/releases/latest"),
         (
             "post",
             "/api/connector/computers/bootstrap",
@@ -927,6 +929,12 @@ def test_buddy_inbox_methods_use_canonical_paths(monkeypatch):
         "shadow-plays",
         "agent-1",
         title="Install",
+        tags=["UI", {"label": "High touch"}],
+        app={
+            "appKey": "figma",
+            "name": "Figma",
+            "iconUrl": "https://example.com/figma.png",
+        },
         idempotency_key="skills:install:x",
     ) == {"ok": True}
     assert client.enqueue_inbox_task("channel-1", title="Review") == {"ok": True}
@@ -966,7 +974,16 @@ def test_buddy_inbox_methods_use_canonical_paths(monkeypatch):
         (
             "post",
             "/api/servers/shadow-plays/inboxes/agent-1/tasks",
-            {"title": "Install", "idempotencyKey": "skills:install:x"},
+            {
+                "title": "Install",
+                "tags": ["UI", {"label": "High touch"}],
+                "app": {
+                    "appKey": "figma",
+                    "name": "Figma",
+                    "iconUrl": "https://example.com/figma.png",
+                },
+                "idempotencyKey": "skills:install:x",
+            },
         ),
         ("post", "/api/channels/channel-1/inbox/tasks", {"title": "Review"}),
         (

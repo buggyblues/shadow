@@ -25,6 +25,7 @@ import {
   HeadphoneOff,
   Headphones,
   Inbox,
+  Loader2,
   Lock,
   Megaphone,
   Menu,
@@ -40,6 +41,7 @@ import {
   Trash2,
   UserPlus,
   Volume2,
+  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -48,6 +50,14 @@ import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { type VoiceParticipant, type VoiceState } from '../../hooks/use-voice-channel'
 import { fetchApi } from '../../lib/api'
+import {
+  invalidateServerChannelState,
+  patchServerChannel,
+  removeServerChannel,
+  serverChannelCacheKeys,
+  upsertBuddyInboxChannel,
+  upsertServerChannel,
+} from '../../lib/channel-cache'
 import { scheduleIdleAfterNextPaint } from '../../lib/schedule'
 import { joinChannel } from '../../lib/socket'
 import { showToast } from '../../lib/toast'
@@ -294,6 +304,8 @@ export function ChannelSidebar({
   // Listen for 'create-channel' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
   const setPendingAction = useUIStore((s) => s.setPendingAction)
+  const pendingInvitePanel = useUIStore((s) => s.pendingInvitePanel)
+  const setPendingInvitePanel = useUIStore((s) => s.setPendingInvitePanel)
   useEffect(() => {
     if (pendingAction === 'create-channel') {
       setShowCreate(true)
@@ -318,6 +330,7 @@ export function ChannelSidebar({
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
   const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [openingBuddyInboxAgentId, setOpeningBuddyInboxAgentId] = useState<string | null>(null)
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const localUnreadEventIdsRef = useRef<Set<string>>(new Set())
@@ -343,6 +356,10 @@ export function ChannelSidebar({
     staleTime: CHANNEL_NAVIGATION_STALE_MS,
     gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
+  const serverChannelKeys = useMemo(
+    () => serverChannelCacheKeys(serverSlug, server?.slug, server?.id),
+    [serverSlug, server?.slug, server?.id],
+  )
 
   const { data: rawChannels = [] } = useQuery<Channel[]>({
     queryKey: ['channels', serverSlug],
@@ -418,21 +435,15 @@ export function ChannelSidebar({
   }, [channels, searchQuery])
   const updateChannelInCache = useCallback(
     (channelId: string, patch: Partial<Channel>) => {
-      queryClient.setQueryData<Channel[]>(['channels', serverSlug], (current) =>
-        current?.map((channel) =>
-          channel.id === channelId ? { ...channel, ...patch, id: channel.id } : channel,
-        ),
-      )
+      patchServerChannel(queryClient, serverChannelKeys, channelId, patch)
     },
-    [queryClient, serverSlug],
+    [queryClient, serverChannelKeys],
   )
   const removeChannelFromCache = useCallback(
     (channelId: string) => {
-      queryClient.setQueryData<Channel[]>(['channels', serverSlug], (current) =>
-        current?.filter((channel) => channel.id !== channelId),
-      )
+      removeServerChannel(queryClient, serverChannelKeys, channelId)
     },
-    [queryClient, serverSlug],
+    [queryClient, serverChannelKeys],
   )
   const buddyInboxChannelIds = useMemo(
     () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
@@ -453,6 +464,38 @@ export function ChannelSidebar({
     () => visibleChannels.filter((channel) => channel.type === 'voice'),
     [visibleChannels],
   )
+  useEffect(() => {
+    if (!pendingInvitePanel) return
+
+    const matchesServer =
+      pendingInvitePanel.serverSlug === serverSlug || pendingInvitePanel.serverSlug === server?.slug
+    const routeOrActiveChannelId = routeChannelId ?? activeChannelId
+    if (!matchesServer || routeOrActiveChannelId !== pendingInvitePanel.channelId) return
+
+    const targetChannel =
+      channels.find((channel) => channel.id === pendingInvitePanel.channelId) ??
+      ({
+        id: pendingInvitePanel.channelId,
+        name: pendingInvitePanel.channelName,
+        type: 'text',
+        topic: null,
+        position: 0,
+        isPrivate: false,
+      } satisfies Channel)
+
+    setInviteTargetChannel(targetChannel)
+    setInviteInitialTab(pendingInvitePanel.initialTab)
+    setShowInvitePanel(true)
+    setPendingInvitePanel(null)
+  }, [
+    activeChannelId,
+    channels,
+    pendingInvitePanel,
+    routeChannelId,
+    server?.slug,
+    serverSlug,
+    setPendingInvitePanel,
+  ])
   const voiceStateResetKey = useMemo(
     () => `${serverSlug}:${voiceChannels.map((channel) => channel.id).join('|')}`,
     [serverSlug, voiceChannels],
@@ -592,16 +635,18 @@ export function ChannelSidebar({
         body: JSON.stringify(data),
       }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      upsertServerChannel(queryClient, serverChannelKeys, data)
+      invalidateServerChannelState(queryClient, serverChannelKeys)
       setShowCreate(false)
       setNewName('')
       setNewIsPrivate(false)
-      // Auto-navigate to the newly created channel
+      setPendingInvitePanel({
+        serverSlug,
+        channelId: data.id,
+        channelName: data.name,
+        initialTab: 'buddies',
+      })
       handleSelectChannel(data)
-      // Show invite panel for the new channel
-      setInviteTargetChannel(data)
-      setInviteInitialTab('buddies')
-      setShowInvitePanel(true)
     },
   })
 
@@ -613,10 +658,19 @@ export function ChannelSidebar({
           method: 'POST',
         },
       ),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+    onMutate: (agentId) => {
+      setOpeningBuddyInboxAgentId(agentId)
+    },
+    onSuccess: (data, agentId) => {
+      upsertBuddyInboxChannel(queryClient, serverChannelKeys, agentId, data.channel)
+      invalidateServerChannelState(queryClient, serverChannelKeys, {
+        includeChannelLists: false,
+        includeBuddyInboxes: true,
+      })
       handleSelectChannel(data.channel)
+    },
+    onSettled: (_data, _error, agentId) => {
+      setOpeningBuddyInboxAgentId((current) => (current === agentId ? null : current))
     },
   })
 
@@ -720,7 +774,7 @@ export function ChannelSidebar({
       }),
     onSuccess: (_data, deletedChannelId) => {
       removeChannelFromCache(deletedChannelId)
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      invalidateServerChannelState(queryClient, serverChannelKeys)
       // If the deleted channel was active, navigate to next available channel
       if (activeChannelId === deletedChannelId) {
         const remaining = channels.filter((ch) => ch.id !== deletedChannelId)
@@ -744,14 +798,21 @@ export function ChannelSidebar({
         method: 'POST',
       }),
     onSuccess: (data, channelId) => {
-      updateChannelInCache(channelId, data.channel)
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      upsertServerChannel(queryClient, serverChannelKeys, data.channel)
+      invalidateServerChannelState(queryClient, serverChannelKeys)
       if (activeChannelId === channelId) {
-        setActiveChannel(null)
-        navigate({
-          to: '/servers/$serverSlug',
-          params: { serverSlug: server?.slug ?? serverSlug },
-        })
+        const nextChannel = channels.find(
+          (channel) => channel.id !== channelId && !channel.isArchived,
+        )
+        if (nextChannel) {
+          handleSelectChannel(nextChannel)
+        } else {
+          setActiveChannel(null)
+          navigate({
+            to: '/servers/$serverSlug',
+            params: { serverSlug: server?.slug ?? serverSlug },
+          })
+        }
       }
       showToast(t('channel.archiveSuccess'), 'success')
     },
@@ -766,8 +827,8 @@ export function ChannelSidebar({
         method: 'POST',
       }),
     onSuccess: (data, channelId) => {
-      updateChannelInCache(channelId, data.channel)
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      upsertServerChannel(queryClient, serverChannelKeys, data.channel)
+      invalidateServerChannelState(queryClient, serverChannelKeys)
       showToast(t('channel.unarchiveSuccess'), 'success')
     },
     onError: (error) => {
@@ -780,12 +841,13 @@ export function ChannelSidebar({
 
   const updateChannel = useMutation({
     mutationFn: (data: { channelId: string; name?: string; isPrivate?: boolean }) =>
-      fetchApi(`/api/channels/${data.channelId}`, {
+      fetchApi<Channel>(`/api/channels/${data.channelId}`, {
         method: 'PATCH',
         body: JSON.stringify({ name: data.name, isPrivate: data.isPrivate }),
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+    onSuccess: (updatedChannel) => {
+      upsertServerChannel(queryClient, serverChannelKeys, updatedChannel)
+      invalidateServerChannelState(queryClient, serverChannelKeys)
       setEditingChannel(null)
       setEditChannelName('')
     },
@@ -841,7 +903,7 @@ export function ChannelSidebar({
         }>(`/api/channels/${channel.id}/join-requests`, {
           method: 'POST',
         })
-        await queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+        invalidateServerChannelState(queryClient, serverChannelKeys)
         await queryClient.invalidateQueries({ queryKey: ['channel-access', channel.id] })
         queryClient.invalidateQueries({ queryKey: ['notifications'] })
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
@@ -867,6 +929,7 @@ export function ChannelSidebar({
       handleSelectChannel,
       joinVoiceChannel,
       queryClient,
+      serverChannelKeys,
       serverSlug,
       voice,
     ],
@@ -911,9 +974,10 @@ export function ChannelSidebar({
   }, [activeChannelId])
 
   // Auto-refresh channel list when a new channel is created
-  useSocketEvent('channel:created', (data: { serverId: string }) => {
+  useSocketEvent('channel:created', (data: Channel & { serverId: string }) => {
     if (data.serverId === serverSlug || data.serverId === server?.id) {
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      upsertServerChannel(queryClient, serverChannelKeys, data)
+      invalidateServerChannelState(queryClient, serverChannelKeys)
     }
   })
 
@@ -922,20 +986,28 @@ export function ChannelSidebar({
     (data) => {
       if (data.serverId && data.serverId !== serverSlug && data.serverId !== server?.id) return
       updateChannelInCache(data.id, data)
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+      invalidateServerChannelState(queryClient, serverChannelKeys)
     },
   )
 
   useSocketEvent<{ id: string; serverId?: string }>('channel:deleted', (data) => {
     if (data.serverId && data.serverId !== serverSlug && data.serverId !== server?.id) return
     removeChannelFromCache(data.id)
-    queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+    invalidateServerChannelState(queryClient, serverChannelKeys)
     if (activeChannelId === data.id) {
       setActiveChannel(null)
       navigate({
         to: '/servers/$serverSlug',
         params: { serverSlug: server?.slug ?? serverSlug },
       })
+    }
+  })
+
+  useSocketEvent<{ channelId?: string; serverId?: string }>('channel:member-added', (data) => {
+    if (data.serverId && data.serverId !== serverSlug && data.serverId !== server?.id) return
+    invalidateServerChannelState(queryClient, serverChannelKeys)
+    if (data.channelId) {
+      queryClient.invalidateQueries({ queryKey: ['channel-access', data.channelId] })
     }
   })
 
@@ -981,15 +1053,17 @@ export function ChannelSidebar({
 
   const recordChannelMessageActivity = useCallback(
     (event: { id?: string; channelId?: string }) => {
-      if (
-        !event.channelId ||
-        (!rawChannels.some((channel) => channel.id === event.channelId) &&
-          !buddyInboxChannelIds.has(event.channelId))
-      ) {
+      if (!event.channelId) {
         return
       }
-      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
-      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
+      const isServerChannel = rawChannels.some((channel) => channel.id === event.channelId)
+      const isBuddyInboxChannel = buddyInboxChannelIds.has(event.channelId)
+      if (!isServerChannel && !isBuddyInboxChannel) return
+      invalidateServerChannelState(queryClient, serverChannelKeys, {
+        includeChannelLists: isServerChannel,
+        includeBuddyInboxes: isBuddyInboxChannel,
+        includeBootstrap: false,
+      })
       const currentChannelId = useChatStore.getState().activeChannelId
       if (event.channelId === currentChannelId) {
         void requestMarkScopeRead({ channelId: event.channelId, force: true })
@@ -1007,7 +1081,7 @@ export function ChannelSidebar({
         [event.channelId!]: (prev[event.channelId!] ?? 0) + 1,
       }))
     },
-    [buddyInboxChannelIds, queryClient, rawChannels, requestMarkScopeRead, serverSlug],
+    [buddyInboxChannelIds, queryClient, rawChannels, requestMarkScopeRead, serverChannelKeys],
   )
 
   useSocketEvent<{ id?: string; channelId?: string }>('message:new', recordChannelMessageActivity)
@@ -1064,9 +1138,11 @@ export function ChannelSidebar({
     return (
       <div key={ch.id} className="space-y-1">
         {isEditing ? (
-          <div className="relative flex items-center gap-1.5 rounded-xl border border-primary/20 bg-primary/10 px-2 py-1">
-            <Volume2 size={16} className="shrink-0 text-text-muted" />
-            <Input
+          <div className="grid h-9 grid-cols-[1.5rem_minmax(0,1fr)_1.75rem_1.75rem] items-center gap-1.5 rounded-xl border border-primary/25 bg-primary/10 px-2">
+            <div className="grid h-6 w-6 place-items-center rounded-lg bg-bg-tertiary/50 text-text-muted">
+              <Volume2 size={14} />
+            </div>
+            <input
               type="text"
               value={editChannelName}
               onChange={(e) => setEditChannelName(e.target.value)}
@@ -1078,18 +1154,30 @@ export function ChannelSidebar({
                 }
               }}
               autoFocus
-              className="flex-1 !rounded-md !border-none !bg-transparent !px-2 !py-1 pr-8 text-sm font-black text-text-primary !shadow-none !ring-0 focus:!ring-1 focus:!ring-primary"
+              className="h-7 min-w-0 rounded-md border-0 bg-transparent px-1 text-sm font-bold text-text-primary outline-none placeholder:text-text-muted focus:bg-bg-primary/35"
             />
             <button
               type="button"
+              aria-label={t('common.save')}
+              title={t('common.save')}
+              disabled={!editChannelName.trim() || updateChannel.isPending}
               onClick={() => {
                 if (editChannelName.trim()) {
                   updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
                 }
               }}
-              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-success/20 text-success transition-colors hover:text-success/80"
+              className="grid h-7 w-7 place-items-center rounded-lg bg-success/15 text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Check size={14} />
+            </button>
+            <button
+              type="button"
+              aria-label={t('common.cancel')}
+              title={t('common.cancel')}
+              onClick={() => setEditingChannel(null)}
+              className="grid h-7 w-7 place-items-center rounded-lg text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+            >
+              <X size={14} />
             </button>
           </div>
         ) : (
@@ -1193,9 +1281,11 @@ export function ChannelSidebar({
     return (
       <div key={ch.id}>
         {isEditing ? (
-          <div className="relative flex items-center gap-1.5 px-2 py-1 bg-primary/10 rounded-xl border border-primary/20">
-            <Icon size={16} className="shrink-0 text-text-muted" />
-            <Input
+          <div className="grid h-9 grid-cols-[1.5rem_minmax(0,1fr)_1.75rem_1.75rem] items-center gap-1.5 rounded-xl border border-primary/25 bg-primary/10 px-2">
+            <div className="grid h-6 w-6 place-items-center rounded-lg bg-bg-tertiary/50 text-text-muted">
+              <Icon size={14} />
+            </div>
+            <input
               type="text"
               value={editChannelName}
               onChange={(e) => setEditChannelName(e.target.value)}
@@ -1207,18 +1297,30 @@ export function ChannelSidebar({
                 }
               }}
               autoFocus
-              className="flex-1 !bg-transparent !border-none !shadow-none !ring-0 text-text-primary font-black !rounded-md !px-2 !py-1 text-sm focus:!ring-1 focus:!ring-primary pr-8"
+              className="h-7 min-w-0 rounded-md border-0 bg-transparent px-1 text-sm font-bold text-text-primary outline-none placeholder:text-text-muted focus:bg-bg-primary/35"
             />
             <button
               type="button"
+              aria-label={t('common.save')}
+              title={t('common.save')}
+              disabled={!editChannelName.trim() || updateChannel.isPending}
               onClick={() => {
                 if (editChannelName.trim()) {
                   updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
                 }
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-success/20 text-success hover:text-success/80 transition-colors"
+              className="grid h-7 w-7 place-items-center rounded-lg bg-success/15 text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Check size={14} />
+            </button>
+            <button
+              type="button"
+              aria-label={t('common.cancel')}
+              title={t('common.cancel')}
+              onClick={() => setEditingChannel(null)}
+              className="grid h-7 w-7 place-items-center rounded-lg text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+            >
+              <X size={14} />
             </button>
           </div>
         ) : (
@@ -1232,7 +1334,7 @@ export function ChannelSidebar({
                 }>(`/api/channels/${ch.id}/join-requests`, {
                   method: 'POST',
                 })
-                await queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+                invalidateServerChannelState(queryClient, serverChannelKeys)
                 await queryClient.invalidateQueries({ queryKey: ['channel-access', ch.id] })
                 queryClient.invalidateQueries({ queryKey: ['notifications'] })
                 queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
@@ -1291,18 +1393,21 @@ export function ChannelSidebar({
       : 0
     const isUnread = !isActive && unreadCount > 0
     const displayName = entry.agent.user.displayName ?? entry.agent.user.username
+    const isOpening = openingBuddyInboxAgentId === entry.agent.id
 
     return (
       <div key={entry.agent.id} className="group/inbox flex items-center gap-1">
         <button
           type="button"
           data-app-item
-          disabled={ensureBuddyInbox.isPending}
+          disabled={isOpening}
+          aria-busy={isOpening}
           onClick={() => {
             if (channel) {
               handleSelectChannel(channel)
               return
             }
+            if (isOpening) return
             ensureBuddyInbox.mutate(entry.agent.id)
           }}
           className={cn(
@@ -1324,7 +1429,9 @@ export function ChannelSidebar({
             <Inbox size={14} strokeWidth={2.6} />
           </div>
           <span className="min-w-0 flex-1 truncate">{displayName}</span>
-          {!channel && <Lock size={12} className="shrink-0 text-text-muted" />}
+          <span className="grid h-3 w-3 shrink-0 place-items-center">
+            {isOpening && <Loader2 size={12} className="animate-spin text-text-muted" />}
+          </span>
           {isUnread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-danger" />}
         </button>
         {entry.canManage && (
@@ -2313,7 +2420,7 @@ export function ChannelSidebar({
       )}
 
       {/* Invite Panel */}
-      {showInvitePanel && server?.inviteCode && (
+      {showInvitePanel && (
         <InvitePanel
           serverId={serverSlug}
           channelId={inviteTargetChannel?.id}

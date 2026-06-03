@@ -676,6 +676,7 @@ const desktopAPI = {
       httpProxy: string
       httpsProxy: string
       connectorApiKey: string
+      connectorComputerId: string
       connectorAutoStart: boolean
       connectorWorkDir: string
       connectorBuddyWorkDirs: Record<string, string>
@@ -698,6 +699,7 @@ const desktopAPI = {
     httpProxy?: string
     httpsProxy?: string
     connectorApiKey?: string
+    connectorComputerId?: string
     connectorAutoStart?: boolean
     connectorWorkDir?: string
     connectorBuddyWorkDirs?: Record<string, string>
@@ -720,6 +722,7 @@ const desktopAPI = {
       httpProxy: string
       httpsProxy: string
       connectorApiKey: string
+      connectorComputerId: string
       connectorAutoStart: boolean
       connectorWorkDir: string
       connectorBuddyWorkDirs: Record<string, string>
@@ -755,6 +758,7 @@ const desktopAPI = {
       httpProxy?: string
       httpsProxy?: string
       connectorApiKey?: string
+      connectorComputerId?: string
       connectorAutoStart?: boolean
       connectorWorkDir?: string
     }) => ipcRenderer.invoke('desktop:connector:start', settings),
@@ -967,6 +971,7 @@ const desktopAPI = {
       httpProxy: string
       httpsProxy: string
       connectorApiKey: string
+      connectorComputerId: string
       connectorAutoStart: boolean
       connectorWorkDir: string
       connectorBuddyWorkDirs: Record<string, string>
@@ -990,6 +995,7 @@ const desktopAPI = {
         httpProxy: string
         httpsProxy: string
         connectorApiKey: string
+        connectorComputerId: string
         connectorAutoStart: boolean
         connectorWorkDir: string
         connectorBuddyWorkDirs: Record<string, string>

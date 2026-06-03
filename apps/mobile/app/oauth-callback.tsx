@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import {
@@ -27,19 +27,23 @@ export default function OAuthCallbackScreen() {
   const router = useRouter()
   const setAuth = useAuthStore((s) => s.setAuth)
   const currentUrl = Linking.useURL()
+  const handledRef = useRef(false)
 
   useEffect(() => {
     const handleCallback = async () => {
+      if (handledRef.current) return
       try {
-        const candidateUrls = [currentUrl, await Linking.getInitialURL()]
+        const candidateUrls = Array.from(new Set([currentUrl, await Linking.getInitialURL()]))
         for (const url of candidateUrls) {
           if (!url || !isOAuthCallbackUrl(url)) continue
           const result = await completeOAuthCallbackUrl(url, setAuth)
           if (result === 'authenticated') {
+            handledRef.current = true
             router.replace('/(main)')
             return
           }
           if (result === 'linked') {
+            handledRef.current = true
             router.replace('/(main)/settings/account')
             return
           }
@@ -47,15 +51,19 @@ export default function OAuthCallbackScreen() {
 
         const result = await completeOAuthCallback(normalizeOAuthCallbackParams(params), setAuth)
         if (result === 'authenticated') {
+          handledRef.current = true
           router.replace('/(main)')
           return
         }
         if (result === 'linked') {
+          handledRef.current = true
           router.replace('/(main)/settings/account')
           return
         }
+        handledRef.current = true
         router.replace('/(auth)/login')
       } catch {
+        handledRef.current = true
         router.replace('/(auth)/login')
       }
     }

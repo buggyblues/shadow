@@ -519,6 +519,24 @@
       "canceled": "キャンセル済み",
       "transferred": "転送済み"
     },
+    "task": {
+      "new": "新規タスク",
+      "quickPlaceholder": "タスク名を書き、改行で完了条件、リンク、背景を追加",
+      "create": "タスクを作成",
+      "created": "タスクを作成しました",
+      "createFailed": "タスクの作成に失敗しました",
+      "tagsPlaceholder": "タグをカンマで区切って入力",
+      "noReplies": "返信はまだありません",
+      "replyPlaceholder": "返信を入力...",
+      "sendReply": "返信を送信",
+      "replyFailed": "返信の送信に失敗しました",
+      "priority": {
+        "low": "低",
+        "normal": "通常",
+        "high": "高",
+        "urgent": "緊急"
+      }
+    },
     "action": {
       "start": "開始",
       "complete": "完了",

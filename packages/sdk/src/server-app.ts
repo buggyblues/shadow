@@ -63,6 +63,7 @@ export interface ShadowServerAppInboxTaskOutbox {
   title: string
   body?: string
   priority?: ShadowServerAppInboxTaskPriority
+  tags?: ShadowInboxTaskInput['tags']
   agentId?: string
   agentUserId?: string
   assigneeLabel?: string
@@ -197,6 +198,7 @@ export interface ShadowServerAppHostAppRef {
   serverId?: string | null
   name?: string | null
   label?: string | null
+  iconUrl?: string | null
 }
 
 export interface ShadowServerAppHostInboxTaskRequestInput {
@@ -281,12 +283,23 @@ export function buildShadowServerAppInboxTaskRequest(
       title: input.task.title,
       body: input.task.body,
       priority: input.task.priority,
+      tags: input.task.tags,
       idempotencyKey: input.task.idempotencyKey,
+      app: {
+        id: appId,
+        appId,
+        appKey: input.app.appKey,
+        name: input.app.name ?? input.app.label ?? input.app.appKey,
+        label: input.app.label ?? input.app.name ?? input.app.appKey,
+        ...(input.app.iconUrl ? { iconUrl: input.app.iconUrl } : {}),
+      },
       source: {
         kind: 'server_app',
         id: appId,
         appId,
         appKey: input.app.appKey,
+        ...(input.app.name ? { appName: input.app.name } : {}),
+        ...(input.app.iconUrl ? { iconUrl: input.app.iconUrl } : {}),
         ...(input.app.serverId ? { serverId: input.app.serverId } : {}),
         ...(input.commandName ? { command: input.commandName } : {}),
         label: input.app.label ?? input.app.name ?? input.app.appKey,
@@ -297,6 +310,9 @@ export function buildShadowServerAppInboxTaskRequest(
         serverApp: {
           ...serverAppData,
           appKey: input.app.appKey,
+          name: input.app.name ?? input.app.label ?? input.app.appKey,
+          label: input.app.label ?? input.app.name ?? input.app.appKey,
+          ...(input.app.iconUrl ? { iconUrl: input.app.iconUrl } : {}),
           ...(input.commandName ? { command: input.commandName } : {}),
         },
       },

@@ -116,6 +116,8 @@ const SHADOW_CONNECTOR_PACKAGE = '@shadowob/connector@latest'
 const DEFAULT_OPENCLAW_CONFIG = '~/.openclaw/openclaw.json'
 const LEGACY_OPENCLAW_CONFIG = '~/.shadowob/openclaw.json'
 const DEFAULT_DAEMON_POLL_INTERVAL_MS = 5_000
+const RUNTIME_INSTALL_TIMEOUT_MS = 20 * 60_000
+const SHELL_OUTPUT_MAX_CHARS = 24_000
 
 function readOption(args: string[], name: string): string | undefined {
   const prefix = `${name}=`
@@ -285,26 +287,59 @@ function runShell(
   command: string,
   dryRun: boolean,
   env: NodeJS.ProcessEnv = connectorProcessEnv(),
+  timeoutMs = 0,
 ): void {
   if (dryRun) {
     console.log(`[dry-run] ${command}`)
     return
   }
-  const result = spawnSync(command, { shell: true, stdio: 'inherit', env })
+  const result = spawnSync(command, { shell: true, stdio: 'inherit', env, timeout: timeoutMs })
+  if (result.error) {
+    throw new Error(shellExecutionErrorMessage(command, result.error, timeoutMs))
+  }
   if (result.status !== 0) {
     throw new Error(`Command failed with exit code ${result.status ?? 'unknown'}: ${command}`)
   }
+}
+
+function compactShellOutput(output: string): string {
+  const trimmed = output.trim()
+  if (trimmed.length <= SHELL_OUTPUT_MAX_CHARS) return trimmed
+  return `${trimmed.slice(0, 4000)}\n...\n${trimmed.slice(-SHELL_OUTPUT_MAX_CHARS + 4000)}`
+}
+
+function shellExecutionErrorMessage(command: string, error: Error, timeoutMs: number): string {
+  const code = (error as NodeJS.ErrnoException).code
+  if (code === 'ETIMEDOUT') {
+    return `Command timed out after ${Math.round(timeoutMs / 1000)}s: ${command}`
+  }
+  return error.message || `Command failed: ${command}`
 }
 
 function runShellQuiet(
   command: string,
   dryRun: boolean,
   env: NodeJS.ProcessEnv = connectorProcessEnv(),
+  timeoutMs = 0,
 ): void {
   if (dryRun) return
-  const result = spawnSync(command, { shell: true, encoding: 'utf8', env })
+  const result = spawnSync(command, {
+    shell: true,
+    encoding: 'utf8',
+    env,
+    timeout: timeoutMs,
+    maxBuffer: 1024 * 1024,
+  })
+  if (result.error) {
+    const output = compactShellOutput(`${result.stdout ?? ''}${result.stderr ?? ''}`)
+    throw new Error(
+      [shellExecutionErrorMessage(command, result.error, timeoutMs), output]
+        .filter(Boolean)
+        .join('\n'),
+    )
+  }
   if (result.status !== 0) {
-    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
+    const output = compactShellOutput(`${result.stdout ?? ''}${result.stderr ?? ''}`)
     throw new Error(
       output || `Command failed with exit code ${result.status ?? 'unknown'}: ${command}`,
     )
@@ -1678,12 +1713,28 @@ async function installRuntime(options: CliOptions): Promise<void> {
       `No install command is available for ${runtime.label}. See ${runtime.install.helpUrl}`,
     )
   }
-  const command = commands[0] as string
-  const env = await envForShellCommand(command, options.dryRun)
-  if (options.json) {
-    runShellQuiet(command, options.dryRun, env)
-  } else {
-    runShell(command, options.dryRun, env)
+  const errors: string[] = []
+  let installedCommand = ''
+  for (const command of commands) {
+    const env = await envForShellCommand(command, options.dryRun)
+    try {
+      if (options.json) {
+        runShellQuiet(command, options.dryRun, env, RUNTIME_INSTALL_TIMEOUT_MS)
+      } else {
+        runShell(command, options.dryRun, env, RUNTIME_INSTALL_TIMEOUT_MS)
+      }
+      installedCommand = command
+      break
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  if (!installedCommand) {
+    throw new Error(
+      `All install commands failed for ${runtime.label}:\n${errors
+        .map((error, index) => `${index + 1}. ${error}`)
+        .join('\n')}`,
+    )
   }
   const detected = await detectCatalogRuntime(runtime)
   if (options.json) {
@@ -1693,6 +1744,7 @@ async function installRuntime(options: CliOptions): Promise<void> {
           ok: detected.status === 'available' || options.dryRun,
           runtimeId: runtime.id,
           commands,
+          installedCommand,
           runtime: detected,
         },
         null,

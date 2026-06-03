@@ -17,6 +17,7 @@
     "release:mac:arm64": "node scripts/release.mjs --platform=darwin --arch=arm64 --mode=make --notarize",
     "release:win": "node scripts/release.mjs --platform=win32 --arch=x64 --mode=make",
     "release:linux": "node scripts/release.mjs --platform=linux --arch=x64 --mode=make",
+    "verify:package-assets": "node scripts/verify-package-assets.mjs",
     "changelog:archive": "node scripts/archive-changelog.mjs",
     "test": "npx playwright test",
     "test:e2e": "npx playwright test",

@@ -19,6 +19,8 @@ import {
   Cloud,
   Compass,
   Heart,
+  LayoutGrid,
+  List,
   Loader2,
   type LucideIcon,
   MessageCircle,
@@ -30,12 +32,12 @@ import {
   Store,
 } from 'lucide-react'
 import {
-  type FormEvent,
   type KeyboardEvent,
   type ReactNode,
   type UIEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -47,10 +49,12 @@ import {
 } from '../components/buddy-market/buddy-listing-card'
 import { FileCard } from '../components/chat/file-card'
 import { FilePreviewPanel } from '../components/chat/file-preview-panel'
+import type { Message as ChatMessage } from '../components/chat/message-bubble'
 import { MessageMarkdown } from '../components/chat/message-bubble/markdown'
 import { resolveAttachmentMediaUrl } from '../components/chat/message-bubble/media'
 import type { Attachment } from '../components/chat/message-bubble/types'
 import { VoiceMessageView } from '../components/chat/message-bubble/voice-message'
+import { type Thread, ThreadPanel } from '../components/chat/thread-panel'
 import { UserAvatar } from '../components/common/avatar'
 import {
   type CloudTemplateSource,
@@ -69,11 +73,13 @@ import { fetchApi } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
 import { copyToClipboardSilent } from '../lib/clipboard'
 import { showToast } from '../lib/toast'
+import { useAuthStore } from '../stores/auth.store'
 
 type HubSection = 'all' | 'feed' | 'buddies' | 'market' | 'shops' | 'cloud' | 'communities'
 
 type DiscoverView = 'browse' | 'explore' | 'market' | 'cloud'
 type DiscoverModuleId = 'subscriptions' | 'communities' | 'cloud' | 'products' | 'buddies' | 'shops'
+type FeedViewMode = 'timeline' | 'masonry'
 
 interface DiscoverViewConfig {
   id: DiscoverView
@@ -83,6 +89,13 @@ interface DiscoverViewConfig {
 
 interface DiscoverLayoutConfig {
   views: DiscoverViewConfig[]
+}
+
+interface DiscoverRouteSearch {
+  createBuddy?: string | number | boolean
+  desktopCreateBuddyAt?: string | number
+  feedView?: string
+  tab?: string
 }
 
 interface ServerEntry {
@@ -278,34 +291,6 @@ interface ContentFeedPage {
   nextCursor: string | null
 }
 
-interface MessageThread {
-  id: string
-  name: string
-  channelId: string
-  parentMessageId: string
-  creatorId?: string
-  isArchived?: boolean
-  createdAt: string
-  updatedAt?: string
-}
-
-interface MessageThreadMessage {
-  id: string
-  content: string
-  channelId: string
-  authorId: string
-  replyToId: string | null
-  createdAt: string
-  updatedAt: string
-  author: {
-    id: string
-    username: string
-    displayName?: string | null
-    avatarUrl?: string | null
-    isBot?: boolean
-  } | null
-}
-
 interface PreviewAttachment {
   id: string
   filename: string
@@ -374,6 +359,8 @@ const DISCOVER_MODULE_ANCHOR_ID: Record<DiscoverModuleId, string> = {
 const SECTION_PAGE_SIZE = 12
 const DISCOVER_STALE_MS = 60_000
 const DISCOVER_GC_MS = 10 * 60 * 1000
+const DISCOVER_FEED_VIEW_STORAGE_KEY = 'shadow.discover.feedViewMode'
+const DISCOVER_DOCUMENT_PREVIEW_WIDTH = 720
 
 const initialSectionPages: Record<HubSection, number> = {
   all: 1,
@@ -410,6 +397,26 @@ function normalizeDiscoverViewId(value: unknown): DiscoverView | null {
   if (value === 'subscriptions' || value === 'feed' || value === 'all') return 'browse'
   if (DISCOVER_VIEW_ORDER.includes(value as DiscoverView)) return value as DiscoverView
   return null
+}
+
+function parseFeedViewMode(value: unknown): FeedViewMode | null {
+  return value === 'timeline' || value === 'masonry' ? value : null
+}
+
+function readStoredFeedViewMode(): FeedViewMode | null {
+  if (typeof window === 'undefined') return null
+  return parseFeedViewMode(window.localStorage.getItem(DISCOVER_FEED_VIEW_STORAGE_KEY))
+}
+
+function writeStoredFeedViewMode(value: FeedViewMode) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(DISCOVER_FEED_VIEW_STORAGE_KEY, value)
+}
+
+function discoverFeedSearch(routeSearch: DiscoverRouteSearch, feedViewMode: FeedViewMode) {
+  const nextSearch: Record<string, unknown> = { ...routeSearch, feedView: feedViewMode }
+  delete nextSearch.tab
+  return nextSearch
 }
 
 function isDiscoverModule(value: unknown): value is DiscoverModuleId {
@@ -466,12 +473,9 @@ export function DiscoverPage() {
   const unreadCount = useUnreadCount()
   const navigate = useNavigate()
   const location = useLocation()
-  const routeSearch = useSearch({ strict: false }) as {
-    createBuddy?: string | number | boolean
-    desktopCreateBuddyAt?: string | number
-    tab?: string
-  }
+  const routeSearch = useSearch({ strict: false }) as DiscoverRouteSearch
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((state) => state.user)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeView, setActiveView] = useState<DiscoverView>(
     () =>
@@ -482,7 +486,17 @@ export function DiscoverPage() {
   const [sectionPages, setSectionPages] = useState<Record<HubSection, number>>(initialSectionPages)
   const [showCreateBuddy, setShowCreateBuddy] = useState(false)
   const [previewFile, setPreviewFile] = useState<PreviewAttachment | null>(null)
+  const [previewInitialFullscreen, setPreviewInitialFullscreen] = useState(false)
+  const [activeThread, setActiveThread] = useState<Thread | null>(null)
+  const [activeThreadParent, setActiveThreadParent] = useState<ChatMessage | null>(null)
+  const [activeThreadContext, setActiveThreadContext] = useState<{
+    serverId: string
+    channelName: string
+  } | null>(null)
   const [activeModule, setActiveModule] = useState<DiscoverModuleId | null>(null)
+  const [feedViewMode, setFeedViewMode] = useState<FeedViewMode>(
+    () => parseFeedViewMode(routeSearch.feedView) ?? readStoredFeedViewMode() ?? 'timeline',
+  )
   const normalizedSearch = searchQuery.trim()
   const effectiveSearch = normalizedSearch.length >= 2 ? normalizedSearch : ''
   useAppStatus({
@@ -628,6 +642,13 @@ export function DiscoverPage() {
     if (nextView) setActiveView(nextView)
   }, [location.pathname, routeSearch.tab])
 
+  useEffect(() => {
+    const nextFeedViewMode = parseFeedViewMode(routeSearch.feedView)
+    if (!nextFeedViewMode) return
+    setFeedViewMode(nextFeedViewMode)
+    writeStoredFeedViewMode(nextFeedViewMode)
+  }, [routeSearch.feedView])
+
   const discoverLayout = useMemo(
     () => normalizeDiscoverLayout(discoverConfigData?.data),
     [discoverConfigData?.data],
@@ -692,7 +713,19 @@ export function DiscoverPage() {
   const selectView = (view: DiscoverView) => {
     setActiveView(view)
     setSectionPages(initialSectionPages)
-    navigate({ to: DISCOVER_VIEW_PATH[view] })
+    navigate({
+      to: DISCOVER_VIEW_PATH[view],
+      search: view === 'browse' ? discoverFeedSearch(routeSearch, feedViewMode) : {},
+    })
+  }
+
+  const selectFeedViewMode = (viewMode: FeedViewMode) => {
+    setFeedViewMode(viewMode)
+    writeStoredFeedViewMode(viewMode)
+    navigate({
+      to: DISCOVER_VIEW_PATH.browse,
+      search: discoverFeedSearch(routeSearch, viewMode),
+    })
   }
 
   const loadMore = (section: HubSection) => {
@@ -703,6 +736,10 @@ export function DiscoverPage() {
     items.slice(0, sectionPages[section] * SECTION_PAGE_SIZE)
 
   const visibleFeedItems = feedItems
+  const visibleMasonryFeedItems = useMemo(
+    () => visibleFeedItems.filter(isMasonryFeedItem),
+    [visibleFeedItems],
+  )
   const visibleBuddies = sectionItems(buddies, 'buddies')
   const visibleShops = sectionItems(shops, 'shops')
   const visibleCommunities = sectionItems(communities, 'communities')
@@ -758,6 +795,7 @@ export function DiscoverPage() {
 
       if (item.primaryAttachmentId) {
         const media = await resolveAttachmentMediaUrl(item.primaryAttachmentId, 'inline')
+        setPreviewInitialFullscreen(shouldOpenFeedPreviewFullscreen(item))
         setPreviewFile({
           id: item.primaryAttachmentId,
           filename: item.title,
@@ -778,6 +816,60 @@ export function DiscoverPage() {
     } catch (error) {
       showToast(getApiErrorMessage(error, t, 'discover.feedOpenFailed'), 'error')
     }
+  }
+
+  const openContentFeedThread = async (item: ContentFeedItem) => {
+    try {
+      const mediaPromise = item.primaryAttachmentId
+        ? resolveAttachmentMediaUrl(item.primaryAttachmentId, 'inline')
+            .then((media) => media.url)
+            .catch(() => '')
+        : Promise.resolve('')
+      const [thread, attachmentUrl] = await Promise.all([
+        fetchApi<Thread>(`/api/messages/${item.messageId}/thread`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        }),
+        mediaPromise,
+      ])
+
+      queryClient.setQueryData(['message-thread', item.messageId], thread)
+      queryClient.setQueryData<Thread[]>(['threads', item.channelId], (current) => {
+        const existing = current ?? []
+        if (existing.some((entry) => entry.id === thread.id)) return existing
+        return [thread, ...existing]
+      })
+      setActiveThread(thread)
+      setActiveThreadParent(buildContentFeedParentMessage(item, attachmentUrl))
+      setActiveThreadContext({ serverId: item.serverId, channelName: item.channel.name })
+      recordContentOpened(item.id)
+    } catch (error) {
+      showToast(getApiErrorMessage(error, t, 'discover.timeline.commentFailed'), 'error')
+    }
+  }
+
+  const openThreadAttachmentPreview = async (attachment: Attachment) => {
+    try {
+      const url =
+        attachment.url ||
+        (await resolveAttachmentMediaUrl(attachment.id, 'inline').then((media) => media.url))
+      setPreviewInitialFullscreen(shouldOpenAttachmentPreviewFullscreen(attachment))
+      setPreviewFile({
+        id: attachment.id,
+        filename: attachment.filename,
+        url,
+        contentType: attachment.contentType,
+        size: attachment.size,
+      })
+    } catch (error) {
+      showToast(getApiErrorMessage(error, t, 'discover.feedOpenFailed'), 'error')
+    }
+  }
+
+  const closeThreadPanel = () => {
+    setActiveThread(null)
+    setActiveThreadParent(null)
+    setActiveThreadContext(null)
   }
 
   const handleModuleSelect = (module: DiscoverModuleId) => {
@@ -897,6 +989,16 @@ export function DiscoverPage() {
     })
   }, [visibleModuleKey])
 
+  useEffect(() => {
+    if (activeView !== 'browse') return
+    if (parseFeedViewMode(routeSearch.feedView)) return
+    navigate({
+      to: DISCOVER_VIEW_PATH.browse,
+      search: discoverFeedSearch(routeSearch, feedViewMode),
+      replace: true,
+    })
+  }, [activeView, feedViewMode, navigate, routeSearch.feedView])
+
   const isActiveViewLoading =
     activeView === 'browse'
       ? isContentFeedLoading
@@ -936,6 +1038,9 @@ export function DiscoverPage() {
               activeModule={activeModule}
               onModuleSelect={handleModuleSelect}
             />
+            {activeView === 'browse' && enabledModuleIds.has('subscriptions') ? (
+              <FeedViewModeTabs t={t} value={feedViewMode} onChange={selectFeedViewMode} />
+            ) : null}
             <MarketplaceSearchHeader
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -975,13 +1080,13 @@ export function DiscoverPage() {
                     <HubLane
                       id="discover-module-subscriptions"
                       icon={Rss}
-                      layout="timeline"
+                      layout={feedViewMode}
                       hasMore={Boolean(hasNextContentFeedPage)}
                       loadMoreLabel={t('discover.loadMoreItems')}
                       loadingMore={isFetchingNextContentFeedPage}
                       onLoadMore={() => void fetchNextContentFeedPage()}
                     >
-                      {visibleFeedItems.length
+                      {feedViewMode === 'timeline'
                         ? visibleFeedItems.map((item) => (
                             <ContentFeedCard
                               key={item.id}
@@ -1004,9 +1109,37 @@ export function DiscoverPage() {
                                 })
                               }
                               onOpen={() => void openContentFeedItem(item)}
+                              onOpenThread={() => void openContentFeedThread(item)}
                             />
                           ))
-                        : null}
+                        : visibleMasonryFeedItems.map((item) => (
+                            <MasonryFeedCard
+                              key={item.id}
+                              item={item}
+                              t={t}
+                              onOpenServer={() =>
+                                navigate({
+                                  to: '/servers/$serverSlug',
+                                  params: { serverSlug: item.server.slug ?? item.server.id },
+                                })
+                              }
+                              onOpenChannel={() =>
+                                navigate({
+                                  to: '/servers/$serverSlug/channels/$channelId',
+                                  params: {
+                                    serverSlug: item.server.slug ?? item.server.id,
+                                    channelId: item.channelId,
+                                  },
+                                  search: { msg: item.messageId },
+                                })
+                              }
+                              onOpen={() => void openContentFeedItem(item)}
+                              onOpenThread={() => void openContentFeedThread(item)}
+                            />
+                          ))}
+                      {feedViewMode === 'masonry' && !visibleMasonryFeedItems.length ? (
+                        <MasonryFeedEmptyState t={t} />
+                      ) : null}
                     </HubLane>
                   )}
 
@@ -1167,11 +1300,27 @@ export function DiscoverPage() {
         onClose={closeCreateBuddy}
         onSuccess={handleCreatedBuddy}
       />
+      {activeThread ? (
+        <ThreadPanel
+          thread={activeThread}
+          parentMessage={activeThreadParent}
+          currentUserId={currentUser?.id ?? ''}
+          serverId={activeThreadContext?.serverId}
+          channelName={activeThreadContext?.channelName}
+          onClose={closeThreadPanel}
+          onPreviewFile={(attachment) => void openThreadAttachmentPreview(attachment)}
+          forceSheet
+        />
+      ) : null}
       {previewFile ? (
         <FilePreviewPanel
           attachment={previewFile}
+          initialFullscreen={previewInitialFullscreen}
           presentation="overlay"
-          onClose={() => setPreviewFile(null)}
+          onClose={() => {
+            setPreviewFile(null)
+            setPreviewInitialFullscreen(false)
+          }}
         />
       ) : null}
     </>
@@ -1368,6 +1517,47 @@ function ContentMartSkeleton() {
   )
 }
 
+function FeedViewModeTabs({
+  t,
+  value,
+  onChange,
+}: {
+  t: TFunction
+  value: FeedViewMode
+  onChange: (value: FeedViewMode) => void
+}) {
+  return (
+    <Tabs
+      value={value}
+      onValueChange={(nextValue) => {
+        if (nextValue !== 'timeline' && nextValue !== 'masonry') return
+        onChange(nextValue)
+      }}
+      className="shrink-0"
+    >
+      <TabsList
+        aria-label={t('discover.feedView.label')}
+        className="h-11 rounded-[18px] border border-[var(--glass-line)]/70 bg-bg-primary/35 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+      >
+        <TabsTrigger
+          value="timeline"
+          className="h-9 gap-2 rounded-[14px] px-3 text-xs font-black normal-case tracking-normal"
+        >
+          <List size={15} />
+          {t('discover.feedView.timeline')}
+        </TabsTrigger>
+        <TabsTrigger
+          value="masonry"
+          className="h-9 gap-2 rounded-[14px] px-3 text-xs font-black normal-case tracking-normal"
+        >
+          <LayoutGrid size={15} />
+          {t('discover.feedView.masonry')}
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+  )
+}
+
 function handleCardKey(event: KeyboardEvent, onOpen: () => void) {
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
@@ -1554,6 +1744,7 @@ function HubLane({
   id,
   title,
   layout = 'grid',
+  toolbar,
   action,
   onAction,
   hasMore,
@@ -1566,7 +1757,8 @@ function HubLane({
   icon: LucideIcon
   title?: string
   description?: string
-  layout?: 'grid' | 'timeline'
+  layout?: 'grid' | 'timeline' | 'masonry'
+  toolbar?: ReactNode
   action?: string
   onAction?: () => void
   hasMore?: boolean
@@ -1575,14 +1767,18 @@ function HubLane({
   onLoadMore?: () => void
   children: ReactNode
 }) {
+  const showHeader = layout === 'grid' || Boolean(title || toolbar || action)
   return (
     <section id={id} className="scroll-mt-4">
-      {layout === 'grid' ? (
+      {showHeader ? (
         <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="flex min-w-0">
-            <div className="min-w-0">
-              <h2 className="text-xl font-black leading-7 text-white">{title}</h2>
-            </div>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {title ? (
+              <div className="min-w-0">
+                <h2 className="text-xl font-black leading-7 text-white">{title}</h2>
+              </div>
+            ) : null}
+            {toolbar}
           </div>
           {action && (
             <button
@@ -1600,7 +1796,9 @@ function HubLane({
         className={
           layout === 'timeline'
             ? 'mx-auto flex w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/40 shadow-[0_18px_54px_rgba(0,0,0,0.20)]'
-            : 'grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]'
+            : layout === 'masonry'
+              ? 'mx-auto w-full max-w-[1720px] columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]'
+              : 'grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]'
         }
       >
         {children}
@@ -1653,58 +1851,16 @@ function TimelineActionButton({
   )
 }
 
-function ContentFeedCard({
-  item,
-  t,
-  onOpenServer,
-  onOpenChannel,
-  onOpen,
-}: {
-  item: ContentFeedItem
-  t: TFunction
-  onOpenServer: () => void
-  onOpenChannel: () => void
-  onOpen: () => void
-}) {
+function useContentFeedInteractions(item: ContentFeedItem, t: TFunction) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [commentOpen, setCommentOpen] = useState(false)
-  const [commentText, setCommentText] = useState('')
   const interactions = item.interactions ?? {
     likeCount: 0,
     viewerLiked: false,
     commentCount: 0,
     viewerSaved: item.readState === 'saved',
   }
-  const appCard = firstServerAppCard(item)
-  const hasPayload = hasContentFeedPayload(item)
-  const showTitle = Boolean(appCard) || !hasPayload
-  const summaryText = normalizeFeedText(item.summary)
-  const displayText = summaryText || (hasPayload ? getContentFeedPlaceholderText(t, item) : '')
-  const hasTextContent = showTitle || Boolean(displayText)
-  const publishedAt = new Date(item.publishedAt)
-  const publishedLabel = Number.isNaN(publishedAt.getTime()) ? '' : publishedAt.toLocaleDateString()
   const invalidateFeed = () => queryClient.invalidateQueries({ queryKey: ['content-feed'] })
-  const threadQuery = useQuery({
-    queryKey: ['message-thread', item.messageId],
-    enabled: commentOpen,
-    staleTime: 20_000,
-    queryFn: ({ signal }) =>
-      fetchApi<MessageThread>(`/api/messages/${item.messageId}/thread`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-        signal,
-      }),
-  })
-  const threadMessagesQuery = useQuery({
-    queryKey: ['thread-messages', threadQuery.data?.id],
-    enabled: commentOpen && Boolean(threadQuery.data?.id),
-    staleTime: 20_000,
-    queryFn: ({ signal }) =>
-      fetchApi<MessageThreadMessage[]>(`/api/threads/${threadQuery.data!.id}/messages?limit=20`, {
-        signal,
-      }),
-  })
   const likeMutation = useMutation({
     mutationFn: () =>
       interactions.viewerLiked
@@ -1732,37 +1888,6 @@ function ContentFeedCard({
     onError: (error) =>
       showToast(getApiErrorMessage(error, t, 'discover.timeline.saveFailed'), 'error'),
   })
-  const commentMutation = useMutation({
-    mutationFn: async (content: string) => {
-      const thread =
-        threadQuery.data ??
-        (await fetchApi<MessageThread>(`/api/messages/${item.messageId}/thread`, {
-          method: 'POST',
-          body: JSON.stringify({}),
-        }))
-      const message = await fetchApi<MessageThreadMessage>(`/api/threads/${thread.id}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content }),
-      })
-      return { message, thread }
-    },
-    onSuccess: ({ thread }) => {
-      setCommentText('')
-      setCommentOpen(true)
-      queryClient.setQueryData(['message-thread', item.messageId], thread)
-      void queryClient.invalidateQueries({ queryKey: ['thread-messages', thread.id] })
-      void invalidateFeed()
-    },
-    onError: (error) =>
-      showToast(getApiErrorMessage(error, t, 'discover.timeline.commentFailed'), 'error'),
-  })
-
-  const handleCommentSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const content = commentText.trim()
-    if (!content) return
-    commentMutation.mutate(content)
-  }
 
   const handleShare = async () => {
     const url = contentFeedMessageUrl(item)
@@ -1782,6 +1907,88 @@ function ContentFeedCard({
   const openAuthor = () => {
     navigate({ to: '/profile/$userId', params: { userId: item.author.id } })
   }
+
+  return {
+    handleShare,
+    interactions,
+    openAuthor,
+    saveMutation,
+    likeMutation,
+  }
+}
+
+function FeedInteractionSection({
+  item,
+  t,
+  onOpenThread,
+  className,
+}: {
+  item: ContentFeedItem
+  t: TFunction
+  onOpenThread: () => void
+  className?: string
+}) {
+  const { handleShare, interactions, likeMutation, openAuthor, saveMutation } =
+    useContentFeedInteractions(item, t)
+
+  return (
+    <div className={className}>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-text-muted">
+        <div className="flex min-w-0 items-center gap-1">
+          <TimelineActionButton
+            active={interactions.viewerLiked}
+            label={t('discover.timeline.like')}
+            count={interactions.likeCount}
+            icon={Heart}
+            onClick={() => likeMutation.mutate()}
+          />
+          <TimelineActionButton
+            label={t('discover.timeline.comment')}
+            count={interactions.commentCount}
+            icon={MessageCircle}
+            onClick={onOpenThread}
+          />
+          <TimelineActionButton
+            active={interactions.viewerSaved}
+            label={t('discover.timeline.save')}
+            icon={Bookmark}
+            onClick={() => saveMutation.mutate()}
+          />
+          <TimelineActionButton
+            label={t('discover.timeline.share')}
+            icon={Repeat2}
+            onClick={() => void handleShare()}
+          />
+        </div>
+        <FeedAuthorBadge item={item} onOpen={openAuthor} />
+      </div>
+    </div>
+  )
+}
+
+function ContentFeedCard({
+  item,
+  t,
+  onOpenServer,
+  onOpenChannel,
+  onOpen,
+  onOpenThread,
+}: {
+  item: ContentFeedItem
+  t: TFunction
+  onOpenServer: () => void
+  onOpenChannel: () => void
+  onOpen: () => void
+  onOpenThread: () => void
+}) {
+  const appCard = firstServerAppCard(item)
+  const hasPayload = hasContentFeedPayload(item)
+  const showTitle = Boolean(appCard) || !hasPayload
+  const summaryText = normalizeFeedText(item.summary)
+  const displayText = summaryText || (hasPayload ? getContentFeedPlaceholderText(t, item) : '')
+  const hasTextContent = showTitle || Boolean(displayText)
+  const publishedAt = new Date(item.publishedAt)
+  const publishedLabel = Number.isNaN(publishedAt.getTime()) ? '' : publishedAt.toLocaleDateString()
 
   return (
     <article
@@ -1839,77 +2046,109 @@ function ContentFeedCard({
             <p className="mt-1 line-clamp-4 text-sm leading-6 text-text-secondary">{displayText}</p>
           ) : null}
           <FeedAttachmentPreview item={item} onOpen={onOpen} />
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-text-muted">
-            <div className="flex min-w-0 items-center gap-1">
-              <TimelineActionButton
-                active={interactions.viewerLiked}
-                label={t('discover.timeline.like')}
-                count={interactions.likeCount}
-                icon={Heart}
-                onClick={() => likeMutation.mutate()}
-              />
-              <TimelineActionButton
-                active={commentOpen}
-                label={t('discover.timeline.comment')}
-                count={interactions.commentCount}
-                icon={MessageCircle}
-                onClick={() => setCommentOpen((value) => !value)}
-              />
-              <TimelineActionButton
-                active={interactions.viewerSaved}
-                label={t('discover.timeline.save')}
-                icon={Bookmark}
-                onClick={() => saveMutation.mutate()}
-              />
-              <TimelineActionButton
-                label={t('discover.timeline.share')}
-                icon={Repeat2}
-                onClick={() => void handleShare()}
-              />
-            </div>
-            <FeedAuthorBadge item={item} onOpen={openAuthor} />
-          </div>
-          {commentOpen ? (
-            <div
-              className="mt-3 space-y-3"
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <FeedReplies
-                replies={threadMessagesQuery.data ?? []}
-                isLoading={threadQuery.isLoading || threadMessagesQuery.isLoading}
-              />
-              <form
-                className="flex gap-2"
-                onSubmit={(event) => {
-                  event.stopPropagation()
-                  handleCommentSubmit(event)
-                }}
-              >
-                <input
-                  value={commentText}
-                  onChange={(event) => setCommentText(event.target.value)}
-                  placeholder={t('discover.timeline.commentPlaceholder')}
-                  className="min-w-0 flex-1 rounded-full border border-white/10 bg-bg-primary/70 px-4 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/50"
-                />
-                <Button
-                  type="submit"
-                  size="sm"
-                  variant="primary"
-                  disabled={!commentText.trim() || commentMutation.isPending}
-                >
-                  {commentMutation.isPending ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    t('discover.timeline.sendComment')
-                  )}
-                </Button>
-              </form>
-            </div>
-          ) : null}
+          <FeedInteractionSection item={item} t={t} onOpenThread={onOpenThread} className="mt-3" />
         </div>
       </div>
     </article>
+  )
+}
+
+function MasonryFeedCard({
+  item,
+  t,
+  onOpenServer,
+  onOpenChannel,
+  onOpen,
+  onOpenThread,
+}: {
+  item: ContentFeedItem
+  t: TFunction
+  onOpenServer: () => void
+  onOpenChannel: () => void
+  onOpen: () => void
+  onOpenThread: () => void
+}) {
+  const summaryText = normalizeFeedText(item.summary)
+  const displayText = summaryText || getContentFeedPlaceholderText(t, item)
+  const publishedAt = new Date(item.publishedAt)
+  const publishedLabel = Number.isNaN(publishedAt.getTime()) ? '' : publishedAt.toLocaleDateString()
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => handleCardKey(event, onOpen)}
+      className="mb-4 break-inside-avoid overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/42 shadow-[0_18px_54px_rgba(0,0,0,0.20)] backdrop-blur-xl transition hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+    >
+      <FeedAttachmentPreview item={item} onOpen={onOpen} variant="masonry" />
+      <div className="space-y-3 p-3.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            title={t('discover.timeline.openServer')}
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpenServer()
+            }}
+            className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-3xl transition hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/60"
+          >
+            <ServerAvatar iconUrl={item.server.iconUrl} name={item.server.name} />
+          </button>
+          <div className="min-w-0 flex-1 text-sm leading-5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                className="min-w-0 truncate font-black text-text-primary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                title={t('discover.timeline.openServer')}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onOpenServer()
+                }}
+              >
+                {item.server.name}
+              </button>
+              <span className="shrink-0 text-text-muted">/</span>
+              <button
+                type="button"
+                className="min-w-0 truncate font-bold text-text-secondary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                title={t('discover.timeline.openChannel')}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onOpenChannel()
+                }}
+              >
+                #{item.channel.name}
+              </button>
+            </div>
+            {publishedLabel ? (
+              <div className="mt-0.5 truncate text-xs font-semibold text-text-muted">
+                {publishedLabel}
+              </div>
+            ) : null}
+          </div>
+        </div>
+        {displayText ? (
+          <p className="line-clamp-3 text-sm font-semibold leading-6 text-text-secondary">
+            {displayText}
+          </p>
+        ) : null}
+        <FeedInteractionSection item={item} t={t} onOpenThread={onOpenThread} />
+      </div>
+    </article>
+  )
+}
+
+function MasonryFeedEmptyState({ t }: { t: TFunction }) {
+  return (
+    <div className="break-inside-avoid rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/42 p-6 shadow-[0_18px_54px_rgba(0,0,0,0.18)]">
+      <EmptyState
+        icon={LayoutGrid}
+        title={t('discover.feedView.emptyTitle')}
+        description={t('discover.feedView.emptyDesc')}
+        className="py-10"
+      />
+    </div>
   )
 }
 
@@ -1967,58 +2206,147 @@ function SourceAvatar({
   )
 }
 
-function FeedReplies({
-  replies,
-  isLoading,
-}: {
-  replies: MessageThreadMessage[]
-  isLoading: boolean
-}) {
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-xs font-semibold text-text-muted">
-        <Loader2 size={13} className="animate-spin" />
-      </div>
-    )
-  }
+function useElementWidth<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null)
+  const [width, setWidth] = useState(0)
 
-  if (!replies.length) return null
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+
+    const updateWidth = () => setWidth(Math.round(element.clientWidth))
+    updateWidth()
+
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  return [ref, width] as const
+}
+
+function ScaledHtmlPreviewCard({
+  className,
+  html,
+  onOpen,
+  title,
+}: {
+  className: string
+  html: string
+  onOpen: () => void
+  title: string
+}) {
+  const [frameRef, frameWidth] = useElementWidth<HTMLDivElement>()
+  const fallbackWidth = 420
+  const width = frameWidth || fallbackWidth
+  const scale = Math.min(1, Math.max(0.34, width / DISCOVER_DOCUMENT_PREVIEW_WIDTH))
+  const frameHeight = width * (4 / 3)
+  const documentHeight = Math.max(960, Math.ceil(frameHeight / scale))
 
   return (
-    <div className="space-y-2 border-l border-white/10 pl-3">
-      {replies.map((reply) => {
-        const name =
-          reply.author?.displayName?.trim() || reply.author?.username?.trim() || reply.authorId
-        const initial = name.trim().slice(0, 1) || '#'
-        return (
-          <div key={reply.id} className="flex gap-2">
-            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-[11px] font-black text-text-secondary">
-              {reply.author?.avatarUrl ? (
-                <img
-                  src={reply.author.avatarUrl}
-                  alt=""
-                  className="h-full w-full rounded-full object-cover"
-                />
-              ) : (
-                initial.toUpperCase()
-              )}
-            </span>
-            <div className="min-w-0 rounded-2xl bg-white/[0.045] px-3 py-2">
-              <div className="truncate text-xs font-black text-text-primary">{name}</div>
-              <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-5 text-text-secondary">
-                {reply.content}
-              </p>
-            </div>
-          </div>
-        )
-      })}
+    <div
+      ref={frameRef}
+      role="button"
+      tabIndex={0}
+      className={cn(className, 'bg-white')}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpen()
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        handleCardKey(event, onOpen)
+      }}
+    >
+      <div
+        className="origin-top-left"
+        style={{
+          height: documentHeight,
+          transform: `scale(${scale})`,
+          width: DISCOVER_DOCUMENT_PREVIEW_WIDTH,
+        }}
+      >
+        <iframe
+          title={title}
+          srcDoc={html}
+          sandbox=""
+          className="pointer-events-none h-full w-full bg-white"
+          loading="lazy"
+          tabIndex={-1}
+        />
+      </div>
     </div>
   )
 }
 
-function FeedAttachmentPreview({ item, onOpen }: { item: ContentFeedItem; onOpen: () => void }) {
+function ScaledMarkdownPreviewCard({
+  className,
+  onOpen,
+  text,
+}: {
+  className: string
+  onOpen: () => void
+  text: string
+}) {
+  const [frameRef, frameWidth] = useElementWidth<HTMLDivElement>()
+  const fallbackWidth = 420
+  const width = frameWidth || fallbackWidth
+  const scale = Math.min(1, Math.max(0.34, width / DISCOVER_DOCUMENT_PREVIEW_WIDTH))
+  const frameHeight = width * (4 / 3)
+  const documentHeight = Math.max(960, Math.ceil(frameHeight / scale))
+
+  return (
+    <div
+      ref={frameRef}
+      role="button"
+      tabIndex={0}
+      className={cn(className, 'bg-bg-primary/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]')}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpen()
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        handleCardKey(event, onOpen)
+      }}
+    >
+      <div
+        className="pointer-events-none origin-top-left overflow-hidden p-6"
+        style={{
+          height: documentHeight,
+          transform: `scale(${scale})`,
+          width: DISCOVER_DOCUMENT_PREVIEW_WIDTH,
+        }}
+      >
+        <MessageMarkdown content={text} renderMentions={(children) => children} />
+      </div>
+    </div>
+  )
+}
+
+function FeedAttachmentPreview({
+  item,
+  onOpen,
+  variant = 'timeline',
+}: {
+  item: ContentFeedItem
+  onOpen: () => void
+  variant?: 'timeline' | 'masonry'
+}) {
   const previewKind = getFeedPreviewKind(item)
   const needsMediaUrl = ['image', 'video', 'markdown', 'html', 'file'].includes(previewKind)
+  const previewOffset = variant === 'masonry' ? 'mt-0' : 'mt-3'
+  const embeddedFrameClass =
+    variant === 'masonry'
+      ? 'rounded-none border-0 border-b border-white/10'
+      : 'rounded-2xl border border-white/10'
+  const documentFrameClass = cn(
+    previewOffset,
+    'aspect-[3/4] w-full cursor-pointer overflow-hidden transition hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+    variant === 'masonry' ? 'max-w-none rounded-none border-0' : 'max-w-[420px]',
+    embeddedFrameClass,
+  )
   const mediaQuery = useQuery({
     queryKey: ['content-feed-attachment-media', item.primaryAttachmentId, previewKind],
     enabled: Boolean(item.primaryAttachmentId) && needsMediaUrl,
@@ -2066,25 +2394,64 @@ function FeedAttachmentPreview({ item, onOpen }: { item: ContentFeedItem; onOpen
   if (previewKind === 'app') return <ServerAppPreview item={item} />
   if (previewKind === 'image' && mediaUrl) {
     return (
-      <div className={cn('mt-3', 'overflow-hidden rounded-2xl border border-white/10 bg-black/20')}>
-        <img src={mediaUrl} alt="" loading="lazy" className="max-h-[520px] w-full object-cover" />
+      <div
+        role="button"
+        tabIndex={0}
+        className={cn(
+          previewOffset,
+          'cursor-pointer',
+          'overflow-hidden bg-black/20',
+          embeddedFrameClass,
+          variant === 'masonry' && 'max-h-[360px]',
+        )}
+        onClick={(event) => {
+          event.stopPropagation()
+          onOpen()
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          handleCardKey(event, onOpen)
+        }}
+      >
+        <img
+          src={mediaUrl}
+          alt=""
+          loading="lazy"
+          className={cn(
+            variant === 'masonry' ? 'w-full object-cover' : 'max-h-[520px] w-full object-cover',
+          )}
+        />
       </div>
     )
   }
   if (previewKind === 'video' && mediaUrl) {
     return (
       <div
+        role="button"
+        tabIndex={0}
         className={cn(
-          'mt-3',
-          'relative overflow-hidden rounded-2xl border border-white/10 bg-black',
+          previewOffset,
+          'relative cursor-pointer overflow-hidden bg-black',
+          embeddedFrameClass,
         )}
+        onClick={(event) => {
+          event.stopPropagation()
+          onOpen()
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          handleCardKey(event, onOpen)
+        }}
       >
         <video
           src={mediaUrl}
           muted
           playsInline
           preload="metadata"
-          className="max-h-[520px] w-full bg-black object-cover"
+          className={cn(
+            'w-full bg-black object-cover',
+            variant === 'masonry' ? 'max-h-[360px]' : 'max-h-[520px]',
+          )}
         />
         <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10">
           <span className="h-12 w-12 rounded-full bg-black/55 shadow-[0_8px_22px_rgba(0,0,0,0.35)]">
@@ -2098,7 +2465,11 @@ function FeedAttachmentPreview({ item, onOpen }: { item: ContentFeedItem; onOpen
     const attachment = contentFeedAttachment(item)
     return (
       <div
-        className="mt-3"
+        className={cn(
+          previewOffset,
+          variant === 'masonry' &&
+            'overflow-hidden border-b border-white/10 p-3 [&>div]:!w-full [&>div]:!min-w-0 [&>div]:!max-w-full [&_button]:!w-full [&_button]:!min-w-0 [&_button]:!max-w-full [&_[aria-label]]:!min-w-0 [&_[aria-label]]:!max-w-full [&_[aria-label]]:!overflow-hidden',
+        )}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
@@ -2108,55 +2479,30 @@ function FeedAttachmentPreview({ item, onOpen }: { item: ContentFeedItem; onOpen
   }
   if (previewKind === 'html') {
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        className={cn(
-          'mt-3',
-          'aspect-[3/4] w-full max-w-[420px] cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-white transition hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
-        )}
-        onClick={(event) => {
-          event.stopPropagation()
-          onOpen()
-        }}
-        onKeyDown={(event) => {
-          event.stopPropagation()
-          handleCardKey(event, onOpen)
-        }}
-      >
-        <div className="h-[161.29%] w-[161.29%] origin-top-left scale-[0.62]">
-          <iframe
-            title={item.title}
-            srcDoc={htmlQuery.data ?? ''}
-            sandbox=""
-            className="pointer-events-none h-full w-full bg-white"
-            loading="lazy"
-            tabIndex={-1}
-          />
-        </div>
-      </div>
+      <ScaledHtmlPreviewCard
+        className={documentFrameClass}
+        html={htmlQuery.data ?? ''}
+        onOpen={onOpen}
+        title={item.title}
+      />
     )
   }
   if (previewKind === 'markdown') {
     const text = markdownQuery.data ?? item.summary ?? ''
     return text ? (
-      <div
-        className={cn(
-          'mt-3',
-          'max-h-72 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] p-4',
-        )}
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <MessageMarkdown content={text} renderMentions={(children) => children} />
-      </div>
+      <ScaledMarkdownPreviewCard className={documentFrameClass} onOpen={onOpen} text={text} />
     ) : null
   }
   if (item.primaryAttachmentId) {
     const attachment = contentFeedAttachment(item, mediaUrl ?? '')
     return (
       <div
-        className="mt-3 w-fit"
+        className={cn(
+          previewOffset,
+          variant === 'masonry'
+            ? 'overflow-hidden border-b border-white/10 bg-bg-primary/25 p-3 [&>div]:!w-full [&>div]:!min-w-0 [&>div]:!max-w-full [&>div]:!box-border'
+            : 'w-fit',
+        )}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
@@ -2207,6 +2553,34 @@ function contentFeedAttachment(item: ContentFeedItem, url = ''): Attachment {
   }
 }
 
+function buildContentFeedParentMessage(item: ContentFeedItem, attachmentUrl = ''): ChatMessage {
+  const authorName =
+    item.author.displayName?.trim() || item.author.username?.trim() || item.author.id
+  const content = normalizeFeedText(item.summary)
+  const attachments = item.primaryAttachmentId ? [contentFeedAttachment(item, attachmentUrl)] : []
+
+  return {
+    id: item.messageId,
+    content,
+    channelId: item.channelId,
+    authorId: item.author.id,
+    threadId: null,
+    replyToId: null,
+    isEdited: false,
+    createdAt: item.publishedAt,
+    updatedAt: item.publishedAt,
+    author: {
+      id: item.author.id,
+      username: item.author.username,
+      displayName: authorName,
+      avatarUrl: item.author.avatarUrl ?? null,
+      isBot: Boolean(item.author.isBot),
+    },
+    attachments,
+    reactions: [],
+  }
+}
+
 function getFeedPreviewKind(item: ContentFeedItem): FeedPreviewKind {
   const contentType = (item.primaryAttachmentContentType ?? '').toLowerCase()
   const title = item.title.toLowerCase()
@@ -2225,6 +2599,57 @@ function getFeedPreviewKind(item: ContentFeedItem): FeedPreviewKind {
   }
   if (firstServerAppCard(item)) return 'app'
   return 'file'
+}
+
+function isMasonryFeedItem(item: ContentFeedItem) {
+  const kind = getFeedPreviewKind(item)
+  if (kind === 'markdown')
+    return Boolean(item.primaryAttachmentId || normalizeFeedText(item.summary))
+  if (
+    kind === 'image' ||
+    kind === 'video' ||
+    kind === 'audio' ||
+    kind === 'html' ||
+    kind === 'file'
+  ) {
+    return Boolean(item.primaryAttachmentId)
+  }
+  return false
+}
+
+function shouldOpenFeedPreviewFullscreen(item: ContentFeedItem) {
+  const kind = getFeedPreviewKind(item)
+  const contentType = (item.primaryAttachmentContentType ?? '').toLowerCase()
+  if (kind === 'html' || kind === 'markdown') return true
+  if (contentType.includes('pdf')) return true
+  return (
+    kind === 'file' &&
+    !contentType.startsWith('image/') &&
+    !contentType.startsWith('video/') &&
+    !contentType.startsWith('audio/')
+  )
+}
+
+function shouldOpenAttachmentPreviewFullscreen(attachment: Attachment) {
+  const contentType = attachment.contentType.toLowerCase()
+  const filename = attachment.filename.toLowerCase()
+  if (
+    contentType.includes('html') ||
+    contentType.includes('markdown') ||
+    contentType.includes('pdf') ||
+    filename.endsWith('.html') ||
+    filename.endsWith('.htm') ||
+    filename.endsWith('.md') ||
+    filename.endsWith('.markdown') ||
+    filename.endsWith('.pdf')
+  ) {
+    return true
+  }
+  return (
+    !contentType.startsWith('image/') &&
+    !contentType.startsWith('video/') &&
+    !contentType.startsWith('audio/')
+  )
 }
 
 function normalizeFeedText(value?: string | null) {

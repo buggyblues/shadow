@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
   iconBtn: { padding: spacing.sm },
   modalOverlay: {
     flex: 1,
-    backgroundColor: palette.black,
+    backgroundColor: palette.blackOverlay,
     justifyContent: 'center',
     padding: spacing.xl,
   },

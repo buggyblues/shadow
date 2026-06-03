@@ -61,7 +61,7 @@ import {
   getBuddyIntroPrompt,
   RuntimeIcon,
 } from '../buddy-management/agent-dialogs'
-import { ConfigCodeBlock } from '../buddy-management/config-code-block'
+import { DesktopConnectorDownloadCard } from '../buddy-management/desktop-connector-download-card'
 import {
   type Agent,
   type ConnectorComputer,
@@ -350,6 +350,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const [selectedConnectorRuntimeId, setSelectedConnectorRuntimeId] = useState<string | null>(null)
   const [connectorSelectionConfirmed, setConnectorSelectionConfirmed] = useState(false)
   const [connectorCommand, setConnectorCommand] = useState<string | null>(null)
+  const [isWaitingForDesktopConnector, setIsWaitingForDesktopConnector] = useState(false)
   const [newName, setNewName] = useState('')
   const [isPublic, setIsPublic] = useState(true)
   const [joinCode, setJoinCode] = useState('')
@@ -423,7 +424,10 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     queryKey: ['connector-computers'],
     queryFn: () => fetchApi<{ computers: ConnectorComputer[] }>('/api/connector/computers'),
     enabled: showCreateBuddy && createBuddyTarget === 'local',
-    refetchInterval: showCreateBuddy && createBuddyTarget === 'local' ? 5000 : false,
+    refetchInterval:
+      showCreateBuddy && createBuddyTarget === 'local' && isWaitingForDesktopConnector
+        ? 3000
+        : false,
   })
 
   const connectorComputers = connectorData?.computers ?? []
@@ -566,6 +570,12 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     selectedConnectorRuntimeOption,
     showCreateBuddy,
   ])
+
+  useEffect(() => {
+    if (connectorRuntimeOptions.length > 0 && isWaitingForDesktopConnector) {
+      setIsWaitingForDesktopConnector(false)
+    }
+  }, [connectorRuntimeOptions.length, isWaitingForDesktopConnector])
 
   const updateNotificationPreference = useMutation({
     mutationFn: (payload: Partial<NotificationPreference>) =>
@@ -719,6 +729,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     setSelectedConnectorRuntimeId(null)
     setConnectorSelectionConfirmed(false)
     setConnectorCommand(null)
+    setIsWaitingForDesktopConnector(false)
     connectorBootstrapStartedRef.current = false
   }, [])
 
@@ -1143,6 +1154,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                           onClick={() => {
                             setCreateBuddyTarget(target)
                             setConnectorSelectionConfirmed(false)
+                            setIsWaitingForDesktopConnector(false)
                             setQuickBuddyStep('basic')
                           }}
                           className={cn(
@@ -1168,27 +1180,12 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   {createBuddyTarget === 'local' ? (
                     <>
                       {connectorRuntimeOptions.length === 0 && (
-                        <div className="rounded-2xl border border-border-subtle bg-bg-tertiary/40 px-4 py-4">
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary">
-                              <Terminal size={18} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm font-black text-text-primary">
-                                {t('agentMgmt.connectorDaemonTitle')}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-4">
-                            {connectorCommand ? (
-                              <ConfigCodeBlock content={connectorCommand} mode="single" t={t} />
-                            ) : (
-                              <div className="rounded-2xl border border-border-subtle bg-bg-deep/40 px-4 py-3 text-xs leading-5 text-text-muted">
-                                {t('agentMgmt.connectorCreating')}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        <DesktopConnectorDownloadCard
+                          connectorCommand={connectorCommand}
+                          isWaitingForConnector={isWaitingForDesktopConnector}
+                          onWaitingForConnectorChange={setIsWaitingForDesktopConnector}
+                          t={t}
+                        />
                       )}
 
                       {connectorComputers.some((computer) => computer.runtimes.length > 0) && (

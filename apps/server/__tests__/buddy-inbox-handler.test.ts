@@ -57,6 +57,8 @@ describe('buddy inbox handler', () => {
         title: 'Install grill-me',
         body: 'Download the skill zip and install it.',
         priority: 'normal',
+        tags: ['UI', { label: 'Design QA' }],
+        app: { appKey: 'figma', name: 'Figma', logoUrl: 'https://example.com/figma.png' },
         idempotencyKey: 'skills:install:grill-me:agent-1',
         source: { kind: 'server_app', appKey: 'shadow-skills' },
         data: { skill: 'grill-me' },
@@ -73,6 +75,8 @@ describe('buddy inbox handler', () => {
       'agent-1',
       expect.objectContaining({
         title: 'Install grill-me',
+        tags: ['UI', { label: 'Design QA' }],
+        app: { appKey: 'figma', name: 'Figma', logoUrl: 'https://example.com/figma.png' },
         source: { kind: 'server_app', appKey: 'shadow-skills' },
         data: { skill: 'grill-me' },
       }),

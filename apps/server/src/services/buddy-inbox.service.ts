@@ -35,6 +35,8 @@ type EnqueueTaskInput = {
   title: string
   body?: string
   priority?: TaskPriority
+  tags?: TaskMessageCardMetadata['tags']
+  app?: TaskMessageCardMetadata['app']
   idempotencyKey?: string
   source?: TaskMessageCardMetadata['source']
   data?: Record<string, unknown>
@@ -120,6 +122,94 @@ function recordValue(value: unknown): Record<string, unknown> | null {
 function recordString(record: Record<string, unknown> | null | undefined, key: string) {
   const value = record?.[key]
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+function recordFirstString(record: Record<string, unknown> | null | undefined, keys: string[]) {
+  for (const key of keys) {
+    const value = recordString(record, key)
+    if (value) return value
+  }
+  return undefined
+}
+
+function normalizeTaskTags(tags?: TaskMessageCardMetadata['tags']) {
+  if (!Array.isArray(tags)) return undefined
+  const seen = new Set<string>()
+  const normalized: NonNullable<TaskMessageCardMetadata['tags']> = []
+  for (const tag of tags) {
+    if (typeof tag === 'string') {
+      const label = tag.trim().replace(/^#+/u, '').slice(0, 48)
+      const key = label.toLocaleLowerCase()
+      if (!label || seen.has(key)) continue
+      seen.add(key)
+      normalized.push(label)
+      continue
+    }
+
+    const label = tag?.label?.trim().replace(/^#+/u, '').slice(0, 48)
+    const key = label?.toLocaleLowerCase()
+    if (!label || !key || seen.has(key)) continue
+    seen.add(key)
+    normalized.push({ ...tag, label })
+  }
+  return normalized.length > 0 ? normalized.slice(0, 12) : undefined
+}
+
+function normalizeTaskApp(input: EnqueueTaskInput) {
+  const explicitApp = recordValue(input.app)
+  const serverApp = recordValue(recordValue(input.data)?.serverApp)
+  const source = input.source
+  const sourceResource =
+    source?.resource && typeof source.resource === 'object' && !Array.isArray(source.resource)
+      ? (source.resource as Record<string, unknown>)
+      : null
+
+  const appId =
+    recordString(explicitApp, 'appId') ??
+    recordString(explicitApp, 'id') ??
+    source?.appId ??
+    (source?.kind === 'server_app' ? source.id : undefined)
+  const appKey =
+    recordString(explicitApp, 'appKey') ?? recordString(serverApp, 'appKey') ?? source?.appKey
+  const name =
+    recordString(explicitApp, 'name') ??
+    recordString(explicitApp, 'label') ??
+    recordString(serverApp, 'name') ??
+    recordString(serverApp, 'label') ??
+    source?.appName ??
+    source?.label ??
+    appKey
+  const iconUrl =
+    recordFirstString(explicitApp, [
+      'iconUrl',
+      'logoUrl',
+      'avatarUrl',
+      'imageUrl',
+      'icon',
+      'logo',
+    ]) ??
+    recordFirstString(serverApp, ['iconUrl', 'logoUrl', 'avatarUrl', 'imageUrl', 'icon', 'logo']) ??
+    source?.iconUrl ??
+    recordFirstString(sourceResource, [
+      'iconUrl',
+      'logoUrl',
+      'avatarUrl',
+      'imageUrl',
+      'icon',
+      'logo',
+    ])
+  const url =
+    recordFirstString(explicitApp, ['url', 'href']) ??
+    recordFirstString(sourceResource, ['url', 'href'])
+
+  if (!appId && !appKey && !name && !iconUrl && !url) return undefined
+  return {
+    ...(appId ? { appId, id: appId } : {}),
+    ...(appKey ? { appKey } : {}),
+    ...(name ? { name, label: name } : {}),
+    ...(iconUrl ? { iconUrl } : {}),
+    ...(url ? { url } : {}),
+  } satisfies TaskMessageCardMetadata['app']
 }
 
 function normalizedToken(value: string | null | undefined) {
@@ -967,6 +1057,8 @@ export class BuddyInboxService {
     }
     const cardId = randomUUID()
     const workspaceId = `task_${cardId.replace(/-/g, '')}`
+    const tags = normalizeTaskTags(input.tags)
+    const app = normalizeTaskApp(input)
     const card: TaskMessageCardMetadata = {
       id: cardId,
       kind: 'task',
@@ -975,6 +1067,8 @@ export class BuddyInboxService {
       ...(input.body?.trim() ? { body: input.body.trim() } : {}),
       status: 'queued',
       ...(input.priority ? { priority: input.priority } : {}),
+      ...(tags ? { tags } : {}),
+      ...(app ? { app } : {}),
       assignee: {
         agentId: agent.id,
         userId: agent.userId,
@@ -1468,6 +1562,8 @@ export class BuddyInboxService {
         title: card.title,
         body: card.body,
         priority: card.priority,
+        tags: card.tags,
+        app: card.app,
         source: card.source,
         data: {
           ...(card.data ?? {}),

@@ -1,4 +1,5 @@
-import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { MakerDMG } from '@electron-forge/maker-dmg'
@@ -17,6 +18,22 @@ const shouldSignAndNotarize = isMac && hasNotaryApiKey
 const iconPath = resolve(__dirname, 'assets', 'icon')
 const connectorPackagePath = resolve(__dirname, '../../packages/connector')
 const requireFromDesktop = createRequire(resolve(__dirname, 'package.json'))
+const desktopPackage = requireFromDesktop('./package.json') as {
+  description?: string
+  version?: string
+}
+const productName = 'Shadow'
+const companyName = 'ShadowOB Team'
+const copyright = `Copyright © ${new Date().getFullYear()} ${companyName}`
+const desktopUpdateBaseUrl = process.env.DESKTOP_UPDATE_BASE_URL?.replace(/\/+$/, '')
+const localizedAppNames: Record<string, string> = {
+  en: productName,
+  zh: '虾豆',
+  'zh-Hans': '虾豆',
+  'zh-Hant': '虾豆',
+  zh_CN: '虾豆',
+  zh_TW: '虾豆',
+}
 
 const extraResource: string[] = []
 extraResource.push(
@@ -32,6 +49,8 @@ if (isMac) {
   extraResource.push(
     resolve(__dirname, 'assets', 'en.lproj'),
     resolve(__dirname, 'assets', 'zh-Hans.lproj'),
+    resolve(__dirname, 'assets', 'zh-Hant.lproj'),
+    resolve(__dirname, 'assets', 'zh.lproj'),
   )
 }
 
@@ -76,33 +95,90 @@ function copyDependencyToBuild(buildPath: string, packageName: string) {
   })
 }
 
+function infoPlistStrings(name: string): Buffer {
+  const content = `CFBundleDisplayName = "${name}";\nCFBundleName = "${name}";\n`
+  return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(content, 'utf16le')])
+}
+
+function setPlistValue(infoPlist: string, key: string, value: string) {
+  try {
+    execFileSync('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, infoPlist])
+  } catch {
+    execFileSync('/usr/libexec/PlistBuddy', ['-c', `Add :${key} string ${value}`, infoPlist])
+  }
+}
+
+function normalizePackagedMacApp(outputPath: string) {
+  const appPath = outputPath.endsWith('.app')
+    ? outputPath
+    : resolve(outputPath, `${productName}.app`)
+  const contentsPath = resolve(appPath, 'Contents')
+  const resourcesPath = resolve(contentsPath, 'Resources')
+  const infoPlist = resolve(contentsPath, 'Info.plist')
+  if (!existsSync(infoPlist)) return
+
+  cpSync(resolve(__dirname, 'assets', 'icon.icns'), resolve(resourcesPath, 'icon.icns'), {
+    force: true,
+  })
+  setPlistValue(infoPlist, 'CFBundleIconFile', 'icon.icns')
+
+  for (const [locale, name] of Object.entries(localizedAppNames)) {
+    const localeDir = resolve(resourcesPath, `${locale}.lproj`)
+    mkdirSync(localeDir, { recursive: true })
+    writeFileSync(resolve(localeDir, 'InfoPlist.strings'), infoPlistStrings(name))
+  }
+
+  // Finder caches bundle metadata aggressively. Touching the bundle helps local
+  // package smoke tests pick up the corrected icon and localized names.
+  execFileSync('/usr/bin/touch', [appPath])
+}
+
 const config: ForgeConfig = {
   hooks: {
     packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {
       copyDependencyToBuild(buildPath, 'sherpa-onnx-node')
       copyDependencyToBuild(buildPath, sherpaNativePackageName(platform, arch))
     },
+    postPackage: async (_config, packageResult) => {
+      if (packageResult.platform !== 'darwin') return
+      for (const outputPath of packageResult.outputPaths) {
+        normalizePackagedMacApp(outputPath)
+      }
+    },
   },
   packagerConfig: {
     asar: {
       unpack: '**/node_modules/sherpa-onnx-*/**/*',
     },
-    name: 'Shadow',
-    executableName: isLinux ? 'shadow' : 'Shadow',
+    name: productName,
+    executableName: isLinux ? 'shadow' : productName,
     icon: iconPath,
+    overwrite: true,
+    prune: true,
     appBundleId: 'com.shadowob.app',
-    appCopyright: `Copyright © ${new Date().getFullYear()} ShadowOB Team`,
+    appCopyright: copyright,
     appCategoryType: 'public.app-category.social-networking',
     darwinDarkModeSupport: true,
+    win32metadata: {
+      CompanyName: companyName,
+      FileDescription: desktopPackage.description ?? 'Shadow Desktop',
+      InternalName: productName,
+      LegalCopyright: copyright,
+      OriginalFilename: `${productName}.exe`,
+      ProductName: productName,
+    },
     // Ensure icon is referenced in Info.plist
     extendInfo: {
+      CFBundleDisplayName: productName,
       CFBundleIconFile: 'icon',
+      CFBundleName: productName,
       CFBundleURLTypes: [
         {
-          CFBundleURLName: 'Shadow',
+          CFBundleURLName: productName,
           CFBundleURLSchemes: ['shadow'],
         },
       ],
+      NSHighResolutionCapable: true,
       NSCameraUseContinuityCameraDeviceType: true,
       NSCameraUsageDescription:
         'Shadow uses camera access only when a community or runtime feature requests it.',
@@ -149,7 +225,13 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
-      name: 'Shadow',
+      name: productName,
+      title: productName,
+      authors: companyName,
+      description: desktopPackage.description ?? 'Shadow Desktop',
+      setupExe: `${productName}-${desktopPackage.version ?? '0.0.0'}-windows-x64-setup.exe`,
+      setupMsi: `${productName}-${desktopPackage.version ?? '0.0.0'}-windows-x64-setup.msi`,
+      noMsi: true,
       setupIcon: resolve(__dirname, 'assets', 'icon.ico'),
       iconUrl:
         'https://raw.githubusercontent.com/buggyblues/shadow/main/apps/desktop/assets/icon.ico',
@@ -158,10 +240,23 @@ const config: ForgeConfig = {
       {
         format: 'ULFO',
         icon: resolve(__dirname, 'assets', 'icon.icns'),
+        name: productName,
+        title: productName,
+        overwrite: true,
+        additionalDMGOptions: {
+          'background-color': '#0B1116',
+          'icon-size': 96,
+          window: {
+            size: { width: 544, height: 408 },
+          },
+        },
       },
       ['darwin'],
     ),
-    new MakerZIP({}, ['darwin', 'linux']),
+    new MakerZIP(desktopUpdateBaseUrl ? { macUpdateManifestBaseUrl: desktopUpdateBaseUrl } : {}, [
+      'darwin',
+      'linux',
+    ]),
   ],
   plugins: [new AutoUnpackNativesPlugin({})],
 }

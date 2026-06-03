@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -52,6 +53,8 @@ import {
 
 type ContentKind = 'image' | 'html' | 'pdf' | 'file' | 'voice' | 'card'
 type ReadState = 'unread' | 'seen' | 'opened' | 'saved' | 'hidden' | 'dismissed'
+const DOCUMENT_PREVIEW_WIDTH = 720
+const DOCUMENT_PREVIEW_MIN_SCALE = 0.34
 
 interface ContentFeedPage {
   items: ContentFeedItem[]
@@ -343,6 +346,7 @@ function FeedRow({
   const queryClient = useQueryClient()
   const [commentOpen, setCommentOpen] = useState(false)
   const [commentText, setCommentText] = useState('')
+  const commentInputRef = useRef<TextInput>(null)
   const interactions = item.interactions ?? {
     likeCount: 0,
     viewerLiked: false,
@@ -525,53 +529,59 @@ function FeedRow({
         ) : null}
         {displayText ? (
           <AppText
-            variant="label"
-            numberOfLines={4}
-            style={[styles.summary, { color: colors.textSecondary }]}
+            numberOfLines={5}
+            style={[
+              styles.summary,
+              !showTitle ? styles.summaryStandalone : null,
+              { color: colors.textSecondary },
+            ]}
           >
             {displayText}
           </AppText>
         ) : null}
         <FeedAttachmentPreview item={item} onOpen={onPress} />
-        <FeedAuthorBadge item={item} onOpen={openAuthor} />
-        <View style={styles.actionBar}>
-          <TimelineActionButton
-            icon={Heart}
-            active={interactions.viewerLiked}
-            count={interactions.likeCount}
-            label={t('contentFeed.like')}
-            onPress={() => {
-              selectionHaptic()
-              likeMutation.mutate()
-            }}
-          />
-          <TimelineActionButton
-            icon={MessageCircle}
-            active={commentOpen}
-            count={interactions.commentCount}
-            label={t('contentFeed.comment')}
-            onPress={() => {
-              selectionHaptic()
-              setCommentOpen((value) => !value)
-            }}
-          />
-          <TimelineActionButton
-            icon={Bookmark}
-            active={interactions.viewerSaved}
-            label={t('contentFeed.save')}
-            onPress={() => {
-              selectionHaptic()
-              saveMutation.mutate()
-            }}
-          />
-          <TimelineActionButton
-            icon={Repeat2}
-            label={t('contentFeed.share')}
-            onPress={() => {
-              selectionHaptic()
-              void shareItem()
-            }}
-          />
+        <View style={styles.interactionRow}>
+          <View style={styles.actionButtonGroup}>
+            <TimelineActionButton
+              icon={Heart}
+              active={interactions.viewerLiked}
+              count={interactions.likeCount}
+              label={t('contentFeed.like')}
+              onPress={() => {
+                selectionHaptic()
+                likeMutation.mutate()
+              }}
+            />
+            <TimelineActionButton
+              icon={MessageCircle}
+              active={commentOpen}
+              count={interactions.commentCount}
+              label={t('contentFeed.comment')}
+              onPress={() => {
+                selectionHaptic()
+                if (!commentOpen) requestAnimationFrame(() => commentInputRef.current?.focus())
+                setCommentOpen((value) => !value)
+              }}
+            />
+            <TimelineActionButton
+              icon={Bookmark}
+              active={interactions.viewerSaved}
+              label={t('contentFeed.save')}
+              onPress={() => {
+                selectionHaptic()
+                saveMutation.mutate()
+              }}
+            />
+            <TimelineActionButton
+              icon={Repeat2}
+              label={t('contentFeed.share')}
+              onPress={() => {
+                selectionHaptic()
+                void shareItem()
+              }}
+            />
+          </View>
+          <FeedAuthorBadge item={item} onOpen={openAuthor} />
         </View>
         {commentOpen ? (
           <View style={styles.commentPanel}>
@@ -581,6 +591,7 @@ function FeedRow({
             />
             <View style={styles.commentBox}>
               <TextInput
+                ref={commentInputRef}
                 value={commentText}
                 onChangeText={setCommentText}
                 placeholder={t('contentFeed.commentPlaceholder')}
@@ -629,42 +640,26 @@ function FeedRow({
 }
 
 function FeedAuthorBadge({ item, onOpen }: { item: ContentFeedItem; onOpen: () => void }) {
-  const colors = useColors()
   const authorName =
     item.author.displayName?.trim() || item.author.username?.trim() || item.author.id
-  const authorHandle = item.author.username?.trim() || authorName
 
   return (
-    <View style={styles.authorBadgeRow}>
-      <Pressable
-        onPress={(event) => {
-          event.stopPropagation()
-          onOpen()
-        }}
-        accessibilityRole="link"
-        style={({ pressed }) => [
-          styles.authorBadge,
-          {
-            backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <Avatar
-          uri={item.author.avatarUrl}
-          name={authorName}
-          userId={item.author.id}
-          size={size.avatarXs}
-        />
-        <AppText
-          variant="label"
-          numberOfLines={1}
-          style={[styles.authorBadgeText, { color: colors.textSecondary }]}
-        >
-          @{authorHandle}
-        </AppText>
-      </Pressable>
-    </View>
+    <Pressable
+      onPress={(event) => {
+        event.stopPropagation()
+        onOpen()
+      }}
+      accessibilityRole="link"
+      accessibilityLabel={authorName}
+      style={({ pressed }) => [styles.creatorAvatarButton, { opacity: pressed ? 0.72 : 1 }]}
+    >
+      <Avatar
+        uri={item.author.avatarUrl}
+        name={authorName}
+        userId={item.author.id}
+        size={size.avatarSm}
+      />
+    </Pressable>
   )
 }
 
@@ -772,7 +767,17 @@ function TimelineActionButton({
       }}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [styles.actionButton, { opacity: pressed ? 0.72 : 1 }]}
+      style={({ pressed }) => [
+        styles.actionButton,
+        {
+          backgroundColor: active
+            ? colors.surfaceHover
+            : pressed
+              ? colors.inputBackground
+              : 'transparent',
+          opacity: pressed ? 0.78 : 1,
+        },
+      ]}
     >
       <Icon size={18} color={color} fill={active ? color : 'none'} />
       {typeof count === 'number' && count > 0 ? (
@@ -789,6 +794,8 @@ type FeedPreviewKind = 'image' | 'video' | 'audio' | 'markdown' | 'html' | 'app'
 function FeedAttachmentPreview({ item, onOpen }: { item: ContentFeedItem; onOpen: () => void }) {
   const colors = useColors()
   const previewKind = getFeedPreviewKind(item)
+  const [htmlPreviewFailed, setHtmlPreviewFailed] = useState(false)
+  const [htmlPreviewWidth, setHtmlPreviewWidth] = useState<number>(size.contentMaxWidth)
   const needsMedia = needsInlineMediaUrl(previewKind)
   const mediaQuery = useQuery({
     queryKey: ['content-feed-attachment-media', item.primaryAttachmentId, previewKind],
@@ -801,6 +808,9 @@ function FeedAttachmentPreview({ item, onOpen }: { item: ContentFeedItem; onOpen
     },
   })
   const mediaUrl = getImageUrl(mediaQuery.data?.url) ?? mediaQuery.data?.url ?? null
+  useEffect(() => {
+    setHtmlPreviewFailed(false)
+  }, [mediaUrl])
   const markdownQuery = useQuery({
     queryKey: ['content-feed-markdown-preview', mediaUrl],
     enabled: previewKind === 'markdown' && Boolean(mediaUrl),
@@ -820,9 +830,14 @@ function FeedAttachmentPreview({ item, onOpen }: { item: ContentFeedItem; onOpen
     queryFn: async () => {
       const response = await fetch(mediaUrl as string)
       if (!response.ok) throw new Error('failed to load html preview')
-      return sanitizeHtmlPreview((await response.text()).slice(0, 120_000))
+      return (await response.text()).slice(0, 120_000)
     },
   })
+  const isMobileHtmlPreview = htmlQuery.data ? isMobileOptimizedHtml(htmlQuery.data) : false
+  const htmlPreviewInjectedStyle = useMemo(
+    () => buildHtmlPreviewInjectedStyle(htmlQuery.data ?? '', htmlPreviewWidth),
+    [htmlQuery.data, htmlPreviewWidth],
+  )
 
   if (previewKind === 'app') return <ServerAppPreview item={item} />
   if (needsMedia && !mediaUrl) {
@@ -871,17 +886,59 @@ function FeedAttachmentPreview({ item, onOpen }: { item: ContentFeedItem; onOpen
     )
   }
   if (previewKind === 'html' && mediaUrl) {
+    if (htmlPreviewFailed || htmlQuery.isError) return <FeedFileCard item={item} onOpen={onOpen} />
     return (
-      <View pointerEvents="none" style={[styles.htmlPreviewFrame, { borderColor: colors.border }]}>
-        <WebView
-          source={{ html: buildScaledHtmlPreviewHtml(htmlQuery.data ?? '') }}
-          javaScriptEnabled={false}
-          domStorageEnabled={false}
-          scrollEnabled={false}
-          bounces={false}
-          style={styles.webPreview}
-        />
-      </View>
+      <Pressable
+        onPress={(event) => {
+          event.stopPropagation()
+          selectionHaptic()
+          onOpen()
+        }}
+        style={({ pressed }) => [
+          styles.htmlPreviewFrame,
+          isMobileHtmlPreview ? styles.htmlMobilePreviewFrame : null,
+          {
+            backgroundColor: colors.surface,
+            borderColor: pressed ? colors.primary : colors.border,
+          },
+        ]}
+        onLayout={(event) => {
+          const nextWidth = Math.round(event.nativeEvent.layout.width)
+          if (nextWidth > 0 && Math.abs(nextWidth - htmlPreviewWidth) > 1) {
+            setHtmlPreviewWidth(nextWidth)
+          }
+        }}
+      >
+        {htmlQuery.isLoading || !htmlQuery.data ? (
+          <View style={[styles.webPreviewLoading, { backgroundColor: colors.inputBackground }]}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : (
+          <WebView
+            pointerEvents="none"
+            key={`${item.primaryAttachmentId ?? item.id}:${mediaUrl}:${htmlPreviewWidth}`}
+            source={{
+              html: buildHtmlPreviewDocument(htmlQuery.data, mediaUrl, htmlPreviewWidth),
+              baseUrl: mediaUrl,
+            }}
+            originWhitelist={['*']}
+            javaScriptEnabled
+            domStorageEnabled
+            scrollEnabled={false}
+            bounces={false}
+            startInLoadingState
+            injectedJavaScript={htmlPreviewInjectedStyle}
+            renderLoading={() => (
+              <View style={[styles.webPreviewLoading, { backgroundColor: colors.inputBackground }]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            )}
+            onError={() => setHtmlPreviewFailed(true)}
+            onHttpError={() => setHtmlPreviewFailed(true)}
+            style={styles.webPreview}
+          />
+        )}
+      </Pressable>
     )
   }
   if (previewKind === 'markdown') {
@@ -1189,30 +1246,74 @@ function buildVideoPreviewHtml(url: string, backgroundColor: string) {
   return `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{${resetRule}${style}}video{${fillRule}object-fit:cover;background:${backgroundColor}}</style></head><body><video src="${src}" muted playsinline preload="metadata"></video></body></html>`
 }
 
+function isMobileOptimizedHtml(html: string) {
+  const viewportTag = html
+    .match(/<meta\b[^>]*>/gi)
+    ?.find((tag) => /\bname\s*=\s*["']viewport["']/i.test(tag))
+  if (!viewportTag) return false
+  return /\bcontent\s*=\s*["'][^"']*\bwidth\s*=\s*device-width\b/i.test(viewportTag)
+}
+
+function getHtmlPreviewLayout(html: string, frameWidth: number) {
+  const width = Math.max(1, Math.round(frameWidth || size.contentMaxWidth))
+  if (isMobileOptimizedHtml(html)) {
+    return {
+      documentHeight: Math.ceil(width * (4 / 3)),
+      documentWidth: width,
+      isMobile: true,
+      scale: 1,
+    }
+  }
+  const scale = Math.min(1, Math.max(DOCUMENT_PREVIEW_MIN_SCALE, width / DOCUMENT_PREVIEW_WIDTH))
+  const frameHeight = width * (4 / 3)
+  const documentHeight = Math.max(960, Math.ceil(frameHeight / scale))
+  return {
+    documentHeight,
+    documentWidth: DOCUMENT_PREVIEW_WIDTH,
+    isMobile: false,
+    scale,
+  }
+}
+
+function buildHtmlPreviewInjectedStyle(html: string, frameWidth: number) {
+  const { documentHeight, documentWidth, isMobile, scale } = getHtmlPreviewLayout(html, frameWidth)
+  if (isMobile) {
+    return `document.documentElement.style.overflow='hidden';document.body.style.margin='0';document.body.style.overflow='hidden';document.body.style.width='100%';document.body.style.minWidth='0';document.body.style.minHeight='${documentHeight}px';true;`
+  }
+  return `document.documentElement.style.overflow='hidden';document.body.style.margin='0';document.body.style.overflow='hidden';document.body.style.transform='scale(${scale})';document.body.style.transformOrigin='top left';document.body.style.width='${documentWidth}px';document.body.style.minWidth='${documentWidth}px';document.body.style.minHeight='${documentHeight}px';true;`
+}
+
+function buildHtmlPreviewDocument(html: string, baseUrl: string, frameWidth: number) {
+  const { documentHeight, documentWidth, isMobile, scale } = getHtmlPreviewLayout(html, frameWidth)
+  const headMarkup = [
+    '<meta charset="utf-8">',
+    `<meta name="viewport" content="${isMobile ? 'width=device-width' : `width=${documentWidth}`}, initial-scale=1">`,
+    `<base href="${escapeHtmlAttribute(baseUrl)}">`,
+    '<style id="shadow-mobile-html-preview-scale">',
+    'html{margin:calc(0px)!important;overflow:hidden!important;background:white!important;}',
+    isMobile
+      ? `body{margin:calc(0px)!important;overflow:hidden!important;background:white!important;width:calc(100%)!important;min-width:calc(0px)!important;min-height:${documentHeight}px!important;}`
+      : `body{margin:calc(0px)!important;overflow:hidden!important;background:white!important;transform:scale(${scale});transform-origin:top left;width:${documentWidth}px!important;min-width:${documentWidth}px!important;min-height:${documentHeight}px!important;}`,
+    '*{box-sizing:border-box;}',
+    'img,video,canvas,svg{max-width:calc(100%);height:auto;}',
+    'iframe{max-width:calc(100%);}',
+    '</style>',
+  ].join('')
+  const trimmed = html.trim()
+  const sanitized = trimmed.replace(/<meta\b(?=[^>]*\bname\s*=\s*["']viewport["'])[^>]*>/gi, '')
+  if (!sanitized) return `<!doctype html><html><head>${headMarkup}</head><body></body></html>`
+
+  if (/<head\b[^>]*>/i.test(sanitized)) {
+    return sanitized.replace(/<head\b([^>]*)>/i, `<head$1>${headMarkup}`)
+  }
+  if (/<html\b[^>]*>/i.test(sanitized)) {
+    return sanitized.replace(/<html\b([^>]*)>/i, `<html$1><head>${headMarkup}</head>`)
+  }
+  return `<!doctype html><html><head>${headMarkup}</head><body>${sanitized}</body></html>`
+}
+
 function escapeHtmlAttribute(value: string) {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
-}
-
-function buildScaledHtmlPreviewHtml(html: string) {
-  const srcDoc = escapeHtmlAttribute(html)
-  const fillRule = 'width:' + '100%;height:' + '100%;'
-  const resetRule = 'margin:' + '0;'
-  const borderRule = 'border:' + '0;'
-  const viewportScale = 'initial-scale=' + '1'
-  const previewRule =
-    'width:' +
-    '133.333%;height:' +
-    '133.333%;transform:' +
-    'scale(0.75);transform-origin:' +
-    `top left;pointer-events:none;${borderRule}background:white`
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width, ${viewportScale}"><style>html,body{${fillRule}${resetRule}overflow:hidden;background:white}</style></head><body><iframe sandbox="" srcdoc="${srcDoc}" style="${previewRule}"></iframe></body></html>`
-}
-
-function sanitizeHtmlPreview(html: string) {
-  return html
-    .replace(/<iframe\b[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<iframe\b[^>]*\/?>/gi, '')
-    .trim()
 }
 
 function getFeedFileIcon(contentType: string) {
@@ -1342,9 +1443,10 @@ const styles = StyleSheet.create({
   },
   rowMeta: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xxs,
   },
   rowMetaCentered: {
     minHeight: size.avatarLg,
@@ -1361,7 +1463,12 @@ const styles = StyleSheet.create({
   },
   summary: {
     marginTop: spacing.xs,
-    lineHeight: lineHeight.sm,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    lineHeight: lineHeight.md,
+  },
+  summaryStandalone: {
+    marginTop: spacing.none,
   },
   source: {
     fontSize: fontSize.xs,
@@ -1378,35 +1485,33 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
-  actionBar: {
-    marginTop: spacing.md,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  authorBadgeRow: {
+  interactionRow: {
     marginTop: spacing.sm,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
-  authorBadge: {
-    maxWidth: size.commerceChipMaxWidth,
+  actionButtonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    flexShrink: 0,
+  },
+  creatorAvatarButton: {
+    maxWidth: size.chipMaxWidth,
+    flexShrink: 1,
+    minWidth: 0,
     minHeight: size.controlXs,
-    borderRadius: radius.full,
-    borderWidth: border.hairline,
-    paddingLeft: spacing.xs,
-    paddingRight: spacing.sm,
+    paddingLeft: spacing.xxs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  authorBadgeText: {
-    flexShrink: 1,
-    minWidth: 0,
-    fontSize: fontSize.xs,
-    fontWeight: '900',
-  },
   actionButton: {
-    minWidth: size.controlMd,
+    minWidth: size.iconButtonMd,
     minHeight: size.iconButtonSm,
+    paddingHorizontal: spacing.xs,
     borderRadius: radius.full,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1486,7 +1591,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: size.contentMaxWidth / 2 + spacing.sm,
     borderRadius: radius.lg,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     overflow: 'hidden',
   },
   webPreviewFrame: {
@@ -1498,12 +1603,20 @@ const styles = StyleSheet.create({
     aspectRatio: 3 / 4,
     borderRadius: radius.lg,
     borderWidth: border.hairline,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     overflow: 'hidden',
+  },
+  htmlMobilePreviewFrame: {
+    aspectRatio: 1,
   },
   webPreview: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  webPreviewLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -85,6 +85,24 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="subscriptions"
+        options={{
+          title: t('nav.subscriptions'),
+          tabBarIcon: ({ color }) => (
+            <View
+              style={{
+                width: size.controlXs,
+                height: size.controlXs,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Rss size={iconSize['2xl']} color={color} strokeWidth={2.5} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="notifications"
         options={{
           title: t('nav.notifications'),
@@ -127,24 +145,6 @@ export default function TabsLayout() {
               </View>
             )
           },
-        }}
-      />
-      <Tabs.Screen
-        name="subscriptions"
-        options={{
-          title: t('nav.subscriptions'),
-          tabBarIcon: ({ color }) => (
-            <View
-              style={{
-                width: size.controlXs,
-                height: size.controlXs,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Rss size={iconSize['2xl']} color={color} strokeWidth={2.5} />
-            </View>
-          ),
         }}
       />
       <Tabs.Screen
