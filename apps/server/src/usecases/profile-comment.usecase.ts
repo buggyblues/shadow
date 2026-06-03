@@ -1,7 +1,9 @@
 import type { ProfileCommentDao } from '../dao/profile-comment.dao'
 import type { UserDao } from '../dao/user.dao'
+import { resolveAvatarUrl, withResolvedAvatarUrl } from '../lib/avatar-url'
 import type { AccessService } from '../security/access.service'
 import type { AuditLogService } from '../services/audit-log.service'
+import type { MediaService } from '../services/media.service'
 import type { SecureUseCaseInput } from './_security-usecase'
 import { auditUseCase } from './_security-usecase'
 
@@ -12,8 +14,21 @@ export class ProfileCommentUseCase {
       auditLogService: AuditLogService
       profileCommentDao: ProfileCommentDao
       userDao: UserDao
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
     },
   ) {}
+
+  private resolveCommentAuthorAvatars<T extends { author: { avatarUrl: string | null } }>(
+    comments: T[],
+  ): T[] {
+    return comments.map((comment) => ({
+      ...comment,
+      author: {
+        ...comment.author,
+        avatarUrl: resolveAvatarUrl(this.deps.mediaService, comment.author.avatarUrl),
+      },
+    }))
+  }
 
   async findByProfileUserId(
     input: SecureUseCaseInput & {
@@ -23,11 +38,13 @@ export class ProfileCommentUseCase {
     },
   ) {
     const currentUserId = input.ctx.actor.kind === 'user' ? input.ctx.actor.userId : null
-    return this.deps.profileCommentDao.findByProfileUserId(
-      input.profileUserId,
-      currentUserId,
-      input.limit ?? 20,
-      input.offset ?? 0,
+    return this.resolveCommentAuthorAvatars(
+      await this.deps.profileCommentDao.findByProfileUserId(
+        input.profileUserId,
+        currentUserId,
+        input.limit ?? 20,
+        input.offset ?? 0,
+      ),
     )
   }
 
@@ -43,11 +60,13 @@ export class ProfileCommentUseCase {
     },
   ) {
     const currentUserId = input.ctx.actor.kind === 'user' ? input.ctx.actor.userId : null
-    return this.deps.profileCommentDao.findReplies(
-      input.parentId,
-      currentUserId,
-      input.limit ?? 10,
-      input.offset ?? 0,
+    return this.resolveCommentAuthorAvatars(
+      await this.deps.profileCommentDao.findReplies(
+        input.parentId,
+        currentUserId,
+        input.limit ?? 10,
+        input.offset ?? 0,
+      ),
     )
   }
 
@@ -170,6 +189,7 @@ export class ProfileCommentUseCase {
   }
 
   async getUserById(input: SecureUseCaseInput & { userId: string }) {
-    return this.deps.userDao.findById(input.userId)
+    const user = await this.deps.userDao.findById(input.userId)
+    return user ? withResolvedAvatarUrl(this.deps.mediaService, user) : null
   }
 }

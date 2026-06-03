@@ -1,6 +1,6 @@
-# Shadow Server App Integrations
+# Shadow App Integrations
 
-This directory contains runnable Server Apps. `kanban` is the canonical copyable demo; `qna`, `quiz`, `trainer`, `resume`, `flash`, `space`, and `warbuddy` show richer product patterns.
+This directory contains runnable Apps. `kanban` is the canonical copyable demo; `qna`, `quiz`, `trainer`, `resume`, `flash`, `space`, and `warbuddy` show richer product patterns.
 
 Run all standard demos locally:
 

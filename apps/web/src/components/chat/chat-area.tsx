@@ -58,6 +58,7 @@ import {
   invalidateServerChannelState,
   patchChannelAcrossCachedCollections,
 } from '../../lib/channel-cache'
+import { copyToClipboard } from '../../lib/clipboard'
 import { playReceiveSound } from '../../lib/sounds'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
@@ -1619,7 +1620,7 @@ export function ChatArea({
     }
   }, [])
 
-  const handleCopySelectedAsMarkdown = useCallback(() => {
+  const handleCopySelectedAsMarkdown = useCallback(async () => {
     const selectedMsgs = messages
       .filter((m) => selectedMessageIds.has(m.id))
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
@@ -1631,9 +1632,11 @@ export function ChatArea({
         return [`**${author}** (${time})`, m.content, ...attachmentLines].filter(Boolean).join('\n')
       })
       .join('\n\n---\n\n')
-    navigator.clipboard.writeText(md)
-    showToast(t('chat.copiedAsMarkdown', '已复制为 Markdown'), 'success')
-    handleExitSelectionMode()
+    const didCopy = await copyToClipboard(md, {
+      successMessage: t('chat.copiedAsMarkdown', '已复制为 Markdown'),
+      errorMessage: t('chat.copyFailed', '复制失败'),
+    })
+    if (didCopy) handleExitSelectionMode()
   }, [messages, selectedMessageIds, t, handleExitSelectionMode])
 
   const handleMessageUpdate = useCallback(
@@ -1718,10 +1721,10 @@ export function ChatArea({
   )
 
   const handleCopyPageShareLink = useCallback(() => {
-    navigator.clipboard.writeText(pageShareUrl).then(
-      () => showToast(t('chat.linkCopied'), 'success'),
-      () => showToast(t('chat.copyFailed', '复制失败'), 'error'),
-    )
+    void copyToClipboard(pageShareUrl, {
+      successMessage: t('chat.linkCopied'),
+      errorMessage: t('chat.copyFailed', '复制失败'),
+    })
   }, [pageShareUrl, t])
 
   const renderTimelineItem = (item: TimelineItem, index: number) => (

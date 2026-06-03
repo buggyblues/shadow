@@ -1,7 +1,16 @@
 import { generateRandomCatConfig, getCatAvatarByUserId, renderCatSvg } from '@shadowob/shared'
-import { Button, cn } from '@shadowob/ui'
-import { Check, Dices, Upload, X } from 'lucide-react'
-import { useRef, useState } from 'react'
+import {
+  Button,
+  cn,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from '@shadowob/ui'
+import { Camera, Dices, Upload, ZoomIn, ZoomOut } from 'lucide-react'
+import { type ChangeEvent, type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 
@@ -11,127 +20,335 @@ interface AvatarEditorProps {
   onChange: (url: string) => void
 }
 
+type DraftKind = 'existing' | 'generated' | 'uploaded'
+
+const AVATAR_PREVIEW_SIZE = 256
+const AVATAR_EXPORT_SIZE = 512
+
+function loadAvatarImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+    if (!src.startsWith('data:')) image.crossOrigin = 'anonymous'
+    image.onload = () => resolve(image)
+    image.onerror = reject
+    image.src = src
+  })
+}
+
+function getCoverSize(image: HTMLImageElement, containerSize: number) {
+  const scale = Math.max(containerSize / image.naturalWidth, containerSize / image.naturalHeight)
+  return {
+    width: image.naturalWidth * scale,
+    height: image.naturalHeight * scale,
+  }
+}
+
+async function uploadAvatarBlob(blob: Blob) {
+  const formData = new FormData()
+  formData.append('file', blob, 'avatar.png')
+  return fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
 export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
   const { t } = useTranslation()
   const [initialSvg] = useState(() =>
     userId ? getCatAvatarByUserId(userId) : renderCatSvg(generateRandomCatConfig()),
   )
-  const [pendingPreview, setPendingPreview] = useState<string | null>(null)
-  const [uploadedPreview, setUploadedPreview] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+  const committedValueRef = useRef<string | undefined>(value)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragStartRef = useRef<{ clientX: number; clientY: number; x: number; y: number } | null>(
+    null,
+  )
 
-  const handleRollDice = () => {
-    const config = generateRandomCatConfig()
-    setUploadedPreview(null)
-    setPendingPreview(renderCatSvg(config))
-  }
+  const [previewOverride, setPreviewOverride] = useState<string | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [draftSrc, setDraftSrc] = useState(value ?? initialSvg)
+  const [draftKind, setDraftKind] = useState<DraftKind>('existing')
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [renderSize, setRenderSize] = useState({
+    width: AVATAR_PREVIEW_SIZE,
+    height: AVATAR_PREVIEW_SIZE,
+  })
+  const [isDragging, setIsDragging] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleApplyPreset = () => {
-    if (pendingPreview) {
-      onChange(pendingPreview)
-      setPendingPreview(null)
+  useEffect(() => {
+    if (value !== committedValueRef.current) {
+      committedValueRef.current = value
+      setPreviewOverride(null)
     }
-  }
+  }, [value])
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setIsUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
-        method: 'POST',
-        body: formData,
+  const displaySrc = previewOverride ?? value ?? initialSvg
+
+  useEffect(() => {
+    if (!modalOpen) return
+    setDraftSrc(displaySrc)
+    setDraftKind('existing')
+    setPosition({ x: 0, y: 0 })
+    setZoom(1)
+    setError(null)
+  }, [displaySrc, modalOpen])
+
+  useEffect(() => {
+    let cancelled = false
+    loadAvatarImage(draftSrc)
+      .then((image) => {
+        if (cancelled) return
+        const size = getCoverSize(image, AVATAR_PREVIEW_SIZE)
+        setRenderSize(size)
       })
-      if (res?.url) {
-        setPendingPreview(null)
-        setUploadedPreview(res.signedUrl ?? res.url)
-        onChange(res.url)
-      }
-    } catch (err) {
-      console.error('Failed to upload avatar', err)
-    } finally {
-      setIsUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      .catch(() => {
+        if (!cancelled) setError(t('common.saveFailed'))
+      })
+    return () => {
+      cancelled = true
     }
+  }, [draftSrc, t])
+
+  const handleRandomize = () => {
+    setDraftSrc(renderCatSvg(generateRandomCatConfig()))
+    setDraftKind('generated')
+    setPosition({ x: 0, y: 0 })
+    setZoom(1)
+    setError(null)
   }
 
-  const currentSrc = uploadedPreview || value || initialSvg
-  const hasPending = !!pendingPreview
+  const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return
+      setDraftSrc(reader.result)
+      setDraftKind('uploaded')
+      setPosition({ x: 0, y: 0 })
+      setZoom(1)
+      setError(null)
+    }
+    reader.readAsDataURL(file)
+
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragStartRef.current = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      x: position.x,
+      y: position.y,
+    }
+    setIsDragging(true)
+  }
+
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragStartRef.current
+    if (!drag) return
+    setPosition({
+      x: drag.x + event.clientX - drag.clientX,
+      y: drag.y + event.clientY - drag.clientY,
+    })
+  }
+
+  const handlePointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    if (dragStartRef.current) {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      } catch {
+        // Pointer capture can be released by the browser on cancel.
+      }
+    }
+    dragStartRef.current = null
+    setIsDragging(false)
+  }
+
+  const createCroppedAvatarBlob = async () => {
+    const image = await loadAvatarImage(draftSrc)
+    const coverSize = getCoverSize(image, AVATAR_EXPORT_SIZE)
+    const exportScale = AVATAR_EXPORT_SIZE / AVATAR_PREVIEW_SIZE
+    const canvas = document.createElement('canvas')
+    canvas.width = AVATAR_EXPORT_SIZE
+    canvas.height = AVATAR_EXPORT_SIZE
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Canvas context unavailable')
+
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, AVATAR_EXPORT_SIZE, AVATAR_EXPORT_SIZE)
+    context.translate(AVATAR_EXPORT_SIZE / 2, AVATAR_EXPORT_SIZE / 2)
+    context.translate(position.x * exportScale, position.y * exportScale)
+    context.scale(zoom, zoom)
+    context.drawImage(
+      image,
+      -coverSize.width / 2,
+      -coverSize.height / 2,
+      coverSize.width,
+      coverSize.height,
+    )
+
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob)
+        else reject(new Error('Avatar export failed'))
+      }, 'image/png')
+    })
+  }
+
+  const handleSave = async () => {
+    const hasUnchangedPersistedValue =
+      draftKind === 'existing' &&
+      Boolean(value) &&
+      draftSrc === displaySrc &&
+      position.x === 0 &&
+      position.y === 0 &&
+      zoom === 1
+
+    if (hasUnchangedPersistedValue) {
+      setModalOpen(false)
+      return
+    }
+
+    setIsSaving(true)
+    setError(null)
+    try {
+      const blob = await createCroppedAvatarBlob()
+      const result = await uploadAvatarBlob(blob)
+      committedValueRef.current = result.url
+      setPreviewOverride(result.signedUrl ?? result.url)
+      onChange(result.url)
+      setModalOpen(false)
+    } catch (err) {
+      console.error('Failed to save avatar', err)
+      setError(t('common.saveFailed'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Row: current avatar + dice preview (if any) + actions */}
-      <div className="flex items-center gap-4">
-        {/* Current avatar */}
-        <div className="relative shrink-0">
-          <div
-            className={cn(
-              'w-16 h-16 rounded-full overflow-hidden border-2 bg-bg-tertiary/50',
-              hasPending ? 'border-border-subtle opacity-60' : 'border-primary/40',
-            )}
-          >
-            <img src={currentSrc} alt="Current" className="w-full h-full object-cover" />
-          </div>
-          {!hasPending && (
-            <span className="absolute -bottom-1 -right-1 text-[9px] font-bold text-primary bg-bg-primary border border-border-subtle rounded px-1">
-              {t('avatar.current', '当前')}
-            </span>
-          )}
-        </div>
-
-        {/* Pending preview with apply */}
-        {hasPending && (
-          <>
-            <span className="text-text-muted/40 text-lg">→</span>
-            <div className="relative shrink-0">
-              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary ring-2 ring-primary/20 bg-bg-tertiary/50">
-                <img src={pendingPreview} alt="New" className="w-full h-full object-cover" />
-              </div>
-              <span className="absolute -bottom-1 -right-1 text-[9px] font-bold text-bg-primary bg-primary rounded px-1">
-                {t('avatar.new', '新')}
-              </span>
-            </div>
-            <Button variant="primary" size="sm" onClick={handleApplyPreset} icon={Check}>
-              {t('common.apply', '应用')}
-            </Button>
-            <button
-              type="button"
-              onClick={() => setPendingPreview(null)}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-text-muted hover:text-danger hover:bg-danger/10 transition"
-              title={t('common.cancel', '取消')}
-            >
-              <X size={16} />
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Action buttons row */}
-      <div className="flex items-center gap-2">
-        <Button variant="secondary" size="sm" onClick={handleRollDice} icon={Dices}>
-          {t('agentMgmt.generateBtn', '一键生成')}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          icon={Upload}
-          loading={isUploading}
-        >
-          {t('agentMgmt.uploadAvatar', '本地上传')}
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileUpload}
-          disabled={isUploading}
-          className="hidden"
+    <>
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
+        className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-border-subtle bg-bg-tertiary/60 outline-none transition focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
+        aria-label={t('agentMgmt.avatarLabel')}
+        title={t('common.edit')}
+      >
+        <img
+          src={displaySrc}
+          alt={t('agentMgmt.avatarLabel')}
+          className="h-full w-full object-cover"
         />
-      </div>
-    </div>
+        <span className="absolute inset-0 grid place-items-center bg-bg-deep/55 text-white opacity-0 backdrop-blur-[2px] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+          <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.14em]">
+            <Camera size={15} />
+            {t('common.edit')}
+          </span>
+        </span>
+      </button>
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+        <ModalContent maxWidth="max-w-[440px]">
+          <ModalHeader title={t('agentMgmt.avatarLabel')} closeLabel={t('common.close')} />
+          <ModalBody className="space-y-5">
+            <div className="flex justify-center">
+              <div
+                className={cn(
+                  'relative h-64 w-64 touch-none select-none overflow-hidden rounded-full border-2 border-border-subtle bg-bg-tertiary/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]',
+                  isDragging ? 'cursor-grabbing' : 'cursor-grab',
+                )}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerEnd}
+                onPointerCancel={handlePointerEnd}
+              >
+                <img
+                  src={draftSrc}
+                  alt={t('agentMgmt.avatarLabel')}
+                  draggable={false}
+                  className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"
+                  style={{
+                    width: renderSize.width,
+                    height: renderSize.height,
+                    transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${zoom})`,
+                    transformOrigin: 'center',
+                  }}
+                />
+                <div className="pointer-events-none absolute inset-0 opacity-20">
+                  <div className="absolute left-1/2 top-0 h-full w-px bg-white" />
+                  <div className="absolute left-0 top-1/2 h-px w-full bg-white" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <ZoomOut size={17} className="text-text-muted" />
+              <input
+                type="range"
+                min="0.75"
+                max="3"
+                step="0.05"
+                value={zoom}
+                onChange={(event) => setZoom(Number(event.target.value))}
+                className="h-1.5 flex-1 cursor-pointer accent-primary"
+                aria-label={t('agentMgmt.avatarLabel')}
+              />
+              <ZoomIn size={17} className="text-text-muted" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={Dices}
+                onClick={handleRandomize}
+              >
+                {t('agentMgmt.generateBtn')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={Upload}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {t('agentMgmt.uploadAvatar')}
+              </Button>
+            </div>
+            {error && <p className="text-sm font-bold text-danger">{error}</p>}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleUpload}
+              className="hidden"
+            />
+          </ModalBody>
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setModalOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleSave}
+                loading={isSaving}
+              >
+                {t('common.save')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </>
   )
 }

@@ -40,6 +40,17 @@ export function ProfileSettings() {
       setUser({ ...user!, ...result })
       showToast(t('common.saveSuccess'), 'success')
       queryClient.invalidateQueries({ queryKey: ['me'] })
+      queryClient.invalidateQueries({ queryKey: ['messages'] })
+      queryClient.invalidateQueries({ queryKey: ['channel-bootstrap'] })
+      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: ['friends-sent'] })
+      queryClient.invalidateQueries({ queryKey: ['friends-pending'] })
+      queryClient.invalidateQueries({ queryKey: ['channel-members'] })
+      queryClient.invalidateQueries({ queryKey: ['server-members'] })
+      queryClient.invalidateQueries({ queryKey: ['mention-suggestions'] })
+      queryClient.invalidateQueries({ queryKey: ['search-messages'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
     onError: (err) => {
       showToast(err instanceof Error ? err.message : t('common.saveFailed'), 'error')

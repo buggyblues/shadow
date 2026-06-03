@@ -53,6 +53,7 @@ import { WorkspaceFilePicker } from '../components/workspace/WorkspaceFilePicker
 import type { CommunityAsset } from '../hooks/use-community-economy'
 import { fetchApi } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
+import { copyToClipboard } from '../lib/clipboard'
 import { deliveryDetailHref, entitlementHasOpenablePaidFile } from '../lib/commerce-delivery'
 import { hasActivePurchasedEntitlement } from '../lib/commerce-products'
 import {
@@ -1161,12 +1162,10 @@ export function PersonalShopPage({
   const buyerShopUrl =
     typeof window !== 'undefined' ? `${window.location.origin}${buyerShopPath}` : buyerShopPath
   const copyBuyerShopLink = async () => {
-    try {
-      await navigator.clipboard.writeText(buyerShopUrl)
-      showToast(t('commerce.shopLinkCopied'), 'success')
-    } catch {
-      showToast(t('commerce.shopLinkCopyFailed'), 'error')
-    }
+    await copyToClipboard(buyerShopUrl, {
+      successMessage: t('commerce.shopLinkCopied'),
+      errorMessage: t('commerce.shopLinkCopyFailed'),
+    })
   }
 
   useEffect(() => {

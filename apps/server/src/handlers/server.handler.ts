@@ -298,6 +298,7 @@ export function createServerHandler(container: AppContainer) {
   // POST /api/servers/:id/join
   serverHandler.post('/:id/join', zValidator('json', joinServerSchema), async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const { inviteCode } = c.req.valid('json')
     const user = c.get('user')
     try {
@@ -315,7 +316,9 @@ export function createServerHandler(container: AppContainer) {
           userId: user.userId,
           username: fullUser?.username ?? 'unknown',
           displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
-          avatarUrl: fullUser?.avatarUrl ?? null,
+          avatarUrl: await resolveSignedMediaUrl(mediaService, fullUser?.avatarUrl, {
+            variant: 'avatar',
+          }),
           isBot: fullUser?.isBot ?? false,
         }
         if (channels.length > 0) {
@@ -433,6 +436,7 @@ export function createServerHandler(container: AppContainer) {
   // POST /api/servers/:id/leave
   serverHandler.post('/:id/leave', async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const id = c.req.param('id')
     const user = c.get('user')
 
@@ -453,7 +457,9 @@ export function createServerHandler(container: AppContainer) {
         userId: user.userId,
         username: fullUser?.username ?? 'unknown',
         displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
-        avatarUrl: fullUser?.avatarUrl ?? null,
+        avatarUrl: await resolveSignedMediaUrl(mediaService, fullUser?.avatarUrl, {
+          variant: 'avatar',
+        }),
         isBot: fullUser?.isBot ?? false,
       }
     } catch {
@@ -527,6 +533,7 @@ export function createServerHandler(container: AppContainer) {
   // DELETE /api/servers/:id/members/:userId
   serverHandler.delete('/:id/members/:userId', async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const id = c.req.param('id')
     const targetUserId = c.req.param('userId')
     const user = c.get('user')
@@ -548,7 +555,9 @@ export function createServerHandler(container: AppContainer) {
         userId: targetUserId,
         username: fullUser?.username ?? 'unknown',
         displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
-        avatarUrl: fullUser?.avatarUrl ?? null,
+        avatarUrl: await resolveSignedMediaUrl(mediaService, fullUser?.avatarUrl, {
+          variant: 'avatar',
+        }),
         isBot: fullUser?.isBot ?? false,
       }
     } catch {
@@ -636,6 +645,7 @@ export function createServerHandler(container: AppContainer) {
 
   // POST /api/servers/:id/agents — add agent(s) to server as members
   serverHandler.post('/:id/agents', async (c) => {
+    const mediaService = container.resolve('mediaService')
     const idOrSlug = c.req.param('id')
     const id = await resolveServerId(idOrSlug)
     const user = c.get('user')
@@ -666,7 +676,9 @@ export function createServerHandler(container: AppContainer) {
           userId: botUserId,
           username: botUser?.username ?? 'unknown',
           displayName: botUser?.displayName ?? botUser?.username ?? 'unknown',
-          avatarUrl: botUser?.avatarUrl ?? null,
+          avatarUrl: await resolveSignedMediaUrl(mediaService, botUser?.avatarUrl, {
+            variant: 'avatar',
+          }),
           isBot: true,
         }
         // Notify all non-bot server members about the new bot

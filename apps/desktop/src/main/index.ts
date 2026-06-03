@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import {
   app,
   BrowserWindow,
+  clipboard,
   desktopCapturer,
   dialog,
   ipcMain,
@@ -826,6 +827,13 @@ app.on('ready', async () => {
       return false
     }
   })
+
+  ipcMain.handle('desktop:clipboard:writeText', (_event, text: unknown) => {
+    if (typeof text !== 'string') return false
+    clipboard.writeText(text)
+    return true
+  })
+
   ipcMain.handle(
     'desktop:openReader',
     async (

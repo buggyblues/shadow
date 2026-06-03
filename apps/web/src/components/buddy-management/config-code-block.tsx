@@ -1,6 +1,7 @@
 import { cn } from '@shadowob/ui'
 import { Check, ChevronDown, ChevronUp, ClipboardCopy } from 'lucide-react'
 import { type MouseEvent, useEffect, useRef, useState } from 'react'
+import { copyToClipboard } from '../../lib/clipboard'
 
 type CodeBlockMode = 'single' | 'multi'
 type FoldMode = 'expanded' | 'collapsed'
@@ -38,7 +39,11 @@ export function ConfigCodeBlock({
 
   const handleCopy = async (event?: MouseEvent<HTMLElement>) => {
     event?.stopPropagation()
-    await navigator.clipboard.writeText(content)
+    const didCopy = await copyToClipboard(content, {
+      successMessage: t('common.copied'),
+      errorMessage: t('chat.copyFailed'),
+    })
+    if (!didCopy) return
     setCopiedState(true)
     setTimeout(() => setCopiedState(false), 2000)
     onCopy?.(content)

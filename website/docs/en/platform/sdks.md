@@ -25,7 +25,7 @@ const servers = await client.listServers()
 const msg = await client.sendMessage('channel-id', 'Hello!')
 ```
 
-### Server App Helpers
+### App Helpers
 
 ```ts
 const apps = await client.listServerApps('server-id-or-slug')
@@ -190,9 +190,9 @@ servers = client.list_servers()
 msg = client.send_message("channel-id", "Hello from Python!")
 ```
 
-### Server App Runtime
+### App Runtime
 
-The TypeScript SDK includes a modeled backend runtime for Server App implementations:
+The TypeScript SDK includes a modeled backend runtime for App implementations:
 
 ```ts
 import { defineShadowServerApp } from '@shadowob/sdk'

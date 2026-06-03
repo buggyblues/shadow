@@ -47,6 +47,7 @@ import { useTranslation } from 'react-i18next'
 import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
+import { copyToClipboard } from '../../lib/clipboard'
 import { clearLastChannelId, getLastChannelId, setLastChannelId } from '../../lib/last-channel'
 import { scheduleIdleAfterDelay } from '../../lib/schedule'
 import { showToast } from '../../lib/toast'
@@ -141,7 +142,15 @@ function normalizePresenceStatus(status?: string | null) {
   return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline'
 }
 
-function pickServerNavigationChannel(channels: ServerNavigationChannel[]) {
+function pickServerNavigationChannel(
+  channels: ServerNavigationChannel[],
+  preferredChannelId?: string | null,
+) {
+  const preferredChannel = preferredChannelId
+    ? channels.find((channel) => channel.id === preferredChannelId && !channel.isArchived)
+    : null
+  if (preferredChannel) return preferredChannel
+
   return (
     channels.find((channel) => !channel.isArchived && channel.type !== 'voice') ??
     channels.find((channel) => !channel.isArchived) ??
@@ -734,7 +743,12 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   }, [])
 
   const openFirstChannelForServer = useCallback(
-    async (serverId: string, serverSlug: string, requestId: number) => {
+    async (
+      serverId: string,
+      serverSlug: string,
+      requestId: number,
+      preferredChannelId?: string | null,
+    ) => {
       try {
         const channels = await queryClient.fetchQuery({
           queryKey: ['channels', serverSlug],
@@ -747,7 +761,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         })
         if (serverNavigationRequestRef.current !== requestId) return
 
-        const channel = pickServerNavigationChannel(channels)
+        const channel = pickServerNavigationChannel(channels, preferredChannelId)
         if (channel) {
           setLastChannelId(serverId, channel.id)
           navigate({
@@ -776,13 +790,20 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       const requestId = ++serverNavigationRequestRef.current
       // Navigate directly into chat; the server index triggers a slower first-paint waterfall.
       const lastChannelId = getLastChannelId(serverId)
-      if (lastChannelId) {
+      const cachedChannels = queryClient.getQueryData<ServerNavigationChannel[]>([
+        'channels',
+        serverSlug,
+      ])
+      const cachedLastChannel = lastChannelId
+        ? cachedChannels?.find((channel) => channel.id === lastChannelId && !channel.isArchived)
+        : null
+      if (cachedLastChannel) {
         navigate({
           to: '/servers/$serverSlug/channels/$channelId',
-          params: { serverSlug, channelId: lastChannelId },
+          params: { serverSlug, channelId: cachedLastChannel.id },
         })
       } else {
-        void openFirstChannelForServer(serverId, serverSlug, requestId)
+        void openFirstChannelForServer(serverId, serverSlug, requestId, lastChannelId)
       }
       scheduleIdleAfterDelay(() => {
         void requestMarkScopeRead({ serverId })
@@ -793,6 +814,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       navigate,
       onNavigate,
       openFirstChannelForServer,
+      queryClient,
       requestMarkScopeRead,
       setActiveServer,
       setMobileView,
@@ -1526,10 +1548,15 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   {
                     icon: copiedId ? Check : Copy,
                     label: copiedId ? t('common.copied') : t('server.copyServerId'),
-                    onClick: () => {
-                      navigator.clipboard.writeText(contextMenu.server.server.id)
-                      setCopiedId(true)
-                      setTimeout(() => setCopiedId(false), 2000)
+                    onClick: async () => {
+                      const didCopy = await copyToClipboard(contextMenu.server.server.id, {
+                        successMessage: t('common.copied'),
+                        errorMessage: t('chat.copyFailed'),
+                      })
+                      if (didCopy) {
+                        setCopiedId(true)
+                        setTimeout(() => setCopiedId(false), 2000)
+                      }
                     },
                   },
                 ],

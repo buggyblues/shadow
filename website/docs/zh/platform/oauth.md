@@ -145,7 +145,7 @@ Shadow 有两个 authorize 入口：
 - 浏览器入口：`GET /app/oauth/authorize?...`。把用户重定向到这里；嵌入式 App 需要用顶层弹窗打开。
 - API 校验/批准：`GET/POST /api/oauth/authorize`。这是 Shadow Web UI 和 SDK helper 使用的接口，不要把最终用户直接送到这里，也不要放进 iframe。
 
-Shadow Web 会返回 `frame-ancestors 'none'`，OAuth 授权页不能被第三方 iframe 嵌入。Server App 需要用 popup 完成授权，并在 iframe sandbox 中允许 `allow-popups-to-escape-sandbox`，callback 成功后再刷新自己的本地 session。
+Shadow Web 会返回 `frame-ancestors 'none'`，OAuth 授权页不能被第三方 iframe 嵌入。应用 需要用 popup 完成授权，并在 iframe sandbox 中允许 `allow-popups-to-escape-sandbox`，callback 成功后再刷新自己的本地 session。
 
 ### 第一步：重定向到授权页面
 

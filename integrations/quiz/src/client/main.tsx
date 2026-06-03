@@ -613,7 +613,7 @@ function CreateQuizModal() {
               maxLength={220}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Server App Basics"
+              placeholder="App Basics"
             />
           </label>
           <label>

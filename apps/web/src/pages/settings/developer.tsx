@@ -5,6 +5,7 @@ import { AlertTriangle, Copy, Eye, EyeOff, Key, Pencil, Plus, RotateCw, Trash2 }
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { copyToClipboard as copyTextToClipboard } from '../../lib/clipboard'
 import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
 
 interface OAuthApp {
@@ -150,7 +151,10 @@ export function DeveloperSettings() {
   })
 
   const copyToClipboard = async (text: string) => {
-    await navigator.clipboard.writeText(text)
+    await copyTextToClipboard(text, {
+      successMessage: t('common.copied'),
+      errorMessage: t('chat.copyFailed'),
+    })
   }
 
   return (
@@ -728,7 +732,10 @@ function ApiTokenSection() {
   })
 
   const copyToClipboard = async (text: string) => {
-    await navigator.clipboard.writeText(text)
+    await copyTextToClipboard(text, {
+      successMessage: t('common.copied'),
+      errorMessage: t('chat.copyFailed'),
+    })
   }
 
   const handleCreateSubmit = (e: React.FormEvent) => {

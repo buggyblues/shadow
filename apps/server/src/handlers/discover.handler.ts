@@ -577,6 +577,37 @@ export function createDiscoverHandler(container: AppContainer) {
   })
 
   /**
+   * GET /api/discover/server-apps
+   * Official Server App directory.
+   * Security: actor=user via authMiddleware; resource=server_app_catalog; action=read;
+   * data class=public/login-required marketplace metadata.
+   */
+  handler.get('/server-apps', authMiddleware, async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? '48'), 1), 96)
+    const offset = Math.max(Number(c.req.query('offset') ?? '0'), 0)
+    const q = c.req.query('q')?.trim() ?? ''
+    const result = await appIntegrationService.listDiscoverCatalog({ q, limit, offset })
+    return c.json(result)
+  })
+
+  /**
+   * GET /api/discover/server-apps/:appKey
+   * Official Server App directory detail.
+   * Security: actor=user via authMiddleware; resource=server_app_catalog; action=read;
+   * data class=public/login-required marketplace metadata.
+   */
+  handler.get('/server-apps/:appKey', authMiddleware, async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const appKey = c.req.param('appKey')
+    if (!appKey) {
+      return c.json({ error: 'appKey is required' }, 400)
+    }
+    const app = await appIntegrationService.getDiscoverCatalogEntry(appKey)
+    return c.json(app)
+  })
+
+  /**
    * GET /api/discover/marketplace/products
    * Unified public marketplace product listing.
    * Security: actor=user via authMiddleware; resource=marketplace.products; action=read;

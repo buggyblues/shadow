@@ -1,8 +1,8 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { Save } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { StyleSheet, View } from 'react-native'
-import { Avatar } from '../../../src/components/common/avatar'
+import { StyleSheet } from 'react-native'
 import { AvatarEditor } from '../../../src/components/common/avatar-editor'
 import { LanguageSwitcher } from '../../../src/components/common/language-switcher'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
@@ -20,6 +20,7 @@ import { spacing } from '../../../src/theme'
 
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const { user, setUser } = useAuthStore()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? '')
@@ -44,6 +45,14 @@ export default function ProfileSettingsScreen() {
         }),
       })
       setUser({ ...user!, ...result })
+      queryClient.invalidateQueries({ queryKey: ['messages'] })
+      queryClient.invalidateQueries({ queryKey: ['channel-bootstrap'] })
+      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: ['channel-members'] })
+      queryClient.invalidateQueries({ queryKey: ['server-members'] })
+      queryClient.invalidateQueries({ queryKey: ['mention-suggestions'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setMessage(t('common.saveSuccess'))
     } catch (err) {
       setMessage(err instanceof Error ? err.message : t('common.saveFailed'))
@@ -75,17 +84,10 @@ export default function ProfileSettingsScreen() {
       />
       <PageScroll compact>
         <Section title={t('settings.avatarLabel')} padded cardStyle={styles.card}>
-          <View style={styles.avatarRow}>
-            <Avatar
-              uri={avatarUrl || user.avatarUrl}
-              name={user.displayName || user.username}
-              size={72}
-              userId={user.id}
-            />
-          </View>
           <AvatarEditor
             value={avatarUrl || user.avatarUrl}
             userId={user.id}
+            name={displayName || user.displayName || user.username}
             onChange={setAvatarUrl}
           />
         </Section>
@@ -115,7 +117,6 @@ export default function ProfileSettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   card: { gap: spacing.md },
-  avatarRow: { alignItems: 'center', marginBottom: spacing.md },
   notice: {
     marginTop: spacing.xs,
   },

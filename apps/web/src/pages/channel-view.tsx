@@ -43,11 +43,29 @@ function getNotificationChannelId(event: NotificationEvent) {
   )
 }
 
+interface ChannelAccessState {
+  canAccess: boolean
+  requiresApproval?: boolean
+  joinRequestStatus?: 'pending' | 'approved' | 'rejected' | null
+  isServerMember?: boolean
+  isChannelMember?: boolean
+  channel: {
+    id: string
+    name: string
+    type?: string
+    serverId: string
+    isPrivate?: boolean
+    topic?: string | null
+  }
+}
+
 interface ChannelViewProps {
   channelId?: string
   serverSlug?: string
   initialMessages?: ChatInitialMessagesPage | null
   initialMembers?: MemberListInitialMember[] | null
+  initialAccess?: ChannelAccessState | null
+  routeAccessFallbackLoading?: boolean
   copilot?: {
     channels: ChannelSwitcherOption[]
     onSelectChannel: (channelId: string) => void
@@ -61,6 +79,8 @@ export function ChannelView({
   serverSlug: serverSlugProp,
   initialMessages,
   initialMembers,
+  initialAccess,
+  routeAccessFallbackLoading = false,
   copilot,
 }: ChannelViewProps = {}) {
   const { t } = useTranslation()
@@ -76,31 +96,17 @@ export function ChannelView({
   const readScopeCooldownRef = useRef<Map<string, number>>(new Map())
   const readScopeInFlightRef = useRef<Set<string>>(new Set())
   const {
-    data: access,
+    data: fetchedAccess,
     isLoading: isAccessLoading,
     isError: isAccessError,
   } = useQuery({
     queryKey: ['channel-access', channelId],
-    queryFn: () =>
-      fetchApi<{
-        canAccess: boolean
-        requiresApproval: boolean
-        joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
-        isServerMember?: boolean
-        isChannelMember?: boolean
-        channel: {
-          id: string
-          name: string
-          type: string
-          serverId: string
-          isPrivate: boolean
-          topic?: string | null
-        }
-      }>(`/api/channels/${channelId}/access`),
-    enabled: !!channelId,
+    queryFn: () => fetchApi<ChannelAccessState>(`/api/channels/${channelId}/access`),
+    enabled: !!channelId && !initialAccess,
     retry: false,
     staleTime: 30_000,
   })
+  const access = initialAccess ?? fetchedAccess
   const canAccessChannel = access?.canAccess === true
 
   const { data: channel } = useQuery({
@@ -230,7 +236,12 @@ export function ChannelView({
     }
   }, [activeServerId, channel?.serverId, channelId])
 
-  if (isAccessLoading || (!access && !isAccessError)) {
+  if (
+    !access &&
+    (isAccessLoading ||
+      (!isAccessError && !fetchedAccess) ||
+      (isAccessError && routeAccessFallbackLoading))
+  ) {
     return <ChannelContentLoading />
   }
 

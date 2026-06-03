@@ -639,67 +639,93 @@
     "cta": "はじめる"
   },
   "serverApps": {
-    "nav": "アプリ",
     "group": "アプリ",
-    "addApp": "アプリを追加",
-    "title": "サーバーアプリ",
-    "empty": "このサーバーにはまだアプリがインストールされていません。",
     "installedTitle": "インストール済みアプリ",
-    "noInstalled": "アプリはまだインストールされていません。",
-    "addDescription": "ストアからアプリを選ぶか、アプリ設定 URL を貼り付けて接続してからこのサーバーにインストールします。",
+    "addApp": "アプリを追加",
+    "addDescription": "公式ディレクトリから追加するか、manifest URL でカスタムアプリをインストールします。",
     "addMode": {
-      "catalog": "ストア",
+      "catalog": "公式ディレクトリ",
       "custom": "カスタム"
     },
     "auth": {
-      "oauth2-bearer": "OAuth Bearer"
+      "oauth2-bearer": "OAuth 2.0"
     },
-    "install": "アプリをインストール",
-    "manifestUrl": "アプリ設定 URL",
-    "installButton": "インストール",
+    "alreadyInstalled": "インストール済み",
+    "installFromCatalog": "インストール",
+    "catalogEmpty": "ディレクトリに追加できるアプリはまだありません。",
+    "customInstall": "manifest URL でインストール",
+    "manifestUrl": "Manifest URL",
+    "discoverButton": "確認",
+    "requestedPermissions": "要求される権限",
+    "authorizeInstall": "承認してインストール",
+    "noDescription": "説明はまだありません",
+    "noInstalled": "アプリはまだインストールされていません。",
     "selectApp": "アプリを選択",
-    "selectFromSidebar": "サイドバーからアプリを選択",
-    "noDescription": "説明なし",
+    "selectFromSidebar": "左からインストール済みアプリを選ぶか、新しいアプリを追加してください。",
+    "install": "アプリをインストール",
+    "privateUrlError": "このアプリ URL はローカルまたはプライベートネットワークを指しているため、この環境ではインストールできません。",
+    "uninstallConfirmTitle": "アプリをアンインストール",
+    "uninstallConfirmMessage": "{{name}} をこのサーバーから削除しますか？関連する Buddy 権限も無効になります。",
+    "uninstallApp": "アンインストール",
+    "accessTitle": "Buddy アクセス",
+    "defaultAccessTitle": "デフォルト権限",
+    "defaultAccessDescription": "新しい Buddy がデフォルトで使えるアプリ権限を選択します。",
+    "saveDefaultAccess": "デフォルトを保存",
+    "defaultAccessSaved": "デフォルト権限を保存しました",
+    "accessDescription": "Buddy に権限を付与すると、コマンドからこのアプリを呼び出せます。",
+    "grantButton": "Buddy に付与",
+    "grantSuccess": "Buddy 権限を保存しました",
+    "noBuddies": "このサーバーにはまだ Buddy がいません。",
     "openApp": "アプリを開く",
     "copyAppLink": "アプリリンクをコピー",
-    "refresh": "更新",
-    "openExternal": "開く",
-    "noIframe": "このアプリには iframe エントリがありません。",
-    "commands": "コマンド",
-    "buddyUsage": "Buddy の使い方",
-    "discoverInstall": "検出して承認",
-    "catalogTitle": "アプリストア",
-    "catalogEmpty": "ストアにインストール可能なアプリはありません。",
-    "installFromCatalog": "インストール",
-    "customInstall": "カスタムアプリ",
-    "discoverButton": "アプリを接続",
-    "requestedPermissions": "要求された権限",
-    "alreadyInstalled": "インストール済み",
-    "authorizeInstall": "インストール",
-    "authorizeBuddy": "Buddy を承認",
-    "accessTitle": "アクセス",
-    "accessDescription": "サーバーチャンネルからこのアプリを操作できる Buddy を選びます。",
-    "grantButton": "アクセスを付与",
-    "grantSuccess": "Buddy のアクセスを更新しました。",
-    "noBuddies": "このサーバーに利用可能な Buddy メンバーはいません。",
-    "uninstallApp": "アンインストール",
-    "uninstallConfirmTitle": "アプリをアンインストール",
-    "uninstallConfirmMessage": "{{name}} をアンインストールしますか？承認済みの Buddy はこのアプリを操作できなくなります。",
-    "privateUrlError": "この URL はプライベートまたはローカルアドレスのため、サーバーは既定では取得しません。ローカル開発では host.lima.internal を使うか、そのホストを SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS に追加してサーバーを再起動してください。",
-    "defaultAccessTitle": "既定で許可する権限",
-    "defaultAccessDescription": "メンバーと Buddy はこれらの権限を確認なしで使えます。重要な書き込みは未選択にして、初回利用時に確認します。",
-    "saveDefaultAccess": "既定権限を保存",
-    "defaultAccessSaved": "既定アクセスを更新しました。",
-    "commandApprovalTitle": "アプリコマンドを承認",
-    "commandApprovalSubject": "承認対象",
+    "noIframe": "このアプリには開ける画面がありません。",
+    "commandApprovalTitle": "アプリコマンドを確認",
+    "commandApprovalMessage": "{{appName}} が {{commandName}} を実行しようとしています。",
+    "commandApprovalSubject": "実行者",
     "commandApprovalBuddy": "Buddy",
     "commandApprovalPerson": "メンバー",
     "commandApprovalPermission": "権限",
-    "commandApprovalScope": "操作",
-    "commandApprovalDenied": "コマンド承認をキャンセルしました。",
-    "commandApprovalSuccess": "アプリコマンドを承認しました。",
-    "commandApprovalFailed": "アプリコマンドの承認に失敗しました。",
-    "commandApprovalConfirm": "承認して続行"
+    "commandApprovalScope": "範囲",
+    "commandApprovalConfirm": "実行を許可",
+    "commandApprovalDenied": "アプリコマンドをキャンセルしました",
+    "commandApprovalSuccess": "アプリコマンドを承認しました",
+    "commandApprovalFailed": "アプリコマンドの承認に失敗しました",
+    "backToDirectory": "アプリディレクトリに戻る",
+    "start": "起動",
+    "addToServer": "サーバーに追加",
+    "adding": "追加中...",
+    "installed": "インストール済み",
+    "installSuccess": "アプリをサーバーに追加しました",
+    "installFailed": "アプリの追加に失敗しました",
+    "notFoundTitle": "アプリが見つかりません",
+    "notFoundDesc": "まだ掲載されていないか、公式マーケットから削除された可能性があります。",
+    "noTagline": "このアプリにはまだ短い紹介文がありません。",
+    "overview": "概要",
+    "gallery": "メディア",
+    "previousMedia": "前のメディア",
+    "nextMedia": "次のメディア",
+    "selectMedia": "{{index}} 番目のメディアを表示",
+    "commands": "コマンド",
+    "commandNoDescription": "コマンド説明はまだありません。",
+    "dataAccess": "データアクセス",
+    "dataAccessTitle": "アプリはデフォルトで固定の基本データのみアクセスできます",
+    "dataAccessBody": "機密性の高いコマンドは、サーバー権限、Buddy 権限、承認ポリシーを引き続き使用します。インストール前に権限とデータ分類を確認してください。",
+    "chooseServer": "サーバーを選択",
+    "installedOnSelected": "このアプリは選択したサーバーにインストール済みで、すぐ起動できます。",
+    "readyToAdd": "このアプリを選択したサーバーに追加できます。",
+    "adminRequired": "アプリを追加するにはサーバー管理者権限が必要です。",
+    "serverCount": "サーバー数",
+    "serverCountValue": "{{count}} 個のサーバーで利用中",
+    "categories": "カテゴリ",
+    "noCategories": "カテゴリ未設定",
+    "languages": "対応言語",
+    "noLanguages": "言語未設定",
+    "links": "リンク",
+    "noLinks": "リンクはまだありません",
+    "manifest": "Manifest",
+    "versionValue": "バージョン {{version}}",
+    "privacy": "プライバシー",
+    "privacyBody": "アプリはサーバーの認可境界に従う必要があります。掲載リンクから開発者の利用規約とプライバシーポリシーを確認してください。"
   },
   "channel": {
     "serverSettings": "サーバー設定",
@@ -1548,6 +1574,10 @@
       "cloud": {
         "title": "テンプレートから Cloud Buddy を開始",
         "subtitle": "テンプレートを選び、ワークフローをデプロイして、実行可能な能力をサーバーやチャンネルへ戻せます。"
+      },
+      "apps": {
+        "title": "サーバー機能として App を見つける",
+        "subtitle": "公式 App を閲覧し、manifest、カテゴリ、対応言語、権限を確認してからサーバーに追加できます。"
       }
     },
     "communityModelTitle": "サーバーの中身",
@@ -1564,7 +1594,8 @@
       "feed": "タイムライン",
       "explore": "探索",
       "market": "マーケット",
-      "cloud": "クラウド"
+      "cloud": "クラウド",
+      "apps": "Apps"
     },
     "metrics": {
       "publicCommunities": "公開サーバー",
@@ -1630,7 +1661,8 @@
       "products": "サービスと内容",
       "shops": "ショップ",
       "cloud": "Xiaodou Cloud",
-      "communities": "サーバー"
+      "communities": "サーバー",
+      "apps": "Apps"
     },
     "lanes": {
       "feed": "購読タイムライン",
@@ -1640,7 +1672,8 @@
       "products": "今日買えるもの",
       "shops": "見る価値のあるショップ",
       "cloud": "Cloud テンプレート還元",
-      "communities": "おすすめサーバー"
+      "communities": "おすすめサーバー",
+      "apps": "公式 App"
     },
     "laneDescriptions": {
       "feed": "読めるチャンネルのうち、停止していない購読から届く画像、文書、音声、App カード。",
@@ -1649,7 +1682,8 @@
       "market": "仮想商品、素材パック、テスト、サービスチケットをまとめた売り場。",
       "shops": "公開個人ショップと公開サーバーショップ。",
       "cloud": "デプロイ可能な Buddy サービステンプレートと Cloud ワークフロー。",
-      "communities": "チャンネル、ショップ、メンバーを見つける公開サーバー入口。"
+      "communities": "チャンネル、ショップ、メンバーを見つける公開サーバー入口。",
+      "apps": "サーバーにインストールできるインタラクティブ App、ツール、ゲーム。"
     },
     "emptyLane": {
       "feed": "購読コンテンツはまだありません。",
@@ -1659,7 +1693,8 @@
       "products": "出品はまだありません。",
       "shops": "見られるショップはまだありません。",
       "cloud": "デプロイできる Cloud テンプレートはまだありません。",
-      "communities": "公開サーバーはまだありません。"
+      "communities": "公開サーバーはまだありません。",
+      "apps": "掲載されている App はまだありません。"
     },
     "feedUnread": "未読",
     "feedSource": "{{server}} / #{{channel}}",
@@ -1766,7 +1801,9 @@
       "beginner": "初級",
       "intermediate": "中級",
       "advanced": "上級"
-    }
+    },
+    "openApp": "App を見る",
+    "appServerCount": "{{count}} 個のサーバーで利用"
   },
   "commerceMarketplace": {
     "tagPageEyebrow": "テーマ棚",
@@ -2272,6 +2309,7 @@
     "pendingSent": "送信したリクエスト",
     "wantsToBeYourFriend": "フレンド申請が届いています",
     "requestPending": "承認待ち",
+    "alreadyFriend": "フレンドです",
     "waiting": "待機中...",
     "noPending": "保留中のフレンドリクエストはありません",
     "addFriend": "フレンド追加",
@@ -3667,7 +3705,7 @@
       "every_time": "毎回承認"
     },
     "admissionSubject": {
-      "server_app": "Server App",
+      "server_app": "App",
       "agent": "Buddy",
       "user": "ユーザー",
       "system": "システム"

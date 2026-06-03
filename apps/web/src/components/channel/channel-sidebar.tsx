@@ -58,6 +58,7 @@ import {
   upsertBuddyInboxChannel,
   upsertServerChannel,
 } from '../../lib/channel-cache'
+import { copyToClipboard } from '../../lib/clipboard'
 import { scheduleIdleAfterNextPaint } from '../../lib/schedule'
 import { joinChannel } from '../../lib/socket'
 import { showToast } from '../../lib/toast'
@@ -256,6 +257,12 @@ const channelIcons = {
 
 const CHANNEL_NAVIGATION_STALE_MS = 5 * 60 * 1000
 const CHANNEL_NAVIGATION_GC_MS = 30 * 60 * 1000
+const BUDDY_INBOX_COLLAPSED_STORAGE_KEY = 'shadow:buddy-inbox-collapsed'
+
+function readStoredBuddyInboxCollapsed() {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(BUDDY_INBOX_COLLAPSED_STORAGE_KEY) === 'true'
+}
 
 export function ChannelSidebar({
   serverSlug,
@@ -273,6 +280,7 @@ export function ChannelSidebar({
     channelId?: string
   }
   const queryClient = useQueryClient()
+  const activeServerId = useChatStore((state) => state.activeServerId)
   const activeChannelId = useChatStore((state) => state.activeChannelId)
   const setActiveChannel = useChatStore((state) => state.setActiveChannel)
   const {
@@ -292,7 +300,13 @@ export function ChannelSidebar({
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
   const [newIsPrivate, setNewIsPrivate] = useState(false)
   const [inboxSettingsEntry, setInboxSettingsEntry] = useState<BuddyInboxEntry | null>(null)
-  const [isBuddyInboxCollapsed, setBuddyInboxCollapsed] = useState(true)
+  const [isBuddyInboxCollapsed, setBuddyInboxCollapsed] = useState(readStoredBuddyInboxCollapsed)
+  const setBuddyInboxCollapsedPreference = useCallback((collapsed: boolean) => {
+    setBuddyInboxCollapsed(collapsed)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(BUDDY_INBOX_COLLAPSED_STORAGE_KEY, String(collapsed))
+    }
+  }, [])
   const [draftAdmissionPolicy, setDraftAdmissionPolicy] = useState<AdmissionPolicy | null>(null)
   const [draftAdmissionRule, setDraftAdmissionRule] = useState<AdmissionRule>({
     subjectKind: 'server_app',
@@ -449,10 +463,6 @@ export function ChannelSidebar({
     () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
     [buddyInboxes],
   )
-  const isActiveBuddyInbox = Boolean(activeChannelId && buddyInboxChannelIds.has(activeChannelId))
-  useEffect(() => {
-    if (isActiveBuddyInbox) setBuddyInboxCollapsed(false)
-  }, [isActiveBuddyInbox])
   const textChannels = useMemo(
     () =>
       visibleChannels.filter(
@@ -872,6 +882,33 @@ export function ChannelSidebar({
 
   const handleSelectChannel = useCallback(
     (channel: Channel) => {
+      const serverId = server?.id ?? activeServerId
+      setActiveChannel(channel.id)
+      if (serverId && channel.isMember !== false) {
+        queryClient.setQueryData(['channel-access', channel.id], {
+          canAccess: true,
+          requiresApproval: false,
+          joinRequestStatus: null,
+          isServerMember: true,
+          isChannelMember: channel.isMember ?? true,
+          channel: {
+            id: channel.id,
+            name: channel.name,
+            type: channel.type,
+            serverId,
+            isPrivate: channel.isPrivate,
+            topic: channel.topic ?? null,
+          },
+        })
+        queryClient.setQueryData(['channel', channel.id], {
+          id: channel.id,
+          name: channel.name,
+          type: channel.type,
+          serverId,
+          isPrivate: channel.isPrivate,
+          topic: channel.topic ?? null,
+        })
+      }
       scheduleIdleAfterNextPaint(() => {
         setLocalMessageUnread((prev) => {
           if (!prev[channel.id]) return prev
@@ -892,7 +929,18 @@ export function ChannelSidebar({
         params: { serverSlug: server?.slug ?? serverSlug, channelId: channel.id },
       })
     },
-    [setMobileView, onSelectChannel, server?.slug, serverSlug, navigate, updateLastAccessed],
+    [
+      activeServerId,
+      navigate,
+      onSelectChannel,
+      queryClient,
+      server?.id,
+      server?.slug,
+      serverSlug,
+      setActiveChannel,
+      setMobileView,
+      updateLastAccessed,
+    ],
   )
 
   const handleJoinVoiceChannel = useCallback(
@@ -1403,6 +1451,7 @@ export function ChannelSidebar({
           disabled={isOpening}
           aria-busy={isOpening}
           onClick={() => {
+            setBuddyInboxCollapsedPreference(false)
             if (channel) {
               handleSelectChannel(channel)
               return
@@ -1598,7 +1647,7 @@ export function ChannelSidebar({
             <button
               type="button"
               aria-expanded={!isBuddyInboxCollapsed}
-              onClick={() => setBuddyInboxCollapsed((collapsed) => !collapsed)}
+              onClick={() => setBuddyInboxCollapsedPreference(!isBuddyInboxCollapsed)}
               className="flex w-full items-center justify-between px-3 py-1.5 text-left transition-colors hover:text-text-primary"
             >
               <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
@@ -2296,10 +2345,13 @@ export function ChannelSidebar({
                 {
                   icon: Copy,
                   label: t('channel.copyChannelLink'),
-                  onClick: () => {
+                  onClick: async () => {
                     const slug = server?.slug ?? serverSlug
                     const channelLink = `${window.location.origin}/app/servers/${slug}/channels/${contextMenu.channel.id}`
-                    navigator.clipboard.writeText(channelLink)
+                    await copyToClipboard(channelLink, {
+                      successMessage: t('common.copied'),
+                      errorMessage: t('chat.copyFailed'),
+                    })
                   },
                 },
               ],

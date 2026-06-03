@@ -6,6 +6,7 @@ import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../../lib/api'
+import { copyToClipboard } from '../../../lib/clipboard'
 import { useAuthStore } from '../../../stores/auth.store'
 import { useChatStore } from '../../../stores/chat.store'
 import { useConfirmStore } from '../../common/confirm-dialog'
@@ -143,24 +144,16 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
       event.stopPropagation()
       if (!targetPath) return
       const absoluteUrl = new URL(targetPath, window.location.origin).toString()
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(absoluteUrl)
-      } else {
-        const textarea = document.createElement('textarea')
-        textarea.value = absoluteUrl
-        textarea.setAttribute('readonly', 'true')
-        textarea.style.position = 'fixed'
-        textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
-        textarea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textarea)
-      }
+      const didCopy = await copyToClipboard(absoluteUrl, {
+        successMessage: t('common.copied'),
+        errorMessage: t('chat.copyFailed'),
+      })
+      if (!didCopy) return
       setCopied(true)
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
       copyTimeoutRef.current = setTimeout(() => setCopied(false), 1200)
     },
-    [targetPath],
+    [t, targetPath],
   )
 
   const channelName =

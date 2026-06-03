@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { copyToClipboard } from '../../lib/clipboard'
 import {
   type CommerceDeliveryEntitlement,
   type CommercePurchaseOrder,
@@ -566,8 +567,10 @@ export function ProductDetail({
         showToast(t('shop.shareStarted'), 'success')
         return
       }
-      await navigator.clipboard.writeText(shareText)
-      showToast(t('shop.shareLinkCopied'), 'success')
+      await copyToClipboard(shareText, {
+        successMessage: t('shop.shareLinkCopied'),
+        errorMessage: t('shop.shareUnavailable'),
+      })
     } catch {
       showToast(t('shop.shareUnavailable'), 'error')
     }

@@ -2579,6 +2579,24 @@ class ShadowClient:
             params["limit"] = limit
         return self._get("/api/discover/business", params=params or None)
 
+    def discover_server_apps(
+        self,
+        q: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if q:
+            params["q"] = q
+        if limit:
+            params["limit"] = limit
+        if offset:
+            params["offset"] = offset
+        return self._get("/api/discover/server-apps", params=params or None)
+
+    def get_discover_server_app(self, app_key: str) -> dict[str, Any]:
+        return self._get(f"/api/discover/server-apps/{app_key}")
+
     def discover_marketplace_products(
         self,
         q: str | None = None,

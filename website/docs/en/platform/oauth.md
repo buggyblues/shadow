@@ -145,7 +145,7 @@ Shadow has two authorize surfaces:
 - Browser entry: `GET /app/oauth/authorize?...`. Redirect users here, or open it in a top-level popup from an embedded app.
 - API validation/approval: `GET/POST /api/oauth/authorize`. This is used by Shadow's web UI and SDK helpers; do not iframe it or send end users directly to it.
 
-The Shadow web app sends `frame-ancestors 'none'`, so an OAuth consent page must never be loaded inside a third-party iframe. Server Apps should open OAuth in a popup with `allow-popups-to-escape-sandbox`, then refresh their local session after the callback completes.
+The Shadow web app sends `frame-ancestors 'none'`, so an OAuth consent page must never be loaded inside a third-party iframe. Apps should open OAuth in a popup with `allow-popups-to-escape-sandbox`, then refresh their local session after the callback completes.
 
 ### Step 1: Redirect to authorize
 

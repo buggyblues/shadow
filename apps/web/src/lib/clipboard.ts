@@ -1,5 +1,15 @@
 import { showToast } from './toast'
 
+type DesktopClipboardBridge = {
+  writeClipboardText?: (text: string) => Promise<boolean>
+}
+
+function getDesktopClipboardBridge(): DesktopClipboardBridge | null {
+  if (typeof window === 'undefined') return null
+  const desktopAPI = (window as Window & { desktopAPI?: DesktopClipboardBridge }).desktopAPI
+  return desktopAPI?.writeClipboardText ? desktopAPI : null
+}
+
 /**
  * Copy text to clipboard with fallback support.
  * Tries modern Clipboard API first, falls back to legacy execCommand.
@@ -7,9 +17,28 @@ import { showToast } from './toast'
  */
 export async function copyToClipboard(
   text: string,
-  options: { silent?: boolean; successMessage?: string } = {},
+  options: { silent?: boolean; successMessage?: string; errorMessage?: string } = {},
 ): Promise<boolean> {
-  const { silent = false, successMessage = 'Copied to clipboard' } = options
+  const {
+    silent = false,
+    successMessage = 'Copied to clipboard',
+    errorMessage = 'Failed to copy to clipboard',
+  } = options
+
+  try {
+    const desktopClipboard = getDesktopClipboardBridge()
+    if (desktopClipboard) {
+      const success = await desktopClipboard.writeClipboardText?.(text)
+      if (success) {
+        if (!silent) {
+          showToast(successMessage, 'success')
+        }
+        return true
+      }
+    }
+  } catch {
+    // Fallback to browser clipboard methods.
+  }
 
   try {
     // Try modern Clipboard API first
@@ -52,7 +81,7 @@ export async function copyToClipboard(
 
   // All methods failed
   if (!silent) {
-    showToast('Failed to copy to clipboard', 'error')
+    showToast(errorMessage, 'error')
   }
   return false
 }

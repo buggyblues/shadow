@@ -2,7 +2,9 @@ import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { ServerDao } from '../dao/server.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import type { ActorInput } from '../security/actor'
+import type { MediaService } from './media.service'
 import type { PolicyService } from './policy.service'
 
 export class SearchService {
@@ -13,6 +15,7 @@ export class SearchService {
       channelMemberDao: ChannelMemberDao
       serverDao: ServerDao
       policyService: PolicyService
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
     },
   ) {}
 
@@ -45,6 +48,16 @@ export class SearchService {
 
     if (options.accessibleChannelIds.length === 0) return []
 
-    return this.deps.messageDao.search(normalizedQuery, options)
+    const messages = await this.deps.messageDao.search(normalizedQuery, options)
+    return messages.map((message) => {
+      if (!message.author) return message
+      return {
+        ...message,
+        author: {
+          ...message.author,
+          avatarUrl: resolveAvatarUrl(this.deps.mediaService, message.author.avatarUrl),
+        },
+      }
+    })
   }
 }

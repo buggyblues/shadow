@@ -20,6 +20,27 @@ export type ServerAppManifest = {
   version?: string
   updatedAt?: string
   iconUrl?: string
+  marketplace?: {
+    tagline?: string
+    summary?: string
+    categories?: string[]
+    supportedLanguages?: string[]
+    coverImageUrl?: string
+    gallery?: Array<{
+      url: string
+      type?: 'image' | 'video'
+      alt?: string
+    }>
+    links?: Array<{
+      label: string
+      url: string
+      type?: 'website' | 'support' | 'docs' | 'terms' | 'privacy' | 'dashboard' | 'premium'
+    }>
+    publisher?: {
+      name?: string
+      websiteUrl?: string
+    }
+  }
   iframe?: {
     entry: string
     allowedOrigins: string[]

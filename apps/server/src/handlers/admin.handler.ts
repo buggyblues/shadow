@@ -444,27 +444,41 @@ export function createAdminHandler(container: AppContainer) {
             .groupBy(serverAppBuddyGrants.serverAppId)
         : []
     const grantCountMap = new Map(grantCounts.map((row) => [row.serverAppId, Number(row.count)]))
+    const catalogEntries = await container.resolve('appIntegrationService').listAdminCatalog()
+    const catalogByAppKey = new Map(catalogEntries.map((entry) => [entry.appKey, entry]))
 
     return c.json(
-      rows.map((row) => ({
-        id: row.app.id,
-        serverId: row.app.serverId,
-        serverName: row.server.name,
-        serverSlug: row.server.slug,
-        appKey: row.app.appKey,
-        name: row.app.name,
-        description: row.app.description,
-        iconUrl: row.app.iconUrl,
-        manifestUrl: row.app.manifestUrl,
-        iframeEntry: row.app.iframeEntry,
-        apiBaseUrl: row.app.apiBaseUrl,
-        status: row.app.status,
-        commandCount: row.app.manifest.commands.length,
-        skillCount: row.app.manifest.skills?.length ?? 0,
-        grantCount: grantCountMap.get(row.app.id) ?? 0,
-        createdAt: row.app.createdAt,
-        updatedAt: row.app.updatedAt,
-      })),
+      rows.map((row) => {
+        const catalogEntry = catalogByAppKey.get(row.app.appKey)
+        const marketplace = row.app.manifest.marketplace
+        return {
+          id: row.app.id,
+          serverId: row.app.serverId,
+          serverName: row.server.name,
+          serverSlug: row.server.slug,
+          appKey: row.app.appKey,
+          name: row.app.name,
+          description: row.app.description,
+          iconUrl: row.app.iconUrl,
+          manifestUrl: row.app.manifestUrl,
+          manifest: row.app.manifest,
+          iframeEntry: row.app.iframeEntry,
+          apiBaseUrl: row.app.apiBaseUrl,
+          status: row.app.status,
+          commandCount: row.app.manifest.commands.length,
+          skillCount: row.app.manifest.skills?.length ?? 0,
+          grantCount: grantCountMap.get(row.app.id) ?? 0,
+          inCatalog: Boolean(catalogEntry),
+          catalogEntryId: catalogEntry?.id ?? null,
+          catalogStatus: catalogEntry?.status ?? null,
+          categories: marketplace?.categories ?? [],
+          supportedLanguages: marketplace?.supportedLanguages ?? [],
+          coverImageUrl:
+            marketplace?.coverImageUrl ?? marketplace?.gallery?.[0]?.url ?? row.app.iconUrl,
+          createdAt: row.app.createdAt,
+          updatedAt: row.app.updatedAt,
+        }
+      }),
     )
   })
 
@@ -472,6 +486,33 @@ export function createAdminHandler(container: AppContainer) {
     const appIntegrationDao = container.resolve('appIntegrationDao')
     await appIntegrationDao.deleteById(c.req.param('id'))
     return c.json({ ok: true })
+  })
+
+  // Actor: user admin
+  // Resource: server_app_integration
+  // Action: manage
+  // Data class: server-private manifest metadata
+  adminHandler.post('/server-apps/:id/refresh', async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const app = await appIntegrationService.refreshInstalledAppForAdmin(c.req.param('id'))
+    return c.json(app)
+  })
+
+  // Actor: user admin
+  // Resource: server_app_catalog
+  // Action: manage
+  // Data class: server-private manifest promoted to public marketplace metadata
+  adminHandler.post('/server-apps/:id/catalog', async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const sourceServerAppId = c.req.param('id')
+    if (!sourceServerAppId) {
+      return c.json({ error: 'server app id is required' }, 400)
+    }
+    const entry = await appIntegrationService.upsertCatalogEntry(c.get('actor'), {
+      sourceServerAppId,
+      status: 'active',
+    })
+    return c.json(entry, 201)
   })
 
   adminHandler.get('/server-app-catalog', async (c) => {
@@ -497,6 +538,16 @@ export function createAdminHandler(container: AppContainer) {
     const appIntegrationService = container.resolve('appIntegrationService')
     const result = await appIntegrationService.deleteCatalogEntry(c.req.param('id'))
     return c.json(result)
+  })
+
+  // Actor: user admin
+  // Resource: server_app_catalog
+  // Action: manage
+  // Data class: public marketplace metadata refreshed from App manifest
+  adminHandler.post('/server-app-catalog/:id/refresh', async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const entry = await appIntegrationService.refreshCatalogEntryForAdmin(c.req.param('id'))
+    return c.json(entry)
   })
 
   // ── Messages ──────────────────────────────────────

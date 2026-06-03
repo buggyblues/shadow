@@ -1,0 +1,3 @@
+-- server app manifest marketplace metadata
+-- No database changes are required. This records the manifest type expansion
+-- for marketplace metadata so the schema/migration guard remains append-only.

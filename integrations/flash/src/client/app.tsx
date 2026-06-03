@@ -867,7 +867,7 @@ export function FlashApp() {
     return (
       <main className="flash-canvas-shell flash-center">
         <section className="flash-auth-gate">
-          <span>Flash Server App</span>
+          <span>Flash App</span>
           <h1>{alreadyAuthorized ? 'Open Flash from Shadow.' : 'Authorize Flash with Shadow.'}</h1>
           <p>
             {hasShadowLaunch

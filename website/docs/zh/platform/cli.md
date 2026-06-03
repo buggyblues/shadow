@@ -142,7 +142,7 @@ shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id
 
 详见 [平台应用](/zh/platform/platform-apps) 了解构建 OAuth 应用的完整指南。
 
-## Server App 命令
+## 应用 命令
 
 ```bash
 # 列出服务器已安装 App
@@ -164,7 +164,7 @@ shadowob app skills demo-desk --server <server-id-or-slug>
 shadowob app call demo-desk tickets.create --server <server-id-or-slug> --json-input '{"title":"Example"}' --json
 ```
 
-Server App 命令调用会通过 CLI 绑定 Shadow OAuth 身份和 Buddy 授权。Buddy 不应该用 curl 直接调用 Server App 命令路由。
+应用 命令调用会通过 CLI 绑定 Shadow OAuth 身份和 Buddy 授权。Buddy 不应该用 curl 直接调用 应用 命令路由。
 
 ## 语音命令
 

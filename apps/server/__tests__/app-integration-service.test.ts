@@ -7,6 +7,13 @@ const manifest: ServerAppManifestInput = {
   appKey: 'demo-desk',
   name: 'Demo Desk',
   iconUrl: 'http://localhost:4199/assets/icon.svg',
+  marketplace: {
+    tagline: 'Tickets for every server.',
+    categories: ['Productivity', 'Support'],
+    supportedLanguages: ['English (US)', '简体中文'],
+    coverImageUrl: 'http://localhost:4199/assets/cover.png',
+    links: [{ label: 'Privacy', url: 'http://localhost:4199/privacy', type: 'privacy' }],
+  },
   version: '1.0.0',
   updatedAt: '2026-05-20T00:00:00.000Z',
   api: {
@@ -81,6 +88,7 @@ function createService(overrides: Record<string, unknown> = {}) {
       listByServer: vi.fn().mockResolvedValue([appRow]),
       findById: vi.fn().mockResolvedValue(appRow),
       findByServerAndKey: vi.fn().mockResolvedValue(appRow),
+      countInstallationsByAppKeys: vi.fn().mockResolvedValue([{ appKey: 'demo-desk', count: 3 }]),
       listBuddyGrants: vi.fn().mockResolvedValue([]),
       findBuddyGrant: vi.fn().mockResolvedValue({
         id: 'grant-1',
@@ -97,7 +105,7 @@ function createService(overrides: Record<string, unknown> = {}) {
       updateManifest: vi.fn().mockImplementation(async (_serverAppId, data) => ({
         ...appRow,
         ...data,
-        manifestUrl: appRow.manifestUrl,
+        manifestUrl: data.manifestUrl ?? appRow.manifestUrl,
         defaultPermissions: appRow.defaultPermissions,
         defaultApprovalMode: appRow.defaultApprovalMode,
         updatedAt: new Date(),
@@ -155,7 +163,7 @@ function createService(overrides: Record<string, unknown> = {}) {
           name: 'Demo Desk',
           description: null,
           iconUrl: manifest.iconUrl,
-          manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+          manifestUrl: null,
           manifest,
           status: 'active',
           createdByUserId: null,
@@ -177,19 +185,33 @@ function createService(overrides: Record<string, unknown> = {}) {
         updatedAt: new Date(),
       }),
       findCatalogEntryByAppKey: vi.fn().mockResolvedValue(null),
-      upsertCatalogEntry: vi.fn().mockResolvedValue({
+      findLatestByAppKey: vi.fn().mockResolvedValue(appRow),
+      upsertCatalogEntry: vi.fn().mockImplementation(async (data) => ({
         id: 'catalog-1',
-        appKey: 'demo-desk',
-        name: 'Demo Desk',
-        description: null,
-        iconUrl: manifest.iconUrl,
-        manifestUrl: null,
-        manifest,
-        status: 'active',
-        createdByUserId: 'user-1',
+        appKey: data.appKey,
+        name: data.name,
+        description: data.description ?? null,
+        iconUrl: data.iconUrl ?? null,
+        manifestUrl: data.manifestUrl ?? null,
+        manifest: data.manifest,
+        status: data.status ?? 'active',
+        createdByUserId: data.createdByUserId ?? null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      }),
+      })),
+      updateCatalogEntryManifest: vi.fn().mockImplementation(async (_catalogEntryId, data) => ({
+        id: 'catalog-1',
+        appKey: data.manifest.appKey,
+        name: data.name,
+        description: data.description,
+        iconUrl: data.iconUrl,
+        manifestUrl: data.manifestUrl,
+        manifest: data.manifest,
+        status: 'active',
+        createdByUserId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })),
       deleteCatalogEntryById: vi.fn(),
     },
     agentDao: {
@@ -310,6 +332,150 @@ describe('AppIntegrationService', () => {
         apiBaseUrl: 'http://localhost:4199',
         defaultPermissions: ['demo.tickets:read'],
         defaultApprovalMode: 'none',
+      }),
+    )
+  })
+
+  it('lists official app directory entries with marketplace metadata', async () => {
+    const { service } = createService()
+
+    const result = await service.listDiscoverCatalog({ q: 'support' })
+
+    expect(result).toMatchObject({
+      total: 1,
+      hasMore: false,
+      apps: [
+        expect.objectContaining({
+          appKey: 'demo-desk',
+          tagline: 'Tickets for every server.',
+          categories: ['Productivity', 'Support'],
+          supportedLanguages: ['English (US)', '简体中文'],
+          coverImageUrl: 'http://localhost:4199/assets/cover.png',
+          serverCount: 3,
+          commandCount: 2,
+          skillCount: 1,
+        }),
+      ],
+    })
+  })
+
+  it('refreshes official app directory entries from manifest URLs before listing', async () => {
+    const staleManifest: ServerAppManifestInput = {
+      ...manifest,
+      marketplace: {
+        ...manifest.marketplace,
+        tagline: 'Legacy listing',
+        categories: ['Legacy'],
+        coverImageUrl: 'http://localhost:4199/assets/old-cover.png',
+      },
+    }
+    const freshManifest: ServerAppManifestInput = {
+      ...manifest,
+      updatedAt: '2026-05-21T00:00:00.000Z',
+      marketplace: {
+        ...manifest.marketplace,
+        tagline: 'Fresh app listing',
+        categories: ['Games'],
+        coverImageUrl: 'http://localhost:4199/assets/fresh-cover.png',
+      },
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(freshManifest), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...createService().deps.appIntegrationDao,
+        listCatalogEntries: vi.fn().mockResolvedValue([
+          {
+            id: 'catalog-1',
+            appKey: 'demo-desk',
+            name: 'Demo Desk',
+            description: null,
+            iconUrl: staleManifest.iconUrl,
+            manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+            manifest: staleManifest,
+            status: 'active',
+            createdByUserId: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]),
+      },
+    })
+
+    const result = await service.listDiscoverCatalog({ q: 'fresh' })
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4199/.well-known/shadow-app.json', {
+      redirect: 'manual',
+    })
+    expect(deps.appIntegrationDao.updateCatalogEntryManifest).toHaveBeenCalledWith(
+      'catalog-1',
+      expect.objectContaining({
+        manifest: freshManifest,
+        manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+      }),
+    )
+    expect(result.apps).toEqual([
+      expect.objectContaining({
+        tagline: 'Fresh app listing',
+        categories: ['Games'],
+        coverImageUrl: 'http://localhost:4199/assets/fresh-cover.png',
+      }),
+    ])
+  })
+
+  it('publishes an installed app into the official catalog', async () => {
+    const freshManifest: ServerAppManifestInput = {
+      ...manifest,
+      marketplace: {
+        ...manifest.marketplace,
+        categories: ['Games'],
+        coverImageUrl: 'http://localhost:4199/assets/fresh-cover.png',
+      },
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(freshManifest), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService()
+
+    const result = await service.upsertCatalogEntry(
+      { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      { sourceServerAppId: 'app-1', status: 'active' },
+    )
+
+    expect(deps.appIntegrationDao.findById).toHaveBeenCalledWith('app-1')
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4199/.well-known/shadow-app.json', {
+      redirect: 'manual',
+    })
+    expect(deps.appIntegrationDao.updateManifest).toHaveBeenCalledWith(
+      'app-1',
+      expect.objectContaining({
+        manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+        manifest: freshManifest,
+      }),
+    )
+    expect(deps.appIntegrationDao.upsertCatalogEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appKey: 'demo-desk',
+        manifest: freshManifest,
+        manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+        status: 'active',
+        createdByUserId: 'user-1',
+      }),
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        appKey: 'demo-desk',
+        categories: ['Games'],
+        coverImageUrl: 'http://localhost:4199/assets/fresh-cover.png',
       }),
     )
   })

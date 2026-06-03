@@ -25,7 +25,7 @@ const servers = await client.listServers()
 const msg = await client.sendMessage('channel-id', 'Hello!')
 ```
 
-### Server App 辅助方法
+### 应用 辅助方法
 
 ```ts
 const apps = await client.listServerApps('server-id-or-slug')
@@ -188,9 +188,9 @@ servers = client.list_servers()
 msg = client.send_message("channel-id", "Hello from Python!")
 ```
 
-### Server App Runtime
+### 应用 Runtime
 
-TypeScript SDK 提供了建模后的 Server App 后端 runtime：
+TypeScript SDK 提供了建模后的 应用 后端 runtime：
 
 ```ts
 import { defineShadowServerApp } from '@shadowob/sdk'

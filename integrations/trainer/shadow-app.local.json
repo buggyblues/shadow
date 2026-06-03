@@ -2,9 +2,33 @@
   "schemaVersion": "shadow.app/1",
   "appKey": "shadow-trainer",
   "name": "Code Trainer",
-  "description": "A LeetCode-style Server App where learners submit code and Buddies fetch, execute, judge, and provide learning advice.",
+  "description": "A LeetCode-style App where learners submit code and Buddies fetch, execute, judge, and provide learning advice.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4213/assets/icon.svg",
+  "marketplace": {
+    "tagline": "Practice coding problems with Buddy review and persistent learning memory.",
+    "summary": "Code Trainer lets learners submit code, import practice problems, run examples and edge cases, assign review work to Buddies, track weak tags, and build study plans. It turns coding practice into an ongoing server activity instead of a one-off chat thread.",
+    "categories": ["教育", "开发工具", "效率"],
+    "supportedLanguages": ["English", "中文"],
+    "coverImageUrl": "http://localhost:4213/assets/cover.png",
+    "gallery": [
+      {
+        "url": "http://localhost:4213/assets/cover.png",
+        "type": "image",
+        "alt": "trainer cover"
+      }
+    ],
+    "links": [
+      {
+        "label": "主页",
+        "url": "http://localhost:4213/shadow/server",
+        "type": "website"
+      }
+    ],
+    "publisher": {
+      "name": "Shadow"
+    }
+  },
   "iframe": {
     "entry": "http://localhost:4213/shadow/server",
     "allowedOrigins": ["http://localhost:4213"]

@@ -1,7 +1,7 @@
 import { Download, FolderPlus, Image, Info, Link } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { showToast } from '../../lib/toast'
+import { copyToClipboard } from '../../lib/clipboard'
 import { useContextMenuPosition } from '../common/context-menu'
 
 interface ImageContextMenuProps {
@@ -48,9 +48,12 @@ export function ImageContextMenu({
     onClose()
   }
 
-  function handleCopyLink() {
-    navigator.clipboard.writeText(attachment.url)
-    showToast(t('chat.linkCopied'), 'success')
+  async function handleCopyLink() {
+    const didCopy = await copyToClipboard(attachment.url, {
+      successMessage: t('chat.linkCopied'),
+      errorMessage: t('chat.copyFailed'),
+    })
+    if (!didCopy) return
     onClose()
   }
 

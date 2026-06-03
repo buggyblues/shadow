@@ -7,9 +7,34 @@ export const shadowServerAppManifest = {
   appKey: 'shadow-resume',
   name: 'Super Resume',
   description:
-    'A resume Server App for CRUD, Buddy-guided profile collection, resume generation, and CSS style updates.',
+    'A resume App for CRUD, Buddy-guided profile collection, resume generation, and CSS style updates.',
   version: '1.0.0',
   iconUrl: 'http://localhost:4214/assets/icon.svg',
+  marketplace: {
+    tagline: 'Build polished resumes with structured facts, generation, and style controls.',
+    summary:
+      'Super Resume helps people collect career facts, create resumes, update sections, delete stale drafts, and refine CSS styling with Buddy guidance. It keeps resume work structured enough for automation while still easy to edit by hand.',
+    categories: ['效率', '创作', '工具'],
+    supportedLanguages: ['English', '中文'],
+    coverImageUrl: 'http://localhost:4214/assets/cover.png',
+    gallery: [
+      {
+        url: 'http://localhost:4214/assets/cover.png',
+        type: 'image',
+        alt: 'resume cover',
+      },
+    ],
+    links: [
+      {
+        label: '主页',
+        url: 'http://localhost:4214/shadow/server',
+        type: 'website',
+      },
+    ],
+    publisher: {
+      name: 'Shadow',
+    },
+  },
   iframe: {
     entry: 'http://localhost:4214/shadow/server',
     allowedOrigins: ['http://localhost:4214'],

@@ -652,6 +652,13 @@
       "when": 1780462513068,
       "tag": "0092_task_message_card_metadata_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1780487684877,
+      "tag": "0093_server_app_manifest_marketplace_metadata",
+      "breakpoints": true
     }
   ]
 }

@@ -393,6 +393,49 @@ describe('MessageService', () => {
     })
   })
 
+  describe('getByChannelId', () => {
+    it('should resolve author avatar urls before returning messages', async () => {
+      const messageDao = createMockMessageDao({
+        findByChannelId: vi.fn().mockResolvedValue({
+          messages: [
+            {
+              id: 'msg1',
+              content: 'Hello',
+              channelId: 'ch1',
+              author: {
+                id: 'u1',
+                username: 'testuser',
+                displayName: 'Test',
+                avatarUrl: '/shadow/uploads/avatar.png',
+                isBot: false,
+              },
+            },
+          ],
+          hasMore: false,
+        }),
+      })
+      const mediaService = {
+        resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/avatar-token'),
+      }
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao() as any,
+        mediaService: mediaService as any,
+      })
+
+      const result = await service.getByChannelId('ch1')
+
+      expect(result.messages[0]?.author?.avatarUrl).toBe('/api/media/signed/avatar-token')
+      expect(mediaService.resolveMediaUrl).toHaveBeenCalledWith(
+        '/shadow/uploads/avatar.png',
+        'image/png',
+        {
+          variant: 'avatar',
+        },
+      )
+    })
+  })
+
   describe('addReaction', () => {
     it('should add reaction to existing message', async () => {
       const mockMessage = { id: 'msg1', content: 'Hello' }
@@ -683,6 +726,43 @@ describe('MessageService', () => {
 })
 
 describe('NotificationService', () => {
+  describe('getByUserId', () => {
+    it('should resolve sender avatar urls for notification lists', async () => {
+      const notificationDao = createMockNotificationDao({
+        findByUserId: vi.fn().mockResolvedValue([
+          {
+            id: 'n1',
+            userId: 'u1',
+            type: 'mention',
+            title: 'Mention',
+            referenceId: 'm1',
+            referenceType: 'message',
+            senderAvatarUrl: '/shadow/uploads/sender.png',
+            isRead: false,
+          },
+        ]),
+      })
+      const mediaService = {
+        resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/sender-token'),
+      }
+      const service = new NotificationService({
+        notificationDao: notificationDao as any,
+        mediaService: mediaService as any,
+      })
+
+      const result = await service.getByUserId('u1')
+
+      expect(result[0]?.senderAvatarUrl).toBe('/api/media/signed/sender-token')
+      expect(mediaService.resolveMediaUrl).toHaveBeenCalledWith(
+        '/shadow/uploads/sender.png',
+        'image/png',
+        {
+          variant: 'avatar',
+        },
+      )
+    })
+  })
+
   describe('create', () => {
     it('should create a reply notification', async () => {
       const mockNotification = {

@@ -29,16 +29,16 @@ function defaultSections(): ResumeSections {
       {
         id: 'exp_shadow',
         company: 'Shadow Labs',
-        role: 'Server App Builder',
+        role: 'App Builder',
         period: '2025 - Present',
         highlights: [
-          'Designed typed Server App command schemas for Buddy automation.',
+          'Designed typed App command schemas for Buddy automation.',
           'Built reusable React product flows backed by persistent app data.',
         ],
       },
     ],
     education: [],
-    skills: ['TypeScript', 'React', 'Server Apps', 'Product Systems'],
+    skills: ['TypeScript', 'React', 'Apps', 'Product Systems'],
     projects: [
       {
         id: 'proj_integrations',
@@ -57,7 +57,7 @@ function defaultState(): ResumeState {
       {
         id: 'resume_demo',
         owner: systemPerson('Resume Buddy'),
-        title: 'Server App Resume',
+        title: 'App Resume',
         profile: {
           fullName: 'Alex Builder',
           headline: 'Full-stack product engineer',

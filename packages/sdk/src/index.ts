@@ -69,7 +69,7 @@ export type {
   ShadowServerAppRuntimeOptions,
   ShadowServerAppValidationIssue,
 } from './server-app'
-// Server App helpers
+// App helpers
 export {
   buildShadowServerAppInboxDelivery,
   buildShadowServerAppInboxTaskRequest,

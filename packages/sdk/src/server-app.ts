@@ -646,6 +646,25 @@ function joinBasePath(baseUrl: string, path: string) {
   return `${cleanBase}${cleanPath}`
 }
 
+function urlOrigin(value: string) {
+  try {
+    return new URL(value).origin
+  } catch {
+    return null
+  }
+}
+
+function rebasePublicAssetUrl(value: string, sourceOrigin: string | null, publicBaseUrl: string) {
+  if (!sourceOrigin) return value
+  try {
+    const url = new URL(value)
+    if (url.origin !== sourceOrigin) return value
+    return joinBasePath(publicBaseUrl, `${url.pathname}${url.search}${url.hash}`)
+  } catch {
+    return value
+  }
+}
+
 export function extractShadowServerAppBearerToken(value?: string | null) {
   if (!value) return null
   return value.toLowerCase().startsWith('bearer ') ? value.slice(7).trim() : null
@@ -674,9 +693,26 @@ export function createShadowServerAppManifest<TManifest extends ShadowServerAppM
   const apiBaseUrl = trimTrailingSlash(options.apiBaseUrl ?? publicBaseUrl)
   const iframePath = options.iframePath ?? '/shadow/server'
   const iconPath = options.iconPath ?? '/assets/icon.svg'
+  const sourceAssetOrigin = urlOrigin(manifest.iconUrl)
   return {
     ...manifest,
     iconUrl: joinBasePath(publicBaseUrl, iconPath),
+    marketplace: manifest.marketplace
+      ? {
+          ...manifest.marketplace,
+          coverImageUrl: manifest.marketplace.coverImageUrl
+            ? rebasePublicAssetUrl(
+                manifest.marketplace.coverImageUrl,
+                sourceAssetOrigin,
+                publicBaseUrl,
+              )
+            : manifest.marketplace.coverImageUrl,
+          gallery: manifest.marketplace.gallery?.map((item) => ({
+            ...item,
+            url: rebasePublicAssetUrl(item.url, sourceAssetOrigin, publicBaseUrl),
+          })),
+        }
+      : manifest.marketplace,
     iframe: manifest.iframe
       ? {
           ...manifest.iframe,
