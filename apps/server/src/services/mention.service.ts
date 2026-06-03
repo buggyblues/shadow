@@ -14,6 +14,8 @@ import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
+import type { MediaService } from './media.service'
 import type { NotificationTriggerService } from './notification-trigger.service'
 
 const MAX_MESSAGE_MENTIONS = 20
@@ -156,6 +158,7 @@ export class MentionService {
       serverDao: ServerDao
       userDao: UserDao
       notificationTriggerService: NotificationTriggerService
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
     },
   ) {}
 
@@ -293,7 +296,7 @@ export class MentionService {
         userId: user.id,
         username: user.username,
         displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
+        avatarUrl: resolveAvatarUrl(this.deps.mediaService, user.avatarUrl),
         isBot: user.isBot,
         serverId: currentScope.server.id,
         serverSlug: currentScope.server.slug,
@@ -753,7 +756,7 @@ export class MentionService {
       userId: user.id,
       username: user.username,
       displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: resolveAvatarUrl(this.deps.mediaService, user.avatarUrl),
       isBot: user.isBot,
       serverId: currentScope.server.id,
       serverSlug: currentScope.server.slug,

@@ -335,6 +335,9 @@ const desktopAPI = {
   openExternal: (url: string) => {
     return ipcRenderer.invoke('desktop:openExternal', url) as Promise<boolean>
   },
+  writeClipboardText: (text: string) => {
+    return ipcRenderer.invoke('desktop:clipboard:writeText', text) as Promise<boolean>
+  },
   openReader: (input: {
     url: string
     title?: string

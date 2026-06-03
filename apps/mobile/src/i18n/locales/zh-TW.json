@@ -413,7 +413,7 @@
   "contentFeed": {
     "title": "訂閱",
     "empty": "暫無訂閱內容",
-    "emptyDesc": "訂閱頻道後，帶附件的訊息和 Server App 卡片會出現在這裡。",
+    "emptyDesc": "訂閱頻道後，帶附件的訊息和應用卡片會出現在這裡。",
     "markAllRead": "全部標為已讀",
     "open": "打開",
     "card": "應用卡片",
@@ -1028,7 +1028,7 @@
     "faq4q": "訊息支援什麼格式？",
     "faq4a": "訊息支援完整的 Markdown 格式，包括粗體、斜體、程式碼區塊、列表、連結等，同時支援發送圖片和使用 Emoji 回應。",
     "faq5q": "可以在手機上使用嗎？",
-    "faq5a": "可以！蝦豆的網頁版已經針對行動端進行了深度優化，在手機瀏覽器中可以獲得類似原生 App 的體驗。",
+    "faq5a": "可以！蝦豆的網頁版已經針對行動端進行了深度優化，在手機瀏覽器中可以獲得類似原生應用的體驗。",
     "faq6q": "資料安全嗎？",
     "faq6a": "蝦豆支援私有化部署，所有資料儲存在你自己的伺服器上。同時所有通訊都經過加密傳輸。",
     "faq7q": "如何建立 AI Buddy？",
@@ -1098,7 +1098,7 @@
       "midRange": "中階",
       "unknown": "不明"
     },
-    "emptyDesc": "先換個關鍵字，或稍後再看看新的 Buddy、服務、店鋪和伺服器。",
+    "emptyDesc": "先換個關鍵字，或稍後再看看新的 Buddy、應用、服務、店鋪和伺服器。",
     "emptyTitle": "還沒有找到想逛的內容",
     "filter": {
       "apply": "套用",
@@ -1151,7 +1151,8 @@
       "browse": "瀏覽",
       "explore": "探索",
       "market": "市場",
-      "cloud": "雲"
+      "cloud": "雲",
+      "apps": "應用"
     },
     "metrics": {
       "publicCommunities": "公開伺服器",
@@ -1215,7 +1216,8 @@
       "products": "服務與內容",
       "shops": "店鋪",
       "cloud": "蝦豆雲",
-      "communities": "伺服器"
+      "communities": "伺服器",
+      "apps": "應用"
     },
     "lanes": {
       "plays": "現在能玩的玩法",
@@ -1224,7 +1226,8 @@
       "products": "今天可買",
       "shops": "值得逛的店",
       "cloud": "蝦豆雲模板返現",
-      "communities": "推薦伺服器"
+      "communities": "推薦伺服器",
+      "apps": "官方應用"
     },
     "laneDescriptions": {
       "plays": "可直接進入的互動內容和遊戲入口。",
@@ -1232,7 +1235,8 @@
       "market": "來自伺服器店鋪和個人店鋪的公開商品與服務。",
       "shops": "聚合商品、支援和交付上下文的賣家空間。",
       "cloud": "可部署的 Buddy 服務模板和雲端工作流。",
-      "communities": "可加入的公開伺服器，包含頻道、店鋪和 Buddy。"
+      "communities": "可加入的公開伺服器，包含頻道、店鋪和 Buddy。",
+      "apps": "遊戲、工具和創作應用，適合和伺服器裡的朋友一起玩、一起用。"
     },
     "emptyLane": {
       "plays": "暫時沒有可開始的玩法。",
@@ -1241,7 +1245,8 @@
       "products": "暫時沒有上架內容。",
       "shops": "暫時沒有可逛的店鋪。",
       "cloud": "暫時沒有可部署的蝦豆雲模板。",
-      "communities": "暫時沒有公開伺服器。"
+      "communities": "暫時沒有公開伺服器。",
+      "apps": "還沒有可加入的應用"
     },
     "cashbackBadge": "模板返現",
     "cashbackTitle": "發布蝦豆雲模板賺返現",
@@ -1286,7 +1291,15 @@
         "title": "心理測試",
         "subtitle": "量表、互動問卷和可購買的測評體驗。"
       }
-    }
+    },
+    "hero": {
+      "apps": {
+        "title": "發現好玩的應用",
+        "subtitle": "把遊戲、工具和創作應用帶進你的伺服器，和朋友一起玩、一起用。"
+      }
+    },
+    "openApp": "查看應用",
+    "appServerCount": "在 {{count}} 個伺服器中"
   },
   "commerceMarketplace": {
     "globalPublic": "加入全域網路商城",
@@ -1492,13 +1505,93 @@
     "approved": "已批准"
   },
   "serverApps": {
-    "noIframe": "此應用未提供 iframe 入口。",
-    "commandApprovalTitle": "授權 App 命令",
-    "commandApprovalMessage": "{{app}} 想執行 {{command}}，需要使用 {{permission}}。",
-    "commandApprovalDenied": "已取消命令授權。",
-    "commandApprovalSuccess": "App 命令已授權。",
-    "commandApprovalFailed": "App 命令授權失敗。",
-    "commandApprovalConfirm": "授權並繼續"
+    "group": "應用",
+    "installedTitle": "已安裝應用",
+    "addApp": "加入應用",
+    "addDescription": "從官方目錄加入應用，或貼上 manifest URL 安裝自訂應用。",
+    "addMode": {
+      "catalog": "官方目錄",
+      "custom": "自訂安裝"
+    },
+    "auth": {
+      "oauth2-bearer": "OAuth 2.0"
+    },
+    "alreadyInstalled": "已安裝",
+    "installFromCatalog": "安裝",
+    "catalogEmpty": "官方目錄裡還沒有可安裝的應用。",
+    "customInstall": "使用 manifest URL 安裝",
+    "manifestUrl": "Manifest URL",
+    "discoverButton": "檢查",
+    "requestedPermissions": "請求權限",
+    "authorizeInstall": "授權並安裝",
+    "noDescription": "暫無介紹",
+    "noInstalled": "還沒有安裝應用。",
+    "selectApp": "選擇一個應用",
+    "selectFromSidebar": "從左側選擇已安裝應用，或加入新應用。",
+    "install": "安裝應用",
+    "privateUrlError": "這個應用位址指向本機或私有網路，目前環境不允許安裝。",
+    "uninstallConfirmTitle": "卸載應用",
+    "uninstallConfirmMessage": "確定要從伺服器卸載 {{name}} 嗎？相關 Buddy 授權也會失效。",
+    "uninstallApp": "卸載應用",
+    "accessTitle": "Buddy 存取",
+    "defaultAccessTitle": "預設權限",
+    "defaultAccessDescription": "選擇新 Buddy 預設可使用的應用權限。",
+    "saveDefaultAccess": "儲存預設權限",
+    "defaultAccessSaved": "預設權限已儲存",
+    "accessDescription": "為指定 Buddy 授權後，它就可以透過命令呼叫這個應用。",
+    "grantButton": "授權 Buddy",
+    "grantSuccess": "Buddy 授權已儲存",
+    "noBuddies": "這個伺服器還沒有 Buddy。",
+    "openApp": "開啟應用",
+    "copyAppLink": "複製應用連結",
+    "noIframe": "這個應用沒有可開啟的介面。",
+    "commandApprovalTitle": "確認應用命令",
+    "commandApprovalMessage": "{{appName}} 想執行 {{commandName}}。",
+    "commandApprovalSubject": "發起方",
+    "commandApprovalBuddy": "Buddy",
+    "commandApprovalPerson": "成員",
+    "commandApprovalPermission": "權限",
+    "commandApprovalScope": "範圍",
+    "commandApprovalConfirm": "允許執行",
+    "commandApprovalDenied": "已取消應用命令",
+    "commandApprovalSuccess": "應用命令已核准",
+    "commandApprovalFailed": "核准應用命令失敗",
+    "backToDirectory": "返回應用目錄",
+    "start": "啟動",
+    "addToServer": "加入伺服器",
+    "adding": "加入中...",
+    "installed": "已安裝",
+    "installSuccess": "應用已加入伺服器",
+    "installFailed": "加入應用失敗",
+    "notFoundTitle": "找不到這個應用",
+    "notFoundDesc": "它可能還沒有收錄，或已從官方市場下架。",
+    "noTagline": "這個應用還沒有一句話介紹。",
+    "overview": "概況",
+    "gallery": "媒體",
+    "previousMedia": "上一張媒體",
+    "nextMedia": "下一張媒體",
+    "selectMedia": "查看第 {{index}} 個媒體",
+    "commands": "命令",
+    "commandNoDescription": "暫無命令說明。",
+    "dataAccess": "資料存取",
+    "dataAccessTitle": "應用預設只能存取固定的基礎資料",
+    "dataAccessBody": "更敏感的命令會繼續走伺服器權限、Buddy 授權和審批策略；安裝前請查看權限與資料類別。",
+    "chooseServer": "選擇伺服器",
+    "installedOnSelected": "這個應用已安裝在所選伺服器，可以直接啟動。",
+    "readyToAdd": "你可以把這個應用加入所選伺服器。",
+    "adminRequired": "需要伺服器管理員權限才能加入應用。",
+    "serverCount": "伺服器數量",
+    "serverCountValue": "在 {{count}} 個伺服器中",
+    "categories": "類別",
+    "noCategories": "未標註類別",
+    "languages": "支援語言",
+    "noLanguages": "未標註語言",
+    "links": "連結",
+    "noLinks": "暫無連結",
+    "manifest": "Manifest",
+    "versionValue": "版本 {{version}}",
+    "privacy": "隱私",
+    "privacyBody": "應用必須遵守伺服器授權邊界。請透過連結查看開發者服務條款與隱私政策。"
   },
   "apps": {
     "noApps": "暫無應用"
@@ -1718,7 +1811,7 @@
     "ready": "準備連線",
     "connecting": "正在連線",
     "callHint": "加入後即可使用麥克風、拒聽和揚聲器控制。",
-    "setupRequired": "目前用戶端缺少語音執行環境，請更新或重新建置 App 後再加入。",
+    "setupRequired": "目前用戶端缺少語音執行環境，請更新或重新建置應用後再加入。",
     "unavailableTitle": "語音暫不可用",
     "connectedCount": "{{count}} 人已連線",
     "join": "加入語音",
@@ -1746,6 +1839,6 @@
     "speaker": "揚聲器",
     "earpiece": "聽筒",
     "joinFailed": "加入語音頻道失敗",
-    "nativeModuleUnavailable": "目前用戶端未啟用原生語音模組，請使用已重新建置的 App 加入語音。"
+    "nativeModuleUnavailable": "目前用戶端未啟用原生語音模組，請使用已重新建置的應用加入語音。"
   }
 }

@@ -28,7 +28,7 @@ function defaultState(): QnaState {
       {
         id: 'list_server_app_handoff',
         title: 'Server app handoff',
-        description: 'Questions and answers that help a Buddy operate installed server apps.',
+        description: 'Questions and answers that help a Buddy operate installed apps.',
         owner: guide,
         questionIds: [questionId],
         createdAt: timestamp,
@@ -38,8 +38,8 @@ function defaultState(): QnaState {
     questions: [
       {
         id: questionId,
-        title: 'How should a Buddy use an installed Server App?',
-        body: 'What is the safe path for a Buddy that needs to operate a server app from a channel?',
+        title: 'How should a Buddy use an installed App?',
+        body: 'What is the safe path for a Buddy that needs to operate a app from a channel?',
         tags: ['server-apps', 'buddies'],
         author: guide,
         comments: [],
@@ -55,7 +55,7 @@ function defaultState(): QnaState {
               '- Inspect the command schema before writing data.',
               '- Call commands through `shadowob app call` so Shadow applies grants and approvals.',
               '',
-              '> Treat the Server App command manifest as the contract, then keep screenshots or uploaded diagrams directly in the answer when context matters.',
+              '> Treat the App command manifest as the contract, then keep screenshots or uploaded diagrams directly in the answer when context matters.',
             ].join('\n'),
             author: guide,
             comments: [],

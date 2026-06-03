@@ -1,4 +1,6 @@
 import type { CreateNotificationRecord, NotificationDao } from '../dao/notification.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
+import type { MediaService } from './media.service'
 
 export type NotificationType = 'mention' | 'reply' | 'dm' | 'system'
 export type NotificationStrategy = 'all' | 'mention_only' | 'none'
@@ -21,6 +23,7 @@ export interface NotificationItem {
   referenceType: string | null
   scopeServerId?: string | null
   scopeChannelId?: string | null
+  senderAvatarUrl?: string | null
   aggregatedCount?: number | null
   isRead: boolean
 }
@@ -35,7 +38,19 @@ export interface NotificationCreateInput extends CreateNotificationRecord {
 }
 
 export class NotificationService {
-  constructor(private deps: { notificationDao: NotificationDao }) {}
+  constructor(
+    private deps: {
+      notificationDao: NotificationDao
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
+    },
+  ) {}
+
+  private resolveSenderAvatars<T extends { senderAvatarUrl?: string | null }>(items: T[]): T[] {
+    return items.map((item) => ({
+      ...item,
+      senderAvatarUrl: resolveAvatarUrl(this.deps.mediaService, item.senderAvatarUrl),
+    }))
+  }
 
   private async getOrInitPreference(userId: string): Promise<NotificationPreference> {
     const pref = await this.deps.notificationDao.getPreference(userId)
@@ -178,7 +193,7 @@ export class NotificationService {
       this.deps.notificationDao.findByUserId(userId, limit, offset),
       this.getOrInitPreference(userId),
     ])
-    return this.filterByPreference(notifications, preference)
+    return this.resolveSenderAvatars(await this.filterByPreference(notifications, preference))
   }
 
   async create(data: NotificationCreateInput) {

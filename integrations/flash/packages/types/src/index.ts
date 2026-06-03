@@ -82,7 +82,7 @@ export type {
   ThemeFolder,
   ThemeRefRecord,
 } from './records.js'
-// Server App protocol models and validators
+// App protocol models and validators
 export * from './server-app.js'
 // Settings
 export type {

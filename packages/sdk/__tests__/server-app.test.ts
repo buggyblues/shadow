@@ -99,13 +99,43 @@ describe('server app helpers', () => {
 
   it('rewrites local manifest URLs from a public base URL', () => {
     expect(
-      createShadowServerAppManifest(manifest, {
-        publicBaseUrl: 'https://app.example.com/',
-        apiBaseUrl: 'https://api.example.com/',
-        iframePath: '/server',
-      }),
+      createShadowServerAppManifest(
+        {
+          ...manifest,
+          marketplace: {
+            tagline: 'Demo app',
+            coverImageUrl: 'http://localhost:4201/assets/cover.png',
+            gallery: [
+              {
+                url: 'http://localhost:4201/assets/gallery.png',
+                type: 'image',
+                alt: 'Gallery',
+              },
+              {
+                url: 'https://cdn.example.com/demo.jpg',
+                type: 'image',
+                alt: 'External gallery',
+              },
+            ],
+            links: [{ label: 'Docs', url: 'https://docs.example.com/demo', type: 'docs' }],
+          },
+        },
+        {
+          publicBaseUrl: 'https://app.example.com/',
+          apiBaseUrl: 'https://api.example.com/',
+          iframePath: '/server',
+        },
+      ),
     ).toMatchObject({
       iconUrl: 'https://app.example.com/assets/icon.svg',
+      marketplace: {
+        coverImageUrl: 'https://app.example.com/assets/cover.png',
+        gallery: [
+          { url: 'https://app.example.com/assets/gallery.png' },
+          { url: 'https://cdn.example.com/demo.jpg' },
+        ],
+        links: [{ url: 'https://docs.example.com/demo' }],
+      },
       iframe: {
         entry: 'https://app.example.com/server',
         allowedOrigins: ['https://app.example.com'],
@@ -125,7 +155,7 @@ describe('server app helpers', () => {
     expect(normalizeShadowServerAppCommandInput({ title: 'A' })).toEqual({ title: 'A' })
   })
 
-  it('keeps Server App outbox metadata in the shadow.app/1 namespace', () => {
+  it('keeps App outbox metadata in the shadow.app/1 namespace', () => {
     const appResult = {
       item: { id: 'card-1' },
     }

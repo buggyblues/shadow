@@ -13,6 +13,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useLocation, useNavigate, useSearch } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
 import {
+  AppWindow,
   ArrowRight,
   Bookmark,
   Bot,
@@ -75,10 +76,17 @@ import { copyToClipboardSilent } from '../lib/clipboard'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 
-type HubSection = 'all' | 'feed' | 'buddies' | 'market' | 'shops' | 'cloud' | 'communities'
+type HubSection = 'all' | 'feed' | 'buddies' | 'market' | 'shops' | 'cloud' | 'communities' | 'apps'
 
-type DiscoverView = 'browse' | 'explore' | 'market' | 'cloud'
-type DiscoverModuleId = 'subscriptions' | 'communities' | 'cloud' | 'products' | 'buddies' | 'shops'
+type DiscoverView = 'browse' | 'explore' | 'market' | 'apps' | 'cloud'
+type DiscoverModuleId =
+  | 'subscriptions'
+  | 'communities'
+  | 'cloud'
+  | 'products'
+  | 'buddies'
+  | 'shops'
+  | 'apps'
 type FeedViewMode = 'timeline' | 'masonry'
 
 interface DiscoverViewConfig {
@@ -226,6 +234,28 @@ interface MarketplaceProductSection {
   products: HubProduct[]
 }
 
+interface ServerAppDirectoryEntry {
+  id: string
+  appKey: string
+  name: string
+  description: string | null
+  iconUrl: string | null
+  tagline: string | null
+  summary: string | null
+  categories: string[]
+  supportedLanguages: string[]
+  coverImageUrl: string | null
+  serverCount: number
+  commandCount: number
+  skillCount: number
+}
+
+interface ServerAppDirectoryResponse {
+  apps: ServerAppDirectoryEntry[]
+  total: number
+  hasMore: boolean
+}
+
 type ContentFeedKind = 'image' | 'html' | 'pdf' | 'file' | 'voice' | 'card'
 type ContentFeedReadState = 'unread' | 'seen' | 'opened' | 'saved' | 'hidden' | 'dismissed'
 
@@ -311,6 +341,7 @@ const HUB_SECTIONS: Array<{ key: HubSection; icon: LucideIcon }> = [
 const DISCOVER_VIEWS: Array<{ key: DiscoverView; icon: LucideIcon; labelFallback: string }> = [
   { key: 'browse', icon: Rss, labelFallback: '浏览' },
   { key: 'explore', icon: Compass, labelFallback: '探索' },
+  { key: 'apps', icon: AppWindow, labelFallback: '应用' },
   { key: 'market', icon: ShoppingBag, labelFallback: '市场' },
   { key: 'cloud', icon: Cloud, labelFallback: '云' },
 ]
@@ -320,6 +351,7 @@ const DEFAULT_DISCOVER_LAYOUT: DiscoverLayoutConfig = {
   views: [
     { id: 'browse', enabled: true, modules: ['subscriptions'] },
     { id: 'explore', enabled: true, modules: ['communities'] },
+    { id: 'apps', enabled: true, modules: ['apps'] },
     { id: 'market', enabled: true, modules: ['products', 'buddies', 'shops'] },
     { id: 'cloud', enabled: true, modules: ['cloud'] },
   ],
@@ -329,12 +361,14 @@ const DISCOVER_MODULE_BY_VIEW: Record<DiscoverView, DiscoverModuleId[]> = {
   browse: ['subscriptions'],
   explore: ['communities'],
   market: ['products', 'buddies', 'shops'],
+  apps: ['apps'],
   cloud: ['cloud'],
 }
 const DISCOVER_VIEW_PATH = {
   browse: '/discover/browse',
   explore: '/discover/explore',
   market: '/discover/market',
+  apps: '/discover/apps',
   cloud: '/discover/cloud',
 } as const satisfies Record<DiscoverView, string>
 
@@ -345,6 +379,7 @@ const DISCOVER_MODULE_ICON: Record<DiscoverModuleId, LucideIcon> = {
   products: ShoppingBag,
   buddies: Bot,
   shops: Store,
+  apps: AppWindow,
 }
 
 const DISCOVER_MODULE_ANCHOR_ID: Record<DiscoverModuleId, string> = {
@@ -353,6 +388,7 @@ const DISCOVER_MODULE_ANCHOR_ID: Record<DiscoverModuleId, string> = {
   products: 'discover-module-products',
   buddies: 'discover-module-buddies',
   shops: 'discover-module-shops',
+  apps: 'discover-module-apps',
   cloud: 'discover-module-cloud',
 }
 
@@ -370,6 +406,7 @@ const initialSectionPages: Record<HubSection, number> = {
   shops: 1,
   cloud: 1,
   communities: 1,
+  apps: 1,
 }
 
 function parseHubSection(value: unknown): HubSection | null {
@@ -383,6 +420,7 @@ function parseDiscoverView(value: unknown): DiscoverView | null {
   if (section === 'all' || section === 'feed') return 'browse'
   if (section === 'communities') return 'explore'
   if (section === 'cloud') return 'cloud'
+  if (section === 'apps') return 'apps'
   if (section === 'buddies' || section === 'market' || section === 'shops') return 'market'
   return null
 }
@@ -426,7 +464,8 @@ function isDiscoverModule(value: unknown): value is DiscoverModuleId {
     value === 'cloud' ||
     value === 'products' ||
     value === 'buddies' ||
-    value === 'shops'
+    value === 'shops' ||
+    value === 'apps'
   )
 }
 
@@ -620,6 +659,19 @@ export function DiscoverPage() {
     gcTime: DISCOVER_GC_MS,
   })
 
+  const { data: serverAppDirectoryData, isLoading: isServerAppsLoading } = useQuery({
+    queryKey: ['discover-server-apps', effectiveSearch],
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({ limit: '72' })
+      if (effectiveSearch) params.set('q', effectiveSearch)
+      return fetchApi<ServerAppDirectoryResponse>(`/api/discover/server-apps?${params}`, {
+        signal,
+      })
+    },
+    staleTime: DISCOVER_STALE_MS,
+    gcTime: DISCOVER_GC_MS,
+  })
+
   const { data: cloudTemplates = [], isLoading: isCloudTemplatesLoading } = useQuery({
     queryKey: ['discover-cloud-templates', i18n.language, effectiveSearch],
     queryFn: ({ signal }) =>
@@ -693,6 +745,10 @@ export function DiscoverPage() {
     [marketplaceCategories, products],
   )
   const shops = useMemo(() => sortShops(hub.shops), [hub.shops])
+  const serverApps = useMemo(
+    () => sortServerApps(serverAppDirectoryData?.apps ?? []),
+    [serverAppDirectoryData?.apps],
+  )
   const communities = useMemo(() => sortCommunities(hub.communities), [hub.communities])
   const cloudCards = useMemo(
     () => cloudTemplates.map(toTemplateCatalogSummary).sort(sortCloudTemplates),
@@ -742,6 +798,7 @@ export function DiscoverPage() {
   )
   const visibleBuddies = sectionItems(buddies, 'buddies')
   const visibleShops = sectionItems(shops, 'shops')
+  const visibleServerApps = sectionItems(serverApps, 'apps')
   const visibleCommunities = sectionItems(communities, 'communities')
   const visibleCloudCards = cloudCards.slice(
     0,
@@ -922,6 +979,7 @@ export function DiscoverPage() {
       products: products.length,
       buddies: buddies.length,
       shops: shops.length,
+      apps: serverApps.length,
     }),
     [
       buddies.length,
@@ -929,6 +987,7 @@ export function DiscoverPage() {
       communities.length,
       feedItems.length,
       products.length,
+      serverApps.length,
       shops.length,
     ],
   )
@@ -948,6 +1007,18 @@ export function DiscoverPage() {
     [activeModules, enabledModuleIds],
   )
   const activeViewHasContent = activeModules.some((module) => enabledModuleIds.has(module))
+  const emptyStateTitle =
+    activeView === 'apps' && !isSearching
+      ? t('discover.emptyLane.apps')
+      : isSearching
+        ? t('discover.noSearchResults')
+        : t('discover.emptyTitle')
+  const emptyStateDescription =
+    activeView === 'apps' && !isSearching
+      ? t('discover.laneDescriptions.apps')
+      : isSearching
+        ? t('discover.noSearchResultsDesc')
+        : t('discover.emptyDesc')
   const sectionAnchors = useMemo(() => {
     const anchors: Array<{ module: DiscoverModuleId; ids: string[] }> = []
 
@@ -973,6 +1044,9 @@ export function DiscoverPage() {
       if (visibleModules.includes('shops')) {
         anchors.push({ module: 'shops', ids: ['discover-module-shops'] })
       }
+    }
+    if (activeView === 'apps' && visibleModules.includes('apps')) {
+      anchors.push({ module: 'apps', ids: ['discover-module-apps'] })
     }
     if (activeView === 'cloud' && visibleModules.includes('cloud')) {
       anchors.push({ module: 'cloud', ids: ['discover-module-cloud'] })
@@ -1006,7 +1080,9 @@ export function DiscoverPage() {
         ? isLoading
         : activeView === 'market'
           ? isLoading || isMarketplaceLoading
-          : isCloudTemplatesLoading
+          : activeView === 'apps'
+            ? isServerAppsLoading
+            : isCloudTemplatesLoading
 
   return (
     <>
@@ -1068,10 +1144,8 @@ export function DiscoverPage() {
                 <div className="py-5">
                   <DashboardEmptyState
                     icon={Search}
-                    title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
-                    description={
-                      isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')
-                    }
+                    title={emptyStateTitle}
+                    description={emptyStateDescription}
                   />
                 </div>
               ) : (
@@ -1267,6 +1341,32 @@ export function DiscoverPage() {
                         </HubLane>
                       )}
                     </>
+                  )}
+
+                  {activeView === 'apps' && enabledModuleIds.has('apps') && (
+                    <HubLane
+                      id="discover-module-apps"
+                      icon={AppWindow}
+                      title={t('discover.lanes.apps')}
+                      description={t('discover.laneDescriptions.apps')}
+                      hasMore={hasMore(visibleServerApps.length, serverApps.length)}
+                      loadMoreLabel={t('discover.loadMoreItems')}
+                      onLoadMore={() => loadMore('apps')}
+                    >
+                      {visibleServerApps.map((app) => (
+                        <ServerAppDirectoryCard
+                          key={app.id}
+                          app={app}
+                          t={t}
+                          onOpen={() =>
+                            navigate({
+                              to: '/discover/apps/$appKey',
+                              params: { appKey: app.appKey },
+                            })
+                          }
+                        />
+                      ))}
+                    </HubLane>
                   )}
 
                   {activeView === 'cloud' && enabledModuleIds.has('cloud') && (
@@ -1697,6 +1797,16 @@ function buildProductSections(
 
 function moduleHasContent(module: DiscoverModuleId, counts: Record<DiscoverModuleId, number>) {
   return counts[module] > 0
+}
+
+function sortServerApps(apps: ServerAppDirectoryEntry[]) {
+  return [...apps].sort(
+    (a, b) =>
+      b.serverCount * 8 +
+        b.commandCount * 2 +
+        b.skillCount -
+        (a.serverCount * 8 + a.commandCount * 2 + a.skillCount) || a.name.localeCompare(b.name),
+  )
 }
 
 function sortShops(shops: HubShop[]) {
@@ -2719,6 +2829,101 @@ function getProductResourceType(product: HubProduct | null) {
     ? product.entitlementConfig[0]
     : product?.entitlementConfig
   return entitlementConfig?.resourceType ?? null
+}
+
+function ServerAppDirectoryCard({
+  app,
+  t,
+  onOpen,
+}: {
+  app: ServerAppDirectoryEntry
+  t: TFunction
+  onOpen: () => void
+}) {
+  const leadText = app.tagline ?? app.description ?? app.summary ?? t('discover.noDescription')
+  const categories = Array.isArray(app.categories) ? app.categories : []
+  const categoryLabels = categories.length ? categories.slice(0, 4) : [t('serverApps.noCategories')]
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => handleCardKey(event, onOpen)}
+      className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+    >
+      <div className="relative aspect-[16/9] overflow-hidden bg-bg-primary/55">
+        <CardImageWithFallback
+          imageUrl={app.coverImageUrl}
+          alt=""
+          className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
+        />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/75 to-transparent" />
+        <div className="absolute bottom-3 left-3 flex items-center gap-3">
+          <AppIconWithFallback imageUrl={app.iconUrl} label={app.name} />
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-black leading-6 text-white">{app.name}</h3>
+            <p className="truncate text-xs font-bold text-white/72">{app.appKey}</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex min-h-[188px] flex-col p-4">
+        <p className="line-clamp-3 text-sm font-semibold leading-6 text-text-secondary">
+          {leadText}
+        </p>
+        <div className="mt-auto flex flex-wrap gap-1.5 border-t border-white/10 pt-3">
+          {categoryLabels.map((category) => (
+            <span
+              key={category}
+              className="rounded-full border border-white/10 bg-white/[0.055] px-2.5 py-1 text-xs font-bold text-text-secondary"
+            >
+              {category}
+            </span>
+          ))}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function CardImageWithFallback({
+  imageUrl,
+  alt,
+  className,
+}: {
+  imageUrl?: string | null
+  alt: string
+  className?: string
+}) {
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    setFailed(false)
+  }, [imageUrl])
+  if (!imageUrl || failed) return <DiscoverPlaceholderVisual className={className} />
+  return <img src={imageUrl} alt={alt} className={className} onError={() => setFailed(true)} />
+}
+
+function AppIconWithFallback({ imageUrl, label }: { imageUrl?: string | null; label: string }) {
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    setFailed(false)
+  }, [imageUrl])
+  return (
+    <div className="relative flex h-[56px] w-[56px] shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-bg-primary text-primary">
+      {imageUrl && !failed ? (
+        <img
+          src={imageUrl}
+          alt={label}
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <>
+          <DiscoverPlaceholderVisual className="absolute inset-0" />
+          <AppWindow size={24} className="relative text-primary" />
+        </>
+      )}
+    </div>
+  )
 }
 
 function MarketplaceProductTile({

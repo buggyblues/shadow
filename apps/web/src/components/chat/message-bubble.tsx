@@ -23,6 +23,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { copyToClipboard } from '../../lib/clipboard'
 import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { EmojiPicker } from '../common/emoji-picker'
@@ -311,20 +312,28 @@ function MessageBubbleInner({
     }
   }, [message.id, onMessageDelete, deleteApi, t])
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(message.content)
+  const handleCopy = useCallback(async () => {
+    const didCopy = await copyToClipboard(message.content, {
+      successMessage: t('common.copied'),
+      errorMessage: t('chat.copyFailed'),
+    })
+    if (!didCopy) return
     setCopied(true)
     setShowMoreMenu(false)
     setTimeout(() => setCopied(false), 2000)
-  }, [message.content])
+  }, [message.content, t])
 
-  const handleShareLink = useCallback(() => {
+  const handleShareLink = useCallback(async () => {
     const url = `${window.location.origin}${window.location.pathname}?msg=${message.id}`
-    navigator.clipboard.writeText(url)
+    const didCopy = await copyToClipboard(url, {
+      successMessage: t('common.copied'),
+      errorMessage: t('chat.copyFailed'),
+    })
+    if (!didCopy) return
     setCopied(true)
     setShowMoreMenu(false)
     setTimeout(() => setCopied(false), 2000)
-  }, [message.id])
+  }, [message.id, t])
 
   // Avatar hover handlers
   const handleAvatarMouseEnter = useCallback(() => {

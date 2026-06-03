@@ -639,67 +639,93 @@
     "cta": "시작"
   },
   "serverApps": {
-    "nav": "앱",
     "group": "앱",
-    "addApp": "앱 추가",
-    "title": "서버 앱",
-    "empty": "이 서버에는 아직 설치된 앱이 없습니다.",
     "installedTitle": "설치된 앱",
-    "noInstalled": "아직 설치된 앱이 없습니다.",
-    "addDescription": "스토어에서 앱을 선택하거나 앱 설정 URL을 붙여 넣어 연결한 뒤 이 서버에 설치합니다.",
+    "addApp": "앱 추가",
+    "addDescription": "공식 디렉터리에서 앱을 추가하거나 manifest URL로 사용자 지정 앱을 설치하세요.",
     "addMode": {
-      "catalog": "스토어",
-      "custom": "사용자 정의"
+      "catalog": "공식 디렉터리",
+      "custom": "사용자 지정"
     },
     "auth": {
-      "oauth2-bearer": "OAuth Bearer"
+      "oauth2-bearer": "OAuth 2.0"
     },
-    "install": "앱 설치",
-    "manifestUrl": "앱 설정 URL",
-    "installButton": "설치",
+    "alreadyInstalled": "설치됨",
+    "installFromCatalog": "설치",
+    "catalogEmpty": "디렉터리에 설치할 수 있는 앱이 아직 없습니다.",
+    "customInstall": "manifest URL로 설치",
+    "manifestUrl": "Manifest URL",
+    "discoverButton": "확인",
+    "requestedPermissions": "요청 권한",
+    "authorizeInstall": "승인하고 설치",
+    "noDescription": "아직 설명이 없습니다",
+    "noInstalled": "설치된 앱이 아직 없습니다.",
     "selectApp": "앱 선택",
-    "selectFromSidebar": "사이드바에서 앱을 선택하세요",
-    "noDescription": "설명 없음",
+    "selectFromSidebar": "왼쪽에서 설치된 앱을 선택하거나 새 앱을 추가하세요.",
+    "install": "앱 설치",
+    "privateUrlError": "이 앱 URL은 로컬 또는 사설 네트워크를 가리키므로 현재 환경에서 설치할 수 없습니다.",
+    "uninstallConfirmTitle": "앱 제거",
+    "uninstallConfirmMessage": "{{name}} 앱을 이 서버에서 제거할까요? 관련 Buddy 권한도 중지됩니다.",
+    "uninstallApp": "앱 제거",
+    "accessTitle": "Buddy 접근",
+    "defaultAccessTitle": "기본 권한",
+    "defaultAccessDescription": "새 Buddy가 기본으로 사용할 수 있는 앱 권한을 선택하세요.",
+    "saveDefaultAccess": "기본값 저장",
+    "defaultAccessSaved": "기본 권한을 저장했습니다",
+    "accessDescription": "Buddy에게 권한을 부여하면 명령으로 이 앱을 호출할 수 있습니다.",
+    "grantButton": "Buddy 권한 부여",
+    "grantSuccess": "Buddy 권한을 저장했습니다",
+    "noBuddies": "이 서버에는 아직 Buddy가 없습니다.",
     "openApp": "앱 열기",
     "copyAppLink": "앱 링크 복사",
-    "refresh": "새로고침",
-    "openExternal": "열기",
-    "noIframe": "이 앱은 iframe 진입점을 제공하지 않습니다.",
-    "commands": "명령",
-    "buddyUsage": "Buddy 사용법",
-    "discoverInstall": "발견 및 승인",
-    "catalogTitle": "앱 스토어",
-    "catalogEmpty": "스토어에 설치 가능한 앱이 없습니다.",
-    "installFromCatalog": "설치",
-    "customInstall": "사용자 정의 앱",
-    "discoverButton": "앱 연결",
-    "requestedPermissions": "요청 권한",
-    "alreadyInstalled": "설치됨",
-    "authorizeInstall": "설치",
-    "authorizeBuddy": "Buddy 승인",
-    "accessTitle": "접근 권한",
-    "accessDescription": "서버 채널에서 이 앱을 조작할 수 있는 Buddy를 선택합니다.",
-    "grantButton": "접근 권한 부여",
-    "grantSuccess": "Buddy 접근이 업데이트되었습니다.",
-    "noBuddies": "이 서버에 사용 가능한 Buddy 멤버가 없습니다.",
-    "uninstallApp": "제거",
-    "uninstallConfirmTitle": "앱 제거",
-    "uninstallConfirmMessage": "{{name}}을(를) 제거하시겠습니까? 권한이 부여된 Buddy는 더 이상 이 앱을 조작할 수 없습니다.",
-    "privateUrlError": "이 주소는 사설 또는 로컬 주소이므로 서버가 기본적으로 가져오지 않습니다. 로컬 개발에서는 host.lima.internal을 사용하거나 해당 호스트를 SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS에 추가한 뒤 서버를 다시 시작하세요.",
-    "defaultAccessTitle": "기본 허용 권한",
-    "defaultAccessDescription": "멤버와 Buddy는 이 권한을 확인 없이 사용할 수 있습니다. 민감한 쓰기 권한은 선택하지 않으면 첫 사용 때 확인합니다.",
-    "saveDefaultAccess": "기본 권한 저장",
-    "defaultAccessSaved": "기본 접근이 업데이트되었습니다.",
-    "commandApprovalTitle": "App 명령 승인",
-    "commandApprovalSubject": "승인 대상",
+    "noIframe": "이 앱에는 열 수 있는 화면이 없습니다.",
+    "commandApprovalTitle": "앱 명령 확인",
+    "commandApprovalMessage": "{{appName}} 앱이 {{commandName}} 명령을 실행하려고 합니다.",
+    "commandApprovalSubject": "요청자",
     "commandApprovalBuddy": "Buddy",
     "commandApprovalPerson": "멤버",
     "commandApprovalPermission": "권한",
-    "commandApprovalScope": "동작",
-    "commandApprovalDenied": "명령 승인이 취소되었습니다.",
-    "commandApprovalSuccess": "App 명령이 승인되었습니다.",
-    "commandApprovalFailed": "App 명령 승인에 실패했습니다.",
-    "commandApprovalConfirm": "승인하고 계속"
+    "commandApprovalScope": "범위",
+    "commandApprovalConfirm": "실행 허용",
+    "commandApprovalDenied": "앱 명령이 취소되었습니다",
+    "commandApprovalSuccess": "앱 명령을 승인했습니다",
+    "commandApprovalFailed": "앱 명령 승인에 실패했습니다",
+    "backToDirectory": "앱 디렉터리로 돌아가기",
+    "start": "시작",
+    "addToServer": "서버에 추가",
+    "adding": "추가 중...",
+    "installed": "설치됨",
+    "installSuccess": "앱을 서버에 추가했습니다",
+    "installFailed": "앱 추가 실패",
+    "notFoundTitle": "앱을 찾을 수 없습니다",
+    "notFoundDesc": "아직 등록되지 않았거나 공식 마켓에서 내려갔을 수 있습니다.",
+    "noTagline": "이 앱에는 아직 한 줄 소개가 없습니다.",
+    "overview": "개요",
+    "gallery": "미디어",
+    "previousMedia": "이전 미디어",
+    "nextMedia": "다음 미디어",
+    "selectMedia": "{{index}}번째 미디어 보기",
+    "commands": "명령",
+    "commandNoDescription": "아직 명령 설명이 없습니다.",
+    "dataAccess": "데이터 접근",
+    "dataAccessTitle": "앱은 기본적으로 고정된 기본 데이터만 접근할 수 있습니다",
+    "dataAccessBody": "민감한 명령은 서버 권한, Buddy 권한, 승인 정책을 계속 사용합니다. 설치 전에 권한과 데이터 분류를 확인하세요.",
+    "chooseServer": "서버 선택",
+    "installedOnSelected": "이 앱은 선택한 서버에 설치되어 바로 시작할 수 있습니다.",
+    "readyToAdd": "이 앱을 선택한 서버에 추가할 수 있습니다.",
+    "adminRequired": "앱을 추가하려면 서버 관리자 권한이 필요합니다.",
+    "serverCount": "서버 수",
+    "serverCountValue": "{{count}}개 서버에서 사용 중",
+    "categories": "카테고리",
+    "noCategories": "카테고리 없음",
+    "languages": "지원 언어",
+    "noLanguages": "언어 정보 없음",
+    "links": "링크",
+    "noLinks": "아직 링크가 없습니다",
+    "manifest": "Manifest",
+    "versionValue": "버전 {{version}}",
+    "privacy": "개인정보",
+    "privacyBody": "앱은 서버 승인 경계를 따라야 합니다. 표시된 링크에서 개발자 약관과 개인정보 처리방침을 확인하세요."
   },
   "channel": {
     "serverSettings": "서버 설정",
@@ -1548,6 +1574,10 @@
       "cloud": {
         "title": "템플릿으로 Cloud Buddy 시작",
         "subtitle": "템플릿을 선택하고 워크플로를 배포해 실행 가능한 기능을 서버와 채널로 가져오세요."
+      },
+      "apps": {
+        "title": "서버 기능으로 App 발견하기",
+        "subtitle": "공식 App을 둘러보고 manifest, 분류, 지원 언어, 권한을 확인한 뒤 서버에 추가하세요."
       }
     },
     "communityModelTitle": "서버 안에서",
@@ -1564,7 +1594,8 @@
       "feed": "타임라인",
       "explore": "탐색",
       "market": "마켓",
-      "cloud": "클라우드"
+      "cloud": "클라우드",
+      "apps": "Apps"
     },
     "metrics": {
       "publicCommunities": "공개 서버",
@@ -1630,7 +1661,8 @@
       "products": "서비스와 콘텐츠",
       "shops": "상점",
       "cloud": "샤오더우 Cloud",
-      "communities": "서버"
+      "communities": "서버",
+      "apps": "Apps"
     },
     "lanes": {
       "feed": "구독 타임라인",
@@ -1640,7 +1672,8 @@
       "products": "오늘 구매하기",
       "shops": "둘러볼 상점",
       "cloud": "Cloud 템플릿 캐시백",
-      "communities": "추천 서버"
+      "communities": "추천 서버",
+      "apps": "공식 App"
     },
     "laneDescriptions": {
       "feed": "읽을 수 있고 일시 중지하지 않은 채널에서 온 이미지, 문서, 음성, App 카드입니다.",
@@ -1649,7 +1682,8 @@
       "market": "가상 상품, 에셋 팩, 테스트, 서비스 티켓을 한 매대에 모았습니다.",
       "shops": "공개 개인 상점과 공개 서버 상점입니다.",
       "cloud": "배포 가능한 Buddy 서비스 템플릿과 Cloud 워크플로입니다.",
-      "communities": "채널, 상점, 멤버를 더 둘러볼 수 있는 공개 서버입니다."
+      "communities": "채널, 상점, 멤버를 더 둘러볼 수 있는 공개 서버입니다.",
+      "apps": "서버에 설치할 수 있는 인터랙티브 App, 도구, 게임입니다."
     },
     "emptyLane": {
       "feed": "아직 구독 콘텐츠가 없습니다.",
@@ -1659,7 +1693,8 @@
       "products": "등록된 항목이 아직 없습니다.",
       "shops": "둘러볼 상점이 아직 없습니다.",
       "cloud": "아직 배포할 수 있는 Cloud 템플릿이 없습니다.",
-      "communities": "공개 서버가 아직 없습니다."
+      "communities": "공개 서버가 아직 없습니다.",
+      "apps": "아직 등록된 App이 없습니다."
     },
     "feedUnread": "읽지 않음",
     "feedSource": "{{server}} / #{{channel}}",
@@ -1766,7 +1801,9 @@
       "beginner": "초급",
       "intermediate": "중급",
       "advanced": "고급"
-    }
+    },
+    "openApp": "App 보기",
+    "appServerCount": "{{count}}개 서버에서 사용 중"
   },
   "commerceMarketplace": {
     "tagPageEyebrow": "테마 매대",
@@ -2272,6 +2309,7 @@
     "pendingSent": "보낸 요청",
     "wantsToBeYourFriend": "친구 요청을 보냈습니다",
     "requestPending": "수락 대기 중",
+    "alreadyFriend": "이미 친구입니다",
     "waiting": "대기 중...",
     "noPending": "대기 중인 친구 요청이 없습니다",
     "addFriend": "친구 추가",
@@ -3667,7 +3705,7 @@
       "every_time": "매번 승인"
     },
     "admissionSubject": {
-      "server_app": "Server App",
+      "server_app": "App",
       "agent": "Buddy",
       "user": "사용자",
       "system": "시스템"

@@ -71,7 +71,7 @@ const commands = shadowApp.defineCommands({
       {
         title: `Install skill: ${result.skill.name}`,
         body: [
-          `Download the skill zip through the Shadow Skills Server App command.`,
+          `Download the skill zip through the Shadow Skills App command.`,
           '',
           `Command: shadow-skills skills.download`,
           `Input: {"skillId":"${result.skill.id}"}`,
@@ -195,6 +195,7 @@ function iconSvg() {
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+app.get('/assets/cover.png', serveStatic({ root: './public' }))
 app.get('/assets/*', serveStatic({ root: './dist/client' }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))

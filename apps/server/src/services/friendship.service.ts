@@ -3,6 +3,8 @@ import type { AgentListingDao } from '../dao/agent-listing.dao'
 import type { FriendshipDao } from '../dao/friendship.dao'
 import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { UserDao } from '../dao/user.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
+import type { MediaService } from './media.service'
 
 export class FriendshipService {
   constructor(
@@ -12,8 +14,13 @@ export class FriendshipService {
       agentDao: AgentDao
       agentListingDao: AgentListingDao
       rentalContractDao: RentalContractDao
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
     },
   ) {}
+
+  private resolveUserAvatar(avatarUrl: string | null | undefined) {
+    return resolveAvatarUrl(this.deps.mediaService, avatarUrl)
+  }
 
   /** Send a friend request by username */
   async sendRequest(requesterId: string, targetUsername: string) {
@@ -116,7 +123,7 @@ export class FriendshipService {
             id: user.id,
             username: user.username,
             displayName: user.displayName,
-            avatarUrl: user.avatarUrl,
+            avatarUrl: this.resolveUserAvatar(user.avatarUrl),
             status: user.status,
             isBot: user.isBot,
           },
@@ -152,7 +159,7 @@ export class FriendshipService {
             id: botUser.id,
             username: botUser.username,
             displayName: botUser.displayName,
-            avatarUrl: botUser.avatarUrl,
+            avatarUrl: this.resolveUserAvatar(botUser.avatarUrl),
             status: botUser.status,
             isBot: botUser.isBot,
           },
@@ -189,7 +196,7 @@ export class FriendshipService {
             id: botUser.id,
             username: botUser.username,
             displayName: botUser.displayName,
-            avatarUrl: botUser.avatarUrl,
+            avatarUrl: this.resolveUserAvatar(botUser.avatarUrl),
             status: botUser.status,
             isBot: botUser.isBot,
           },
@@ -216,7 +223,7 @@ export class FriendshipService {
             id: user.id,
             username: user.username,
             displayName: user.displayName,
-            avatarUrl: user.avatarUrl,
+            avatarUrl: this.resolveUserAvatar(user.avatarUrl),
             status: user.status,
             isBot: user.isBot,
           },
@@ -243,7 +250,7 @@ export class FriendshipService {
             id: user.id,
             username: user.username,
             displayName: user.displayName,
-            avatarUrl: user.avatarUrl,
+            avatarUrl: this.resolveUserAvatar(user.avatarUrl),
             status: user.status,
             isBot: user.isBot,
           },

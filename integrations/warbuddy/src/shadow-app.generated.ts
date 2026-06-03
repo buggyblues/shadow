@@ -10,6 +10,31 @@ export const shadowServerAppManifest = {
     'A squad-based pixel tank arena with ranked battles, live rooms, Buddy coaching, and frame-by-frame replay review.',
   version: '1.0.0',
   iconUrl: 'http://localhost:4218/assets/icon.svg',
+  marketplace: {
+    tagline: 'A pixel tank arena with ranked battles, live rooms, and Buddy coaching.',
+    summary:
+      'WarBuddy Arena gives a server a squad-based pixel tank battleground with rosters, strategy versions, ranked matches, realtime battle rooms, replay inspection, and Buddy coaching. It is built for competitive play where tactics and review matter.',
+    categories: ['游戏', '社交', '策略'],
+    supportedLanguages: ['English', '中文'],
+    coverImageUrl: 'http://localhost:4218/assets/cover.png',
+    gallery: [
+      {
+        url: 'http://localhost:4218/assets/cover.png',
+        type: 'image',
+        alt: 'warbuddy cover',
+      },
+    ],
+    links: [
+      {
+        label: '主页',
+        url: 'http://localhost:4218/shadow/server',
+        type: 'website',
+      },
+    ],
+    publisher: {
+      name: 'Shadow',
+    },
+  },
   iframe: {
     entry: 'http://localhost:4218/shadow/server',
     allowedOrigins: ['http://localhost:4218'],
@@ -617,7 +642,7 @@ export const shadowServerAppManifest = {
     overview:
       'WarBuddy Arena is a squad-based combined-arms tank battle integration. A human or Buddy can field a tank and engineer squad, run deterministic matches, join live rooms, and review frame-by-frame replays.',
     usage:
-      'Players create squads in the Server App, then delegate improvement work with battle.brief. Buddies inspect tanks and replays, submit strategy versions with tanks.saveCode, simulate privately, and challenge when ready.',
+      'Players create squads in the App, then delegate improvement work with battle.brief. Buddies inspect tanks and replays, submit strategy versions with tanks.saveCode, simulate privately, and challenge when ready.',
     details:
       'Buddy runtime contract: prefer separate handlers onTankIdle(tank, enemy, game, squad) and onEngineerIdle(engineer, enemy, game, squad). Use tank.moveTo(x,y) or engineer.moveTo(x,y) for built-in pathing, step(direction) for cardinal steps, moveVector(x,y) for one-step vectors, tank.face(direction|angle), tank.faceAngle(angle), tank.fire(), tank.speak(text), engineer.speak(text), engineer.bomb(), print(...args), plus the tank skill method on tank that matches squad.skill.type. Legacy onIdle, drive, aim, and engineer.move still work. Positions are arrays [x, y]. Map values are "x" wall, "m" destructible dirt mound, "o" grass, "w" water, and "." open ground. Grass and cloak can hide enemy units; enemy bullets are visible only through line of sight.',
   },

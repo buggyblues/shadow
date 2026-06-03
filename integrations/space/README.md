@@ -1,6 +1,6 @@
-# Space Server App
+# Space App
 
-Space is a portfolio Server App for publishing personal HTML webpage artworks. It includes a profile homepage with custom CSS, Pinterest-style tags, public/private artworks, comments and interactions, remixes, favorites, version history, rollback, and HTML/ZIP upload into a MinIO-compatible CDN store.
+Space is a portfolio App for publishing personal HTML webpage artworks. It includes a profile homepage with custom CSS, Pinterest-style tags, public/private artworks, comments and interactions, remixes, favorites, version history, rollback, and HTML/ZIP upload into a MinIO-compatible CDN store.
 
 ```bash
 pnpm -C integrations/space typegen

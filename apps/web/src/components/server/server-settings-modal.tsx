@@ -33,6 +33,7 @@ import {
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { copyToClipboard } from '../../lib/clipboard'
 import {
   SettingsCard,
   SettingsDanger,
@@ -250,9 +251,14 @@ export function ServerSettingsModal({
   const copyInviteCode = async () => {
     if (server?.inviteCode) {
       const inviteLink = `${window.location.origin}/app/invite/${server.inviteCode}`
-      await navigator.clipboard.writeText(inviteLink)
-      setCopiedInvite(true)
-      setTimeout(() => setCopiedInvite(false), 2000)
+      const didCopy = await copyToClipboard(inviteLink, {
+        successMessage: t('common.copied'),
+        errorMessage: t('chat.copyFailed'),
+      })
+      if (didCopy) {
+        setCopiedInvite(true)
+        setTimeout(() => setCopiedInvite(false), 2000)
+      }
     }
   }
 

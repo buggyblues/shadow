@@ -821,7 +821,7 @@
     "groupServers": "服务器",
     "searchMessages": "搜索消息",
     "openServerHome": "打开服务器主页",
-    "openApps": "打开服务器应用",
+    "openApps": "打开应用",
     "openShop": "打开服务器商店"
   },
   "serverLanding": {
@@ -837,67 +837,93 @@
     "cta": "开始了解"
   },
   "serverApps": {
-    "nav": "应用",
     "group": "应用",
-    "addApp": "添加 App",
-    "title": "服务器应用",
-    "empty": "这个服务器还没有安装应用。",
-    "installedTitle": "已安装 App",
-    "noInstalled": "还没有安装 App。",
-    "addDescription": "从商店选择 App，或粘贴应用配置 URL 连接后安装到这个服务器。",
+    "installedTitle": "已安装应用",
+    "addApp": "添加应用",
+    "addDescription": "从官方目录添加应用，或者粘贴 manifest URL 安装自定义应用。",
     "addMode": {
-      "catalog": "商店",
-      "custom": "自定义"
+      "catalog": "官方目录",
+      "custom": "自定义安装"
     },
     "auth": {
-      "oauth2-bearer": "OAuth Bearer"
+      "oauth2-bearer": "OAuth 2.0"
     },
-    "install": "安装应用",
-    "manifestUrl": "应用配置 URL",
-    "installButton": "安装",
-    "selectApp": "选择一个应用",
-    "selectFromSidebar": "从左侧选择一个 App",
-    "noDescription": "暂无描述",
-    "openApp": "打开 App",
-    "copyAppLink": "复制 App 链接",
-    "refresh": "刷新",
-    "openExternal": "打开",
-    "noIframe": "此应用未提供 iframe 入口。",
-    "commands": "命令",
-    "buddyUsage": "Buddy 用法",
-    "discoverInstall": "发现并授权",
-    "catalogTitle": "应用商店",
-    "catalogEmpty": "商店里暂无可安装应用。",
-    "installFromCatalog": "安装",
-    "customInstall": "自定义应用",
-    "discoverButton": "连接应用",
-    "requestedPermissions": "申请的权限",
     "alreadyInstalled": "已安装",
-    "authorizeInstall": "安装",
-    "authorizeBuddy": "授权 Buddy",
-    "accessTitle": "访问权限",
-    "accessDescription": "选择哪些 Buddy 可以从服务器频道里操作这个 App。",
-    "grantButton": "授予访问",
-    "grantSuccess": "Buddy 访问已更新。",
-    "noBuddies": "此服务器暂无可用 Buddy 成员。",
-    "uninstallApp": "卸载",
+    "installFromCatalog": "安装",
+    "catalogEmpty": "官方目录里还没有可安装的应用。",
+    "customInstall": "使用 manifest URL 安装",
+    "manifestUrl": "Manifest URL",
+    "discoverButton": "检查",
+    "requestedPermissions": "请求权限",
+    "authorizeInstall": "授权并安装",
+    "noDescription": "暂无介绍",
+    "noInstalled": "还没有安装应用。",
+    "selectApp": "选择一个应用",
+    "selectFromSidebar": "从左侧选择已安装应用，或添加新应用。",
+    "install": "安装应用",
+    "privateUrlError": "这个应用地址指向本地或私有网络，当前环境不允许安装。",
     "uninstallConfirmTitle": "卸载应用",
-    "uninstallConfirmMessage": "确定要卸载 {{name}} 吗？已授权的 Buddy 将无法继续操作这个 App。",
-    "privateUrlError": "这个地址是内网或本机地址，服务端默认不会访问。开发时请改用 host.lima.internal，或把该主机加入 SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS 后重启服务。",
-    "defaultAccessTitle": "默认放行权限",
-    "defaultAccessDescription": "成员和 Buddy 可直接使用这些权限，不会弹出确认；敏感写入可保持未勾选，在首次使用时确认。",
+    "uninstallConfirmMessage": "确定要从服务器卸载 {{name}} 吗？相关 Buddy 授权也会失效。",
+    "uninstallApp": "卸载应用",
+    "accessTitle": "Buddy 访问",
+    "defaultAccessTitle": "默认权限",
+    "defaultAccessDescription": "选择新 Buddy 默认可使用的应用权限。",
     "saveDefaultAccess": "保存默认权限",
-    "defaultAccessSaved": "默认访问已更新。",
-    "commandApprovalTitle": "授权 App 命令",
-    "commandApprovalSubject": "授权对象",
+    "defaultAccessSaved": "默认权限已保存",
+    "accessDescription": "为指定 Buddy 授权后，它就可以通过命令调用这个应用。",
+    "grantButton": "授权 Buddy",
+    "grantSuccess": "Buddy 授权已保存",
+    "noBuddies": "这个服务器还没有 Buddy。",
+    "openApp": "打开应用",
+    "copyAppLink": "复制应用链接",
+    "noIframe": "这个应用没有可打开的界面。",
+    "commandApprovalTitle": "确认应用命令",
+    "commandApprovalMessage": "{{appName}} 想执行 {{commandName}}。",
+    "commandApprovalSubject": "发起方",
     "commandApprovalBuddy": "Buddy",
     "commandApprovalPerson": "成员",
     "commandApprovalPermission": "权限",
-    "commandApprovalScope": "动作",
-    "commandApprovalDenied": "已取消命令授权。",
-    "commandApprovalSuccess": "App 命令已授权。",
-    "commandApprovalFailed": "App 命令授权失败。",
-    "commandApprovalConfirm": "授权并继续"
+    "commandApprovalScope": "范围",
+    "commandApprovalConfirm": "允许执行",
+    "commandApprovalDenied": "已取消应用命令",
+    "commandApprovalSuccess": "应用命令已批准",
+    "commandApprovalFailed": "批准应用命令失败",
+    "backToDirectory": "返回应用目录",
+    "start": "启动",
+    "addToServer": "添加到服务器",
+    "adding": "添加中...",
+    "installed": "已安装",
+    "installSuccess": "应用已添加到服务器",
+    "installFailed": "添加应用失败",
+    "notFoundTitle": "找不到这个应用",
+    "notFoundDesc": "它可能还没有收录，或者已从官方市场下架。",
+    "noTagline": "这个应用还没有一句话介绍。",
+    "overview": "概况",
+    "gallery": "媒体",
+    "previousMedia": "上一张媒体",
+    "nextMedia": "下一张媒体",
+    "selectMedia": "查看第 {{index}} 个媒体",
+    "commands": "命令",
+    "commandNoDescription": "暂无命令说明。",
+    "dataAccess": "数据访问",
+    "dataAccessTitle": "应用默认只能访问固定的基础数据",
+    "dataAccessBody": "更敏感的命令会继续走服务器权限、Buddy 授权和审批策略；安装前请查看权限与数据类别。",
+    "chooseServer": "选择服务器",
+    "installedOnSelected": "这个应用已安装在所选服务器，可以直接启动。",
+    "readyToAdd": "你可以把这个应用添加到所选服务器。",
+    "adminRequired": "需要服务器管理员权限才能添加应用。",
+    "serverCount": "服务器数量",
+    "serverCountValue": "在 {{count}} 个服务器中",
+    "categories": "类别",
+    "noCategories": "未标注类别",
+    "languages": "支持语言",
+    "noLanguages": "未标注语言",
+    "links": "链接",
+    "noLinks": "暂无链接",
+    "manifest": "Manifest",
+    "versionValue": "版本 {{version}}",
+    "privacy": "隐私",
+    "privacyBody": "应用必须遵守服务器授权边界。请通过链接查看开发者服务条款与隐私政策。"
   },
   "channel": {
     "serverSettings": "服务器设置",
@@ -1597,7 +1623,7 @@
     "faq4q": "消息支持什么格式？",
     "faq4a": "消息支持完整的 Markdown 格式，包括粗体、斜体、代码块、列表、链接等，同时支持发送图片和使用 Emoji 回应。",
     "faq5q": "可以在手机上使用吗？",
-    "faq5a": "可以！虾豆的网页版已经针对移动端进行了深度优化，在手机浏览器中可以获得类似原生 App 的体验。",
+    "faq5a": "可以！虾豆的网页版已经针对移动端进行了深度优化，在手机浏览器中可以获得类似原生应用的体验。",
     "faq6q": "数据安全吗？",
     "faq6a": "虾豆支持私有化部署，所有数据存储在你自己的服务器上。同时所有通信都经过加密传输。",
     "faq7q": "如何创建 AI Buddy？",
@@ -1680,7 +1706,7 @@
     "loadMore": "加载更多服务器",
     "noMore": "已显示全部服务器",
     "emptyTitle": "还没有找到想逛的内容",
-    "emptyDesc": "先换个关键词，或者稍后再来看看新的 Buddy、服务、店铺和服务器。",
+    "emptyDesc": "先换个关键词，或者稍后再来看看新的 Buddy、应用、服务、店铺和服务器。",
     "noSearchResults": "没有找到结果",
     "noSearchResultsDesc": "换一个关键词试试。",
     "playsTitle": "玩法",
@@ -1741,6 +1767,10 @@
       "cloud": {
         "title": "用 DIY Cloud 部署 Buddy 团队",
         "subtitle": "挑选模板，一键在云端部署可协作的 Buddy 团队，把能力直接带回服务器与频道。"
+      },
+      "apps": {
+        "title": "发现好玩的应用",
+        "subtitle": "把游戏、工具和创作应用带进你的服务器，和朋友一起玩、一起用。"
       }
     },
     "communityModelTitle": "服务器里有什么",
@@ -1757,7 +1787,8 @@
       "feed": "时间线",
       "explore": "探索",
       "market": "市场",
-      "cloud": "云"
+      "cloud": "云",
+      "apps": "应用"
     },
     "metrics": {
       "publicCommunities": "公开服务器",
@@ -1824,7 +1855,8 @@
       "products": "服务与内容",
       "shops": "店铺",
       "cloud": "虾豆云",
-      "communities": "服务器"
+      "communities": "服务器",
+      "apps": "应用"
     },
     "lanes": {
       "feed": "我的订阅",
@@ -1834,7 +1866,8 @@
       "products": "今天可买",
       "shops": "值得逛的店",
       "cloud": "虾豆云模板",
-      "communities": "推荐服务器"
+      "communities": "推荐服务器",
+      "apps": "官方应用"
     },
     "laneDescriptions": {
       "feed": "来自你有权限访问且未暂停订阅频道的图片、文档、语音和应用卡片。",
@@ -1843,7 +1876,8 @@
       "market": "虚拟商品、素材包、测试和服务券统一上架。",
       "shops": "公开个人店铺和公开服务器店铺。",
       "cloud": "可部署 Buddy 团队模板，在云端快速搭建协作能力。",
-      "communities": "公开服务器入口，适合继续逛频道、店铺和成员。"
+      "communities": "公开服务器入口，适合继续逛频道、店铺和成员。",
+      "apps": "游戏、工具和创作应用，适合和服务器里的朋友一起玩、一起用。"
     },
     "emptyLane": {
       "feed": "暂时没有订阅内容。",
@@ -1853,7 +1887,8 @@
       "products": "暂时没有上架内容。",
       "shops": "暂时没有可逛的店铺。",
       "cloud": "暂时没有可部署的虾豆云模板。",
-      "communities": "暂时没有公开服务器。"
+      "communities": "暂时没有公开服务器。",
+      "apps": "还没有可添加的应用"
     },
     "feedUnread": "未读",
     "feedSource": "{{server}} / #{{channel}}",
@@ -1952,7 +1987,9 @@
         "title": "心理测试",
         "subtitle": "量表、互动问卷和可购买的测评体验。"
       }
-    }
+    },
+    "openApp": "查看应用",
+    "appServerCount": "在 {{count}} 个服务器中"
   },
   "store": {
     "featured": "精选"
@@ -2461,6 +2498,7 @@
     "pendingSent": "已发送的请求",
     "wantsToBeYourFriend": "请求添加你为好友",
     "requestPending": "等待对方接受",
+    "alreadyFriend": "已是好友",
     "waiting": "等待中...",
     "noPending": "暂无待处理的好友请求",
     "addFriend": "添加好友",
@@ -3018,8 +3056,8 @@
     "deliveryPendingHint": "当前还没有可打开内容，请等待商家处理或查看订单进度。",
     "serviceCompletedContent": "服务已完成",
     "serviceCompletedHint": "这次服务已确认完成，交付过程和评价会保留在订单时间线。",
-    "externalAppEntitlementContent": "App 权益已可使用",
-    "externalAppEntitlementHint": "服务商 App 可通过 OAuth 查询或核销这份权益。",
+    "externalAppEntitlementContent": "应用权益已可使用",
+    "externalAppEntitlementHint": "服务商应用可通过 OAuth 查询或核销这份权益。",
     "fulfillmentJob": "履约任务",
     "afterSaleRules": "售后",
     "afterSaleRulesHint": "需要退款或停止续费时从这里处理，结果会同步到订单。",
@@ -3097,7 +3135,7 @@
       "digital_asset": "数字资产",
       "community_asset": "社区资产",
       "subscription": "订阅权益",
-      "external_app": "App 权益",
+      "external_app": "应用权益",
       "external_resource": "外部资源"
     },
     "capabilities": {
@@ -3144,7 +3182,7 @@
     "deliveryAndPricing": "买家获得什么",
     "deliveryAndPricingHint": "告诉买家会得到什么、多少钱、能用多久。",
     "fulfillmentTarget": "购买后获得",
-    "fulfillmentTargetHint": "选择服务、付费文件、徽章、礼物或 App 权益。",
+    "fulfillmentTargetHint": "选择服务、付费文件、徽章、礼物或应用权益。",
     "priceInvalidHint": "价格必须大于 0。",
     "durationInvalidHint": "限时或订阅商品需要填写有效天数。",
     "buyerPreviewHint": "确认一下买家看到的名称、封面、价格和交付方式。",
@@ -3162,7 +3200,7 @@
       "gift": "礼物",
       "ticket": "服务券",
       "asset": "社区资产",
-      "app": "App 权益",
+      "app": "应用权益",
       "physical": "实物"
     },
     "consumerPath": {
@@ -3187,7 +3225,7 @@
       "gift": "可赠送收藏",
       "ticket": "可核销凭证",
       "asset": "进入钱包资产",
-      "app": "App 内使用",
+      "app": "应用内使用",
       "physical": "配送交付"
     },
     "deliveryRecord": "订单留痕",
@@ -3389,8 +3427,8 @@
     "fulfillmentAssetHint": "购买完成后会进入钱包资产库，可消费、赠送或查看历史。",
     "fulfillmentFileTitle": "付费内容已开通",
     "fulfillmentFileHint": "购买后会直接打开，也可以从订单或钱包再次进入。",
-    "fulfillmentExternalAppTitle": "App 权益已绑定",
-    "fulfillmentExternalAppHint": "购买后可在对应 App 内查询或核销这份权益。",
+    "fulfillmentExternalAppTitle": "应用权益已绑定",
+    "fulfillmentExternalAppHint": "购买后可在对应应用内查询或核销这份权益。",
     "fulfillmentServiceTitle": "服务履约已记录",
     "fulfillmentServiceHint": "店主会按订单处理服务，也可从订单联系客服。",
     "fulfillmentProgress": "履约进度",
@@ -3662,7 +3700,7 @@
     "admissionSave": "保存策略",
     "admissionAddRule": "添加规则",
     "admissionSubjectId": "主体 ID",
-    "admissionAppKey": "App Key",
+    "admissionAppKey": "应用 Key",
     "admissionMode": {
       "allow": "直接放行",
       "deny": "拒绝",
@@ -3670,7 +3708,7 @@
       "every_time": "每次批准"
     },
     "admissionSubject": {
-      "server_app": "Server App",
+      "server_app": "应用",
       "agent": "Buddy",
       "user": "用户",
       "system": "系统"
@@ -4196,7 +4234,7 @@
     "currentVersion": "当前版本",
     "platform": "平台",
     "network": "网络",
-    "serverBaseUrl": "App Base URL",
+    "serverBaseUrl": "应用 Base URL",
     "serverBaseUrlDesc": "桌面端社区窗口会直接打开这个 URL，API 和 Socket 请求使用同一个主机。",
     "httpProxy": "HTTP 代理",
     "httpProxyDesc": "可选。填写 HTTP 代理地址，例如 http://127.0.0.1:7890。",

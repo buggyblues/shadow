@@ -459,6 +459,28 @@ export interface ShadowServerAppRealtimeSpec {
   }
 }
 
+export interface ShadowServerAppMarketplaceMetadata {
+  tagline?: string
+  summary?: string
+  categories?: readonly string[]
+  supportedLanguages?: readonly string[]
+  coverImageUrl?: string
+  gallery?: readonly {
+    url: string
+    type?: 'image' | 'video'
+    alt?: string
+  }[]
+  links?: readonly {
+    label: string
+    url: string
+    type?: 'website' | 'support' | 'docs' | 'terms' | 'privacy' | 'dashboard' | 'premium'
+  }[]
+  publisher?: {
+    name?: string
+    websiteUrl?: string
+  }
+}
+
 export interface ShadowServerAppManifest {
   schemaVersion: 'shadow.app/1'
   appKey: string
@@ -467,6 +489,7 @@ export interface ShadowServerAppManifest {
   version?: string
   updatedAt?: string
   iconUrl: string
+  marketplace?: ShadowServerAppMarketplaceMetadata
   iframe?: {
     entry: string
     allowedOrigins: readonly string[]
@@ -583,10 +606,27 @@ export interface ShadowServerAppCatalogEntry {
   manifestUrl?: string | null
   manifest: ShadowServerAppManifest
   status: string
+  tagline?: string | null
+  summary?: string | null
+  categories?: string[]
+  supportedLanguages?: string[]
+  coverImageUrl?: string | null
+  gallery?: Array<{ url: string; type: 'image' | 'video'; alt: string | null }>
+  links?: Array<{ label: string; url: string; type: string }>
+  publisher?: { name: string | null; websiteUrl: string | null } | null
+  commandCount?: number
+  skillCount?: number
+  serverCount?: number
   installed?: ShadowServerAppIntegration | null
   permissions?: ShadowServerAppDiscovery['permissions']
   createdAt: string
   updatedAt: string
+}
+
+export interface ShadowServerAppDirectoryResponse {
+  apps: ShadowServerAppCatalogEntry[]
+  total: number
+  hasMore: boolean
 }
 
 export interface ShadowServerAppLaunchContext {

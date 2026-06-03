@@ -11,6 +11,31 @@ export const shadowServerAppManifest = {
   version: '1.1.0',
   updatedAt: '2026-05-21T00:00:00.000Z',
   iconUrl: 'http://localhost:4216/assets/icon.svg',
+  marketplace: {
+    tagline: 'A visual card canvas for building, arranging, and sharing ideas with your server.',
+    summary:
+      'Flash gives a server a persistent creative canvas for cards, images, code, charts, timelines, poker, tarot, Live2D, Three.js scenes, and realtime board collaboration. People and Buddies can create cards, upload assets, publish board state, and keep visual work organized in one shared place.',
+    categories: ['创作', '效率', '工具'],
+    supportedLanguages: ['English', '中文'],
+    coverImageUrl: 'http://localhost:4216/assets/cover.png',
+    gallery: [
+      {
+        url: 'http://localhost:4216/assets/cover.png',
+        type: 'image',
+        alt: 'flash cover',
+      },
+    ],
+    links: [
+      {
+        label: '主页',
+        url: 'http://localhost:4216/shadow/server',
+        type: 'website',
+      },
+    ],
+    publisher: {
+      name: 'Shadow',
+    },
+  },
   iframe: {
     entry: 'http://localhost:4216/shadow/server',
     allowedOrigins: ['http://localhost:4216'],

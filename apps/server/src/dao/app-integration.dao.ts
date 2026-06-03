@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import {
   type ServerAppManifest,
@@ -57,6 +57,29 @@ export class AppIntegrationDao {
       )
       .limit(1)
     return rows[0] ?? null
+  }
+
+  async findLatestByAppKey(appKey: string) {
+    const rows = await this.db
+      .select()
+      .from(serverAppIntegrations)
+      .where(eq(serverAppIntegrations.appKey, appKey))
+      .orderBy(desc(serverAppIntegrations.updatedAt))
+      .limit(1)
+    return rows[0] ?? null
+  }
+
+  async countInstallationsByAppKeys(appKeys: string[]) {
+    const uniqueAppKeys = [...new Set(appKeys)].filter(Boolean)
+    if (uniqueAppKeys.length === 0) return []
+    return this.db
+      .select({
+        appKey: serverAppIntegrations.appKey,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(serverAppIntegrations)
+      .where(inArray(serverAppIntegrations.appKey, uniqueAppKeys))
+      .groupBy(serverAppIntegrations.appKey)
   }
 
   async upsert(data: {
@@ -132,6 +155,7 @@ export class AppIntegrationDao {
       name: string
       description?: string | null
       iconUrl?: string | null
+      manifestUrl?: string | null
       manifest: ServerAppManifest
       manifestVersion?: string | null
       manifestUpdatedAt?: Date | null
@@ -148,6 +172,7 @@ export class AppIntegrationDao {
         name: data.name,
         description: data.description ?? null,
         iconUrl: data.iconUrl ?? null,
+        ...(data.manifestUrl !== undefined ? { manifestUrl: data.manifestUrl } : {}),
         manifest: data.manifest,
         manifestVersion: data.manifestVersion ?? data.manifest.version ?? null,
         manifestUpdatedAt: data.manifestUpdatedAt ?? null,
@@ -240,6 +265,31 @@ export class AppIntegrationDao {
       })
       .returning()
     return rows[0]!
+  }
+
+  async updateCatalogEntryManifest(
+    id: string,
+    data: {
+      name: string
+      description?: string | null
+      iconUrl?: string | null
+      manifestUrl?: string | null
+      manifest: ServerAppManifest
+    },
+  ) {
+    const rows = await this.db
+      .update(serverAppCatalogEntries)
+      .set({
+        name: data.name,
+        description: data.description ?? null,
+        iconUrl: data.iconUrl ?? null,
+        manifestUrl: data.manifestUrl ?? null,
+        manifest: data.manifest,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(serverAppCatalogEntries.id, id))
+      .returning()
+    return rows[0] ?? null
   }
 
   async deleteCatalogEntryById(id: string) {

@@ -3,6 +3,7 @@ import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import type { ActorInput } from '../security/actor'
 import type {
   CreateServerInput,
@@ -10,6 +11,7 @@ import type {
   UpdateServerInput,
 } from '../validators/server.schema'
 import { canBuddyJoinServer } from './buddy-policy'
+import type { MediaService } from './media.service'
 import type { MembershipSnapshot } from './membership.service'
 import type { PolicyService } from './policy.service'
 
@@ -38,8 +40,13 @@ export class ServerService {
         getMembership: (userId: string) => Promise<MembershipSnapshot>
       }
       policyService: PolicyService
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
     },
   ) {}
+
+  private resolveUserAvatar(avatarUrl: string | null | undefined) {
+    return resolveAvatarUrl(this.deps.mediaService, avatarUrl)
+  }
 
   /** Generate a unique slug from a name, appending a random suffix if needed. */
   private async generateUniqueSlug(name: string, excludeId?: string): Promise<string> {
@@ -279,7 +286,7 @@ export class ServerService {
           uid: owner.id,
           nickname: owner.displayName || owner.username || owner.id,
           username: owner.username,
-          avatarUrl: owner.avatarUrl,
+          avatarUrl: this.resolveUserAvatar(owner.avatarUrl),
         }
       })()
       const botTag =
@@ -292,7 +299,7 @@ export class ServerService {
         ...member,
         uid: user?.id ?? member.userId,
         nickname: user?.displayName || user?.username || user?.id || member.userId,
-        avatar: user?.avatarUrl ?? null,
+        avatar: this.resolveUserAvatar(user?.avatarUrl),
         status,
         membershipTier: membership?.tier.id ?? 'visitor',
         membershipLevel: membership?.level ?? 0,
@@ -304,6 +311,7 @@ export class ServerService {
         user: user
           ? {
               ...user,
+              avatarUrl: this.resolveUserAvatar(user.avatarUrl),
               membership: membership
                 ? {
                     status: membership.status,

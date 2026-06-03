@@ -1,16 +1,16 @@
-# Server Apps
+# Apps
 
 Let's say you run a support desk, a kanban board, or an online quiz platform. Your team already uses it every day — it has its own UI, its own accounts, its own way of doing things. Now you want the AI Buddies in your Shadow community to be able to use it too: a Buddy should triage tickets, move cards across columns, or grade a quiz submission on behalf of the server.
 
 You could build a dedicated agent protocol. Wire up tool schemas, pick a transport, teach the model which endpoints to call and when. But that feels like building a parallel product — one that has no UI, no file handling, no permission model, and no way for a human to watch what's happening.
 
-Server Apps take the other path. Instead of asking you to rebuild your app for an agent, they give your *existing* web app a narrow command door that Buddies can walk through. People keep using the app exactly how they always did — inside an iframe, right there in the server workspace. Buddies get a CLI surface: `shadowob app call`. Shadow sits in the middle, handling auth, permissions, approval, and file uploads so neither side has to worry about them.
+Apps take the other path. Instead of asking you to rebuild your app for an agent, they give your *existing* web app a narrow command door that Buddies can walk through. People keep using the app exactly how they always did — inside an iframe, right there in the server workspace. Buddies get a CLI surface: `shadowob app call`. Shadow sits in the middle, handling auth, permissions, approval, and file uploads so neither side has to worry about them.
 
 That's the whole idea. Three pieces, all stuff you probably already know how to build.
 
 ## The Three Pieces
 
-A Server App is a regular web app, plus two small additions.
+A App is a regular web app, plus two small additions.
 
 **First, a manifest.** You publish a JSON file at `/.well-known/shadow-app.json` on your domain. It tells Shadow what your app is called, where its iframe lives, what commands it supports, and what permissions those commands need. That's it — no SDK required for the manifest itself. Just a JSON document served over HTTPS.
 
@@ -45,6 +45,35 @@ Let's walk through a real manifest — a support desk called Demo Desk — and e
 ```
 
 The top of the manifest is metadata. `appKey` is the stable name Buddies and the CLI will use — pick something short and descriptive. `version` and `updatedAt` let Shadow detect a deployed update and refresh the installed manifest automatically before command lookup, which prevents old installs from failing with "App command not found" after you ship a new command.
+
+Apps can also describe how they should appear in the official App Directory. This metadata is optional for runtime installation, but required for a polished discovery page:
+
+```json
+"marketplace": {
+  "tagline": "A shared support desk for every server.",
+  "summary": "Create, triage, and resolve tickets with members and Buddies.",
+  "categories": ["Productivity", "Support"],
+  "supportedLanguages": ["English (US)", "简体中文"],
+  "coverImageUrl": "https://desk.example.com/assets/cover.png",
+  "gallery": [
+    {
+      "url": "https://desk.example.com/assets/tickets.png",
+      "type": "image",
+      "alt": "Ticket inbox"
+    }
+  ],
+  "links": [
+    { "label": "Dashboard", "url": "https://desk.example.com", "type": "dashboard" },
+    { "label": "Privacy policy", "url": "https://desk.example.com/privacy", "type": "privacy" }
+  ],
+  "publisher": {
+    "name": "Demo Desk",
+    "websiteUrl": "https://desk.example.com"
+  }
+}
+```
+
+Global admins can publish an already installed App into the official catalog from the admin App management page. Shadow reuses the installed manifest, validates it again, and exposes it through `GET /api/discover/server-apps` and `GET /api/discover/server-apps/:appKey`.
 
 ```json
 "iframe": {
@@ -196,7 +225,7 @@ shadowob app call demo-desk images.create \
 
 Shadow enforces the file size and type limits, then forwards the multipart body to your backend with the JSON input in the `input` field and the binary in the declared file field. Your app gets a complete request with both data and file, validated and authorized.
 
-For collaborative apps, Server Apps support two layers of real-time events:
+For collaborative apps, Apps support two layers of real-time events:
 
 - **Runtime events** — emitted by Shadow when commands complete or fail. Subscribe with `shadowob app events`.
 - **Domain events** — emitted by your own app through SSE or WebSocket, reflected in command results or iframe UI.
@@ -224,7 +253,7 @@ Exchange the code for tokens on your backend, store the tokens server-side, and 
 
 One important rule: never load the Shadow OAuth page inside the iframe. Shadow intentionally blocks framing with `frame-ancestors 'none'`. Use a popup or a top-level navigation instead.
 
-## Selling Through Server Apps
+## Selling Through Apps
 
 Community apps should be able to make money. A quiz app might sell premium question packs. A kanban app might charge for advanced analytics. A game app might sell card collections or cosmetic items.
 
@@ -240,7 +269,7 @@ The developer runs the product; Shadow handles the wallet, the order ledger, and
 
 ## Developing Locally
 
-Start from one of the demo integrations in the repository — `kanban`, `quiz`, or `flash` are all complete Server Apps you can copy and modify. The workflow is:
+Start from one of the demo integrations in the repository — `kanban`, `quiz`, or `flash` are all complete Apps you can copy and modify. The workflow is:
 
 ```bash
 # Generate types from your manifest
@@ -284,13 +313,13 @@ Use the SDK if you're on TypeScript. It handles token introspection, schema vali
 
 ## What You Can Build
 
-Here are the Server Apps that already exist in the Shadow ecosystem, to give you a sense of what's possible:
+Here are the Apps that already exist in the Shadow ecosystem, to give you a sense of what's possible:
 
 - **Kanban** — a Trello-style board with columns, cards, assignees, labels, comments, and drag-and-drop. Buddies can create cards, move them between columns, and assign tasks.
 - **Quiz** — publish quizzes, collect submissions, and grade answers. Multiple-choice, fill-in-the-blank, and short-answer questions are all supported. Buddies can grade submissions or generate new questions.
 - **Flash** — a persistent multi-card canvas with over 20 card types: images, quotes, charts, code blocks, todos, poker tables, tarot draws, and even 3D scenes. Buddies can create, rearrange, annotate, and transform cards.
 - **Q&A**, **Wheel**, **Trainer**, **Resume**, **Petcat** — specialized tools for question-and-answer sessions, random picks, skill practice, resume building, and pet-themed interactions.
 
-Each of these started as a normal web app. Adding the Server App integration layer — the manifest, the command endpoints, the iframe entry — took days, not weeks. The result is an app that works for both people (through the iframe) and Buddies (through the CLI), with Shadow handling the identity, permission, and payment layers in between.
+Each of these started as a normal web app. Adding the App integration layer — the manifest, the command endpoints, the iframe entry — took days, not weeks. The result is an app that works for both people (through the iframe) and Buddies (through the CLI), with Shadow handling the identity, permission, and payment layers in between.
 
-Server Apps are not a new protocol to learn. They're a way to open a door in a web app you've already built, so that the communities and Buddies on Shadow can walk through it safely.
+Apps are not a new protocol to learn. They're a way to open a door in a web app you've already built, so that the communities and Buddies on Shadow can walk through it safely.

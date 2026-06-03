@@ -413,7 +413,7 @@
   "contentFeed": {
     "title": "購読",
     "empty": "購読コンテンツはありません",
-    "emptyDesc": "チャンネルを購読すると、添付ファイル付きメッセージや Server App カードがここに表示されます。",
+    "emptyDesc": "チャンネルを購読すると、添付ファイル付きメッセージや App カードがここに表示されます。",
     "markAllRead": "すべて既読にする",
     "open": "開く",
     "card": "アプリカード",
@@ -1152,7 +1152,8 @@
       "browse": "閲覧",
       "explore": "探索",
       "market": "マーケット",
-      "cloud": "クラウド"
+      "cloud": "クラウド",
+      "apps": "Apps"
     },
     "metrics": {
       "publicCommunities": "公開サーバー",
@@ -1216,7 +1217,8 @@
       "products": "サービスと内容",
       "shops": "ショップ",
       "cloud": "Xiaodou Cloud",
-      "communities": "サーバー"
+      "communities": "サーバー",
+      "apps": "Apps"
     },
     "lanes": {
       "plays": "今すぐ始められるプレイ",
@@ -1225,7 +1227,8 @@
       "products": "今日買えるもの",
       "shops": "見る価値のあるショップ",
       "cloud": "Cloud テンプレート還元",
-      "communities": "おすすめサーバー"
+      "communities": "おすすめサーバー",
+      "apps": "公式 App"
     },
     "laneDescriptions": {
       "plays": "今すぐ開けるインタラクティブコンテンツとゲーム入口。",
@@ -1233,7 +1236,8 @@
       "market": "サーバーショップと個人ショップの公開商品とサービス。",
       "shops": "商品、サポート、提供情報をまとめたショップ空間。",
       "cloud": "デプロイ可能な Buddy サービステンプレートと Cloud ワークフロー。",
-      "communities": "チャンネル、ショップ、Buddy を含む公開サーバー。"
+      "communities": "チャンネル、ショップ、Buddy を含む公開サーバー。",
+      "apps": "サーバーにインストールできるインタラクティブ App、ツール、ゲーム。"
     },
     "emptyLane": {
       "plays": "開始できるプレイはまだありません。",
@@ -1242,7 +1246,8 @@
       "products": "出品はまだありません。",
       "shops": "見られるショップはまだありません。",
       "cloud": "デプロイできる Cloud テンプレートはまだありません。",
-      "communities": "公開サーバーはまだありません。"
+      "communities": "公開サーバーはまだありません。",
+      "apps": "掲載されている App はまだありません。"
     },
     "cashbackBadge": "テンプレート還元",
     "cashbackTitle": "Cloud テンプレートを公開して還元を得る",
@@ -1287,7 +1292,15 @@
         "title": "心理テスト",
         "subtitle": "尺度、インタラクティブ問診、購入できる評価体験。"
       }
-    }
+    },
+    "hero": {
+      "apps": {
+        "title": "サーバー機能として App を見つける",
+        "subtitle": "公式 App を閲覧し、manifest、カテゴリ、対応言語、権限を確認してからサーバーに追加できます。"
+      }
+    },
+    "openApp": "App を見る",
+    "appServerCount": "{{count}} 個のサーバーで利用"
   },
   "commerceMarketplace": {
     "globalPublic": "グローバルマーケットに掲載",
@@ -1493,13 +1506,93 @@
     "approved": "承認済"
   },
   "serverApps": {
-    "noIframe": "このアプリには iframe エントリがありません。",
-    "commandApprovalTitle": "アプリコマンドを承認",
-    "commandApprovalMessage": "{{app}} が {{permission}} を使って {{command}} を実行しようとしています。",
-    "commandApprovalDenied": "コマンド承認をキャンセルしました。",
-    "commandApprovalSuccess": "アプリコマンドを承認しました。",
-    "commandApprovalFailed": "アプリコマンドの承認に失敗しました。",
-    "commandApprovalConfirm": "承認して続行"
+    "group": "アプリ",
+    "installedTitle": "インストール済みアプリ",
+    "addApp": "アプリを追加",
+    "addDescription": "公式ディレクトリから追加するか、manifest URL でカスタムアプリをインストールします。",
+    "addMode": {
+      "catalog": "公式ディレクトリ",
+      "custom": "カスタム"
+    },
+    "auth": {
+      "oauth2-bearer": "OAuth 2.0"
+    },
+    "alreadyInstalled": "インストール済み",
+    "installFromCatalog": "インストール",
+    "catalogEmpty": "ディレクトリに追加できるアプリはまだありません。",
+    "customInstall": "manifest URL でインストール",
+    "manifestUrl": "Manifest URL",
+    "discoverButton": "確認",
+    "requestedPermissions": "要求される権限",
+    "authorizeInstall": "承認してインストール",
+    "noDescription": "説明はまだありません",
+    "noInstalled": "アプリはまだインストールされていません。",
+    "selectApp": "アプリを選択",
+    "selectFromSidebar": "左からインストール済みアプリを選ぶか、新しいアプリを追加してください。",
+    "install": "アプリをインストール",
+    "privateUrlError": "このアプリ URL はローカルまたはプライベートネットワークを指しているため、この環境ではインストールできません。",
+    "uninstallConfirmTitle": "アプリをアンインストール",
+    "uninstallConfirmMessage": "{{name}} をこのサーバーから削除しますか？関連する Buddy 権限も無効になります。",
+    "uninstallApp": "アンインストール",
+    "accessTitle": "Buddy アクセス",
+    "defaultAccessTitle": "デフォルト権限",
+    "defaultAccessDescription": "新しい Buddy がデフォルトで使えるアプリ権限を選択します。",
+    "saveDefaultAccess": "デフォルトを保存",
+    "defaultAccessSaved": "デフォルト権限を保存しました",
+    "accessDescription": "Buddy に権限を付与すると、コマンドからこのアプリを呼び出せます。",
+    "grantButton": "Buddy に付与",
+    "grantSuccess": "Buddy 権限を保存しました",
+    "noBuddies": "このサーバーにはまだ Buddy がいません。",
+    "openApp": "アプリを開く",
+    "copyAppLink": "アプリリンクをコピー",
+    "noIframe": "このアプリには開ける画面がありません。",
+    "commandApprovalTitle": "アプリコマンドを確認",
+    "commandApprovalMessage": "{{appName}} が {{commandName}} を実行しようとしています。",
+    "commandApprovalSubject": "実行者",
+    "commandApprovalBuddy": "Buddy",
+    "commandApprovalPerson": "メンバー",
+    "commandApprovalPermission": "権限",
+    "commandApprovalScope": "範囲",
+    "commandApprovalConfirm": "実行を許可",
+    "commandApprovalDenied": "アプリコマンドをキャンセルしました",
+    "commandApprovalSuccess": "アプリコマンドを承認しました",
+    "commandApprovalFailed": "アプリコマンドの承認に失敗しました",
+    "backToDirectory": "アプリディレクトリに戻る",
+    "start": "起動",
+    "addToServer": "サーバーに追加",
+    "adding": "追加中...",
+    "installed": "インストール済み",
+    "installSuccess": "アプリをサーバーに追加しました",
+    "installFailed": "アプリの追加に失敗しました",
+    "notFoundTitle": "アプリが見つかりません",
+    "notFoundDesc": "まだ掲載されていないか、公式マーケットから削除された可能性があります。",
+    "noTagline": "このアプリにはまだ短い紹介文がありません。",
+    "overview": "概要",
+    "gallery": "メディア",
+    "previousMedia": "前のメディア",
+    "nextMedia": "次のメディア",
+    "selectMedia": "{{index}} 番目のメディアを表示",
+    "commands": "コマンド",
+    "commandNoDescription": "コマンド説明はまだありません。",
+    "dataAccess": "データアクセス",
+    "dataAccessTitle": "アプリはデフォルトで固定の基本データのみアクセスできます",
+    "dataAccessBody": "機密性の高いコマンドは、サーバー権限、Buddy 権限、承認ポリシーを引き続き使用します。インストール前に権限とデータ分類を確認してください。",
+    "chooseServer": "サーバーを選択",
+    "installedOnSelected": "このアプリは選択したサーバーにインストール済みで、すぐ起動できます。",
+    "readyToAdd": "このアプリを選択したサーバーに追加できます。",
+    "adminRequired": "アプリを追加するにはサーバー管理者権限が必要です。",
+    "serverCount": "サーバー数",
+    "serverCountValue": "{{count}} 個のサーバーで利用中",
+    "categories": "カテゴリ",
+    "noCategories": "カテゴリ未設定",
+    "languages": "対応言語",
+    "noLanguages": "言語未設定",
+    "links": "リンク",
+    "noLinks": "リンクはまだありません",
+    "manifest": "Manifest",
+    "versionValue": "バージョン {{version}}",
+    "privacy": "プライバシー",
+    "privacyBody": "アプリはサーバーの認可境界に従う必要があります。掲載リンクから開発者の利用規約とプライバシーポリシーを確認してください。"
   },
   "apps": {
     "noApps": "アプリなし"

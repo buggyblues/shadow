@@ -443,7 +443,7 @@ function SkillDetailPage() {
           <div className="summary-panel">
             <p>{skill.description}</p>
             <ul>
-              <li>Downloads through the Shadow Skills Server App as a complete zip package.</li>
+              <li>Downloads through the Shadow Skills App as a complete zip package.</li>
               <li>Installs by dispatching an Inbox task to the selected Buddy.</li>
               <li>Preserves SKILL.md and supporting files for multi-file skill packages.</li>
             </ul>

@@ -1,6 +1,6 @@
 # Code Trainer
 
-Code Trainer is a Server App for LeetCode-style practice. Learners write code from skeleton starters, assign a server Buddy through Inbox, and wait for sandbox-tested learning feedback.
+Code Trainer is a App for LeetCode-style practice. Learners write code from skeleton starters, assign a server Buddy through Inbox, and wait for sandbox-tested learning feedback.
 
 ```bash
 pnpm -C integrations/trainer typegen
@@ -11,7 +11,7 @@ Open `http://localhost:4213/shadow/server`.
 
 ## Architecture
 
-- `src/server.ts` defines Shadow Server App commands, OAuth command context handling, Buddy task outbox creation, and local-dev command fallback.
+- `src/server.ts` defines Shadow App commands, OAuth command context handling, Buddy task outbox creation, and local-dev command fallback.
 - `src/data.ts` owns normalization, JSON persistence, seed data, owner scoping, and submission access policy.
 - `src/sources.ts` imports public LeetCode and Codeforces problems into the current owner scope.
 - `src/client/` contains the embedded React practice workspace.

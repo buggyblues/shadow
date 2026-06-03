@@ -6,6 +6,7 @@ import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { UserDao } from '../dao/user.dao'
 import type { MessageMetadata, TaskMessageCardMetadata } from '../db/schema/messages'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import type {
   CreateThreadInput,
   InteractiveActionInput,
@@ -16,12 +17,17 @@ import type {
 } from '../validators/message.schema'
 import { parseBuddyInboxAgentId } from './buddy-inbox-protocol'
 import type { ContentFeedService } from './content-feed.service'
+import type { MediaService } from './media.service'
 import type { VoiceMessageService } from './voice-message.service'
 import type { WorkspaceService } from './workspace.service'
 
 type MessageWithMetadata = {
   id: string
   metadata?: Record<string, unknown> | null
+}
+
+type MessageAuthorWithAvatar = {
+  avatarUrl: string | null
 }
 
 type InteractiveSubmissionRecord = NonNullable<
@@ -108,10 +114,30 @@ export class MessageService {
       workspaceService?: WorkspaceService
       voiceMessageService?: VoiceMessageService
       contentFeedService?: ContentFeedService
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
       io?: SocketIOServer
       logger?: Logger
     },
   ) {}
+
+  private resolveAuthorAvatar<T extends { author?: (MessageAuthorWithAvatar & object) | null }>(
+    message: T,
+  ): T {
+    if (!message.author) return message
+    return {
+      ...message,
+      author: {
+        ...message.author,
+        avatarUrl: resolveAvatarUrl(this.deps.mediaService, message.author.avatarUrl),
+      },
+    }
+  }
+
+  private resolveAuthorAvatars<T extends { author?: (MessageAuthorWithAvatar & object) | null }>(
+    messages: T[],
+  ): T[] {
+    return messages.map((message) => this.resolveAuthorAvatar(message))
+  }
 
   private async createWorkspaceNodeForAttachment(
     channelId: string,
@@ -195,11 +221,9 @@ export class MessageService {
 
   async getByChannelId(channelId: string, limit?: number, cursor?: string, viewerUserId?: string) {
     const result = await this.deps.messageDao.findByChannelId(channelId, limit, cursor)
-    if (!viewerUserId) return result
-    const messagesWithInteractiveState = await this.attachInteractiveStates(
-      result.messages,
-      viewerUserId,
-    )
+    const messages = this.resolveAuthorAvatars(result.messages)
+    if (!viewerUserId) return { ...result, messages }
+    const messagesWithInteractiveState = await this.attachInteractiveStates(messages, viewerUserId)
     return {
       ...result,
       messages:
@@ -388,7 +412,7 @@ export class MessageService {
       content: input.content,
     })
 
-    const responseMessage = {
+    const responseMessage = this.resolveAuthorAvatar({
       ...message,
       author: user
         ? {
@@ -401,7 +425,7 @@ export class MessageService {
           }
         : null,
       attachments: messageAttachments,
-    }
+    })
     const [enrichedResponseMessage] =
       (await this.deps.voiceMessageService?.enrichMessagesForViewer([responseMessage], authorId)) ??
       []
@@ -410,7 +434,9 @@ export class MessageService {
       this.deps.logger?.warn?.({ err, messageId: message.id }, 'Failed to index content feed item')
     })
 
-    return enrichedResponseMessage ?? responseMessage
+    return enrichedResponseMessage
+      ? this.resolveAuthorAvatar(enrichedResponseMessage)
+      : responseMessage
   }
 
   private async completeInboxTaskFromBuddyReply(input: {
@@ -519,7 +545,7 @@ export class MessageService {
     // Attach author info and attachments for broadcasting
     const user = await this.deps.userDao.findById(userId)
     const messageAttachments = await this.deps.messageDao.getAttachments(id)
-    return {
+    return this.resolveAuthorAvatar({
       ...updated,
       author: user
         ? {
@@ -532,7 +558,7 @@ export class MessageService {
           }
         : null,
       attachments: messageAttachments,
-    }
+    })
   }
 
   async updateMetadata(id: string, metadata: Record<string, unknown> | null) {
@@ -546,7 +572,7 @@ export class MessageService {
       this.deps.messageDao.getAttachments(id),
     ])
 
-    return {
+    return this.resolveAuthorAvatar({
       ...updated,
       author: user
         ? {
@@ -559,7 +585,7 @@ export class MessageService {
           }
         : null,
       attachments: messageAttachments,
-    }
+    })
   }
 
   async delete(id: string, userId: string) {
@@ -702,7 +728,7 @@ export class MessageService {
     })
 
     const user = await this.deps.userDao.findById(userId)
-    return {
+    return this.resolveAuthorAvatar({
       ...message,
       author: user
         ? {
@@ -714,7 +740,7 @@ export class MessageService {
             isBot: user.isBot,
           }
         : null,
-    }
+    })
   }
 
   async getThreadMessages(
@@ -723,7 +749,9 @@ export class MessageService {
     cursor?: string,
     viewerUserId?: string,
   ) {
-    const messages = await this.deps.messageDao.findByThreadId(threadId, limit, cursor)
+    const messages = this.resolveAuthorAvatars(
+      await this.deps.messageDao.findByThreadId(threadId, limit, cursor),
+    )
     if (!viewerUserId) return messages
     const messagesWithInteractiveState = await this.attachInteractiveStates(messages, viewerUserId)
     return (
@@ -758,7 +786,7 @@ export class MessageService {
   }
 
   async getPinnedMessages(channelId: string) {
-    return this.deps.messageDao.findPinnedByChannelId(channelId)
+    return this.resolveAuthorAvatars(await this.deps.messageDao.findPinnedByChannelId(channelId))
   }
 
   // Reactions

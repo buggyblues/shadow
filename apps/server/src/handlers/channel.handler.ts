@@ -884,6 +884,7 @@ export function createChannelHandler(container: AppContainer) {
   channelHandler.post('/channels/:id/members', async (c) => {
     const serverDao = container.resolve('serverDao')
     const channelMemberDao = container.resolve('channelMemberDao')
+    const mediaService = container.resolve('mediaService')
     const id = c.req.param('id')
     const body = await c.req.json<{ userId?: string }>()
     const requesterId = c.get('user').userId
@@ -989,7 +990,9 @@ export function createChannelHandler(container: AppContainer) {
           userId: targetUserId,
           username: targetUser.username ?? 'unknown',
           displayName: targetUser.displayName ?? targetUser.username ?? 'unknown',
-          avatarUrl: targetUser.avatarUrl ?? null,
+          avatarUrl: await resolveSignedMediaUrl(mediaService, targetUser.avatarUrl, {
+            variant: 'avatar',
+          }),
           isBot: targetUser.isBot ?? false,
         }
         io.to(`channel:${id}`).emit('member:joined', payload)

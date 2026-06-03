@@ -1,6 +1,6 @@
-# Shadow Kanban Server App
+# Shadow Kanban App
 
-Shadow Kanban is a standalone Server App. Run it as a separate process and connect it to Shadow through its manifest URL and command protocol.
+Shadow Kanban is a standalone App. Run it as a separate process and connect it to Shadow through its manifest URL and command protocol.
 
 ```bash
 cp integrations/kanban/.env.example integrations/kanban/.env
@@ -31,7 +31,7 @@ Environment:
 - `SHADOW_APP_API_BASE_URL`: Shadow-facing command API base URL. For local Shadow-in-Docker installs, use `http://host.lima.internal:4201` so the server container can call the app.
 - `KANBAN_DATA_FILE`: JSON persistence file. Defaults to `./data/kanban-board.json`.
 
-This integration is the reference Server App demo. It uses `@shadowob/sdk` for the modeled Server App runtime, typed command handlers generated from JSON Schema, Shadow OAuth command token introspection, input validation, actor profile display, and JSON persistence.
+This integration is the reference App demo. It uses `@shadowob/sdk` for the modeled App runtime, typed command handlers generated from JSON Schema, Shadow OAuth command token introspection, input validation, actor profile display, and JSON persistence.
 
 ## Buddy Inbox workflow
 
@@ -43,7 +43,7 @@ Shadow Kanban demonstrates the Multica-style task flow without adding Kanban or 
 
 Shadow Server consumes `shadow.protocol === "shadow.app/1"` plus `shadow.outbox.inboxTasks`, resolves the target Buddy in the current server, publishes a Task Card to the Buddy Inbox channel, and returns delivery receipts under `shadow.outbox.deliveries`.
 
-Kanban intentionally does not own Skills or scheduled Autopilot behavior. Skills live in the standalone `shadow-skills` Server App. Scheduled work should be modeled by an automation app or platform scheduler that enqueues ordinary Inbox task cards.
+Kanban intentionally does not own Skills or scheduled Autopilot behavior. Skills live in the standalone `shadow-skills` App. Scheduled work should be modeled by an automation app or platform scheduler that enqueues ordinary Inbox task cards.
 
 Local command smoke tests:
 

@@ -1,5 +1,5 @@
 import { Badge, Button, GlassPanel, Tabs, TabsContent, TabsList, TabsTrigger } from '@shadowob/ui'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import {
   ArrowRight,
@@ -35,6 +35,7 @@ import type { Product, Shop } from '../components/shop/shop-page'
 import { PriceDisplay } from '../components/shop/ui/currency'
 import { ProductVisual } from '../components/shop/ui/product-visual'
 import { fetchApi } from '../lib/api'
+import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 
 interface UserProfile {
@@ -110,6 +111,16 @@ interface DashboardData {
       displayName: string
     }
   }
+}
+
+interface FriendEntry {
+  user: {
+    id: string
+  }
+}
+
+interface FriendRequestResult {
+  status?: 'pending' | 'accepted'
 }
 
 function firstProductEntitlementConfig(product: Product) {
@@ -287,6 +298,7 @@ function BuddyAssetMetric({
 export function UserProfilePage() {
   const { t, i18n } = useTranslation()
   const { userId } = useParams({ strict: false }) as { userId: string }
+  const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const [showQrCard, setShowQrCard] = useState(false)
   const [dashboardTab, setDashboardTab] = useState<
@@ -330,6 +342,45 @@ export function UserProfilePage() {
     enabled: Boolean(assetShop?.id),
   })
 
+  const friendQueryEnabled = Boolean(
+    currentUser?.id && profile?.id && currentUser.id !== profile.id,
+  )
+  const { data: myFriends = [] } = useQuery({
+    queryKey: ['friends'],
+    queryFn: () => fetchApi<FriendEntry[]>('/api/friends'),
+    enabled: friendQueryEnabled,
+  })
+
+  const { data: sentRequests = [] } = useQuery({
+    queryKey: ['friends-sent'],
+    queryFn: () => fetchApi<FriendEntry[]>('/api/friends/sent'),
+    enabled: friendQueryEnabled,
+  })
+
+  const sendFriendRequest = useMutation({
+    mutationFn: () => {
+      if (!profile?.username) throw new Error(t('profile.unavailableTitle'))
+      return fetchApi<FriendRequestResult>('/api/friends/request', {
+        method: 'POST',
+        body: JSON.stringify({ username: profile.username }),
+      })
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: ['friends-sent'] })
+      queryClient.invalidateQueries({ queryKey: ['friends-pending'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      showToast(
+        result.status === 'accepted' ? t('friends.accepted') : t('friends.requestSent'),
+        'success',
+      )
+    },
+    onError: (error: Error) => {
+      showToast(error.message || t('common.error'), 'error')
+    },
+  })
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -366,6 +417,9 @@ export function UserProfilePage() {
   }
 
   const status = profile.status ?? 'offline'
+  const isFriend = myFriends.some((item) => item.user.id === profile.id)
+  const isRequestSent = sentRequests.some((item) => item.user.id === profile.id)
+  const addFriendDisabled = sendFriendRequest.isPending || isFriend || isRequestSent
   const joinedDate = new Date(profile.createdAt).toLocaleDateString(i18n.resolvedLanguage, {
     year: 'numeric',
     month: 'long',
@@ -470,8 +524,19 @@ export function UserProfilePage() {
                     >
                       {t('communityEconomy.supportUser')}
                     </Button>
-                    <Button size="sm" variant="outline" icon={UserPlus}>
-                      {t('friends.addFriend')}
+                    <Button
+                      size="sm"
+                      variant={isFriend || isRequestSent ? 'glass' : 'outline'}
+                      icon={UserPlus}
+                      disabled={addFriendDisabled}
+                      loading={sendFriendRequest.isPending}
+                      onClick={() => sendFriendRequest.mutate()}
+                    >
+                      {isFriend
+                        ? t('friends.alreadyFriend')
+                        : isRequestSent
+                          ? t('friends.requestPending')
+                          : t('friends.addFriend')}
                     </Button>
                   </div>
                 )}

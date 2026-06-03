@@ -160,12 +160,19 @@ export interface ServerAppIntegration {
   description: string | null
   iconUrl: string | null
   manifestUrl: string | null
+  manifest?: Record<string, unknown> | null
   iframeEntry: string | null
   apiBaseUrl: string
   status: string
   commandCount: number
   skillCount: number
   grantCount: number
+  inCatalog: boolean
+  catalogEntryId: string | null
+  catalogStatus: 'active' | 'disabled' | null
+  categories: string[]
+  supportedLanguages: string[]
+  coverImageUrl: string | null
   createdAt: string
   updatedAt: string
 }
@@ -178,8 +185,17 @@ export interface ServerAppCatalogEntry {
   iconUrl: string | null
   manifestUrl: string | null
   status: 'active' | 'disabled'
+  tagline: string | null
+  summary: string | null
+  categories: string[]
+  supportedLanguages: string[]
+  coverImageUrl: string | null
+  gallery: Array<{ url: string; type: 'image' | 'video'; alt: string | null }>
+  links: Array<{ label: string; url: string; type: string }>
+  publisher: { name: string | null; websiteUrl: string | null } | null
   commandCount: number
   skillCount: number
+  serverCount: number
   createdAt: string
   updatedAt: string
 }

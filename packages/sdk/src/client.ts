@@ -98,6 +98,7 @@ import type {
   ShadowServerAppApprovalMode,
   ShadowServerAppCatalogEntry,
   ShadowServerAppCommandConsent,
+  ShadowServerAppDirectoryResponse,
   ShadowServerAppDiscovery,
   ShadowServerAppIntegration,
   ShadowServerAppLaunchContext,
@@ -716,7 +717,7 @@ export class ShadowClient {
     return this.request<ShadowServerAccess>(`/api/servers/${serverIdOrSlug}/access`)
   }
 
-  // ── Server App Integrations ───────────────────────────────────────────
+  // ── App Integrations ──────────────────────────────────────────────────
 
   async listServerApps(serverIdOrSlug: string): Promise<ShadowServerAppIntegration[]> {
     return this.request(`/api/servers/${serverIdOrSlug}/apps`)
@@ -3627,6 +3628,23 @@ export class ShadowClient {
     if (params?.limit) qs.set('limit', String(params.limit))
     const suffix = qs.toString()
     return this.request(`/api/discover/business${suffix ? `?${suffix}` : ''}`)
+  }
+
+  async discoverServerApps(params?: {
+    q?: string
+    limit?: number
+    offset?: number
+  }): Promise<ShadowServerAppDirectoryResponse> {
+    const qs = new URLSearchParams()
+    if (params?.q) qs.set('q', params.q)
+    if (params?.limit) qs.set('limit', String(params.limit))
+    if (params?.offset) qs.set('offset', String(params.offset))
+    const suffix = qs.toString()
+    return this.request(`/api/discover/server-apps${suffix ? `?${suffix}` : ''}`)
+  }
+
+  async getDiscoverServerApp(appKey: string): Promise<ShadowServerAppCatalogEntry> {
+    return this.request(`/api/discover/server-apps/${encodeURIComponent(appKey)}`)
   }
 
   async discoverMarketplaceProducts(params?: {

@@ -60,6 +60,44 @@ const manifestHelpSchema = z
   })
   .optional()
 
+const marketplaceMetadataSchema = z
+  .object({
+    tagline: z.string().max(160).optional(),
+    summary: z.string().max(4000).optional(),
+    categories: z.array(z.string().min(1).max(64)).max(8).optional(),
+    supportedLanguages: z.array(z.string().min(2).max(48)).max(24).optional(),
+    coverImageUrl: httpUrlSchema.optional(),
+    gallery: z
+      .array(
+        z.object({
+          url: httpUrlSchema,
+          type: z.enum(['image', 'video']).default('image').optional(),
+          alt: z.string().max(240).optional(),
+        }),
+      )
+      .max(12)
+      .optional(),
+    links: z
+      .array(
+        z.object({
+          label: z.string().min(1).max(80),
+          url: httpUrlSchema,
+          type: z
+            .enum(['website', 'support', 'docs', 'terms', 'privacy', 'dashboard', 'premium'])
+            .optional(),
+        }),
+      )
+      .max(12)
+      .optional(),
+    publisher: z
+      .object({
+        name: z.string().min(1).max(120).optional(),
+        websiteUrl: httpUrlSchema.optional(),
+      })
+      .optional(),
+  })
+  .optional()
+
 const realtimeSpecSchema = z
   .object({
     transports: z
@@ -137,6 +175,7 @@ export const serverAppManifestSchema = z.object({
   version: z.string().max(64).optional(),
   updatedAt: z.string().datetime().optional(),
   iconUrl: httpUrlSchema,
+  marketplace: marketplaceMetadataSchema,
   iframe: z
     .object({
       entry: httpUrlSchema,
@@ -207,10 +246,11 @@ export const createServerAppCatalogEntrySchema = z
   .object({
     manifestUrl: httpUrlSchema.optional(),
     manifest: serverAppManifestSchema.optional(),
+    sourceServerAppId: z.string().uuid().optional(),
     status: z.enum(['active', 'disabled']).default('active').optional(),
   })
-  .refine((value) => Boolean(value.manifestUrl || value.manifest), {
-    message: 'manifestUrl or manifest is required',
+  .refine((value) => Boolean(value.manifestUrl || value.manifest || value.sourceServerAppId), {
+    message: 'manifestUrl, manifest, or sourceServerAppId is required',
   })
 
 export const installServerAppFromCatalogSchema = z.object({}).optional().default({})

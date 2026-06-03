@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import {
+  AppWindow,
   ArrowRight,
   Bot,
   Cloud,
@@ -50,9 +51,24 @@ import {
   useColors,
 } from '../../src/theme'
 
-type HubSection = 'all' | 'plays' | 'buddies' | 'market' | 'shops' | 'cloud' | 'communities'
-type DiscoverView = 'explore' | 'market'
-type DiscoverModuleId = 'plays' | 'communities' | 'cloud' | 'products' | 'buddies' | 'shops'
+type HubSection =
+  | 'all'
+  | 'plays'
+  | 'buddies'
+  | 'market'
+  | 'shops'
+  | 'cloud'
+  | 'communities'
+  | 'apps'
+type DiscoverView = 'explore' | 'market' | 'apps'
+type DiscoverModuleId =
+  | 'plays'
+  | 'communities'
+  | 'cloud'
+  | 'products'
+  | 'buddies'
+  | 'shops'
+  | 'apps'
 
 interface DiscoverViewConfig {
   id: DiscoverView
@@ -217,9 +233,32 @@ interface MarketplaceProductSection {
   products: HubProduct[]
 }
 
+interface ServerAppDirectoryEntry {
+  id: string
+  appKey: string
+  name: string
+  description: string | null
+  iconUrl: string | null
+  tagline: string | null
+  summary: string | null
+  categories: string[]
+  supportedLanguages: string[]
+  coverImageUrl: string | null
+  serverCount: number
+  commandCount: number
+  skillCount: number
+}
+
+interface ServerAppDirectoryResponse {
+  apps: ServerAppDirectoryEntry[]
+  total: number
+  hasMore: boolean
+}
+
 const DISCOVER_VIEWS: Array<{ key: DiscoverView; icon: LucideIcon }> = [
   { key: 'explore', icon: Compass },
   { key: 'market', icon: ShoppingBag },
+  { key: 'apps', icon: AppWindow },
 ]
 
 const DISCOVER_CONFIG_SCHEMA_NAME = 'discover-page'
@@ -227,12 +266,14 @@ const DEFAULT_DISCOVER_LAYOUT: DiscoverLayoutConfig = {
   views: [
     { id: 'explore', enabled: true, modules: ['plays', 'communities'] },
     { id: 'market', enabled: true, modules: ['cloud', 'products', 'buddies', 'shops'] },
+    { id: 'apps', enabled: true, modules: ['apps'] },
   ],
 }
-const DISCOVER_VIEW_ORDER: DiscoverView[] = ['explore', 'market']
+const DISCOVER_VIEW_ORDER: DiscoverView[] = ['explore', 'market', 'apps']
 const DISCOVER_MODULE_BY_VIEW: Record<DiscoverView, DiscoverModuleId[]> = {
   explore: ['plays', 'communities'],
   market: ['cloud', 'products', 'buddies', 'shops'],
+  apps: ['apps'],
 }
 const SECTION_PAGE_SIZE = 12
 
@@ -247,7 +288,8 @@ function isDiscoverModule(value: unknown): value is DiscoverModuleId {
     value === 'cloud' ||
     value === 'products' ||
     value === 'buddies' ||
-    value === 'shops'
+    value === 'shops' ||
+    value === 'apps'
   )
 }
 
@@ -296,6 +338,7 @@ const initialSectionPages: Record<HubSection, number> = {
   shops: 1,
   cloud: 1,
   communities: 1,
+  apps: 1,
 }
 
 export default function DiscoverScreen() {
@@ -356,6 +399,15 @@ export default function DiscoverScreen() {
     },
   })
 
+  const { data: serverAppDirectoryData, isLoading: isServerAppsLoading } = useQuery({
+    queryKey: ['discover-server-apps', effectiveSearch],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: '72' })
+      if (effectiveSearch) params.set('q', effectiveSearch)
+      return fetchApi<ServerAppDirectoryResponse>(`/api/discover/server-apps?${params}`)
+    },
+  })
+
   const { data: playData } = useQuery({
     queryKey: ['discover-plays'],
     queryFn: () => fetchApi<{ plays: PlayCatalogItem[] }>('/api/play/catalog'),
@@ -395,6 +447,10 @@ export default function DiscoverScreen() {
     [marketplaceCategories, products],
   )
   const shops = useMemo(() => sortShops(hub.shops), [hub.shops])
+  const serverApps = useMemo(
+    () => sortServerApps(serverAppDirectoryData?.apps ?? []),
+    [serverAppDirectoryData?.apps],
+  )
   const communities = useMemo(() => sortCommunities(hub.communities), [hub.communities])
   const cloudCards = useMemo(() => sortCloudTemplates(cloudTemplates), [cloudTemplates])
   const isZh = i18n.language.startsWith('zh')
@@ -430,7 +486,8 @@ export default function DiscoverScreen() {
   })
 
   const isSearching = effectiveSearch.length > 0
-  const loadingContent = isLoading || isMarketplaceLoading
+  const loadingContent =
+    isLoading || isMarketplaceLoading || (activeView === 'apps' && isServerAppsLoading)
   const moduleCounts = useMemo(
     () => ({
       plays: plays.length,
@@ -439,6 +496,7 @@ export default function DiscoverScreen() {
       products: products.length,
       buddies: buddies.length,
       shops: shops.length,
+      apps: serverApps.length,
     }),
     [
       buddies.length,
@@ -446,6 +504,7 @@ export default function DiscoverScreen() {
       communities.length,
       plays.length,
       products.length,
+      serverApps.length,
       shops.length,
     ],
   )
@@ -462,6 +521,18 @@ export default function DiscoverScreen() {
   const activeViewHasContent = (activeViewConfig?.modules ?? []).some((module) =>
     enabledModuleIds.has(module),
   )
+  const emptyStateTitle =
+    activeView === 'apps' && !isSearching
+      ? t('discover.emptyLane.apps')
+      : isSearching
+        ? t('discover.noSearchResults')
+        : t('discover.emptyTitle')
+  const emptyStateDescription =
+    activeView === 'apps' && !isSearching
+      ? t('discover.laneDescriptions.apps')
+      : isSearching
+        ? t('discover.noSearchResultsDesc')
+        : t('discover.emptyDesc')
 
   const selectView = (view: DiscoverView) => {
     if (view !== activeView) {
@@ -537,6 +608,17 @@ export default function DiscoverScreen() {
     })
   }
 
+  const openServerApp = (app: ServerAppDirectoryEntry) => {
+    selectionHaptic()
+    router.push({
+      pathname: '/(main)/webview-preview',
+      params: {
+        url: encodeURIComponent(`${API_BASE}/app/discover/apps/${encodeURIComponent(app.appKey)}`),
+        title: app.name,
+      },
+    })
+  }
+
   const openCommunity = (community: HubCommunity) => {
     selectionHaptic()
     router.push(`/(main)/servers/${community.slug ?? community.id}`)
@@ -559,11 +641,7 @@ export default function DiscoverScreen() {
     if (!activeViewHasContent) {
       return (
         <GlassPanel style={styles.emptyPanel}>
-          <EmptyState
-            icon={Search}
-            title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
-            description={isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')}
-          />
+          <EmptyState icon={Search} title={emptyStateTitle} description={emptyStateDescription} />
         </GlassPanel>
       )
     }
@@ -571,6 +649,7 @@ export default function DiscoverScreen() {
     const shownPlays = sectionItems(plays, 'plays')
     const shownBuddies = sectionItems(buddies, 'buddies')
     const shownShops = sectionItems(shops, 'shops')
+    const shownServerApps = sectionItems(serverApps, 'apps')
     const shownCommunities = sectionItems(communities, 'communities')
     const cloudLimit = Math.max(sectionPages.cloud * SECTION_PAGE_SIZE - 1, 0)
     const shownCloud = cloudCards.slice(0, cloudLimit)
@@ -669,6 +748,23 @@ export default function DiscoverScreen() {
           >
             {shownShops.map((shop) => (
               <ShopCard key={shop.id} shop={shop} onOpen={() => openShop(shop)} />
+            ))}
+          </HubLane>
+        )}
+
+        {view === 'apps' && enabledModuleIds.has('apps') && (
+          <HubLane
+            icon={AppWindow}
+            title={t('discover.lanes.apps')}
+            description={t('discover.laneDescriptions.apps')}
+            empty={t('discover.emptyLane.apps')}
+            hasContent
+            hasMore={hasMore(shownServerApps.length, serverApps.length)}
+            loadMoreLabel={t('discover.loadMoreItems')}
+            onLoadMore={() => loadMore('apps')}
+          >
+            {shownServerApps.map((app) => (
+              <ServerAppCard key={app.id} app={app} onOpen={() => openServerApp(app)} />
             ))}
           </HubLane>
         )}
@@ -982,6 +1078,54 @@ function ShopCard({ shop, onOpen }: { shop: HubShop; onOpen: () => void }) {
   )
 }
 
+function ServerAppCard({ app, onOpen }: { app: ServerAppDirectoryEntry; onOpen: () => void }) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const leadText = app.tagline || app.description || app.summary || t('discover.noDescription')
+  const categories = Array.isArray(app.categories) ? app.categories : []
+  const categoryLabels = categories.length ? categories.slice(0, 4) : [t('serverApps.noCategories')]
+  return (
+    <FeedCard onPress={onOpen} accessibilityLabel={app.name}>
+      <Visual imageUrl={app.coverImageUrl ?? app.iconUrl} icon={AppWindow} label={app.name} />
+      <View style={styles.row}>
+        <Avatar imageUrl={app.iconUrl} icon={AppWindow} label={app.name} />
+        <View style={styles.titleBlock}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+            {app.name}
+          </Text>
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
+            {app.appKey}
+          </Text>
+        </View>
+        <Badge variant="primary" size="xs">
+          {t('discover.sections.apps')}
+        </Badge>
+      </View>
+      <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+        {leadText}
+      </Text>
+      <View style={styles.appCategoryRow}>
+        {categoryLabels.map((category) => (
+          <View
+            key={category}
+            style={[
+              styles.appCategoryChip,
+              { borderColor: colors.border, backgroundColor: colors.inputBackground },
+            ]}
+          >
+            <Text
+              style={[styles.appCategoryText, { color: colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              {category}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </FeedCard>
+  )
+}
+
 function CloudCashbackCard({ onOpen }: { onOpen: () => void }) {
   const { t } = useTranslation()
   const colors = useColors()
@@ -1141,6 +1285,10 @@ function Avatar({
   label: string
 }) {
   const colors = useColors()
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    setFailed(false)
+  }, [imageUrl])
   return (
     <View
       style={[
@@ -1148,8 +1296,13 @@ function Avatar({
         { backgroundColor: colors.inputBackground, borderColor: colors.border },
       ]}
     >
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.avatarImage} accessibilityLabel={label} />
+      {imageUrl && !failed ? (
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.avatarImage}
+          accessibilityLabel={label}
+          onError={() => setFailed(true)}
+        />
       ) : (
         <Icon size={iconSize.xl} color={colors.primary} />
       )}
@@ -1167,10 +1320,19 @@ function Visual({
   label: string
 }) {
   const colors = useColors()
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    setFailed(false)
+  }, [imageUrl])
   return (
     <View style={[styles.visual, { backgroundColor: colors.inputBackground }]}>
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.visualImage} accessibilityLabel={label} />
+      {imageUrl && !failed ? (
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.visualImage}
+          accessibilityLabel={label}
+          onError={() => setFailed(true)}
+        />
       ) : (
         <Icon size={iconSize['4xl']} color={colors.primary} />
       )}
@@ -1238,6 +1400,16 @@ function sortProducts(products: HubProduct[]) {
 function sortShops(shops: HubShop[]) {
   return [...shops].sort(
     (a, b) => (b.productCount ?? 0) - (a.productCount ?? 0) || a.name.localeCompare(b.name),
+  )
+}
+
+function sortServerApps(apps: ServerAppDirectoryEntry[]) {
+  return [...apps].sort(
+    (a, b) =>
+      b.serverCount * 8 +
+        b.commandCount * 2 +
+        b.skillCount -
+        (a.serverCount * 8 + a.commandCount * 2 + a.skillCount) || a.name.localeCompare(b.name),
   )
 }
 
@@ -1530,6 +1702,22 @@ const styles = StyleSheet.create({
   description: {
     fontSize: fontSize.sm,
     lineHeight: lineHeight.sm,
+  },
+  appCategoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  appCategoryChip: {
+    maxWidth: size.compactChipMaxWidth,
+    borderWidth: border.hairline,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+  },
+  appCategoryText: {
+    fontSize: fontSize.xs,
+    fontWeight: '900',
   },
   price: {
     fontSize: fontSize.lg,

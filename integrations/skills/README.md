@@ -1,6 +1,6 @@
-# Shadow Skills Server App
+# Shadow Skills App
 
-Shadow Skills is a standalone Server App for server-owned Buddy skills. It is intentionally separate from Kanban and other domain apps.
+Shadow Skills is a standalone App for server-owned Buddy skills. It is intentionally separate from Kanban and other domain apps.
 
 ```bash
 pnpm -C integrations/skills typegen

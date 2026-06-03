@@ -7,9 +7,34 @@ export const shadowServerAppManifest = {
   appKey: 'shadow-answers',
   name: '问问',
   description:
-    'A Q&A Server App for tagged questions, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.',
+    'A Q&A App for tagged questions, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.',
   version: '1.0.0',
   iconUrl: 'http://localhost:4210/assets/icon.svg',
+  marketplace: {
+    tagline: 'A server knowledge base where questions turn into reusable answers.',
+    summary:
+      '问问 helps a server collect tagged questions, Markdown answers, comments, images, search results, and Buddy participation. Use it for team FAQs, study groups, support communities, and long-lived knowledge that should stay searchable.',
+    categories: ['知识', '协作', '工具'],
+    supportedLanguages: ['中文', 'English'],
+    coverImageUrl: 'http://localhost:4210/assets/cover.png',
+    gallery: [
+      {
+        url: 'http://localhost:4210/assets/cover.png',
+        type: 'image',
+        alt: 'qna cover',
+      },
+    ],
+    links: [
+      {
+        label: '主页',
+        url: 'http://localhost:4210/shadow/server',
+        type: 'website',
+      },
+    ],
+    publisher: {
+      name: 'Shadow',
+    },
+  },
   iframe: {
     entry: 'http://localhost:4210/shadow/server',
     allowedOrigins: ['http://localhost:4210'],

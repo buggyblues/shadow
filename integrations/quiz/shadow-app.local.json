@@ -2,9 +2,33 @@
   "schemaVersion": "shadow.app/1",
   "appKey": "shadow-quiz",
   "name": "Quiz",
-  "description": "A quiz Server App for publishing answer-keyed quizzes, step-by-step submissions, and grader review by people or Buddies.",
+  "description": "A quiz App for publishing answer-keyed quizzes, step-by-step submissions, and grader review by people or Buddies.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4211/assets/icon.svg",
+  "marketplace": {
+    "tagline": "Publish quizzes, collect attempts, and review learning progress together.",
+    "summary": "Quiz lets a server publish answer-keyed quizzes, accept step-by-step submissions, review attempts, and let Buddies help with grading. It fits classrooms, training rooms, games, onboarding, and any community that learns by answering.",
+    "categories": ["教育", "游戏", "团队"],
+    "supportedLanguages": ["English", "中文"],
+    "coverImageUrl": "http://localhost:4211/assets/cover.png",
+    "gallery": [
+      {
+        "url": "http://localhost:4211/assets/cover.png",
+        "type": "image",
+        "alt": "quiz cover"
+      }
+    ],
+    "links": [
+      {
+        "label": "主页",
+        "url": "http://localhost:4211/shadow/server",
+        "type": "website"
+      }
+    ],
+    "publisher": {
+      "name": "Shadow"
+    }
+  },
   "iframe": {
     "entry": "http://localhost:4211/shadow/server",
     "allowedOrigins": ["http://localhost:4211"]

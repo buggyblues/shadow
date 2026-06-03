@@ -56,6 +56,7 @@ import { BuddyMarketContent } from '../components/buddy-market/buddy-market-cont
 import { UserAvatar } from '../components/common/avatar'
 import { OnlineRank } from '../components/common/online-rank'
 import { fetchApi } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 import { useUIStore } from '../stores/ui.store'
@@ -871,8 +872,11 @@ export function BuddyManagementContent({
   }
 
   const copyToken = async (token: string) => {
-    await navigator.clipboard.writeText(token)
-    showMsg(t('agentMgmt.tokenCopied'), true)
+    const didCopy = await copyToClipboard(token, {
+      successMessage: t('agentMgmt.tokenCopied'),
+      errorMessage: t('chat.copyFailed'),
+    })
+    if (didCopy) showMsg(t('agentMgmt.tokenCopied'), true)
   }
 
   const openBuddyDm = async (agent: Agent) => {

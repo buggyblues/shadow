@@ -24,14 +24,14 @@ function defaultState(): QuizState {
     quizzes: [
       {
         id: 'quiz_server_apps',
-        title: 'Server App Basics',
-        description: 'A short demo quiz covering Server App command safety.',
+        title: 'App Basics',
+        description: 'A short demo quiz covering App command safety.',
         author,
         questions: [
           {
             id: 'q_cli',
             type: 'single',
-            prompt: 'Which path should Buddies use to operate a Server App?',
+            prompt: 'Which path should Buddies use to operate a App?',
             options: ['Raw HTTP routes', 'shadowob app call', 'Direct database writes'],
             answer: 'shadowob app call',
             points: 2,

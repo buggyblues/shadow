@@ -42,6 +42,7 @@ import { PlayLaunchPage } from './pages/play-launch'
 import { RegisterPage } from './pages/register'
 import { ResetPasswordPage } from './pages/reset-password'
 import { ServerLayout } from './pages/server'
+import { ServerAppDirectoryDetailPage } from './pages/server-app-directory-detail'
 import { ServerIndexView } from './pages/server-index-view'
 import { SettingsPage } from './pages/settings'
 import { ShopPageRoute } from './pages/shop'
@@ -546,6 +547,18 @@ const discoverMarketRoute = createRoute({
   component: DiscoverPage,
 })
 
+const discoverAppsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/discover/apps',
+  component: DiscoverPage,
+})
+
+const discoverAppDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/discover/apps/$appKey',
+  component: ServerAppDirectoryDetailPage,
+})
+
 const discoverCloudRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/discover/cloud',
@@ -723,6 +736,8 @@ const routeTree = rootRoute.addChildren([
     discoverBrowseRoute,
     discoverExploreRoute,
     discoverMarketRoute,
+    discoverAppsRoute,
+    discoverAppDetailRoute,
     discoverCloudRoute,
     marketplaceRoute,
     myRentalsRoute,

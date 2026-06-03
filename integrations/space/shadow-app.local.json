@@ -2,9 +2,33 @@
   "schemaVersion": "shadow.app/1",
   "appKey": "shadow-space",
   "name": "Space",
-  "description": "A personal portfolio Server App for creator profiles, collected works, cover images, tags, responses, remakes, saved works, editions, restoration, and CDN-backed viewing.",
+  "description": "A personal portfolio App for creator profiles, collected works, cover images, tags, responses, remakes, saved works, editions, restoration, and CDN-backed viewing.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4217/assets/icon.svg",
+  "marketplace": {
+    "tagline": "A creator space for profiles, works, covers, responses, and remakes.",
+    "summary": "Space gives creators a server-native portfolio with profile pages, uploaded works, cover images, tags, responses, remakes, saved works, editions, restoration, and CDN-backed viewing. It is designed for communities that make and discuss creative work together.",
+    "categories": ["创作", "社区", "作品集"],
+    "supportedLanguages": ["English", "中文"],
+    "coverImageUrl": "http://localhost:4217/assets/cover.png",
+    "gallery": [
+      {
+        "url": "http://localhost:4217/assets/cover.png",
+        "type": "image",
+        "alt": "space cover"
+      }
+    ],
+    "links": [
+      {
+        "label": "主页",
+        "url": "http://localhost:4217/shadow/server",
+        "type": "website"
+      }
+    ],
+    "publisher": {
+      "name": "Shadow"
+    }
+  },
   "iframe": {
     "entry": "http://localhost:4217/shadow/server",
     "allowedOrigins": ["http://localhost:4217"]

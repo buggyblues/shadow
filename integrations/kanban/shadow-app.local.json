@@ -5,6 +5,30 @@
   "description": "A Trello-style task board where people and Buddies coordinate cards, lists, assignees, and comments.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4201/assets/icon.svg",
+  "marketplace": {
+    "tagline": "A shared board for moving server work from idea to done.",
+    "summary": "Shadow Kanban gives people and Buddies a simple shared task board with lists, cards, assignees, comments, dispatch actions, and Buddy task handoff. It is built for teams that want project coordination directly inside the server.",
+    "categories": ["协作", "效率", "管理工具"],
+    "supportedLanguages": ["English", "中文"],
+    "coverImageUrl": "http://localhost:4201/assets/cover.png",
+    "gallery": [
+      {
+        "url": "http://localhost:4201/assets/cover.png",
+        "type": "image",
+        "alt": "kanban cover"
+      }
+    ],
+    "links": [
+      {
+        "label": "主页",
+        "url": "http://localhost:4201/shadow/server",
+        "type": "website"
+      }
+    ],
+    "publisher": {
+      "name": "Shadow"
+    }
+  },
   "iframe": {
     "entry": "http://localhost:4201/shadow/server",
     "allowedOrigins": ["http://localhost:4201"]

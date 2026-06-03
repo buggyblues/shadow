@@ -1,8 +1,10 @@
 import { Button } from '@shadowob/ui'
 import { Check, Copy } from 'lucide-react'
 import React, { memo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { copyToClipboard } from '../../../lib/clipboard'
 
 interface MessageMarkdownProps {
   content: string
@@ -10,9 +12,10 @@ interface MessageMarkdownProps {
 }
 
 function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
     let text = ''
     const extractText = (node: React.ReactNode): string => {
       if (typeof node === 'string') return node
@@ -31,7 +34,11 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
       return ''
     }
     text = extractText(children)
-    navigator.clipboard.writeText(text)
+    const didCopy = await copyToClipboard(text, {
+      successMessage: t('common.copied'),
+      errorMessage: t('chat.copyFailed'),
+    })
+    if (!didCopy) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -44,7 +51,7 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
         size="xs"
         onClick={handleCopyCode}
         className="absolute top-2 right-2 !p-1.5 !h-auto !w-auto !rounded-md !font-normal !normal-case !tracking-normal opacity-0 group-hover:opacity-100 bg-bg-secondary/50 backdrop-blur-sm border border-white/10 text-text-muted hover:text-text-primary"
-        title="Copy code"
+        title={t('common.copy')}
       >
         {copied ? <Check size={14} /> : <Copy size={14} />}
       </Button>

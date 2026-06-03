@@ -1,6 +1,6 @@
 # Super Resume
 
-Super Resume is a Server App for resume CRUD, Buddy-guided resume generation, and CSS style updates.
+Super Resume is a App for resume CRUD, Buddy-guided resume generation, and CSS style updates.
 
 ```bash
 pnpm -C integrations/resume typegen

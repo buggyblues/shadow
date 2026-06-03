@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../../lib/api'
+import { copyToClipboard } from '../../../lib/clipboard'
 import { showToast } from '../../../lib/toast'
 import { QuickCreateBuddyModal } from '../../buddy-management/quick-create-buddy-modal'
 import {
@@ -594,9 +595,14 @@ export function InvitePanel({
   const copyInviteCode = async () => {
     if (server?.inviteCode) {
       const inviteLink = `${window.location.origin}/app/invite/${server.inviteCode}`
-      await navigator.clipboard.writeText(inviteLink)
-      setCopiedInvite(true)
-      setTimeout(() => setCopiedInvite(false), 2000)
+      const didCopy = await copyToClipboard(inviteLink, {
+        successMessage: t('common.copied'),
+        errorMessage: t('chat.copyFailed'),
+      })
+      if (didCopy) {
+        setCopiedInvite(true)
+        setTimeout(() => setCopiedInvite(false), 2000)
+      }
     }
   }
 

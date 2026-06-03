@@ -1,4 +1,5 @@
 import { getCatAvatarByUserId } from '@shadowob/shared'
+import { useEffect, useState } from 'react'
 
 interface AvatarProps {
   userId?: string
@@ -27,7 +28,14 @@ export function UserAvatar({
 }: AvatarProps) {
   const sizeClass = sizeMap[size]
   const fallbackSeed = userId?.trim() || displayName?.trim() || 'default'
-  const src = avatarUrl?.trim() || getCatAvatarByUserId(fallbackSeed)
+  const requestedSrc = avatarUrl?.trim() || null
+  const fallbackSrc = getCatAvatarByUserId(fallbackSeed)
+  const [imageFailed, setImageFailed] = useState(false)
+  const src = requestedSrc && !imageFailed ? requestedSrc : fallbackSrc
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [requestedSrc])
 
   return (
     <img
@@ -35,6 +43,7 @@ export function UserAvatar({
       alt={displayName ?? ''}
       loading={loading}
       decoding="async"
+      onError={() => setImageFailed(true)}
       className={`${sizeClass} rounded-full bg-bg-secondary object-cover shrink-0 ${className}`}
     />
   )

@@ -21,6 +21,7 @@ import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { ServerAppManifest } from '../db/schema/app-integrations'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { validateJsonLimits } from '../lib/json-limits'
 import type { Actor } from '../security/actor'
@@ -165,6 +166,81 @@ function redactCatalogEntry(row: Awaited<ReturnType<AppIntegrationDao['findCatal
     updatedAt: row.updatedAt,
   }
 }
+
+function compactStringList(values: string[] | undefined, limit = 12) {
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))].slice(0, limit)
+}
+
+function catalogEntryMetadata(manifest: ServerAppManifestInput | ServerAppManifest) {
+  const marketplace = manifest.marketplace
+  const gallery =
+    marketplace?.gallery?.map((item) => ({
+      url: item.url,
+      type: item.type ?? 'image',
+      alt: item.alt ?? null,
+    })) ?? []
+  const coverImageUrl = marketplace?.coverImageUrl ?? gallery[0]?.url ?? manifest.iconUrl
+  const links =
+    marketplace?.links?.map((link) => ({
+      label: link.label,
+      url: link.url,
+      type: link.type ?? 'website',
+    })) ?? []
+
+  return {
+    tagline: marketplace?.tagline ?? null,
+    summary: marketplace?.summary ?? manifest.help?.overview ?? manifest.description ?? null,
+    categories: compactStringList(marketplace?.categories, 8),
+    supportedLanguages: compactStringList(marketplace?.supportedLanguages, 24),
+    coverImageUrl,
+    gallery,
+    links,
+    publisher: marketplace?.publisher
+      ? {
+          name: marketplace.publisher.name ?? null,
+          websiteUrl: marketplace.publisher.websiteUrl ?? null,
+        }
+      : null,
+  }
+}
+
+function catalogEntryResponse(
+  row: NonNullable<Awaited<ReturnType<AppIntegrationDao['findCatalogEntryById']>>>,
+  serverCount = 0,
+) {
+  return {
+    ...redactCatalogEntry(row)!,
+    ...catalogEntryMetadata(row.manifest),
+    commandCount: row.manifest.commands.length,
+    skillCount: row.manifest.skills?.length ?? 0,
+    serverCount,
+  }
+}
+
+function catalogEntryMatchesQuery(
+  row: NonNullable<Awaited<ReturnType<AppIntegrationDao['findCatalogEntryById']>>>,
+  query: string,
+) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  const metadata = catalogEntryMetadata(row.manifest)
+  return [
+    row.appKey,
+    row.name,
+    row.description,
+    metadata.tagline,
+    metadata.summary,
+    metadata.publisher?.name,
+    ...metadata.categories,
+    ...metadata.supportedLanguages,
+    ...row.manifest.commands.map((command) => command.title ?? command.name),
+    ...(row.manifest.skills?.map((skill) => skill.name) ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .some((value) => value.toLowerCase().includes(normalized))
+}
+
+type CatalogEntryRow = NonNullable<Awaited<ReturnType<AppIntegrationDao['findCatalogEntryById']>>>
 
 interface LaunchTokenPayload {
   serverId: string
@@ -460,6 +536,15 @@ function manifestTimestamp(manifest: { updatedAt?: string }) {
   return manifest.updatedAt ? new Date(manifest.updatedAt) : null
 }
 
+function manifestUrlFromApiBaseUrl(apiBaseUrl: string | null | undefined) {
+  if (!apiBaseUrl) return null
+  try {
+    return new URL('/.well-known/shadow-app.json', apiBaseUrl).toString()
+  } catch {
+    return null
+  }
+}
+
 export class AppIntegrationService {
   constructor(
     private deps: {
@@ -564,17 +649,20 @@ export class AppIntegrationService {
 
   private async refreshInstalledManifest<
     TApp extends NonNullable<Awaited<ReturnType<AppIntegrationDao['findById']>>>,
-  >(app: TApp, options: { throwOnError?: boolean } = {}) {
-    if (!app.manifestUrl) return app
+  >(app: TApp, options: { throwOnError?: boolean; inferManifestUrl?: boolean } = {}) {
+    const manifestUrl =
+      app.manifestUrl ??
+      (options.inferManifestUrl ? manifestUrlFromApiBaseUrl(app.apiBaseUrl) : null)
+    if (!manifestUrl) return app
     let manifest: ServerAppManifestInput
     try {
-      const rawManifest = await this.fetchManifest(app.manifestUrl)
+      const rawManifest = await this.fetchManifest(manifestUrl)
       manifest = this.validateManifest(rawManifest)
     } catch (error) {
       if (options.throwOnError) throw error
       this.deps.logger.warn(
         { appKey: app.appKey, serverAppId: app.id, error },
-        'Server App manifest refresh failed',
+        'App manifest refresh failed',
       )
       return app
     }
@@ -588,10 +676,59 @@ export class AppIntegrationService {
     }
 
     const nextFields = this.appFieldsFromManifest(manifest)
-    if (app.manifestHash && app.manifestHash === nextFields.manifestHash) return app
+    if (app.manifestHash && app.manifestHash === nextFields.manifestHash && app.manifestUrl) {
+      return app
+    }
 
-    const updated = await this.deps.appIntegrationDao.updateManifest(app.id, nextFields)
+    const updated = await this.deps.appIntegrationDao.updateManifest(app.id, {
+      ...nextFields,
+      manifestUrl,
+    })
     return (updated ?? app) as TApp
+  }
+
+  private async refreshCatalogEntry<TEntry extends CatalogEntryRow>(
+    row: TEntry,
+    options: { throwOnError?: boolean } = {},
+  ) {
+    if (!row.manifestUrl) return row
+    let manifest: ServerAppManifestInput
+    try {
+      const rawManifest = await this.fetchManifest(row.manifestUrl)
+      manifest = this.validateManifest(rawManifest)
+    } catch (error) {
+      if (options.throwOnError) throw error
+      this.deps.logger.warn(
+        { appKey: row.appKey, catalogEntryId: row.id, error },
+        'App catalog manifest refresh failed',
+      )
+      return row
+    }
+    if (manifest.appKey !== row.appKey) {
+      const error = Object.assign(
+        new Error('Manifest appKey cannot change during catalog refresh'),
+        {
+          status: 422,
+        },
+      )
+      if (options.throwOnError) throw error
+      this.deps.logger.warn({ appKey: row.appKey, catalogEntryId: row.id }, error.message)
+      return row
+    }
+    if (hashManifest(row.manifest) === hashManifest(manifest)) return row
+
+    const updated = await this.deps.appIntegrationDao.updateCatalogEntryManifest(row.id, {
+      name: manifest.name,
+      description: manifest.description ?? null,
+      iconUrl: manifest.iconUrl,
+      manifestUrl: row.manifestUrl,
+      manifest,
+    })
+    return (updated ?? row) as TEntry
+  }
+
+  private async refreshCatalogEntries<TEntry extends CatalogEntryRow>(rows: TEntry[]) {
+    return Promise.all(rows.map((row) => this.refreshCatalogEntry(row)))
   }
 
   private async findFreshApp(
@@ -676,11 +813,41 @@ export class AppIntegrationService {
     }
   }
 
-  private async buildCatalogPreview(input: DiscoverServerAppInput) {
+  private async buildCatalogPreview(
+    input: CreateServerAppCatalogEntryInput | DiscoverServerAppInput,
+  ) {
+    if ('sourceServerAppId' in input && input.sourceServerAppId) {
+      const installedRow = await this.deps.appIntegrationDao.findById(input.sourceServerAppId)
+      const installed = installedRow
+        ? await this.refreshInstalledManifest(installedRow, {
+            throwOnError: true,
+            inferManifestUrl: true,
+          })
+        : null
+      if (!installed) {
+        throw Object.assign(new Error('Installed app not found'), { status: 404 })
+      }
+      const manifest = this.validateManifest(installed.manifest)
+      return {
+        manifest,
+        manifestUrl: input.manifestUrl ?? installed.manifestUrl ?? null,
+        permissions: manifest.commands.map((command) => ({
+          name: command.name,
+          title: command.title ?? command.name,
+          description: command.description ?? null,
+          permission: command.permission,
+          action: command.action,
+          dataClass: command.dataClass,
+          approvalMode: command.approvalMode ?? 'none',
+        })),
+      }
+    }
+
     const rawManifest = input.manifest ?? (await this.fetchManifest(input.manifestUrl!))
     const manifest = this.validateManifest(rawManifest)
     return {
       manifest,
+      manifestUrl: 'manifestUrl' in input ? (input.manifestUrl ?? null) : null,
       permissions: manifest.commands.map((command) => ({
         name: command.name,
         title: command.title ?? command.name,
@@ -693,6 +860,44 @@ export class AppIntegrationService {
     }
   }
 
+  async refreshInstalledAppForAdmin(serverAppId: string) {
+    const app = await this.deps.appIntegrationDao.findById(serverAppId)
+    if (!app) throw Object.assign(new Error('Installed app not found'), { status: 404 })
+    return redactApp(
+      await this.refreshInstalledManifest(app, { throwOnError: true, inferManifestUrl: true }),
+    )!
+  }
+
+  async refreshCatalogEntryForAdmin(catalogEntryId: string) {
+    const row = await this.deps.appIntegrationDao.findCatalogEntryById(catalogEntryId)
+    if (!row) throw Object.assign(new Error('App catalog entry not found'), { status: 404 })
+    if (row.manifestUrl)
+      return catalogEntryResponse(await this.refreshCatalogEntry(row, { throwOnError: true }))
+
+    const installed = await this.deps.appIntegrationDao.findLatestByAppKey(row.appKey)
+    if (!installed) {
+      throw Object.assign(
+        new Error('Catalog entry has no manifest URL and no installed app source'),
+        {
+          status: 422,
+        },
+      )
+    }
+    const freshInstalled = await this.refreshInstalledManifest(installed, {
+      throwOnError: true,
+      inferManifestUrl: true,
+    })
+    const manifest = this.validateManifest(freshInstalled.manifest)
+    const updated = await this.deps.appIntegrationDao.updateCatalogEntryManifest(row.id, {
+      name: manifest.name,
+      description: manifest.description ?? null,
+      iconUrl: manifest.iconUrl,
+      manifestUrl: freshInstalled.manifestUrl,
+      manifest,
+    })
+    return catalogEntryResponse(updated ?? row)
+  }
+
   async listCatalog(serverIdOrSlug: string, actor: Actor) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)
@@ -700,8 +905,9 @@ export class AppIntegrationService {
       this.deps.appIntegrationDao.listCatalogEntries(),
       this.deps.appIntegrationDao.listByServer(serverId),
     ])
+    const freshCatalogRows = await this.refreshCatalogEntries(catalogRows)
     const installedByKey = new Map(installedRows.map((row) => [row.appKey, redactApp(row)!]))
-    return catalogRows.map((row) => ({
+    return freshCatalogRows.map((row) => ({
       ...redactCatalogEntry(row)!,
       installed: installedByKey.get(row.appKey) ?? null,
       permissions: row.manifest.commands.map((command) => ({
@@ -718,11 +924,50 @@ export class AppIntegrationService {
 
   async listAdminCatalog() {
     const rows = await this.deps.appIntegrationDao.listCatalogEntries({ includeInactive: true })
-    return rows.map((row) => ({
-      ...redactCatalogEntry(row)!,
-      commandCount: row.manifest.commands.length,
-      skillCount: row.manifest.skills?.length ?? 0,
-    }))
+    const freshRows = await this.refreshCatalogEntries(rows)
+    const installCounts = await this.deps.appIntegrationDao.countInstallationsByAppKeys(
+      freshRows.map((row) => row.appKey),
+    )
+    const serverCountByAppKey = new Map(installCounts.map((row) => [row.appKey, Number(row.count)]))
+    return freshRows.map((row) =>
+      catalogEntryResponse(row, serverCountByAppKey.get(row.appKey) ?? 0),
+    )
+  }
+
+  async listDiscoverCatalog(input: { q?: string | null; limit?: number; offset?: number } = {}) {
+    const rows = await this.deps.appIntegrationDao.listCatalogEntries()
+    const freshRows = await this.refreshCatalogEntries(rows)
+    const query = input.q?.trim() ?? ''
+    const matchedRows = query
+      ? freshRows.filter((row) => catalogEntryMatchesQuery(row, query))
+      : freshRows
+    const installCounts = await this.deps.appIntegrationDao.countInstallationsByAppKeys(
+      matchedRows.map((row) => row.appKey),
+    )
+    const serverCountByAppKey = new Map(installCounts.map((row) => [row.appKey, Number(row.count)]))
+    const limit = Math.max(1, Math.min(input.limit ?? 48, 96))
+    const offset = Math.max(0, input.offset ?? 0)
+    const items = matchedRows
+      .slice(offset, offset + limit)
+      .map((row) => catalogEntryResponse(row, serverCountByAppKey.get(row.appKey) ?? 0))
+    return {
+      apps: items,
+      total: matchedRows.length,
+      hasMore: offset + items.length < matchedRows.length,
+    }
+  }
+
+  async getDiscoverCatalogEntry(appKey: string) {
+    const existing = await this.deps.appIntegrationDao.findCatalogEntryByAppKey(appKey)
+    if (!existing || existing.status !== 'active') {
+      throw Object.assign(new Error('App catalog entry not found'), { status: 404 })
+    }
+    const row = await this.refreshCatalogEntry(existing)
+    const installCounts = await this.deps.appIntegrationDao.countInstallationsByAppKeys([
+      row.appKey,
+    ])
+    const serverCount = Number(installCounts[0]?.count ?? 0)
+    return catalogEntryResponse(row, serverCount)
   }
 
   async upsertCatalogEntry(actor: Actor, input: CreateServerAppCatalogEntryInput) {
@@ -732,15 +977,13 @@ export class AppIntegrationService {
       name: preview.manifest.name,
       description: preview.manifest.description ?? null,
       iconUrl: preview.manifest.iconUrl,
-      manifestUrl: input.manifestUrl ?? null,
+      manifestUrl: preview.manifestUrl,
       manifest: preview.manifest,
       status: input.status ?? 'active',
       createdByUserId: actor.kind === 'system' ? null : actor.userId,
     })
     return {
-      ...redactCatalogEntry(row)!,
-      commandCount: row.manifest.commands.length,
-      skillCount: row.manifest.skills?.length ?? 0,
+      ...catalogEntryResponse(row),
       permissions: preview.permissions,
     }
   }
@@ -756,7 +999,7 @@ export class AppIntegrationService {
       name: preview.manifest.name,
       description: preview.manifest.description ?? null,
       iconUrl: preview.manifest.iconUrl,
-      manifestUrl: input.manifestUrl ?? null,
+      manifestUrl: preview.manifestUrl,
       manifest: preview.manifest,
       status: input.status ?? 'active',
       createdByUserId: null,

@@ -143,7 +143,7 @@ shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id
 
 See [Platform Apps](/platform/platform-apps) for a complete guide to building OAuth apps.
 
-## Server App Commands
+## App Commands
 
 ```bash
 # List Apps installed in a server
@@ -165,7 +165,7 @@ shadowob app skills demo-desk --server <server-id-or-slug>
 shadowob app call demo-desk tickets.create --server <server-id-or-slug> --json-input '{"title":"Example"}' --json
 ```
 
-Server App command calls bind Shadow OAuth identity and Buddy grants through the CLI. Do not call Server App command routes with curl from a Buddy.
+App command calls bind Shadow OAuth identity and Buddy grants through the CLI. Do not call App command routes with curl from a Buddy.
 
 ## API Token Commands
 

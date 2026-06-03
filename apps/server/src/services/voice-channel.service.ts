@@ -4,8 +4,10 @@ import type { Logger } from 'pino'
 import type { RedisClientType } from 'redis'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { UserDao } from '../dao/user.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { getRedisClient } from '../lib/redis'
 import { type ActorInput, actorUserId } from '../security/actor'
+import type { MediaService } from './media.service'
 import type { PolicyService } from './policy.service'
 
 const TOKEN_TTL_SECONDS = 60 * 60
@@ -114,6 +116,7 @@ export class VoiceChannelService {
       channelDao: ChannelDao
       userDao: UserDao
       policyService: PolicyService
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
       logger: Logger
     },
   ) {}
@@ -407,7 +410,7 @@ export class VoiceChannelService {
       screenUid: credentials.screenUid,
       username: user.username,
       displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: resolveAvatarUrl(this.deps.mediaService, user.avatarUrl),
       isBot: user.isBot ?? false,
       isMuted: options.muted ?? previous?.isMuted ?? false,
       isDeafened: options.deafened ?? previous?.isDeafened ?? false,

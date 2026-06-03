@@ -14,6 +14,8 @@ import {
   Upload,
 } from 'lucide-react'
 import { type RefObject, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { copyToClipboard } from '../../lib/clipboard'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import { resolveWorkspaceMediaUrl } from './workspace-media'
 import type { ContextMenuState } from './workspace-types'
@@ -77,6 +79,7 @@ export function WorkspaceContextMenu({
   onDownloadZip,
   onDownloadWorkspaceZip,
 }: WorkspaceContextMenuProps) {
+  const { t } = useTranslation()
   const node = menu.node
   const menuRef = useRef<HTMLDivElement>(null)
   const position = useWorkspaceMenuPosition(menu.x, menu.y, menuRef, boundsRef, 190)
@@ -98,6 +101,8 @@ export function WorkspaceContextMenu({
     onRefresh,
     onDownloadZip,
     onDownloadWorkspaceZip,
+    copySuccessMessage: t('common.copied'),
+    copyErrorMessage: t('chat.copyFailed'),
   })
 
   return (
@@ -194,6 +199,8 @@ function buildMenuGroups(ctx: {
   node: WorkspaceNode | null
   serverId: string
   hasClipboard: boolean
+  copySuccessMessage: string
+  copyErrorMessage: string
   onNewFolder: (parentId: string | null) => void
   onNewFile: (parentId: string | null) => void
   onUploadTo: (parentId: string) => void
@@ -332,8 +339,11 @@ function buildMenuGroups(ctx: {
         {
           icon: Link,
           label: '复制路径',
-          onClick: () => {
-            navigator.clipboard.writeText(node.path)
+          onClick: async () => {
+            await copyToClipboard(node.path, {
+              successMessage: ctx.copySuccessMessage,
+              errorMessage: ctx.copyErrorMessage,
+            })
           },
         },
       ],

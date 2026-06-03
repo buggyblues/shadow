@@ -1,5 +1,6 @@
 import { getCatAvatarByUserId } from '@shadowob/shared'
 import { Image } from 'expo-image'
+import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { getImageUrl } from '../../lib/api'
 import { border, palette, radius, spacing, useColors } from '../../theme'
@@ -24,14 +25,20 @@ export function Avatar({
   shape = 'circle',
 }: AvatarProps) {
   const colors = useColors()
+  const [imageFailed, setImageFailed] = useState(false)
 
   const resolvedUri = getImageUrl(uri)
   const fallbackSeed = userId?.trim() || name.trim() || 'default'
-  const src = resolvedUri || (shape === 'circle' ? getCatAvatarByUserId(fallbackSeed) : null)
+  const fallbackSrc = shape === 'circle' ? getCatAvatarByUserId(fallbackSeed) : null
+  const src = resolvedUri && !imageFailed ? resolvedUri : fallbackSrc
   const dotSize = Math.max(10, Math.round(size * 0.28))
   const statusColor = getStatusColor(colors, status)
   const borderRadius = shape === 'server' ? radius['2lg'] : size / 2
   const isServerShape = shape === 'server'
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [resolvedUri])
 
   const initials = (name || '?').slice(0, 2).toUpperCase()
   return (
@@ -54,6 +61,7 @@ export function Avatar({
           style={[styles.image, { borderRadius }]}
           contentFit="cover"
           transition={200}
+          onError={() => setImageFailed(true)}
         />
       ) : (
         <View

@@ -413,7 +413,7 @@
   "contentFeed": {
     "title": "Subscriptions",
     "empty": "No subscribed content",
-    "emptyDesc": "Subscribe to channels and messages with attachments or Server App cards will appear here.",
+    "emptyDesc": "Subscribe to channels and messages with attachments or App cards will appear here.",
     "markAllRead": "Mark all read",
     "open": "Open",
     "card": "App card",
@@ -1128,7 +1128,7 @@
     "loadMore": "Load more servers",
     "noMore": "All servers shown",
     "emptyTitle": "Nothing to browse yet",
-    "emptyDesc": "Try another search or come back for new Buddies, services, shops, and servers.",
+    "emptyDesc": "Try another search or come back for new Buddies, Apps, services, shops, and servers.",
     "noSearchResults": "No results found",
     "noSearchResultsDesc": "Try another keyword.",
     "deviceTier": {
@@ -1152,7 +1152,8 @@
       "browse": "Browse",
       "explore": "Explore",
       "market": "Market",
-      "cloud": "Cloud"
+      "cloud": "Cloud",
+      "apps": "Apps"
     },
     "metrics": {
       "publicCommunities": "Public servers",
@@ -1216,7 +1217,8 @@
       "products": "Services & content",
       "shops": "Shops",
       "cloud": "Xiaodou Cloud",
-      "communities": "Servers"
+      "communities": "Servers",
+      "apps": "Apps"
     },
     "lanes": {
       "plays": "Plays to start",
@@ -1225,7 +1227,8 @@
       "products": "Buy today",
       "shops": "Shops to visit",
       "cloud": "Cloud template cashback",
-      "communities": "Recommended servers"
+      "communities": "Recommended servers",
+      "apps": "Official apps"
     },
     "laneDescriptions": {
       "plays": "Interactive content and games you can launch now.",
@@ -1233,7 +1236,8 @@
       "market": "Public goods and services from server and personal shops.",
       "shops": "Seller spaces with products, support, and fulfillment context.",
       "cloud": "Deployable Buddy service templates and cloud workflows.",
-      "communities": "Public servers you can join for channels, shops, and Buddies."
+      "communities": "Public servers you can join for channels, shops, and Buddies.",
+      "apps": "Games, tools, and creative Apps built for servers."
     },
     "emptyLane": {
       "plays": "No plays are ready to start yet.",
@@ -1242,7 +1246,8 @@
       "products": "No items listed yet.",
       "shops": "No shops to browse yet.",
       "cloud": "No Cloud templates are ready to deploy yet.",
-      "communities": "No public servers yet."
+      "communities": "No public servers yet.",
+      "apps": "No Apps are ready to add yet"
     },
     "cashbackBadge": "Template cashback",
     "cashbackTitle": "Publish a Cloud template for cashback",
@@ -1287,7 +1292,15 @@
         "title": "Psychology tests",
         "subtitle": "Scales, interactive questionnaires, and paid assessment experiences."
       }
-    }
+    },
+    "hero": {
+      "apps": {
+        "title": "Find Apps to bring into your server",
+        "subtitle": "Bring games, tools, and creative Apps into your server so friends can play and use them together."
+      }
+    },
+    "openApp": "View app",
+    "appServerCount": "In {{count}} servers"
   },
   "commerceMarketplace": {
     "globalPublic": "List in the global marketplace",
@@ -1493,13 +1506,93 @@
     "approved": "APPROVED"
   },
   "serverApps": {
-    "noIframe": "This App does not provide an iframe entry.",
-    "commandApprovalTitle": "Authorize App Command",
-    "commandApprovalMessage": "{{app}} wants to run {{command}} using {{permission}}.",
-    "commandApprovalDenied": "Command authorization was cancelled.",
-    "commandApprovalSuccess": "App command authorized.",
-    "commandApprovalFailed": "App command authorization failed.",
-    "commandApprovalConfirm": "Authorize"
+    "group": "Apps",
+    "installedTitle": "Installed Apps",
+    "addApp": "Add App",
+    "addDescription": "Add an App from the official directory, or install a custom App with a manifest URL.",
+    "addMode": {
+      "catalog": "Directory",
+      "custom": "Custom"
+    },
+    "auth": {
+      "oauth2-bearer": "OAuth 2.0"
+    },
+    "alreadyInstalled": "Installed",
+    "installFromCatalog": "Install",
+    "catalogEmpty": "There are no Apps in the directory yet.",
+    "customInstall": "Install with manifest URL",
+    "manifestUrl": "Manifest URL",
+    "discoverButton": "Check",
+    "requestedPermissions": "Requested permissions",
+    "authorizeInstall": "Authorize and install",
+    "noDescription": "No description yet",
+    "noInstalled": "No Apps installed yet.",
+    "selectApp": "Select an App",
+    "selectFromSidebar": "Choose an installed App from the left, or add a new one.",
+    "install": "Install App",
+    "privateUrlError": "This App URL points to a local or private network and cannot be installed in this environment.",
+    "uninstallConfirmTitle": "Uninstall App",
+    "uninstallConfirmMessage": "Remove {{name}} from this server? Related Buddy grants will stop working.",
+    "uninstallApp": "Uninstall App",
+    "accessTitle": "Buddy access",
+    "defaultAccessTitle": "Default permissions",
+    "defaultAccessDescription": "Choose which App permissions new Buddies can use by default.",
+    "saveDefaultAccess": "Save defaults",
+    "defaultAccessSaved": "Default permissions saved",
+    "accessDescription": "Grant a Buddy permission to call this App through commands.",
+    "grantButton": "Grant Buddy",
+    "grantSuccess": "Buddy grant saved",
+    "noBuddies": "This server does not have any Buddies yet.",
+    "openApp": "Open App",
+    "copyAppLink": "Copy App link",
+    "noIframe": "This App does not have an interface to open.",
+    "commandApprovalTitle": "Confirm App command",
+    "commandApprovalMessage": "{{appName}} wants to run {{commandName}}.",
+    "commandApprovalSubject": "Requester",
+    "commandApprovalBuddy": "Buddy",
+    "commandApprovalPerson": "Member",
+    "commandApprovalPermission": "Permission",
+    "commandApprovalScope": "Scope",
+    "commandApprovalConfirm": "Allow command",
+    "commandApprovalDenied": "App command canceled",
+    "commandApprovalSuccess": "App command approved",
+    "commandApprovalFailed": "Failed to approve App command",
+    "backToDirectory": "Back to App directory",
+    "start": "Start",
+    "addToServer": "Add to server",
+    "adding": "Adding...",
+    "installed": "Installed",
+    "installSuccess": "App added to server",
+    "installFailed": "Failed to add App",
+    "notFoundTitle": "App not found",
+    "notFoundDesc": "It may not be listed yet, or it may have been removed from the official market.",
+    "noTagline": "This App does not have a tagline yet.",
+    "overview": "Overview",
+    "gallery": "Media",
+    "previousMedia": "Previous media",
+    "nextMedia": "Next media",
+    "selectMedia": "View media {{index}}",
+    "commands": "Commands",
+    "commandNoDescription": "No command description yet.",
+    "dataAccess": "Data access",
+    "dataAccessTitle": "Apps can only access fixed basic data by default",
+    "dataAccessBody": "Sensitive commands still use server permissions, Buddy grants, and approval policy. Review permissions and data classes before installing.",
+    "chooseServer": "Choose server",
+    "installedOnSelected": "This App is installed on the selected server and can be started now.",
+    "readyToAdd": "You can add this App to the selected server.",
+    "adminRequired": "Server admin permission is required to add Apps.",
+    "serverCount": "Server count",
+    "serverCountValue": "In {{count}} servers",
+    "categories": "Categories",
+    "noCategories": "No categories",
+    "languages": "Languages",
+    "noLanguages": "No languages listed",
+    "links": "Links",
+    "noLinks": "No links yet",
+    "manifest": "Manifest",
+    "versionValue": "Version {{version}}",
+    "privacy": "Privacy",
+    "privacyBody": "Apps must follow server authorization boundaries. Check developer terms and privacy policy through the listed links."
   },
   "apps": {
     "noApps": "No apps yet"

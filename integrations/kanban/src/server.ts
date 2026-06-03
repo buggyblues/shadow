@@ -109,6 +109,7 @@ function iconSvg() {
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+app.get('/assets/cover.png', serveStatic({ root: './public' }))
 app.get('/assets/*', serveStatic({ root: './dist/client' }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))

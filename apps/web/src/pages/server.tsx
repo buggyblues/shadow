@@ -254,7 +254,9 @@ export function ServerLayout() {
   } = useQuery({
     queryKey: ['server-access', serverSlug],
     queryFn: () => fetchApi<ServerAccessMeta>(`/api/servers/${serverSlug}/access`),
-    enabled: !!serverSlug && (!channelId || channelBootstrap?.access.isServerMember === false),
+    enabled:
+      !!serverSlug &&
+      (!channelId || isChannelBootstrapError || channelBootstrap?.access.isServerMember === false),
     retry: false,
     staleTime: SERVER_ROUTE_STALE_MS,
     gcTime: SERVER_ROUTE_GC_MS,
@@ -471,7 +473,8 @@ export function ServerLayout() {
   const activeCopilotChannelId = isServerAppsRoute ? routeCopilotChannelId : null
   const isCopilotMode = isServerAppsRoute && Boolean(activeCopilotChannelId)
   const isServerMember = channelId
-    ? (channelBootstrap?.access.isServerMember ?? serverAccess?.isMember) === true
+    ? (channelBootstrap?.access.isServerMember ?? serverAccess?.isMember ?? Boolean(serverMeta)) ===
+      true
     : serverAccess?.isMember === true
   const shouldRenderChannelSidebar = !isCopilotMode && isServerMember
 
@@ -570,9 +573,7 @@ export function ServerLayout() {
   }
 
   const routeChannelBlocked =
-    !!channelId &&
-    (isRouteChannelLoading ||
-      (!!serverMeta?.id && !!routeChannel && routeChannel.serverId !== serverMeta.id))
+    !!channelId && !!serverMeta?.id && !!routeChannel && routeChannel.serverId !== serverMeta.id
 
   const navigateServerAppCopilot = (nextChannelId: string | null) => {
     navigate({
@@ -614,7 +615,9 @@ export function ServerLayout() {
         >
           <ChannelSidebar
             serverSlug={serverSlug}
-            deferInitialQueries={Boolean(channelId && bootstrapSeededChannelId !== channelId)}
+            deferInitialQueries={Boolean(
+              channelId && !serverMeta && bootstrapSeededChannelId !== channelId,
+            )}
             onSelectChannel={isServerAppsRoute ? openChannelInCopilot : undefined}
           />
         </div>
@@ -695,12 +698,14 @@ export function ServerLayout() {
           </div>
         ) : routeChannelBlocked ? (
           <RouteChannelContentLoading />
-        ) : channelId && channelBootstrap ? (
+        ) : channelId ? (
           <ChannelView
             channelId={channelId}
             serverSlug={serverSlug}
-            initialMessages={channelBootstrap.messages}
-            initialMembers={channelBootstrap.members}
+            initialAccess={channelBootstrap?.access ?? null}
+            initialMessages={channelBootstrap?.messages}
+            initialMembers={channelBootstrap?.members}
+            routeAccessFallbackLoading={isChannelBootstrapLoading || isServerAccessLoading}
           />
         ) : (
           <Outlet />

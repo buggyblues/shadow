@@ -1,9 +1,11 @@
 import { type ChannelDao, normalizeDirectPair } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
+import { withResolvedAvatarUrl } from '../lib/avatar-url'
 import { type ActorInput, actorUserId } from '../security/actor'
 import type { CreateChannelInput, UpdateChannelInput } from '../validators/channel.schema'
 import { isBuddyInboxTopic } from './buddy-inbox-protocol'
+import type { MediaService } from './media.service'
 import type { PolicyService } from './policy.service'
 import type { ServerService } from './server.service'
 
@@ -17,8 +19,19 @@ export class ChannelService {
       serverDao: ServerDao
       serverService: ServerService
       policyService: PolicyService
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
     },
   ) {}
+
+  private withSignedDirectPeer<T extends { otherUser?: { avatarUrl?: string | null } | null }>(
+    channel: T,
+  ): T {
+    if (!channel.otherUser) return channel
+    return {
+      ...channel,
+      otherUser: withResolvedAvatarUrl(this.deps.mediaService, channel.otherUser),
+    }
+  }
 
   /** Generate a unique channel name within a server, appending -2, -3, etc. if needed. */
   private async generateUniqueName(
@@ -299,7 +312,8 @@ export class ChannelService {
   }
 
   async listDirectChannels(userId: string) {
-    return this.deps.channelDao.findDirectChannelsForUser(userId)
+    const channels = await this.deps.channelDao.findDirectChannelsForUser(userId)
+    return channels.map((channel) => this.withSignedDirectPeer(channel))
   }
 
   async getDirectChannelById(channelId: string, viewerUserId: string) {
@@ -315,7 +329,8 @@ export class ChannelService {
   }
 
   async findDirectPeer(channelId: string, viewerUserId: string) {
-    return this.deps.channelDao.findDirectPeer(channelId, viewerUserId)
+    const peer = await this.deps.channelDao.findDirectPeer(channelId, viewerUserId)
+    return peer ? withResolvedAvatarUrl(this.deps.mediaService, peer) : null
   }
 
   private async withDirectPeer<T extends { id: string; kind: string }>(
@@ -324,6 +339,6 @@ export class ChannelService {
   ) {
     if (channel.kind !== 'dm') return channel
     const otherUser = await this.deps.channelDao.findDirectPeer(channel.id, viewerUserId)
-    return { ...channel, otherUser }
+    return this.withSignedDirectPeer({ ...channel, otherUser })
   }
 }

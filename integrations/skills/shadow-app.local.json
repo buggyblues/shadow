@@ -5,6 +5,30 @@
   "description": "A server-owned skill library where people and Buddies can publish, discover, export, and install reusable working skills.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4220/assets/icon.svg",
+  "marketplace": {
+    "tagline": "A server-owned library for reusable working skills.",
+    "summary": "Shadow Skills lets a server publish, discover, export, install, and refresh reusable skills. People and Buddies can keep operational know-how in a shared library instead of burying prompts, runbooks, and workflows across channels.",
+    "categories": ["开发工具", "效率", "知识"],
+    "supportedLanguages": ["English", "中文"],
+    "coverImageUrl": "http://localhost:4220/assets/cover.png",
+    "gallery": [
+      {
+        "url": "http://localhost:4220/assets/cover.png",
+        "type": "image",
+        "alt": "skills cover"
+      }
+    ],
+    "links": [
+      {
+        "label": "主页",
+        "url": "http://localhost:4220/shadow/server",
+        "type": "website"
+      }
+    ],
+    "publisher": {
+      "name": "Shadow"
+    }
+  },
   "iframe": {
     "entry": "http://localhost:4220/shadow/server",
     "allowedOrigins": ["http://localhost:4220"]
@@ -219,7 +243,7 @@
   "skills": [
     {
       "name": "shadow-skill-library",
-      "description": "Use when a Buddy needs to discover reusable skills, download a complete skill zip, upload a skill package, or install a skill through the Shadow Skills Server App.",
+      "description": "Use when a Buddy needs to discover reusable skills, download a complete skill zip, upload a skill package, or install a skill through the Shadow Skills App.",
       "commandHints": [
         "shadow-skills skills.list",
         "shadow-skills skills.search",

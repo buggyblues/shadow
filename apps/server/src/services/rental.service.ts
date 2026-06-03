@@ -11,10 +11,12 @@ import type {
 } from '../dao/rental-contract.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { type Actor, actorHasScope } from '../security/actor'
 import { effectiveAgentStatus } from './agent.service'
 import { getBuddyMode } from './buddy-policy'
 import type { LedgerService } from './ledger.service'
+import type { MediaService } from './media.service'
 
 /* ──────────────── Pricing Constants ──────────────── */
 
@@ -67,9 +69,14 @@ export class RentalService {
       serverDao: ServerDao
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
       io: SocketIOServer
     },
   ) {}
+
+  private resolveUserAvatar(avatarUrl: string | null | undefined) {
+    return resolveAvatarUrl(this.deps.mediaService, avatarUrl)
+  }
 
   /* ═══════════════ Listings ═══════════════ */
 
@@ -244,7 +251,7 @@ export class RentalService {
           id: ownerUser.id,
           username: ownerUser.username,
           displayName: ownerUser.displayName,
-          avatarUrl: ownerUser.avatarUrl,
+          avatarUrl: this.resolveUserAvatar(ownerUser.avatarUrl),
         }
       : null
     return { ...listing, viewCount: (listing.viewCount ?? 0) + 1, totalOnlineSeconds, owner }
@@ -297,7 +304,7 @@ export class RentalService {
                 id: owner.id,
                 username: owner.username,
                 displayName: owner.displayName,
-                avatarUrl: owner.avatarUrl,
+                avatarUrl: this.resolveUserAvatar(owner.avatarUrl),
               }
             : null,
         }
