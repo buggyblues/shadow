@@ -11,6 +11,7 @@ assets/*.png
 assets/*.ico
 assets/*.icns
 !assets/icon.png
+!assets/dmg-background.png
 !assets/icon.ico
 !assets/icon.icns
 !assets/tray*.png

@@ -49,6 +49,16 @@ function plistValue(infoPlistPath, key) {
   }).trim()
 }
 
+function verifyCommand(command, args, label) {
+  try {
+    execFileSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  } catch (error) {
+    const stderr = error.stderr ? `\n${error.stderr}` : ''
+    const stdout = error.stdout ? `\n${error.stdout}` : ''
+    throw new Error(`[verify-package-assets] ${label} failed:${stderr}${stdout}`)
+  }
+}
+
 function verifyMacIcon(iconPath) {
   assertFile(iconPath, 'macOS app icon')
   const iconInfo = execFileSync(
@@ -104,6 +114,38 @@ function verifyMacPackage() {
   if (bundleName !== 'Shadow') {
     throw new Error(`[verify-package-assets] Expected CFBundleName=Shadow, got ${bundleName}`)
   }
+  const displayName = plistValue(infoPlist, 'CFBundleDisplayName')
+  if (displayName !== 'Shadow') {
+    throw new Error(
+      `[verify-package-assets] Expected CFBundleDisplayName=Shadow, got ${displayName}`,
+    )
+  }
+  const developmentRegion = plistValue(infoPlist, 'CFBundleDevelopmentRegion')
+  if (developmentRegion !== 'en') {
+    throw new Error(
+      `[verify-package-assets] Expected CFBundleDevelopmentRegion=en, got ${developmentRegion}`,
+    )
+  }
+  const hasLocalizedDisplayName = plistValue(infoPlist, 'LSHasLocalizedDisplayName')
+  if (hasLocalizedDisplayName !== 'true') {
+    throw new Error(
+      `[verify-package-assets] Expected LSHasLocalizedDisplayName=true, got ${hasLocalizedDisplayName}`,
+    )
+  }
+  const localizations = plistValue(infoPlist, 'CFBundleLocalizations')
+  for (const locale of ['en', 'zh', 'zh-Hans', 'zh-Hant', 'zh_CN', 'zh_TW']) {
+    if (!localizations.includes(locale)) {
+      throw new Error(`[verify-package-assets] Missing CFBundleLocalizations entry: ${locale}`)
+    }
+  }
+
+  verifyCommand('codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath], 'codesign')
+  verifyCommand(
+    'spctl',
+    ['--assess', '--type', 'execute', '--verbose=4', appPath],
+    'Gatekeeper assessment',
+  )
+  verifyCommand('xcrun', ['stapler', 'validate', appPath], 'notarization staple validation')
 }
 
 function verifyWindowsPackage() {
