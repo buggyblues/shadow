@@ -1882,7 +1882,7 @@
     "advancedOptions": "進階選項",
     "usernameHint": "會自動根據名稱生成，也可以手動調整。僅支援小寫字母、數字、短橫線和底線。",
     "descriptionHint": "寫清楚它擅長什麼，方便成員判斷何時呼叫它。",
-    "nameLabel": "Buddy 名稱",
+    "nameLabel": "名稱",
     "namePlaceholder": "例如：代碼貓",
     "usernameLabel": "使用者名稱",
     "usernamePlaceholder": "例如：coding-cat",

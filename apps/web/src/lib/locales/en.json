@@ -2071,7 +2071,7 @@
     "advancedOptions": "Advanced Options",
     "usernameHint": "Generated from the name until you edit it. Use lowercase letters, numbers, hyphens, and underscores.",
     "descriptionHint": "Describe what this Buddy is good at so members know when to call it.",
-    "nameLabel": "Buddy Name",
+    "nameLabel": "Name",
     "namePlaceholder": "e.g. CodingCat",
     "usernameLabel": "Username",
     "usernamePlaceholder": "e.g. coding-cat",

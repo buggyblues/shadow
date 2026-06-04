@@ -151,6 +151,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       cache_from:
         - type=local,src=.docker-cache/web
       cache_to:

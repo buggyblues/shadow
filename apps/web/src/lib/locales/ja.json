@@ -1882,7 +1882,7 @@
     "advancedOptions": "詳細オプション",
     "usernameHint": "名前から自動生成されますが、手動でも変更できます。小文字、数字、ハイフン、アンダースコアが使えます。",
     "descriptionHint": "この Buddy が得意なことを書いて、メンバーが呼び出すタイミングを判断しやすくします。",
-    "nameLabel": "Buddy 名",
+    "nameLabel": "名前",
     "namePlaceholder": "例：コーディングキャット",
     "usernameLabel": "ユーザー名",
     "usernamePlaceholder": "例：coding-cat",

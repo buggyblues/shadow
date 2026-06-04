@@ -80,6 +80,9 @@ export function LoginPanel({ variant, redirect, onClose, onComplete }: LoginPane
   )
   const oauthRedirect = useMemo(() => webRedirectFromRouterPath(routerRedirect), [routerRedirect])
   const apiBase = import.meta.env.VITE_API_BASE ?? ''
+  const googleClientId = (
+    typeof __SHADOW_GOOGLE_CLIENT_ID__ !== 'undefined' ? __SHADOW_GOOGLE_CLIENT_ID__ : ''
+  ).trim()
   const text = useMemo(() => loginText(t), [t])
 
   return (
@@ -88,6 +91,7 @@ export function LoginPanel({ variant, redirect, onClose, onComplete }: LoginPane
       lang={i18n.language}
       redirect={routerRedirect}
       oauthRedirect={oauthRedirect}
+      googleClientId={googleClientId || undefined}
       apiBase={apiBase}
       logoSrc="/Logo.svg"
       brandSuffix="OwnBuddy"

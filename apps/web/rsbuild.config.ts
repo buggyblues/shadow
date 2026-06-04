@@ -1,11 +1,13 @@
 import path from 'node:path'
-import { defineConfig } from '@rsbuild/core'
+import { defineConfig, loadEnv } from '@rsbuild/core'
 import { pluginReact } from '@rsbuild/plugin-react'
 
 // Absolute path to @shadowob/cloud-ui source
 const cloudUiRoot = path.resolve(__dirname, '../cloud/packages/ui')
 const cloudUiSrc = path.resolve(__dirname, '../cloud/packages/ui/src')
 const defaultStandaloneDevApiTarget = 'http://127.0.0.1:3002'
+
+loadEnv({ cwd: path.resolve(__dirname, '../..') })
 
 function normalizeHttpOrigin(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -25,6 +27,7 @@ function getDevApiTarget(): string {
 }
 
 const devApiTarget = getDevApiTarget()
+const googleClientId = process.env.GOOGLE_CLIENT_ID ?? ''
 
 function handleDevProxyError(error: NodeJS.ErrnoException) {
   if (error.code === 'EPIPE' || error.code === 'ECONNRESET') {
@@ -89,6 +92,9 @@ export default defineConfig({
       // resolve those to cloud-ui's own src directory instead of apps/web/src.
       config.plugins ??= []
       config.plugins.push(
+        new rspack.DefinePlugin({
+          __SHADOW_GOOGLE_CLIENT_ID__: JSON.stringify(googleClientId),
+        }),
         new rspack.NormalModuleReplacementPlugin(/^@\//, (resource) => {
           const issuer = (resource.contextInfo?.issuer ?? resource.context ?? '').replaceAll(
             '\\',

@@ -8,6 +8,8 @@ interface ImportMeta {
   readonly env: ImportMetaEnv
 }
 
+declare const __SHADOW_GOOGLE_CLIENT_ID__: string | undefined
+
 declare module '*.css' {
   const content: string
   export default content

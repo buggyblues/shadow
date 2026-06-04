@@ -249,7 +249,7 @@ export function QuickCreateBuddyModal({
   return (
     <Modal open={open} onClose={close}>
       <ModalContent
-        maxWidth={isQuickBuddyAdvanced || !isCreateBuddyDetailsStep ? 'max-w-2xl' : 'max-w-[560px]'}
+        maxWidth={isQuickBuddyAdvanced || !isCreateBuddyDetailsStep ? 'max-w-2xl' : 'max-w-[760px]'}
         className={cn(
           'transition-[max-width,height] duration-300 ease-out max-h-[calc(100vh-48px)]',
           !isCreateBuddyDetailsStep
@@ -257,8 +257,8 @@ export function QuickCreateBuddyModal({
               ? 'h-[560px]'
               : 'h-[520px]'
             : isQuickBuddyAdvanced
-              ? 'h-[520px]'
-              : 'h-[760px]',
+              ? 'h-[460px]'
+              : 'h-[520px]',
         )}
       >
         <ModalHeader
