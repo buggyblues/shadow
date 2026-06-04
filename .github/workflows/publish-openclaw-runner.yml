@@ -21,7 +21,6 @@ on:
           - openclaw-runner
           - claude-runner
           - codex-runner
-          - gemini-runner
           - opencode-runner
           - hermes-runner
 
@@ -93,9 +92,6 @@ jobs:
           - image: codex-runner
             image_name: buggyblues/codex-runner
             dockerfile: apps/cloud/images/codex-runner/Dockerfile
-          - image: gemini-runner
-            image_name: buggyblues/gemini-runner
-            dockerfile: apps/cloud/images/gemini-runner/Dockerfile
           - image: opencode-runner
             image_name: buggyblues/opencode-runner
             dockerfile: apps/cloud/images/opencode-runner/Dockerfile
@@ -169,5 +165,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=min,scope=${{ matrix.image }},ignore-error=true
