@@ -18,6 +18,11 @@ import {
   SELECTION_RECT_VERTEX_SHADER,
 } from '../utils/shaders'
 
+function devicePixelRatio(): number {
+  const value = (globalThis as { devicePixelRatio?: number }).devicePixelRatio
+  return typeof value === 'number' && Number.isFinite(value) ? value : 1
+}
+
 // ─────────────────────────────────────
 // Type
 // ─────────────────────────────────────
@@ -46,7 +51,7 @@ export interface GLContext {
 
 /** Initialise WebGL and compile shaders. Throws if WebGL is unavailable. */
 export function createGLContext(canvas: HTMLCanvasElement): GLContext {
-  const dpr = Math.min(window.devicePixelRatio || 1, 4)
+  const dpr = Math.min(devicePixelRatio(), 4)
 
   const gl = canvas.getContext('webgl', {
     alpha: true,

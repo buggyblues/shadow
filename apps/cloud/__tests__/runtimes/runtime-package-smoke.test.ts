@@ -192,6 +192,14 @@ describe('runner runtime package smoke checks', () => {
     expect(() => parseYaml(files['/home/shadow/.hermes/config.yaml'] ?? '')).not.toThrow()
     expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toContain('shadowob')
+    expect(files['/home/shadow/.hermes/skills/shadow-server-app/SKILL.md']).toContain(
+      'shadowob app discover',
+    )
+    expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
+      'shadowob app call',
+    )
+    expect(files['/home/shadow/.hermes/.env']).toContain('SHADOWOB_TOKEN=${SHADOW_TOKEN_BUDDY_1}')
+    expect(files['/home/shadow/.hermes/.env']).toContain('HERMES_YOLO_MODE=true')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
   })

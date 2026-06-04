@@ -144,6 +144,8 @@ interface PersistedSceneLayout {
 }
 
 function persistedSceneLayout(card: Card): PersistedSceneLayout | null {
+  const direct = (card as Card & { layout?: PersistedSceneLayout }).layout
+  if (direct && typeof direct === 'object') return direct
   const meta = card.meta as { layout?: PersistedSceneLayout } | null
   const layout = meta?.layout
   if (!layout || typeof layout !== 'object') return null

@@ -405,11 +405,25 @@ export function getShadowServerAppChannelMessageErrors(
   return shadow?.outbox?.channelMessageErrors ?? []
 }
 
+function isDomainResultWithEvents(payload: Record<string, unknown>): boolean {
+  return Array.isArray(payload.events) && ('cursor' in payload || 'result' in payload)
+}
+
+function isCommandPayloadEnvelope(payload: Record<string, unknown>): boolean {
+  if (isDomainResultWithEvents(payload)) return false
+  return payload.ok === true || payload.ok === false || shadowFromPayload(payload) !== null
+}
+
 export function unwrapShadowServerAppCommandPayload<TResult = unknown>(payload: unknown): TResult {
   if (isProtocolRecord(payload) && payload.ok === false) {
     throw new Error(typeof payload.error === 'string' ? payload.error : 'Command failed')
   }
-  if (isProtocolRecord(payload) && 'result' in payload && payload.result !== undefined) {
+  if (
+    isProtocolRecord(payload) &&
+    'result' in payload &&
+    payload.result !== undefined &&
+    isCommandPayloadEnvelope(payload)
+  ) {
     const nested = unwrapShadowServerAppCommandPayload<unknown>(payload.result)
     const shadow = shadowFromPayload(payload)
     if (isProtocolRecord(nested)) return mergeShadowResult(nested, shadow) as TResult

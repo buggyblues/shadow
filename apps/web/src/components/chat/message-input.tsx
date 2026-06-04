@@ -117,6 +117,9 @@ function getSpeechRecognitionConstructor(): BrowserSpeechRecognitionConstructor 
 
 type MessagesPage = { messages: Record<string, unknown>[]; hasMore: boolean }
 
+const sentMessageHistoryByScope = new Map<string, string[]>()
+const SENT_MESSAGE_HISTORY_LIMIT = 20
+
 function getPendingFileKey(pf: PendingFile): string {
   return [
     pf.workspaceUrl,
@@ -334,6 +337,7 @@ export function MessageInput({
   const [viewingImage, setViewingImage] = useState<PendingFile | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const historyBrowseIndexRef = useRef(-1)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const voiceRecorderRef = useRef<MediaRecorder | null>(null)
   const voiceStreamRef = useRef<MediaStream | null>(null)
@@ -433,6 +437,46 @@ export function MessageInput({
       }
     })
   })
+
+  useEffect(() => {
+    historyBrowseIndexRef.current = -1
+  }, [draftScopeId])
+
+  const recordSentMessageHistory = useCallback(
+    (text: string) => {
+      const normalized = text.trim()
+      if (!normalized) return
+      const current = sentMessageHistoryByScope.get(draftScopeId) ?? []
+      sentMessageHistoryByScope.set(
+        draftScopeId,
+        [normalized, ...current.filter((item) => item !== normalized)].slice(
+          0,
+          SENT_MESSAGE_HISTORY_LIMIT,
+        ),
+      )
+      historyBrowseIndexRef.current = -1
+    },
+    [draftScopeId],
+  )
+
+  const recallSentMessageHistory = useCallback(() => {
+    const textarea = textareaRef.current
+    const history = sentMessageHistoryByScope.get(draftScopeId) ?? []
+    if (!textarea || history.length === 0) return false
+    if (content.trim()) return false
+    historyBrowseIndexRef.current = Math.min(historyBrowseIndexRef.current + 1, history.length - 1)
+    const recalled = history[historyBrowseIndexRef.current] ?? ''
+    if (!recalled) return false
+    setContent(recalled)
+    scheduleSave(recalled)
+    requestAnimationFrame(() => {
+      textarea.focus()
+      textarea.style.height = 'auto'
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
+      textarea.setSelectionRange(recalled.length, recalled.length)
+    })
+    return true
+  }, [content, draftScopeId, scheduleSave])
 
   // Mention autocomplete state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
@@ -1277,6 +1321,7 @@ export function MessageInput({
     const savedMentions = mentionsToSend
     const savedCommerceCards = [...selectedCommerceCards]
     const savedMetadata = metadataToSend
+    recordSentMessageHistory(savedContent)
     setContent('')
     setSelectedMentions([])
     setMentionQuery(null)
@@ -1489,6 +1534,7 @@ export function MessageInput({
     queryClient,
     clearDraft,
     messageMetadata,
+    recordSentMessageHistory,
     threadId,
   ])
 
@@ -1594,6 +1640,19 @@ export function MessageInput({
         setMentionQuery(null)
         setMentionTrigger(null)
         setMentionIndex(0)
+        return
+      }
+    }
+
+    if (e.key === 'ArrowUp' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      const textarea = textareaRef.current
+      const cursorAtStart =
+        textarea &&
+        textarea.selectionStart === 0 &&
+        textarea.selectionEnd === 0 &&
+        !e.nativeEvent.isComposing
+      if (cursorAtStart && recallSentMessageHistory()) {
+        e.preventDefault()
         return
       }
     }

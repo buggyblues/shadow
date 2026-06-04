@@ -1,7 +1,7 @@
 import type { RuntimeSessionPetReaction } from '@shadowob/shared/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { PetNoticeKind } from '../lib/chatbot'
+import type { PetNoticeKind, PetNoticeOptions } from '../lib/chatbot'
 import {
   loadServiceHistory,
   loadServiceState,
@@ -31,6 +31,7 @@ import type {
 const MIN_SERVICE_INTERVAL_MINUTES = 5
 const RUNTIME_SESSION_REACTION_VISIBLE_MS = 45_000
 const RUNTIME_SESSION_REACTION_BUBBLE_COOLDOWN_MS = 30_000
+const PET_RUNTIME_DEBUG_KEY = 'shadow:desktop-pet:runtime-debug'
 
 const RUNTIME_LABELS: Record<string, string> = {
   'claude-code': 'Claude Code',
@@ -60,7 +61,7 @@ export function usePetServices({
   panelOpen: boolean
   tab: AppTab
   petName: string
-  showPetNotice: (message: string, options?: { noticeKind?: PetNoticeKind }) => void
+  showPetNotice: (message: string, options?: PetNoticeOptions) => void
   clearPetNotice: (noticeKind?: PetNoticeKind) => void
 }) {
   const { t } = useTranslation()
@@ -216,8 +217,21 @@ export function usePetServices({
           lastActivityAt,
           shownAt: now,
         })
+        logRuntimeDebug('show-runtime-bubble', {
+          key,
+          reaction,
+          active: runtimeSessionLooksActive(session),
+          session: runtimeSessionDebugSummary(session),
+        })
         showPetNotice(runtimeSessionBubbleMessage(session, t), {
           noticeKind: runtimeSessionLooksActive(session) ? 'runtime-busy' : 'runtime-terminal',
+          debugSource: 'runtime-session-reaction',
+          debugContext: {
+            key,
+            reaction,
+            active: runtimeSessionLooksActive(session),
+            session: runtimeSessionDebugSummary(session),
+          },
         })
       }
       for (const key of runtimeSessionBubbleTrackerRef.current.keys()) {
@@ -307,6 +321,13 @@ export function usePetServices({
       if (hasRuntimeSessionSnapshot && activeRuntimeSessions.length === 0) {
         clearPetNotice('runtime-busy')
       }
+      logRuntimeScanDebug({
+        watchingRuntimes,
+        hasRuntimeSessionSnapshot,
+        sessions: runtimeSessions,
+        activeRuntimeSessions,
+        runtimeSessionReactions,
+      })
       setConnectorSnapshot({
         connectorOnline: state.running || readySessions.length > 0,
         activeRuntimeSessionCount: activeRuntimeSessions.length,
@@ -548,4 +569,78 @@ function runtimeSessionBubbleMessage(
       : t(`desktopPet.services.runtimeActivity.${activity.kind}`)
   }
   return t(`desktopPet.services.runtimeReaction.${runtimeSessionReaction(session)}`)
+}
+
+function isRuntimeDebugEnabled(): boolean {
+  try {
+    return localStorage.getItem(PET_RUNTIME_DEBUG_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function logRuntimeDebug(reason: string, context: Record<string, unknown>): void {
+  if (!isRuntimeDebugEnabled()) return
+  emitDesktopPetDebugLog('[desktop-pet:runtime]', {
+    reason,
+    at: new Date().toISOString(),
+    ...context,
+  })
+}
+
+function logRuntimeScanDebug({
+  watchingRuntimes,
+  hasRuntimeSessionSnapshot,
+  sessions,
+  activeRuntimeSessions,
+  runtimeSessionReactions,
+}: {
+  watchingRuntimes: boolean
+  hasRuntimeSessionSnapshot: boolean
+  sessions: RuntimeSessionForNotification[]
+  activeRuntimeSessions: RuntimeSessionForNotification[]
+  runtimeSessionReactions: RuntimeSessionPetReaction[]
+}): void {
+  if (!isRuntimeDebugEnabled()) return
+  emitDesktopPetDebugLog('[desktop-pet:runtime]', {
+    reason: 'runtime-scan',
+    at: new Date().toISOString(),
+    watchingRuntimes,
+    hasRuntimeSessionSnapshot,
+    totalSessions: sessions.length,
+    activeCount: activeRuntimeSessions.length,
+    visibleReactions: runtimeSessionReactions,
+    stateCounts: countBy(sessions, (session) => session.state),
+    reactionCounts: countBy(sessions, runtimeSessionReaction),
+    activeSessions: activeRuntimeSessions.slice(0, 8).map(runtimeSessionDebugSummary),
+  })
+}
+
+function emitDesktopPetDebugLog(scope: string, payload: Record<string, unknown>): void {
+  window.desktopPetDebugLog?.(scope, payload)
+}
+
+function runtimeSessionDebugSummary(
+  session: RuntimeSessionForNotification,
+): Record<string, unknown> {
+  return {
+    key: runtimeSessionKey(session),
+    runtimeId: session.runtimeId,
+    instanceId: session.instanceId,
+    sessionId: session.sessionId,
+    state: session.state,
+    reaction: runtimeSessionReaction(session),
+    active: runtimeSessionLooksActive(session),
+    title: session.title ?? null,
+    lastActivityAt: session.lastActivityAt ?? null,
+  }
+}
+
+function countBy<T>(items: T[], keyForItem: (item: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const item of items) {
+    const key = keyForItem(item)
+    counts[key] = (counts[key] ?? 0) + 1
+  }
+  return counts
 }

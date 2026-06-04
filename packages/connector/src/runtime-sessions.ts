@@ -9,6 +9,7 @@ import {
   type RuntimeSessionPetReaction,
   type RuntimeSessionState,
   runtimeSessionPetReactionForState,
+  runtimeSessionStateLooksActive,
 } from '@shadowob/shared/types'
 import type { ConnectorRuntimeId } from './runtime-catalog.js'
 import { connectorProcessEnv } from './toolchain.js'
@@ -104,6 +105,10 @@ export interface RuntimeSessionSendResult {
 
 const SESSION_RUNTIME_IDS: ConnectorRuntimeId[] = ['opencode', 'claude-code', 'codex']
 const DEFAULT_OPENCODE_URL = 'http://127.0.0.1:4096'
+// Transcript files are append-only history, not a liveness source. Without process
+// confirmation, an unfinished final record only drives active UI briefly.
+const TRANSCRIPT_ACTIVE_GRACE_MS = 90_000
+const TRANSCRIPT_FUTURE_SKEW_MS = 30_000
 
 interface CommandResult {
   status: number | null
@@ -135,6 +140,25 @@ function withRuntimeSessionPetReaction(session: RuntimeSessionInfoInput): Runtim
   return {
     ...session,
     petReaction: session.petReaction ?? runtimeSessionPetReactionForState(session.state),
+  }
+}
+
+function transcriptActivityLooksFresh(lastActivityAt: string | null, now = Date.now()): boolean {
+  if (!lastActivityAt) return false
+  const activityMs = Date.parse(lastActivityAt)
+  if (!Number.isFinite(activityMs)) return false
+  if (activityMs > now + TRANSCRIPT_FUTURE_SKEW_MS) return false
+  return now - activityMs <= TRANSCRIPT_ACTIVE_GRACE_MS
+}
+
+function settleStaleTranscriptActivity(session: RuntimeSessionInfoInput): RuntimeSessionInfoInput {
+  if (!runtimeSessionStateLooksActive(session.state)) return session
+  if (transcriptActivityLooksFresh(session.lastActivityAt ?? null)) return session
+  return {
+    ...session,
+    state: 'unknown',
+    petReaction: undefined,
+    petActivity: undefined,
   }
 }
 
@@ -317,6 +341,13 @@ function activeRuntimePetReaction(
   return 'working'
 }
 
+function activeRuntimeState(state: RuntimeSessionState): RuntimeSessionState {
+  if (state === 'tool_call' || state === 'waiting_for_approval' || state === 'blocked') {
+    return state
+  }
+  return 'running'
+}
+
 function runCommand(
   command: string,
   args: string[],
@@ -487,6 +518,7 @@ function mapNativeState(value: unknown): RuntimeSessionState {
   const text =
     typeof value === 'string' ? value.toLowerCase() : JSON.stringify(value ?? {}).toLowerCase()
   if (text.includes('approval') || text.includes('permission')) return 'waiting_for_approval'
+  if (text.includes('tool') || text.includes('function_call')) return 'tool_call'
   if (text.includes('stream')) return 'streaming'
   if (text.includes('run') || text.includes('busy') || text.includes('work')) return 'running'
   if (text.includes('idle') || text.includes('ready')) return 'idle'
@@ -869,9 +901,9 @@ function claudeSignalFromRecord(
     const toolSignal = claudeToolSignal(message.content)
     if (stopReason === 'tool_use' || contentHasBlockType(message.content, 'tool_use')) {
       return {
-        state: 'running',
+        state: 'tool_call',
         petReaction: toolSignal?.petReaction ?? 'working',
-        petActivity: toolSignal?.petActivity,
+        petActivity: toolSignal?.petActivity ?? { kind: 'tool_call' },
       }
     }
     if (stopReason === 'max_tokens') {
@@ -948,21 +980,23 @@ async function sessionFromClaudeTranscript(path: string): Promise<RuntimeSession
     }
   }
 
-  return withRuntimeSessionPetReaction({
-    runtimeId: 'claude-code',
-    instanceId: 'transcripts',
-    sessionId,
-    title,
-    workDir,
-    state,
-    petReaction,
-    petActivity,
-    model,
-    lastActivityAt,
-    startedAt,
-    source: 'transcript',
-    native: { transcriptFile: basename(path) },
-  })
+  return withRuntimeSessionPetReaction(
+    settleStaleTranscriptActivity({
+      runtimeId: 'claude-code',
+      instanceId: 'transcripts',
+      sessionId,
+      title,
+      workDir,
+      state,
+      petReaction,
+      petActivity,
+      model,
+      lastActivityAt,
+      startedAt,
+      source: 'transcript',
+      native: { transcriptFile: basename(path) },
+    }),
+  )
 }
 
 function codexSessionIdFromFilename(path: string): string {
@@ -1029,9 +1063,11 @@ function codexSignalFromRecord(parsed: Record<string, unknown>): RuntimeSessionR
     if (payloadType === 'mcp_tool_call_begin' || payloadType === 'mcp_tool_call_end') {
       const toolName = codexToolName(payload)
       return {
-        state: 'running',
+        state: 'tool_call',
         petReaction: runtimeToolReaction(toolName, codexToolInput(payload)) ?? 'working',
-        petActivity: runtimeToolActivity(toolName, codexToolInput(payload)) ?? { kind: 'working' },
+        petActivity: runtimeToolActivity(toolName, codexToolInput(payload)) ?? {
+          kind: 'tool_call',
+        },
       }
     }
     if (
@@ -1059,21 +1095,25 @@ function codexSignalFromRecord(parsed: Record<string, unknown>): RuntimeSessionR
     if (payloadType === 'function_call' || payloadType === 'custom_tool_call') {
       const toolName = codexToolName(payload)
       return {
-        state: 'running',
+        state: 'tool_call',
         petReaction: runtimeToolReaction(toolName, codexToolInput(payload)) ?? 'working',
-        petActivity: runtimeToolActivity(toolName, codexToolInput(payload)) ?? { kind: 'working' },
+        petActivity: runtimeToolActivity(toolName, codexToolInput(payload)) ?? {
+          kind: 'tool_call',
+        },
       }
     }
     if (payloadType === 'function_call_output' || payloadType === 'custom_tool_call_output') {
-      return { state: 'running', petReaction: 'working', petActivity: { kind: 'working' } }
+      return { state: 'tool_call', petReaction: 'working', petActivity: { kind: 'tool_call' } }
     }
     if (
-      payloadType === 'reasoning' ||
       payloadType === 'web_search_call' ||
       payloadType === 'image_generation_call' ||
       payloadType === 'tool_search_call' ||
       payloadType === 'tool_search_output'
     ) {
+      return { state: 'tool_call', petReaction: 'working', petActivity: { kind: 'tool_call' } }
+    }
+    if (payloadType === 'reasoning') {
       return { state: 'streaming', petReaction: 'thinking', petActivity: { kind: 'thinking' } }
     }
   }
@@ -1150,21 +1190,23 @@ async function sessionFromCodexTranscript(path: string): Promise<RuntimeSessionI
     }
   }
 
-  return withRuntimeSessionPetReaction({
-    runtimeId: 'codex',
-    instanceId: 'transcripts',
-    sessionId,
-    title,
-    workDir,
-    state,
-    petReaction,
-    petActivity,
-    model,
-    lastActivityAt,
-    startedAt,
-    source: 'transcript',
-    native: { transcriptFile: basename(path) },
-  })
+  return withRuntimeSessionPetReaction(
+    settleStaleTranscriptActivity({
+      runtimeId: 'codex',
+      instanceId: 'transcripts',
+      sessionId,
+      title,
+      workDir,
+      state,
+      petReaction,
+      petActivity,
+      model,
+      lastActivityAt,
+      startedAt,
+      source: 'transcript',
+      native: { transcriptFile: basename(path) },
+    }),
+  )
 }
 
 async function activeClaudeSessionIds(env: NodeJS.ProcessEnv): Promise<Set<string>> {
@@ -1213,7 +1255,7 @@ async function scanClaudeCode(
       activeSessions.has(session.sessionId)
         ? withRuntimeSessionPetReaction({
             ...session,
-            state: 'running' as const,
+            state: activeRuntimeState(session.state),
             petReaction: activeRuntimePetReaction(session.petReaction),
           })
         : session,
@@ -1255,7 +1297,7 @@ async function scanCodex(
       activeSessions.has(session.sessionId)
         ? withRuntimeSessionPetReaction({
             ...session,
-            state: 'running' as const,
+            state: activeRuntimeState(session.state),
             petReaction: activeRuntimePetReaction(session.petReaction),
           })
         : session,

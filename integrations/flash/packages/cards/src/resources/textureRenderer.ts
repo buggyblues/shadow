@@ -26,6 +26,11 @@ bootstrapCards()
 
 export type { CardTextureInfo }
 
+function devicePixelRatio(): number {
+  const value = (globalThis as { devicePixelRatio?: number }).devicePixelRatio
+  return typeof value === 'number' && Number.isFinite(value) ? value : 1
+}
+
 // ════════════════════════════════════════
 // ── Public API ──
 // ════════════════════════════════════════
@@ -38,7 +43,7 @@ export function renderCardTexture(
 ): CardTextureInfo {
   const cached = getCachedTexture(card.id)
   const version = cardHash(card)
-  const requestedLod = lodScale ?? Math.min(Math.ceil(window.devicePixelRatio || 1), 2)
+  const requestedLod = lodScale ?? Math.min(Math.ceil(devicePixelRatio()), 2)
   const backend = cardAssetPipeline.getFaceBackend(card.kind).id
   const frame = cardAssetPipeline.currentFrame()
 

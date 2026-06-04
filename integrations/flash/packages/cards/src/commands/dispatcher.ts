@@ -640,12 +640,14 @@ function handleScan(cmd: CardCommand<'scan'>, ctx: CommandContext): CommandResul
 // ─────────────────────────────────────
 
 function handleStack(cmd: CardCommand<'stack'>, ctx: CommandContext): CommandResult {
-  const p = cmd.params as StackParams
-  const dx = p.dx ?? 18
-  const dy = p.dy ?? 8
+  const p = (cmd.params ?? {}) as StackParams
+  const dx = typeof p.dx === 'number' && Number.isFinite(p.dx) ? p.dx : 18
+  const dy = typeof p.dy === 'number' && Number.isFinite(p.dy) ? p.dy : 8
 
-  // Collect card IDs: explicit list only — no implicit "all cards"
-  const ids: string[] = p.cardIds && p.cardIds.length > 0 ? p.cardIds : []
+  // Collect card IDs: explicit list only — no implicit "all cards".
+  const ids = Array.isArray(p.cardIds)
+    ? p.cardIds.filter((id): id is string => typeof id === 'string')
+    : []
 
   if (ids.length === 0)
     return {
@@ -654,29 +656,24 @@ function handleStack(cmd: CardCommand<'stack'>, ctx: CommandContext): CommandRes
     }
   if (ids.length === 1) return { success: false, error: 'At least two cards are required to stack' }
 
-  // Anchor position = current position of first card
-  const firstBody = ctx.bodiesMap.get(ids[0])
+  const firstBody = ctx.bodiesMap.get(ids[0]!)
   if (!firstBody) return { success: false, error: `Card body not found: ${ids[0]}` }
   const baseX = firstBody.position.x
   const baseY = firstBody.position.y
-
-  const dispatch = (name: string, cardId: string, dparams: Record<string, unknown>) => {
-    dispatchCommand(
-      { name: name as CommandName, cardId, params: dparams as any, timestamp: Date.now() },
-      ctx,
-    )
-  }
+  const baseAngle = firstBody.angle
 
   ids.forEach((id, i) => {
-    dispatch('move', id, {
-      x: baseX + dx * i,
-      y: baseY + dy * i,
-      duration: 400,
-      easing: 'spring',
-    })
+    const body = ctx.bodiesMap.get(id)
+    if (!body) return
+    Matter.Sleeping.set(body, false)
+    Matter.Body.setPosition(body, { x: baseX + dx * i, y: baseY + dy * i })
+    Matter.Body.setVelocity(body, { x: 0, y: 0 })
+    Matter.Body.setAngularVelocity(body, 0)
+    Matter.Body.setAngle(body, baseAngle + i * 0.015)
+    Matter.Sleeping.set(body, true)
   })
 
-  return { success: true, data: { stacked: ids.length, dx, dy } }
+  return { success: true, data: { stacked: ids.length, dx, dy, cardIds: ids } }
 }
 
 // ─────────────────────────────────────
@@ -1016,8 +1013,9 @@ export function tickCommands(now: number): boolean {
  */
 export function parseCommand(
   text: string,
-  cards: import('@shadowob/flash-types').Card[],
+  cards: import('@shadowob/flash-types').Card[] = [],
 ): CardCommand | null {
+  const safeCards = Array.isArray(cards) ? cards.filter((card) => Boolean(card?.id)) : []
   const trimmed = text.trim()
   if (!trimmed.startsWith('/')) return null
 
@@ -1069,8 +1067,8 @@ export function parseCommand(
         stackParams[k] = isNaN(num) ? v : num
       } else {
         // try as card ID or title
-        const match = cards.find(
-          (c) => c.id === token || c.title.toLowerCase().includes(token.toLowerCase()),
+        const match = safeCards.find(
+          (c) => c.id === token || (c.title ?? '').toLowerCase().includes(token.toLowerCase()),
         )
         if (match) cardIds.push(match.id)
       }
@@ -1104,19 +1102,21 @@ export function parseCommand(
   if (parts.length > 1) {
     // Try exact card ID match
     const candidate = parts[1]
-    const byId = cards.find((c) => c.id === candidate)
+    const byId = safeCards.find((c) => c.id === candidate)
     if (byId) {
       cardId = byId.id
       paramStart = 2
     } else {
       // Try numeric index
       const idx = parseInt(candidate, 10)
-      if (!isNaN(idx) && idx >= 0 && idx < cards.length) {
-        cardId = cards[idx].id
+      if (!isNaN(idx) && idx >= 0 && idx < safeCards.length) {
+        cardId = safeCards[idx].id
         paramStart = 2
       } else {
         // Try title match
-        const byTitle = cards.find((c) => c.title.toLowerCase().includes(candidate.toLowerCase()))
+        const byTitle = safeCards.find((c) =>
+          (c.title ?? '').toLowerCase().includes(candidate.toLowerCase()),
+        )
         if (byTitle) {
           cardId = byTitle.id
           paramStart = 2
@@ -1127,7 +1127,7 @@ export function parseCommand(
 
   // If no card found and command requires one, use first card
   if (!cardId && cmdName !== 'add') {
-    if (cards.length > 0) cardId = cards[0].id
+    if (safeCards.length > 0) cardId = safeCards[0].id
     else return null
   }
 
@@ -1145,8 +1145,8 @@ export function parseCommand(
     } else if (key) {
       // For link command, bare second arg is targetId
       if (cmdName === 'link' && i === paramStart) {
-        const targetCard = cards.find(
-          (c) => c.id === key || c.title.toLowerCase().includes(key.toLowerCase()),
+        const targetCard = safeCards.find(
+          (c) => c.id === key || (c.title ?? '').toLowerCase().includes(key.toLowerCase()),
         )
         if (targetCard) params.targetId = targetCard.id
       }

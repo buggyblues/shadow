@@ -21,5 +21,6 @@ export function slugify(text: string): string {
 }
 
 export * from './avatar-generator'
+export * from './message-commands'
 export * from './message-mentions'
 export * from './pixel-cats'

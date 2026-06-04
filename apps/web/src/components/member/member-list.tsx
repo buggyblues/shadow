@@ -153,6 +153,17 @@ export const MemberList = memo(function MemberList({
     staleTime: 60_000,
   })
 
+  const invalidateCurrentMemberState = useCallback(() => {
+    if (!currentServerId) return
+    queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
+    queryClient.invalidateQueries({ queryKey: ['members', currentServerId] })
+    queryClient.invalidateQueries({ queryKey: ['members-buddy-agents', currentServerId] })
+    queryClient.invalidateQueries({ queryKey: ['server-members', currentServerId] })
+    if (currentChannelId) {
+      queryClient.invalidateQueries({ queryKey: ['channel-members', currentChannelId] })
+    }
+  }, [currentChannelId, currentServerId, queryClient])
+
   const mergeMemberPresence = useCallback(
     (updates: Map<string, PresenceStatus>) => {
       if (updates.size === 0) return
@@ -191,26 +202,27 @@ export const MemberList = memo(function MemberList({
       hasSeenSocketConnectRef.current = true
       return
     }
-    queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
+    invalidateCurrentMemberState()
   })
 
   // Listen for channel member changes (buddy added/removed from channel)
   useSocketEvent('channel:member-added', (data: { channelId: string }) => {
     if (data.channelId === currentChannelId) {
-      queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
+      invalidateCurrentMemberState()
     }
   })
   useSocketEvent('member:joined', (data: { serverId?: string; channelId?: string }) => {
     if (
       (currentChannelId && data.channelId === currentChannelId) ||
+      (currentChannelId && data.serverId === currentServerId) ||
       (!currentChannelId && data.serverId === currentServerId)
     ) {
-      queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
+      invalidateCurrentMemberState()
     }
   })
   useSocketEvent('channel:member-removed', (data: { channelId: string }) => {
     if (data.channelId === currentChannelId) {
-      queryClient.invalidateQueries({ queryKey: ['members', currentServerId, currentChannelId] })
+      invalidateCurrentMemberState()
     }
   })
 

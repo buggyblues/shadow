@@ -5,6 +5,11 @@
 // GPU memory is kept bounded by capping DPR at 2×.
 // ══════════════════════════════════════════════════════════════
 
+function devicePixelRatio(): number {
+  const value = (globalThis as { devicePixelRatio?: number }).devicePixelRatio
+  return typeof value === 'number' && Number.isFinite(value) ? value : 1
+}
+
 export interface CanvasSetupResult {
   canvas: HTMLCanvasElement
   ctx: CanvasRenderingContext2D
@@ -26,7 +31,7 @@ export function setupCanvas(
   height: number,
   texScaleOverride?: number,
 ): CanvasSetupResult {
-  const texScale = texScaleOverride ?? Math.min(Math.ceil(window.devicePixelRatio || 1), 2)
+  const texScale = texScaleOverride ?? Math.min(Math.ceil(devicePixelRatio()), 2)
   const pw = Math.round(width * texScale)
   const ph = Math.round(height * texScale)
 

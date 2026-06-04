@@ -177,7 +177,11 @@ export default function UserProfileScreen() {
           ? t('member.activityReady')
           : currentActivity === 'preparing'
             ? t('member.activityPreparing')
-            : currentActivity
+            : currentActivity === 'approval' || currentActivity === 'waiting_for_approval'
+              ? t('member.activityApproval')
+              : currentActivity === 'tool_call'
+                ? t('member.activityWorking')
+                : currentActivity
 
   return (
     <BackgroundSurface style={styles.container}>

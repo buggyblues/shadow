@@ -29,8 +29,10 @@ export function sceneUpdateSystem(
 ): Set<string> {
   const activeIds = new Set<string>()
 
+  const safeCards = Array.isArray(cards) ? cards : []
+
   // Phase 1 & 2: entity lifecycle + per-entity systems
-  for (const card of cards) {
+  for (const card of safeCards) {
     if (!card || !card.id || !card.kind) continue
     const body = bodiesMap.get(card.id)
     if (!body) continue

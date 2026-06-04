@@ -62,15 +62,19 @@ export function glRenderSystem(
     tiltStrength: config.tiltStrength,
   }
 
-  for (const eid of eids) {
-    if (!Visibility.visible[eid]) continue
-    glTextureSystem(eid, gl, config.cardW, config.cardH, viewport.zoom, dpr, viewport.zoomSettled)
-    gl.useProgram(program)
+  const bindMainQuad = () => {
     gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO)
     gl.enableVertexAttribArray(aPosition)
     gl.enableVertexAttribArray(aTexCoord)
     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 16, 0)
     gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 16, 8)
+  }
+
+  for (const eid of eids) {
+    if (!Visibility.visible[eid]) continue
+    glTextureSystem(eid, gl, config.cardW, config.cardH, viewport.zoom, dpr, viewport.zoomSettled)
+    gl.useProgram(program)
+    bindMainQuad()
     glDrawSystem(eid, drawCtx)
     glArtLayerSystem(
       eid,

@@ -188,13 +188,13 @@ export function buildIdentityWorkspaceFiles(agent: AgentDeployment): RuntimeFile
   return files
 }
 
-function shadowobSkillMarkdown(): string {
+function skillMarkdown(relativePath: string, label: string): string {
   const here = dirname(fileURLToPath(import.meta.url))
   let currentDir = here
   let path: string | undefined
 
   while (true) {
-    const candidate = resolve(currentDir, 'skills/shadowob-cli/SKILL.md')
+    const candidate = resolve(currentDir, relativePath)
     if (existsSync(candidate)) {
       path = candidate
       break
@@ -208,9 +208,17 @@ function shadowobSkillMarkdown(): string {
   }
 
   if (!path) {
-    throw new Error('Cannot find skills/shadowob-cli/SKILL.md for runner package generation')
+    throw new Error(`Cannot find ${relativePath} for ${label} runner package generation`)
   }
   return readFileSync(path, 'utf8')
+}
+
+function shadowobSkillMarkdown(): string {
+  return skillMarkdown('skills/shadowob-cli/SKILL.md', 'shadowob-cli')
+}
+
+function shadowServerAppSkillMarkdown(): string {
+  return skillMarkdown('skills/shadow-server-app/SKILL.md', 'shadow-server-app')
 }
 
 export function addShadowobSkill(
@@ -235,6 +243,31 @@ export function addShadowobSkill(
   }
   if (runtimeKind === 'hermes') {
     files[`${HOME_DIR}/.hermes/skills/shadowob/SKILL.md`] = skill
+  }
+}
+
+export function addShadowServerAppSkill(
+  files: RuntimeFiles,
+  runtimeKind: RuntimeKind,
+  runtimeId: string,
+): void {
+  const skill = shadowServerAppSkillMarkdown()
+  files[`${WORKSPACE_DIR}/.agents/skills/shadow-server-app/SKILL.md`] = skill
+
+  if (runtimeId === 'claude-code') {
+    files[`${WORKSPACE_DIR}/.claude/skills/shadow-server-app/SKILL.md`] = skill
+  }
+  if (runtimeId === 'opencode') {
+    files[`${WORKSPACE_DIR}/.opencode/skills/shadow-server-app/SKILL.md`] = skill
+  }
+  if (runtimeId === 'codex') {
+    files[`${HOME_DIR}/.codex/skills/shadow-server-app/SKILL.md`] = skill
+  }
+  if (runtimeKind === 'openclaw') {
+    files[`${OPENCLAW_SKILLS_DIR}/shadow-server-app/SKILL.md`] = skill
+  }
+  if (runtimeKind === 'hermes') {
+    files[`${HOME_DIR}/.hermes/skills/shadow-server-app/SKILL.md`] = skill
   }
 }
 

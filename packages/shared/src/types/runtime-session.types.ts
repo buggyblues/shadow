@@ -2,6 +2,7 @@ export type RuntimeSessionState =
   | 'idle'
   | 'running'
   | 'streaming'
+  | 'tool_call'
   | 'waiting_for_approval'
   | 'blocked'
   | 'completed'
@@ -31,6 +32,8 @@ export type RuntimeSessionPetActivityKind =
   | 'editing'
   | 'running'
   | 'testing'
+  | 'tool_call'
+  | 'approval'
   | 'waiting'
   | 'success'
   | 'error'
@@ -47,6 +50,7 @@ export const RUNTIME_SESSION_PET_REACTION_BY_STATE: Record<
   idle: 'idle',
   running: 'working',
   streaming: 'thinking',
+  tool_call: 'working',
   waiting_for_approval: 'waiting',
   blocked: 'waiting',
   completed: 'success',
@@ -69,6 +73,8 @@ export function runtimeSessionSignalToPetReaction(
       return 'working'
     case 'streaming':
       return 'thinking'
+    case 'tool_call':
+      return 'working'
     case 'waiting_for_approval':
     case 'blocked':
       return 'waiting'
@@ -88,6 +94,7 @@ export function runtimeSessionStateLooksActive(state: RuntimeSessionState): bool
   return (
     state === 'running' ||
     state === 'streaming' ||
+    state === 'tool_call' ||
     state === 'waiting_for_approval' ||
     state === 'blocked'
   )

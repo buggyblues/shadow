@@ -191,6 +191,7 @@ export interface MessageBubbleProps {
   isSelected?: boolean
   selectionAnchorId?: string | null
   submittedInteractiveResponse?: InteractiveResponseMetadata | null
+  enableSlashCommandActions?: boolean
   onToggleSelect?: (messageId: string) => void
   onEnterSelectionMode?: (messageId: string) => void
   onSelectRangeTo?: (messageId: string) => void

@@ -98,7 +98,7 @@ const defaultSettings: DesktopRuntimeSettings = {
   httpsProxy: '',
   connectorApiKey: '',
   connectorComputerId: '',
-  connectorAutoStart: false,
+  connectorAutoStart: true,
   connectorWorkDir: '',
   connectorBuddyWorkDirs: {},
   connectorDeletedConnectionIds: [],
@@ -380,7 +380,10 @@ function normalizeDesktopSettings(parsed: Partial<DesktopRuntimeSettings>): Desk
     httpsProxy: normalizeHttpProxy(parsed.httpsProxy),
     connectorApiKey: normalizeConnectorApiKey(parsed.connectorApiKey),
     connectorComputerId: normalizeConnectorComputerId(parsed.connectorComputerId),
-    connectorAutoStart: parsed.connectorAutoStart === true,
+    connectorAutoStart:
+      parsed.connectorAutoStart === undefined
+        ? defaultSettings.connectorAutoStart
+        : parsed.connectorAutoStart === true,
     connectorWorkDir: normalizeWorkDir(parsed.connectorWorkDir),
     connectorBuddyWorkDirs: normalizeConnectorBuddyWorkDirs(parsed.connectorBuddyWorkDirs),
     connectorDeletedConnectionIds: normalizeConnectorDeletedConnectionIds(

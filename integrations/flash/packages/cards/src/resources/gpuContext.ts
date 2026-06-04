@@ -77,6 +77,11 @@ export interface GPUContext {
 
 // ─────────────────────────────────────
 // Factory — async (requires GPU  device)
+function devicePixelRatio(): number {
+  const value = (globalThis as { devicePixelRatio?: number }).devicePixelRatio
+  return typeof value === 'number' && Number.isFinite(value) ? value : 1
+}
+
 // ─────────────────────────────────────
 
 /**
@@ -86,12 +91,14 @@ export interface GPUContext {
 export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUContext> {
   if (!navigator.gpu) throw new Error('WebGPU not supported')
 
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' })
+  const adapter = await navigator.gpu.requestAdapter({
+    powerPreference: 'high-performance',
+  })
   if (!adapter) throw new Error('No WebGPU adapter found')
 
   const device = await adapter.requestDevice()
   const queue = device.queue
-  const dpr = Math.min(window.devicePixelRatio || 1, 4)
+  const dpr = Math.min(devicePixelRatio(), 4)
 
   const ctx = canvas.getContext('webgpu') as GPUCanvasContext | null
   if (!ctx) throw new Error('Canvas already has a non-WebGPU context (WebGL acquired first)')
@@ -116,13 +123,19 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
 
   const bgl1 = device.createBindGroupLayout({
     entries: [
-      { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: '2d-array' } },
+      {
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { viewDimension: '2d-array' },
+      },
       { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
     ],
   })
 
   // ── Pipeline layout ──
-  const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bgl0, bgl1] })
+  const pipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [bgl0, bgl1],
+  })
   const selectionBgl = device.createBindGroupLayout({
     entries: [
       {
@@ -132,11 +145,15 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
       },
     ],
   })
-  const selectionPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [selectionBgl] })
+  const selectionPipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [selectionBgl],
+  })
 
   // ── Shader module ──
   const shaderModule = device.createShaderModule({ code: WGSL_SHADER })
-  const selectionShaderModule = device.createShaderModule({ code: SELECTION_RECT_WGSL_SHADER })
+  const selectionShaderModule = device.createShaderModule({
+    code: SELECTION_RECT_WGSL_SHADER,
+  })
 
   // ── Render pipeline ──
   const pipeline = device.createRenderPipeline({
@@ -152,8 +169,16 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
         {
           format,
           blend: {
-            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            color: {
+              srcFactor: 'src-alpha',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
           },
         },
       ],
@@ -174,8 +199,16 @@ export async function createGPUContext(canvas: HTMLCanvasElement): Promise<GPUCo
         {
           format,
           blend: {
-            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            color: {
+              srcFactor: 'src-alpha',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
           },
         },
       ],

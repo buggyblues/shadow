@@ -71,6 +71,9 @@ _DOCUMENT_CT_PREFIXES = ("application/", "text/")
 _SLASH_COMMAND_RE = re.compile(r"^/([a-zA-Z][a-zA-Z0-9._-]{0,63})(?:\s+([\s\S]*))?$")
 _PRIVATE_CONTENT_REF_RE = re.compile(r"^/[^/]+/(?:uploads|voice)/.+")
 _TERMINAL_TASK_STATUSES = {"completed", "failed", "canceled", "transferred"}
+_DEFAULT_SHADOW_AUTO_SKILLS = ("shadowob", "shadow-server-app")
+_CHANNEL_CONTEXT_CACHE_TTL_SECONDS = 60
+_CHANNEL_CONTEXT_LIST_LIMIT = 24
 
 
 def _visible_text(text: str) -> str:
@@ -134,6 +137,43 @@ def _home_channel_id(config: Any) -> str | None:
     return None
 
 
+def _current_channel_payload(config: Any) -> dict[str, Any]:
+    raw = _extra(config).get("current_channel")
+    return raw if isinstance(raw, dict) else {}
+
+
+def _current_channel_id(config: Any) -> str | None:
+    raw = (
+        os.getenv("SHADOW_CURRENT_CHANNEL")
+        or os.getenv("SHADOW_CURRENT_CHANNEL_ID")
+        or os.getenv("SHADOWOB_CHANNEL_ID")
+        or _current_channel_payload(config).get("chat_id")
+        or _current_channel_payload(config).get("channel_id")
+        or _current_channel_payload(config).get("id")
+    )
+    return str(raw).strip() if raw else None
+
+
+def _current_thread_id(config: Any) -> str | None:
+    raw = (
+        os.getenv("SHADOW_CURRENT_THREAD_ID")
+        or os.getenv("SHADOWOB_THREAD_ID")
+        or _current_channel_payload(config).get("thread_id")
+        or _current_channel_payload(config).get("threadId")
+    )
+    return str(raw).strip() if raw else None
+
+
+def _current_server_id(config: Any) -> str | None:
+    raw = (
+        os.getenv("SHADOWOB_SERVER_ID")
+        or os.getenv("SHADOW_CURRENT_SERVER_ID")
+        or _current_channel_payload(config).get("server_id")
+        or _current_channel_payload(config).get("serverId")
+    )
+    return str(raw).strip() if raw else None
+
+
 def _channel_ids_from_config(config: Any) -> list[str]:
     values: list[str] = []
     values.extend(split_csv(os.getenv("SHADOW_CHANNEL_IDS")))
@@ -185,6 +225,22 @@ def _metadata_thread_id(metadata: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _metadata_channel_id(metadata: dict[str, Any] | None) -> str | None:
+    if not metadata:
+        return None
+    for key in ("channel_id", "channelId", "shadow_channel_id", "chat_id", "chatId"):
+        value = metadata.get(key)
+        if value not in (None, ""):
+            return str(value)
+    source = metadata.get("source")
+    if source is not None:
+        for attr in ("chat_id", "channel_id", "parent_chat_id"):
+            value = getattr(source, attr, None)
+            if value:
+                return str(value)
+    return None
+
+
 def _metadata_reply_to(metadata: dict[str, Any] | None, fallback: str | None = None) -> str | None:
     if not metadata:
         return fallback
@@ -223,6 +279,24 @@ def _parse_json_list(value: Any) -> list[dict[str, Any]]:
         if isinstance(parsed, dict) and isinstance(parsed.get("commands"), list):
             return [item for item in parsed["commands"] if isinstance(item, dict)]
     return []
+
+
+def _merge_auto_skills(value: Any) -> Any:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        skills: list[Any] = [value] if value.strip() else []
+    elif isinstance(value, (list, tuple, set)):
+        skills = [item for item in value if item not in (None, "")]
+    else:
+        skills = []
+
+    seen = {str(item) for item in skills}
+    for skill in _DEFAULT_SHADOW_AUTO_SKILLS:
+        if skill not in seen:
+            skills.append(skill)
+            seen.add(skill)
+    return skills
 
 
 def _parse_int(value: Any) -> int | None:
@@ -639,6 +713,168 @@ def _remote_listen_channel_entries(
     return entries
 
 
+def _string_field(record: dict[str, Any] | None, *keys: str) -> str | None:
+    if not isinstance(record, dict):
+        return None
+    for key in keys:
+        value = record.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _compact_record(record: dict[str, Any] | None, keys: tuple[str, ...]) -> dict[str, Any]:
+    if not isinstance(record, dict):
+        return {}
+    return {key: record[key] for key in keys if record.get(key) not in (None, "", [])}
+
+
+def _compact_member(entry: Any) -> dict[str, Any]:
+    if not isinstance(entry, dict):
+        return {}
+    user = entry.get("user") if isinstance(entry.get("user"), dict) else entry
+    compact = _compact_record(
+        user,
+        ("id", "username", "displayName", "isBot", "status"),
+    )
+    for key in ("role", "userId"):
+        if entry.get(key) not in (None, ""):
+            compact[key] = entry[key]
+    return compact
+
+
+def _compact_buddy(entry: Any) -> dict[str, Any]:
+    if not isinstance(entry, dict):
+        return {}
+    bot_user = entry.get("botUser") if isinstance(entry.get("botUser"), dict) else {}
+    compact = _compact_record(
+        entry,
+        ("id", "agentId", "agentName", "name", "displayName", "status", "ownerId"),
+    )
+    if bot_user:
+        compact["botUser"] = _compact_record(bot_user, ("id", "username", "displayName", "status"))
+    return compact
+
+
+def _compact_app(entry: Any) -> dict[str, Any]:
+    if not isinstance(entry, dict):
+        return {}
+    compact = _compact_record(
+        entry,
+        ("id", "appKey", "name", "title", "description", "summary", "status"),
+    )
+    commands = entry.get("commands")
+    if isinstance(commands, list) and commands:
+        compact["commands"] = [
+            _compact_record(command, ("name", "title", "description"))
+            for command in commands[:8]
+            if isinstance(command, dict)
+        ]
+    return compact
+
+
+def _compact_slash_command(entry: Any) -> dict[str, Any]:
+    if not isinstance(entry, dict):
+        return {}
+    return _compact_record(entry, ("name", "description", "source", "appKey", "packId"))
+
+
+def _limited_compact_list(values: Any, compact_fn) -> list[dict[str, Any]]:
+    if not isinstance(values, list):
+        return []
+    compacted = [compact_fn(item) for item in values[:_CHANNEL_CONTEXT_LIST_LIMIT]]
+    return [item for item in compacted if item]
+
+
+def _shadow_context_from_bootstrap(
+    bootstrap: dict[str, Any] | None,
+    *,
+    channel_id: str,
+    thread_id: str | None,
+    fallback_channel: dict[str, Any] | None = None,
+    agent_id: str | None = None,
+    bot_user_id: str | None = None,
+    bot_username: str | None = None,
+) -> dict[str, Any]:
+    bootstrap = bootstrap if isinstance(bootstrap, dict) else {}
+    channel = bootstrap.get("channel") if isinstance(bootstrap.get("channel"), dict) else fallback_channel or {}
+    server = bootstrap.get("server") if isinstance(bootstrap.get("server"), dict) else None
+    slash_commands = bootstrap.get("slashCommands")
+    commands = slash_commands.get("commands") if isinstance(slash_commands, dict) else []
+    return {
+        "current": {
+            "channelId": channel_id,
+            **({"threadId": thread_id} if thread_id else {}),
+            **_compact_record(channel, ("id", "name", "title", "kind", "type", "topic", "serverId")),
+        },
+        **({"server": _compact_record(server, ("id", "name", "slug", "description", "visibility"))} if server else {}),
+        "channels": _limited_compact_list(
+            bootstrap.get("channels"),
+            lambda item: _compact_record(item, ("id", "name", "title", "kind", "type", "topic")),
+        ),
+        "members": _limited_compact_list(bootstrap.get("members"), _compact_member),
+        "buddies": _limited_compact_list(bootstrap.get("buddyInboxes"), _compact_buddy),
+        "serverApps": _limited_compact_list(bootstrap.get("appSummaries"), _compact_app),
+        "slashCommands": _limited_compact_list(commands, _compact_slash_command),
+        "currentBuddy": {
+            **({"agentId": agent_id} if agent_id else {}),
+            **({"botUserId": bot_user_id} if bot_user_id else {}),
+            **({"botUsername": bot_username} if bot_username else {}),
+        },
+    }
+
+
+def _brief_name(record: dict[str, Any]) -> str:
+    return (
+        _string_field(record, "displayName", "name", "title", "username", "appKey", "id")
+        or "unknown"
+    )
+
+
+def _format_shadow_context_prompt(context: dict[str, Any] | None) -> str | None:
+    if not isinstance(context, dict) or not context:
+        return None
+    current = context.get("current") if isinstance(context.get("current"), dict) else {}
+    lines = ["Shadow context snapshot:", "- Use this as the current channel/server/app/member context for the message."]
+    if current:
+        lines.append(
+            "- Current channel: "
+            + json.dumps(
+                _compact_record(current, ("channelId", "threadId", "id", "name", "title", "kind", "type", "topic", "serverId")),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+    server = context.get("server")
+    if isinstance(server, dict) and server:
+        lines.append("- Server: " + json.dumps(server, ensure_ascii=False, sort_keys=True))
+    buddy = context.get("currentBuddy")
+    if isinstance(buddy, dict) and buddy:
+        lines.append("- Current Buddy identity: " + json.dumps(buddy, ensure_ascii=False, sort_keys=True))
+
+    for label, key in (
+        ("Channels", "channels"),
+        ("Members", "members"),
+        ("Buddies", "buddies"),
+        ("Server apps", "serverApps"),
+        ("Slash commands", "slashCommands"),
+    ):
+        values = context.get(key)
+        if isinstance(values, list) and values:
+            names = []
+            for item in values[:_CHANNEL_CONTEXT_LIST_LIMIT]:
+                if isinstance(item, dict):
+                    names.append(_brief_name(item))
+            if names:
+                lines.append(f"- {label}: " + ", ".join(names))
+    return "\n".join(lines)
+
+
+def _merge_channel_prompt(*parts: str | None) -> str | None:
+    merged = "\n\n".join(part.strip() for part in parts if isinstance(part, str) and part.strip())
+    return merged or None
+
+
 def _owner_id_from_remote_config(remote_config: dict[str, Any] | None) -> str | None:
     if not isinstance(remote_config, dict):
         return None
@@ -667,6 +903,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self._channel_policies: dict[str, dict[str, Any]] = {}
         self._remote_config: dict[str, Any] | None = None
         self._channel_cache: dict[str, dict[str, Any]] = {}
+        self._channel_context_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
         self._activity_clear_tasks: dict[str, asyncio.Task] = {}
         self._processed_ids: deque[str] = deque(maxlen=2000)
         self._processed_set: set[str] = set()
@@ -844,14 +1081,14 @@ class ShadowOBAdapter(BasePlatformAdapter):
     ) -> SendResult:
         if self.client is None:
             return SendResult(success=False, error="Shadow client is not initialized", retryable=True)
+        channel_id, thread_id = self._resolve_outbound_channel(chat_id, metadata)
         try:
-            await self._set_activity(str(chat_id), "working")
-            thread_id = _metadata_thread_id(metadata)
+            await self._set_activity(channel_id, "working")
             reply_to_id = _metadata_reply_to(metadata, reply_to)
             shadow_metadata = _metadata_payload(metadata)
             if thread_id:
                 message = await self.client.send_message(
-                    str(chat_id),
+                    channel_id,
                     content,
                     thread_id=thread_id,
                     reply_to_id=reply_to_id,
@@ -859,7 +1096,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 )
             else:
                 message = await self.client.send_message(
-                    str(chat_id),
+                    channel_id,
                     content,
                     reply_to_id=reply_to_id,
                     metadata=shadow_metadata,
@@ -869,7 +1106,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
             logger.warning("[Shadow] send failed: %s", exc)
             return SendResult(success=False, error=str(exc), retryable=self._is_retryable(exc))
         finally:
-            await self._set_activity(str(chat_id), None)
+            await self._set_activity(channel_id, None)
 
     async def edit_message(
         self,
@@ -897,21 +1134,51 @@ class ShadowOBAdapter(BasePlatformAdapter):
             logger.debug("[Shadow] delete_message failed for %s/%s: %s", chat_id, message_id, exc)
             return False
 
+    def _resolve_outbound_channel(
+        self,
+        chat_id: str | None,
+        metadata: dict[str, Any] | None,
+    ) -> tuple[str, str | None]:
+        config = getattr(self, "config", None)
+        requested = str(chat_id or "").strip()
+        metadata_channel = _metadata_channel_id(metadata)
+        current_channel = _current_channel_id(config)
+        home_channel = _home_channel_id(config)
+
+        should_use_current = bool(
+            current_channel
+            and (
+                not requested
+                or requested.lower() == PLATFORM_NAME
+                or (home_channel and requested == home_channel)
+            )
+        )
+        channel_id = metadata_channel or (current_channel if should_use_current else requested)
+        if not channel_id:
+            channel_id = current_channel or home_channel or requested
+
+        thread_id = _metadata_thread_id(metadata)
+        if not thread_id and current_channel and channel_id == current_channel:
+            thread_id = _current_thread_id(config)
+        return str(channel_id), thread_id
+
     async def send_typing(self, chat_id: str, metadata=None) -> None:
         if self.socket is None:
             return None
+        channel_id, _thread_id = self._resolve_outbound_channel(chat_id, metadata)
         try:
-            await self.socket.send_typing(str(chat_id), True)
-            await self._set_activity(str(chat_id), "thinking")
+            await self.socket.send_typing(channel_id, True)
+            await self._set_activity(channel_id, "thinking")
         except Exception:
             return None
 
     async def stop_typing(self, chat_id: str) -> None:
         if self.socket is None:
             return None
+        channel_id, _thread_id = self._resolve_outbound_channel(chat_id, None)
         try:
-            await self.socket.send_typing(str(chat_id), False)
-            await self._set_activity(str(chat_id), None)
+            await self.socket.send_typing(channel_id, False)
+            await self._set_activity(channel_id, None)
         except Exception:
             return None
 
@@ -994,12 +1261,14 @@ class ShadowOBAdapter(BasePlatformAdapter):
             return SendResult(success=False, error="Shadow client is not initialized", retryable=True)
         shadow_metadata = _metadata_payload(metadata) or {}
         shadow_metadata["interactive"] = interactive
+        channel_id, thread_id = self._resolve_outbound_channel(chat_id, metadata)
+        is_approval = str(interactive.get("kind") or "").lower() == "approval"
         try:
-            await self._set_activity(str(chat_id), "working")
+            await self._set_activity(channel_id, "approval" if is_approval else "working")
             message = await self.client.send_message(
-                str(chat_id),
+                channel_id,
                 content or "[interactive]",
-                thread_id=_metadata_thread_id(metadata),
+                thread_id=thread_id,
                 reply_to_id=_metadata_reply_to(metadata, reply_to),
                 metadata=shadow_metadata,
             )
@@ -1007,7 +1276,8 @@ class ShadowOBAdapter(BasePlatformAdapter):
         except Exception as exc:
             return SendResult(success=False, error=str(exc), retryable=self._is_retryable(exc))
         finally:
-            await self._set_activity(str(chat_id), None)
+            if not is_approval:
+                await self._set_activity(channel_id, None)
 
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
         channel = self._channel_cache.get(str(chat_id))
@@ -1036,6 +1306,9 @@ class ShadowOBAdapter(BasePlatformAdapter):
         chats: list[dict[str, Any]] = []
         seen: set[str] = set()
         channel_ids = list(getattr(self, "_channel_ids", []) or [])
+        current_id = _current_channel_id(getattr(self, "config", None))
+        if current_id and current_id not in channel_ids:
+            channel_ids.insert(0, current_id)
         home_id = _home_channel_id(getattr(self, "config", None))
         if home_id and home_id not in channel_ids:
             channel_ids.append(home_id)
@@ -1090,12 +1363,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
     ) -> SendResult:
         if self.client is None:
             return SendResult(success=False, error="Shadow client is not initialized", retryable=True)
+        channel_id, thread_id = self._resolve_outbound_channel(chat_id, metadata)
         try:
-            await self._set_activity(str(chat_id), "working")
+            await self._set_activity(channel_id, "working")
             msg = await self.client.send_message(
-                str(chat_id),
+                channel_id,
                 caption or "\u200B",
-                thread_id=_metadata_thread_id(metadata),
+                thread_id=thread_id,
                 reply_to_id=_metadata_reply_to(metadata, reply_to),
                 metadata=_metadata_payload(metadata),
             )
@@ -1113,7 +1387,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         except Exception as exc:
             return SendResult(success=False, error=str(exc), retryable=self._is_retryable(exc))
         finally:
-            await self._set_activity(str(chat_id), None)
+            await self._set_activity(channel_id, None)
 
     async def _send_remote_file(
         self,
@@ -1126,12 +1400,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
     ) -> SendResult:
         if self.client is None:
             return SendResult(success=False, error="Shadow client is not initialized", retryable=True)
+        channel_id, thread_id = self._resolve_outbound_channel(chat_id, metadata)
         try:
-            await self._set_activity(str(chat_id), "working")
+            await self._set_activity(channel_id, "working")
             msg = await self.client.send_message(
-                str(chat_id),
+                channel_id,
                 caption or "\u200B",
-                thread_id=_metadata_thread_id(metadata),
+                thread_id=thread_id,
                 reply_to_id=_metadata_reply_to(metadata, reply_to),
                 metadata=_metadata_payload(metadata),
             )
@@ -1140,7 +1415,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         except Exception as exc:
             return SendResult(success=False, error=str(exc), retryable=self._is_retryable(exc))
         finally:
-            await self._set_activity(str(chat_id), None)
+            await self._set_activity(channel_id, None)
 
     async def _set_activity(self, channel_id: str, activity: str | None) -> None:
         if self.socket is None:
@@ -1225,6 +1500,36 @@ class ShadowOBAdapter(BasePlatformAdapter):
 
         if sync_socket:
             await self._sync_socket_channels(old_channel_ids)
+
+    async def _shadow_channel_context(self, channel_id: str, thread_id: str | None) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        cached = self._channel_context_cache.get(channel_id)
+        if cached and (now - cached[0]).total_seconds() < _CHANNEL_CONTEXT_CACHE_TTL_SECONDS:
+            context = dict(cached[1])
+            current = dict(context.get("current") or {})
+            if thread_id:
+                current["threadId"] = thread_id
+            context["current"] = current
+            return context
+
+        fallback_channel = self._channel_cache.get(channel_id, {})
+        bootstrap: dict[str, Any] | None = None
+        if self.client is not None:
+            try:
+                bootstrap = await self.client.get_channel_bootstrap(channel_id, messages_limit=1)
+            except Exception as exc:
+                logger.debug("[Shadow] failed to load channel bootstrap context for %s: %s", channel_id, exc)
+        context = _shadow_context_from_bootstrap(
+            bootstrap,
+            channel_id=channel_id,
+            thread_id=thread_id,
+            fallback_channel=fallback_channel,
+            agent_id=self._agent_id,
+            bot_user_id=self._bot_user_id,
+            bot_username=self._bot_username,
+        )
+        self._channel_context_cache[channel_id] = (now, context)
+        return context
 
     async def _sync_socket_channels(self, old_channel_ids: set[str]) -> None:
         if self.socket is None:
@@ -1315,6 +1620,57 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 pass
         logger.info("[Shadow] Set runtime home channel to %s", channel_id)
         return True
+
+    def _set_runtime_current_channel(
+        self,
+        channel_id: str,
+        thread_id: str | None,
+        channel: dict[str, Any] | None = None,
+    ) -> None:
+        if not channel_id:
+            return
+        channel = channel if isinstance(channel, dict) else {}
+        name = str(channel.get("name") or channel.get("title") or channel_id)
+        kind = str(channel.get("kind") or channel.get("type") or "channel")
+        server_id = str(channel.get("serverId") or channel.get("server_id") or "").strip()
+        server_slug = str(channel.get("serverSlug") or channel.get("server_slug") or "").strip()
+
+        os.environ["SHADOW_CURRENT_CHANNEL"] = channel_id
+        os.environ["SHADOW_CURRENT_CHANNEL_ID"] = channel_id
+        os.environ["SHADOWOB_CHANNEL_ID"] = channel_id
+        if thread_id:
+            os.environ["SHADOW_CURRENT_THREAD_ID"] = thread_id
+            os.environ["SHADOWOB_THREAD_ID"] = thread_id
+        else:
+            os.environ.pop("SHADOW_CURRENT_THREAD_ID", None)
+            os.environ.pop("SHADOWOB_THREAD_ID", None)
+        if server_id:
+            os.environ["SHADOW_CURRENT_SERVER_ID"] = server_id
+            os.environ["SHADOWOB_SERVER_ID"] = server_id
+            os.environ["SHADOW_SERVER_ID"] = server_id
+        else:
+            os.environ.pop("SHADOW_CURRENT_SERVER_ID", None)
+            os.environ.pop("SHADOWOB_SERVER_ID", None)
+            os.environ.pop("SHADOW_SERVER_ID", None)
+        if server_slug:
+            os.environ["SHADOWOB_SERVER_SLUG"] = server_slug
+        else:
+            os.environ.pop("SHADOWOB_SERVER_SLUG", None)
+
+        current_channel: dict[str, Any] = {"chat_id": channel_id, "name": name, "type": kind}
+        if thread_id:
+            current_channel["thread_id"] = thread_id
+        if server_id:
+            current_channel["server_id"] = server_id
+        if server_slug:
+            current_channel["server_slug"] = server_slug
+
+        extra = getattr(self, "extra", None)
+        if isinstance(extra, dict):
+            extra["current_channel"] = current_channel
+        config_extra = _extra(getattr(self, "config", None))
+        if isinstance(config_extra, dict):
+            config_extra["current_channel"] = current_channel
 
     async def _register_slash_commands(self) -> None:
         if self.client is None or not self._agent_id or not self._slash_commands:
@@ -1764,10 +2120,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
             return
         if self._channel_ids and channel_id not in self._channel_ids:
             return
+        thread_id = _message_thread_id(message)
+        channel = self._channel_cache.get(channel_id, {})
+        self._set_runtime_current_channel(channel_id, thread_id, channel)
         self._set_runtime_home_channel(
             channel_id,
-            _message_thread_id(message),
-            name=str(self._channel_cache.get(channel_id, {}).get("name") or "Shadow Home"),
+            thread_id,
+            name=str(channel.get("name") or "Shadow Home"),
             force=False,
         )
         policy = self._channel_policies.get(channel_id)
@@ -1830,7 +2189,6 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if slash_match:
             command, invoked, args = slash_match
             logger.info("[Shadow] Matched slash command /%s -> /%s", invoked, command.get("name") or invoked)
-            thread_id = _message_thread_id(message)
             passthrough = _slash_command_is_passthrough(command)
             if command.get("interaction") and not args.strip() and not passthrough:
                 sent = await self._send_slash_interactive_prompt(
@@ -1864,11 +2222,10 @@ class ShadowOBAdapter(BasePlatformAdapter):
         reply_to_id = _message_reply_to_id(message)
         reply_to_text = await self._fetch_reply_text(reply_to_id) if reply_to_id else None
 
-        thread_id = _message_thread_id(message)
-        channel = self._channel_cache.get(channel_id, {})
         chat_name = str(channel.get("name") or channel.get("title") or channel_id)
         channel_kind = str(channel.get("kind") or channel.get("type") or "channel").lower()
         chat_type = "thread" if thread_id else ("dm" if channel_kind in {"dm", "direct"} else "group")
+        shadow_context = await self._shadow_channel_context(channel_id, thread_id)
 
         source_obj = self.build_source(
             chat_id=channel_id,
@@ -1884,18 +2241,29 @@ class ShadowOBAdapter(BasePlatformAdapter):
 
         parent_for_bindings = channel_id if thread_id else None
         config_extra = _extra(self.config)
+        channel_prompt = _merge_channel_prompt(
+            _format_shadow_context_prompt(shadow_context),
+            resolve_channel_prompt(config_extra, thread_id or channel_id, parent_for_bindings),
+        )
         event = MessageEvent(
             text=text or ("[Media attached]" if media_paths else ""),
             message_type=message_type,
             source=source_obj,
-            raw_message={"shadow": message, "source": source, "media": media_metadata},
+            raw_message={
+                "shadow": message,
+                "source": source,
+                "media": media_metadata,
+                "shadow_context": shadow_context,
+            },
             message_id=message_id,
             media_urls=media_paths,
             media_types=media_types,
             reply_to_message_id=reply_to_id,
             reply_to_text=reply_to_text,
-            auto_skill=resolve_channel_skills(config_extra, thread_id or channel_id, parent_for_bindings),
-            channel_prompt=resolve_channel_prompt(config_extra, thread_id or channel_id, parent_for_bindings),
+            auto_skill=_merge_auto_skills(
+                resolve_channel_skills(config_extra, thread_id or channel_id, parent_for_bindings)
+            ),
+            channel_prompt=channel_prompt,
         )
         task_card_id = _card_id(task_card) if task_card else None
         try:
@@ -2085,8 +2453,12 @@ def _env_enablement() -> dict[str, Any] | None:
     channel_ids = split_csv(os.getenv("SHADOW_CHANNEL_IDS") or os.getenv("SHADOW_CHANNEL_ID"))
     home = os.getenv("SHADOW_HOME_CHANNEL")
     home_thread = os.getenv("SHADOW_HOME_THREAD_ID")
+    current = os.getenv("SHADOW_CURRENT_CHANNEL") or os.getenv("SHADOW_CURRENT_CHANNEL_ID")
+    current_thread = os.getenv("SHADOW_CURRENT_THREAD_ID")
     if home and home not in channel_ids:
         channel_ids.append(home)
+    if current and current not in channel_ids:
+        channel_ids.insert(0, current)
 
     seed: dict[str, Any] = {
         "base_url": base_url,
@@ -2131,6 +2503,14 @@ def _env_enablement() -> dict[str, Any] | None:
             "name": "Shadow Home",
             **({"thread_id": home_thread} if home_thread else {}),
         }
+    if current:
+        seed["current_channel"] = {
+            "chat_id": current,
+            "name": "Shadow Current",
+            **({"thread_id": current_thread} if current_thread else {}),
+            **({"server_id": os.getenv("SHADOWOB_SERVER_ID")} if os.getenv("SHADOWOB_SERVER_ID") else {}),
+            **({"server_slug": os.getenv("SHADOWOB_SERVER_SLUG")} if os.getenv("SHADOWOB_SERVER_SLUG") else {}),
+        }
     return seed
 
 
@@ -2162,18 +2542,24 @@ async def _standalone_send(
 SHADOWOB_SEND_MESSAGE_SCHEMA = {
     "name": "shadowob_send_message",
     "description": (
-        "Send a message through Shadow/OpenClaw Buddy with native Shadow attachment support. "
-        "Use action='list' to see known Shadow targets. Use action='send' with target='shadowob' "
-        "for the current/home chat, target='shadowob:<channel_id>' for a specific channel, or "
-        "attachments/MEDIA:/path for files such as HTML reports."
+        "Send, edit, delete, react to, or list Shadow/OpenClaw channel messages through "
+        "Shadow/OpenClaw Buddy with native Shadow attachment support. Use action='list' "
+        "to see known Shadow targets. Use action='send', action='upload-file', or "
+        "action='send-voice' with target='shadowob' for the current/home chat, "
+        "target='shadowob:<channel_id>' for a specific channel, or attachments/MEDIA:/path "
+        "for files such as HTML reports."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["send", "list"],
-                "description": "Use 'send' to deliver a message or 'list' to list known Shadow chats.",
+                "enum": ["send", "upload-file", "send-voice", "list", "react", "edit", "delete"],
+                "description": (
+                    "Use 'send' to deliver a message, 'upload-file'/'send-voice' to send media, "
+                    "'react' to add a reaction, 'edit' to update a message, 'delete' to remove one, "
+                    "or 'list' to list known Shadow chats."
+                ),
             },
             "target": {
                 "type": "string",
@@ -2181,7 +2567,15 @@ SHADOWOB_SEND_MESSAGE_SCHEMA = {
             },
             "message": {
                 "type": "string",
-                "description": "Message text. May include MEDIA:/local/path.ext tags; attachments can also be supplied separately.",
+                "description": "Message text for send/edit. May include MEDIA:/local/path.ext tags; attachments can also be supplied separately.",
+            },
+            "message_id": {
+                "type": "string",
+                "description": "Shadow message ID for react, edit, or delete actions.",
+            },
+            "emoji": {
+                "type": "string",
+                "description": "Emoji to add when action='react'.",
             },
             "thread_id": {
                 "type": "string",
@@ -2297,9 +2691,22 @@ async def _shadowob_known_chats(pconfig: Any, home_channel_id: str | None = None
         except Exception as exc:
             logger.debug("[Shadow] shadowob_send_message list_chats failed: %s", exc)
 
+    current = _current_channel_id(pconfig)
+    if current and current not in seen:
+        chats.insert(
+            0,
+            {
+                "id": current,
+                "name": "Shadow Current",
+                "type": "channel",
+                **({"thread_id": _current_thread_id(pconfig)} if _current_thread_id(pconfig) else {}),
+            },
+        )
+        seen.add(current)
+
     home = home_channel_id or _home_channel_id(pconfig)
     if home and home not in seen:
-        chats.insert(0, {"id": home, "name": "Shadow Home", "type": "channel"})
+        chats.append({"id": home, "name": "Shadow Home", "type": "channel"})
     return chats
 
 
@@ -2322,7 +2729,12 @@ async def _resolve_shadowob_tool_target(
     chats = await _shadowob_known_chats(pconfig, home_channel_id)
     value = _normalize_shadowob_tool_target(target)
     if not value:
-        return home_channel_id or _home_channel_id(pconfig), explicit_thread_id, chats
+        current_channel = _current_channel_id(pconfig)
+        return (
+            current_channel or home_channel_id or _home_channel_id(pconfig),
+            explicit_thread_id or (_current_thread_id(pconfig) if current_channel else None),
+            chats,
+        )
 
     target_channel = value
     target_thread = explicit_thread_id
@@ -2393,13 +2805,73 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
                     for chat in chats
                 ],
                 "home_channel": home_channel_id,
+                "current_channel": _current_channel_id(pconfig),
             }
         )
-    if action != "send":
-        return _tool_error("action must be 'send' or 'list'")
+    send_actions = {"send", "upload-file", "send-voice"}
+    message_actions = {"react", "edit", "delete"}
+    if action not in send_actions | message_actions:
+        return _tool_error("action must be one of 'send', 'upload-file', 'send-voice', 'list', 'react', 'edit', or 'delete'")
+
+    base_url = _base_url_from_config(pconfig)
+    token = _token_from_config(pconfig)
+    if not base_url or not token:
+        return _tool_error("SHADOW_BASE_URL and SHADOW_TOKEN are required")
+
+    if action in message_actions:
+        message_id = str(args.get("message_id") or args.get("messageId") or "").strip()
+        if not message_id:
+            return _tool_error("message_id is required")
+
+        try:
+            async with ShadowAsyncClient(base_url, token) as client:
+                if action == "react":
+                    emoji = str(args.get("emoji") or args.get("reaction") or "").strip()
+                    if not emoji:
+                        return _tool_error("emoji is required")
+                    await client.add_reaction(message_id, emoji)
+                    return _tool_result(
+                        {
+                            "success": True,
+                            "platform": PLATFORM_NAME,
+                            "action": "react",
+                            "message_id": message_id,
+                            "emoji": emoji,
+                        }
+                    )
+                if action == "edit":
+                    message = str(args.get("message") or args.get("content") or "")
+                    if not _visible_text(message):
+                        return _tool_error("message is required")
+                    updated = await client.edit_message(message_id, message)
+                    return _tool_result(
+                        {
+                            "success": True,
+                            "platform": PLATFORM_NAME,
+                            "action": "edit",
+                            "message_id": message_id,
+                            "raw_response": updated,
+                        }
+                    )
+
+                await client.delete_message(message_id)
+                return _tool_result(
+                    {
+                        "success": True,
+                        "platform": PLATFORM_NAME,
+                        "action": "delete",
+                        "message_id": message_id,
+                    }
+                )
+        except Exception as exc:
+            return _tool_error(str(exc))
 
     message = str(args.get("message") or "")
     media_items, cleaned_message = _shadowob_tool_media(args, message)
+    if action == "send-voice":
+        for media in media_items:
+            media["is_voice"] = True
+            media["kind"] = media.get("kind") or "voice"
     if not _visible_text(cleaned_message) and not media_items:
         return _tool_error("message or attachments are required")
 
@@ -2411,13 +2883,8 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
     )
     if not channel_id:
         return _tool_error(
-            "No Shadow target resolved. Run shadowob_send_message(action='list') or set SHADOW_HOME_CHANNEL."
+            "No Shadow target resolved. Run shadowob_send_message(action='list') or set SHADOW_CURRENT_CHANNEL/SHADOW_HOME_CHANNEL."
         )
-
-    base_url = _base_url_from_config(pconfig)
-    token = _token_from_config(pconfig)
-    if not base_url or not token:
-        return _tool_error("SHADOW_BASE_URL and SHADOW_TOKEN are required")
 
     try:
         async with ShadowAsyncClient(base_url, token) as client:
@@ -2438,6 +2905,7 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
                 {
                     "success": True,
                     "platform": PLATFORM_NAME,
+                    "action": action,
                     "target": f"{PLATFORM_NAME}:{channel_id}",
                     "channel_id": channel_id,
                     "thread_id": thread_id,

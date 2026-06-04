@@ -475,7 +475,11 @@ export function ChatArea({
               ? t('member.activityReady')
               : status.activity === 'preparing'
                 ? t('member.activityPreparing')
-                : status.activity
+                : status.activity === 'approval' || status.activity === 'waiting_for_approval'
+                  ? t('member.activityApproval')
+                  : status.activity === 'tool_call'
+                    ? t('member.activityWorking')
+                    : status.activity
       return trimStatusEllipsis(label)
     },
     [t],
@@ -983,6 +987,15 @@ export function ChatArea({
     () => buildChatTimeline(timelineMessages, systemEvents),
     [systemEvents, timelineMessages],
   )
+  const latestMessageId = useMemo(() => {
+    let latest: Message | null = null
+    for (const message of timelineMessages) {
+      if (!latest || new Date(message.createdAt).getTime() > new Date(latest.createdAt).getTime()) {
+        latest = message
+      }
+    }
+    return latest?.id ?? null
+  }, [timelineMessages])
 
   // Listen for new messages via WebSocket
   useSocketEvent('message:new', (msg: Message) => {
@@ -1790,6 +1803,7 @@ export function ChatArea({
             interactiveResponsesBySourceId.get(item.data.id) ??
             null
           }
+          enableSlashCommandActions={item.data.id === latestMessageId}
           onToggleSelect={handleToggleSelect}
           onEnterSelectionMode={handleEnterSelectionMode}
           onSelectRangeTo={handleSelectRangeTo}

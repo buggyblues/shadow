@@ -68,6 +68,7 @@ export const KIND_INDEX: Record<string, number> = {
   poker: 41,
   tarot: 42,
   flash: 43,
+  rule: 44,
 }
 
 export const TAPE_COLORS: Record<string, [number, number, number]> = {
@@ -115,6 +116,7 @@ export const TAPE_COLORS: Record<string, [number, number, number]> = {
   poker: [0.863, 0.149, 0.149],
   tarot: [0.486, 0.228, 0.929],
   flash: [0.984, 0.749, 0.165],
+  rule: [0.976, 0.62, 0.043],
 }
 
 const EDGE_COLORS: Record<string, [number, number, number]> = {

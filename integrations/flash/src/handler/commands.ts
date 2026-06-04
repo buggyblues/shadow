@@ -6,9 +6,11 @@ import {
   BoardGetInputSchema,
   BoardViewportUpdateInputSchema,
   CardsCommandInputSchema,
+  CardsComposeInputSchema,
   CardsCreateInputSchema,
   CardsDeleteInputSchema,
   CardsGetInputSchema,
+  CardsLayoutUpdateInputSchema,
   CardsUpdateInputSchema,
   RoomsAttachInputSchema,
   SelectionGetInputSchema,
@@ -62,10 +64,14 @@ export function defineCommandHandlers(service: FlashService) {
       service.updateBoardViewport(parseInput(BoardViewportUpdateInputSchema, input), runtime),
     'cards.get': (input, runtime) =>
       service.getCard(parseInput(CardsGetInputSchema, input), runtime),
+    'cards.compose': (input, runtime) =>
+      service.composeCards(parseInput(CardsComposeInputSchema, input), runtime),
     'cards.create': (input, runtime) =>
       service.createCard(parseInput(CardsCreateInputSchema, input), runtime),
     'cards.update': (input, runtime) =>
       service.updateCard(parseInput(CardsUpdateInputSchema, input), runtime),
+    'cards.layout.update': (input, runtime) =>
+      service.updateCardLayouts(parseInput(CardsLayoutUpdateInputSchema, input), runtime),
     'cards.delete': (input, runtime) =>
       service.deleteCard(parseInput(CardsDeleteInputSchema, input), runtime),
     'assets.upload': (input, runtime) =>

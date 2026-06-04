@@ -17,7 +17,20 @@ interface PersistedLayout {
   locked?: boolean
 }
 
+interface BodyLayoutPlugin {
+  flashLayoutKey?: string
+}
+
+const RECONCILE_POS_EPS = 0.25
+const RECONCILE_ANGLE_EPS = 0.0004
+
+function finite(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 function persistedLayout(card: Card): PersistedLayout | null {
+  const direct = (card as Card & { layout?: PersistedLayout }).layout
+  if (direct && typeof direct === 'object') return direct
   const meta = card.meta as { layout?: PersistedLayout } | null
   const layout = meta?.layout
   if (!layout || typeof layout !== 'object') return null
@@ -31,7 +44,7 @@ function makeBody(card: Card, cols: number, index: number): Matter.Body {
   const x = layout?.x ?? 200 + col * CARD_SPACING_X + (Math.random() - 0.5) * 30
   const y = layout?.y ?? 200 + row * CARD_SPACING_Y + (Math.random() - 0.5) * 30
   const angle = layout?.angle ?? (Math.random() - 0.5) * 0.15
-  return Matter.Bodies.rectangle(x, y, CARD_W, CARD_H, {
+  const body = Matter.Bodies.rectangle(x, y, CARD_W, CARD_H, {
     restitution: 0.3,
     friction: 0.15,
     frictionAir: 0.08,
@@ -41,16 +54,80 @@ function makeBody(card: Card, cols: number, index: number): Matter.Body {
     label: card.id,
     collisionFilter: { group: -1 },
   })
+  setLayoutKey(body, layout)
+  return body
+}
+
+function layoutKey(layout: PersistedLayout | null): string {
+  return JSON.stringify({
+    x: finite(layout?.x),
+    y: finite(layout?.y),
+    angle: finite(layout?.angle),
+    locked: layout?.locked,
+  })
+}
+
+function layoutPlugin(body: Matter.Body): BodyLayoutPlugin {
+  const target = body as Matter.Body & { plugin?: BodyLayoutPlugin }
+  target.plugin = target.plugin ?? {}
+  return target.plugin
+}
+
+function setLayoutKey(body: Matter.Body, layout: PersistedLayout | null): void {
+  layoutPlugin(body).flashLayoutKey = layoutKey(layout)
+}
+
+function reconcileBodyToLayout(
+  body: Matter.Body,
+  layout: PersistedLayout | null,
+  preserveLayout: boolean,
+): void {
+  if (!layout) return
+  const nextKey = layoutKey(layout)
+  const plugin = layoutPlugin(body)
+  if (plugin.flashLayoutKey === nextKey) return
+
+  if (!preserveLayout) {
+    const x = finite(layout.x)
+    const y = finite(layout.y)
+    if (x !== undefined && y !== undefined) {
+      const dx = Math.abs(body.position.x - x)
+      const dy = Math.abs(body.position.y - y)
+      if (dx > RECONCILE_POS_EPS || dy > RECONCILE_POS_EPS) {
+        Matter.Body.setPosition(body, { x, y })
+        Matter.Body.setVelocity(body, { x: 0, y: 0 })
+      }
+    }
+
+    const angle = finite(layout.angle)
+    if (angle !== undefined && Math.abs(body.angle - angle) > RECONCILE_ANGLE_EPS) {
+      Matter.Body.setAngle(body, angle)
+      Matter.Body.setAngularVelocity(body, 0)
+    }
+
+    if (layout.locked !== undefined && body.isStatic !== layout.locked) {
+      Matter.Body.setStatic(body, layout.locked)
+    }
+    plugin.flashLayoutKey = nextKey
+    return
+  }
+
+  if (layout.locked !== undefined && body.isStatic !== layout.locked) {
+    Matter.Body.setStatic(body, layout.locked)
+  }
 }
 
 /** Seed all bodies for an initial card list (call once at engine init). */
 export function seedBodies(world: PhysicsWorld, cards: Card[]): void {
   const { engine, bodiesMap } = world
-  const cols = Math.max(1, Math.ceil(Math.sqrt(cards.length)))
-  let idx = 0
-  for (const card of cards) {
+  const safeCards = Array.isArray(cards)
+    ? cards.filter((card): card is Card => Boolean(card?.id))
+    : []
+  const cols = Math.max(1, Math.ceil(Math.sqrt(safeCards.length)))
+  for (let index = 0; index < safeCards.length; index++) {
+    const card = safeCards[index]!
     if (bodiesMap.has(card.id)) continue
-    const body = makeBody(card, cols, idx++)
+    const body = makeBody(card, cols, index)
     bodiesMap.set(card.id, body)
     Matter.World.add(engine.world, body)
   }
@@ -67,7 +144,10 @@ export function syncBodies(
   options: SyncBodiesOptions = {},
 ): void {
   const { engine, bodiesMap } = world
-  const currentIds = new Set(cards.map((c) => c.id))
+  const safeCards = Array.isArray(cards)
+    ? cards.filter((card): card is Card => Boolean(card?.id))
+    : []
+  const currentIds = new Set(safeCards.map((c) => c.id))
 
   // Remove bodies for deleted cards
   bodiesMap.forEach((body, id) => {
@@ -78,22 +158,17 @@ export function syncBodies(
   })
 
   // Add bodies for new cards
-  const cols = Math.max(1, Math.ceil(Math.sqrt(cards.length)))
-  let newIdx = 0
-  for (const card of cards) {
+  const cols = Math.max(1, Math.ceil(Math.sqrt(safeCards.length)))
+  for (let index = 0; index < safeCards.length; index++) {
+    const card = safeCards[index]!
     const existing = bodiesMap.get(card.id)
     const layout = persistedLayout(card)
     if (existing) {
       const preserveLayout = options.preserveLayoutIds?.has(card.id) === true
-      if (!preserveLayout && layout?.x !== undefined && layout?.y !== undefined) {
-        Matter.Body.setPosition(existing, { x: layout.x, y: layout.y })
-      }
-      if (!preserveLayout && layout?.angle !== undefined)
-        Matter.Body.setAngle(existing, layout.angle)
-      if (layout?.locked !== undefined) Matter.Body.setStatic(existing, layout.locked)
+      reconcileBodyToLayout(existing, layout, preserveLayout)
       continue
     }
-    const body = makeBody(card, cols, newIdx++)
+    const body = makeBody(card, cols, index)
     bodiesMap.set(card.id, body)
     Matter.World.add(engine.world, body)
   }

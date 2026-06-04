@@ -38,6 +38,8 @@ export type {
   QrcodeCardMeta,
   QuoteCardMeta,
   ReferenceCardMeta,
+  RuleCardMeta,
+  RuleTrigger,
   SocialCardMeta,
   StoryCardMeta,
   SummaryCardMeta,
@@ -51,6 +53,28 @@ export type {
   VoiceCardMeta,
   WebpageCardMeta,
 } from './card.js'
+
+// Card semantic normalization and Buddy composition helpers
+export type {
+  CardComposeDraftInput,
+  CardComposeIntent,
+  CardComposeRequest,
+  CardCompositionPlanItem,
+  CardCompositionResult,
+  CardDraftInputLike,
+  CardRenderProfile,
+  NormalizedCardDraft,
+} from './card-semantics.js'
+export {
+  CARD_COMPOSE_INTENT_VALUES,
+  CARD_RENDER_PROFILES,
+  CARD_SEMANTIC_VERSION,
+  composeCardDraftsFromMaterial,
+  normalizeCardDraft,
+  normalizeCardForTransport,
+  normalizeCardKind,
+  SEMANTIC_CARD_KIND_VALUES,
+} from './card-semantics.js'
 // Domain models
 export type {
   Card,
@@ -85,7 +109,4 @@ export type {
 // App protocol models and validators
 export * from './server-app.js'
 // Settings
-export type {
-  AppSettings,
-  UserSettings,
-} from './settings.js'
+export type { AppSettings, UserSettings } from './settings.js'

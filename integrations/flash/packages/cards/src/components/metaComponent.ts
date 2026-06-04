@@ -39,6 +39,7 @@ import type {
   QrcodeCardMeta,
   QuoteCardMeta,
   ReferenceCardMeta,
+  RuleCardMeta,
   SocialCardMeta,
   StoryCardMeta,
   SummaryCardMeta,
@@ -96,6 +97,7 @@ export const CStoryMeta = {}
 export const CSocialMeta = {}
 export const CPokerMeta = {}
 export const CTarotMeta = {}
+export const CRuleMeta = {}
 export const CRawMeta = {}
 
 // Registry-backed meta store accessors (lazy — created on first access)
@@ -138,4 +140,5 @@ export const storyMetaStore = registry.getMetaStoreArray<StoryCardMeta>('story')
 export const socialMetaStore = registry.getMetaStoreArray<SocialCardMeta>('social')
 export const pokerMetaStore = registry.getMetaStoreArray<PokerCardMeta>('poker')
 export const tarotMetaStore = registry.getMetaStoreArray<TarotCardMeta>('tarot')
+export const ruleMetaStore = registry.getMetaStoreArray<RuleCardMeta>('rule')
 export const rawMetaStore = registry.getRawMetaStoreArray()

@@ -61,6 +61,7 @@ import { processSystem } from '../plugins/processSystem'
 import { qrcodeSystem } from '../plugins/qrcodeSystem'
 import { quoteSystem } from '../plugins/quoteSystem'
 import { referenceSystem } from '../plugins/referenceSystem'
+import { ruleSystem } from '../plugins/ruleSystem'
 import { socialSystem } from '../plugins/socialSystem'
 import { storySystem } from '../plugins/storySystem'
 import { tableSystem } from '../plugins/tableSystem'
@@ -522,6 +523,15 @@ const BUILTIN_PLUGINS: CardPlugin[] = [
     { accentColor: '#fbbf24', kindLabel: 'Flash', pip: '⚡', rank: '⚡' },
     drawLightbulbIcon,
     [0.984, 0.749, 0.165],
+  ),
+  bp(
+    'rule',
+    ruleSystem,
+    906,
+    'rule',
+    { accentColor: '#f59e0b', kindLabel: 'Rule', pip: '⚙', rank: 'R' },
+    drawCodeIcon,
+    [0.976, 0.62, 0.043],
   ),
 
   // Fallback — always last — catches any unmatched kind

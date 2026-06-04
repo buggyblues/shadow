@@ -76,6 +76,11 @@ type AddAgentsResponse = {
   results?: Array<{ agentId: string; success: boolean; error?: string }>
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const isUuid = (value: string | null | undefined): value is string =>
+  typeof value === 'string' && UUID_RE.test(value)
+
 interface InvitePanelMember {
   key: string
   uid: string
@@ -338,6 +343,14 @@ export function InvitePanel({
     enabled: !!serverId,
   })
 
+  const resolveServerUuid = async () => {
+    if (isUuid(server?.id)) return server.id
+    if (isUuid(serverId)) return serverId
+    const resolved = await fetchApi<{ id: string }>(`/api/servers/${serverId}`)
+    return resolved.id
+  }
+  const policyServerId = server?.id ?? serverId
+
   const { data: serverMembers = [] } = useQuery({
     queryKey: ['server-members', serverId],
     queryFn: () => fetchApi<ServerMember[]>(`/api/servers/${serverId}/members`),
@@ -457,7 +470,7 @@ export function InvitePanel({
       })
       .map((m) => {
         const agent = myBuddiesByBotId.get(m.user!.id)
-        const allowedInServer = agent ? canBuddyJoinServer(agent, serverId) : false
+        const allowedInServer = agent ? canBuddyJoinServer(agent, policyServerId) : false
         const buddyMode = agent ? getBuddyMode(agent) : undefined
         const requiresServerAllowlist = Boolean(
           agent && buddyMode === 'private' && !allowedInServer && agent.accessRole !== 'tenant',
@@ -495,7 +508,7 @@ export function InvitePanel({
         } as InvitePanelMember
       })
       .filter((candidate) => candidate.agentId)
-  }, [serverMembers, searchKeyword, joinedUserIds, myBuddiesByBotId, channelId, serverId])
+  }, [serverMembers, searchKeyword, joinedUserIds, myBuddiesByBotId, channelId, policyServerId])
 
   const buddyCandidatesNew = useMemo<InvitePanelMember[]>(() => {
     return myBuddies
@@ -510,7 +523,7 @@ export function InvitePanel({
         return name.includes(searchKeyword) || desc.includes(searchKeyword)
       })
       .map((agent) => {
-        const allowedInServer = canBuddyJoinServer(agent, serverId)
+        const allowedInServer = canBuddyJoinServer(agent, policyServerId)
         const buddyMode = getBuddyMode(agent)
         const requiresServerAllowlist =
           buddyMode === 'private' && !allowedInServer && agent.accessRole !== 'tenant'
@@ -547,7 +560,7 @@ export function InvitePanel({
           requiresServerAllowlist,
         }
       })
-  }, [myBuddies, serverMemberUserIds, searchKeyword, channelId, serverId])
+  }, [myBuddies, serverMemberUserIds, searchKeyword, channelId, policyServerId])
 
   const buddyCandidates = useMemo(
     () => sortInviteCandidates([...buddyCandidatesOnServer, ...buddyCandidatesNew]),
@@ -646,6 +659,7 @@ export function InvitePanel({
         )
 
         if (allowlistCandidates.length > 0) {
+          const serverUuid = await resolveServerUuid()
           const names = allowlistCandidates.map((candidate) => candidate.nickname).join(', ')
           const ok = await useConfirmStore.getState().confirm({
             title: t('member.allowlistPrivateBuddyTitle'),
@@ -665,7 +679,7 @@ export function InvitePanel({
                 body: JSON.stringify({
                   buddyMode: 'private',
                   allowedServerIds: Array.from(
-                    new Set([...getBuddyAllowedServerIds(agent), serverId]),
+                    new Set([...getBuddyAllowedServerIds(agent).filter(isUuid), serverUuid]),
                   ),
                 }),
               })
@@ -729,6 +743,9 @@ export function InvitePanel({
       removeSelected(Array.from(successCandidateIds))
 
       queryClient.invalidateQueries({ queryKey: ['server-members', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['members', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['members', serverId, channelId] })
+      queryClient.invalidateQueries({ queryKey: ['members-buddy-agents', serverId] })
       queryClient.invalidateQueries({ queryKey: ['members'] })
       if (channelId) {
         queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
@@ -755,9 +772,10 @@ export function InvitePanel({
     setAdding(true)
     try {
       if (getAgentBuddyMode(agent) === 'private') {
-        const allowedServerIds = new Set(getAgentAllowedServerIds(agent))
-        if (!allowedServerIds.has(serverId)) {
-          allowedServerIds.add(serverId)
+        const serverUuid = await resolveServerUuid()
+        const allowedServerIds = new Set(getAgentAllowedServerIds(agent).filter(isUuid))
+        if (!allowedServerIds.has(serverUuid)) {
+          allowedServerIds.add(serverUuid)
           await fetchApi<Agent>(`/api/agents/${agent.id}`, {
             method: 'PATCH',
             body: JSON.stringify({
@@ -785,6 +803,9 @@ export function InvitePanel({
       }
 
       queryClient.invalidateQueries({ queryKey: ['server-members', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['members', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['members', serverId, channelId] })
+      queryClient.invalidateQueries({ queryKey: ['members-buddy-agents', serverId] })
       queryClient.invalidateQueries({ queryKey: ['members'] })
       queryClient.invalidateQueries({ queryKey: ['my-buddies-for-invite'] })
       queryClient.invalidateQueries({ queryKey: ['agents'] })

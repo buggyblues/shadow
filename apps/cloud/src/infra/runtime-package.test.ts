@@ -252,6 +252,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       approvals?: { mode?: string }
     }
     expect(parsedHermesConfig.approvals?.mode).toBe('off')
+    expect(files['/home/shadow/.hermes/.env']).toContain('HERMES_YOLO_MODE=true')
     expect(hermesConfig).toContain('shadowob')
     expect(hermesConfig).toContain('${SHADOW_TOKEN_BUDDY_1}')
     expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
