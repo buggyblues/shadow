@@ -41,8 +41,6 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm install --prefer-offline --no-audit --fund=false \
       "openclaw@${OPENCLAW_VERSION}" \
       "@shadowob/openclaw-shadowob@${SHADOWOB_OPENCLAW_PLUGIN_VERSION}" \
-      "@shadowob/cli@latest" \
-      "@shadowob/connector@latest" \
       "playwright-core@${PLAYWRIGHT_VERSION}"
 
 # Cleanup dev artifacts to reduce image size. This depends only on npm deps,
@@ -65,28 +63,44 @@ COPY patches patches
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/sdk/package.json packages/sdk/package.json
 COPY packages/cli/package.json packages/cli/package.json
+COPY packages/connector/package.json packages/connector/package.json
 COPY packages/openclaw-shadowob/package.json packages/openclaw-shadowob/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
     pnpm config set store-dir /pnpm/store && \
     pnpm install --frozen-lockfile --ignore-scripts \
       --filter @shadowob/openclaw-shadowob... \
-      --filter @shadowob/cli...
+      --filter @shadowob/cli... \
+      --filter @shadowob/connector...
 
 # Build local packages in-container. This makes the image reproducible in CI and
 # keeps it independent from whatever dist/ happens to exist on the host.
 COPY packages/shared packages/shared
 COPY packages/sdk packages/sdk
 COPY packages/cli packages/cli
+COPY packages/connector packages/connector
 COPY packages/openclaw-shadowob packages/openclaw-shadowob
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
     pnpm --filter @shadowob/shared build && \
     pnpm --filter @shadowob/sdk build && \
     pnpm --filter @shadowob/cli build && \
+    pnpm --filter @shadowob/connector build && \
     pnpm --filter @shadowob/openclaw-shadowob build
+
+RUN mkdir -p /workspace/shadow-pkgs && \
+    pnpm --filter @shadowob/shared pack --pack-destination /workspace/shadow-pkgs && \
+    pnpm --filter @shadowob/sdk pack --pack-destination /workspace/shadow-pkgs && \
+    pnpm --filter @shadowob/cli pack --pack-destination /workspace/shadow-pkgs && \
+    pnpm --filter @shadowob/connector pack --pack-destination /workspace/shadow-pkgs
 
 # Overlay the freshly built local Shadow packages into the runtime dependency
 # tree, preventing the bundled extension from resolving older published code.
 WORKDIR /build
+RUN npm install --no-audit --fund=false \
+      /workspace/shadow-pkgs/shadowob-shared-*.tgz \
+      /workspace/shadow-pkgs/shadowob-sdk-*.tgz \
+      /workspace/shadow-pkgs/shadowob-cli-*.tgz \
+      /workspace/shadow-pkgs/shadowob-connector-*.tgz && \
+    rm -rf /workspace/shadow-pkgs
 RUN for pkg in shared sdk cli; do \
       rm -rf "node_modules/@shadowob/${pkg}" && \
       mkdir -p "node_modules/@shadowob/${pkg}" && \
@@ -114,12 +128,8 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ca-certificates \
-      chromium \
-      chromium-driver \
       curl \
       fonts-liberation \
-      fonts-noto-cjk \
-      fonts-noto-color-emoji \
       git \
       libasound2 \
       libatk-bridge2.0-0 \
@@ -141,7 +151,8 @@ RUN apt-get update && \
       xdg-utils && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /ms-playwright && \
-    npx -y "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium && \
+	    npx -y "playwright@${PLAYWRIGHT_VERSION}" install --no-shell chromium && \
+    ln -sf "$(find /ms-playwright -path '*/chrome-linux/chrome' -type f | head -n1)" /usr/bin/chromium && \
     chmod -R 755 /ms-playwright
 
 # Create non-root user shadow:1000
@@ -168,21 +179,30 @@ RUN ln -s /app/node_modules/.bin/openclaw /usr/local/bin/openclaw && \
     ln -s /app/node_modules/.bin/shadowob /usr/local/bin/shadowob && \
     ln -s /app/node_modules/.bin/shadowob-connector /usr/local/bin/shadowob-connector
 
+# Precompute OpenClaw's default workspace bootstrap during image build. The
+# entrypoint copies these files into the writable state volume instead of paying
+# the `openclaw setup` cost on every Pod cold start.
+RUN mkdir -p /opt/openclaw/bootstrap-workspace /tmp/openclaw-bootstrap && \
+    printf '{"gateway":{"mode":"local","auth":{"mode":"none"}}}\n' \
+      > /tmp/openclaw-bootstrap/config.json && \
+    HOME=/home/shadow \
+    OPENCLAW_STATE_DIR=/tmp/openclaw-bootstrap/state \
+    OPENCLAW_CONFIG_PATH=/tmp/openclaw-bootstrap/config.json \
+    openclaw setup --workspace /opt/openclaw/bootstrap-workspace && \
+    rm -rf /tmp/openclaw-bootstrap && \
+    chown -R shadow:shadow /opt/openclaw
+
 # Copy local extensions before dependency warmup so the image carries the exact
 # plugin runtime dependency set used at startup. The extension layer is still
 # after node_modules, so ordinary plugin edits do not invalidate the large
 # pnpm install/build layers.
 COPY --from=builder --chown=shadow:shadow /build/extensions ./extensions
 
-# Stage bundled plugin runtime deps in the image so the first real Buddy reply
-# does not spend minutes installing optional tool/provider packages.
-COPY --chown=shadow:shadow apps/cloud/images/openclaw-runner/warm-runtime-deps.mjs ./warm-runtime-deps.mjs
-ENV OPENCLAW_PLUGIN_STAGE_DIR=/opt/openclaw-runtime-deps
-ENV npm_config_cache=/tmp/npm-cache
-RUN --mount=type=cache,target=/tmp/npm-cache,sharing=locked \
-    mkdir -p /opt/openclaw-runtime-deps && \
-    node /app/warm-runtime-deps.mjs && \
-    chown -R shadow:shadow /opt/openclaw-runtime-deps
+# The OpenClaw plugin loader falls back to jiti source transforms when a plugin
+# entry imports openclaw/plugin-sdk by package subpath. Cloud images already know
+# the host package layout, so rewrite the built plugin artifacts to import the
+# baked OpenClaw SDK files directly and keep startup on Node's native loader.
+RUN node -e "const fs=require('fs'); const path=require('path'); const dir='/app/extensions/shadowob/dist'; const replacements=new Map([['openclaw/plugin-sdk/core','../../../node_modules/openclaw/dist/plugin-sdk/core.js'],['openclaw/plugin-sdk/runtime-store','../../../node_modules/openclaw/dist/plugin-sdk/runtime-store.js'],['openclaw/plugin-sdk/channel-reply-pipeline','../../../node_modules/openclaw/dist/plugin-sdk/channel-reply-pipeline.js'],['openclaw/plugin-sdk','../../../node_modules/openclaw/dist/plugin-sdk/index.js']]); for (const name of fs.readdirSync(dir)) { if (!name.endsWith('.js')) continue; const file=path.join(dir,name); let source=fs.readFileSync(file,'utf8'); for (const [from,to] of replacements) { source=source.replaceAll('from \"'+from+'\"','from \"'+to+'\"').replaceAll(\"from '\"+from+\"'\",\"from '\"+to+\"'\"); } fs.writeFileSync(file,source); }"
 
 # Copy entrypoint (small, changes often → last COPY for cache)
 COPY --chown=shadow:shadow apps/cloud/images/openclaw-runner/entrypoint.mjs ./entrypoint.mjs
@@ -198,9 +218,7 @@ ENV HOME=/home/shadow
 ENV OPENCLAW_HEALTH_PORT=3100
 ENV OPENCLAW_GATEWAY_PORT=3101
 ENV OPENCLAW_NO_RESPAWN=1
-ENV OPENCLAW_MODEL_PRICING_FETCH_TIMEOUT_MS=2500
 ENV OPENCLAW_SKIP_STARTUP_MODEL_PREWARM=1
-ENV OPENCLAW_PLUGIN_STAGE_DIR=/opt/openclaw-runtime-deps
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMIUM_PATH=/usr/bin/chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
@@ -209,5 +227,5 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 USER shadow
 
 # Use tini as PID 1 for proper signal handling
-ENTRYPOINT ["tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "entrypoint.mjs"]

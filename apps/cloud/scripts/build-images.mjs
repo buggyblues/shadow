@@ -8,6 +8,7 @@
  *   node scripts/build-images.mjs openclaw-runner   # Build single image
  *   node scripts/build-images.mjs --push            # Build and push
  *   node scripts/build-images.mjs --tag v1.0.0      # Custom tag
+ *   node scripts/build-images.mjs --kind-load        # Build, smoke, and load into kind
  */
 
 import { execSync } from 'node:child_process'
@@ -21,12 +22,12 @@ const WORKSPACE_ROOT = join(ROOT, '..', '..')
 const IMAGES_DIR = join(ROOT, 'images')
 const REGISTRY =
   process.env.SHADOWOB_REGISTRY ?? process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
+const DEFAULT_TAG = process.env.SHADOWOB_RUNNER_IMAGE_TAG?.trim() || '20260604-faststart'
 
 const IMAGES = [
   'openclaw-runner',
   'claude-runner',
   'codex-runner',
-  'gemini-runner',
   'opencode-runner',
   'hermes-runner',
 ]
@@ -36,9 +37,12 @@ function parseArgs() {
   const opts = {
     images: [],
     push: false,
-    tag: 'latest',
+    tag: DEFAULT_TAG,
     platform: '',
     noCache: false,
+    skipSmoke: false,
+    kindLoad: false,
+    kindCluster: '',
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -51,6 +55,13 @@ function parseArgs() {
       opts.platform = args[++i]
     } else if (arg === '--no-cache') {
       opts.noCache = true
+    } else if (arg === '--skip-smoke') {
+      opts.skipSmoke = true
+    } else if (arg === '--kind-load') {
+      opts.kindLoad = true
+      if (args[i + 1] && !args[i + 1].startsWith('-') && !IMAGES.includes(args[i + 1])) {
+        opts.kindCluster = args[++i]
+      }
     } else if (!arg.startsWith('-') && IMAGES.includes(arg)) {
       opts.images.push(arg)
     }
@@ -61,6 +72,35 @@ function parseArgs() {
   }
 
   return opts
+}
+
+function runSmokeTest(name, opts) {
+  console.log(`\n━━━ Smoke testing ${name}:${opts.tag} ━━━`)
+  try {
+    execSync(`node ${join(__dirname, 'smoke-test-images.mjs')} ${name} --tag ${opts.tag}`, {
+      stdio: 'inherit',
+      env: process.env,
+    })
+  } catch {
+    console.error('\n✗ Smoke tests failed — do NOT deploy this image')
+    process.exit(1)
+  }
+}
+
+function loadKindImage(image, opts) {
+  if (!opts.kindLoad) return
+
+  const clusterArg = opts.kindCluster ? ` --name ${opts.kindCluster}` : ''
+  console.log(
+    `\n━━━ Loading ${image} into kind${opts.kindCluster ? ` (${opts.kindCluster})` : ''} ━━━`,
+  )
+  try {
+    execSync(`kind load docker-image${clusterArg} ${image}`, { stdio: 'inherit' })
+    console.log(`✓ Loaded ${image} into kind`)
+  } catch {
+    console.error(`✗ Failed to load ${image} into kind`)
+    process.exit(1)
+  }
 }
 
 function buildImage(name, opts) {
@@ -77,7 +117,9 @@ function buildImage(name, opts) {
   console.log(`\n━━━ Building ${fullTag} ━━━`)
 
   const buildContext = WORKSPACE_ROOT
-  const buildArgs = ['docker', 'build', '-t', fullTag, '-f', dockerfilePath]
+  const buildArgs = opts.push
+    ? ['docker', 'build', '-t', fullTag, '-f', dockerfilePath]
+    : ['docker', 'buildx', 'build', '--load', '-t', fullTag, '-f', dockerfilePath]
 
   if (opts.tag !== 'latest') {
     buildArgs.push('-t', latestTag)
@@ -104,6 +146,10 @@ function buildImage(name, opts) {
     process.exit(1)
   }
 
+  if (!opts.skipSmoke) {
+    runSmokeTest(name, opts)
+  }
+
   if (opts.push) {
     console.log(`Pushing ${fullTag}...`)
     try {
@@ -116,6 +162,8 @@ function buildImage(name, opts) {
       console.error(`✗ Failed to push ${name}`)
       process.exit(1)
     }
+  } else {
+    loadKindImage(fullTag, opts)
   }
 }
 
@@ -128,23 +176,11 @@ console.log(`Registry: ${REGISTRY}`)
 console.log(`Tag: ${opts.tag}`)
 console.log(`Images: ${opts.images.join(', ')}`)
 console.log(`Push: ${opts.push}`)
+console.log(`Smoke: ${opts.skipSmoke ? 'false' : 'true'}`)
+console.log(`Kind load: ${opts.kindLoad ? opts.kindCluster || 'default cluster' : 'false'}`)
 
 for (const image of opts.images) {
   buildImage(image, opts)
 }
 
 console.log('\n✓ All images built successfully')
-
-// Run smoke tests automatically after build (unless pushing, to save time on CI)
-if (!opts.push) {
-  console.log('\n━━━ Running smoke tests ━━━')
-  try {
-    execSync(
-      `node ${join(__dirname, 'smoke-test-images.mjs')} ${opts.images.join(' ')} --tag ${opts.tag}`,
-      { stdio: 'inherit' },
-    )
-  } catch {
-    console.error('\n✗ Smoke tests failed — do NOT deploy this image')
-    process.exit(1)
-  }
-}

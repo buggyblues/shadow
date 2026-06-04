@@ -2,10 +2,18 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig([
   {
-    entry: ['src/index.ts'],
+    entry: ['src/index.ts', 'src/browser.ts'],
     format: ['esm', 'cjs'],
     dts: true,
     clean: true,
+    outDir: 'dist',
+  },
+  {
+    entry: ['src/runtime-sessions.ts'],
+    format: ['esm', 'cjs'],
+    dts: true,
+    clean: false,
+    platform: 'node',
     outDir: 'dist',
   },
   {

@@ -14,10 +14,9 @@
 
 | Runtime | 镜像 | npm 包 | ACP Agent |
 |---------|------|--------|-----------|
-| `openclaw` | `openclaw-runner:latest` | — | — (直接网关) |
+| `openclaw` | `openclaw-runner:20260604-faststart` | — | — (直接网关) |
 | `claude-code` | `acp-runner:claude-code` | `@anthropic-ai/claude-code` | `claude` |
 | `codex` | `acp-runner:codex` | `@openai/codex` | `codex` |
-| `gemini` | `acp-runner:gemini` | `@google/gemini-cli` | `gemini` |
 | `opencode` | `acp-runner:opencode` | `opencode-ai` | `opencode` |
 
 ### 1.2 ACP 架构
@@ -143,7 +142,7 @@ Shadow Cloud 的核心价值是 **声明式部署 + 多通道消息**，不是 a
 ### 4.2 已完成 (v3.x): RuntimeAdapter 插件化
 
 ✅ `RuntimeAdapter` 接口 + Map-based 注册表
-✅ 5 个运行时适配器 (openclaw, claude-code, codex, gemini, opencode)
+✅ 4 个运行时适配器 (openclaw, claude-code, codex, opencode)
 ✅ Parser 零 if/else — `getRuntime(agent.runtime).applyConfig()`
 ✅ Infra 零硬编码 — `getRuntime(agent.runtime).defaultImage`
 ✅ 统一 `acp-runner` 镜像 — 一个 Dockerfile, `RUNTIME_PACKAGE` build arg
@@ -183,7 +182,7 @@ Shadow Cloud 的核心价值是 **声明式部署 + 多通道消息**，不是 a
 ### P2: Schema 扩展
 
 ```typescript
-export type AgentRuntime = 'openclaw' | 'claude-code' | 'codex' | 'gemini' | 'opencode' | 'agent-sdk'
+export type AgentRuntime = 'openclaw' | 'claude-code' | 'codex' | 'opencode' | 'agent-sdk'
 ```
 
 ---

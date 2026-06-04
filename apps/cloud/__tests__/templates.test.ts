@@ -60,9 +60,7 @@ describe('template-schema consistency (TPL-02)', () => {
       expect(agent).toHaveProperty('id')
       expect(agent).toHaveProperty('runtime')
       expect(typeof agent.id).toBe('string')
-      expect(['openclaw', 'claude-code', 'codex', 'gemini', 'opencode', 'hermes']).toContain(
-        agent.runtime,
-      )
+      expect(['openclaw', 'claude-code', 'codex', 'opencode', 'hermes']).toContain(agent.runtime)
       expect(agent).toHaveProperty('configuration')
       expect(agent.configuration).toBeTruthy()
       expect(typeof agent.configuration).toBe('object')

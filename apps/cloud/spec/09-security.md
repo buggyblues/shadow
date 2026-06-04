@@ -541,7 +541,7 @@ RUN npm ci --omit=dev
 - name: Trivy 容器扫描
   uses: aquasecurity/trivy-action@v0.24
   with:
-    image-ref: shadowob-cloud/openclaw-runner:latest
+    image-ref: shadowob-cloud/openclaw-runner:20260604-faststart
     severity: 'CRITICAL,HIGH'
     exit-code: 1
 ```

@@ -276,7 +276,7 @@ export function PetWheel({
             item.id === 'services'
               ? servicesLabel
               : item.id === 'connection'
-                ? connectorSnapshot.running
+                ? connectorSnapshot.connectorOnline
                   ? t('desktopPet.connector.online', { count: connectorSnapshot.onlineCount })
                   : t('desktopPet.connector.offline')
                 : serviceId

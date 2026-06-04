@@ -59,19 +59,9 @@ const CLOUD_BUDDY_RUNTIME_OPTIONS: Array<{
     descriptionKey: 'agentMgmt.cloudRuntimeClaudeCodeDesc',
   },
   {
-    id: 'codex',
-    label: CLOUD_RUNTIME_LABELS.codex,
-    descriptionKey: 'agentMgmt.cloudRuntimeCodexDesc',
-  },
-  {
     id: 'opencode',
     label: CLOUD_RUNTIME_LABELS.opencode,
     descriptionKey: 'agentMgmt.cloudRuntimeOpenCodeDesc',
-  },
-  {
-    id: 'gemini',
-    label: CLOUD_RUNTIME_LABELS.gemini,
-    descriptionKey: 'agentMgmt.cloudRuntimeGeminiDesc',
   },
 ]
 
@@ -80,9 +70,7 @@ function runtimeSortKey(runtime: ConnectorRuntimeInfo) {
     openclaw: 0,
     hermes: 1,
     'claude-code': 2,
-    codex: 3,
-    opencode: 4,
-    gemini: 5,
+    opencode: 3,
   }
   return priority[runtime.id] ?? 50
 }

@@ -3,6 +3,11 @@ import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { delimiter, join } from 'node:path'
+import type {
+  RuntimeSessionPetActivity,
+  RuntimeSessionPetReaction,
+  RuntimeSessionState,
+} from '@shadowob/shared/types'
 import { app, BrowserWindow, ipcMain, net } from 'electron'
 import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../shared/community-auth'
 import {
@@ -86,16 +91,9 @@ export type ConnectorRuntimeInfo = {
   detectedAt?: string | null
 }
 
-export type ConnectorRuntimeSessionState =
-  | 'idle'
-  | 'running'
-  | 'streaming'
-  | 'waiting_for_approval'
-  | 'blocked'
-  | 'completed'
-  | 'failed'
-  | 'stopped'
-  | 'unknown'
+export type ConnectorRuntimeSessionState = RuntimeSessionState
+
+export type ConnectorRuntimeSessionPetReaction = RuntimeSessionPetReaction
 
 export type ConnectorRuntimeInstanceStatus =
   | 'running'
@@ -122,6 +120,8 @@ export type ConnectorRuntimeSessionInfo = {
   title?: string | null
   workDir?: string | null
   state: ConnectorRuntimeSessionState
+  petReaction?: ConnectorRuntimeSessionPetReaction
+  petActivity?: RuntimeSessionPetActivity
   model?: string | null
   lastActivityAt?: string | null
   startedAt?: string | null

@@ -3,6 +3,12 @@ import {
   CC_CONNECT_FORK_REPO,
   CC_CONNECT_FORK_SHORT_REF,
 } from './cc-connect-fork.js'
+import {
+  ccConnectModelRef,
+  connectorModelProviderEndpoint,
+  normalizeConnectorModelProvider,
+  type ConnectorModelProvider as ShadowConnectorModelProvider,
+} from './model-provider.js'
 
 export {
   CONNECTOR_RUNTIME_CATALOG,
@@ -19,6 +25,8 @@ export {
 
 export type ShadowConnectorTarget = 'openclaw' | 'hermes' | 'cc-connect'
 
+export type { ConnectorModelProvider as ShadowConnectorModelProvider } from './model-provider.js'
+
 export interface ShadowConnectorInput {
   target: ShadowConnectorTarget
   serverUrl: string
@@ -26,16 +34,8 @@ export interface ShadowConnectorInput {
   hermesHome?: string
   workDir?: string
   projectName?: string
-  agentType?: 'codex' | 'claudecode' | 'opencode' | 'gemini' | 'cursor' | string
+  agentType?: 'codex' | 'claudecode' | 'opencode' | 'cursor' | string
   modelProvider?: ShadowConnectorModelProvider
-}
-
-export interface ShadowConnectorModelProvider {
-  id?: string
-  label?: string
-  baseUrl: string
-  apiKey: string
-  model: string
 }
 
 export interface ConnectorCommand {
@@ -79,26 +79,25 @@ const normalizeServerUrl = (value: string): string => {
 
 const tokenOrPlaceholder = (token: string): string => token.trim() || '<BUDDY_TOKEN>'
 
-function normalizeModelProvider(input: ShadowConnectorInput): ShadowConnectorModelProvider | null {
-  const baseUrl = input.modelProvider?.baseUrl.trim()
-  const apiKey = input.modelProvider?.apiKey.trim()
-  const model = input.modelProvider?.model.trim()
-  if (!baseUrl || !apiKey || !model) return null
-  return {
-    id: input.modelProvider?.id?.trim() || 'shadow-official',
-    label: input.modelProvider?.label?.trim() || 'Shadow official LLM proxy',
-    baseUrl,
-    apiKey,
-    model,
-  }
-}
-
 function modelProviderEnvLines(provider: ShadowConnectorModelProvider | null): string[] {
   if (!provider) return []
+  const openAI = connectorModelProviderEndpoint(provider, 'openai')
+  const anthropic = connectorModelProviderEndpoint(provider, 'anthropic')
   return [
-    `OPENAI_COMPATIBLE_BASE_URL=${shellQuote(provider.baseUrl)}`,
-    `OPENAI_COMPATIBLE_API_KEY=${shellQuote(provider.apiKey)}`,
-    `OPENAI_COMPATIBLE_MODEL_ID=${shellQuote(provider.model)}`,
+    ...(openAI
+      ? [
+          `OPENAI_COMPATIBLE_BASE_URL=${shellQuote(openAI.baseUrl)}`,
+          `OPENAI_COMPATIBLE_API_KEY=${shellQuote(openAI.apiKey)}`,
+          `OPENAI_COMPATIBLE_MODEL_ID=${shellQuote(provider.model)}`,
+        ]
+      : []),
+    ...(anthropic
+      ? [
+          `ANTHROPIC_COMPATIBLE_BASE_URL=${shellQuote(anthropic.baseUrl)}`,
+          `ANTHROPIC_COMPATIBLE_API_KEY=${shellQuote(anthropic.apiKey)}`,
+          `ANTHROPIC_COMPATIBLE_MODEL_ID=${shellQuote(provider.model)}`,
+        ]
+      : []),
     `SHADOW_MODEL_PROVIDER_ID=${shellQuote(provider.id ?? 'shadow-official')}`,
   ]
 }
@@ -113,7 +112,8 @@ function modelProviderCapabilities(
 function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
   const token = tokenOrPlaceholder(input.token)
   const serverUrl = normalizeServerUrl(input.serverUrl)
-  const modelProvider = normalizeModelProvider(input)
+  const modelProvider = normalizeConnectorModelProvider(input.modelProvider)
+  const openAIProvider = connectorModelProviderEndpoint(modelProvider, 'openai')
   const jsonConfig = JSON.stringify(
     {
       channels: {
@@ -122,15 +122,16 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
           serverUrl,
         },
       },
-      ...(modelProvider
+      ...(modelProvider && openAIProvider
         ? {
             models: {
               mode: 'merge',
+              pricing: { enabled: false },
               providers: {
                 [modelProvider.id ?? 'shadow-official']: {
                   api: 'openai-completions',
                   apiKey: '${env:OPENAI_COMPATIBLE_API_KEY}',
-                  baseUrl: modelProvider.baseUrl,
+                  baseUrl: openAIProvider.baseUrl,
                   request: { allowPrivateNetwork: true },
                   models: [{ id: modelProvider.model, name: modelProvider.model }],
                 },
@@ -223,13 +224,13 @@ function buildOpenClawPlan(input: RequiredCoreInput): ConnectorPlan {
 function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
   const token = tokenOrPlaceholder(input.token)
   const serverUrl = normalizeServerUrl(input.serverUrl)
-  const modelProvider = normalizeModelProvider(input)
+  const modelProvider = normalizeConnectorModelProvider(input.modelProvider)
+  const openAIProvider = connectorModelProviderEndpoint(modelProvider, 'openai')
   const envBlock = [
     `SHADOW_BASE_URL=${shellQuote(serverUrl)}`,
     `SHADOW_TOKEN=${shellQuote(token)}`,
     'SHADOW_ALLOW_ALL_USERS=true',
     'SHADOW_HEARTBEAT_INTERVAL_SECONDS=30',
-    `SHADOW_SLASH_COMMANDS_JSON=${shellQuote('[]')}`,
     ...modelProviderEnvLines(modelProvider),
   ].join('\n')
   const yamlConfig = [
@@ -248,13 +249,18 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
     '      catchup_minutes: 0',
     '      download_media: true',
     '      slash_commands: []',
-    ...(modelProvider
+    ...(modelProvider && openAIProvider
       ? [
           '',
           'model:',
           `  default: "${modelProvider.model}"`,
-          '  provider: custom',
-          `  base_url: "${modelProvider.baseUrl}"`,
+          `  provider: "${modelProvider.id ?? 'shadow-official'}"`,
+          '',
+          'custom_providers:',
+          `  - name: "${modelProvider.id ?? 'shadow-official'}"`,
+          `    base_url: "${openAIProvider.baseUrl}"`,
+          '    key_env: OPENAI_COMPATIBLE_API_KEY',
+          `    model: "${modelProvider.model}"`,
         ]
       : []),
   ].join('\n')
@@ -304,8 +310,8 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
       '',
       `Preferred one-line setup: ${connectCommand}`,
       'The connector installs/configures the Shadow CLI, official Shadow skill files, and the Buddy profile before writing Hermes config. The plugin resolves the Buddy agent id and channel policy from Shadow at runtime.',
-      modelProvider
-        ? `It also configures Hermes custom model endpoint ${modelProvider.baseUrl} with model ${modelProvider.model}.`
+      modelProvider && openAIProvider
+        ? `It also configures Hermes custom model endpoint ${openAIProvider.baseUrl} with model ${modelProvider.model}.`
         : '',
     ].join('\n'),
     docsUrl: 'https://hermes-agent.nousresearch.com/docs/user-guide/messaging',
@@ -336,7 +342,15 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
   const projectName = input.projectName?.trim() || DEFAULT_PROJECT_NAME
   const workDir = input.workDir?.trim() || DEFAULT_WORK_DIR
   const agentType = input.agentType?.trim() || DEFAULT_CC_AGENT
-  const modelProvider = normalizeModelProvider(input)
+  const modelProvider = normalizeConnectorModelProvider(input.modelProvider)
+  const providerEndpoint = connectorModelProviderEndpoint(
+    modelProvider,
+    agentType === 'claudecode' ? 'anthropic' : 'openai',
+  )
+  const providerId = modelProvider?.id ?? 'shadow-official'
+  const providerModel = modelProvider
+    ? ccConnectModelRef(agentType, providerId, modelProvider.model)
+    : null
   const tomlConfig = [
     'language = "zh"',
     '',
@@ -348,19 +362,19 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
     '',
     '[projects.agent.options]',
     `work_dir = "${workDir}"`,
-    ...(modelProvider
+    ...(modelProvider && providerEndpoint
       ? [
-          `provider = "${modelProvider.id ?? 'shadow-official'}"`,
-          `model = "${modelProvider.model}"`,
+          `provider = "${providerId}"`,
+          `model = "${providerModel}"`,
           '',
           '[[projects.agent.providers]]',
-          `name = "${modelProvider.id ?? 'shadow-official'}"`,
-          `api_key = "${modelProvider.apiKey}"`,
-          `base_url = "${modelProvider.baseUrl}"`,
-          `model = "${modelProvider.model}"`,
+          `name = "${providerId}"`,
+          `api_key = "${providerEndpoint.apiKey}"`,
+          `base_url = "${providerEndpoint.baseUrl}"`,
+          `model = "${providerModel}"`,
           '',
           '[[projects.agent.providers.models]]',
-          `model = "${modelProvider.model}"`,
+          `model = "${providerModel}"`,
         ]
       : []),
     '',

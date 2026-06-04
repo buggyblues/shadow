@@ -19,6 +19,15 @@ solo-*.png
 !skills/
 !skills/shadowob-cli/
 !skills/shadowob-cli/SKILL.md
+!packages/connector/
+!packages/connector/README.md
+!packages/connector/docs/
+!packages/connector/docs/**
+!packages/connector/hermes-shadowob-plugin/
+!packages/connector/hermes-shadowob-plugin/**
+!packages/connector/skills/
+!packages/connector/skills/**
+!packages/connector/skills/shadowob/SKILL.md
 !packages/openclaw-shadowob/
 !packages/openclaw-shadowob/openclaw.plugin.json
 !packages/openclaw-shadowob/package.json

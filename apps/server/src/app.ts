@@ -176,6 +176,7 @@ export function createApp(container: AppContainer) {
   app.route('/api/auth', createAuthHandler(container))
   app.route('/api/oauth', createOAuthHandler(container))
   app.route('/api/ai/v1', createModelProxyHandler(container))
+  app.route('/api/ai/anthropic', createModelProxyHandler(container))
   app.route('/api/play', createPlayHandler(container))
   app.route('/api/tokens', createApiTokenHandler(container))
   // Paid file viewer URLs are authorized by short-lived grant tokens, so this handler must be

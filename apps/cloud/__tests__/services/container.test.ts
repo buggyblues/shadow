@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { ConfigService } from '../../src/services/config.service.js'
 import { createContainer } from '../../src/services/container.js'
 import { DeployService } from '../../src/services/deploy.service.js'
-import { ImageService } from '../../src/services/image.service.js'
+import { DEFAULT_IMAGE_TAG, IMAGES, ImageService } from '../../src/services/image.service.js'
 import { K8sService } from '../../src/services/k8s.service.js'
 import { ManifestService } from '../../src/services/manifest.service.js'
 import { RuntimeService } from '../../src/services/runtime.service.js'
@@ -44,5 +44,20 @@ describe('createContainer', () => {
     expect(container.config).toBe(mockConfig)
     // Other services unaffected
     expect(container.manifest).toBeInstanceOf(ManifestService)
+  })
+
+  it('keeps the service image catalog aligned with supported cloud runners', () => {
+    const container = createContainer()
+
+    expect(IMAGES).toEqual([
+      'openclaw-runner',
+      'claude-runner',
+      'codex-runner',
+      'opencode-runner',
+      'hermes-runner',
+    ])
+    expect(DEFAULT_IMAGE_TAG).toBeTruthy()
+    expect(DEFAULT_IMAGE_TAG).not.toBe('latest')
+    expect(container.image.getAvailableImages()).toEqual(IMAGES)
   })
 })

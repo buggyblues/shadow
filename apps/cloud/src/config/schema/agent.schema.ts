@@ -11,7 +11,7 @@ import type { UseEntry } from './shadow.schema.js'
 /**
  * Agent runtime types.
  */
-export type AgentRuntime = 'openclaw' | 'claude-code' | 'codex' | 'gemini' | 'opencode' | 'hermes'
+export type AgentRuntime = 'openclaw' | 'claude-code' | 'codex' | 'opencode' | 'hermes'
 
 /**
  * Agent model configuration — mirrors gitagent's model section.

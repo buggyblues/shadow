@@ -116,23 +116,36 @@ if (config.discovery?.mdns?.mode !== 'off') errors.push(`discovery.mdns.mode=${c
 if (config.plugins?.entries?.bonjour?.enabled !== false) {
   errors.push(`plugins.entries.bonjour.enabled=${config.plugins?.entries?.bonjour?.enabled}`)
 }
-if (config.plugins?.entries?.browser?.enabled !== true) {
+if (config.plugins?.entries?.browser?.enabled === true) {
   errors.push(`plugins.entries.browser.enabled=${config.plugins?.entries?.browser?.enabled}`)
 }
-if (Array.isArray(config.plugins?.allow) && !config.plugins.allow.includes('browser')) {
+for (const id of ['device-pair', 'file-transfer', 'phone-control', 'talk-voice']) {
+  if (config.plugins?.entries?.[id]?.enabled !== false) {
+    errors.push(`plugins.entries.${id}.enabled=${config.plugins?.entries?.[id]?.enabled}`)
+  }
+}
+if (Array.isArray(config.plugins?.allow) && config.plugins.allow.includes('browser')) {
   errors.push(`plugins.allow=${config.plugins.allow.join(',')}`)
 }
-if (vector?.enabled !== true) errors.push(`memory vector enabled=${vector?.enabled}`)
-if (typeof vector?.extensionPath !== 'string' || !vector.extensionPath.endsWith('.so')) {
+if (!Array.isArray(config.plugins?.allow) || !config.plugins.allow.includes('openclaw-shadowob')) {
+  errors.push(`plugins.allow=${config.plugins?.allow}`)
+}
+if (Array.isArray(config.plugins?.allow) && config.plugins.allow.includes('memory-core')) {
+  errors.push(`plugins.allow=${config.plugins.allow.join(',')}`)
+}
+if (vector != null && vector?.enabled !== false) errors.push(`memory vector enabled=${vector?.enabled}`)
+if (vector?.extensionPath != null && !String(vector.extensionPath).endsWith('.so')) {
   errors.push(`memory vector extensionPath=${vector?.extensionPath}`)
 }
-if (browser?.headless !== true) errors.push(`browser.headless=${browser?.headless}`)
-if (browser?.noSandbox !== true) errors.push(`browser.noSandbox=${browser?.noSandbox}`)
-if (browser?.executablePath !== '/usr/bin/chromium') {
-  errors.push(`browser.executablePath=${browser?.executablePath}`)
-}
-if (!Array.isArray(browser?.extraArgs) || !browser.extraArgs.includes('--disable-dev-shm-usage')) {
-  errors.push(`browser.extraArgs=${browser?.extraArgs}`)
+if (browser != null) {
+  if (browser?.headless !== true) errors.push(`browser.headless=${browser?.headless}`)
+  if (browser?.noSandbox !== true) errors.push(`browser.noSandbox=${browser?.noSandbox}`)
+  if (browser?.executablePath !== '/usr/bin/chromium') {
+    errors.push(`browser.executablePath=${browser?.executablePath}`)
+  }
+  if (!Array.isArray(browser?.extraArgs) || !browser.extraArgs.includes('--disable-dev-shm-usage')) {
+    errors.push(`browser.extraArgs=${browser?.extraArgs}`)
+  }
 }
 if (errors.length) {
   console.error(errors.join('\n'))

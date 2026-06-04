@@ -1,7 +1,7 @@
 import {
   connectorRuntimeInstallCommands,
   connectorRuntimeInstallCommand as sharedConnectorRuntimeInstallCommand,
-} from '@shadowob/connector'
+} from '@shadowob/connector/browser'
 
 export interface Agent {
   id: string

@@ -14,7 +14,7 @@ npx @shadowob/connector@latest --daemon \
   --api-key sk_machine_...
 ```
 
-The daemon connects this computer once, scans supported runtimes, sends heartbeats to Shadow, claims Buddy setup jobs, and configures the selected runtime. Supported runtime detection currently includes OpenClaw, Hermes Agent, Claude Code, Codex CLI, OpenCode, Gemini CLI, Cursor CLI, Kimi CLI, Copilot CLI, and Antigravity CLI.
+The daemon connects this computer once, scans supported runtimes, sends heartbeats to Shadow, claims Buddy setup jobs, and configures the selected runtime. Supported runtime detection currently includes OpenClaw, Hermes Agent, Claude Code, Codex CLI, OpenCode, Cursor CLI, Kimi CLI, Copilot CLI, and Antigravity CLI.
 
 Research and design notes for runtime session scanning, monitoring, and direct
 message push are in [`docs/agent-runtime-session-monitoring.md`](docs/agent-runtime-session-monitoring.md).

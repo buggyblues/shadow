@@ -5,6 +5,7 @@
 import * as k8s from '@pulumi/kubernetes'
 import type * as pulumi from '@pulumi/pulumi'
 import { PULUMI_MANAGED_ANNOTATIONS, PULUMI_SKIP_AWAIT_ANNOTATIONS } from './constants.js'
+import { serviceNameForAgent } from './k8s-names.js'
 
 export interface NetworkingOptions {
   agentName: string
@@ -17,12 +18,13 @@ export interface NetworkingOptions {
 
 export function createNetworking(options: NetworkingOptions) {
   const { agentName, namespace, port, targetPort, provider, resourceOptions } = options
+  const serviceName = serviceNameForAgent(agentName)
 
   const service = new k8s.core.v1.Service(
-    `${agentName}-svc`,
+    serviceName,
     {
       metadata: {
-        name: `${agentName}-svc`,
+        name: serviceName,
         namespace,
         labels: {
           app: 'shadowob-cloud',

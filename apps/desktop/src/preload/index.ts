@@ -815,6 +815,31 @@ const desktopAPI = {
             lastActivityAt?: string | null
             startedAt?: string | null
             source: string
+            petReaction?:
+              | 'idle'
+              | 'thinking'
+              | 'working'
+              | 'editing'
+              | 'running'
+              | 'testing'
+              | 'waiting'
+              | 'waving'
+              | 'success'
+              | 'error'
+              | 'celebrating'
+            petActivity?: {
+              kind:
+                | 'thinking'
+                | 'reading'
+                | 'working'
+                | 'editing'
+                | 'running'
+                | 'testing'
+                | 'waiting'
+                | 'success'
+                | 'error'
+              label?: string | null
+            }
             native?: Record<string, unknown>
           }>
         } | null
@@ -856,6 +881,31 @@ const desktopAPI = {
               | 'failed'
               | 'stopped'
               | 'unknown'
+            petReaction?:
+              | 'idle'
+              | 'thinking'
+              | 'working'
+              | 'editing'
+              | 'running'
+              | 'testing'
+              | 'waiting'
+              | 'waving'
+              | 'success'
+              | 'error'
+              | 'celebrating'
+            petActivity?: {
+              kind:
+                | 'thinking'
+                | 'reading'
+                | 'working'
+                | 'editing'
+                | 'running'
+                | 'testing'
+                | 'waiting'
+                | 'success'
+                | 'error'
+              label?: string | null
+            }
           }>
         }
         cached?: boolean

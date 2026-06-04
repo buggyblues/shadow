@@ -453,6 +453,8 @@ export interface OpenClawProviderConfig {
 export interface OpenClawModelsConfig {
   /** Merge mode */
   mode?: 'merge' | 'replace'
+  /** Optional model pricing catalog bootstrap */
+  pricing?: { enabled?: boolean }
   /** Custom providers */
   providers?: Record<string, OpenClawProviderConfig>
 }

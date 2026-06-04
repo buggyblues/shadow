@@ -17,8 +17,6 @@ export const CODEX_PET_STATES: CodexPetAnimationKey[] = [
   'review',
 ]
 
-export const CODEX_PETS_GALLERY_URL = 'https://codex-pets.net/#/?page=2&kind=creature'
-
 const DEFAULT_CODEX_SPRITESHEET_PATH = 'spritesheet.webp'
 const CODEX_ATLAS_COLUMNS = 8
 const CODEX_ATLAS_ROWS = 9

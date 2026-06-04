@@ -1,3 +1,8 @@
+import {
+  type RuntimeSessionAnimationSignal,
+  runtimeSessionSignalToPetReaction,
+} from '@shadowob/shared/types'
+
 export type PetAttribute = 'tide' | 'spark' | 'snack' | 'focus'
 export type PetDayPhase = 'morning' | 'day' | 'evening' | 'night'
 export type PetEmotionState =
@@ -290,24 +295,24 @@ export function selectAnimation(state: PetState): PetAnimationKey {
 }
 
 export function selectRuntimeAnimation(
-  states: Array<
-    | 'idle'
-    | 'running'
-    | 'streaming'
-    | 'waiting_for_approval'
-    | 'blocked'
-    | 'completed'
-    | 'failed'
-    | 'stopped'
-    | 'unknown'
-  >,
+  signals: RuntimeSessionAnimationSignal[],
 ): PetAnimationKey | null {
-  if (states.some((state) => state === 'waiting_for_approval' || state === 'blocked')) {
-    return 'waiting'
+  const reactions = signals.map(runtimeSessionSignalToPetReaction)
+  if (reactions.some((reaction) => reaction === 'waiting')) return 'waiting'
+  if (reactions.some((reaction) => reaction === 'error')) return 'failed'
+  if (reactions.some((reaction) => reaction === 'testing')) return 'waiting'
+  if (
+    reactions.some(
+      (reaction) => reaction === 'working' || reaction === 'editing' || reaction === 'running',
+    )
+  ) {
+    return 'running'
   }
-  if (states.some((state) => state === 'failed')) return 'failed'
-  if (states.some((state) => state === 'running' || state === 'streaming')) return 'running'
-  if (states.some((state) => state === 'completed')) return 'review'
+  if (reactions.some((reaction) => reaction === 'thinking')) return 'review'
+  if (reactions.some((reaction) => reaction === 'success' || reaction === 'celebrating')) {
+    return 'jumping'
+  }
+  if (reactions.some((reaction) => reaction === 'waving')) return 'waving'
   return null
 }
 

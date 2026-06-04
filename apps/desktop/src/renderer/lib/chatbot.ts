@@ -1,6 +1,7 @@
 import type { PetState } from './game'
 
 export type ChatRole = 'pet' | 'user'
+export type PetNoticeKind = 'runtime-busy' | 'runtime-terminal'
 
 export type ChatMessage = {
   id: string
@@ -9,6 +10,7 @@ export type ChatMessage = {
   text?: string
   createdAt: number
   streaming?: boolean
+  noticeKind?: PetNoticeKind
 }
 
 export function createInitialMessages(now = Date.now()): ChatMessage[] {

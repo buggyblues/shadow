@@ -3908,7 +3908,7 @@
       "title": "デスクトップペットストア",
       "subtitle": "デスクトップペット素材パックを入手",
       "petAssets": "デスクトップペット素材パック",
-      "petAssetsHint": "codex-pets.net の creature ギャラリーを開きます。",
+      "petAssetsHint": "XiaDou Community のデスクトップペット素材パックを閲覧します。",
       "open": "ストアを開く",
       "manage": "パック管理"
     },
@@ -4208,7 +4208,40 @@
       "runtimeFallback": "ローカルランタイム",
       "runtimeReady": "{{runtime}} の {{name}} が準備できました。",
       "runtimeReadyMany": "{{count}} 件の Runtime セッションが準備できました。",
-      "runtimeSessionCompleted": "{{runtime}} の {{name}} セッションが完了しました。"
+      "runtimeSessionCompleted": "{{runtime}} の {{name}} セッションが完了しました。",
+      "runtimeReaction": {
+        "idle": "準備完了。",
+        "thinking": "確認中。",
+        "working": "処理中。",
+        "editing": "ファイルを更新中。",
+        "running": "コマンド実行中。",
+        "testing": "チェック中。",
+        "waiting": "承認待ち。",
+        "waving": "お知らせ。",
+        "success": "完了。",
+        "error": "確認が必要です。",
+        "celebrating": "うまく完了しました。"
+      },
+      "runtimeActivity": {
+        "thinking": "確認中。",
+        "thinkingWithLabel": "{{label}} を確認中。",
+        "reading": "読み取り中。",
+        "readingWithLabel": "{{label}} を読み取り中。",
+        "working": "処理中。",
+        "workingWithLabel": "{{label}} を処理中。",
+        "editing": "ファイルを更新中。",
+        "editingWithLabel": "{{label}} を編集中。",
+        "running": "コマンド実行中。",
+        "runningWithLabel": "{{label}} を実行中。",
+        "testing": "チェック中。",
+        "testingWithLabel": "{{label}} をテスト中。",
+        "waiting": "承認待ち。",
+        "waitingWithLabel": "{{label}} を待機中。",
+        "success": "完了。",
+        "successWithLabel": "完了: {{label}}。",
+        "error": "確認が必要です。",
+        "errorWithLabel": "{{label}} の確認が必要です。"
+      }
     }
   },
   "desktopReader": {

@@ -1,5 +1,7 @@
+import type { RuntimeSessionPetReaction } from '@shadowob/shared/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { PetNoticeKind } from '../lib/chatbot'
 import {
   loadServiceHistory,
   loadServiceState,
@@ -11,6 +13,9 @@ import {
   type RuntimeSessionForNotification,
   type RuntimeSessionNotificationTracker,
   runtimeSessionKey,
+  runtimeSessionLooksActive,
+  runtimeSessionReaction,
+  runtimeSessionReactionIsVisible,
 } from '../lib/runtime-session-notifications'
 import type {
   AppTab,
@@ -24,16 +29,23 @@ import type {
 } from '../pet-types'
 
 const MIN_SERVICE_INTERVAL_MINUTES = 5
+const RUNTIME_SESSION_REACTION_VISIBLE_MS = 45_000
+const RUNTIME_SESSION_REACTION_BUBBLE_COOLDOWN_MS = 30_000
 
 const RUNTIME_LABELS: Record<string, string> = {
   'claude-code': 'Claude Code',
   opencode: 'OpenCode',
   codex: 'Codex CLI',
-  gemini: 'Gemini CLI',
   cursor: 'Cursor',
   kimi: 'Kimi',
   copilot: 'GitHub Copilot',
   antigravity: 'Antigravity',
+}
+
+type RuntimeSessionReactionBubbleTracker = {
+  reaction: RuntimeSessionPetReaction
+  lastActivityAt: string | null
+  shownAt: number
 }
 
 export function usePetServices({
@@ -42,15 +54,20 @@ export function usePetServices({
   tab,
   petName,
   showPetNotice,
+  clearPetNotice,
 }: {
   api: DesktopPetApi | null
   panelOpen: boolean
   tab: AppTab
   petName: string
-  showPetNotice: (message: string) => void
+  showPetNotice: (message: string, options?: { noticeKind?: PetNoticeKind }) => void
+  clearPetNotice: (noticeKind?: PetNoticeKind) => void
 }) {
   const { t } = useTranslation()
   const runtimeSessionTrackerRef = useRef(new Map<string, RuntimeSessionNotificationTracker>())
+  const runtimeSessionBubbleTrackerRef = useRef(
+    new Map<string, RuntimeSessionReactionBubbleTracker>(),
+  )
   const runtimeNotificationsRef = useRef<Record<string, boolean>>({})
   const runtimeNotificationEnabledAtRef = useRef(new Map<string, number>())
   const runtimeWatchStartedAtRef = useRef<number | null>(null)
@@ -62,9 +79,10 @@ export function usePetServices({
   const [services, setServices] = useState<PetServiceState>(() => loadServiceState())
   const [serviceHistory, setServiceHistory] = useState(() => loadServiceHistory())
   const [connectorSnapshot, setConnectorSnapshot] = useState<ConnectorSnapshot>({
-    running: false,
+    connectorOnline: false,
+    activeRuntimeSessionCount: 0,
     onlineCount: 0,
-    runtimeSessionStates: [],
+    runtimeSessionReactions: [],
     readySessions: [],
   })
 
@@ -78,6 +96,9 @@ export function usePetServices({
         enabledAt.delete(runtimeId)
         for (const key of runtimeSessionTrackerRef.current.keys()) {
           if (key.startsWith(`${runtimeId}:`)) runtimeSessionTrackerRef.current.delete(key)
+        }
+        for (const key of runtimeSessionBubbleTrackerRef.current.keys()) {
+          if (key.startsWith(`${runtimeId}:`)) runtimeSessionBubbleTrackerRef.current.delete(key)
         }
       } else if (previous[runtimeId] === false || !enabledAt.has(runtimeId)) {
         enabledAt.set(runtimeId, now)
@@ -151,6 +172,61 @@ export function usePetServices({
     [notifyRuntimeSessionCompleted],
   )
 
+  const processRuntimeSessionReactionBubbles = useCallback(
+    (sessions: RuntimeSessionForNotification[], enabledRuntimeIds: Set<string>) => {
+      const now = Date.now()
+      const globalStartedAt = runtimeWatchStartedAtRef.current ?? now
+      const seenKeys = new Set<string>()
+      for (const session of sessions) {
+        if (!enabledRuntimeIds.has(session.runtimeId)) continue
+        if (runtimeNotificationsRef.current[session.runtimeId] === false) continue
+        if (!runtimeSessionReactionIsVisible(session, now, RUNTIME_SESSION_REACTION_VISIBLE_MS)) {
+          continue
+        }
+
+        const reaction = runtimeSessionReaction(session)
+        if (reaction === 'idle') continue
+
+        const lastActivityAt = session.lastActivityAt ?? null
+        const lastActivityMs = lastActivityAt ? Date.parse(lastActivityAt) : Number.NaN
+        const startedAt = Math.max(
+          globalStartedAt,
+          runtimeNotificationEnabledAtRef.current.get(session.runtimeId) ?? globalStartedAt,
+        )
+        if (
+          !runtimeSessionLooksActive(session) &&
+          (!Number.isFinite(lastActivityMs) || lastActivityMs < startedAt - 1000)
+        ) {
+          continue
+        }
+
+        const key = runtimeSessionKey(session)
+        seenKeys.add(key)
+        const previous = runtimeSessionBubbleTrackerRef.current.get(key)
+        if (
+          previous?.reaction === reaction &&
+          previous.lastActivityAt === lastActivityAt &&
+          now - previous.shownAt < RUNTIME_SESSION_REACTION_BUBBLE_COOLDOWN_MS
+        ) {
+          continue
+        }
+
+        runtimeSessionBubbleTrackerRef.current.set(key, {
+          reaction,
+          lastActivityAt,
+          shownAt: now,
+        })
+        showPetNotice(runtimeSessionBubbleMessage(session, t), {
+          noticeKind: runtimeSessionLooksActive(session) ? 'runtime-busy' : 'runtime-terminal',
+        })
+      }
+      for (const key of runtimeSessionBubbleTrackerRef.current.keys()) {
+        if (!seenKeys.has(key)) runtimeSessionBubbleTrackerRef.current.delete(key)
+      }
+    },
+    [showPetNotice, t],
+  )
+
   useEffect(() => {
     void api?.getDesktopSettings?.().then((settings) => {
       applyRuntimeNotificationSettings(settings.connectorRuntimeNotifications ?? {})
@@ -197,22 +273,45 @@ export function usePetServices({
       const runtimeLabels = new Map(
         runtimeScan?.runtimes?.map((runtime) => [runtime.id, runtime.label]) ?? [],
       )
-      if (watchingRuntimes && runtimeScan?.runtimeSessions?.sessions) {
+      const hasRuntimeSessionSnapshot =
+        watchingRuntimes && Boolean(runtimeScan?.runtimeSessions?.sessions)
+      if (hasRuntimeSessionSnapshot && runtimeScan?.runtimeSessions?.sessions) {
+        const enabledRuntimeIds = new Set(runtimeScan.runtimeSessions.runtimeIds ?? [])
         processRuntimeSessionNotifications(
           runtimeScan.runtimeSessions.sessions,
           runtimeLabels,
-          new Set(runtimeScan.runtimeSessions.runtimeIds ?? []),
+          enabledRuntimeIds,
+        )
+        processRuntimeSessionReactionBubbles(
+          runtimeScan.runtimeSessions.sessions,
+          enabledRuntimeIds,
         )
       }
-      const runtimeSessionStates =
-        watchingRuntimes && runtimeScan?.runtimeSessions?.sessions
-          ? runtimeScan.runtimeSessions.sessions.map((session) => session.state)
+      const runtimeSessions =
+        hasRuntimeSessionSnapshot && runtimeScan?.runtimeSessions?.sessions
+          ? runtimeScan.runtimeSessions.sessions
           : []
+      const activeRuntimeSessions = runtimeSessions.filter(runtimeSessionLooksActive)
+      const runtimeSessionReactions = hasRuntimeSessionSnapshot
+        ? runtimeSessions
+            .filter((session) =>
+              runtimeSessionReactionIsVisible(
+                session,
+                Date.now(),
+                RUNTIME_SESSION_REACTION_VISIBLE_MS,
+              ),
+            )
+            .map(runtimeSessionReaction)
+        : []
       const readySessions = buddyReadySessions
+      if (hasRuntimeSessionSnapshot && activeRuntimeSessions.length === 0) {
+        clearPetNotice('runtime-busy')
+      }
       setConnectorSnapshot({
-        running: state.running || readySessions.length > 0 || runtimeSessionStates.length > 0,
+        connectorOnline: state.running || readySessions.length > 0,
+        activeRuntimeSessionCount: activeRuntimeSessions.length,
         onlineCount: readySessions.length,
-        runtimeSessionStates,
+        runtimeSessionReactions,
         readySessions,
       })
     }
@@ -222,7 +321,12 @@ export function usePetServices({
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [api, processRuntimeSessionNotifications])
+  }, [
+    api,
+    clearPetNotice,
+    processRuntimeSessionNotifications,
+    processRuntimeSessionReactionBubbles,
+  ])
 
   const addServiceAlert = useCallback(
     (id: PetServiceAlertId, message: string) => {
@@ -316,10 +420,12 @@ export function usePetServices({
     if (!services.coding) {
       runtimeWatchStartedAtRef.current = null
       runtimeSessionTrackerRef.current.clear()
+      runtimeSessionBubbleTrackerRef.current.clear()
+      clearPetNotice('runtime-busy')
       return
     }
     if (runtimeWatchStartedAtRef.current === null) runtimeWatchStartedAtRef.current = Date.now()
-  }, [services.coding])
+  }, [clearPetNotice, services.coding])
 
   function toggleService(service: PetServiceId) {
     const previous = servicesRef.current
@@ -428,4 +534,18 @@ function normalizeIntervalMs(value: number): number {
     Math.round(value / 60_000 / MIN_SERVICE_INTERVAL_MINUTES) * MIN_SERVICE_INTERVAL_MINUTES,
   )
   return minutes * 60_000
+}
+
+function runtimeSessionBubbleMessage(
+  session: RuntimeSessionForNotification,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const activity = session.petActivity
+  if (activity) {
+    const label = typeof activity.label === 'string' ? activity.label.trim() : ''
+    return label
+      ? t(`desktopPet.services.runtimeActivity.${activity.kind}WithLabel`, { label })
+      : t(`desktopPet.services.runtimeActivity.${activity.kind}`)
+  }
+  return t(`desktopPet.services.runtimeReaction.${runtimeSessionReaction(session)}`)
 }

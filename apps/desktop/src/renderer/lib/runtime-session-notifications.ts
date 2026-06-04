@@ -1,3 +1,11 @@
+import {
+  type RuntimeSessionPetActivity,
+  type RuntimeSessionPetReaction,
+  type RuntimeSessionState,
+  runtimeSessionPetReactionForState,
+  runtimeSessionStateLooksActive,
+} from '@shadowob/shared/types'
+
 export const RUNTIME_SESSION_SETTLE_MS = 10_000
 
 export type RuntimeSessionForNotification = {
@@ -6,16 +14,9 @@ export type RuntimeSessionForNotification = {
   sessionId: string
   title?: string | null
   lastActivityAt?: string | null
-  state:
-    | 'idle'
-    | 'running'
-    | 'streaming'
-    | 'waiting_for_approval'
-    | 'blocked'
-    | 'completed'
-    | 'failed'
-    | 'stopped'
-    | 'unknown'
+  state: RuntimeSessionState
+  petReaction?: RuntimeSessionPetReaction
+  petActivity?: RuntimeSessionPetActivity
 }
 
 export type RuntimeSessionNotificationTracker = {
@@ -29,12 +30,39 @@ export function runtimeSessionKey(session: RuntimeSessionForNotification): strin
 }
 
 export function runtimeSessionLooksActive(session: RuntimeSessionForNotification): boolean {
+  return runtimeSessionStateLooksActive(session.state)
+}
+
+export function runtimeSessionReaction(
+  session: RuntimeSessionForNotification,
+): RuntimeSessionPetReaction {
+  return session.petReaction ?? runtimeSessionPetReactionForState(session.state)
+}
+
+function runtimeSessionReactionLooksBusy(reaction: RuntimeSessionPetReaction): boolean {
   return (
-    session.state === 'running' ||
-    session.state === 'streaming' ||
-    session.state === 'waiting_for_approval' ||
-    session.state === 'blocked'
+    reaction === 'thinking' ||
+    reaction === 'working' ||
+    reaction === 'editing' ||
+    reaction === 'running' ||
+    reaction === 'testing' ||
+    reaction === 'waiting'
   )
+}
+
+export function runtimeSessionReactionIsVisible(
+  session: RuntimeSessionForNotification,
+  now: number,
+  visibleMs: number,
+): boolean {
+  const reaction = runtimeSessionReaction(session)
+  if (reaction === 'idle') return false
+  if (runtimeSessionLooksActive(session)) return true
+  if (runtimeSessionReactionLooksBusy(reaction)) return false
+
+  const lastActivityAt = session.lastActivityAt
+  const lastActivityMs = lastActivityAt ? Date.parse(lastActivityAt) : Number.NaN
+  return Number.isFinite(lastActivityMs) && now - lastActivityMs <= visibleMs
 }
 
 export function evaluateRuntimeSessionNotification({

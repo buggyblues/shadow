@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 import asyncio
+import os
+import json
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -211,6 +213,77 @@ def test_slash_command_prompt_and_interactive_block():
     block = adapter._slash_interactive_block(match, 'message-1')
     assert block['id'].endswith(':message-1')
     assert block['kind'] == 'form'
+
+
+def test_sethome_is_handled_as_local_shadow_control_command(monkeypatch):
+    monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
+
+    class FakeClient:
+        def __init__(self):
+            self.sent = []
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'home-reply'}
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance.extra = {}
+    instance.config = type('Config', (), {'extra': {}})()
+
+    handled = asyncio.run(
+        instance._handle_shadow_control_command(
+            '/sethome',
+            channel_id='dm-1',
+            thread_id=None,
+            message_id='message-1',
+        )
+    )
+
+    assert handled is True
+    assert instance.extra['home_channel']['chat_id'] == 'dm-1'
+    assert instance.config.extra['home_channel']['chat_id'] == 'dm-1'
+    assert os.environ['SHADOW_HOME_CHANNEL'] == 'dm-1'
+    assert instance.client.sent == [
+        (
+            'dm-1',
+            'Home channel locked — this is now the Shadowob relay point.',
+            {'thread_id': None, 'reply_to_id': 'message-1'},
+        )
+    ]
+
+
+def test_runner_readiness_file_is_written_after_shadow_transport_ready(tmp_path):
+    class FakeSocket:
+        connected = True
+
+    ready_file = tmp_path / 'ready.json'
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance._ready_file = str(ready_file)
+    instance._agent_id = 'agent-1'
+    instance._channel_ids = ['dm-1']
+    instance.socket = FakeSocket()
+    instance._rest_only = False
+
+    instance._mark_runner_ready()
+
+    payload = json.loads(ready_file.read_text())
+    assert payload['platform'] == 'shadowob'
+    assert payload['agent_id'] == 'agent-1'
+    assert payload['channels'] == ['dm-1']
+    assert payload['socket'] is True
+    assert payload['rest_only'] is False
+
+
+def test_runner_readiness_file_is_cleared_on_disconnect_path(tmp_path):
+    ready_file = tmp_path / 'ready.json'
+    ready_file.write_text('{}')
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance._ready_file = str(ready_file)
+
+    instance._clear_runner_ready()
+
+    assert not ready_file.exists()
 
 
 def test_interactive_response_text_appends_shadow_context():

@@ -69,7 +69,7 @@ function asClaudeServer(server: PluginMCPServer): NativeMcpServer {
   return server.transport === 'stdio' ? stdioServer(server) : remoteServer(server)
 }
 
-function asGeminiServer(server: PluginMCPServer): NativeMcpServer {
+function asHermesServer(server: PluginMCPServer): NativeMcpServer {
   if (server.transport === 'stdio') return stdioServer(server)
   return {
     url: server.url,
@@ -124,16 +124,10 @@ export function claudeMcpJson(extension: PluginRuntimeExtension): string {
   return json({ mcpServers: mapServers(extension, asClaudeServer) })
 }
 
-export function geminiMcpServers(
-  extension: PluginRuntimeExtension,
-): Record<string, NativeMcpServer> {
-  return mapServers(extension, asGeminiServer)
-}
-
 export function hermesMcpServers(
   extension: PluginRuntimeExtension,
 ): Record<string, NativeMcpServer> {
-  return mapServers(extension, asGeminiServer)
+  return mapServers(extension, asHermesServer)
 }
 
 export function openCodeMcpServers(

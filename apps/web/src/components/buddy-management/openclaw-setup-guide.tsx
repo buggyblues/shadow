@@ -2,7 +2,7 @@ import {
   type ConnectorPlan,
   createConnectorPlans,
   type ShadowConnectorTarget,
-} from '@shadowob/connector'
+} from '@shadowob/connector/browser'
 import { Button, cn } from '@shadowob/ui'
 import { ArrowRight, BookOpen, Check, ChevronDown, MessageSquare, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'

@@ -15,9 +15,11 @@ export const IMAGES = [
   'openclaw-runner',
   'claude-runner',
   'codex-runner',
-  'gemini-runner',
   'opencode-runner',
+  'hermes-runner',
 ] as const
+export const DEFAULT_IMAGE_TAG =
+  process.env.SHADOWOB_RUNNER_IMAGE_TAG?.trim() || '20260604-faststart'
 
 export type ImageName = (typeof IMAGES)[number]
 
@@ -27,6 +29,7 @@ export interface ImageBuildOptions {
   noCache?: boolean
   intoK8s?: boolean
   push?: boolean
+  skipSmoke?: boolean
   platform?: string
 }
 
@@ -61,7 +64,7 @@ export class ImageService {
 
   /** Build a Docker image with streaming output. */
   async build(options: ImageBuildOptions): Promise<void> {
-    const { name, tag = 'latest', noCache, intoK8s, push, platform } = options
+    const { name, tag = DEFAULT_IMAGE_TAG, noCache, intoK8s, push, skipSmoke, platform } = options
     const dockerfilePath = resolve(this.imagesDir, name, 'Dockerfile')
     const buildContext = this.getBuildContext(name)
 
@@ -93,13 +96,17 @@ export class ImageService {
       this.logger.success(`Built: ${remoteTag}`)
     }
 
+    if (!skipSmoke) {
+      this.smoke(name, tag)
+    }
+
     if (push) {
       await this.push(name, tag)
     }
   }
 
   /** Push an image to the registry. */
-  async push(name: string, tag = 'latest'): Promise<void> {
+  async push(name: string, tag = DEFAULT_IMAGE_TAG): Promise<void> {
     const registry = this.getRegistry()
     const fullTag = `${registry}/${name}:${tag}`
     this.logger.step(`Pushing ${fullTag}...`)
@@ -120,11 +127,30 @@ export class ImageService {
   }
 
   private getBuildContext(name: string): string {
-    if (name !== 'openclaw-runner') return resolve(this.imagesDir, name)
-
     const repoRoot = resolve(this.imagesDir, '../../..')
-    const localShadowobPlugin = resolve(repoRoot, 'packages', 'openclaw-shadowob', 'package.json')
-    return existsSync(localShadowobPlugin) ? repoRoot : resolve(this.imagesDir, name)
+    const workspacePackage = resolve(repoRoot, 'package.json')
+    const workspaceFile = resolve(repoRoot, 'pnpm-workspace.yaml')
+    return existsSync(workspacePackage) && existsSync(workspaceFile)
+      ? repoRoot
+      : resolve(this.imagesDir, name)
+  }
+
+  private smoke(name: string, tag: string): void {
+    const script = resolve(this.imagesDir, '../scripts/smoke-test-images.mjs')
+    if (!existsSync(script)) {
+      throw new Error(`Image smoke script not found: ${script}`)
+    }
+    this.logger.step(`Smoke testing ${name}:${tag}...`)
+    try {
+      execFileSync(process.execPath, [script, name, '--tag', tag], {
+        stdio: 'inherit',
+        timeout: 600_000,
+        env: process.env,
+      })
+      this.logger.success(`Smoke passed: ${name}:${tag}`)
+    } catch (err) {
+      throw new Error(`Smoke failed: ${(err as Error).message}`)
+    }
   }
 
   private dockerBuild(args: string[]): Promise<void> {

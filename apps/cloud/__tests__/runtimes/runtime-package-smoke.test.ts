@@ -86,7 +86,6 @@ describe('runner runtime package smoke checks', () => {
     ['claude-code', '/workspace/.claude/settings.json', 'json', 'add-dir'],
     ['codex', '/home/shadow/.codex/config.toml', 'toml', 'permissions'],
     ['opencode', '/workspace/opencode.json', 'json', 'connect'],
-    ['gemini', '/workspace/.gemini/settings.json', 'json', 'about'],
   ] as const)('checks cc-connect container files for %s', (runtime, nativePath, parser, commandName) => {
     const subject = agent(runtime)
     const pkg = buildAgentRuntimePackage({
@@ -134,7 +133,6 @@ describe('runner runtime package smoke checks', () => {
     ['claude-code', '/workspace/.mcp.json', 'json'],
     ['codex', '/home/shadow/.codex/config.toml', 'toml'],
     ['opencode', '/workspace/opencode.json', 'json'],
-    ['gemini', '/workspace/.gemini/settings.json', 'json'],
     ['hermes', '/home/shadow/.hermes/config.yaml', 'yaml'],
   ] as const)('emits plugin MCP config in native format for %s', (runtime, nativePath, parser) => {
     registerShadowobAndGithub()
@@ -192,7 +190,7 @@ describe('runner runtime package smoke checks', () => {
     expect(pkg.configData['config.json']).toBeUndefined()
     expect(JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}').openclaw).toBeUndefined()
     expect(() => parseYaml(files['/home/shadow/.hermes/config.yaml'] ?? '')).not.toThrow()
-    expect(files['/home/shadow/.hermes/plugins/shadowob/adapter.py']).toContain('Shadow')
+    expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toContain('shadowob')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)

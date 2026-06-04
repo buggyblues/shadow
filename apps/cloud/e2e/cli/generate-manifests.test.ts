@@ -192,7 +192,7 @@ describe.each(TEMPLATES)('shadowob-cloud generate manifests: %s', (templateName)
         | undefined
       expect(labels?.app).toBe('shadowob-cloud')
       expect(typeof labels?.agent).toBe('string')
-      expect(['openclaw', 'claude-code', 'codex', 'gemini', 'opencode']).toContain(labels?.runtime)
+      expect(['openclaw', 'claude-code', 'codex', 'opencode']).toContain(labels?.runtime)
     }
   })
 

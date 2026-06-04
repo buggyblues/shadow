@@ -96,9 +96,9 @@ test.describe('desktop pet asset settings', () => {
       Object.defineProperty(window, 'desktopAPI', {
         value: {
           platform: 'darwin',
-          openExternal: async (url: string) => {
-            ;(window as unknown as { __lastExternalUrl?: string }).__lastExternalUrl = url
-            return true
+          showCommunity: async (path?: string) => {
+            ;(window as unknown as { __lastCommunityPath?: string }).__lastCommunityPath =
+              path ?? ''
           },
           getCommunityAuthToken: async () => 'test-token',
           getVersion: async () => 'test',
@@ -196,10 +196,10 @@ test.describe('desktop pet asset settings', () => {
     await expect
       .poll(() =>
         page.evaluate(
-          () => (window as unknown as { __lastExternalUrl?: string }).__lastExternalUrl,
+          () => (window as unknown as { __lastCommunityPath?: string }).__lastCommunityPath,
         ),
       )
-      .toBe('https://codex-pets.net/#/?page=2&kind=creature')
+      .toBe('/shop/tags/%E8%99%BE%E8%B1%86%E6%A1%8C%E9%9D%A2%E5%AE%A0%E7%89%A9')
 
     await expect(page.getByText('Lazy Pack').first()).toBeVisible()
     await expect(page.getByText('Purchased from the marketplace')).toBeVisible()
@@ -549,10 +549,6 @@ test.describe('desktop pet asset settings', () => {
           getDesktopSettings: async () => settings,
           onDesktopSettingsChanged: () => () => undefined,
           communityFetchJson: async () => [],
-          openExternal: async (url: string) => {
-            ;(window as unknown as { __lastPanelExternalUrl?: string }).__lastPanelExternalUrl = url
-            return true
-          },
           petAssets: {
             importFile: async (file: File) => {
               ;(

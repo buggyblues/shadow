@@ -17,13 +17,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const REGISTRY = process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
+const REGISTRY =
+  process.env.SHADOWOB_REGISTRY ?? process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
+const DEFAULT_TAG = process.env.SHADOWOB_RUNNER_IMAGE_TAG?.trim() || '20260604-faststart'
 
 const IMAGES = [
   'openclaw-runner',
   'claude-runner',
   'codex-runner',
-  'gemini-runner',
   'opencode-runner',
   'hermes-runner',
 ]
@@ -43,7 +44,7 @@ const REQUIRED_WORKSPACE_FILES = [
 
 function docker(image, cmd, { timeout = 30000 } = {}) {
   try {
-    return execSync(`docker run --rm ${image} sh -c ${JSON.stringify(cmd)}`, {
+    return execSync(`docker run --rm --entrypoint /bin/sh ${image} -c ${JSON.stringify(cmd)}`, {
       encoding: 'utf-8',
       timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -201,9 +202,8 @@ function testRunnerCli(image, name) {
   const commandByImage = {
     'claude-runner': 'claude --version',
     'codex-runner': 'codex --version',
-    'gemini-runner': 'gemini --version',
     'opencode-runner': 'opencode --version',
-    'hermes-runner': 'hermes --version',
+    'hermes-runner': 'hermes --help',
   }
   const command = commandByImage[name]
   if (!command) return true
@@ -233,7 +233,7 @@ function testEntrypointValidateOnly(image) {
 
 function parseArgs() {
   const args = process.argv.slice(2)
-  const opts = { images: [], tag: 'latest' }
+  const opts = { images: [], tag: DEFAULT_TAG }
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     if (arg === '--tag' && args[i + 1]) {

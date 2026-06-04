@@ -369,6 +369,7 @@ export function PetApp() {
     setChatInput,
     sendChat,
     showPetNotice,
+    clearPetNotice,
     beginHoldVoiceCapture,
     finishVoiceCapture,
   } = usePetConversation({
@@ -397,10 +398,11 @@ export function PetApp() {
     tab,
     petName: profile.name,
     showPetNotice,
+    clearPetNotice,
   })
 
   const careAnimation = selectAnimation(petState)
-  const runtimeAnimation = selectRuntimeAnimation(connectorSnapshot.runtimeSessionStates)
+  const runtimeAnimation = selectRuntimeAnimation(connectorSnapshot.runtimeSessionReactions)
   const voiceAnimation: PetAnimationKey | null =
     voiceRecording || voiceSignalActive ? 'waiting' : isSpeaking ? 'waving' : null
   const animation: PetAnimationKey = dragging

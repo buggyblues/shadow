@@ -6,7 +6,6 @@ export type ConnectorRuntimeId =
   | 'claude-code'
   | 'codex'
   | 'opencode'
-  | 'gemini'
   | 'cursor'
   | 'kimi'
   | 'copilot'
@@ -111,19 +110,6 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
         default: ['npm install -g opencode-ai'],
       },
       helpUrl: 'https://opencli.co/cli/opencode',
-    },
-  },
-  {
-    id: 'gemini',
-    label: 'Gemini CLI',
-    kind: 'cli',
-    command: 'gemini',
-    iconId: 'gemini',
-    install: {
-      commands: {
-        default: ['npm install -g @google/gemini-cli'],
-      },
-      helpUrl: 'https://github.com/google-gemini/gemini-cli',
     },
   },
   {

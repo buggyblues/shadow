@@ -669,12 +669,14 @@ class ShadowOBAdapter(BasePlatformAdapter):
             True,
         )
         self._transports = split_csv(_cfg(config, "SHADOW_SOCKET_TRANSPORTS", "socket_transports", default="websocket")) or ["websocket"]
+        self._ready_file = str(_cfg(config, "SHADOW_READY_FILE", "ready_file", default="") or "") or None
 
     @property
     def name(self) -> str:
         return "Shadow"
 
     async def connect(self) -> bool:
+        self._clear_runner_ready()
         if not self.base_url:
             self._set_fatal_error("config_missing", "SHADOW_BASE_URL is required", retryable=False)
             return False
@@ -706,6 +708,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
             self._mark_connected()
             if use_polling:
                 await self._start_polling()
+            self._mark_runner_ready()
             await self._start_heartbeat()
             await self._start_channel_refresh()
             logger.info("[Shadow] Connected to %s; channels=%s", self.base_url, ",".join(self._channel_ids))
@@ -713,6 +716,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         except Exception as exc:
             logger.exception("[Shadow] connect failed")
             self._set_fatal_error("connect_failed", str(exc), retryable=True)
+            self._clear_runner_ready()
             try:
                 if self.client:
                     await self.client.close()
@@ -721,6 +725,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
             return False
 
     async def disconnect(self) -> None:
+        self._clear_runner_ready()
         self._mark_disconnected()
         if self._heartbeat_task is not None and not self._heartbeat_task.done():
             self._heartbeat_task.cancel()
@@ -759,6 +764,39 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 self.socket = None
         if self.client is not None:
             await self.client.close()
+
+    def _mark_runner_ready(self) -> None:
+        if not self._ready_file:
+            return
+        path = Path(self._ready_file)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_name(f"{path.name}.tmp")
+            tmp_path.write_text(
+                json.dumps(
+                    {
+                        "platform": PLATFORM_NAME,
+                        "agent_id": self._agent_id,
+                        "channels": self._channel_ids,
+                        "socket": self.socket.connected if self.socket is not None else False,
+                        "rest_only": self._rest_only,
+                        "ready_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    separators=(",", ":"),
+                ),
+                encoding="utf-8",
+            )
+            tmp_path.replace(path)
+        except Exception as exc:
+            logger.warning("[Shadow] Failed to write readiness file %s: %s", self._ready_file, exc)
+
+    def _clear_runner_ready(self) -> None:
+        if not self._ready_file:
+            return
+        try:
+            Path(self._ready_file).unlink(missing_ok=True)
+        except Exception as exc:
+            logger.debug("[Shadow] Failed to remove readiness file %s: %s", self._ready_file, exc)
 
     async def send(
         self,
@@ -1224,6 +1262,38 @@ class ShadowOBAdapter(BasePlatformAdapter):
         logger.info("[Shadow] Sent interactive prompt for slash command /%s", name)
         return True
 
+    async def _handle_shadow_control_command(
+        self,
+        text: str,
+        *,
+        channel_id: str,
+        thread_id: str | None,
+        message_id: str,
+    ) -> bool:
+        if text.strip().lower() != "/sethome":
+            return False
+        if self.client is None:
+            return False
+
+        os.environ["SHADOW_HOME_CHANNEL"] = channel_id
+        home_channel = {"chat_id": channel_id, "name": "Shadow Home"}
+        if thread_id:
+            home_channel["thread_id"] = thread_id
+        if isinstance(self.extra, dict):
+            self.extra["home_channel"] = home_channel
+        config_extra = _extra(self.config)
+        if isinstance(config_extra, dict):
+            config_extra["home_channel"] = home_channel
+
+        await self.client.send_message(
+            channel_id,
+            "Home channel locked — this is now the Shadowob relay point.",
+            thread_id=thread_id,
+            reply_to_id=message_id,
+        )
+        logger.info("[Shadow] Set home channel to %s", channel_id)
+        return True
+
     async def _resolve_channels(self, *, sync_socket: bool = False) -> None:
         if self.client is None:
             return
@@ -1606,6 +1676,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 logger.debug("[Shadow] mention-only skipped message %s", message_id)
                 return
         text = _text_without_self_mention(text, self._bot_username)
+        if await self._handle_shadow_control_command(
+            text,
+            channel_id=channel_id,
+            thread_id=_message_thread_id(message),
+            message_id=message_id,
+        ):
+            return
 
         slash_match = _slash_command_match(text, self._slash_commands)
         if slash_match:

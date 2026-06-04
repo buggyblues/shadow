@@ -2,6 +2,13 @@ import { parse as parseDotenv } from 'dotenv'
 import type { TomlTable, TomlValue } from 'smol-toml'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import {
+  type ConnectorModelProviderInput,
+  type ConnectorModelProvider as ConnectorModelProviderValues,
+  ccConnectModelRef,
+  connectorModelProviderEndpoint,
+  normalizeConnectorModelProvider,
+} from './model-provider.js'
 
 export interface ShadowConfigValues {
   token: string
@@ -20,18 +27,11 @@ export interface CcConnectConfigValues extends ShadowConfigValues {
   agentType: string
 }
 
-export interface ConnectorModelProviderValues {
-  id?: string
-  label?: string
-  baseUrl: string
-  apiKey: string
-  model: string
-}
+export type ConnectorModelProviderInputValues = ConnectorModelProviderInput
 
 const SHADOW_ENV_VALUES = {
   SHADOW_ALLOW_ALL_USERS: 'true',
   SHADOW_HEARTBEAT_INTERVAL_SECONDS: '30',
-  SHADOW_SLASH_COMMANDS_JSON: '[]',
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,22 +54,6 @@ function ensureTrailingNewline(value: string): string {
 
 function quoteEnv(value: string): string {
   return /^[A-Za-z0-9_./:@-]+$/.test(value) ? value : JSON.stringify(value)
-}
-
-function normalizeModelProvider(
-  provider: ConnectorModelProviderValues | undefined,
-): ConnectorModelProviderValues | null {
-  const baseUrl = provider?.baseUrl.trim()
-  const apiKey = provider?.apiKey.trim()
-  const model = provider?.model.trim()
-  if (!baseUrl || !apiKey || !model) return null
-  return {
-    id: provider?.id?.trim() || 'shadow-official',
-    label: provider?.label?.trim() || 'Shadow official LLM proxy',
-    baseUrl,
-    apiKey,
-    model,
-  }
 }
 
 function normalizedOptionalString(value: string | undefined): string | undefined {
@@ -108,16 +92,25 @@ function parseTomlRoot(existing: string, label: string): TomlTable {
 export function mergeEnvContent(existing: string, values: ShadowConfigValues): string {
   parseDotenv(existing)
 
-  const modelProvider = normalizeModelProvider(values.modelProvider)
+  const modelProvider = normalizeConnectorModelProvider(values.modelProvider)
   const updates: Record<string, string> = {
     SHADOW_BASE_URL: values.serverUrl,
     SHADOW_TOKEN: values.token,
     ...SHADOW_ENV_VALUES,
   }
   if (modelProvider) {
-    updates.OPENAI_COMPATIBLE_BASE_URL = modelProvider.baseUrl
-    updates.OPENAI_COMPATIBLE_API_KEY = modelProvider.apiKey
-    updates.OPENAI_COMPATIBLE_MODEL_ID = modelProvider.model
+    const openAI = connectorModelProviderEndpoint(modelProvider, 'openai')
+    const anthropic = connectorModelProviderEndpoint(modelProvider, 'anthropic')
+    if (openAI) {
+      updates.OPENAI_COMPATIBLE_BASE_URL = openAI.baseUrl
+      updates.OPENAI_COMPATIBLE_API_KEY = openAI.apiKey
+      updates.OPENAI_COMPATIBLE_MODEL_ID = modelProvider.model
+    }
+    if (anthropic) {
+      updates.ANTHROPIC_COMPATIBLE_BASE_URL = anthropic.baseUrl
+      updates.ANTHROPIC_COMPATIBLE_API_KEY = anthropic.apiKey
+      updates.ANTHROPIC_COMPATIBLE_MODEL_ID = modelProvider.model
+    }
     updates.SHADOW_MODEL_PROVIDER_ID = modelProvider.id ?? 'shadow-official'
   }
   const agentId = normalizedOptionalString(values.agentId)
@@ -148,7 +141,7 @@ export function mergeEnvContent(existing: string, values: ShadowConfigValues): s
 
 export function mergeOpenClawConfigContent(existing: string, values: ShadowConfigValues): string {
   const root = normalizeJsonRoot(existing, 'OpenClaw')
-  const modelProvider = normalizeModelProvider(values.modelProvider)
+  const modelProvider = normalizeConnectorModelProvider(values.modelProvider)
   const accountId = normalizedOptionalString(values.projectName)
   const channels = asRecord(root.channels)
   const legacyShadow = asRecord(channels['openclaw-shadowob'])
@@ -205,6 +198,8 @@ export function mergeOpenClawConfigContent(existing: string, values: ShadowConfi
   root.plugins = plugins
 
   if (modelProvider) {
+    const endpoint = connectorModelProviderEndpoint(modelProvider, 'openai')
+    if (!endpoint) return ensureTrailingNewline(JSON.stringify(root, null, 2))
     const models = asRecord(root.models)
     const providers = asRecord(models.providers)
     const providerId = modelProvider.id ?? 'shadow-official'
@@ -212,11 +207,12 @@ export function mergeOpenClawConfigContent(existing: string, values: ShadowConfi
       ...asRecord(providers[providerId]),
       api: 'openai-completions',
       apiKey: '${env:OPENAI_COMPATIBLE_API_KEY}',
-      baseUrl: modelProvider.baseUrl,
+      baseUrl: endpoint.baseUrl,
       request: { allowPrivateNetwork: true },
       models: [{ id: modelProvider.model, name: modelProvider.model }],
     }
     models.mode = models.mode ?? 'merge'
+    models.pricing = { ...asRecord(models.pricing), enabled: false }
     models.providers = providers
     root.models = models
   }
@@ -241,7 +237,7 @@ export function removeOpenClawAccountConfigContent(existing: string, projectName
 
 export function mergeHermesConfigContent(existing: string, values: ShadowConfigValues): string {
   const root = parseYamlRoot(existing, 'Hermes')
-  const modelProvider = normalizeModelProvider(values.modelProvider)
+  const modelProvider = normalizeConnectorModelProvider(values.modelProvider)
   const agentId = normalizedOptionalString(values.agentId)
 
   const plugins = asRecord(root.plugins)
@@ -269,13 +265,30 @@ export function mergeHermesConfigContent(existing: string, values: ShadowConfigV
   root.platforms = platforms
 
   if (modelProvider) {
+    const endpoint = connectorModelProviderEndpoint(modelProvider, 'openai')
+    if (!endpoint) return ensureTrailingNewline(stringifyYaml(root))
+    const providerId = modelProvider.id ?? 'shadow-official'
     const model = asRecord(root.model)
     root.model = {
       ...model,
       default: model.model ?? model.default ?? modelProvider.model,
-      provider: model.provider ?? 'custom',
-      base_url: model.base_url ?? modelProvider.baseUrl,
+      provider: model.provider ?? providerId,
     }
+
+    const customProviders = Array.isArray(root.custom_providers)
+      ? root.custom_providers.filter(isRecord).map((item) => ({ ...item }))
+      : []
+    let customProvider = customProviders.find((entry) => entry.name === providerId)
+    if (!customProvider) {
+      customProvider = {}
+      customProviders.push(customProvider)
+    }
+    customProvider.name = providerId
+    customProvider.base_url = endpoint.baseUrl
+    customProvider.key_env = 'OPENAI_COMPATIBLE_API_KEY'
+    customProvider.model = modelProvider.model
+    delete customProvider.api_key
+    root.custom_providers = customProviders
   }
 
   return ensureTrailingNewline(stringifyYaml(root))
@@ -318,25 +331,30 @@ export function mergeCcConnectConfigContent(
     ...agentOptions,
     work_dir: values.workDir,
   }
-  const modelProvider = normalizeModelProvider(values.modelProvider)
-  if (modelProvider) {
+  const modelProvider = normalizeConnectorModelProvider(values.modelProvider)
+  const providerEndpoint = connectorModelProviderEndpoint(
+    modelProvider,
+    values.agentType === 'claudecode' ? 'anthropic' : 'openai',
+  )
+  if (modelProvider && providerEndpoint) {
+    const providerId = modelProvider.id ?? 'shadow-official'
+    const providerModel = ccConnectModelRef(values.agentType, providerId, modelProvider.model)
     agent.options = {
       ...asTomlTable(agent.options),
-      provider: modelProvider.id ?? 'shadow-official',
-      model: modelProvider.model,
+      provider: providerId,
+      model: providerModel,
     }
     const providers = tomlArray(agent.providers)
-    const providerId = modelProvider.id ?? 'shadow-official'
     let provider = providers.find((item) => item.name === providerId)
     if (!provider) {
       provider = {}
       providers.push(provider)
     }
     provider.name = providerId
-    provider.api_key = modelProvider.apiKey
-    provider.base_url = modelProvider.baseUrl
-    provider.model = modelProvider.model
-    provider.models = [{ model: modelProvider.model }]
+    provider.api_key = providerEndpoint.apiKey
+    provider.base_url = providerEndpoint.baseUrl
+    provider.model = providerModel
+    provider.models = [{ model: providerModel }]
     agent.providers = providers
   } else {
     const nextOptions = asTomlTable(agent.options)

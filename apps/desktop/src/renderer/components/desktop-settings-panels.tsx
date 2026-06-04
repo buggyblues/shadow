@@ -78,10 +78,6 @@ const DESKTOP_RUNTIME_ICON_SOURCES: Record<string, string> = {
     '../../../../web/src/assets/runtime-icons/opencode.svg',
     import.meta.url,
   ).toString(),
-  gemini: new URL(
-    '../../../../web/src/assets/runtime-icons/gemini.svg',
-    import.meta.url,
-  ).toString(),
   cursor: new URL(
     '../../../../web/src/assets/runtime-icons/cursor.svg',
     import.meta.url,

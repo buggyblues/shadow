@@ -39,16 +39,16 @@ export const LIVENESS_PROBE = {
 /** Readiness probe configuration */
 export const READINESS_PROBE = {
   httpGet: { path: '/ready', port: HEALTH_PORT },
-  initialDelaySeconds: 10,
-  periodSeconds: 5,
+  initialDelaySeconds: 1,
+  periodSeconds: 1,
 } as const
 
 /** Startup probe configuration */
 export const STARTUP_PROBE = {
   httpGet: { path: '/live', port: HEALTH_PORT },
-  initialDelaySeconds: 5,
-  periodSeconds: 5,
-  failureThreshold: 60,
+  initialDelaySeconds: 1,
+  periodSeconds: 2,
+  failureThreshold: 150,
 } as const
 
 export function probesForPort(port: number) {

@@ -17,12 +17,31 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs",
       "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "development": "./src/browser.ts",
+      "import": "./dist/browser.js",
+      "require": "./dist/browser.cjs",
+      "default": "./dist/browser.js"
+    },
+    "./runtime-sessions": {
+      "types": "./dist/runtime-sessions.d.ts",
+      "development": "./src/runtime-sessions.ts",
+      "import": "./dist/runtime-sessions.js",
+      "require": "./dist/runtime-sessions.cjs",
+      "default": "./dist/runtime-sessions.js"
     }
   },
   "files": [
     "dist",
     "docs",
-    "hermes-shadowob-plugin",
+    "hermes-shadowob-plugin/__init__.py",
+    "hermes-shadowob-plugin/adapter.py",
+    "hermes-shadowob-plugin/plugin.yaml",
+    "hermes-shadowob-plugin/README.md",
+    "hermes-shadowob-plugin/requirements.txt",
+    "hermes-shadowob-plugin/shadow_sdk.py",
     "skills",
     "README.md"
   ],
@@ -58,6 +77,7 @@
     "access": "public"
   },
   "dependencies": {
+    "@shadowob/shared": "workspace:*",
     "dotenv": "^17.4.2",
     "smol-toml": "^1.6.1",
     "yaml": "^2.8.4"

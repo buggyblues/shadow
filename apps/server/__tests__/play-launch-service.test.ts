@@ -460,8 +460,13 @@ describe('play launch orchestration', () => {
               envVars: expect.objectContaining({
                 SHADOW_SERVER_URL: 'http://localhost:3002',
                 SHADOW_AGENT_SERVER_URL: 'http://host.lima.internal:3002',
+                SHADOW_MODEL_PROVIDER_ID: 'shadow-official',
                 OPENAI_COMPATIBLE_BASE_URL: 'http://host.lima.internal:3002/api/ai/v1',
                 OPENAI_COMPATIBLE_API_KEY: expect.stringMatching(/^smp_/),
+                OPENAI_COMPATIBLE_MODEL_ID: 'deepseek-v4-flash',
+                ANTHROPIC_COMPATIBLE_BASE_URL: 'http://host.lima.internal:3002/api/ai/anthropic',
+                ANTHROPIC_COMPATIBLE_API_KEY: expect.stringMatching(/^smp_/),
+                ANTHROPIC_COMPATIBLE_MODEL_ID: 'deepseek-v4-flash',
               }),
               greeting: expect.objectContaining({
                 messages: expect.arrayContaining([

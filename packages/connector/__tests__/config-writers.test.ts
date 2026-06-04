@@ -115,15 +115,23 @@ describe('connector config writers', () => {
   })
 
   it('merges Hermes env and YAML config in place', () => {
+    const provider = {
+      id: 'shadow-official',
+      baseUrl: 'https://shadow.example.com/api/ai/v1',
+      apiKey: 'mp_test',
+      model: 'deepseek-v4-flash',
+    }
     const env = mergeEnvContent('DEEPSEEK_API_KEY=keep\nSHADOW_TOKEN=old\n', {
       token: 'new token',
       serverUrl: 'http://localhost:3000',
       agentId: 'agent-1',
+      modelProvider: provider,
     })
     expect(env).toContain('DEEPSEEK_API_KEY=keep')
     expect(env).toContain('SHADOW_TOKEN="new token"')
     expect(env).toContain('SHADOW_BASE_URL=http://localhost:3000')
     expect(env).toContain('SHADOW_AGENT_ID=agent-1')
+    expect(env).toContain('OPENAI_COMPATIBLE_API_KEY=mp_test')
 
     const yaml = mergeHermesConfigContent(
       [
@@ -137,7 +145,12 @@ describe('connector config writers', () => {
         '    extra:',
         '      mention_only: true',
       ].join('\n'),
-      { token: 'tok', serverUrl: 'https://shadow.example.com', agentId: 'agent-1' },
+      {
+        token: 'tok',
+        serverUrl: 'https://shadow.example.com',
+        agentId: 'agent-1',
+        modelProvider: provider,
+      },
     )
     const parsed = parseYaml(yaml) as any
     expect(parsed.plugins.enabled).toEqual(['existing', 'shadowob'])
@@ -147,6 +160,18 @@ describe('connector config writers', () => {
     expect(parsed.platforms.shadowob.extra.base_url).toBe('https://shadow.example.com')
     expect(parsed.platforms.shadowob.extra.agent_id).toBe('agent-1')
     expect(parsed.platforms.shadowob.extra.mention_only).toBe(true)
+    expect(parsed.model).toEqual({
+      default: 'deepseek-v4-flash',
+      provider: 'shadow-official',
+    })
+    expect(parsed.custom_providers).toEqual([
+      {
+        name: 'shadow-official',
+        base_url: 'https://shadow.example.com/api/ai/v1',
+        key_env: 'OPENAI_COMPATIBLE_API_KEY',
+        model: 'deepseek-v4-flash',
+      },
+    ])
   })
 
   it('merges cc-connect TOML project and platform config', () => {
@@ -216,6 +241,51 @@ describe('connector config writers', () => {
       'https://shadow.example.com/api/ai/v1',
     )
     expect(parsed.projects[0].agent.providers[0].models[0].model).toBe('deepseek-v4-flash')
+  })
+
+  it('uses the Anthropic endpoint for Claude Code and OpenAI endpoint for other cc-connect runtimes', () => {
+    const provider = {
+      id: 'shadow-official',
+      openAIBaseUrl: 'https://shadow.example.com/api/ai/v1',
+      openAIApiKey: 'mp_openai',
+      anthropicBaseUrl: 'https://shadow.example.com/api/ai/anthropic',
+      anthropicApiKey: 'mp_anthropic',
+      model: 'deepseek-v4-flash',
+    }
+    const claude = parseToml(
+      mergeCcConnectConfigContent('', {
+        projectName: 'claude',
+        workDir: '/repo',
+        agentType: 'claudecode',
+        token: 'tok',
+        serverUrl: 'https://shadow.example.com',
+        modelProvider: provider,
+      }),
+    ) as any
+    const opencode = parseToml(
+      mergeCcConnectConfigContent('', {
+        projectName: 'opencode',
+        workDir: '/repo',
+        agentType: 'opencode',
+        token: 'tok',
+        serverUrl: 'https://shadow.example.com',
+        modelProvider: provider,
+      }),
+    ) as any
+
+    expect(claude.projects[0].agent.providers[0].base_url).toBe(
+      'https://shadow.example.com/api/ai/anthropic',
+    )
+    expect(claude.projects[0].agent.providers[0].api_key).toBe('mp_anthropic')
+    expect(opencode.projects[0].agent.providers[0].base_url).toBe(
+      'https://shadow.example.com/api/ai/v1',
+    )
+    expect(opencode.projects[0].agent.providers[0].api_key).toBe('mp_openai')
+    expect(opencode.projects[0].agent.options.model).toBe('shadow-official/deepseek-v4-flash')
+    expect(opencode.projects[0].agent.providers[0].model).toBe('shadow-official/deepseek-v4-flash')
+    expect(opencode.projects[0].agent.providers[0].models[0].model).toBe(
+      'shadow-official/deepseek-v4-flash',
+    )
   })
 
   it('removes the generated official provider when no model provider is requested', () => {

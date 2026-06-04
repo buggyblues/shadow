@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   evaluateRuntimeSessionNotification,
   type RuntimeSessionForNotification,
+  runtimeSessionReactionIsVisible,
 } from '../src/renderer/lib/runtime-session-notifications'
 
 const baseNow = Date.parse('2026-06-01T05:30:00.000Z')
@@ -94,5 +95,37 @@ describe('runtime session notifications', () => {
 
     expect(first?.notify).toBe(false)
     expect(settled?.notify).toBe(true)
+  })
+
+  it('does not show busy bubbles for non-active historical sessions', () => {
+    const recentWorking = session({
+      lastActivityAt: new Date(baseNow - 1_000).toISOString(),
+      state: 'unknown',
+      petReaction: 'working',
+      petActivity: { kind: 'working' },
+    })
+
+    expect(runtimeSessionReactionIsVisible(recentWorking, baseNow, 45_000)).toBe(false)
+  })
+
+  it('keeps active runtime sessions visible for pet bubbles', () => {
+    expect(runtimeSessionReactionIsVisible(session({ state: 'running' }), baseNow, 45_000)).toBe(
+      true,
+    )
+  })
+
+  it('allows recent terminal reactions to be visible briefly', () => {
+    expect(
+      runtimeSessionReactionIsVisible(
+        session({
+          lastActivityAt: new Date(baseNow - 1_000).toISOString(),
+          state: 'completed',
+          petReaction: 'success',
+          petActivity: { kind: 'success' },
+        }),
+        baseNow,
+        45_000,
+      ),
+    ).toBe(true)
   })
 })

@@ -2,11 +2,17 @@
 
 Research date: 2026-06-01
 
+State adapter follow-up: see
+[`runtime-session-state-adapters.md`](./runtime-session-state-adapters.md) for
+the per-runtime completion semantics used by desktop notifications. That file
+defines when transcript or native events become `running`, `streaming`,
+`completed`, `failed`, or `stopped`.
+
 ## Scope
 
 This note covers the local agent runtimes in the current connector catalog:
-OpenClaw, Hermes Agent, Claude Code, Codex CLI, OpenCode, Gemini CLI,
-Cursor Agent CLI, Kimi Code, GitHub Copilot CLI, and Antigravity CLI. It also
+OpenClaw, Hermes Agent, Claude Code, Codex CLI, OpenCode, Cursor Agent CLI,
+Kimi Code, GitHub Copilot CLI, and Antigravity CLI. It also
 covers cc-connect because Shadow currently uses it as the multiplexing bridge
 for several CLI runtimes.
 
@@ -15,7 +21,7 @@ The connector today has two separate concepts:
 - Connector targets: `openclaw`, `hermes`, and `cc-connect`, which receive
   Shadow Buddy configuration.
 - Runtime catalog entries: local commands such as `claude`, `codex`,
-  `opencode`, `gemini`, `cursor-agent`, `kimi`, `copilot`, and `agy`, which
+  `opencode`, `cursor-agent`, `kimi`, `copilot`, and `agy`, which
   `runtime-scan` detects by running version commands.
 
 The missing layer is not "runtime installed" detection. It is an operational
@@ -80,7 +86,6 @@ waiting for approval, or blocked.
 | OpenCode | `opencode serve` `/session` API | `/session/status`, session/message APIs | `/session/:id/message` or `prompt_async` | Native adapter |
 | Claude Code | Local JSONL transcripts and `--resume` | `--output-format stream-json` child process events | `claude -p --resume ...` or long-lived `--input-format stream-json` | Process adapter |
 | Codex CLI | CLI `resume`, `exec resume`, local sessions; app-server is experimental | `codex exec --json` child events; experimental app-server/remote-control | `codex exec resume --json` first; app-server later | Process adapter, then native |
-| Gemini CLI | CLI resume/session support | `--output-format stream-json` child events | `gemini -r <session> ...` | Process adapter |
 | Cursor Agent CLI | `--resume`, `resume`, `ls` | `--print --output-format stream-json` child events | `cursor-agent --resume ... --print ...` | Process adapter |
 | Kimi Code | `--continue`, `--session`/`--resume`; Web UI and ACP/Wire modes | Web UI activity, ACP/Wire if enabled, child process events | `kimi -p` with resume, or ACP/Wire | Process adapter, ACP later |
 | GitHub Copilot CLI | `~/.copilot/session-state`, SQLite store, `--resume`/`--continue` | First-party remote access, logs, child process | `copilot -p`/`--resume`; ACP server if used | Process adapter, ACP later |
@@ -276,29 +281,6 @@ Recommendation:
   behind a feature flag.
 - Do not rely on undocumented session file layout as the only inventory source;
   if used, mark it as best-effort.
-
-### Gemini CLI
-
-Relevant docs:
-
-- `https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md`
-- `https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md`
-- `https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/commands.md`
-
-Gemini CLI documents `--prompt` for non-interactive mode, `--output-format`
-with `text`, `json`, and `stream-json`, and `--resume [session_id]`. The CLI
-reference shows examples such as `gemini -r "latest" "query"` and `gemini -r
-"<session-id>" "query"`.
-
-Recommendation:
-
-- Implement a process adapter.
-- Use `gemini -r <session-id> "<message>" --output-format stream-json` for
-  push when a session is known.
-- Use `gemini -p "<message>" --output-format stream-json` for new
-  connector-owned sessions.
-- Treat live status as child-process scoped unless a future official daemon API
-  is adopted.
 
 ### Cursor Agent CLI
 
@@ -564,8 +546,8 @@ Build in this order:
    desired model.
 3. OpenClaw Gateway adapter, because Shadow already treats OpenClaw as a primary
    runtime and its Gateway protocol has the right event model.
-4. Shared process adapter for Claude Code, Cursor, Gemini, Codex, Kimi,
-   Copilot, and Antigravity.
+4. Shared process adapter for Claude Code, Cursor, Codex, Kimi, Copilot, and
+   Antigravity.
 5. Hermes API-server/ACP adapter, while keeping the Shadow Hermes platform
    plugin as the product messaging path.
 6. Experimental native adapters for Codex app-server, Kimi Wire/ACP, Copilot
@@ -655,7 +637,7 @@ Phase 2:
 - A Shadow user can choose a connector computer, runtime, and existing session,
   then send a message to it.
 - cc-connect and OpenCode stream state changes back to Shadow.
-- Claude/Cursor/Gemini/Codex process adapters expose connector-owned run state
+- Claude/Cursor/Codex process adapters expose connector-owned run state
   through JSONL events.
 
 Phase 3:
@@ -718,7 +700,7 @@ Confirmed limitations:
 ### Exploratory Performance Findings
 
 Measured on 2026-06-01 on a macOS arm64 machine with these catalog runtimes
-installed: Claude Code, Codex CLI, OpenCode, Gemini CLI, Cursor CLI, Kimi Code,
+installed: Claude Code, Codex CLI, OpenCode, Cursor CLI, Kimi Code,
 GitHub Copilot CLI, and Antigravity CLI. OpenClaw and Hermes Agent were missing.
 
 Commands were run through the built connector CLI, so these numbers include
@@ -972,7 +954,6 @@ bridge.
 | Claude Code | `Claude Code` | `claude --version` | npm install and optional settings validation | Transcript inventory plus connector-owned process watch | `claude -p --resume <session>`; long-lived streaming input only for connector-owned sessions | `Ready` for resume push when CLI is installed and auth works; `Limited` for arbitrary TUI sessions because there is no documented injection API. |
 | Codex CLI | `Codex CLI` | `codex --version` | npm install and auth/status validation | Process adapter using `codex exec --json`; experimental app-server/remote-control behind a feature flag | `codex exec resume` or `codex resume` through structured process | `Ready` for process-owned jobs after auth validation; `Limited` until stable session inventory is implemented. |
 | OpenCode | `OpenCode` | `opencode --version` | npm install; optionally start managed loopback `opencode serve` with password | Native `/session` and `/session/status` from loopback server; CLI list fallback | `/session/:id/prompt_async` or `/session/:id/message` | `Ready` for monitoring only when loopback server is reachable; `Installed` when only the CLI exists. |
-| Gemini CLI | `Gemini CLI` | `gemini --version` | npm install and auth validation | Process adapter with `--output-format stream-json`; durable session inventory is best-effort | `gemini -r <session>` or connector-owned prompt process | `Ready` for connector-owned structured runs after auth validation; `Limited` for existing local sessions until inventory is verified. |
 | Cursor CLI | `Cursor CLI` | `cursor-agent --version`, fallback `cursor` | Cursor install script and `cursor-agent status`/auth validation | Process adapter with `--print --output-format stream-json`; `ls` for inventory where available | `cursor-agent --resume <chatId> --print --output-format stream-json` | `Ready` when `cursor-agent` is authenticated and structured output works; `Limited` if only the editor CLI exists. |
 | Kimi Code | `Kimi Code` | `kimi --version` | Kimi installer and auth validation | Process adapter first; ACP/Wire only when connector owns the server/process | `kimi -p` plus `--continue`/`--session`/`--resume`; ACP/Wire later | `Ready` for connector-owned process runs; `Limited` for Web UI/TUI sessions unless ACP/Wire is explicitly enabled and owned. |
 | GitHub Copilot CLI | `GitHub Copilot CLI` | `copilot --version` | brew/script/winget install and GitHub auth validation | Read-only local session index for inventory; process adapter for connector-owned runs; first-party remote access is not a connector API | `copilot --prompt`/`--resume` process path; ACP only if explicitly enabled and owned | `Ready` for process-owned jobs after auth validation; `Limited` for first-party remote sessions. |

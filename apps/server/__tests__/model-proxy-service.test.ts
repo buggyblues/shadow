@@ -31,6 +31,8 @@ describe('ModelProxyService', () => {
       'SHADOW_MODEL_PROXY_DEFAULT_MODEL',
       'SHADOW_MODEL_PROXY_UPSTREAM_API_KEY',
       'SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL',
+      'SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY',
+      'SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL',
       'SHADOW_MODEL_PROXY_SHRIMP_PER_CNY',
       'SHADOW_MODEL_PROXY_SHRIMP_MICROS_PER_COIN',
       'SHADOW_MODEL_PROXY_INPUT_CACHE_HIT_CNY_PER_MILLION',
@@ -93,6 +95,23 @@ describe('ModelProxyService', () => {
         owned_by: 'shadow-official',
       },
     ])
+  })
+
+  it('returns OpenAI-compatible model detail for public and configured ids', () => {
+    expect(service.modelResponse('default')).toMatchObject({
+      id: 'default',
+      object: 'model',
+      owned_by: 'shadow-official',
+    })
+    expect(service.modelResponse('deepseek-v4-flash')).toMatchObject({
+      id: 'deepseek-v4-flash',
+      object: 'model',
+      owned_by: 'shadow-official',
+    })
+  })
+
+  it('rejects unavailable model detail ids', () => {
+    expect(() => service.modelResponse('unknown-model')).toThrow('Model is not available')
   })
 
   it('exposes DeepSeek-compatible billing rates without provider secrets', () => {
@@ -170,6 +189,58 @@ describe('ModelProxyService', () => {
         note: 'Official model usage reserve (deepseek-v4-flash)',
       }),
     )
+    expect(ledgerService.settleReservedMicros).toHaveBeenCalledWith(
+      'user-1',
+      40_000,
+      1,
+      'model_proxy',
+      expect.any(String),
+      'model_proxy',
+      'Official model usage (deepseek-v4-flash)',
+    )
+  })
+
+  it('forwards Anthropic messages through the Anthropic upstream endpoint', async () => {
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL = 'https://example.com/anthropic'
+    process.env.SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY = 'official-anthropic-key'
+    const token = signModelProxyToken({ userId: 'user-1', namespace: 'play-bmad' })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            id: 'msg-test',
+            type: 'message',
+            role: 'assistant',
+            model: 'deepseek-v4-flash',
+            content: [{ type: 'text', text: 'done' }],
+            usage: { input_tokens: 1000, output_tokens: 500 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+      }),
+    )
+
+    const identity = await service.resolveIdentity(`Bearer ${token}`)
+    const response = await service.proxyAnthropicMessages(identity, {
+      model: 'default',
+      max_tokens: 500,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+    })
+
+    expect(response.status).toBe(200)
+    const fetchMock = vi.mocked(fetch)
+    const [, init] = fetchMock.mock.calls[0]!
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://example.com/anthropic/v1/messages')
+    expect(init?.headers).toMatchObject({
+      Authorization: 'Bearer official-anthropic-key',
+      'anthropic-version': '2023-06-01',
+    })
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      model: 'deepseek-v4-flash',
+      max_tokens: 500,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+    })
     expect(ledgerService.settleReservedMicros).toHaveBeenCalledWith(
       'user-1',
       40_000,
@@ -306,6 +377,53 @@ describe('ModelProxyService', () => {
       'model_proxy',
       'Official model usage (deepseek-v4-flash)',
     )
+  })
+
+  it('settles streaming usage once when the client cancels early', async () => {
+    const token = signModelProxyToken({ userId: 'user-1', namespace: 'play-bmad' })
+    const encoder = new TextEncoder()
+    let upstreamCancelCount = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    choices: [{ delta: { content: 'partial' } }],
+                    usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+                  })}\n\n`,
+                ),
+              )
+            },
+            cancel() {
+              upstreamCancelCount += 1
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }),
+    )
+
+    const identity = await service.resolveIdentity(`Bearer ${token}`)
+    const response = await service.proxyChatCompletions(identity, {
+      model: 'deepseek-v4-flash',
+      stream: true,
+      max_tokens: 8,
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    const reader = response.body?.getReader()
+    expect(reader).toBeDefined()
+    const first = await reader!.read()
+    expect(new TextDecoder().decode(first.value)).toContain('partial')
+
+    await reader!.cancel('done')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(upstreamCancelCount).toBe(1)
+    expect(ledgerService.settleReservedMicros).toHaveBeenCalledTimes(1)
   })
 
   it('hides upstream auth details and refunds reserve when the provider key is rejected', async () => {
