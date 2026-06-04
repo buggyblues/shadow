@@ -16,6 +16,7 @@ def test_env_enablement_is_flat(monkeypatch):
     monkeypatch.setenv('SHADOW_TOKEN', 'tok')
     monkeypatch.setenv('SHADOW_CHANNEL_IDS', 'c1,c2')
     monkeypatch.setenv('SHADOW_HOME_CHANNEL', 'c3')
+    monkeypatch.setenv('SHADOW_HOME_THREAD_ID', 't3')
     monkeypatch.setenv('SHADOW_MENTION_ONLY', 'true')
     monkeypatch.setenv('SHADOW_AGENT_ID', 'agent-1')
     monkeypatch.setenv('SHADOW_HEARTBEAT_INTERVAL_SECONDS', '15')
@@ -34,6 +35,7 @@ def test_env_enablement_is_flat(monkeypatch):
     assert seed['heartbeat_interval_seconds'] == '15'
     assert seed['slash_commands'][0]['name'] == 'demo'
     assert seed['home_channel']['chat_id'] == 'c3'
+    assert seed['home_channel']['thread_id'] == 't3'
     assert 'extra' not in seed
 
 
@@ -215,6 +217,34 @@ def test_slash_command_prompt_and_interactive_block():
     assert block['kind'] == 'form'
 
 
+def test_hermes_slash_command_defaults_to_passthrough_without_dispatch():
+    command = {'name': 'approve', 'packId': 'hermes', 'description': 'Approve'}
+
+    assert adapter._slash_command_is_passthrough(command) is True
+
+
+def test_agent_slash_command_with_body_is_not_passthrough():
+    command = {'name': 'audit', 'packId': 'hermes', 'body': 'Run an audit.'}
+
+    assert adapter._slash_command_is_passthrough(command) is False
+
+
+def test_public_slash_commands_strip_runtime_only_fields():
+    public = adapter._public_slash_commands(
+        [
+            {
+                'name': 'approve',
+                'description': 'Approve',
+                'dispatch': 'passthrough',
+                'body': 'internal',
+                'packId': 'hermes',
+            }
+        ]
+    )
+
+    assert public == [{'name': 'approve', 'description': 'Approve', 'packId': 'hermes'}]
+
+
 def test_sethome_is_handled_as_local_shadow_control_command(monkeypatch):
     monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
 
@@ -251,6 +281,116 @@ def test_sethome_is_handled_as_local_shadow_control_command(monkeypatch):
             {'thread_id': None, 'reply_to_id': 'message-1'},
         )
     ]
+
+
+def test_runtime_home_channel_sets_env_config_and_home_channel(monkeypatch):
+    monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
+    monkeypatch.delenv('SHADOW_HOME_THREAD_ID', raising=False)
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.extra = {}
+    instance.config = type('Config', (), {'extra': {}})()
+    instance.platform = None
+
+    changed = instance._set_runtime_home_channel('channel-1', 'thread-1', force=False)
+
+    assert changed is True
+    assert os.environ['SHADOW_HOME_CHANNEL'] == 'channel-1'
+    assert os.environ['SHADOW_HOME_THREAD_ID'] == 'thread-1'
+    assert instance.extra['home_channel']['chat_id'] == 'channel-1'
+    assert instance.config.extra['home_channel']['thread_id'] == 'thread-1'
+
+
+def test_list_chats_includes_home_channel_when_not_joined(monkeypatch):
+    monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.config = type('Config', (), {'extra': {'home_channel': {'chat_id': 'home-1'}}})()
+    instance._channel_ids = []
+    instance._channel_cache = {'home-1': {'id': 'home-1', 'kind': 'dm', 'name': 'Home DM'}}
+
+    chats = asyncio.run(instance.list_chats())
+
+    assert chats == [{'id': 'home-1', 'name': 'Home DM', 'type': 'dm'}]
+
+
+def test_register_exposes_shadowob_send_message_tool():
+    class FakeContext:
+        def __init__(self):
+            self.tools = []
+            self.platforms = []
+
+        def register_tool(self, **kwargs):
+            self.tools.append(kwargs)
+
+        def register_platform(self, **kwargs):
+            self.platforms.append(kwargs)
+
+    ctx = FakeContext()
+
+    adapter.register(ctx)
+
+    assert ctx.tools[0]['name'] == 'shadowob_send_message'
+    assert ctx.tools[0]['toolset'] == 'shadowob'
+    assert ctx.tools[0]['is_async'] is True
+    assert ctx.tools[0]['schema']['parameters']['properties']['attachments']['type'] == 'array'
+    assert ctx.platforms[0]['name'] == 'shadowob'
+
+
+def test_shadowob_send_message_tool_extracts_media_and_attachment_paths():
+    media, cleaned = adapter._shadowob_tool_media(
+        {'attachments': [{'path': '/tmp/report.html', 'kind': 'document'}]},
+        'Here is the file MEDIA:/tmp/chart.png',
+    )
+
+    assert cleaned == 'Here is the file'
+    assert media == [
+        {'path': '/tmp/chart.png', 'is_voice': False},
+        {'path': '/tmp/report.html', 'kind': 'document', 'is_voice': False},
+    ]
+
+
+def test_shadowob_send_message_tool_sends_attachment_via_rest(monkeypatch):
+    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOW_HOME_CHANNEL', 'home-1')
+
+    class FakeClient:
+        sent = []
+        uploaded = []
+
+        def __init__(self, base_url, token):
+            self.base_url = base_url
+            self.token = token
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def upload_media_from_url(self, path, **kwargs):
+            self.uploaded.append((path, kwargs))
+            return {'id': 'attachment-1', 'path': path}
+
+    monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+
+    result = json.loads(
+        asyncio.run(
+            adapter._shadowob_send_message_tool(
+                {'message': 'HTML attached', 'attachments': ['/tmp/report.html']}
+            )
+        )
+    )
+
+    assert result['success'] is True
+    assert result['message_id'] == 'message-1'
+    assert FakeClient.sent == [('home-1', 'HTML attached', {'thread_id': None})]
+    assert FakeClient.uploaded == [('/tmp/report.html', {'message_id': 'message-1', 'kind': None})]
 
 
 def test_runner_readiness_file_is_written_after_shadow_transport_ready(tmp_path):

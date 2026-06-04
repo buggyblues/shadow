@@ -44,6 +44,7 @@ const hermesMessagingCommands = [
 export const hermesSlashCommands: RuntimeSlashCommand[] = hermesMessagingCommands.map(
   (command) => ({
     ...command,
+    dispatch: 'passthrough',
     packId: 'hermes',
     sourcePath: HERMES_SLASH_COMMANDS_SOURCE,
   }),

@@ -248,6 +248,10 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     const hermesConfig = files['/home/shadow/.hermes/config.yaml']
     expect(hermesConfig).toBeTypeOf('string')
     expect(() => parseYaml(hermesConfig ?? '')).not.toThrow()
+    const parsedHermesConfig = parseYaml(hermesConfig ?? '') as {
+      approvals?: { mode?: string }
+    }
+    expect(parsedHermesConfig.approvals?.mode).toBe('off')
     expect(hermesConfig).toContain('shadowob')
     expect(hermesConfig).toContain('${SHADOW_TOKEN_BUDDY_1}')
     expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
@@ -257,6 +261,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       expect.arrayContaining([
         expect.objectContaining({
           name: 'commands',
+          dispatch: 'passthrough',
           packId: 'hermes',
           sourcePath:
             'https://github.com/NousResearch/hermes-agent/blob/main/website/docs/reference/slash-commands.md',
