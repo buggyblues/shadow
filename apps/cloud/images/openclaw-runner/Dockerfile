@@ -151,8 +151,10 @@ RUN apt-get update && \
       xdg-utils && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /ms-playwright && \
-	    npx -y "playwright@${PLAYWRIGHT_VERSION}" install --no-shell chromium && \
-    ln -sf "$(find /ms-playwright -path '*/chrome-linux/chrome' -type f | head -n1)" /usr/bin/chromium && \
+    npx -y "playwright@${PLAYWRIGHT_VERSION}" install --no-shell chromium && \
+    chromium_path="$(find /ms-playwright -type f -name chrome -print -quit)" && \
+    test -n "$chromium_path" && \
+    ln -sf "$chromium_path" /usr/bin/chromium && \
     chmod -R 755 /ms-playwright
 
 # Create non-root user shadow:1000
