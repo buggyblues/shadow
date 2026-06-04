@@ -2,14 +2,14 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import '../../src/runtimes/loader.js'
+import { DEFAULT_RUNNER_IMAGE_TAG } from '../../src/runtimes/images.js'
 import { getAllRuntimes, getRuntime, getRuntimeIds } from '../../src/runtimes/index.js'
 
-const EXPECTED_RUNTIMES = ['openclaw', 'claude-code', 'codex', 'gemini', 'opencode', 'hermes']
+const EXPECTED_RUNTIMES = ['openclaw', 'claude-code', 'codex', 'opencode', 'hermes']
 const RUNNER_DOCKERFILES = [
   'openclaw-runner',
   'claude-runner',
   'codex-runner',
-  'gemini-runner',
   'opencode-runner',
   'hermes-runner',
 ]
@@ -25,7 +25,7 @@ describe('Runtime registry', () => {
       id: 'claude-code',
       name: expect.stringContaining('Claude'),
       runtimeKind: 'cc-connect',
-      defaultImage: 'ghcr.io/buggyblues/claude-runner:latest',
+      defaultImage: `ghcr.io/buggyblues/claude-runner:${DEFAULT_RUNNER_IMAGE_TAG}`,
     })
   })
 
@@ -50,7 +50,9 @@ describe('Runtime container layout', () => {
   it('keeps OpenClaw on its gateway health port and state path', () => {
     const adapter = getRuntime('openclaw')
     expect(adapter.runtimeKind).toBe('openclaw')
-    expect(adapter.defaultImage).toBe('ghcr.io/buggyblues/openclaw-runner:latest')
+    expect(adapter.defaultImage).toBe(
+      `ghcr.io/buggyblues/openclaw-runner:${DEFAULT_RUNNER_IMAGE_TAG}`,
+    )
     expect(adapter.container.healthPort).toBe(3102)
     expect(adapter.container.statePath).toBe('/home/shadow/.openclaw')
     expect(adapter.container.logPath).toBe('/var/log/openclaw')
@@ -65,7 +67,6 @@ describe('Runtime container layout', () => {
   it.each([
     ['claude-code', 'cc-connect', '/home/shadow/.cc-connect'],
     ['codex', 'cc-connect', '/home/shadow/.cc-connect'],
-    ['gemini', 'cc-connect', '/home/shadow/.cc-connect'],
     ['opencode', 'cc-connect', '/home/shadow/.cc-connect'],
     ['hermes', 'hermes', '/home/shadow/.hermes'],
   ] as const)('defines native container layout for %s', (id, kind, statePath) => {
@@ -98,5 +99,100 @@ describe('Runner Dockerfile layout', () => {
     expect(runnerStage).toMatch(/mkdir -p[\s\S]*\/workspace/)
     expect(runnerStage).toMatch(/chown -R [^\n]*[\s\S]*\/workspace/)
     expect(runnerStage).toMatch(/USER shadow/)
+    expect(runnerStage).toContain('ENTRYPOINT ["/usr/bin/tini", "--"]')
+  })
+
+  it('prepares the Hermes ShadowOB connector during image build, not container startup', () => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), 'images/hermes-runner/Dockerfile'),
+      'utf8',
+    )
+    const entrypoint = readFileSync(
+      resolve(process.cwd(), 'images/hermes-runner/entrypoint.mjs'),
+      'utf8',
+    )
+
+    expect(dockerfile).toContain(
+      'COPY --chown=1000:1000 packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin',
+    )
+    expect(dockerfile).toMatch(/RUN shadowob-connector connect[\s\S]*--target hermes/)
+    expect(dockerfile).toContain('--hermes-home /home/shadow/.hermes')
+    expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-connector-*.tgz')
+    expect(dockerfile).not.toContain('@shadowob/connector@latest')
+    expect(dockerfile).not.toContain('SHADOWOB_HERMES_PLUGIN_DIR')
+    expect(dockerfile).toContain(
+      'apt-get install -y --no-install-recommends ca-certificates curl tini xz-utils',
+    )
+    expect(dockerfile).toContain('ENTRYPOINT ["/usr/bin/tini", "--"]')
+    expect(entrypoint).toContain('seedBundledShadowobPlugin')
+    expect(entrypoint).toContain('/opt/shadowob/hermes-shadowob-plugin')
+    expect(entrypoint).not.toContain('runConnectorSetup')
+    expect(entrypoint).not.toContain('SHADOWOB_HERMES_PLUGIN_DIR')
+    expect(entrypoint).not.toContain('shadowob-connector connect')
+  })
+
+  it.each([
+    'claude-runner',
+    'codex-runner',
+    'opencode-runner',
+  ])('%s installs Shadow packages from local workspace tarballs', (runnerDir) => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), `images/${runnerDir}/Dockerfile`),
+      'utf8',
+    )
+
+    expect(dockerfile).toContain('FROM node:22-bookworm-slim AS shadow-packages')
+    expect(dockerfile).toContain('FROM golang:1.25-alpine AS cc-builder')
+    expect(dockerfile).toContain('apk add --no-cache ca-certificates git')
+    expect(dockerfile).toContain('id=go-build')
+    expect(dockerfile).toContain('id=go-mod')
+    expect(dockerfile).not.toContain('FROM golang:1.25-bookworm AS cc-builder')
+    expect(dockerfile).toContain('pnpm --filter @shadowob/connector build')
+    expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-cli-*.tgz')
+    expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-connector-*.tgz')
+    expect(dockerfile).not.toContain('@shadowob/cli@latest')
+    expect(dockerfile).not.toContain('@shadowob/connector@latest')
+  })
+
+  it('installs OpenClaw Shadow connector from the local workspace tarball', () => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), 'images/openclaw-runner/Dockerfile'),
+      'utf8',
+    )
+    const entrypoint = readFileSync(
+      resolve(process.cwd(), 'images/openclaw-runner/entrypoint.mjs'),
+      'utf8',
+    )
+
+    expect(dockerfile).toContain('pnpm --filter @shadowob/connector build')
+    expect(dockerfile).toContain('/workspace/shadow-pkgs/shadowob-connector-*.tgz')
+    expect(dockerfile).toContain('/opt/openclaw/bootstrap-workspace')
+    expect(dockerfile).toContain('openclaw setup --workspace /opt/openclaw/bootstrap-workspace')
+    expect(dockerfile).toContain('install --no-shell chromium')
+    expect(dockerfile).not.toContain('--with-deps')
+    expect(dockerfile).toContain('/ms-playwright')
+    expect(dockerfile).not.toContain('warm-runtime-deps')
+    expect(dockerfile).not.toContain('OPENCLAW_PLUGIN_STAGE_DIR')
+    expect(entrypoint).toContain('seedWorkspaceFromBootstrap')
+    expect(entrypoint).toContain('/opt/openclaw/bootstrap-workspace')
+    expect(entrypoint).not.toContain('warmBundledPluginRuntimeDeps')
+    expect(entrypoint).not.toContain('OPENCLAW_PLUGIN_STAGE_DIR')
+    expect(entrypoint).not.toContain("spawnSync('openclaw'")
+    expect(dockerfile).not.toContain('chromium-driver')
+    expect(dockerfile).not.toContain('fonts-noto-cjk')
+    expect(dockerfile).not.toContain('@shadowob/connector@latest')
+  })
+
+  it('smokes and optionally kind-loads each local runner image immediately after build', () => {
+    const script = readFileSync(resolve(process.cwd(), 'scripts/build-images.mjs'), 'utf8')
+
+    expect(script).toContain('--kind-load')
+    expect(script).toContain('function runSmokeTest(name, opts)')
+    expect(script).toContain("smoke-test-images.mjs')} ${name} --tag ${opts.tag}")
+    expect(script).toContain('function loadKindImage(image, opts)')
+    expect(script).toContain('kind load docker-image')
+    expect(script).toContain('runSmokeTest(name, opts)')
+    expect(script).toContain('loadKindImage(fullTag, opts)')
+    expect(script).not.toContain("smoke-test-images.mjs')} ${opts.images.join(' ')}")
   })
 })

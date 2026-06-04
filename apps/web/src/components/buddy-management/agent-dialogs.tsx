@@ -55,13 +55,7 @@ function deriveBuddyUsername(name: string) {
 
 type BuddyModeControlStyle = 'cards' | 'switch'
 type QuickCreateStep = 'basic' | 'advanced'
-export type CloudBuddyRuntimeId =
-  | 'openclaw'
-  | 'hermes'
-  | 'claude-code'
-  | 'codex'
-  | 'opencode'
-  | 'gemini'
+export type CloudBuddyRuntimeId = 'openclaw' | 'hermes' | 'claude-code' | 'codex' | 'opencode'
 
 type CloudDeployment = {
   id: string
@@ -99,7 +93,6 @@ export const CLOUD_RUNTIME_LABELS: Record<CloudBuddyRuntimeId, string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex CLI',
   opencode: 'OpenCode',
-  gemini: 'Gemini CLI',
 }
 
 const RUNTIME_ICON_SOURCES: Record<string, string> = {
@@ -108,7 +101,6 @@ const RUNTIME_ICON_SOURCES: Record<string, string> = {
   'claude-code': new URL('../../assets/runtime-icons/claude-code.svg', import.meta.url).toString(),
   codex: new URL('../../assets/runtime-icons/codex.svg', import.meta.url).toString(),
   opencode: new URL('../../assets/runtime-icons/opencode.svg', import.meta.url).toString(),
-  gemini: new URL('../../assets/runtime-icons/gemini.svg', import.meta.url).toString(),
   cursor: new URL('../../assets/runtime-icons/cursor.svg', import.meta.url).toString(),
   kimi: new URL('../../assets/runtime-icons/kimi.png', import.meta.url).toString(),
   copilot: new URL('../../assets/runtime-icons/copilot.svg', import.meta.url).toString(),
@@ -122,7 +114,6 @@ const RUNTIME_ICON_COMPONENTS: Record<string, LucideIcon> = {
   'claude-code': Code2,
   codex: Terminal,
   opencode: Code2,
-  gemini: Sparkles,
   cursor: Cpu,
   kimi: Sparkles,
   copilot: Code2,
@@ -421,12 +412,12 @@ function buildCloudBuddyTemplate(input: {
           },
           resources: {
             requests: {
-              cpu: '100m',
-              memory: '256Mi',
+              cpu: '250m',
+              memory: '512Mi',
             },
             limits: {
-              cpu: '1000m',
-              memory: '1Gi',
+              cpu: '2000m',
+              memory: '2Gi',
             },
           },
           configuration: {},

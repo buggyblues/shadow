@@ -3908,7 +3908,7 @@
       "title": "데스크톱 펫 스토어",
       "subtitle": "데스크톱 펫 에셋 팩 받기",
       "petAssets": "데스크톱 펫 에셋 팩",
-      "petAssetsHint": "codex-pets.net의 creature 갤러리를 엽니다.",
+      "petAssetsHint": "XiaDou Community 데스크톱 펫 에셋 팩을 둘러봅니다.",
       "open": "스토어 열기",
       "manage": "팩 관리"
     },
@@ -4208,7 +4208,40 @@
       "runtimeFallback": "로컬 런타임",
       "runtimeReady": "{{runtime}}의 {{name}} 세션이 준비되었습니다.",
       "runtimeReadyMany": "Runtime 세션 {{count}}개가 준비되었습니다.",
-      "runtimeSessionCompleted": "{{runtime}}의 {{name}} 세션이 완료되었습니다."
+      "runtimeSessionCompleted": "{{runtime}}의 {{name}} 세션이 완료되었습니다.",
+      "runtimeReaction": {
+        "idle": "준비됨.",
+        "thinking": "검토 중.",
+        "working": "처리 중.",
+        "editing": "파일 업데이트 중.",
+        "running": "명령 실행 중.",
+        "testing": "검사 중.",
+        "waiting": "승인 대기 중.",
+        "waving": "알림.",
+        "success": "완료.",
+        "error": "확인 필요.",
+        "celebrating": "잘 마무리됨."
+      },
+      "runtimeActivity": {
+        "thinking": "검토 중.",
+        "thinkingWithLabel": "{{label}} 검토 중.",
+        "reading": "읽는 중.",
+        "readingWithLabel": "{{label}} 읽는 중.",
+        "working": "처리 중.",
+        "workingWithLabel": "{{label}} 처리 중.",
+        "editing": "파일 업데이트 중.",
+        "editingWithLabel": "{{label}} 편집 중.",
+        "running": "명령 실행 중.",
+        "runningWithLabel": "{{label}} 실행 중.",
+        "testing": "검사 중.",
+        "testingWithLabel": "{{label}} 테스트 중.",
+        "waiting": "승인 대기 중.",
+        "waitingWithLabel": "{{label}} 대기 중.",
+        "success": "완료.",
+        "successWithLabel": "완료: {{label}}.",
+        "error": "확인 필요.",
+        "errorWithLabel": "{{label}} 확인 필요."
+      }
     }
   },
   "desktopReader": {

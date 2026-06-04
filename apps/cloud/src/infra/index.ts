@@ -28,6 +28,7 @@ import {
   PULUMI_SKIP_AWAIT_ANNOTATIONS,
 } from './constants.js'
 import { stableHash } from './hash.js'
+import { serviceNameForAgent } from './k8s-names.js'
 import { createNetworking } from './networking.js'
 import { buildAgentRuntimePackage } from './runtime-package.js'
 import { buildNetworkPolicy, buildSecurityContext } from './security.js'
@@ -423,7 +424,7 @@ export function buildManifests(options: InfraOptions) {
       apiVersion: 'v1',
       kind: 'Service',
       metadata: {
-        name: `${agentName}-svc`,
+        name: serviceNameForAgent(agentName),
         namespace,
         labels: { app: 'shadowob-cloud', agent: agentName },
         annotations: {

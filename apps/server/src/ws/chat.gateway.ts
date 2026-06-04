@@ -181,28 +181,41 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
             logContext: { channelId: data.channelId, userId },
           })
 
-          // Broadcast to channel room
-          io.to(`channel:${data.channelId}`).emit('message:new', message)
-
+          let directPeer: { id: string } | null = null
           try {
             const channelService = container.resolve('channelService')
             const channel = await channelService.getById(data.channelId)
             if (channel.kind === 'dm') {
-              const peer = await channelService.findDirectPeer(data.channelId, userId)
-              if (peer) {
-                const senderName =
-                  message.author?.displayName ?? message.author?.username ?? 'Someone'
-                const notificationTriggerService = container.resolve('notificationTriggerService')
-                await notificationTriggerService.triggerDirectMessage({
-                  userId: peer.id,
-                  actorId: userId,
-                  actorName: senderName,
-                  channelId: data.channelId,
-                  preview: data.content.substring(0, 200),
-                })
-                const rentalService = container.resolve('rentalService')
-                await rentalService.recordRentalMessage(userId, peer.id).catch(() => null)
-              }
+              directPeer = await channelService.findDirectPeer(data.channelId, userId)
+            }
+          } catch (err) {
+            logger.warn(
+              { err, userId, channelId: data.channelId },
+              'Direct channel peer lookup failed — non-critical',
+            )
+          }
+
+          // Broadcast to channel room. Direct message peers also receive the
+          // event through their user room so first-message delivery does not
+          // depend on a newly connected Buddy joining the channel room first.
+          let target = io.to(`channel:${data.channelId}`)
+          if (directPeer) target = target.to(`user:${directPeer.id}`)
+          target.emit('message:new', message)
+
+          try {
+            if (directPeer) {
+              const senderName =
+                message.author?.displayName ?? message.author?.username ?? 'Someone'
+              const notificationTriggerService = container.resolve('notificationTriggerService')
+              await notificationTriggerService.triggerDirectMessage({
+                userId: directPeer.id,
+                actorId: userId,
+                actorName: senderName,
+                channelId: data.channelId,
+                preview: data.content.substring(0, 200),
+              })
+              const rentalService = container.resolve('rentalService')
+              await rentalService.recordRentalMessage(userId, directPeer.id).catch(() => null)
             }
           } catch (err) {
             logger.warn(

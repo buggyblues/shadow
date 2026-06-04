@@ -21,6 +21,33 @@ export interface ShadowRuntimeBinding {
   buddyName?: string
 }
 
+export type OfficialModelProviderStyle = 'openai' | 'anthropic'
+
+export interface OfficialModelProviderBinding {
+  providerId: string
+  style: OfficialModelProviderStyle
+  model: string
+  baseUrlEnvKey: string
+  apiKeyEnvKey: string
+  modelEnvKey?: string
+}
+
+const OFFICIAL_MODEL_PROVIDER_ENV: Record<
+  OfficialModelProviderStyle,
+  { baseUrl: string; apiKey: string; model: string }
+> = {
+  openai: {
+    baseUrl: 'OPENAI_COMPATIBLE_BASE_URL',
+    apiKey: 'OPENAI_COMPATIBLE_API_KEY',
+    model: 'OPENAI_COMPATIBLE_MODEL_ID',
+  },
+  anthropic: {
+    baseUrl: 'ANTHROPIC_COMPATIBLE_BASE_URL',
+    apiKey: 'ANTHROPIC_COMPATIBLE_API_KEY',
+    model: 'ANTHROPIC_COMPATIBLE_MODEL_ID',
+  },
+}
+
 export function hasRuntimeExtensions(extension: PluginRuntimeExtension): boolean {
   return Boolean(
     extension.shadowob ||
@@ -61,6 +88,29 @@ export function reasoningEffort(agent: AgentDeployment): string | undefined {
   const thinking =
     agent.model?.constraints?.thinkingLevel ?? agent.configuration.model?.constraints?.thinkingLevel
   return thinking && ['low', 'medium', 'high', 'xhigh'].includes(thinking) ? thinking : undefined
+}
+
+export function officialModelProviderBinding(
+  runtimeEnv: Record<string, string | undefined>,
+  style: OfficialModelProviderStyle,
+): OfficialModelProviderBinding | null {
+  const env = OFFICIAL_MODEL_PROVIDER_ENV[style]
+  if (!runtimeEnv[env.baseUrl] || !runtimeEnv[env.apiKey]) return null
+
+  const modelEnvKey = runtimeEnv[env.model]
+    ? env.model
+    : style === 'anthropic' && runtimeEnv.OPENAI_COMPATIBLE_MODEL_ID
+      ? 'OPENAI_COMPATIBLE_MODEL_ID'
+      : undefined
+
+  return {
+    providerId: runtimeEnv.SHADOW_MODEL_PROVIDER_ID?.trim() || 'shadow-official',
+    style,
+    model: modelEnvKey ? envPlaceholder(modelEnvKey) : 'default',
+    baseUrlEnvKey: env.baseUrl,
+    apiKeyEnvKey: env.apiKey,
+    modelEnvKey,
+  }
 }
 
 function permissionDefault(agent: AgentDeployment): string | undefined {
@@ -179,9 +229,6 @@ export function addShadowobSkill(
   }
   if (runtimeId === 'codex') {
     files[`${HOME_DIR}/.codex/skills/shadowob/SKILL.md`] = skill
-  }
-  if (runtimeId === 'gemini') {
-    files[`${HOME_DIR}/.gemini/skills/shadowob/SKILL.md`] = skill
   }
   if (runtimeKind === 'openclaw') {
     files[`${OPENCLAW_SKILLS_DIR}/shadowob/SKILL.md`] = skill

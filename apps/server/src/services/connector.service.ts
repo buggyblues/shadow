@@ -2,6 +2,10 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { ConnectorDao } from '../dao/connector.dao'
 import type { ConnectorRuntimeInfo } from '../db/schema'
 import { decrypt, encrypt } from '../lib/kms'
+import {
+  officialModelProxyEnvVars,
+  officialModelProxyMissingConfig,
+} from '../lib/model-proxy-config'
 import { type AgentService, effectiveAgentStatus } from './agent.service'
 
 const ONLINE_WINDOW_MS = 90_000
@@ -36,8 +40,12 @@ export interface ConnectorConfigureBuddyPayload {
   modelProvider?: {
     id: string
     label: string
-    baseUrl: string
-    apiKey: string
+    baseUrl?: string
+    apiKey?: string
+    openAIBaseUrl?: string
+    openAIApiKey?: string
+    anthropicBaseUrl?: string
+    anthropicApiKey?: string
     model: string
   }
 }
@@ -66,6 +74,39 @@ function shellQuote(value: string): string {
 function normalizeServerUrl(value: string): string {
   const trimmed = value.trim() || 'https://shadowob.com'
   return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed.replace(/\/$/, '')
+}
+
+function officialConnectorModelProvider(input: {
+  userId: string
+  serverUrl: string
+  agentId?: string
+}): ConnectorConfigureBuddyPayload['modelProvider'] | undefined {
+  const runtimeServerUrl = normalizeServerUrl(input.serverUrl)
+  if (officialModelProxyMissingConfig(runtimeServerUrl).length > 0) return undefined
+  const env = officialModelProxyEnvVars({
+    runtimeServerUrl,
+    userId: input.userId,
+    namespace: input.agentId,
+  })
+  const openAIBaseUrl = env.OPENAI_COMPATIBLE_BASE_URL
+  const openAIApiKey = env.OPENAI_COMPATIBLE_API_KEY
+  const anthropicBaseUrl = env.ANTHROPIC_COMPATIBLE_BASE_URL
+  const anthropicApiKey = env.ANTHROPIC_COMPATIBLE_API_KEY
+  const model = env.OPENAI_COMPATIBLE_MODEL_ID ?? env.ANTHROPIC_COMPATIBLE_MODEL_ID
+  if (!model || ((!openAIBaseUrl || !openAIApiKey) && (!anthropicBaseUrl || !anthropicApiKey))) {
+    return undefined
+  }
+  return {
+    id: env.SHADOW_MODEL_PROVIDER_ID ?? 'shadow-official',
+    label: 'Shadow official LLM proxy',
+    baseUrl: openAIBaseUrl ?? anthropicBaseUrl,
+    apiKey: openAIApiKey ?? anthropicApiKey,
+    ...(openAIBaseUrl ? { openAIBaseUrl } : {}),
+    ...(openAIApiKey ? { openAIApiKey } : {}),
+    ...(anthropicBaseUrl ? { anthropicBaseUrl } : {}),
+    ...(anthropicApiKey ? { anthropicApiKey } : {}),
+    model,
+  }
 }
 
 function toComputerView(computer: {
@@ -263,6 +304,11 @@ export class ConnectorService {
         },
         projectName: botUser.username,
         workDir: readConfigString(config, 'connectorWorkDir') || '.',
+        modelProvider: officialConnectorModelProvider({
+          userId: computer.userId,
+          serverUrl,
+          agentId: agent.id,
+        }),
       }
       await this.deps.connectorDao.createJob({
         userId: computer.userId,
@@ -340,6 +386,11 @@ export class ConnectorService {
       },
       projectName: agent.botUser?.username ?? input.username,
       workDir: '.',
+      modelProvider: officialConnectorModelProvider({
+        userId,
+        serverUrl: input.serverUrl,
+        agentId,
+      }),
     }
     const job = await this.deps.connectorDao.createJob({
       userId,
@@ -400,6 +451,11 @@ export class ConnectorService {
       },
       projectName: botUser.username,
       workDir: '.',
+      modelProvider: officialConnectorModelProvider({
+        userId,
+        serverUrl: input.serverUrl,
+        agentId,
+      }),
     }
     const job = await this.deps.connectorDao.createJob({
       userId,

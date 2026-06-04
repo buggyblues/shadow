@@ -24,12 +24,7 @@ import {
   isFileDrag,
   isPreloadHandledPetAssetDrop,
 } from '../lib/pet-asset-drag'
-import {
-  CODEX_PET_STATES,
-  CODEX_PETS_GALLERY_URL,
-  DEFAULT_CODEX_PET_PACK,
-  petPackAssetUrl,
-} from '../lib/pet-asset-packs'
+import { CODEX_PET_STATES, DEFAULT_CODEX_PET_PACK, petPackAssetUrl } from '../lib/pet-asset-packs'
 import {
   communityErrorMessage,
   fetchShadow,
@@ -47,7 +42,6 @@ export type PetAssetSettingsApi = {
   getCommunityAuthToken?: () => Promise<string>
   showMainWindow?: () => Promise<void>
   showCommunity?: (path?: string) => Promise<void>
-  openExternal?: (url: string) => Promise<boolean>
   communityFetchJson?: <T = unknown>(input: {
     path: string
     method?: string
@@ -428,8 +422,7 @@ export function DesktopPetAssetsManager({
     await api?.showCommunity?.()
   }
 
-  async function openCodexPetGallery() {
-    if (await api?.openExternal?.(CODEX_PETS_GALLERY_URL)) return
+  async function openCommunityPetStore() {
     await api?.showCommunity?.(`/shop/tags/${encodeURIComponent('虾豆桌面宠物')}`)
   }
 
@@ -707,8 +700,9 @@ export function DesktopPetAssetsManager({
               variant="glass"
               size="sm"
               icon={Store}
+              disabled={!api?.showCommunity}
               className="w-full"
-              onClick={() => void openCodexPetGallery()}
+              onClick={() => void openCommunityPetStore()}
             >
               {t('desktop.petAssetsOpenStore')}
             </Button>

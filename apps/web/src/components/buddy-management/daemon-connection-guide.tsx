@@ -31,7 +31,6 @@ function runtimeSortKey(runtime: ConnectorRuntimeInfo) {
     'claude-code': 2,
     codex: 3,
     opencode: 4,
-    gemini: 5,
   }
   return priority[runtime.id] ?? 50
 }
@@ -56,11 +55,13 @@ export function DaemonConnectionGuide({ agent, t }: { agent: Agent; t: TFunction
       connectorComputers
         .filter((computer) => computer.status === 'online')
         .flatMap((computer) =>
-          computer.runtimes.map((runtime) => ({
-            key: `${computer.id}:${runtime.id}`,
-            computer,
-            runtime,
-          })),
+          computer.runtimes
+            .filter((runtime) => runtime.id !== 'gemini')
+            .map((runtime) => ({
+              key: `${computer.id}:${runtime.id}`,
+              computer,
+              runtime,
+            })),
         )
         .sort(
           (a, b) =>

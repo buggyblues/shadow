@@ -27,7 +27,7 @@
         {
           "id": "L0-02",
           "title": "acp-runner 统一镜像构建与验证",
-          "description": "构建统一 acp-runner Docker 镜像，通过 RUNTIME_PACKAGE build arg 支持 claude-code/codex/gemini/opencode",
+          "description": "构建统一 acp-runner Docker 镜像，通过 RUNTIME_PACKAGE build arg 支持 claude-code/codex/opencode",
           "priority": "P0",
           "spec": "03-runtime.md",
           "acceptance": [

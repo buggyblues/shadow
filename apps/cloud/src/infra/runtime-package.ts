@@ -110,9 +110,6 @@ function runtimePackageEnvDefaults(options: {
   if (!options.currentEnv.SHADOW_SLASH_COMMANDS_PATH) {
     env.SHADOW_SLASH_COMMANDS_PATH = SHADOW_SLASH_COMMANDS_PATH
   }
-  if (options.runtimeKind === 'hermes' && !options.currentEnv.SHADOW_SLASH_COMMANDS_JSON) {
-    env.SHADOW_SLASH_COMMANDS_JSON = '[]'
-  }
   if (options.hasExtensions && !options.currentEnv.SHADOW_RUNTIME_EXTENSIONS_PATH) {
     env.SHADOW_RUNTIME_EXTENSIONS_PATH =
       options.runtimeKind === 'openclaw'

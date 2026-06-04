@@ -72,10 +72,15 @@ describe('renderer pet game state', () => {
   })
 
   it('maps runtime session states to Codex pet animations', () => {
-    expect(selectRuntimeAnimation(['streaming'])).toBe('running')
+    expect(selectRuntimeAnimation(['streaming'])).toBe('review')
+    expect(selectRuntimeAnimation(['thinking'])).toBe('review')
+    expect(selectRuntimeAnimation(['running'])).toBe('running')
+    expect(selectRuntimeAnimation(['editing'])).toBe('running')
+    expect(selectRuntimeAnimation(['testing'])).toBe('waiting')
     expect(selectRuntimeAnimation(['waiting_for_approval'])).toBe('waiting')
     expect(selectRuntimeAnimation(['failed'])).toBe('failed')
-    expect(selectRuntimeAnimation(['completed'])).toBe('review')
+    expect(selectRuntimeAnimation(['completed'])).toBe('jumping')
+    expect(selectRuntimeAnimation(['success'])).toBe('jumping')
     expect(selectRuntimeAnimation([])).toBeNull()
   })
 

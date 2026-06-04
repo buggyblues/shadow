@@ -22,7 +22,9 @@ export const MODEL_PROVIDER_SERVER_SECRET_ENV_KEYS = new Set([
   'XAI_API_KEY',
   'GROK_API_KEY',
   'OPENAI_COMPATIBLE_API_KEY',
+  'ANTHROPIC_COMPATIBLE_API_KEY',
   'SHADOW_MODEL_PROXY_UPSTREAM_API_KEY',
+  'SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY',
   'MODEL_PROXY_TOKEN_SECRET',
   'JWT_SECRET',
 ])
@@ -142,6 +144,11 @@ export function officialModelProxyBaseUrl(runtimeServerUrl?: string) {
   return `${runtimeServerUrl.replace(/\/+$/, '')}/api/ai/v1`
 }
 
+export function officialModelProxyAnthropicBaseUrl(runtimeServerUrl?: string) {
+  if (!runtimeServerUrl) return null
+  return `${runtimeServerUrl.replace(/\/+$/, '')}/api/ai/anthropic`
+}
+
 export function officialModelProxyEnvVars(input: {
   runtimeServerUrl?: string
   runtimeServerUrlRequirement?: string
@@ -157,16 +164,24 @@ export function officialModelProxyEnvVars(input: {
     return {}
   }
   const baseUrl = officialModelProxyBaseUrl(input.runtimeServerUrl)
-  if (!baseUrl) return {}
+  const anthropicBaseUrl = officialModelProxyAnthropicBaseUrl(input.runtimeServerUrl)
+  if (!baseUrl || !anthropicBaseUrl) return {}
+  const token = signModelProxyToken({
+    userId: input.userId,
+    playId: input.playId,
+    templateSlug: input.templateSlug,
+    namespace: input.namespace,
+  })
+  const model = officialModelProxyModel()
 
   return {
-    OPENAI_COMPATIBLE_API_KEY: signModelProxyToken({
-      userId: input.userId,
-      playId: input.playId,
-      templateSlug: input.templateSlug,
-      namespace: input.namespace,
-    }),
+    SHADOW_MODEL_PROVIDER_ID: 'shadow-official',
     OPENAI_COMPATIBLE_BASE_URL: baseUrl,
+    OPENAI_COMPATIBLE_API_KEY: token,
+    OPENAI_COMPATIBLE_MODEL_ID: model,
+    ANTHROPIC_COMPATIBLE_BASE_URL: anthropicBaseUrl,
+    ANTHROPIC_COMPATIBLE_API_KEY: token,
+    ANTHROPIC_COMPATIBLE_MODEL_ID: model,
   }
 }
 

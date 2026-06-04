@@ -4,19 +4,20 @@ import { constants, type Dirent } from 'node:fs'
 import { access, readdir, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
+import {
+  type RuntimeSessionPetActivity,
+  type RuntimeSessionPetReaction,
+  type RuntimeSessionState,
+  runtimeSessionPetReactionForState,
+} from '@shadowob/shared/types'
 import type { ConnectorRuntimeId } from './runtime-catalog.js'
 import { connectorProcessEnv } from './toolchain.js'
 
-export type RuntimeSessionState =
-  | 'idle'
-  | 'running'
-  | 'streaming'
-  | 'waiting_for_approval'
-  | 'blocked'
-  | 'completed'
-  | 'failed'
-  | 'stopped'
-  | 'unknown'
+export type {
+  RuntimeSessionPetActivity,
+  RuntimeSessionPetReaction,
+  RuntimeSessionState,
+} from '@shadowob/shared/types'
 
 export type RuntimeInstanceStatus = 'running' | 'available' | 'stopped' | 'missing' | 'error'
 
@@ -38,6 +39,8 @@ export interface RuntimeSessionInfo {
   title?: string | null
   workDir?: string | null
   state: RuntimeSessionState
+  petReaction: RuntimeSessionPetReaction
+  petActivity?: RuntimeSessionPetActivity
   model?: string | null
   lastActivityAt?: string | null
   startedAt?: string | null
@@ -65,6 +68,10 @@ export interface RuntimeSessionEvent {
   sessionId?: string
   previousState?: RuntimeSessionState
   state?: RuntimeSessionState
+  previousPetReaction?: RuntimeSessionPetReaction
+  petReaction?: RuntimeSessionPetReaction
+  previousPetActivity?: RuntimeSessionPetActivity
+  petActivity?: RuntimeSessionPetActivity
   session?: RuntimeSessionInfo
   snapshot?: RuntimeSessionSnapshot
 }
@@ -95,13 +102,219 @@ export interface RuntimeSessionSendResult {
   exitCode?: number | null
 }
 
-const SESSION_RUNTIME_IDS: ConnectorRuntimeId[] = ['opencode', 'claude-code']
+const SESSION_RUNTIME_IDS: ConnectorRuntimeId[] = ['opencode', 'claude-code', 'codex']
 const DEFAULT_OPENCODE_URL = 'http://127.0.0.1:4096'
 
 interface CommandResult {
   status: number | null
   stdout: string
   stderr: string
+}
+
+type RuntimeSessionInfoInput = Omit<RuntimeSessionInfo, 'petReaction'> & {
+  petReaction?: RuntimeSessionPetReaction
+}
+
+type RuntimeSessionRecordSignal = {
+  state: RuntimeSessionState
+  petReaction?: RuntimeSessionPetReaction
+  petActivity?: RuntimeSessionPetActivity
+}
+
+export { runtimeSessionPetReactionForState } from '@shadowob/shared/types'
+
+export function runtimeSessionPetReaction(
+  session: Pick<RuntimeSessionInfo, 'state'> & {
+    petReaction?: RuntimeSessionPetReaction
+  },
+): RuntimeSessionPetReaction {
+  return session.petReaction ?? runtimeSessionPetReactionForState(session.state)
+}
+
+function withRuntimeSessionPetReaction(session: RuntimeSessionInfoInput): RuntimeSessionInfo {
+  return {
+    ...session,
+    petReaction: session.petReaction ?? runtimeSessionPetReactionForState(session.state),
+  }
+}
+
+const TEST_LIKE_COMMAND_PATTERN =
+  /\b(test|vitest|jest|pytest|npm\s+test|pnpm\s+test|yarn\s+test|cargo\s+test|go\s+test)\b/i
+
+function textForRuntimeSignal(value: unknown, depth = 0): string {
+  if (depth > 4) return ''
+  if (typeof value === 'string') return value.slice(0, 1000)
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => textForRuntimeSignal(item, depth + 1))
+      .filter(Boolean)
+      .join(' ')
+      .slice(0, 1000)
+  }
+  if (!value || typeof value !== 'object') return ''
+  try {
+    return JSON.stringify(value).slice(0, 1000)
+  } catch {
+    return ''
+  }
+}
+
+function commandFromRuntimeSignal(value: unknown, depth = 0): string {
+  if (depth > 4) return ''
+  if (typeof value === 'string') {
+    const parsed = safeJson(value)
+    if (parsed && typeof parsed === 'object') {
+      const nested = commandFromRuntimeSignal(parsed, depth + 1)
+      if (nested) return nested
+    }
+    return value.slice(0, 500)
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => commandFromRuntimeSignal(item, depth + 1))
+      .filter(Boolean)
+      .join(' ')
+      .slice(0, 500)
+  }
+  const root = asRecord(value)
+  if (Object.keys(root).length === 0) return ''
+  for (const key of ['command', 'cmd', 'shellCommand', 'script']) {
+    const entry = root[key]
+    if (typeof entry === 'string' && entry.trim()) return entry.slice(0, 500)
+    if (Array.isArray(entry)) {
+      const command = entry
+        .map((part) =>
+          typeof part === 'string' ? part : commandFromRuntimeSignal(part, depth + 1),
+        )
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+      if (command) return command.slice(0, 500)
+    }
+  }
+  for (const key of ['tool_input', 'input', 'args', 'arguments', 'params', 'payload', 'data']) {
+    const command = commandFromRuntimeSignal(root[key], depth + 1)
+    if (command) return command
+  }
+  return ''
+}
+
+function isTestLikeCommand(command: string): boolean {
+  return TEST_LIKE_COMMAND_PATTERN.test(command)
+}
+
+function runtimeToolReaction(
+  toolName: string | null | undefined,
+  input?: unknown,
+): RuntimeSessionPetReaction | null {
+  const normalized = (toolName ?? '').toLowerCase()
+  if (!normalized) return null
+  if (/edit|write|patch|apply_patch|multi.?edit/.test(normalized)) return 'editing'
+  if (/bash|shell|terminal|exec|command|run/.test(normalized)) {
+    const command = commandFromRuntimeSignal(input)
+    return isTestLikeCommand(command || normalized) ? 'testing' : 'running'
+  }
+  if (/search|reason|think|read|grep|find|list/.test(normalized)) return 'thinking'
+  return 'working'
+}
+
+function clipActivityLabel(value: string, maxLength = 36): string | null {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (!normalized) return null
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 3)}...`
+}
+
+function basenameActivityLabel(value: string): string | null {
+  const normalized = value.trim().replace(/\\/g, '/')
+  if (!normalized) return null
+  const [withoutQuery] = normalized.split(/[?#]/)
+  const parts = (withoutQuery || normalized).split('/').filter(Boolean)
+  return clipActivityLabel(parts.at(-1) ?? normalized)
+}
+
+function stringFieldFromRuntimeSignal(value: unknown, keys: string[], depth = 0): string | null {
+  if (depth > 4) return null
+  if (typeof value === 'string') {
+    const parsed = safeJson(value)
+    return parsed && typeof parsed === 'object'
+      ? stringFieldFromRuntimeSignal(parsed, keys, depth + 1)
+      : null
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = stringFieldFromRuntimeSignal(item, keys, depth + 1)
+      if (found) return found
+    }
+    return null
+  }
+  const root = asRecord(value)
+  if (Object.keys(root).length === 0) return null
+  for (const key of keys) {
+    const entry = root[key]
+    if (typeof entry === 'string' && entry.trim()) return entry.trim()
+  }
+  for (const key of ['tool_input', 'input', 'args', 'arguments', 'params', 'payload', 'data']) {
+    const found = stringFieldFromRuntimeSignal(root[key], keys, depth + 1)
+    if (found) return found
+  }
+  return null
+}
+
+function commandActivityLabel(input: unknown): string | null {
+  const command = commandFromRuntimeSignal(input)
+  if (!command) return null
+  const words = command.split(/\s+/).filter(Boolean).slice(0, 4).join(' ')
+  return clipActivityLabel(words || command, 32)
+}
+
+function runtimeToolActivity(
+  toolName: string | null | undefined,
+  input?: unknown,
+): RuntimeSessionPetActivity | undefined {
+  const normalized = (toolName ?? '').toLowerCase()
+  if (!normalized) return undefined
+  if (/edit|write|patch|apply_patch|multi.?edit/.test(normalized)) {
+    const path = stringFieldFromRuntimeSignal(input, ['file_path', 'path', 'filename'])
+    return { kind: 'editing', label: path ? basenameActivityLabel(path) : null }
+  }
+  if (/bash|shell|terminal|exec|command|run/.test(normalized)) {
+    const command = commandFromRuntimeSignal(input)
+    return {
+      kind: isTestLikeCommand(command || normalized) ? 'testing' : 'running',
+      label: commandActivityLabel(input),
+    }
+  }
+  if (/read/.test(normalized)) {
+    const path = stringFieldFromRuntimeSignal(input, ['file_path', 'path', 'filename'])
+    return { kind: 'reading', label: path ? basenameActivityLabel(path) : null }
+  }
+  if (/grep|find|search/.test(normalized)) {
+    const pattern = stringFieldFromRuntimeSignal(input, ['pattern', 'query'])
+    return { kind: 'reading', label: clipActivityLabel(pattern ?? '') }
+  }
+  if (/list|glob/.test(normalized)) {
+    const pattern = stringFieldFromRuntimeSignal(input, ['pattern', 'path'])
+    return { kind: 'reading', label: clipActivityLabel(pattern ?? '') }
+  }
+  if (/reason|think/.test(normalized)) return { kind: 'thinking' }
+  return { kind: 'working', label: clipActivityLabel(toolName ?? '') }
+}
+
+function activeRuntimePetReaction(
+  reaction: RuntimeSessionPetReaction | undefined,
+): RuntimeSessionPetReaction {
+  if (
+    reaction === 'thinking' ||
+    reaction === 'working' ||
+    reaction === 'editing' ||
+    reaction === 'running' ||
+    reaction === 'testing' ||
+    reaction === 'waiting'
+  ) {
+    return reaction
+  }
+  return 'working'
 }
 
 function runCommand(
@@ -177,7 +390,7 @@ async function pathExists(path: string): Promise<boolean> {
 
 function runtimeIdsFor(input?: string): ConnectorRuntimeId[] {
   if (!input || input === 'all') return SESSION_RUNTIME_IDS
-  if (input === 'opencode' || input === 'claude-code') return [input]
+  if (input === 'opencode' || input === 'claude-code' || input === 'codex') return [input]
   return []
 }
 
@@ -284,6 +497,25 @@ function mapNativeState(value: unknown): RuntimeSessionState {
   return 'unknown'
 }
 
+function mapNativePetReaction(
+  value: unknown,
+  state: RuntimeSessionState,
+): RuntimeSessionPetReaction {
+  const text = textForRuntimeSignal(value).toLowerCase()
+  if (text.includes('approval') || text.includes('permission')) return 'waiting'
+  if (text.includes('fail') || text.includes('error')) return 'error'
+  if (/edit|write|patch|apply_patch|multi.?edit/.test(text)) return 'editing'
+  if (isTestLikeCommand(text)) return 'testing'
+  if (/bash|shell|terminal|exec|command/.test(text)) return 'running'
+  if (/stream|reason|think|review|read/.test(text)) return 'thinking'
+  if (text.includes('complete') || text.includes('success') || text.includes('idle')) {
+    return 'success'
+  }
+  if (text.includes('run') || text.includes('busy') || text.includes('work')) return 'working'
+  if (text.includes('ready')) return 'idle'
+  return runtimeSessionPetReactionForState(state)
+}
+
 function sessionFromOpenCode(
   item: unknown,
   statusValue: unknown,
@@ -304,18 +536,23 @@ function sessionFromOpenCode(
   const model = asRecord(root.model)
   const modelId = readString(root, ['model', 'modelID', 'modelId']) ?? readString(model, ['id'])
   const providerId = readString(model, ['providerID', 'providerId', 'provider'])
-  return {
+  const state =
+    statusValue !== undefined && statusValue !== null
+      ? mapNativeState(statusValue)
+      : endpoint === 'cli'
+        ? 'unknown'
+        : 'idle'
+  return withRuntimeSessionPetReaction({
     runtimeId: 'opencode',
     instanceId: endpoint,
     sessionId,
     title,
     workDir: readString(root, ['cwd', 'directory', 'path']),
-    state:
+    state,
+    petReaction:
       statusValue !== undefined && statusValue !== null
-        ? mapNativeState(statusValue)
-        : endpoint === 'cli'
-          ? 'unknown'
-          : 'idle',
+        ? mapNativePetReaction(statusValue, state)
+        : undefined,
     model: providerId && modelId ? `${providerId}/${modelId}` : modelId,
     startedAt: createdAt,
     lastActivityAt: updatedAt,
@@ -326,7 +563,7 @@ function sessionFromOpenCode(
       agent: readString(root, ['agent']),
       version: readString(root, ['version']),
     },
-  }
+  })
 }
 
 async function sessionsFromOpenCodeCli(
@@ -398,7 +635,7 @@ async function sessionsFromOpenCodeDatabase(
       if (!sessionId) return null
       const updatedAt = normalizeIsoDate(readValue(root, ['time_updated']))
       const createdAt = normalizeIsoDate(readValue(root, ['time_created']))
-      return {
+      return withRuntimeSessionPetReaction({
         runtimeId: 'opencode',
         instanceId: 'database',
         sessionId,
@@ -413,7 +650,7 @@ async function sessionsFromOpenCodeDatabase(
           agent: readString(root, ['agent']),
           dataDir,
         },
-      }
+      })
     })
     .filter((item): item is RuntimeSessionInfo => Boolean(item))
 }
@@ -454,22 +691,24 @@ async function sessionsFromOpenCodeStorage(
     .filter((item): item is NonNullable<(typeof files)[number]> => Boolean(item))
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(0, limit)
-    .map((file) => ({
-      runtimeId: 'opencode' as const,
-      instanceId: 'storage',
-      sessionId: basename(file.name, '.json'),
-      title: null,
-      workDir: null,
-      state: 'unknown' as const,
-      lastActivityAt: file.mtime.toISOString(),
-      startedAt: null,
-      source: 'storage' as const,
-      native: {
-        dataDir,
-        diffFile: file.name,
-        diffBytes: file.size,
-      },
-    }))
+    .map((file) =>
+      withRuntimeSessionPetReaction({
+        runtimeId: 'opencode' as const,
+        instanceId: 'storage',
+        sessionId: basename(file.name, '.json'),
+        title: null,
+        workDir: null,
+        state: 'unknown' as const,
+        lastActivityAt: file.mtime.toISOString(),
+        startedAt: null,
+        source: 'storage' as const,
+        native: {
+          dataDir,
+          diffFile: file.name,
+          diffBytes: file.size,
+        },
+      }),
+    )
 }
 
 async function scanOpenCode(
@@ -556,6 +795,7 @@ async function walkJsonlFiles(root: string, limit: number): Promise<string[]> {
     } catch {
       return
     }
+    entries.sort((a, b) => b.name.localeCompare(a.name))
     for (const entry of entries) {
       if (found.length >= limit) break
       const path = join(dir, entry.name)
@@ -570,6 +810,14 @@ async function walkJsonlFiles(root: string, limit: number): Promise<string[]> {
   return found
 }
 
+function messageText(value: Record<string, unknown>): string | null {
+  const payload = asRecord(value.payload)
+  const message = asRecord(payload.message ?? value.message)
+  const content =
+    payload.content ?? message.content ?? value.content ?? asRecord(value.item).content ?? null
+  return contentText(content)
+}
+
 function contentText(value: unknown): string | null {
   if (typeof value === 'string') return value.trim() || null
   if (!Array.isArray(value)) return null
@@ -580,6 +828,69 @@ function contentText(value: unknown): string | null {
     })
     .filter(Boolean)
   return parts.join('\n').trim() || null
+}
+
+function headTailLines(lines: string[], headCount: number, tailCount: number): string[] {
+  if (lines.length <= headCount + tailCount) return lines
+  return [...lines.slice(0, headCount), ...lines.slice(-tailCount)]
+}
+
+function contentHasBlockType(value: unknown, type: string): boolean {
+  return Array.isArray(value) && value.some((part) => readString(asRecord(part), ['type']) === type)
+}
+
+function claudeToolSignal(
+  content: unknown,
+): Pick<RuntimeSessionRecordSignal, 'petReaction' | 'petActivity'> | null {
+  if (!Array.isArray(content)) return null
+  for (const part of content) {
+    const root = asRecord(part)
+    if (readString(root, ['type']) !== 'tool_use') continue
+    const toolName = readString(root, ['name'])
+    const reaction = runtimeToolReaction(toolName, root.input)
+    if (reaction) {
+      return {
+        petReaction: reaction,
+        petActivity: runtimeToolActivity(toolName, root.input),
+      }
+    }
+  }
+  return null
+}
+
+function claudeSignalFromRecord(
+  parsed: Record<string, unknown>,
+): RuntimeSessionRecordSignal | null {
+  const type = readString(parsed, ['type'])
+  const message = asRecord(parsed.message)
+  const role = readString(message, ['role']) ?? readString(parsed, ['role'])
+  if (type === 'assistant' || role === 'assistant') {
+    const stopReason = readString(message, ['stop_reason'])
+    const toolSignal = claudeToolSignal(message.content)
+    if (stopReason === 'tool_use' || contentHasBlockType(message.content, 'tool_use')) {
+      return {
+        state: 'running',
+        petReaction: toolSignal?.petReaction ?? 'working',
+        petActivity: toolSignal?.petActivity,
+      }
+    }
+    if (stopReason === 'max_tokens') {
+      return { state: 'blocked', petReaction: 'waiting', petActivity: { kind: 'waiting' } }
+    }
+    if (stopReason) {
+      return { state: 'completed', petReaction: 'success', petActivity: { kind: 'success' } }
+    }
+    return { state: 'streaming', petReaction: 'thinking', petActivity: { kind: 'thinking' } }
+  }
+  if (type === 'user' || role === 'user') {
+    return { state: 'running', petReaction: 'thinking', petActivity: { kind: 'thinking' } }
+  }
+  if (type === 'queue-operation') {
+    return { state: 'running', petReaction: 'working', petActivity: { kind: 'working' } }
+  }
+  if (type === 'error')
+    return { state: 'failed', petReaction: 'error', petActivity: { kind: 'error' } }
+  return null
 }
 
 async function sessionFromClaudeTranscript(path: string): Promise<RuntimeSessionInfo | null> {
@@ -597,15 +908,18 @@ async function sessionFromClaudeTranscript(path: string): Promise<RuntimeSession
   } catch {
     return null
   }
-  const tail = lines.slice(-200)
+  const records = headTailLines(lines, 50, 300)
   let sessionId = fallbackId
   let title: string | null = null
   let workDir: string | null = null
   let model: string | null = null
   let lastActivityAt: string | null = statMtime
   let startedAt: string | null = null
+  let state: RuntimeSessionState = 'unknown'
+  let petReaction: RuntimeSessionPetReaction | undefined
+  let petActivity: RuntimeSessionPetActivity | undefined
 
-  for (const line of tail) {
+  for (const line of records) {
     let parsed: Record<string, unknown>
     try {
       parsed = asRecord(JSON.parse(line) as unknown)
@@ -626,21 +940,231 @@ async function sessionFromClaudeTranscript(path: string): Promise<RuntimeSession
     if (!title && role === 'user') {
       title = contentText(message.content ?? parsed.content)?.slice(0, 100) ?? null
     }
+    const signal = claudeSignalFromRecord(parsed)
+    if (signal) {
+      state = signal.state
+      petReaction = signal.petReaction ?? petReaction
+      petActivity = signal.petActivity ?? petActivity
+    }
   }
 
-  return {
+  return withRuntimeSessionPetReaction({
     runtimeId: 'claude-code',
     instanceId: 'transcripts',
     sessionId,
     title,
     workDir,
-    state: 'unknown',
+    state,
+    petReaction,
+    petActivity,
     model,
     lastActivityAt,
     startedAt,
     source: 'transcript',
     native: { transcriptFile: basename(path) },
+  })
+}
+
+function codexSessionIdFromFilename(path: string): string {
+  const name = basename(path, '.jsonl')
+  return name.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i)?.[1] ?? name
+}
+
+function codexToolName(payload: Record<string, unknown>): string | null {
+  return (
+    readString(payload, ['name', 'tool', 'toolName', 'call_name']) ??
+    readString(asRecord(payload.tool), ['name']) ??
+    readString(asRecord(payload.call), ['name'])
+  )
+}
+
+function codexToolInput(payload: Record<string, unknown>): unknown {
+  return (
+    readValue(payload, ['arguments', 'args', 'input', 'tool_input', 'params']) ??
+    asRecord(payload.call).arguments ??
+    asRecord(payload.tool).input ??
+    payload
+  )
+}
+
+function codexCommandReaction(payload: Record<string, unknown>): RuntimeSessionPetReaction {
+  const command = commandFromRuntimeSignal(payload)
+  return isTestLikeCommand(command) ? 'testing' : 'running'
+}
+
+function codexCommandActivity(payload: Record<string, unknown>): RuntimeSessionPetActivity {
+  const command = commandFromRuntimeSignal(payload)
+  return {
+    kind: isTestLikeCommand(command) ? 'testing' : 'running',
+    label: commandActivityLabel(payload),
   }
+}
+
+function codexSignalFromRecord(parsed: Record<string, unknown>): RuntimeSessionRecordSignal | null {
+  const payload = asRecord(parsed.payload)
+  const payloadType = readString(payload, ['type'])
+  if (parsed.type === 'event_msg') {
+    if (payloadType === 'task_complete') {
+      return { state: 'completed', petReaction: 'success', petActivity: { kind: 'success' } }
+    }
+    if (payloadType === 'turn_aborted' || payloadType === 'thread_rolled_back') {
+      return { state: 'stopped', petReaction: 'idle' }
+    }
+    if (payloadType?.includes('error') || payloadType?.includes('failed')) {
+      return { state: 'failed', petReaction: 'error', petActivity: { kind: 'error' } }
+    }
+    if (payloadType === 'task_started') {
+      return { state: 'running', petReaction: 'thinking', petActivity: { kind: 'thinking' } }
+    }
+    if (payloadType === 'exec_command_begin' || payloadType === 'exec_command_end') {
+      return {
+        state: 'running',
+        petReaction: codexCommandReaction(payload),
+        petActivity: codexCommandActivity(payload),
+      }
+    }
+    if (payloadType === 'patch_apply_begin' || payloadType === 'patch_apply_end') {
+      return { state: 'running', petReaction: 'editing', petActivity: { kind: 'editing' } }
+    }
+    if (payloadType === 'mcp_tool_call_begin' || payloadType === 'mcp_tool_call_end') {
+      const toolName = codexToolName(payload)
+      return {
+        state: 'running',
+        petReaction: runtimeToolReaction(toolName, codexToolInput(payload)) ?? 'working',
+        petActivity: runtimeToolActivity(toolName, codexToolInput(payload)) ?? { kind: 'working' },
+      }
+    }
+    if (
+      payloadType === 'agent_message' ||
+      payloadType === 'web_search_end' ||
+      payloadType === 'image_generation_end'
+    ) {
+      return { state: 'streaming', petReaction: 'thinking', petActivity: { kind: 'thinking' } }
+    }
+    return null
+  }
+  if (parsed.type === 'response_item') {
+    if (payloadType === 'message') {
+      const phase = readString(payload, ['phase'])
+      const role = readString(payload, ['role'])
+      if (role === 'user') {
+        return { state: 'running', petReaction: 'thinking', petActivity: { kind: 'thinking' } }
+      }
+      return {
+        state: phase === 'final_answer' ? 'streaming' : 'running',
+        petReaction: 'thinking',
+        petActivity: { kind: 'thinking' },
+      }
+    }
+    if (payloadType === 'function_call' || payloadType === 'custom_tool_call') {
+      const toolName = codexToolName(payload)
+      return {
+        state: 'running',
+        petReaction: runtimeToolReaction(toolName, codexToolInput(payload)) ?? 'working',
+        petActivity: runtimeToolActivity(toolName, codexToolInput(payload)) ?? { kind: 'working' },
+      }
+    }
+    if (payloadType === 'function_call_output' || payloadType === 'custom_tool_call_output') {
+      return { state: 'running', petReaction: 'working', petActivity: { kind: 'working' } }
+    }
+    if (
+      payloadType === 'reasoning' ||
+      payloadType === 'web_search_call' ||
+      payloadType === 'image_generation_call' ||
+      payloadType === 'tool_search_call' ||
+      payloadType === 'tool_search_output'
+    ) {
+      return { state: 'streaming', petReaction: 'thinking', petActivity: { kind: 'thinking' } }
+    }
+  }
+  if (parsed.type === 'turn_context') {
+    return { state: 'running', petReaction: 'thinking', petActivity: { kind: 'thinking' } }
+  }
+  return null
+}
+
+async function sessionFromCodexTranscript(path: string): Promise<RuntimeSessionInfo | null> {
+  const fallbackId = codexSessionIdFromFilename(path)
+  let statMtime: string | null = null
+  try {
+    statMtime = (await stat(path)).mtime.toISOString()
+  } catch {
+    statMtime = null
+  }
+
+  let lines: string[]
+  try {
+    lines = (await readFile(path, 'utf8')).split(/\r?\n/).filter(Boolean)
+  } catch {
+    return null
+  }
+  const records = headTailLines(lines, 80, 400)
+  let sessionId = fallbackId
+  let title: string | null = null
+  let workDir: string | null = null
+  let model: string | null = null
+  let lastActivityAt: string | null = statMtime
+  let startedAt: string | null = null
+  let state: RuntimeSessionState = 'unknown'
+  let petReaction: RuntimeSessionPetReaction | undefined
+  let petActivity: RuntimeSessionPetActivity | undefined
+
+  for (const line of records) {
+    let parsed: Record<string, unknown>
+    try {
+      parsed = asRecord(JSON.parse(line) as unknown)
+    } catch {
+      continue
+    }
+    const payload = asRecord(parsed.payload)
+    const timestamp =
+      normalizeIsoDate(readString(parsed, ['timestamp', 'createdAt'])) ??
+      normalizeIsoDate(readString(payload, ['timestamp', 'createdAt']))
+    if (timestamp) {
+      startedAt = startedAt ?? timestamp
+      lastActivityAt = timestamp
+    }
+
+    if (parsed.type === 'session_meta') {
+      sessionId = readString(payload, ['id', 'sessionId', 'session_id']) ?? sessionId
+      workDir = workDir ?? readString(payload, ['cwd', 'workDir', 'workingDirectory'])
+      model = model ?? readString(payload, ['model'])
+      continue
+    }
+
+    if (parsed.type === 'turn_context') {
+      workDir = workDir ?? readString(payload, ['cwd'])
+      model = model ?? readString(payload, ['model'])
+      continue
+    }
+
+    const role = readString(payload, ['role']) ?? readString(asRecord(payload.message), ['role'])
+    if (!title && role === 'user') {
+      title = messageText(parsed)?.slice(0, 100) ?? null
+    }
+    const signal = codexSignalFromRecord(parsed)
+    if (signal) {
+      state = signal.state
+      petReaction = signal.petReaction ?? petReaction
+      petActivity = signal.petActivity ?? petActivity
+    }
+  }
+
+  return withRuntimeSessionPetReaction({
+    runtimeId: 'codex',
+    instanceId: 'transcripts',
+    sessionId,
+    title,
+    workDir,
+    state,
+    petReaction,
+    petActivity,
+    model,
+    lastActivityAt,
+    startedAt,
+    source: 'transcript',
+    native: { transcriptFile: basename(path) },
+  })
 }
 
 async function activeClaudeSessionIds(env: NodeJS.ProcessEnv): Promise<Set<string>> {
@@ -652,6 +1176,20 @@ async function activeClaudeSessionIds(env: NodeJS.ProcessEnv): Promise<Set<strin
     const resume =
       line.match(/(?:--resume(?:=|\s+)|-r\s+)([0-9a-f]{8}-[0-9a-f-]{27,})/i) ??
       line.match(/--session-id(?:=|\s+)([0-9a-f]{8}-[0-9a-f-]{27,})/i)
+    if (resume?.[1]) ids.add(resume[1])
+  }
+  return ids
+}
+
+async function activeCodexSessionIds(env: NodeJS.ProcessEnv): Promise<Set<string>> {
+  const result = await runCommand('ps', ['-axo', 'command='], { env, timeoutMs: 2500 })
+  if (result.status !== 0 || !result.stdout) return new Set()
+  const ids = new Set<string>()
+  for (const line of result.stdout.split(/\r?\n/)) {
+    if (!line.includes('codex')) continue
+    const resume =
+      line.match(/\bresume\s+([0-9a-f]{8}-[0-9a-f-]{27,})/i) ??
+      line.match(/(?:--resume(?:=|\s+)|--session-id(?:=|\s+))([0-9a-f]{8}-[0-9a-f-]{27,})/i)
     if (resume?.[1]) ids.add(resume[1])
   }
   return ids
@@ -672,7 +1210,13 @@ async function scanClaudeCode(
   const sessions = scannedSessions
     .filter((item): item is RuntimeSessionInfo => Boolean(item))
     .map((session) =>
-      activeSessions.has(session.sessionId) ? { ...session, state: 'running' as const } : session,
+      activeSessions.has(session.sessionId)
+        ? withRuntimeSessionPetReaction({
+            ...session,
+            state: 'running' as const,
+            petReaction: activeRuntimePetReaction(session.petReaction),
+          })
+        : session,
     )
     .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''))
 
@@ -693,6 +1237,48 @@ async function scanClaudeCode(
   }
 }
 
+async function scanCodex(
+  options: RuntimeSessionScanOptions,
+): Promise<{ instances: RuntimeInstanceInfo[]; sessions: RuntimeSessionInfo[] }> {
+  const env = options.env ?? process.env
+  const home = options.homeDir ?? homedir()
+  const root = resolve(home, '.codex/sessions')
+  const [available, files, activeSessions] = await Promise.all([
+    commandAvailable('codex', env),
+    walkJsonlFiles(root, options.limit ?? 100),
+    activeCodexSessionIds(env),
+  ])
+  const scannedSessions = await Promise.all(files.map(sessionFromCodexTranscript))
+  const sessions = scannedSessions
+    .filter((item): item is RuntimeSessionInfo => Boolean(item))
+    .map((session) =>
+      activeSessions.has(session.sessionId)
+        ? withRuntimeSessionPetReaction({
+            ...session,
+            state: 'running' as const,
+            petReaction: activeRuntimePetReaction(session.petReaction),
+          })
+        : session,
+    )
+    .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''))
+
+  return {
+    instances: [
+      {
+        runtimeId: 'codex',
+        instanceId: 'transcripts',
+        label: 'Codex CLI transcripts',
+        status: available ? 'available' : sessions.length > 0 ? 'stopped' : 'missing',
+        capabilities: available
+          ? ['sessionList', 'processWatch', 'sendMessage', 'connectorOwnedOnly']
+          : ['sessionList'],
+        metadata: { transcriptRoot: '~/.codex/sessions' },
+      },
+    ],
+    sessions,
+  }
+}
+
 export async function scanRuntimeSessions(
   options: RuntimeSessionScanOptions = {},
 ): Promise<RuntimeSessionSnapshot> {
@@ -701,6 +1287,7 @@ export async function scanRuntimeSessions(
   const parts = await Promise.all(
     runtimeIds.map((runtimeId) => {
       if (runtimeId === 'opencode') return scanOpenCode(options)
+      if (runtimeId === 'codex') return scanCodex(options)
       return scanClaudeCode(options)
     }),
   )
@@ -714,6 +1301,12 @@ export async function scanRuntimeSessions(
 
 function sessionKey(session: RuntimeSessionInfo): string {
   return `${session.runtimeId}:${session.instanceId}:${session.sessionId}`
+}
+
+function runtimeSessionPetActivityKey(session: Pick<RuntimeSessionInfo, 'petActivity'>): string {
+  return session.petActivity
+    ? `${session.petActivity.kind}:${session.petActivity.label?.trim() ?? ''}`
+    : ''
 }
 
 export function diffRuntimeSessionSnapshots(
@@ -734,11 +1327,18 @@ export function diffRuntimeSessionSnapshots(
         runtimeId: session.runtimeId,
         sessionId: session.sessionId,
         state: session.state,
+        petReaction: runtimeSessionPetReaction(session),
+        petActivity: session.petActivity,
         session,
       })
       continue
     }
-    if (old.state !== session.state || old.lastActivityAt !== session.lastActivityAt) {
+    if (
+      old.state !== session.state ||
+      old.lastActivityAt !== session.lastActivityAt ||
+      runtimeSessionPetReaction(old) !== runtimeSessionPetReaction(session) ||
+      runtimeSessionPetActivityKey(old) !== runtimeSessionPetActivityKey(session)
+    ) {
       events.push({
         type: 'session_changed',
         at: next.scannedAt,
@@ -746,6 +1346,10 @@ export function diffRuntimeSessionSnapshots(
         sessionId: session.sessionId,
         previousState: old.state,
         state: session.state,
+        previousPetReaction: runtimeSessionPetReaction(old),
+        petReaction: runtimeSessionPetReaction(session),
+        previousPetActivity: old.petActivity,
+        petActivity: session.petActivity,
         session,
       })
     }
@@ -760,6 +1364,9 @@ export function diffRuntimeSessionSnapshots(
       sessionId: session.sessionId,
       previousState: session.state,
       state: 'stopped',
+      previousPetReaction: runtimeSessionPetReaction(session),
+      petReaction: runtimeSessionPetReactionForState('stopped'),
+      previousPetActivity: session.petActivity,
       session,
     })
   }
@@ -787,15 +1394,19 @@ export function renderRuntimeSessionPanel(snapshot: RuntimeSessionSnapshot): str
     lines.push('No sessions detected.')
     return lines.join('\n')
   }
-  lines.push('runtime        state       last activity          session                 title')
   lines.push(
-    '-------------  ----------  ---------------------  ----------------------  ----------------',
+    'runtime        state       reaction     last activity          session                 title',
+  )
+  lines.push(
+    '-------------  ----------  -----------  ---------------------  ----------------------  ----------------',
   )
   for (const session of snapshot.sessions.slice(0, 30)) {
     lines.push(
-      `${session.runtimeId.padEnd(13)}  ${session.state.padEnd(10)}  ${(
-        session.lastActivityAt ?? '-'
+      `${session.runtimeId.padEnd(13)}  ${session.state.padEnd(10)}  ${runtimeSessionPetReaction(
+        session,
       )
+        .slice(0, 11)
+        .padEnd(11)}  ${(session.lastActivityAt ?? '-')
         .slice(0, 21)
         .padEnd(21)}  ${session.sessionId.slice(0, 22).padEnd(22)}  ${
         session.title?.replace(/\s+/g, ' ').slice(0, 80) ?? '-'
@@ -875,10 +1486,35 @@ async function sendClaudeMessage(
   }
 }
 
+async function sendCodexMessage(
+  options: RuntimeSessionSendOptions,
+): Promise<RuntimeSessionSendResult> {
+  const env = options.env ?? process.env
+  const result = await runCommand(
+    env.CODEX_CLI_PATH?.trim() || 'codex',
+    ['exec', 'resume', '--json', options.sessionId, options.message],
+    {
+      env,
+      timeoutMs: options.timeoutMs ?? 180_000,
+    },
+  )
+  return {
+    runtimeId: 'codex',
+    sessionId: options.sessionId,
+    accepted: result.status === 0,
+    mode: 'process',
+    events: parseJsonLines(result.stdout ?? ''),
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.status,
+  }
+}
+
 export async function sendRuntimeSessionMessage(
   options: RuntimeSessionSendOptions,
 ): Promise<RuntimeSessionSendResult> {
   if (options.runtimeId === 'opencode') return sendOpenCodeMessage(options)
   if (options.runtimeId === 'claude-code') return sendClaudeMessage(options)
+  if (options.runtimeId === 'codex') return sendCodexMessage(options)
   throw new Error(`Runtime ${options.runtimeId} does not support session-send yet`)
 }

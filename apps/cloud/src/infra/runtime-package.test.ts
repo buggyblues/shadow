@@ -130,7 +130,6 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     ['claude-code', 'claudecode', '/workspace/.claude/settings.json', 'review'],
     ['codex', 'codex', '/home/shadow/.codex/config.toml', 'init'],
     ['opencode', 'opencode', '/workspace/opencode.json', 'connect'],
-    ['gemini', 'gemini', '/workspace/.gemini/settings.json', 'agents'],
   ] as const)('emits cc-connect native package for %s without OpenClaw artifacts', (runtime, agentType, nativeConfigPath, commandName) => {
     const pkg = runtimePackageFor(runtime)
 
@@ -169,6 +168,72 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(pkg.plainEnv.SHADOW_SERVER_URL).toBe(SHADOW_SERVER_URL)
   })
 
+  it.each([
+    [
+      'claude-code',
+      'claudecode',
+      'ANTHROPIC_COMPATIBLE_BASE_URL',
+      'ANTHROPIC_COMPATIBLE_API_KEY',
+      'ANTHROPIC_COMPATIBLE_MODEL_ID',
+    ],
+    [
+      'opencode',
+      'opencode',
+      'OPENAI_COMPATIBLE_BASE_URL',
+      'OPENAI_COMPATIBLE_API_KEY',
+      'OPENAI_COMPATIBLE_MODEL_ID',
+    ],
+  ] as const)('injects the official provider into %s using the expected API style', (runtime, agentType, expectedBaseUrlEnv, expectedApiKeyEnv, expectedModelEnv) => {
+    const agent = baseAgent(runtime)
+    const pkg = buildAgentRuntimePackage({
+      agent,
+      config: cloudConfig(agent),
+      extraEnv: {
+        SHADOW_SERVER_URL,
+        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        SHADOW_MODEL_PROVIDER_ID: 'shadow-official',
+        OPENAI_COMPATIBLE_BASE_URL: 'https://shadow.example.com/api/ai/v1',
+        OPENAI_COMPATIBLE_API_KEY: 'official-openai-token',
+        OPENAI_COMPATIBLE_MODEL_ID: 'deepseek-v4-flash',
+        ANTHROPIC_COMPATIBLE_BASE_URL: 'https://shadow.example.com/api/ai/anthropic',
+        ANTHROPIC_COMPATIBLE_API_KEY: 'official-anthropic-token',
+        ANTHROPIC_COMPATIBLE_MODEL_ID: 'deepseek-v4-flash',
+      },
+    })
+
+    const parsed = parseToml(pkg.configData['cc-connect-config.toml'] ?? '') as any
+    const project = parsed.projects[0]
+    const expectedModel =
+      runtime === 'opencode' ? `shadow-official/\${${expectedModelEnv}}` : `\${${expectedModelEnv}}`
+    expect(project.agent.type).toBe(agentType)
+    expect(project.agent.options.provider).toBe('shadow-official')
+    expect(project.agent.options.model).toBe(expectedModel)
+    expect(project.agent.providers[0].name).toBe('shadow-official')
+    expect(project.agent.providers[0].base_url).toBe(`\${${expectedBaseUrlEnv}}`)
+    expect(project.agent.providers[0].api_key).toBe(`\${${expectedApiKeyEnv}}`)
+    expect(project.agent.providers[0].models[0].model).toBe(expectedModel)
+    if (runtime === 'opencode') {
+      const files = runtimeFiles(pkg)
+      const opencodeConfig = JSON.parse(files['/workspace/opencode.json'] ?? '{}')
+      expect(opencodeConfig.model).toBe('shadow-official/${OPENAI_COMPATIBLE_MODEL_ID}')
+      expect(opencodeConfig.provider['shadow-official']).toEqual({
+        npm: '@ai-sdk/openai-compatible',
+        name: 'Shadow official LLM proxy',
+        options: {
+          baseURL: '${OPENAI_COMPATIBLE_BASE_URL}',
+          apiKey: '{env:OPENAI_COMPATIBLE_API_KEY}',
+        },
+        models: {
+          '${OPENAI_COMPATIBLE_MODEL_ID}': {
+            name: '${OPENAI_COMPATIBLE_MODEL_ID}',
+          },
+        },
+      })
+    }
+    expect(JSON.stringify(pkg.configData)).not.toContain('official-openai-token')
+    expect(JSON.stringify(pkg.configData)).not.toContain('official-anthropic-token')
+  })
+
   it('emits Hermes native package without OpenClaw or cc-connect artifacts', () => {
     const pkg = runtimePackageFor('hermes')
 
@@ -185,7 +250,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(() => parseYaml(hermesConfig ?? '')).not.toThrow()
     expect(hermesConfig).toContain('shadowob')
     expect(hermesConfig).toContain('${SHADOW_TOKEN_BUDDY_1}')
-    expect(files['/home/shadow/.hermes/plugins/shadowob/plugin.yaml']).toContain('shadowob')
+    expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
     expectShadowCliAuth(files)
     expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
@@ -201,6 +266,39 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('# Shadow CLI')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+  })
+
+  it('injects the official OpenAI-compatible model proxy into Hermes native config', () => {
+    const agent = baseAgent('hermes')
+    const pkg = buildAgentRuntimePackage({
+      agent,
+      config: cloudConfig(agent),
+      extraEnv: {
+        SHADOW_SERVER_URL,
+        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        OPENAI_COMPATIBLE_BASE_URL: 'https://shadow.example.com/api/ai/v1',
+        OPENAI_COMPATIBLE_API_KEY: 'official-proxy-token',
+      },
+    })
+
+    const files = runtimeFiles(pkg)
+    const hermesConfig = parseYaml(files['/home/shadow/.hermes/config.yaml'] ?? '') as any
+    const hermesEnv = files['/home/shadow/.hermes/.env'] ?? ''
+
+    expect(hermesConfig.model).toEqual({ default: 'default', provider: 'shadow-official' })
+    expect(hermesConfig.custom_providers).toEqual([
+      {
+        name: 'shadow-official',
+        base_url: '${OPENAI_COMPATIBLE_BASE_URL}',
+        key_env: 'OPENAI_COMPATIBLE_API_KEY',
+        model: 'default',
+      },
+    ])
+    expect(hermesEnv).toContain('OPENAI_COMPATIBLE_BASE_URL=${OPENAI_COMPATIBLE_BASE_URL}')
+    expect(hermesEnv).toContain('OPENAI_COMPATIBLE_API_KEY=${OPENAI_COMPATIBLE_API_KEY}')
+    expect(JSON.stringify(pkg.configData)).not.toContain('official-proxy-token')
+    expect(pkg.plainEnv.OPENAI_COMPATIBLE_BASE_URL).toBe('https://shadow.example.com/api/ai/v1')
+    expect(pkg.secretData.OPENAI_COMPATIBLE_API_KEY).toBe('official-proxy-token')
   })
 
   it('preserves plugin-provided slash command indexes for native runners', () => {

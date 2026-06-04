@@ -408,14 +408,12 @@ function materializePluginRuntimeAssets() {
     '/workspace/.claude/skills',
     '/workspace/.opencode/skills',
     join(RUNNER_HOME, '.codex/skills'),
-    join(RUNNER_HOME, '.gemini/skills'),
   ]
   const subagentDestinations = [
     '/workspace/.agents/agents',
     '/workspace/.claude/agents',
     '/workspace/.opencode/agents',
     join(RUNNER_HOME, '.codex/agents'),
-    join(RUNNER_HOME, '.gemini/agents'),
   ]
 
   for (const root of skillRoots) {
@@ -469,6 +467,26 @@ function verifyBinary(command, args) {
   }
 }
 
+function markReady(reason) {
+  if (ready) return
+  ready = true
+  console.log(`[entrypoint] ${RUNTIME_NAME} ready (${reason})`)
+}
+
+function observeCcConnectOutput(chunk) {
+  const text = chunk.toString()
+  for (const line of text.split(/\r?\n/)) {
+    if (
+      line.includes('platform ready') ||
+      line.includes('cc-connect is running') ||
+      line.includes('api server started')
+    ) {
+      markReady('cc-connect')
+      return
+    }
+  }
+}
+
 function startCcConnect() {
   if (!existsSync(CC_CONNECT_CONFIG_PATH)) {
     throw new Error(`Missing generated cc-connect config: ${CC_CONNECT_CONFIG_PATH}`)
@@ -485,8 +503,14 @@ function startCcConnect() {
     cwd: '/workspace',
   })
   child = proc
-  proc.stdout.on('data', (chunk) => process.stdout.write(redact(chunk.toString())))
-  proc.stderr.on('data', (chunk) => process.stderr.write(redact(chunk.toString())))
+  proc.stdout.on('data', (chunk) => {
+    observeCcConnectOutput(chunk)
+    process.stdout.write(redact(chunk.toString()))
+  })
+  proc.stderr.on('data', (chunk) => {
+    observeCcConnectOutput(chunk)
+    process.stderr.write(redact(chunk.toString()))
+  })
   proc.on('exit', (code, signal) => {
     ready = false
     console.error(
@@ -495,7 +519,7 @@ function startCcConnect() {
     process.exit(code ?? 1)
   })
   setTimeout(() => {
-    if (!proc.killed) ready = true
+    if (!proc.killed) markReady('startup fallback')
   }, 3000)
 }
 
@@ -523,7 +547,7 @@ async function main() {
     verifyBinary('cc-connect', ['--help'])
     verifyBinary('shadowob', ['--help'])
     verifyBinary('shadowob-connector', ['--help'])
-    ready = true
+    markReady('validation')
     console.log('[entrypoint] validation completed')
     return
   }

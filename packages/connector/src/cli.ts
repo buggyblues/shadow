@@ -19,6 +19,11 @@ import {
 } from './config-writers.js'
 import { createConnectorPlan, type ShadowConnectorTarget } from './index.js'
 import {
+  type ConnectorModelProvider,
+  type ConnectorModelProviderInput,
+  normalizeConnectorModelProvider,
+} from './model-provider.js'
+import {
   CONNECTOR_RUNTIME_CATALOG,
   type ConnectorRuntimeCatalogEntry,
   type ConnectorRuntimeKind,
@@ -82,6 +87,10 @@ interface CliOptions {
   modelProviderLabel?: string
   modelProviderBaseUrl?: string
   modelProviderApiKey?: string
+  modelProviderOpenAIBaseUrl?: string
+  modelProviderOpenAIApiKey?: string
+  modelProviderAnthropicBaseUrl?: string
+  modelProviderAnthropicApiKey?: string
   modelProviderModel?: string
   json: boolean
   force: boolean
@@ -165,7 +174,11 @@ function usage(): string {
     '  --agent-type <type>     cc-connect agent type, default codex',
     '  --model-provider-base-url <url> OpenAI-compatible model provider base URL',
     '  --model-provider-api-key <key> OpenAI-compatible model provider API key',
-    '  --model-provider-model <model> OpenAI-compatible model id',
+    '  --model-provider-openai-base-url <url> OpenAI-compatible provider base URL',
+    '  --model-provider-openai-api-key <key> OpenAI-compatible provider API key',
+    '  --model-provider-anthropic-base-url <url> Anthropic-compatible provider base URL',
+    '  --model-provider-anthropic-api-key <key> Anthropic-compatible provider API key',
+    '  --model-provider-model <model> Model id for the configured provider endpoints',
     '  --model-provider-id <id> Model provider id, default shadow-official',
     '  --json                  Print the full plan as JSON',
     '  --force                 Overwrite target config files when needed',
@@ -245,6 +258,10 @@ function parseArgs(args: string[]): CliOptions {
     modelProviderLabel: readOption(optionArgs, '--model-provider-label'),
     modelProviderBaseUrl: readOption(optionArgs, '--model-provider-base-url'),
     modelProviderApiKey: readOption(optionArgs, '--model-provider-api-key'),
+    modelProviderOpenAIBaseUrl: readOption(optionArgs, '--model-provider-openai-base-url'),
+    modelProviderOpenAIApiKey: readOption(optionArgs, '--model-provider-openai-api-key'),
+    modelProviderAnthropicBaseUrl: readOption(optionArgs, '--model-provider-anthropic-base-url'),
+    modelProviderAnthropicApiKey: readOption(optionArgs, '--model-provider-anthropic-api-key'),
     modelProviderModel: readOption(optionArgs, '--model-provider-model'),
     json: hasFlag(optionArgs, '--json'),
     force: hasFlag(optionArgs, '--force'),
@@ -619,26 +636,19 @@ function tokenForCommand(options: CliOptions): string {
   return options.token.trim() || '<BUDDY_TOKEN>'
 }
 
-function modelProviderFromOptions(options: CliOptions):
-  | {
-      id?: string
-      label?: string
-      baseUrl: string
-      apiKey: string
-      model: string
-    }
-  | undefined {
-  const baseUrl = options.modelProviderBaseUrl?.trim()
-  const apiKey = options.modelProviderApiKey?.trim()
-  const model = options.modelProviderModel?.trim()
-  if (!baseUrl || !apiKey || !model) return undefined
-  return {
-    id: options.modelProviderId?.trim() || 'shadow-official',
-    label: options.modelProviderLabel?.trim() || 'Shadow official LLM proxy',
-    baseUrl,
-    apiKey,
-    model,
+function modelProviderFromOptions(options: CliOptions): ConnectorModelProvider | undefined {
+  const input: ConnectorModelProviderInput = {
+    id: options.modelProviderId,
+    label: options.modelProviderLabel,
+    baseUrl: options.modelProviderBaseUrl,
+    apiKey: options.modelProviderApiKey,
+    openAIBaseUrl: options.modelProviderOpenAIBaseUrl,
+    openAIApiKey: options.modelProviderOpenAIApiKey,
+    anthropicBaseUrl: options.modelProviderAnthropicBaseUrl,
+    anthropicApiKey: options.modelProviderAnthropicApiKey,
+    model: options.modelProviderModel,
   }
+  return normalizeConnectorModelProvider(input) ?? undefined
 }
 
 function connectorCommand(
@@ -776,7 +786,6 @@ function shadowobSkillTargets(options: CliOptions): string[] {
       resolve(homedir(), '.agents/skills/shadowob/SKILL.md'),
       resolve(homedir(), '.codex/skills/shadowob/SKILL.md'),
       resolve(homedir(), '.claude/skills/shadowob/SKILL.md'),
-      resolve(homedir(), '.gemini/skills/shadowob/SKILL.md'),
       resolve(homedir(), '.opencode/skills/shadowob/SKILL.md'),
       resolve(homedir(), '.openclaw/skills/shadowob/SKILL.md'),
       resolve(hermesDir, 'skills/shadowob/SKILL.md'),
@@ -1443,13 +1452,7 @@ interface DaemonJob {
     projectName?: string
     workDir?: string
     buddy?: { id?: string; username?: string; displayName?: string | null }
-    modelProvider?: {
-      id?: string
-      label?: string
-      baseUrl: string
-      apiKey: string
-      model: string
-    }
+    modelProvider?: ConnectorModelProvider
   }
 }
 
@@ -1920,7 +1923,6 @@ function ccAgentTypeForRuntime(runtimeId: string): string {
     'claude-code': 'claudecode',
     codex: 'codex',
     opencode: 'opencode',
-    gemini: 'gemini',
     cursor: 'cursor',
     kimi: 'kimi',
     copilot: 'copilot',
@@ -1933,13 +1935,7 @@ function daemonModelProviderForRuntime(
   runtimeId: string,
   provider: DaemonJob['payload']['modelProvider'],
 ): DaemonJob['payload']['modelProvider'] | undefined {
-  if (!provider) return undefined
-  if (provider.id === 'shadow-official' && runtimeId !== 'openclaw' && runtimeId !== 'hermes') {
-    console.log(
-      `[daemon] ignoring default Shadow model provider for local ${runtimeId}; using the runtime's native auth`,
-    )
-    return undefined
-  }
+  void runtimeId
   return provider
 }
 
@@ -2325,6 +2321,10 @@ async function applyDaemonJob(job: DaemonJob, baseOptions: CliOptions): Promise<
         modelProviderLabel: modelProvider?.label,
         modelProviderBaseUrl: modelProvider?.baseUrl,
         modelProviderApiKey: modelProvider?.apiKey,
+        modelProviderOpenAIBaseUrl: modelProvider?.openAIBaseUrl,
+        modelProviderOpenAIApiKey: modelProvider?.openAIApiKey,
+        modelProviderAnthropicBaseUrl: modelProvider?.anthropicBaseUrl,
+        modelProviderAnthropicApiKey: modelProvider?.anthropicApiKey,
         modelProviderModel: modelProvider?.model,
         install: true,
       },
@@ -2349,6 +2349,10 @@ async function applyDaemonJob(job: DaemonJob, baseOptions: CliOptions): Promise<
       modelProviderLabel: modelProvider?.label,
       modelProviderBaseUrl: modelProvider?.baseUrl,
       modelProviderApiKey: modelProvider?.apiKey,
+      modelProviderOpenAIBaseUrl: modelProvider?.openAIBaseUrl,
+      modelProviderOpenAIApiKey: modelProvider?.openAIApiKey,
+      modelProviderAnthropicBaseUrl: modelProvider?.anthropicBaseUrl,
+      modelProviderAnthropicApiKey: modelProvider?.anthropicApiKey,
       modelProviderModel: modelProvider?.model,
       install: true,
       start: false,
@@ -2368,6 +2372,10 @@ async function applyDaemonJob(job: DaemonJob, baseOptions: CliOptions): Promise<
     modelProviderLabel: modelProvider?.label,
     modelProviderBaseUrl: modelProvider?.baseUrl,
     modelProviderApiKey: modelProvider?.apiKey,
+    modelProviderOpenAIBaseUrl: modelProvider?.openAIBaseUrl,
+    modelProviderOpenAIApiKey: modelProvider?.openAIApiKey,
+    modelProviderAnthropicBaseUrl: modelProvider?.anthropicBaseUrl,
+    modelProviderAnthropicApiKey: modelProvider?.anthropicApiKey,
     modelProviderModel: modelProvider?.model,
     install: true,
     start: false,
@@ -2599,11 +2607,35 @@ async function runDaemon(options: CliOptions): Promise<void> {
 function hermesPluginSource(): string {
   const candidates = [
     resolve(packageRoot(), 'hermes-shadowob-plugin'),
+    resolve('/opt/shadowob/hermes-shadowob-plugin'),
     resolve(process.cwd(), 'packages/connector/hermes-shadowob-plugin'),
-  ]
+  ].filter((candidate): candidate is string => Boolean(candidate))
   const found = candidates.find((candidate) => existsSync(candidate))
   if (!found) throw new Error('Cannot find bundled hermes-shadowob-plugin directory')
   return found
+}
+
+function findCommandOnCurrentPath(command: string): string | null {
+  const pathValue = process.env.PATH ?? process.env.Path ?? ''
+  const separator = process.platform === 'win32' ? ';' : ':'
+  const extensions =
+    process.platform === 'win32' ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';') : ['']
+  for (const dir of pathValue.split(separator).filter(Boolean)) {
+    for (const ext of extensions) {
+      const candidate = resolve(dir, process.platform === 'win32' ? `${command}${ext}` : command)
+      if (existsSync(candidate)) return candidate
+    }
+  }
+  return null
+}
+
+function hermesPythonCommand(): string {
+  const hermes = findCommandOnCurrentPath('hermes') ?? findCommandOnConnectorPath('hermes')
+  const siblingPython = hermes ? resolve(dirname(hermes), 'python') : null
+  const candidates = [siblingPython, '/opt/hermes/.venv/bin/python'].filter(
+    (candidate): candidate is string => Boolean(candidate),
+  )
+  return candidates.find((candidate) => existsSync(candidate)) ?? 'python'
 }
 
 async function applyOpenClaw(
@@ -2654,7 +2686,11 @@ async function applyHermes(options: CliOptions): Promise<void> {
 
   if (!envBlock) throw new Error('Hermes plan is missing config blocks')
 
-  await installShadowCliAndSkills(options)
+  if (options.install) {
+    await installShadowCliAndSkills(options)
+  } else {
+    writeShadowCliProfile(options)
+  }
 
   if (options.dryRun) {
     console.log(`[dry-run] copy ${hermesPluginSource()} -> ${pluginTarget}`)
@@ -2689,8 +2725,13 @@ async function applyHermes(options: CliOptions): Promise<void> {
   writeFile(configPath, nextConfig, options.dryRun)
 
   if (options.install) {
+    const python = shellQuote(hermesPythonCommand())
     await runShellAsync(
-      `python -m pip install -r "${resolve(pluginTarget, 'requirements.txt')}"`,
+      `${python} -m pip --version >/dev/null 2>&1 || ${python} -m ensurepip --upgrade`,
+      options.dryRun,
+    )
+    await runShellAsync(
+      `${python} -m pip install -r ${shellQuote(resolve(pluginTarget, 'requirements.txt'))}`,
       options.dryRun,
     )
     await runShellAsync('hermes plugins enable shadowob', options.dryRun)

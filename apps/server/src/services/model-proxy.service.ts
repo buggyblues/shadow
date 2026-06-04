@@ -6,6 +6,7 @@ import { isModelProxyToken, verifyModelProxyToken } from '../lib/model-proxy-tok
 import type { LedgerService } from './ledger.service'
 
 type ChatCompletionsBody = Record<string, unknown>
+type AnthropicMessagesBody = Record<string, unknown>
 
 type ModelProxyIdentity = {
   userId: string
@@ -76,8 +77,32 @@ function upstreamBaseUrl() {
   return firstNonEmptyEnv('SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL')?.replace(/\/+$/, '') ?? null
 }
 
+function upstreamAnthropicBaseUrl() {
+  const configured = firstNonEmptyEnv('SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL')
+  if (configured) return configured.replace(/\/+$/, '')
+
+  const openAIBaseUrl = upstreamBaseUrl()
+  if (!openAIBaseUrl) return null
+  try {
+    const parsed = new URL(openAIBaseUrl)
+    if (parsed.hostname === 'api.deepseek.com') {
+      return `${parsed.origin}/anthropic`
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
 function upstreamApiKey() {
   return firstNonEmptyEnv('SHADOW_MODEL_PROXY_UPSTREAM_API_KEY')
+}
+
+function upstreamAnthropicApiKey() {
+  return firstNonEmptyEnv(
+    'SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY',
+    'SHADOW_MODEL_PROXY_UPSTREAM_API_KEY',
+  )
 }
 
 function defaultModel() {
@@ -98,6 +123,15 @@ function allowedModels() {
 
 function publicModels() {
   return [PUBLIC_MODEL_ALIAS]
+}
+
+function modelResponse(modelId: string) {
+  return {
+    id: modelId,
+    object: 'model',
+    created: 0,
+    owned_by: 'shadow-official',
+  }
 }
 
 function normalizeModel(model: unknown) {
@@ -192,6 +226,9 @@ function usageFromResponse(data: unknown): Usage | null {
 
 function outputTextFromResponse(data: unknown) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
+  const content = (data as Record<string, unknown>).content
+  const contentText = collectText(content)
+  if (contentText) return contentText
   const choices = (data as Record<string, unknown>).choices
   if (!Array.isArray(choices)) return ''
   return choices
@@ -415,12 +452,142 @@ function chatCompletionRechargeStream(input: {
   )
 }
 
+function anthropicRechargeResponse(input: {
+  model: string
+  requiredAmount?: number
+  balance?: number
+  shortfall?: number
+}) {
+  const content = buildWalletRechargeContent(input)
+  return new Response(
+    JSON.stringify({
+      id: `msg_shadow_recharge_${randomUUID()}`,
+      type: 'message',
+      role: 'assistant',
+      model: input.model,
+      content: [{ type: 'text', text: content }],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+      },
+      shadow: {
+        type: 'wallet_recharge_required',
+        requiredAmount: input.requiredAmount,
+        balance: input.balance,
+        shortfall: input.shortfall,
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shadow-Recharge-Required': 'true',
+      },
+    },
+  )
+}
+
+function anthropicRechargeStream(input: {
+  model: string
+  requiredAmount?: number
+  balance?: number
+  shortfall?: number
+}) {
+  const id = `msg_shadow_recharge_${randomUUID()}`
+  const content = buildWalletRechargeContent(input)
+  const encoder = new TextEncoder()
+  const events = [
+    [
+      'message_start',
+      {
+        type: 'message_start',
+        message: {
+          id,
+          type: 'message',
+          role: 'assistant',
+          model: input.model,
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 0, output_tokens: 0 },
+        },
+      },
+    ],
+    [
+      'content_block_start',
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'text', text: '' },
+      },
+    ],
+    [
+      'content_block_delta',
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: content },
+      },
+    ],
+    ['content_block_stop', { type: 'content_block_stop', index: 0 }],
+    [
+      'message_delta',
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 0 },
+      },
+    ],
+    ['message_stop', { type: 'message_stop' }],
+  ] as const
+
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const [event, data] of events) {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+        }
+        controller.close()
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'X-Shadow-Recharge-Required': 'true',
+      },
+    },
+  )
+}
+
 function openAIErrorResponse(status: number, message: string, code: string, extra = {}) {
   return new Response(
     JSON.stringify({
       error: {
         message,
         type: status === 402 ? 'insufficient_balance' : 'invalid_request_error',
+        code,
+        ...extra,
+      },
+    }),
+    {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  )
+}
+
+function anthropicErrorResponse(status: number, message: string, code: string, extra = {}) {
+  return new Response(
+    JSON.stringify({
+      type: 'error',
+      error: {
+        type: status === 401 ? 'authentication_error' : 'api_error',
+        message,
         code,
         ...extra,
       },
@@ -460,6 +627,14 @@ function buildUpstreamBody(body: ChatCompletionsBody, model: string) {
   return next
 }
 
+function buildUpstreamAnthropicBody(body: AnthropicMessagesBody, model: string) {
+  const next: AnthropicMessagesBody = { ...body, model }
+  if (!Number.isFinite(Number(next.max_tokens))) {
+    next.max_tokens = estimateMaxOutputTokens(next)
+  }
+  return next
+}
+
 export class ModelProxyService {
   constructor(
     private deps: {
@@ -472,13 +647,20 @@ export class ModelProxyService {
   modelsResponse() {
     return {
       object: 'list',
-      data: publicModels().map((model) => ({
-        id: model,
-        object: 'model',
-        created: 0,
-        owned_by: 'shadow-official',
-      })),
+      data: publicModels().map((model) => modelResponse(model)),
     }
+  }
+
+  modelResponse(model: string) {
+    const requested = model.trim()
+    if (!requested) {
+      throw Object.assign(new Error('Model id is required'), {
+        status: 400,
+        code: 'MODEL_PROXY_INVALID_REQUEST',
+      })
+    }
+    normalizeModel(requested)
+    return modelResponse(requested)
   }
 
   billingResponse() {
@@ -534,9 +716,9 @@ export class ModelProxyService {
     return { userId: payload.userId, source: 'user_token' }
   }
 
-  private requireUpstreamConfig() {
-    const apiKey = upstreamApiKey()
-    const baseUrl = upstreamBaseUrl()
+  private requireUpstreamConfig(style: 'openai' | 'anthropic' = 'openai') {
+    const apiKey = style === 'anthropic' ? upstreamAnthropicApiKey() : upstreamApiKey()
+    const baseUrl = style === 'anthropic' ? upstreamAnthropicBaseUrl() : upstreamBaseUrl()
     if (!apiKey || !baseUrl) {
       throw Object.assign(new Error('Official model provider is not configured'), {
         status: 503,
@@ -697,6 +879,114 @@ export class ModelProxyService {
     return this.proxyJsonResponse(response, identity, charge, body)
   }
 
+  async proxyAnthropicMessages(
+    identity: ModelProxyIdentity,
+    body: AnthropicMessagesBody,
+    signal?: AbortSignal,
+  ) {
+    if (!Array.isArray(body.messages)) {
+      return anthropicErrorResponse(400, 'messages must be an array', 'MODEL_PROXY_INVALID_REQUEST')
+    }
+
+    let model = defaultModel()
+    let upstream: { apiKey: string; baseUrl: string }
+    let charge: ReservedCharge
+    try {
+      model = normalizeModel(body.model)
+      upstream = this.requireUpstreamConfig('anthropic')
+      charge = await this.reserve(identity, body, model)
+    } catch (err) {
+      const error = err as {
+        status?: number
+        code?: string
+        requiredAmount?: number
+        balance?: number
+        shortfall?: number
+        nextAction?: string
+      }
+      if ((error.status ?? 500) === 402 || error.code === 'WALLET_INSUFFICIENT_BALANCE') {
+        const rechargeInput = {
+          model,
+          requiredAmount: error.requiredAmount,
+          balance: error.balance,
+          shortfall: error.shortfall,
+        }
+        return body.stream === true
+          ? anthropicRechargeStream(rechargeInput)
+          : anthropicRechargeResponse(rechargeInput)
+      }
+      return anthropicErrorResponse(
+        error.status ?? 500,
+        err instanceof Error ? err.message : 'Model proxy failed',
+        error.code ?? 'MODEL_PROXY_ERROR',
+        {
+          ...(typeof error.requiredAmount === 'number'
+            ? { requiredAmount: error.requiredAmount }
+            : {}),
+          ...(typeof error.balance === 'number' ? { balance: error.balance } : {}),
+          ...(typeof error.shortfall === 'number' ? { shortfall: error.shortfall } : {}),
+          ...(error.nextAction ? { nextAction: error.nextAction } : {}),
+        },
+      )
+    }
+
+    const upstreamBody = buildUpstreamAnthropicBody(body, model)
+    let response: Response
+    try {
+      response = await this.deps.safeHttpClient.fetch(`${upstream.baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          Accept: body.stream === true ? 'text/event-stream' : 'application/json',
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          Authorization: `Bearer ${upstream.apiKey}`,
+        },
+        body: JSON.stringify(upstreamBody),
+        signal,
+      })
+    } catch (err) {
+      await this.refundReserve(identity, charge)
+      logger.warn({ err, userId: identity.userId }, 'Official Anthropic upstream request failed')
+      return anthropicErrorResponse(
+        502,
+        'Model provider request failed',
+        'MODEL_PROXY_UPSTREAM_ERROR',
+      )
+    }
+
+    if (!response.ok) {
+      await this.refundReserve(identity, charge)
+      if (response.status === 401 || response.status === 403) {
+        logger.error(
+          { status: response.status, userId: identity.userId },
+          'Official Anthropic upstream authentication failed',
+        )
+        return anthropicErrorResponse(
+          503,
+          'Official model provider authentication failed',
+          'MODEL_PROXY_PROVIDER_AUTH_FAILED',
+        )
+      }
+      logger.warn(
+        { status: response.status, userId: identity.userId },
+        'Official Anthropic upstream returned an error',
+      )
+      return anthropicErrorResponse(
+        response.status >= 500 || response.status === 429 ? 503 : 400,
+        response.status === 429
+          ? 'Official model provider is busy. Please try again later.'
+          : 'Official model provider rejected the request.',
+        'MODEL_PROXY_UPSTREAM_REJECTED',
+      )
+    }
+
+    if (body.stream === true) {
+      return this.proxyAnthropicStreamingResponse(response, identity, charge, body)
+    }
+
+    return this.proxyJsonResponse(response, identity, charge, body)
+  }
+
   private async proxyJsonResponse(
     response: Response,
     identity: ModelProxyIdentity,
@@ -787,8 +1077,40 @@ export class ModelProxyService {
       }
     }
 
+    let closed = false
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
+        const enqueue = (value: Uint8Array) => {
+          if (closed) return false
+          try {
+            controller.enqueue(value)
+            return true
+          } catch (err) {
+            closed = true
+            if ((err as { code?: string }).code !== 'ERR_INVALID_STATE') throw err
+            return false
+          }
+        }
+        const close = () => {
+          if (closed) return
+          closed = true
+          try {
+            controller.close()
+          } catch (err) {
+            if ((err as { code?: string }).code !== 'ERR_INVALID_STATE') throw err
+          }
+        }
+        const error = (err: unknown) => {
+          if (closed) return
+          closed = true
+          try {
+            controller.error(err)
+          } catch (controllerErr) {
+            if ((controllerErr as { code?: string }).code !== 'ERR_INVALID_STATE') {
+              throw controllerErr
+            }
+          }
+        }
         try {
           while (true) {
             const { done, value } = await reader.read()
@@ -799,19 +1121,149 @@ export class ModelProxyService {
               const events = buffer.split(/\r?\n\r?\n/)
               buffer = events.pop() ?? ''
               for (const event of events) captureEvent(event)
-              controller.enqueue(value)
+              if (!enqueue(value)) break
             }
           }
           if (buffer) captureEvent(buffer)
           await settleOnce()
-          controller.close()
+          close()
         } catch (err) {
           logger.warn({ err, userId: identity.userId }, 'Model stream failed')
           await settleOnce()
-          controller.error(err)
+          error(err)
         }
       },
       async cancel(reason) {
+        closed = true
+        await reader.cancel(reason).catch(() => null)
+        await settleOnce()
+      },
+    })
+
+    const headers = filteredResponseHeaders(response.headers)
+    headers.set('Content-Type', 'text/event-stream')
+    headers.set('Cache-Control', 'no-cache')
+    headers.set('X-Accel-Buffering', 'no')
+    headers.set('X-Shadow-Shrimp-Reserved', String(charge.amount))
+    return new Response(stream, { status: response.status, headers })
+  }
+
+  private proxyAnthropicStreamingResponse(
+    response: Response,
+    identity: ModelProxyIdentity,
+    charge: ReservedCharge,
+    requestBody: AnthropicMessagesBody,
+  ) {
+    if (!response.body) {
+      void this.refundReserve(identity, charge)
+      return anthropicErrorResponse(
+        502,
+        'Model provider returned an empty stream',
+        'MODEL_PROXY_UPSTREAM_ERROR',
+      )
+    }
+
+    const decoder = new TextDecoder()
+    const reader = response.body.getReader()
+    let buffer = ''
+    let outputText = ''
+    let usage: Usage | null = null
+    let settled = false
+
+    const captureEvent = (event: string) => {
+      const dataLines = event
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+      if (dataLines.length === 0) return
+      const data = dataLines.join('\n').trim()
+      if (!data || data === '[DONE]') return
+      try {
+        const parsed = JSON.parse(data) as unknown
+        usage = usageFromResponse(parsed) ?? usage
+        outputText += outputTextFromResponse(parsed)
+      } catch {
+        // Keep streaming; malformed individual SSE chunks should not break passthrough.
+      }
+    }
+
+    const settleOnce = async () => {
+      if (settled) return
+      settled = true
+      const promptTokens = estimatePromptTokens(requestBody)
+      const finalUsage = usage ?? {
+        promptTokens,
+        promptCacheHitTokens: 0,
+        promptCacheMissTokens: promptTokens,
+        completionTokens: estimateTokensFromText(outputText),
+        totalTokens: 0,
+      }
+      const actualAmountMicros = priceMicrosForUsage(finalUsage)
+      try {
+        await this.settle(identity, charge, actualAmountMicros)
+      } catch (err) {
+        logger.warn({ err, userId: identity.userId }, 'Failed to settle Anthropic model usage')
+      }
+    }
+
+    let closed = false
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const enqueue = (value: Uint8Array) => {
+          if (closed) return false
+          try {
+            controller.enqueue(value)
+            return true
+          } catch (err) {
+            closed = true
+            if ((err as { code?: string }).code !== 'ERR_INVALID_STATE') throw err
+            return false
+          }
+        }
+        const close = () => {
+          if (closed) return
+          closed = true
+          try {
+            controller.close()
+          } catch (err) {
+            if ((err as { code?: string }).code !== 'ERR_INVALID_STATE') throw err
+          }
+        }
+        const error = (err: unknown) => {
+          if (closed) return
+          closed = true
+          try {
+            controller.error(err)
+          } catch (controllerErr) {
+            if ((controllerErr as { code?: string }).code !== 'ERR_INVALID_STATE') {
+              throw controllerErr
+            }
+          }
+        }
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value) {
+              const text = decoder.decode(value, { stream: true })
+              buffer += text
+              const events = buffer.split(/\r?\n\r?\n/)
+              buffer = events.pop() ?? ''
+              for (const event of events) captureEvent(event)
+              if (!enqueue(value)) break
+            }
+          }
+          if (buffer) captureEvent(buffer)
+          await settleOnce()
+          close()
+        } catch (err) {
+          logger.warn({ err, userId: identity.userId }, 'Anthropic model stream failed')
+          await settleOnce()
+          error(err)
+        }
+      },
+      async cancel(reason) {
+        closed = true
         await reader.cancel(reason).catch(() => null)
         await settleOnce()
       },

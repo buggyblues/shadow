@@ -8,6 +8,7 @@
 import { buildOpenClawConfig } from '../config/openclaw-builder.js'
 import type { OpenClawConfig } from '../config/schema.js'
 import { openclawContainerSpec } from './container.js'
+import { defaultRunnerImage } from './images.js'
 import { type RuntimeAdapter, registerRuntime } from './index.js'
 import {
   addShadowobCliAuth,
@@ -20,11 +21,10 @@ import {
 import { appendTemplateRoutineFiles } from './routines.js'
 import { openClawSlashCommands } from './slash-commands/openclaw.js'
 
-export const DEFAULT_OPENCLAW_RUNNER_IMAGE =
-  process.env.SHADOWOB_OPENCLAW_RUNNER_IMAGE ??
-  process.env.SHADOW_OPENCLAW_RUNNER_IMAGE ??
-  process.env.OPENCLAW_RUNNER_IMAGE ??
-  'ghcr.io/buggyblues/openclaw-runner:latest'
+export const DEFAULT_OPENCLAW_RUNNER_IMAGE = defaultRunnerImage({
+  runner: 'openclaw-runner',
+  env: 'SHADOWOB_OPENCLAW_RUNNER_IMAGE',
+})
 
 function ensureOpenClawShadowobSkillConfig(openclawConfig: OpenClawConfig): void {
   openclawConfig.skills ??= {}

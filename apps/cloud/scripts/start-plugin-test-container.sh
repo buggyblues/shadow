@@ -32,7 +32,7 @@ Options:
   --plugins a,b,c       Comma-separated plugin ids.
   --no-plugins          Start the container without installing plugin assets.
   --runner runner       Use a Cloud runner image: openclaw, claude-code, codex,
-                        gemini, opencode, hermes. Aliases: claude, base, node.
+                        opencode, hermes. Aliases: claude, base, node.
   --build               Build the selected runner image before starting.
   --no-build            Do not build the selected runner image.
   --name name           Docker container name. Default: ${CONTAINER_NAME}
@@ -297,9 +297,6 @@ runner_dir_for() {
     codex|codex-runner)
       printf "codex-runner"
       ;;
-    gemini|gemini-runner)
-      printf "gemini-runner"
-      ;;
     opencode|open-code|opencode-runner)
       printf "opencode-runner"
       ;;
@@ -308,7 +305,7 @@ runner_dir_for() {
       ;;
     *)
       echo "Unknown runner: $1" >&2
-      echo "Supported runners: openclaw, claude-code, codex, gemini, opencode, hermes, base" >&2
+      echo "Supported runners: openclaw, claude-code, codex, opencode, hermes, base" >&2
       exit 2
       ;;
   esac
@@ -328,9 +325,6 @@ runtime_id_for_dir() {
       ;;
     codex-runner)
       printf "codex"
-      ;;
-    gemini-runner)
-      printf "gemini"
       ;;
     opencode-runner)
       printf "opencode"
@@ -644,7 +638,6 @@ const skillDestinations = [
   '/workspace/.claude/skills',
   '/workspace/.opencode/skills',
   '/home/shadow/.codex/skills',
-  '/home/shadow/.gemini/skills',
   '/home/shadow/.hermes/skills',
   '/home/shadow/.openclaw/skills',
 ]
@@ -653,7 +646,6 @@ const subagentDestinations = [
   '/workspace/.claude/agents',
   '/workspace/.opencode/agents',
   '/home/shadow/.codex/agents',
-  '/home/shadow/.gemini/agents',
   '/home/shadow/.hermes/agents',
 ]
 function entriesWithMarker(root, marker) {
@@ -884,7 +876,7 @@ if [ -n "$RUNNER_DIR" ]; then
   echo "  home/config: /home/shadow"
   echo "  runner config mount: /etc/openclaw"
   echo "  ShadowOB skill: /workspace/.agents/skills/shadowob/SKILL.md"
-  echo "  native homes: /home/shadow/.cc-connect /home/shadow/.codex /home/shadow/.claude /home/shadow/.gemini /home/shadow/.hermes"
+  echo "  native homes: /home/shadow/.cc-connect /home/shadow/.codex /home/shadow/.claude /home/shadow/.hermes"
   echo "  docker exec -it --user root ${CONTAINER_NAME} ${SHELL_BIN}"
 fi
 

@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../../shared/community-auth'
-import { type ChatMessage, createInitialMessages } from '../lib/chatbot'
+import { type ChatMessage, createInitialMessages, type PetNoticeKind } from '../lib/chatbot'
 import { applyPetAction, type PetState } from '../lib/game'
 import {
   getShadowUrl,
@@ -110,6 +110,7 @@ export function usePetConversation({
   const bubbleVisibleRef = useRef('')
   const voiceFinishTimerRef = useRef<number | null>(null)
   const noticeDedupeRef = useRef<{ message: string; createdAt: number } | null>(null)
+  const bubbleNoticeKindRef = useRef<PetNoticeKind | null>(null)
   const chatInputRef = useRef<HTMLInputElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const bubbleContentRef = useRef<HTMLSpanElement | null>(null)
@@ -186,7 +187,8 @@ export function usePetConversation({
   }, [bubbleSourceText])
 
   useEffect(() => {
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-24)))
+    const durableMessages = messages.filter((message) => !message.noticeKind)
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(durableMessages.slice(-24)))
   }, [messages])
 
   useEffect(() => {
@@ -260,13 +262,14 @@ export function usePetConversation({
       estimateBubbleRevealDuration(visibleText) + BUBBLE_HOLD_AFTER_DONE_MS,
     )
     bubbleTimerRef.current = window.setTimeout(() => {
+      bubbleNoticeKindRef.current = null
       setBubbleMessageId(null)
       bubbleTimerRef.current = null
     }, delay)
   }, [])
 
   const showPetNotice = useCallback(
-    (text: string) => {
+    (text: string, options?: { noticeKind?: PetNoticeKind }) => {
       const message = normalizePetDisplayText(text)
       if (!message) return
       const now = Date.now()
@@ -285,13 +288,28 @@ export function usePetConversation({
         role: 'pet',
         text: message,
         createdAt: now,
+        noticeKind: options?.noticeKind,
       }
       setMessages((current) => [...current, notice].slice(-24))
+      bubbleNoticeKindRef.current = options?.noticeKind ?? null
       setBubbleMessageId(id)
       scheduleBubbleHide(message)
     },
     [scheduleBubbleHide],
   )
+
+  const clearPetNotice = useCallback((noticeKind?: PetNoticeKind) => {
+    if (noticeKind && bubbleNoticeKindRef.current !== noticeKind) return
+    if (bubbleTimerRef.current) {
+      window.clearTimeout(bubbleTimerRef.current)
+      bubbleTimerRef.current = null
+    }
+    bubbleNoticeKindRef.current = null
+    setBubbleMessageId(null)
+    if (noticeKind) {
+      setMessages((current) => current.filter((message) => message.noticeKind !== noticeKind))
+    }
+  }, [])
 
   async function speakPetReply(text: string, options: { manageSpeaking?: boolean } = {}) {
     const content = normalizeTtsText(text)
@@ -404,6 +422,7 @@ export function usePetConversation({
     setMessages((current) => [...current, userMessage, replyMessage].slice(-24))
     setChatInput('')
     setPetState((current) => applyPetAction(current, 'pet'))
+    bubbleNoticeKindRef.current = null
     setBubbleMessageId(replyId)
     setChatBusy(true)
 
@@ -454,6 +473,7 @@ export function usePetConversation({
           message.id === replyId ? { ...message, text: finalText, streaming: false } : message,
         ),
       )
+      bubbleNoticeKindRef.current = null
       setBubbleMessageId(replyId)
       scheduleBubbleHide(finalText)
       if (shouldSpeak) {
@@ -474,6 +494,7 @@ export function usePetConversation({
           message.id === replyId ? { ...message, text: fallbackText, streaming: false } : message,
         ),
       )
+      bubbleNoticeKindRef.current = null
       setBubbleMessageId(replyId)
       scheduleBubbleHide(fallbackText)
       if (shouldSpeak) {
@@ -649,6 +670,7 @@ export function usePetConversation({
       voiceFinishTimerRef.current = null
     }
     if (recognitionRef.current || voiceStartingRef.current || chatBusy) return
+    bubbleNoticeKindRef.current = null
     setBubbleMessageId(null)
     setVoiceTranscript(t('desktopPet.voice.recognizing'))
     voiceCaptureWantedRef.current = true
@@ -668,6 +690,7 @@ export function usePetConversation({
 
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition
     if (!Recognition) {
+      bubbleNoticeKindRef.current = null
       setBubbleMessageId(null)
       setVoiceSignalActiveState(false)
       setVoiceMode(false)
@@ -793,6 +816,7 @@ export function usePetConversation({
     setChatInput,
     sendChat,
     showPetNotice,
+    clearPetNotice,
     beginHoldVoiceCapture,
     finishVoiceCapture,
   }

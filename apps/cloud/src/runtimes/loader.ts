@@ -11,7 +11,6 @@
 import './openclaw.js'
 import './claude-code.js'
 import './codex.js'
-import './gemini.js'
 import './opencode.js'
 import './hermes.js'
 

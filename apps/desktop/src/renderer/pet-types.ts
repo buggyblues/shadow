@@ -1,3 +1,8 @@
+import type {
+  RuntimeSessionPetActivity,
+  RuntimeSessionPetReaction,
+  RuntimeSessionState,
+} from '@shadowob/shared/types'
 import type { PetAction } from './lib/game'
 import type { PetProfile } from './lib/pet-profile'
 
@@ -161,16 +166,9 @@ export type DesktopPetApi = {
           sessionId: string
           title?: string | null
           lastActivityAt?: string | null
-          state:
-            | 'idle'
-            | 'running'
-            | 'streaming'
-            | 'waiting_for_approval'
-            | 'blocked'
-            | 'completed'
-            | 'failed'
-            | 'stopped'
-            | 'unknown'
+          state: RuntimeSessionState
+          petReaction?: RuntimeSessionPetReaction
+          petActivity?: RuntimeSessionPetActivity
         }>
       } | null
     }>
@@ -188,16 +186,9 @@ export type DesktopPetApi = {
           sessionId: string
           title?: string | null
           lastActivityAt?: string | null
-          state:
-            | 'idle'
-            | 'running'
-            | 'streaming'
-            | 'waiting_for_approval'
-            | 'blocked'
-            | 'completed'
-            | 'failed'
-            | 'stopped'
-            | 'unknown'
+          state: RuntimeSessionState
+          petReaction?: RuntimeSessionPetReaction
+          petActivity?: RuntimeSessionPetActivity
         }>
       }
     }>
@@ -260,19 +251,10 @@ export type PetServiceHistoryDay = {
 }
 
 export type ConnectorSnapshot = {
-  running: boolean
+  connectorOnline: boolean
+  activeRuntimeSessionCount: number
   onlineCount: number
-  runtimeSessionStates: Array<
-    | 'idle'
-    | 'running'
-    | 'streaming'
-    | 'waiting_for_approval'
-    | 'blocked'
-    | 'completed'
-    | 'failed'
-    | 'stopped'
-    | 'unknown'
-  >
+  runtimeSessionReactions: RuntimeSessionPetReaction[]
   readySessions: Array<{
     id: string
     label: string

@@ -9,6 +9,7 @@ import type { AgentDeployment } from '../config/schema.js'
 import type { PluginRuntimeExtension } from '../plugins/types.js'
 import { buildCcConnectPackage } from './cc-connect-package.js'
 import { ccConnectContainerSpec } from './container.js'
+import { defaultRunnerImage } from './images.js'
 import { type RuntimeAdapter, registerRuntime } from './index.js'
 import { codexMcpTable } from './mcp.js'
 import {
@@ -54,7 +55,10 @@ const codexAdapter: RuntimeAdapter = {
   id: 'codex',
   name: 'Codex (OpenAI)',
   runtimeKind: 'cc-connect',
-  defaultImage: 'ghcr.io/buggyblues/codex-runner:latest',
+  defaultImage: defaultRunnerImage({
+    runner: 'codex-runner',
+    env: 'SHADOWOB_CODEX_RUNNER_IMAGE',
+  }),
   container: ccConnectContainerSpec(),
 
   buildPackage(context) {

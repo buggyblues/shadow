@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "images",
+    "scripts",
     "templates"
   ],
   "main": "./dist/index.js",

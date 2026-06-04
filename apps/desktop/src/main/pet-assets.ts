@@ -256,6 +256,13 @@ function validateCodexSpritesheet(packDir: string, value: unknown): string {
   return src
 }
 
+function defaultCodexSpritesheetPath(packDir: string): string | null {
+  for (const candidate of ['spritesheet.webp', 'spritesheet.png']) {
+    if (existsSync(join(packDir, candidate))) return candidate
+  }
+  return null
+}
+
 function codexSprites(src: string): Record<string, DesktopPetAssetSprite> {
   const sprites: Record<string, DesktopPetAssetSprite> = {}
   for (const [row, state] of CODEX_PET_STATES.entries()) {
@@ -313,12 +320,28 @@ function parseCodexPetManifest(
     throw new Error('pet.json exceeds 64 KB')
   }
   const manifest = asRecord(JSON.parse(readFileSync(manifestPath, 'utf8')))
-  const id = typeof manifest.id === 'string' ? manifest.id.trim() : ''
+  const id =
+    typeof manifest.id === 'string'
+      ? manifest.id.trim()
+      : typeof manifest.slug === 'string'
+        ? manifest.slug.trim()
+        : ''
   if (!PACK_ID_PATTERN.test(id)) throw new Error('id must be a lowercase Codex pet slug')
-  const displayName = typeof manifest.displayName === 'string' ? manifest.displayName.trim() : ''
+  const displayName =
+    typeof manifest.displayName === 'string'
+      ? manifest.displayName.trim()
+      : typeof manifest.name === 'string'
+        ? manifest.name.trim()
+        : ''
   if (!displayName) throw new Error('displayName is required')
   const description = typeof manifest.description === 'string' ? manifest.description.trim() : ''
-  const spritesheetPath = validateCodexSpritesheet(packDir, manifest.spritesheetPath)
+  const spritesheetPath = validateCodexSpritesheet(
+    packDir,
+    manifest.spritesheetPath ??
+      manifest.spriteSheetPath ??
+      manifest.spritesheet ??
+      defaultCodexSpritesheetPath(packDir),
+  )
   const version = typeof manifest.version === 'string' ? manifest.version.trim() : undefined
 
   return {

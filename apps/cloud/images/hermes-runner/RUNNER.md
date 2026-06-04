@@ -14,6 +14,10 @@ hermes gateway -> shadowob Hermes platform plugin
 This directory now contains the Hermes runner Dockerfile and entrypoint. The
 runtime loader and package generator emit Hermes-native files through
 `runtime-files.json` and keep ShadowOB token material in Kubernetes Secret data.
+The runner image copies the ShadowOB Hermes plugin to
+`/opt/shadowob/hermes-shadowob-plugin` and runs `shadowob-connector connect
+--target hermes` at image build time, so container startup does not install or
+discover the plugin dynamically.
 
 ## Native Hermes configuration
 

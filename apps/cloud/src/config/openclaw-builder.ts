@@ -267,7 +267,7 @@ function buildProvidersConfig(config: CloudConfig): OpenClawConfig['models'] {
     providers[providerId] = providerEntry
   }
 
-  return { mode: 'merge', providers }
+  return { mode: 'merge', pricing: { enabled: false }, providers }
 }
 
 /**

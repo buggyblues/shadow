@@ -14,6 +14,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
@@ -26,6 +27,8 @@ const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
 const RUNNER_HOME = process.env.HOME ?? '/home/shadow'
 const HERMES_HOME = process.env.HERMES_HOME ?? join(RUNNER_HOME, '.hermes')
+const BUNDLED_SHADOWOB_PLUGIN_SOURCE = '/opt/shadowob/hermes-shadowob-plugin'
+const HERMES_SHADOWOB_PLUGIN_DIR = join(HERMES_HOME, 'plugins', 'shadowob')
 const TEMPLATE_ROUTINES_PATH =
   process.env.SHADOW_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
 const HERMES_CRON_STORE_PATH =
@@ -36,6 +39,7 @@ const HEALTH_PORT = Number.parseInt(
 )
 const LOG_DIR = process.env.SHADOW_RUNNER_LOG_DIR ?? '/var/log/shadowob'
 const ALLOWED_FILE_ROOTS = [RUNNER_HOME, '/home/openclaw', '/workspace', '/etc/shadowob']
+const READY_FILE = process.env.SHADOW_RUNNER_READY_FILE ?? '/tmp/shadowob-ready.json'
 
 let ready = false
 let child = null
@@ -356,6 +360,20 @@ function materializeRuntimeFiles() {
   }
 }
 
+function seedBundledShadowobPlugin() {
+  const requiredFiles = ['plugin.yaml', 'adapter.py']
+  for (const file of requiredFiles) {
+    if (!existsSync(join(BUNDLED_SHADOWOB_PLUGIN_SOURCE, file))) {
+      throw new Error(`Missing bundled Hermes ShadowOB plugin file: ${file}`)
+    }
+  }
+
+  mkdirSync(dirname(HERMES_SHADOWOB_PLUGIN_DIR), { recursive: true })
+  rmSync(HERMES_SHADOWOB_PLUGIN_DIR, { recursive: true, force: true })
+  cpSync(BUNDLED_SHADOWOB_PLUGIN_SOURCE, HERMES_SHADOWOB_PLUGIN_DIR, { recursive: true })
+  console.log(`[entrypoint] seeded bundled ShadowOB Hermes plugin to ${HERMES_SHADOWOB_PLUGIN_DIR}`)
+}
+
 function materializeCredentialFiles() {
   const runtimeExtensions = loadJson(RUNTIME_EXTENSIONS_PATH, {})
   const files = Array.isArray(runtimeExtensions.credentialFiles)
@@ -460,8 +478,11 @@ function materializePluginRuntimeAssets() {
 function startHealthServer() {
   const server = createServer((req, res) => {
     if (req.url === '/health' || req.url === '/ready') {
-      res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ status: ready ? 'ready' : 'starting', runtime: RUNTIME_NAME }))
+      const runtimeReady = ready && existsSync(READY_FILE)
+      res.writeHead(runtimeReady ? 200 : 503, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({ status: runtimeReady ? 'ready' : 'starting', runtime: RUNTIME_NAME }),
+      )
       return
     }
     if (req.url === '/live') {
@@ -490,10 +511,12 @@ function verifyBinary(command, args) {
 
 function startHermes() {
   mkdirSync(LOG_DIR, { recursive: true })
+  rmSync(READY_FILE, { force: true })
   const proc = spawn('hermes', ['gateway'], {
     env: {
       ...process.env,
       HERMES_HOME,
+      SHADOW_READY_FILE: READY_FILE,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     cwd: '/workspace',
@@ -503,17 +526,17 @@ function startHermes() {
   proc.stderr.on('data', (chunk) => process.stderr.write(redact(chunk.toString())))
   proc.on('exit', (code, signal) => {
     ready = false
+    rmSync(READY_FILE, { force: true })
     console.error(`[entrypoint] hermes exited code=${code ?? 'null'} signal=${signal ?? 'null'}`)
     process.exit(code ?? 1)
   })
-  setTimeout(() => {
-    if (!proc.killed) ready = true
-  }, 3000)
+  ready = true
 }
 
 function setupSignals(server) {
   const shutdown = (signal) => {
     ready = false
+    rmSync(READY_FILE, { force: true })
     server.close()
     if (child && !child.killed) child.kill(signal)
     setTimeout(() => process.exit(0), 5000).unref()
@@ -527,6 +550,7 @@ async function main() {
   mkdirSync('/workspace', { recursive: true })
   mkdirSync('/etc/shadowob', { recursive: true })
   materializeRuntimeFiles()
+  seedBundledShadowobPlugin()
   materializeCredentialFiles()
   materializePluginRuntimeAssets()
   syncTemplateRoutinesToHermesCron()

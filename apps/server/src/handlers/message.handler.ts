@@ -236,30 +236,42 @@ export function createMessageHandler(container: AppContainer) {
         logContext: { channelId },
       })
 
-      // Emit WS event so all connected clients (including bots) see the message
+      let directPeer: { id: string } | null = null
+      if (access.channel?.kind === 'dm') {
+        try {
+          const channelService = container.resolve('channelService')
+          directPeer = await channelService.findDirectPeer(channelId, user.userId)
+        } catch {
+          /* direct peer fanout is best-effort */
+        }
+      }
+
+      // Emit WS event so all connected clients (including bots) see the message.
+      // Direct message peers also receive it through their user room so a newly
+      // started Buddy does not miss the first DM while joining the channel room.
       try {
         const io = container.resolve('io')
-        io.to(`channel:${channelId}`).emit('message:new', message)
+        let target = io.to(`channel:${channelId}`)
+        if (directPeer) target = target.to(`user:${directPeer.id}`)
+        target.emit('message:new', message)
       } catch {
         /* io not yet registered */
       }
 
       try {
         if (access.channel?.kind === 'dm') {
-          const channelService = container.resolve('channelService')
-          const peer = await channelService.findDirectPeer(channelId, user.userId)
-          if (peer) {
+          if (directPeer) {
             const notificationTriggerService = container.resolve('notificationTriggerService')
             const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
             await notificationTriggerService.triggerDirectMessage({
-              userId: peer.id,
+              userId: directPeer.id,
               actorId: user.userId,
               actorName: senderName,
               channelId,
               preview: message.content.substring(0, 200),
             })
             const rentalService = container.resolve('rentalService')
-            await rentalService.recordRentalMessage(user.userId, peer.id).catch(() => null)
+            await rentalService.recordRentalMessage(user.userId, directPeer.id).catch(() => null)
           }
         }
       } catch {

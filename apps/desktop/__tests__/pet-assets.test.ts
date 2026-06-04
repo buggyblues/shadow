@@ -57,6 +57,15 @@ function petManifest() {
   }
 }
 
+function slugNameManifest() {
+  return {
+    slug: 'boba-buddy',
+    name: 'Boba Buddy',
+    description: 'A community pet package.',
+    kind: 'creature',
+  }
+}
+
 function codexVp8lSpritesheetHeader() {
   const widthMinusOne = 1535
   const heightMinusOne = 1871
@@ -79,6 +88,13 @@ async function packArchive(prefix = '') {
   zip.file(`${prefix}pet.json`, JSON.stringify(petManifest()))
   zip.file(`${prefix}spritesheet.webp`, codexVp8lSpritesheetHeader())
   zip.file(`${prefix}preview.webp`, 'preview')
+  return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
+}
+
+async function slugNamePackArchive(prefix = '') {
+  const zip = new JSZip()
+  zip.file(`${prefix}pet.json`, JSON.stringify(slugNameManifest()))
+  zip.file(`${prefix}spritesheet.webp`, codexVp8lSpritesheetHeader())
   return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
 }
 
@@ -128,6 +144,24 @@ describe('desktop pet asset pack import', () => {
     )
 
     expect(pack.id).toBe('creator.lazy')
+  })
+
+  it('imports manifests with slug and name aliases', async () => {
+    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+
+    const pack = await __desktopPetAssetTestHooks.importPetPackFromArchive(
+      await slugNamePackArchive(),
+      { source: 'local' },
+    )
+
+    expect(pack).toMatchObject({
+      id: 'boba-buddy',
+      displayName: { en: 'Boba Buddy' },
+      description: 'A community pet package.',
+      source: 'local',
+      spritesheetPath: 'spritesheet.webp',
+    })
+    expect(pack.sprites.review?.atlas).toEqual({ columns: 8, rows: 9, row: 8 })
   })
 
   it('imports a local codex-pet zip path without requiring manual extraction', async () => {

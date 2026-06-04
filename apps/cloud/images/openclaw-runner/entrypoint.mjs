@@ -9,7 +9,7 @@
  * 6. Forward signals for graceful shutdown
  */
 
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import {
   chmodSync,
@@ -19,7 +19,6 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs'
 import { createServer } from 'node:http'
@@ -37,11 +36,7 @@ const TEMPLATE_ROUTINES_PATH =
   process.env.SHADOW_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
 const RUNTIME_CONFIG_DIR = process.env.OPENCLAW_RUNTIME_CONFIG_DIR || '/tmp/openclaw/config'
 const RUNTIME_CONFIG_PATH = join(RUNTIME_CONFIG_DIR, 'openclaw.json')
-const OPENCLAW_PACKAGE_DIR = '/app/node_modules/openclaw'
-const PRICING_FETCH_TIMEOUT_MS = Number.parseInt(
-  process.env.OPENCLAW_MODEL_PRICING_FETCH_TIMEOUT_MS ?? '2500',
-  10,
-)
+const OPENCLAW_BOOTSTRAP_WORKSPACE = '/opt/openclaw/bootstrap-workspace'
 const HEALTH_PORT = parseInt(process.env.OPENCLAW_HEALTH_PORT ?? '3100', 10)
 const OPENCLAW_HTTP_PORT = parseInt(
   process.env.OPENCLAW_GATEWAY_PORT ?? String(HEALTH_PORT + 1),
@@ -56,11 +51,14 @@ const OPENCLAW_MEMORY_VECTOR_ENABLED = normalizeEnvString(
 const LOG_DIR = '/var/log/openclaw'
 const SHARED_WORKSPACE_PATH = process.env.SHARED_WORKSPACE_PATH ?? ''
 const SKILLS_DIR = process.env.SKILLS_DIR ?? ''
-const RUNTIME_DEPS_WARM_SCRIPT = '/app/warm-runtime-deps.mjs'
-const DEFAULT_PLUGIN_STAGE_DIR = '/opt/openclaw-runtime-deps'
-let runtimeDepsStageDir = process.env.OPENCLAW_PLUGIN_STAGE_DIR || DEFAULT_PLUGIN_STAGE_DIR
 const OPENCLAW_VERSION = resolveOpenClawVersion()
 const ALLOWED_RUNTIME_FILE_ROOTS = [RUNNER_HOME, '/home/openclaw', '/workspace', '/etc/shadowob']
+const CLOUD_DISABLED_BUILTIN_PLUGINS = [
+  'device-pair',
+  'file-transfer',
+  'phone-control',
+  'talk-voice',
+]
 
 function installFileLogging() {
   try {
@@ -574,9 +572,9 @@ function generateOpenClawConfig(mountedConfig) {
   ensureBundledExtensionsConfigured(config)
   ensureOpenClawBuiltInPluginsAllowed(config)
   ensureBonjourPluginDisabled(config)
+  ensureCloudOptionalBuiltInPluginsDisabled(config)
   ensureCloudMemorySearchDefaults(config)
   ensureCloudBrowserDefaults(config)
-  ensureBrowserPluginEnabled(config)
   if (!config.meta || !isPlainObject(config.meta)) {
     config.meta = {}
   }
@@ -597,11 +595,18 @@ function resolveOpenClawVersion() {
 }
 
 function ensureOpenClawBuiltInPluginsAllowed(config) {
-  if (!config.plugins || !isPlainObject(config.plugins)) return
-  if (!Array.isArray(config.plugins.allow) || config.plugins.allow.length === 0) return
+  if (!config.plugins || !isPlainObject(config.plugins)) config.plugins = {}
 
-  const allow = new Set(config.plugins.allow.filter((value) => typeof value === 'string'))
-  allow.add('memory-core')
+  const allow = new Set(
+    Array.isArray(config.plugins.allow)
+      ? config.plugins.allow.filter((value) => typeof value === 'string')
+      : ['openclaw-shadowob'],
+  )
+  const browserExplicitlyEnabled = config.plugins?.entries?.browser?.enabled === true
+  if (isPlainObject(config.browser) || browserExplicitlyEnabled) allow.add('browser')
+  if (isPlainObject(config.agents?.defaults?.memorySearch) || OPENCLAW_MEMORY_VECTOR_ENABLED) {
+    allow.add('memory-core')
+  }
   config.plugins.allow = [...allow]
 }
 
@@ -622,7 +627,28 @@ function ensureBonjourPluginDisabled(config) {
     : { enabled: false }
 }
 
+function ensureCloudOptionalBuiltInPluginsDisabled(config) {
+  if (!config.plugins || !isPlainObject(config.plugins)) config.plugins = {}
+  if (!config.plugins.entries || !isPlainObject(config.plugins.entries)) {
+    config.plugins.entries = {}
+  }
+
+  for (const id of CLOUD_DISABLED_BUILTIN_PLUGINS) {
+    const existing = config.plugins.entries[id]
+    if (isPlainObject(existing)) {
+      if (typeof existing.enabled !== 'boolean') {
+        config.plugins.entries[id] = { ...existing, enabled: false }
+      }
+    } else if (existing == null) {
+      config.plugins.entries[id] = { enabled: false }
+    }
+  }
+}
+
 function ensureCloudMemorySearchDefaults(config) {
+  const hasMemoryConfig = isPlainObject(config.agents?.defaults?.memorySearch)
+  if (!hasMemoryConfig && !OPENCLAW_MEMORY_VECTOR_ENABLED) return
+
   if (!config.agents || !isPlainObject(config.agents)) config.agents = {}
   if (!config.agents.defaults || !isPlainObject(config.agents.defaults)) {
     config.agents.defaults = {}
@@ -640,7 +666,7 @@ function ensureCloudMemorySearchDefaults(config) {
   if (OPENCLAW_MEMORY_VECTOR_ENABLED) {
     defaults.memorySearch.store.vector.enabled = OPENCLAW_MEMORY_VECTOR_ENABLED !== 'false'
   } else if (typeof defaults.memorySearch.store.vector.enabled !== 'boolean') {
-    defaults.memorySearch.store.vector.enabled = true
+    defaults.memorySearch.store.vector.enabled = false
   }
   if (
     defaults.memorySearch.store.vector.enabled !== false &&
@@ -652,6 +678,9 @@ function ensureCloudMemorySearchDefaults(config) {
 }
 
 function ensureCloudBrowserDefaults(config) {
+  const browserExplicitlyEnabled = config.plugins?.entries?.browser?.enabled === true
+  if (!isPlainObject(config.browser) && !browserExplicitlyEnabled) return
+
   if (!config.browser || !isPlainObject(config.browser)) config.browser = {}
   const browser = config.browser
   if (typeof browser.headless !== 'boolean') browser.headless = true
@@ -665,20 +694,6 @@ function ensureCloudBrowserDefaults(config) {
   const args = new Set(extraArgs)
   args.add('--disable-dev-shm-usage')
   browser.extraArgs = [...args]
-}
-
-function ensureBrowserPluginEnabled(config) {
-  if (!config.plugins || !isPlainObject(config.plugins)) config.plugins = {}
-  if (Array.isArray(config.plugins.allow) && !config.plugins.allow.includes('browser')) {
-    config.plugins.allow = [...config.plugins.allow, 'browser']
-  }
-  if (!config.plugins.entries || !isPlainObject(config.plugins.entries)) {
-    config.plugins.entries = {}
-  }
-  const existing = config.plugins.entries.browser
-  config.plugins.entries.browser = isPlainObject(existing)
-    ? { ...existing, enabled: true }
-    : { enabled: true }
 }
 
 function normalizeEnvString(value) {
@@ -852,6 +867,24 @@ function verifyExtensions() {
   }
 }
 
+function seedWorkspaceFromBootstrap(workspaceDir) {
+  if (!existsSync(OPENCLAW_BOOTSTRAP_WORKSPACE)) {
+    console.warn(
+      `[entrypoint] Bootstrap workspace missing at ${OPENCLAW_BOOTSTRAP_WORKSPACE}; continuing with mounted files only`,
+    )
+    return
+  }
+
+  let copied = 0
+  for (const entry of readdirSync(OPENCLAW_BOOTSTRAP_WORKSPACE, { withFileTypes: true })) {
+    const destPath = join(workspaceDir, entry.name)
+    if (existsSync(destPath)) continue
+    cpSync(join(OPENCLAW_BOOTSTRAP_WORKSPACE, entry.name), destPath, { recursive: true })
+    copied += 1
+  }
+  console.log(`[entrypoint] Seeded workspace from baked bootstrap (${copied} item(s))`)
+}
+
 // ─── Health Check Server ────────────────────────────────────────────────────
 
 let gatewayHealthy = false
@@ -927,131 +960,6 @@ function startHealthServer() {
 
 // ─── Gateway Process ────────────────────────────────────────────────────────
 
-function clearStaleRuntimeDependencyLocks() {
-  const depsRoots = [runtimeDepsStageDir, join(OPENCLAW_STATE_DIR, 'plugin-runtime-deps')].filter(
-    (entry, index, values) => entry && values.indexOf(entry) === index,
-  )
-
-  for (const depsRoot of depsRoots) {
-    if (!existsSync(depsRoot)) continue
-
-    for (const runtimeDir of listChildDirs(depsRoot)) {
-      const lockDir = join(runtimeDir, '.openclaw-runtime-deps.lock')
-      if (!existsSync(lockDir)) continue
-
-      let ownerPid = null
-      try {
-        const owner = JSON.parse(readFileSync(join(lockDir, 'owner.json'), 'utf-8'))
-        if (typeof owner.pid === 'number') ownerPid = owner.pid
-      } catch {
-        // Treat unreadable lock metadata as stale; the gateway will recreate it.
-      }
-
-      const ownerAlive = ownerPid !== null && existsSync(`/proc/${ownerPid}`)
-      if (!ownerAlive) {
-        rmSync(lockDir, { recursive: true, force: true })
-        console.log(`[entrypoint] Removed stale OpenClaw runtime dependency lock: ${lockDir}`)
-      }
-    }
-  }
-}
-
-function prepareWritableRuntimeDepsStage() {
-  const imageStageDir = DEFAULT_PLUGIN_STAGE_DIR
-  const writableStageDir = join(OPENCLAW_STATE_DIR, 'plugin-runtime-deps')
-  const explicitStageDir = process.env.OPENCLAW_PLUGIN_STAGE_DIR
-
-  if (explicitStageDir && explicitStageDir !== imageStageDir) {
-    runtimeDepsStageDir = explicitStageDir
-    return
-  }
-
-  mkdirSync(writableStageDir, { recursive: true })
-  if (existsSync(imageStageDir)) {
-    for (const runtimeDir of listChildDirs(imageStageDir)) {
-      const dest = join(writableStageDir, basename(runtimeDir))
-      if (existsSync(dest)) continue
-      try {
-        cpSync(runtimeDir, dest, { recursive: true, dereference: false })
-        console.log(`[entrypoint] Seeded OpenClaw runtime deps from image: ${dest}`)
-      } catch (err) {
-        console.warn(`[entrypoint] Failed to seed runtime deps ${dest}: ${err.message}`)
-      }
-    }
-  }
-  runtimeDepsStageDir = writableStageDir
-}
-
-function runRuntimeDepsWarmup(configPath, stageDir) {
-  if (!existsSync(RUNTIME_DEPS_WARM_SCRIPT)) {
-    return { ok: false, reason: 'Bundled runtime dependency warmup script is missing' }
-  }
-
-  const timeout = Number.parseInt(process.env.OPENCLAW_RUNTIME_DEPS_WARM_TIMEOUT_MS ?? '240000', 10)
-  const env = {
-    ...process.env,
-    OPENCLAW_CONFIG_PATH: configPath,
-    OPENCLAW_STATE_DIR,
-    OPENCLAW_PLUGIN_STAGE_DIR: stageDir,
-    HOME: RUNNER_HOME,
-    NODE_ENV: 'production',
-    npm_config_cache: '/tmp/npm-cache',
-  }
-
-  console.log(`[entrypoint] Warming OpenClaw bundled runtime dependencies in ${stageDir}...`)
-  const result = spawnSync('node', [RUNTIME_DEPS_WARM_SCRIPT, configPath], {
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout,
-  })
-
-  const stdout = result.stdout?.toString().trim()
-  if (stdout) {
-    for (const line of stdout.split('\n')) process.stdout.write(`${redact(line)}\n`)
-  }
-  const stderr = result.stderr?.toString().trim()
-  if (stderr) {
-    for (const line of stderr.split('\n')) process.stderr.write(`${redact(line)}\n`)
-  }
-
-  if (result.error) {
-    return { ok: false, reason: result.error.message }
-  }
-  if (result.status !== 0) {
-    return { ok: false, reason: `exited ${result.status}` }
-  }
-  return { ok: true }
-}
-
-function warmBundledPluginRuntimeDeps(configPath) {
-  if (process.env.OPENCLAW_SKIP_RUNTIME_DEPS_WARMUP === '1') {
-    console.log('[entrypoint] Skipping bundled runtime dependency warmup')
-    return
-  }
-
-  const preferredStageDir = runtimeDepsStageDir
-  const first = runRuntimeDepsWarmup(configPath, preferredStageDir)
-  if (first.ok) {
-    runtimeDepsStageDir = preferredStageDir
-    console.log('[entrypoint] ✓ bundled runtime dependencies warmed')
-    return
-  }
-
-  const fallbackStageDir = join(OPENCLAW_STATE_DIR, 'plugin-runtime-deps')
-  console.warn(
-    `[entrypoint] Runtime dependency warmup in ${preferredStageDir} failed: ${first.reason}`,
-  )
-  if (preferredStageDir === fallbackStageDir) return
-
-  const fallback = runRuntimeDepsWarmup(configPath, fallbackStageDir)
-  if (fallback.ok) {
-    runtimeDepsStageDir = fallbackStageDir
-    console.log('[entrypoint] ✓ bundled runtime dependencies warmed in writable state dir')
-    return
-  }
-  console.warn(`[entrypoint] Runtime dependency fallback warmup failed: ${fallback.reason}`)
-}
-
 function findGatewayEntry() {
   const candidates = [
     '/app/node_modules/openclaw/dist/cli/index.js',
@@ -1065,52 +973,7 @@ function findGatewayEntry() {
   return 'openclaw' // Fallback to PATH
 }
 
-function listJavaScriptFiles(root, maxDepth = 3) {
-  if (maxDepth < 0 || !existsSync(root)) return []
-  const files = []
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name)
-    if (entry.isDirectory()) {
-      files.push(...listJavaScriptFiles(path, maxDepth - 1))
-      continue
-    }
-    if (entry.isFile() && entry.name.endsWith('.js')) files.push(path)
-  }
-  return files
-}
-
-function patchOpenClawPricingTimeout() {
-  if (!Number.isFinite(PRICING_FETCH_TIMEOUT_MS) || PRICING_FETCH_TIMEOUT_MS <= 0) return
-  const distDir = join(OPENCLAW_PACKAGE_DIR, 'dist')
-  const pattern = /const FETCH_TIMEOUT_MS = [^;]+;/g
-  for (const file of listJavaScriptFiles(distDir)) {
-    let source
-    try {
-      source = readFileSync(file, 'utf-8')
-    } catch {
-      continue
-    }
-    if (!source.includes('OPENROUTER_MODELS_URL') || !source.includes('LITELLM_PRICING_URL')) {
-      continue
-    }
-    if (!pattern.test(source)) continue
-    pattern.lastIndex = 0
-    writeFileSync(
-      file,
-      source.replace(pattern, `const FETCH_TIMEOUT_MS = ${PRICING_FETCH_TIMEOUT_MS};`),
-      'utf-8',
-    )
-    console.log(
-      `[entrypoint] OpenClaw model pricing fetch timeout set to ${PRICING_FETCH_TIMEOUT_MS}ms`,
-    )
-    return
-  }
-}
-
 function startGateway(_healthServer, configPath) {
-  clearStaleRuntimeDependencyLocks()
-  patchOpenClawPricingTimeout()
-
   const entry = findGatewayEntry()
   const gatewayPort = OPENCLAW_HTTP_PORT
 
@@ -1125,7 +988,6 @@ function startGateway(_healthServer, configPath) {
     OPENCLAW_CONFIG_PATH: configPath,
     OPENCLAW_STATE_DIR: OPENCLAW_STATE_DIR,
     OPENCLAW_GATEWAY_PORT: String(gatewayPort),
-    OPENCLAW_PLUGIN_STAGE_DIR: runtimeDepsStageDir,
     OPENCLAW_LOG_DIR: LOG_DIR,
     NODE_ENV: 'production',
     // Disable OpenClaw's self-respawn mechanism — the original process would exit
@@ -1285,34 +1147,20 @@ async function main() {
     console.log(`[entrypoint] Shared workspace ready: ${SHARED_WORKSPACE_PATH}`)
   }
 
-  // 2d. Run `openclaw setup` to initialize workspace with bootstrap files.
-  // This seeds AGENTS.md, SOUL.md, IDENTITY.md, etc. from OpenClaw's internal templates.
+  // 2d. Seed default OpenClaw workspace files from the image. Running
+  // `openclaw setup` in every Pod costs several seconds, so the Docker image
+  // prepares this bootstrap workspace at build time.
   const workspaceDir =
     openclawConfig.agents?.defaults?.workspace ||
     SHARED_WORKSPACE_PATH ||
     join(OPENCLAW_STATE_DIR, 'workspace')
   mkdirSync(workspaceDir, { recursive: true })
-  console.log(`[entrypoint] Initializing workspace: ${workspaceDir}`)
-  const setupResult = spawnSync('openclaw', ['setup', '--workspace', workspaceDir], {
-    env: { ...process.env, OPENCLAW_CONFIG_PATH: configPath, HOME: RUNNER_HOME },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 30000,
-  })
-  if (setupResult.status === 0) {
-    console.log('[entrypoint] ✓ openclaw setup completed')
-  } else {
-    const stderr = setupResult.stderr?.toString().trim()
-    console.warn(
-      `[entrypoint] ⚠ openclaw setup exited ${setupResult.status}: ${stderr || '(no output)'}`,
-    )
-  }
-  writeFileSync(configPath, JSON.stringify(openclawConfig, null, 2), 'utf-8')
-  console.log('[entrypoint] Runtime config restored after setup')
+  console.log(`[entrypoint] Initializing workspace from baked bootstrap: ${workspaceDir}`)
+  seedWorkspaceFromBootstrap(workspaceDir)
   syncTemplateRoutinesToOpenClawCron(openclawConfig)
 
   // 2e. Overlay workspace files from ConfigMap (SOUL.md, AGENTS.md, etc.)
-  // These are agent-specific files generated by the cloud config builder that
-  // override the default bootstrap files created by `openclaw setup`.
+  // These are agent-specific files generated by the cloud config builder.
   const WORKSPACE_BOOTSTRAP_FILES = [
     'SOUL.md',
     'IDENTITY.md',
@@ -1341,12 +1189,9 @@ async function main() {
     console.log(`[entrypoint] Skills directory ready: ${SKILLS_DIR}`)
   }
 
-  // 3. Apply plugin-provided runtime metadata, then pre-stage plugin runtime deps
-  // before chat traffic.
+  // 3. Apply plugin-provided runtime metadata before chat traffic.
   applyRuntimeManifestPatches(runtimeExtensions)
   verifyExtensions()
-  prepareWritableRuntimeDepsStage()
-  warmBundledPluginRuntimeDeps(configPath)
 
   // 4. Start gateway
   startGateway(healthServer, configPath)

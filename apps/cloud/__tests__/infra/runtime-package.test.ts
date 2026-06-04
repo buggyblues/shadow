@@ -4,6 +4,7 @@ import { buildManifests } from '../../src/infra/index.js'
 import { buildAgentRuntimePackage } from '../../src/infra/runtime-package.js'
 import { loadAllPlugins } from '../../src/plugins/loader.js'
 import { getPluginRegistry, resetPluginRegistry } from '../../src/plugins/registry.js'
+import { DEFAULT_RUNNER_IMAGE_TAG } from '../../src/runtimes/images.js'
 
 beforeAll(async () => {
   resetPluginRegistry()
@@ -431,7 +432,6 @@ describe('buildManifests', () => {
       expect.arrayContaining([
         { name: 'OPENCLAW_HEALTH_PORT', value: '3102' },
         { name: 'OPENCLAW_GATEWAY_PORT', value: '3101' },
-        { name: 'OPENCLAW_MODEL_PRICING_FETCH_TIMEOUT_MS', value: '2500' },
         { name: 'OPENCLAW_SKIP_STARTUP_MODEL_PREWARM', value: '1' },
       ]),
     )
@@ -445,9 +445,9 @@ describe('buildManifests', () => {
     expect(container.startupProbe.httpGet).toMatchObject({ path: '/live', port: 3102 })
     expect(container.readinessProbe.httpGet).toMatchObject({ path: '/ready', port: 3102 })
     expect(deployment.spec.template.metadata.annotations).toMatchObject({
-      'shadowob.cloud/runner-image': 'ghcr.io/buggyblues/openclaw-runner:latest',
+      'shadowob.cloud/runner-image': `ghcr.io/buggyblues/openclaw-runner:${DEFAULT_RUNNER_IMAGE_TAG}`,
     })
-    expect(container.imagePullPolicy).toBe('Always')
+    expect(container.imagePullPolicy).toBe('IfNotPresent')
     expect(
       deployment.spec.template.metadata.annotations['shadowob.cloud/runtime-package-hash'],
     ).toMatch(/^[a-f0-9]{64}$/)
@@ -551,14 +551,14 @@ describe('buildManifests', () => {
     expect(env).toEqual(expect.arrayContaining([{ name: 'TZ', value: 'Asia/Shanghai' }]))
   })
 
-  it('pulls latest registry runner images and keeps immutable/local images cacheable', () => {
+  it('keeps default release runner images cacheable and still pulls mutable latest tags', () => {
     const baseAgent = {
       id: 'agent-1',
       runtime: 'openclaw' as const,
       configuration: {},
     }
-    const latest = buildDeploymentManifests({
-      namespace: 'pull-policy-latest',
+    const defaultRelease = buildDeploymentManifests({
+      namespace: 'pull-policy-default-release',
       config: {
         version: '1',
         deployments: {
@@ -594,6 +594,20 @@ describe('buildManifests', () => {
         },
       },
     })
+    const latest = buildDeploymentManifests({
+      namespace: 'pull-policy-latest',
+      config: {
+        version: '1',
+        deployments: {
+          agents: [
+            {
+              ...baseAgent,
+              image: 'ghcr.io/buggyblues/openclaw-runner:latest',
+            },
+          ],
+        },
+      },
+    })
     const explicit = buildDeploymentManifests({
       namespace: 'pull-policy-explicit',
       imagePullPolicy: 'IfNotPresent',
@@ -606,9 +620,9 @@ describe('buildManifests', () => {
     })
 
     expect(
-      latest.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec.containers[0]
-        .imagePullPolicy,
-    ).toBe('Always')
+      defaultRelease.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec
+        .containers[0].imagePullPolicy,
+    ).toBe('IfNotPresent')
     expect(
       pinned.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec.containers[0]
         .imagePullPolicy,
@@ -617,6 +631,10 @@ describe('buildManifests', () => {
       local.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec.containers[0]
         .imagePullPolicy,
     ).toBe('IfNotPresent')
+    expect(
+      latest.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec.containers[0]
+        .imagePullPolicy,
+    ).toBe('Always')
     expect(
       explicit.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec.containers[0]
         .imagePullPolicy,
@@ -685,6 +703,30 @@ describe('buildManifests', () => {
     expect(service.spec.ports).toEqual([
       { name: 'health', port: 3100, targetPort: 3102, protocol: 'TCP' },
     ])
+  })
+
+  it('uses a Kubernetes-valid Service name for numeric agent ids without changing selectors', () => {
+    const config: CloudConfig = {
+      version: '1',
+      deployments: {
+        agents: [
+          {
+            id: '123',
+            runtime: 'openclaw',
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const manifests = buildDeploymentManifests({ config, namespace: 'numeric-agent-id' })
+    const service = manifests.find((manifest) => manifest.kind === 'Service')!
+    const deployment = manifests.find((manifest) => manifest.kind === 'Deployment')!
+
+    expect(service.metadata.name).toBe('agent-123-svc')
+    expect(service.spec.selector).toEqual({ app: 'shadowob-cloud', agent: '123' })
+    expect(deployment.metadata.name).toBe('123')
+    expect(deployment.spec.template.metadata.labels.agent).toBe('123')
   })
 
   it('defaults new manifests to agent-sandbox resources with a persistent OpenClaw state PVC', () => {

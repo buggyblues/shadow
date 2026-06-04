@@ -4,7 +4,7 @@
 
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
-import { IMAGES, type ImageName } from '../../services/image.service.js'
+import { DEFAULT_IMAGE_TAG, IMAGES, type ImageName } from '../../services/image.service.js'
 
 export function createImagesCommand(container: ServiceContainer) {
   const cmd = new Command('images').description('Manage Docker images')
@@ -28,10 +28,11 @@ export function createImagesCommand(container: ServiceContainer) {
     new Command('build')
       .description('Build a Docker image')
       .argument('<name>', `Image name (${IMAGES.join(' | ')}) or "all"`)
-      .option('-t, --tag <tag>', 'Image tag', 'latest')
+      .option('-t, --tag <tag>', 'Image tag', DEFAULT_IMAGE_TAG)
       .option('--no-cache', 'Build without cache')
       .option('--into-k8s', 'Build for local K8s', false)
       .option('--push', 'Push to registry after build', false)
+      .option('--skip-smoke', 'Skip image smoke tests before publish/load', false)
       .option('--platform <platform>', 'Target platform (e.g. linux/amd64,linux/arm64)')
       .action(
         async (
@@ -41,6 +42,7 @@ export function createImagesCommand(container: ServiceContainer) {
             cache: boolean
             intoK8s: boolean
             push: boolean
+            skipSmoke: boolean
             platform?: string
           },
         ) => {
@@ -63,6 +65,7 @@ export function createImagesCommand(container: ServiceContainer) {
                 noCache: !options.cache,
                 intoK8s: options.intoK8s,
                 push: options.push,
+                skipSmoke: options.skipSmoke,
                 platform: options.platform,
               })
             }
@@ -78,7 +81,7 @@ export function createImagesCommand(container: ServiceContainer) {
     new Command('push')
       .description('Push image to registry')
       .argument('<name>', `Image name (${IMAGES.join(', ')})`)
-      .option('-t, --tag <tag>', 'Image tag', 'latest')
+      .option('-t, --tag <tag>', 'Image tag', DEFAULT_IMAGE_TAG)
       .action(async (name: string, options: { tag: string }) => {
         if (!IMAGES.includes(name as ImageName)) {
           container.logger.error(`Unknown image: ${name}. Available: ${IMAGES.join(', ')}`)

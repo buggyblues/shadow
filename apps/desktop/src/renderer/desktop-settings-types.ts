@@ -1,3 +1,8 @@
+import type {
+  RuntimeSessionPetActivity,
+  RuntimeSessionPetReaction,
+  RuntimeSessionState,
+} from '@shadowob/shared/types'
 import type { DesktopPetAssetPack, DesktopPetAssetSettings } from './pet-types'
 
 export interface DesktopRuntimeSettings {
@@ -74,16 +79,9 @@ export interface ConnectorRuntimeInfo {
   detectedAt?: string | null
 }
 
-export type ConnectorRuntimeSessionState =
-  | 'idle'
-  | 'running'
-  | 'streaming'
-  | 'waiting_for_approval'
-  | 'blocked'
-  | 'completed'
-  | 'failed'
-  | 'stopped'
-  | 'unknown'
+export type ConnectorRuntimeSessionState = RuntimeSessionState
+
+export type ConnectorRuntimeSessionPetReaction = RuntimeSessionPetReaction
 
 export type ConnectorRuntimeInstanceStatus =
   | 'running'
@@ -110,6 +108,8 @@ export interface ConnectorRuntimeSessionInfo {
   title?: string | null
   workDir?: string | null
   state: ConnectorRuntimeSessionState
+  petReaction?: ConnectorRuntimeSessionPetReaction
+  petActivity?: RuntimeSessionPetActivity
   model?: string | null
   lastActivityAt?: string | null
   startedAt?: string | null

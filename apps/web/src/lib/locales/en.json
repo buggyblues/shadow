@@ -3908,7 +3908,7 @@
       "title": "Desktop pet store",
       "subtitle": "Get desktop pet asset packs",
       "petAssets": "Desktop pet asset packs",
-      "petAssetsHint": "Open the codex-pets.net creature gallery.",
+      "petAssetsHint": "Browse XiaDou Community desktop pet packs.",
       "open": "Open store",
       "manage": "Manage packs"
     },
@@ -4117,7 +4117,40 @@
       "runtimeFallback": "Local runtime",
       "runtimeReady": "{{name}} on {{runtime}} is ready.",
       "runtimeReadyMany": "{{count}} runtime sessions are ready.",
-      "runtimeSessionCompleted": "{{name}} on {{runtime}} has finished."
+      "runtimeSessionCompleted": "{{name}} on {{runtime}} has finished.",
+      "runtimeReaction": {
+        "idle": "Ready.",
+        "thinking": "Reviewing.",
+        "working": "Working through it.",
+        "editing": "Updating files.",
+        "running": "Command underway.",
+        "testing": "Running checks.",
+        "waiting": "Approval needed.",
+        "waving": "Heads up.",
+        "success": "Done.",
+        "error": "Needs attention.",
+        "celebrating": "Nice work."
+      },
+      "runtimeActivity": {
+        "thinking": "Reviewing.",
+        "thinkingWithLabel": "Reviewing {{label}}.",
+        "reading": "Reading.",
+        "readingWithLabel": "Reading {{label}}.",
+        "working": "Working.",
+        "workingWithLabel": "Working on {{label}}.",
+        "editing": "Editing files.",
+        "editingWithLabel": "Editing {{label}}.",
+        "running": "Running command.",
+        "runningWithLabel": "Running {{label}}.",
+        "testing": "Running checks.",
+        "testingWithLabel": "Testing {{label}}.",
+        "waiting": "Waiting for approval.",
+        "waitingWithLabel": "Waiting for {{label}}.",
+        "success": "Done.",
+        "successWithLabel": "Done: {{label}}.",
+        "error": "Needs attention.",
+        "errorWithLabel": "Issue with {{label}}."
+      }
     },
     "stats": {
       "mood": "Mood",

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -142,5 +142,37 @@ describe('connector CLI', () => {
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('/.openclaw/openclaw.json')
     expect(result.stdout).not.toContain('/.shadowob/openclaw.json')
+  })
+
+  it('uses the Hermes venv sibling Python when installing the Hermes plugin', () => {
+    const fakeBin = mkdtempSync(join(tmpdir(), 'shadow-hermes-bin-'))
+    const fakeHermes = join(fakeBin, 'hermes')
+    const fakePython = join(fakeBin, 'python')
+    writeFileSync(fakeHermes, '#!/usr/bin/env sh\nexit 0\n')
+    writeFileSync(fakePython, '#!/usr/bin/env sh\nexit 0\n')
+    chmodSync(fakeHermes, 0o755)
+    chmodSync(fakePython, 0o755)
+
+    const result = runConnector(
+      [
+        'connect',
+        '--target',
+        'hermes',
+        '--server-url',
+        'https://shadow.example.com',
+        '--token',
+        'tok',
+        '--dry-run',
+      ],
+      {
+        PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+        SHADOW_CONNECTOR_SKIP_LOGIN_SHELL: '1',
+      },
+    )
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain(`${fakePython} -m ensurepip --upgrade`)
+    expect(result.stdout).toContain(`${fakePython} -m pip install`)
+    expect(result.stdout).not.toContain('SHADOWOB_HERMES_PLUGIN_DIR')
   })
 })

@@ -117,7 +117,7 @@ ENTRYPOINT ["tini", "--", "node", "/app/entrypoint.mjs"]
 
 ### 2.2 acp-runner (统一 ACP 运行时)
 
-**用途**: 运行 OpenClaw gateway + 任意 ACP 集成 (claude-code, codex, gemini, opencode)。
+**用途**: 运行 OpenClaw gateway + 任意 ACP 集成 (claude-code, codex, opencode)。
 
 **架构**: 一个统一的 Dockerfile，通过 `RUNTIME_PACKAGE` build arg 安装不同的 CLI 包：
 
@@ -126,8 +126,6 @@ ENTRYPOINT ["tini", "--", "node", "/app/entrypoint.mjs"]
 docker build --build-arg RUNTIME_PACKAGE=@anthropic-ai/claude-code -t acp-runner:claude-code .
 # Codex
 docker build --build-arg RUNTIME_PACKAGE=@openai/codex -t acp-runner:codex .
-# Gemini CLI
-docker build --build-arg RUNTIME_PACKAGE=@google/gemini-cli -t acp-runner:gemini .
 # OpenCode
 docker build --build-arg RUNTIME_PACKAGE=opencode-ai -t acp-runner:opencode .
 ```
@@ -147,7 +145,7 @@ parser 通过 `getRuntime(agent.runtime).applyConfig()` 自动配置 ACP，无�
 
 ```dockerfile
 # Stage 1: 基础 runtime
-FROM ghcr.io/shadowob/openclaw-runner:latest AS base
+FROM ghcr.io/shadowob/openclaw-runner:20260604-faststart AS base
 
 # Stage 2: Clone agent source
 FROM alpine/git AS source
@@ -243,7 +241,7 @@ spec:
       # --- Main Container ---
       containers:
         - name: agent
-          image: ghcr.io/shadowob/openclaw-runner:latest
+          image: ghcr.io/shadowob/openclaw-runner:20260604-faststart
           ports:
             - containerPort: 3100
           

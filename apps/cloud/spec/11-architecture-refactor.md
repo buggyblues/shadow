@@ -84,7 +84,6 @@ src/
 │   ├── openclaw.ts
 │   ├── claude-code.ts
 │   ├── codex.ts
-│   ├── gemini.ts
 │   └── opencode.ts
 │
 ├── utils/             # 工具函数

@@ -8,18 +8,18 @@
 #     -f apps/cloud/images/codex-runner/Dockerfile .
 # ──────────────────────────────────────────────────────────────────────────
 
-FROM golang:1.25-bookworm AS cc-builder
+FROM golang:1.25-alpine AS cc-builder
 
-ARG CC_CONNECT_REF=63b5d59127b3004bc7002f2d51892b1f2a91ea83
+ARG CC_CONNECT_REF=f382563cfebaef36c5d257461dfaf318161fe3ea
 ARG CC_CONNECT_REPO=https://github.com/buggyblues/cc-connect.git
 
 WORKDIR /build
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates git && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates git
 
-RUN git clone --depth 1 "${CC_CONNECT_REPO}" /tmp/cc-connect && \
+RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
+    --mount=type=cache,id=go-mod,target=/go/pkg/mod,sharing=locked \
+    git clone --depth 1 "${CC_CONNECT_REPO}" /tmp/cc-connect && \
     cd /tmp/cc-connect && \
     git fetch --depth 1 origin "${CC_CONNECT_REF}" && \
     git checkout "${CC_CONNECT_REF}" && \
@@ -28,15 +28,64 @@ RUN git clone --depth 1 "${CC_CONNECT_REPO}" /tmp/cc-connect && \
       -ldflags "-s -w" \
       -o /build/cc-connect ./cmd/cc-connect
 
+FROM node:22-bookworm-slim AS shadow-packages
+
+WORKDIR /workspace
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates git && \
+    rm -rf /var/lib/apt/lists/* && \
+    corepack enable && \
+    corepack prepare pnpm@10.19.0 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json .npmrc ./
+COPY patches patches
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/sdk/package.json packages/sdk/package.json
+COPY packages/cli/package.json packages/cli/package.json
+COPY packages/connector/package.json packages/connector/package.json
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm config set store-dir /pnpm/store && \
+    pnpm install --frozen-lockfile --ignore-scripts \
+      --filter @shadowob/shared... \
+      --filter @shadowob/sdk... \
+      --filter @shadowob/cli... \
+      --filter @shadowob/connector...
+
+COPY packages/shared packages/shared
+COPY packages/sdk packages/sdk
+COPY packages/cli packages/cli
+COPY packages/connector packages/connector
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm --filter @shadowob/shared build && \
+    pnpm --filter @shadowob/sdk build && \
+    pnpm --filter @shadowob/cli build && \
+    pnpm --filter @shadowob/connector build
+
+RUN mkdir -p /shadow-pkgs && \
+    pnpm --filter @shadowob/shared pack --pack-destination /shadow-pkgs && \
+    pnpm --filter @shadowob/sdk pack --pack-destination /shadow-pkgs && \
+    pnpm --filter @shadowob/cli pack --pack-destination /shadow-pkgs && \
+    pnpm --filter @shadowob/connector pack --pack-destination /shadow-pkgs
+
 FROM node:22-bookworm-slim AS node-deps
 
 WORKDIR /build
 
+ARG CODEX_CLI_VERSION=0.137.0
+
+COPY --from=shadow-packages /shadow-pkgs /tmp/shadow-pkgs
+
 RUN npm init -y && \
     npm install --no-audit --fund=false \
-      @openai/codex@latest \
-      @shadowob/cli@latest \
-      @shadowob/connector@latest
+      @openai/codex@${CODEX_CLI_VERSION} \
+      /tmp/shadow-pkgs/shadowob-shared-*.tgz \
+      /tmp/shadow-pkgs/shadowob-sdk-*.tgz \
+      /tmp/shadow-pkgs/shadowob-cli-*.tgz \
+      /tmp/shadow-pkgs/shadowob-connector-*.tgz && \
+    rm -rf /tmp/shadow-pkgs
 
 FROM node:22-bookworm-slim AS runner
 
@@ -83,5 +132,5 @@ ENV npm_config_cache=/tmp/npm-cache
 
 USER shadow
 
-ENTRYPOINT ["tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "/app/entrypoint.mjs"]

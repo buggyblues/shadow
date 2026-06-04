@@ -2472,6 +2472,15 @@
           "enum": ["merge", "replace"],
           "type": "string"
         },
+        "pricing": {
+          "description": "Optional model pricing catalog bootstrap",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
         "providers": {
           "description": "Custom providers",
           "$ref": "#/definitions/Record%3Cstring%2COpenClawProviderConfig%3E"
@@ -3256,7 +3265,7 @@
     },
     "AgentRuntime": {
       "description": "Agent runtime types.",
-      "enum": ["claude-code", "codex", "gemini", "hermes", "openclaw", "opencode"],
+      "enum": ["claude-code", "codex", "hermes", "openclaw", "opencode"],
       "type": "string"
     },
     "AgentConfiguration": {

@@ -2353,10 +2353,14 @@ describe('Cloud SaaS — deployment + billing', () => {
         .limit(1)
 
       const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
+      expect(runtime.SHADOW_MODEL_PROVIDER_ID).toBe('shadow-official')
       expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBe('http://shadow.test/api/ai/v1')
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).toMatch(/^smp_/)
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).not.toBe('stale-compatible-key')
-      expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBeUndefined()
+      expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBe('deepseek-v4-flash')
+      expect(runtime.ANTHROPIC_COMPATIBLE_BASE_URL).toBe('http://shadow.test/api/ai/anthropic')
+      expect(runtime.ANTHROPIC_COMPATIBLE_API_KEY).toMatch(/^smp_/)
+      expect(runtime.ANTHROPIC_COMPATIBLE_MODEL_ID).toBe('deepseek-v4-flash')
       expect(runtime.OPENAI_API_KEY).toBeUndefined()
     } finally {
       if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
@@ -2411,10 +2415,14 @@ describe('Cloud SaaS — deployment + billing', () => {
         .limit(1)
 
       const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
+      expect(runtime.SHADOW_MODEL_PROVIDER_ID).toBe('shadow-official')
       expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBe('http://shadow.test/api/ai/v1')
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).toMatch(/^smp_/)
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).not.toBe('user-supplied-key')
-      expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBeUndefined()
+      expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBe('deepseek-v4-flash')
+      expect(runtime.ANTHROPIC_COMPATIBLE_BASE_URL).toBe('http://shadow.test/api/ai/anthropic')
+      expect(runtime.ANTHROPIC_COMPATIBLE_API_KEY).toMatch(/^smp_/)
+      expect(runtime.ANTHROPIC_COMPATIBLE_MODEL_ID).toBe('deepseek-v4-flash')
       expect(runtime.DEEPSEEK_API_KEY).toBeUndefined()
     } finally {
       if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL

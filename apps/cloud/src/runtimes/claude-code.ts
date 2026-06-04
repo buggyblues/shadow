@@ -7,6 +7,7 @@
 import type { AgentDeployment } from '../config/schema.js'
 import { buildCcConnectPackage } from './cc-connect-package.js'
 import { ccConnectContainerSpec } from './container.js'
+import { defaultRunnerImage } from './images.js'
 import { type RuntimeAdapter, registerRuntime } from './index.js'
 import { claudeMcpJson } from './mcp.js'
 import {
@@ -41,7 +42,10 @@ const claudeCodeAdapter: RuntimeAdapter = {
   id: 'claude-code',
   name: 'Claude Code (Anthropic)',
   runtimeKind: 'cc-connect',
-  defaultImage: 'ghcr.io/buggyblues/claude-runner:latest',
+  defaultImage: defaultRunnerImage({
+    runner: 'claude-runner',
+    env: 'SHADOWOB_CLAUDE_RUNNER_IMAGE',
+  }),
   container: ccConnectContainerSpec(),
 
   buildPackage(context) {
