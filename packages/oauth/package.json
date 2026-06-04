@@ -1,6 +1,6 @@
 {
   "name": "@shadowob/oauth",
-  "version": "1.1.26",
+  "version": "1.1.27",
   "description": "Shadow OAuth SDK — typed client for integrating Shadow OAuth login into third-party applications",
   "license": "MIT",
   "type": "module",
