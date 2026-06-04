@@ -86,6 +86,7 @@ function buildHermesConfig(options: {
   officialModelProxy: HermesOfficialModelProxy
 }): string {
   const { agent, shadow } = options
+  const permissionMode = nativePermissionMode(agent)
   const mcpServers = hermesMcpServers(options.runtimeExtensions)
   const homeChannelEnvKey = firstRoutineDeliveryTargetValue(
     options.config,
@@ -96,7 +97,7 @@ function buildHermesConfig(options: {
   )
   return stringifyYaml({
     approvals: {
-      mode: nativePermissionMode(agent) === 'allow' ? 'manual' : 'manual',
+      mode: permissionMode === 'deny' ? 'manual' : 'off',
     },
     ...(Object.keys(mcpServers).length > 0 ? { mcp_servers: mcpServers } : {}),
     plugins: {
