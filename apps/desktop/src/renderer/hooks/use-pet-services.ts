@@ -564,9 +564,17 @@ function runtimeSessionBubbleMessage(
   const activity = session.petActivity
   if (activity) {
     const label = typeof activity.label === 'string' ? activity.label.trim() : ''
+    const fallback = t(`desktopPet.services.runtimeReaction.${runtimeSessionReaction(session)}`)
+    const activityKey = `desktopPet.services.runtimeActivity.${activity.kind}`
     return label
-      ? t(`desktopPet.services.runtimeActivity.${activity.kind}WithLabel`, { label })
-      : t(`desktopPet.services.runtimeActivity.${activity.kind}`)
+      ? t(`${activityKey}WithLabel`, {
+          label,
+          defaultValue: t('desktopPet.services.runtimeActivity.workingWithLabel', {
+            label,
+            defaultValue: fallback,
+          }),
+        })
+      : t(activityKey, { defaultValue: fallback })
   }
   return t(`desktopPet.services.runtimeReaction.${runtimeSessionReaction(session)}`)
 }
