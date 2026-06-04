@@ -53,6 +53,13 @@ function deriveBuddyUsername(name: string) {
   return toPinyinSlug(name, 'buddy')
 }
 
+const buddyFormLabelClassName =
+  'block text-[11px] font-black uppercase tracking-[0.12em] text-text-muted'
+const buddyFormInputClassName =
+  'h-12 rounded-2xl border border-border-subtle/65 bg-bg-deep/45 px-4 text-sm font-bold shadow-[inset_0_1px_6px_rgba(0,0,0,0.16)] focus:border-primary/70 focus:bg-bg-deep/55'
+const buddyFormTextareaClassName =
+  'w-full min-h-[96px] rounded-2xl border border-border-subtle/70 bg-bg-deep/45 px-4 py-3 text-sm font-bold leading-6 text-text-primary outline-none shadow-[inset_0_1px_6px_rgba(0,0,0,0.16)] transition-all placeholder:text-text-muted/35 focus:border-primary/70 focus:bg-bg-deep/55 focus:shadow-[inset_0_1px_6px_rgba(0,0,0,0.16),0_0_0_4px_rgba(0,198,209,0.1)] resize-none'
+
 type BuddyModeControlStyle = 'cards' | 'switch'
 type QuickCreateStep = 'basic' | 'advanced'
 export type CloudBuddyRuntimeId = 'openclaw' | 'hermes' | 'claude-code' | 'codex' | 'opencode'
@@ -446,7 +453,7 @@ function BuddyModeControl({
   if (style === 'switch') {
     const shareable = buddyMode === 'shareable'
     return (
-      <div className="rounded-[14px] border border-border-subtle bg-bg-tertiary/40 px-4 py-3">
+      <div className="rounded-2xl border border-border-subtle/80 bg-bg-primary/45 px-4 py-3">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-sm font-black text-text-primary">
@@ -466,30 +473,36 @@ function BuddyModeControl({
   }
 
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2">
       <button
         type="button"
         onClick={() => onModeChange('private')}
-        className={`text-left rounded-[14px] border-2 px-4 py-3 transition ${
+        className={cn(
+          'min-h-[96px] rounded-[18px] border px-4 py-3 text-left transition',
           buddyMode === 'private'
-            ? 'border-primary bg-primary/10'
-            : 'border-border-subtle bg-bg-tertiary/50'
-        }`}
+            ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(0,243,255,0.18),0_18px_42px_rgba(0,198,209,0.1)]'
+            : 'border-border-subtle/80 bg-bg-primary/40 hover:border-border-dim hover:bg-bg-tertiary/50',
+        )}
       >
         <div className="text-sm font-black text-text-primary">{t('agentMgmt.modePrivate')}</div>
-        <div className="text-xs leading-5 text-text-muted">{t('agentMgmt.modePrivateDesc')}</div>
+        <div className="mt-1 text-xs leading-5 text-text-muted">
+          {t('agentMgmt.modePrivateDesc')}
+        </div>
       </button>
       <button
         type="button"
         onClick={() => onModeChange('shareable')}
-        className={`text-left rounded-[14px] border-2 px-4 py-3 transition ${
+        className={cn(
+          'min-h-[96px] rounded-[18px] border px-4 py-3 text-left transition',
           buddyMode === 'shareable'
-            ? 'border-primary bg-primary/10'
-            : 'border-border-subtle bg-bg-tertiary/50'
-        }`}
+            ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(0,243,255,0.18),0_18px_42px_rgba(0,198,209,0.1)]'
+            : 'border-border-subtle/80 bg-bg-primary/40 hover:border-border-dim hover:bg-bg-tertiary/50',
+        )}
       >
         <div className="text-sm font-black text-text-primary">{t('agentMgmt.modeShareable')}</div>
-        <div className="text-xs leading-5 text-text-muted">{t('agentMgmt.modeShareableDesc')}</div>
+        <div className="mt-1 text-xs leading-5 text-text-muted">
+          {t('agentMgmt.modeShareableDesc')}
+        </div>
       </button>
     </div>
   )
@@ -505,7 +518,6 @@ function BuddyAccessControls({
   modeControlStyle = 'cards',
   showModeControl = true,
   showServerAllowlist = true,
-  showPolicyNote = true,
 }: {
   buddyMode: BuddyMode
   allowedServerIds: string[]
@@ -516,7 +528,6 @@ function BuddyAccessControls({
   modeControlStyle?: BuddyModeControlStyle
   showModeControl?: boolean
   showServerAllowlist?: boolean
-  showPolicyNote?: boolean
 }) {
   const toggleServer = (serverId: string) => {
     onAllowedServerIdsChange(
@@ -527,10 +538,8 @@ function BuddyAccessControls({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-        {t('agentMgmt.accessSection')}
-      </div>
+    <div className="space-y-4">
+      <div className={buddyFormLabelClassName}>{t('agentMgmt.accessSection')}</div>
       {showModeControl && (
         <BuddyModeControl
           buddyMode={buddyMode}
@@ -539,21 +548,9 @@ function BuddyAccessControls({
           t={t}
         />
       )}
-      {showPolicyNote && (
-        <div className="rounded-[14px] border border-border-subtle bg-bg-tertiary/40 px-4 py-3">
-          <div className="text-xs font-black text-text-primary">
-            {t('agentMgmt.defaultReplyPolicy')}
-          </div>
-          <div className="mt-1 text-xs leading-5 text-text-muted">
-            {t('agentMgmt.defaultReplyPolicyDesc')}
-          </div>
-        </div>
-      )}
       {showServerAllowlist && buddyMode === 'private' && (
         <div className="space-y-2">
-          <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-            {t('agentMgmt.allowedServersLabel')}
-          </div>
+          <div className={buddyFormLabelClassName}>{t('agentMgmt.allowedServersLabel')}</div>
           <p className="text-xs leading-5 text-text-muted">{t('agentMgmt.allowedServersDesc')}</p>
           {servers.length === 0 ? (
             <div className="text-xs text-text-muted">{t('agentMgmt.allowedServersEmpty')}</div>
@@ -868,59 +865,61 @@ export function CreateAgentDialog({
   }
   const footerClassName = quick ? '' : embedded ? 'mt-2 pt-2 border-t border-border-subtle' : ''
   const nameField = (
-    <div className="space-y-2">
-      <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-        {t('agentMgmt.nameLabel')}
-      </label>
+    <div className="min-w-0 space-y-3">
+      <label className={buddyFormLabelClassName}>{t('agentMgmt.nameLabel')}</label>
       <Input
         ref={nameInputRef}
         value={name}
         onChange={(e) => handleNameChange(e.target.value)}
+        placeholder={t('agentMgmt.namePlaceholder')}
+        className={buddyFormInputClassName}
         maxLength={64}
         autoFocus={quick && !isQuickAdvanced}
       />
     </div>
   )
   const usernameField = (
-    <div className="space-y-2">
-      <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+    <div className="space-y-3">
+      <label className={buddyFormLabelClassName}>
         {t(quick ? 'agentMgmt.buddyIdLabel' : 'agentMgmt.usernameLabel')}
       </label>
       <Input
         value={username}
         onChange={(e) => handleUsernameChange(e.target.value)}
+        placeholder={t(quick ? 'agentMgmt.buddyIdPlaceholder' : 'agentMgmt.usernamePlaceholder')}
+        className={buddyFormInputClassName}
         maxLength={32}
       />
     </div>
   )
-  const profileFields = (
-    <div className="grid gap-4 rounded-2xl border border-border-subtle bg-bg-tertiary/30 p-4">
-      <div className="space-y-2">
-        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-          {t('agentMgmt.descLabel')}
-        </label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="w-full bg-bg-deep/45 border-2 border-border-subtle text-text-primary rounded-[18px] px-4 py-3 text-sm font-bold leading-6 outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
-          rows={quick ? 3 : 4}
-          maxLength={500}
-        />
-      </div>
-
-      <div>
-        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
-          {t('agentMgmt.avatarLabel')}
-        </label>
-        <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+  const avatarField = (
+    <div className="shrink-0">
+      <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+    </div>
+  )
+  const identityFields = (
+    <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
+      {avatarField}
+      <div className={quick ? 'min-w-0' : 'grid min-w-0 gap-4 md:grid-cols-2'}>
+        {nameField}
+        {!quick && usernameField}
       </div>
     </div>
   )
-  const renderAccessControls = (
-    showModeControl = true,
-    showServerAllowlist = true,
-    showPolicyNote = true,
-  ) => (
+  const profileFields = (
+    <div className="space-y-3">
+      <label className={buddyFormLabelClassName}>{t('agentMgmt.descLabel')}</label>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder={t('agentMgmt.descPlaceholder')}
+        className={buddyFormTextareaClassName}
+        rows={quick ? 3 : 4}
+        maxLength={500}
+      />
+    </div>
+  )
+  const renderAccessControls = (showModeControl = true, showServerAllowlist = true) => (
     <BuddyAccessControls
       buddyMode={buddyMode}
       allowedServerIds={allowedServerIds}
@@ -931,18 +930,36 @@ export function CreateAgentDialog({
       modeControlStyle="switch"
       showModeControl={showModeControl}
       showServerAllowlist={showServerAllowlist}
-      showPolicyNote={showPolicyNote}
     />
   )
   const isDeployingStep = submitPhase === 'deploying'
+  const footerBackAction = isQuickAdvanced ? () => setQuickStep('basic') : onBack
   const footerButtons = (
     <ModalButtonGroup>
-      <Button variant="ghost" size="sm" onClick={onClose}>
-        {t('common.cancel')}
-      </Button>
+      {footerBackAction ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="min-w-24 normal-case tracking-normal"
+          onClick={footerBackAction}
+        >
+          <ArrowLeft size={15} />
+          {t('common.back')}
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="min-w-24 normal-case tracking-normal"
+          onClick={onClose}
+        >
+          {t('common.cancel')}
+        </Button>
+      )}
       <Button
         variant="primary"
         size="sm"
+        className="min-w-28 normal-case tracking-normal"
         onClick={handleSubmit}
         disabled={!name.trim() || !username.trim() || createMutation.isPending}
       >
@@ -996,57 +1013,32 @@ export function CreateAgentDialog({
       {isDeployingStep ? (
         deploymentStep
       ) : (
-        <div className={quick ? 'space-y-4' : embedded ? 'space-y-4' : 'space-y-5 py-5'}>
-          {onBack && !isQuickAdvanced && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex items-center gap-2 rounded-xl px-2 py-1 text-xs font-black text-text-muted transition hover:bg-bg-tertiary/60 hover:text-text-primary"
-            >
-              <ArrowLeft size={15} />
-              {t('common.back')}
-            </button>
-          )}
+        <div className={quick ? 'space-y-4' : embedded ? 'space-y-4' : 'space-y-5 py-4'}>
           {isQuickAdvanced ? (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
-              <button
-                type="button"
-                onClick={() => setQuickStep('basic')}
-                className="inline-flex items-center gap-2 rounded-xl px-2 py-1 text-xs font-black text-text-muted transition hover:bg-bg-tertiary/60 hover:text-text-primary"
-              >
-                <ArrowLeft size={15} />
-                {t('common.back')}
-              </button>
-              <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-                {t('agentMgmt.advancedOptions')}
-              </div>
+              <div className={buddyFormLabelClassName}>{t('agentMgmt.advancedOptions')}</div>
               <div className="space-y-5">
                 {usernameField}
-                {renderAccessControls(true, false, false)}
+                {renderAccessControls(true, false)}
               </div>
             </div>
           ) : (
             <>
               <div className={embedded ? 'space-y-2' : 'space-y-3'}>
                 {!quick && (
-                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-                    {t('agentMgmt.identitySection')}
-                  </div>
+                  <div className={buddyFormLabelClassName}>{t('agentMgmt.identitySection')}</div>
                 )}
-                <div className={quick ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-2'}>
-                  {nameField}
-                  {!quick && usernameField}
-                </div>
+                {identityFields}
               </div>
 
               {profileFields}
-              {!quick && renderAccessControls(true, false, false)}
+              {!quick && renderAccessControls(true, false)}
 
               {quick && (
                 <button
                   type="button"
                   onClick={() => setQuickStep('advanced')}
-                  className="flex w-full items-center justify-between rounded-2xl border border-border-subtle bg-bg-tertiary/40 px-4 py-3 text-left text-sm font-black text-text-secondary transition hover:bg-bg-tertiary/70 hover:text-text-primary"
+                  className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-border-subtle/80 bg-bg-tertiary/40 px-4 py-3 text-left text-sm font-black text-text-secondary transition hover:bg-bg-tertiary/70 hover:text-text-primary"
                 >
                   <span>{t('agentMgmt.advancedOptions')}</span>
                   <ChevronRight size={16} />
@@ -1069,7 +1061,7 @@ export function CreateAgentDialog({
     if (modalSections) {
       return (
         <>
-          <ModalBody className="min-h-0 space-y-4 py-5">{content}</ModalBody>
+          <ModalBody className="min-h-0 space-y-4 px-5 py-5 sm:px-8">{content}</ModalBody>
           {!isDeployingStep && <ModalFooter className="justify-end">{footerButtons}</ModalFooter>}
         </>
       )
@@ -1079,8 +1071,8 @@ export function CreateAgentDialog({
 
   return (
     <Modal open onClose={onClose}>
-      <ModalContent maxWidth="max-w-[560px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-        <ModalBody className="space-y-5 py-5">{content}</ModalBody>
+      <ModalContent maxWidth="max-w-[760px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+        <ModalBody className="space-y-5 px-5 py-5 sm:px-8">{content}</ModalBody>
         {!isDeployingStep && <ModalFooter className="justify-end">{footerButtons}</ModalFooter>}
       </ModalContent>
     </Modal>
@@ -1134,41 +1126,36 @@ export function EditAgentDialog({
 
   return (
     <Modal open onClose={onClose}>
-      <ModalContent maxWidth="max-w-[480px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+      <ModalContent maxWidth="max-w-[760px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
         <ModalHeader title={t('agentMgmt.editTitle')} closeLabel={t('common.close')} />
 
-        <ModalBody className="space-y-4 py-5">
-          <div className="space-y-2">
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-              {t('agentMgmt.nameLabel')}
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('agentMgmt.namePlaceholder')}
-              maxLength={64}
-            />
+        <ModalBody className="space-y-5 px-5 py-5 sm:px-8">
+          <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
+            <div className="shrink-0">
+              <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+            </div>
+            <div className="min-w-0 space-y-3">
+              <label className={buddyFormLabelClassName}>{t('agentMgmt.nameLabel')}</label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('agentMgmt.namePlaceholder')}
+                className={buddyFormInputClassName}
+                maxLength={64}
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-              {t('agentMgmt.descLabel')}
-            </label>
+          <div className="space-y-3">
+            <label className={buddyFormLabelClassName}>{t('agentMgmt.descLabel')}</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('agentMgmt.descPlaceholder')}
-              className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[24px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
+              className={buddyFormTextareaClassName}
               rows={3}
               maxLength={500}
             />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
-              {t('agentMgmt.avatarLabel')}
-            </label>
-            <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
           </div>
 
           <BuddyAccessControls
@@ -1181,14 +1168,20 @@ export function EditAgentDialog({
           />
         </ModalBody>
 
-        <ModalFooter>
+        <ModalFooter className="justify-end">
           <ModalButtonGroup>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-w-24 normal-case tracking-normal"
+              onClick={onClose}
+            >
               {t('common.cancel')}
             </Button>
             <Button
               variant="primary"
               size="sm"
+              className="min-w-28 normal-case tracking-normal"
               onClick={() =>
                 name.trim() &&
                 updateMutation.mutate({

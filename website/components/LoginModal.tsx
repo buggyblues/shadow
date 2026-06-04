@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useI18n } from 'rspress/runtime'
 
 declare const __SHADOW_APP_BASE_URL__: string | undefined
+declare const __SHADOW_GOOGLE_CLIENT_ID__: string | undefined
 
 type LoginModalProps = {
   open: boolean
@@ -16,6 +17,12 @@ function configuredAppBase() {
     /\/$/,
     '',
   )
+}
+
+function configuredGoogleClientId() {
+  return (
+    typeof __SHADOW_GOOGLE_CLIENT_ID__ !== 'undefined' ? __SHADOW_GOOGLE_CLIENT_ID__ : ''
+  ).trim()
 }
 
 function legalHref(kind: 'terms' | 'privacy', lang: 'zh' | 'en') {
@@ -83,6 +90,9 @@ function loginText(t: (key: string) => string): LoginViewText {
     loggingIn: text('loggingIn'),
     switchToPassword: text('switchToPassword'),
     switchToEmailCode: text('switchToEmailCode'),
+    forgotPassword: text('forgotPassword'),
+    passwordResetSent: text('passwordResetSent'),
+    passwordResetEmailRequired: text('passwordResetEmailRequired'),
     checkEmailTitle: text('checkEmailTitle'),
     checkEmailMessage: text('checkEmailMessage'),
     codeDigit: (index) => formatI18n(text('codeDigit'), { index }),
@@ -104,6 +114,7 @@ export function LoginModal({ open, lang, redirect, onClose }: LoginModalProps) {
   const text = useMemo(() => loginText(t), [t])
   const appBase = configuredAppBase()
   const apiBase = appBase || ''
+  const googleClientId = configuredGoogleClientId()
   const target = safeAppRedirect(redirect)
 
   const completeAuth = async (session: LoginSession) => {
@@ -133,6 +144,7 @@ export function LoginModal({ open, lang, redirect, onClose }: LoginModalProps) {
       lang={lang}
       redirect={target}
       oauthRedirect={target}
+      googleClientId={googleClientId || undefined}
       apiBase={apiBase}
       logoSrc="/Logo.svg"
       brandSuffix="OwnBuddy"

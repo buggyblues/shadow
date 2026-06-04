@@ -17,8 +17,7 @@ solo-*.png
 *.md
 *.log
 !skills/
-!skills/shadowob-cli/
-!skills/shadowob-cli/SKILL.md
+!skills/**
 !packages/connector/
 !packages/connector/README.md
 !packages/connector/docs/

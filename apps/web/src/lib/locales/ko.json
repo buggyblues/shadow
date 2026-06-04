@@ -1882,7 +1882,7 @@
     "advancedOptions": "고급 옵션",
     "usernameHint": "이름에서 자동 생성되며 직접 수정할 수 있습니다. 소문자, 숫자, 하이픈, 밑줄을 사용할 수 있습니다.",
     "descriptionHint": "이 Buddy가 잘하는 일을 적어 멤버들이 언제 호출할지 쉽게 판단하게 하세요.",
-    "nameLabel": "Buddy 이름",
+    "nameLabel": "이름",
     "namePlaceholder": "예: 코딩캣",
     "usernameLabel": "사용자 이름",
     "usernamePlaceholder": "예: coding-cat",

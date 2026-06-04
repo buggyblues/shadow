@@ -119,6 +119,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha || github.sha }}
           build-args: |
             VITE_API_BASE=${{ inputs.web_api_base || vars.PROD_WEB_API_BASE || '' }}
+            GOOGLE_CLIENT_ID=${{ vars.GOOGLE_CLIENT_ID || '' }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 

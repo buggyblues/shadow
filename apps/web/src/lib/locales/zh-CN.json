@@ -2071,7 +2071,7 @@
     "advancedOptions": "高级选项",
     "usernameHint": "会自动根据名称生成，也可以手动调整。仅支持小写字母、数字、短横线和下划线。",
     "descriptionHint": "写清楚它擅长什么，方便成员判断何时呼叫它。",
-    "nameLabel": "Buddy 名称",
+    "nameLabel": "名称",
     "namePlaceholder": "例如：代码猫",
     "usernameLabel": "用户名",
     "usernamePlaceholder": "例如：coding-cat",

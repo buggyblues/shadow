@@ -17,6 +17,42 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 const CODE_LENGTH = 6
 const RESEND_SECONDS = 60
+const GOOGLE_IDENTITY_SCRIPT_SRC = 'https://accounts.google.com/gsi/client'
+
+type GoogleCredentialResponse = {
+  credential?: string
+}
+
+type GooglePromptMomentNotification = {
+  isDisplayed?: () => boolean
+  isNotDisplayed?: () => boolean
+  isSkippedMoment?: () => boolean
+}
+
+type GoogleIdentityClient = {
+  accounts: {
+    id: {
+      initialize: (options: {
+        client_id: string
+        callback: (response: GoogleCredentialResponse) => void
+        auto_select?: boolean
+        cancel_on_tap_outside?: boolean
+        itp_support?: boolean
+        use_fedcm_for_prompt?: boolean
+      }) => void
+      prompt: (momentListener?: (notification: GooglePromptMomentNotification) => void) => void
+      cancel: () => void
+    }
+  }
+}
+
+declare global {
+  interface Window {
+    google?: GoogleIdentityClient
+  }
+}
+
+let googleIdentityScriptPromise: Promise<void> | null = null
 
 export type LoginSession = {
   user: unknown
@@ -71,6 +107,8 @@ export type LoginViewProps = {
   lang: string
   redirect: string
   oauthRedirect: string
+  googleClientId?: string
+  autoGooglePrompt?: boolean
   apiBase?: string
   logoSrc: string
   brandSuffix?: string
@@ -119,6 +157,35 @@ function oauthHref(apiBase: string, provider: 'google' | 'github', redirect: str
   return `${apiBase}/api/auth/oauth/${provider}?${params.toString()}`
 }
 
+function loadGoogleIdentityScript() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Window unavailable'))
+  if (window.google?.accounts?.id) return Promise.resolve()
+  if (googleIdentityScriptPromise) return googleIdentityScriptPromise
+
+  googleIdentityScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${GOOGLE_IDENTITY_SCRIPT_SRC}"]`,
+    )
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true })
+      existing.addEventListener('error', () => reject(new Error('Google sign-in unavailable')), {
+        once: true,
+      })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = GOOGLE_IDENTITY_SCRIPT_SRC
+    script.async = true
+    script.defer = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Google sign-in unavailable'))
+    document.head.appendChild(script)
+  })
+
+  return googleIdentityScriptPromise
+}
+
 function FormTitle({
   modal,
   title,
@@ -161,6 +228,8 @@ export function LoginView({
   lang,
   redirect,
   oauthRedirect,
+  googleClientId,
+  autoGooglePrompt = true,
   apiBase = '',
   logoSrc,
   brandSuffix,
@@ -179,6 +248,7 @@ export function LoginView({
   const lastSubmittedCodeRef = useRef('')
   const verificationInFlightRef = useRef(false)
   const passwordOriginRef = useRef<'choose' | 'code'>('choose')
+  const googlePromptKeyRef = useRef<string | null>(null)
 
   const [step, setStep] = useState<'choose' | 'code' | 'password'>('choose')
   const [email, setEmail] = useState('')
@@ -235,6 +305,62 @@ export function LoginView({
     lastSubmittedCodeRef.current = submissionKey
     void verifyCode({ email: trimmedEmail, code })
   }, [code, step, trimmedEmail])
+
+  useEffect(() => {
+    const clientId = googleClientId?.trim()
+    if (!open || step !== 'choose' || !autoGooglePrompt || !clientId) return
+
+    const promptKey = `${clientId}:${oauthTarget}`
+    if (googlePromptKeyRef.current === promptKey) return
+    googlePromptKeyRef.current = promptKey
+
+    let cancelled = false
+    void loadGoogleIdentityScript()
+      .then(() => {
+        if (cancelled || !window.google?.accounts?.id) return
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          itp_support: true,
+          use_fedcm_for_prompt: true,
+          callback: (response) => {
+            if (cancelled || !response.credential) return
+            void (async () => {
+              setError('')
+              setNotice('')
+              try {
+                const session = await request<LoginSession>('/api/auth/google/id-token', {
+                  method: 'POST',
+                  body: JSON.stringify({ credential: response.credential }),
+                })
+                await onAuthenticated(session)
+              } catch (err) {
+                setError(errorText(err))
+              }
+            })()
+          },
+        })
+        window.google.accounts.id.prompt()
+      })
+      .catch(() => {
+        googlePromptKeyRef.current = null
+      })
+
+    return () => {
+      cancelled = true
+      window.google?.accounts?.id.cancel()
+    }
+  }, [
+    autoGooglePrompt,
+    googleClientId,
+    oauthTarget,
+    onAuthenticated,
+    open,
+    request,
+    step,
+    errorText,
+  ])
 
   const startEmailLogin = async (event?: React.FormEvent) => {
     event?.preventDefault()

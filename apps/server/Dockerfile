@@ -32,7 +32,7 @@ COPY packages/ packages/
 COPY apps/server/ apps/server/
 COPY apps/cloud/ apps/cloud/
 COPY apps/web/src/styles/ apps/web/src/styles/
-COPY skills/shadowob-cli/SKILL.md skills/shadowob-cli/SKILL.md
+COPY skills/ skills/
 
 # Build dependencies first (need devDependencies for tsup)
 ENV SHADOW_BUILD_DTS=0
@@ -84,8 +84,6 @@ COPY --from=builder /app/apps/cloud/dist apps/cloud/dist
 COPY --from=builder /app/apps/cloud/templates apps/cloud/templates
 COPY --from=builder /app/apps/cloud/images apps/cloud/images
 COPY --from=builder /app/apps/server/src/db/migrations apps/server/migrations
-COPY skills/shadowob-cli/SKILL.md skills/shadowob-cli/SKILL.md
-
 EXPOSE 3002
 ENV NODE_ENV=production
 ENV CLOUD_TEMPLATES_DIR=/app/apps/cloud/templates

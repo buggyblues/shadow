@@ -3,7 +3,9 @@
 # ── Build stage ──────────────────────────────────────
 FROM node:22-alpine AS builder
 ARG VITE_API_BASE
+ARG GOOGLE_CLIENT_ID
 ENV VITE_API_BASE=$VITE_API_BASE
+ENV GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate

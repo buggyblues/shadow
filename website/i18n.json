@@ -99,6 +99,18 @@
     "en": "Use email code instead",
     "zh": "使用邮箱验证码登录"
   },
+  "loginModal.forgotPassword": {
+    "en": "Forgot password?",
+    "zh": "忘记密码？"
+  },
+  "loginModal.passwordResetSent": {
+    "en": "If this email is registered, we sent a password reset link. Open it within 30 minutes.",
+    "zh": "如果该邮箱已注册，我们已发送重设密码邮件。请在 30 分钟内打开链接完成设置。"
+  },
+  "loginModal.passwordResetEmailRequired": {
+    "en": "Enter your email first.",
+    "zh": "请先输入邮箱地址。"
+  },
   "loginModal.checkEmailTitle": {
     "en": "Check your email to continue",
     "zh": "查看您的邮箱以继续"
