@@ -9,7 +9,12 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../../shared/community-auth'
-import { type ChatMessage, createInitialMessages, type PetNoticeKind } from '../lib/chatbot'
+import {
+  type ChatMessage,
+  createInitialMessages,
+  type PetNoticeKind,
+  type PetNoticeOptions,
+} from '../lib/chatbot'
 import { applyPetAction, type PetState } from '../lib/game'
 import {
   getShadowUrl,
@@ -33,6 +38,7 @@ const BUBBLE_SENTENCE_PAUSE_MS = 720
 const BUBBLE_MIN_VISIBLE_MS = 27_000
 const BUBBLE_HOLD_AFTER_DONE_MS = 10_800
 const PET_NOTICE_DEDUPE_MS = 2000
+const PET_BUBBLE_DEBUG_KEY = 'shadow:desktop-pet:bubble-debug'
 const TTS_STREAM_MIN_SEGMENT_CHARS = 14
 const TTS_STREAM_SOFT_SEGMENT_CHARS = 28
 const TTS_STREAM_MAX_SEGMENT_CHARS = 64
@@ -61,6 +67,7 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
 
 declare global {
   interface Window {
+    desktopPetDebugLog?: (scope: string, payload: unknown) => void
     SpeechRecognition?: SpeechRecognitionConstructor
     webkitAudioContext?: typeof AudioContext
     webkitSpeechRecognition?: SpeechRecognitionConstructor
@@ -135,6 +142,23 @@ export function usePetConversation({
     : bubbleMessage
       ? localizedPetDisplayText(bubbleMessage, petState, t)
       : ''
+
+  useEffect(() => {
+    logPetBubbleDebug('bubble-source', bubbleSourceText, {
+      bubbleMessageId,
+      bubbleMessage,
+      voiceBubbleText,
+      messageCount: messages.length,
+      recentMessages: messages.slice(-5).map((message) => ({
+        id: message.id,
+        role: message.role,
+        text: message.text ?? null,
+        key: message.key ?? null,
+        noticeKind: message.noticeKind ?? null,
+        createdAt: new Date(message.createdAt).toISOString(),
+      })),
+    })
+  }, [bubbleMessage, bubbleMessageId, bubbleSourceText, messages, voiceBubbleText])
 
   useEffect(() => {
     const node = bubbleContentRef.current
@@ -269,7 +293,7 @@ export function usePetConversation({
   }, [])
 
   const showPetNotice = useCallback(
-    (text: string, options?: { noticeKind?: PetNoticeKind }) => {
+    (text: string, options?: PetNoticeOptions) => {
       const message = normalizePetDisplayText(text)
       if (!message) return
       const now = Date.now()
@@ -294,22 +318,44 @@ export function usePetConversation({
       bubbleNoticeKindRef.current = options?.noticeKind ?? null
       setBubbleMessageId(id)
       scheduleBubbleHide(message)
+      logPetBubbleDebug('show-notice', message, {
+        id,
+        noticeKind: options?.noticeKind ?? null,
+        debugSource: options?.debugSource ?? null,
+        debugContext: options?.debugContext ?? null,
+      })
     },
     [scheduleBubbleHide],
   )
 
-  const clearPetNotice = useCallback((noticeKind?: PetNoticeKind) => {
-    if (noticeKind && bubbleNoticeKindRef.current !== noticeKind) return
-    if (bubbleTimerRef.current) {
-      window.clearTimeout(bubbleTimerRef.current)
-      bubbleTimerRef.current = null
-    }
-    bubbleNoticeKindRef.current = null
-    setBubbleMessageId(null)
-    if (noticeKind) {
-      setMessages((current) => current.filter((message) => message.noticeKind !== noticeKind))
-    }
-  }, [])
+  const clearPetNotice = useCallback(
+    (noticeKind?: PetNoticeKind) => {
+      if (noticeKind && bubbleNoticeKindRef.current !== noticeKind) {
+        logPetBubbleDebug('clear-notice-skipped', null, {
+          requestedNoticeKind: noticeKind,
+          currentNoticeKind: bubbleNoticeKindRef.current,
+          bubbleMessageId,
+          bubbleMessage,
+        })
+        return
+      }
+      if (bubbleTimerRef.current) {
+        window.clearTimeout(bubbleTimerRef.current)
+        bubbleTimerRef.current = null
+      }
+      bubbleNoticeKindRef.current = null
+      setBubbleMessageId(null)
+      if (noticeKind) {
+        setMessages((current) => current.filter((message) => message.noticeKind !== noticeKind))
+      }
+      logPetBubbleDebug('clear-notice', null, {
+        requestedNoticeKind: noticeKind ?? null,
+        bubbleMessageId,
+        bubbleMessage,
+      })
+    },
+    [bubbleMessage, bubbleMessageId],
+  )
 
   async function speakPetReply(text: string, options: { manageSpeaking?: boolean } = {}) {
     const content = normalizeTtsText(text)
@@ -827,10 +873,51 @@ function loadChatMessages() {
     const raw = localStorage.getItem(CHAT_STORAGE_KEY)
     if (!raw) return createInitialMessages()
     const parsed = JSON.parse(raw) as ChatMessage[]
+    if (Array.isArray(parsed) && isPetBubbleDebugEnabled()) {
+      emitDesktopPetDebugLog('[desktop-pet:bubble]', {
+        reason: 'load-chat-messages',
+        at: new Date().toISOString(),
+        storedCount: parsed.length,
+        recentMessages: parsed.slice(-5).map((message) => ({
+          id: message.id,
+          role: message.role,
+          text: message.text ?? null,
+          key: message.key ?? null,
+          noticeKind: message.noticeKind ?? null,
+          createdAt: new Date(message.createdAt).toISOString(),
+        })),
+      })
+    }
     return Array.isArray(parsed) && parsed.length > 0 ? parsed : createInitialMessages()
   } catch {
     return createInitialMessages()
   }
+}
+
+function isPetBubbleDebugEnabled(): boolean {
+  try {
+    return localStorage.getItem(PET_BUBBLE_DEBUG_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function logPetBubbleDebug(
+  reason: string,
+  text: string | null,
+  context: Record<string, unknown>,
+): void {
+  if (!isPetBubbleDebugEnabled()) return
+  emitDesktopPetDebugLog('[desktop-pet:bubble]', {
+    reason,
+    text,
+    at: new Date().toISOString(),
+    ...context,
+  })
+}
+
+function emitDesktopPetDebugLog(scope: string, payload: Record<string, unknown>): void {
+  window.desktopPetDebugLog?.(scope, payload)
 }
 
 function buildPetSystemPrompt(petState: PetState) {

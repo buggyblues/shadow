@@ -359,6 +359,7 @@ export function ThreadPanel({
                   replyToMessage={
                     message.replyToId ? (messageMap.get(message.replyToId) ?? null) : null
                   }
+                  enableSlashCommandActions={index === messages.length - 1}
                 />
               )
             })

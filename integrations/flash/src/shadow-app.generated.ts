@@ -8,8 +8,8 @@ export const shadowServerAppManifest = {
   name: 'Flash',
   description:
     'Persistent multi-card canvas with realtime rooms, server-side command execution, file-backed image cards, and Buddy-assisted board operations.',
-  version: '1.1.0',
-  updatedAt: '2026-05-21T00:00:00.000Z',
+  version: '1.2.0',
+  updatedAt: '2026-06-04T00:00:00.000Z',
   iconUrl: 'http://localhost:4216/assets/icon.svg',
   marketplace: {
     tagline: 'A visual card canvas for building, arranging, and sharing ideas with your server.',
@@ -52,11 +52,11 @@ export const shadowServerAppManifest = {
   },
   help: {
     overview:
-      'Flash is a server-backed canvas for many card kinds, including image, quote, summary, argument, data, table, code, chart, timeline, comparison, process, math, todo, link, file, poker, tarot, Live2D, Three.js, and inspiration cards. Start from the command list, then request per-command help only when the input schema or examples are needed.',
+      'Flash is a server-backed semantic card canvas. For Buddy-generated boards or multi-card content, use cards.compose first so material is split by intent into typed cards with kind-specific metadata and renderers. Use cards.create only for one already-decided card.',
     usage:
       "Use shadowob app call shadow-flash <command> --server <server> --channel-id <channel> --json-input '<input-json>' --json. Use --help on a specific command for detailed schema and examples.",
     commandIndex:
-      'Use boards.get for snapshots, cards.create/cards.update for typed cards, assets.upload or cards.create --file for local images, selection.get for the current stored selection, and shadowob app events shadow-flash for realtime updates.',
+      'Use cards.compose for any request that asks Buddy to create, split, summarize, test, brainstorm, or arrange multiple cards. Use cards.create/cards.update only for a single already-decided typed card, boards.get for snapshots, boards.events for incremental sync, assets.upload or cards.create --file for local images, and selection.get for current selection.',
   },
   commands: [
     {
@@ -125,6 +125,15 @@ export const shadowServerAppManifest = {
             type: 'string',
             minLength: 1,
           },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
+          },
           viewport: {
             type: 'object',
             required: ['offsetX', 'offsetY', 'zoom'],
@@ -172,6 +181,223 @@ export const shadowServerAppManifest = {
       },
     },
     {
+      name: 'cards.compose',
+      title: 'Compose semantic card board',
+      description:
+        'Split Buddy/user material by intent and create multiple typed Flash cards with kind-specific metadata, layout, and render behavior.',
+      help: {
+        summary:
+          'Primary Buddy entry point for creating multiple cards. It prevents large-text card dumps by normalizing each draft into the renderer schema for its kind.',
+        usage: `shadowob app call shadow-flash cards.compose --server "<server>" --json-input '{"intent":"card-showcase","title":"卡片测试","material":"每张卡只讲一个点，类型各不相同"}' --json`,
+        details:
+          'Use this command whenever the user asks to build a board, split notes, make a card test, brainstorm, summarize source material into cards, create a study deck, or generate several cards. Buddy should pass explicit drafts with kind/title/content whenever it understands the intended structure; otherwise pass material plus intent and preferredKinds. The server chooses or validates card kinds, fills structured meta such as todo.items, definition.term/definition, process.steps, argument.evidence, quote.text, timeline.events, rule.principles, and places cards in a grid. Do not put a whole brief into cards.create.content when more than one semantic card is intended.',
+        examples: [
+          {
+            title: 'Create a card showcase with different renderers',
+            input: {
+              intent: 'card-showcase',
+              title: '卡片测试',
+              material: '每张卡只讲一个点，内容精简，类型名不相同。',
+              maxCards: 11,
+            },
+          },
+          {
+            title: 'Normalize explicit Buddy drafts',
+            input: {
+              intent: 'study-deck',
+              drafts: [
+                {
+                  kind: 'definition',
+                  title: '能量 ≠ 激情',
+                  content: '能量不是兴奋，而是一种稳定投入。',
+                },
+                {
+                  kind: 'todo',
+                  title: '检查你头上的钉子',
+                  content: '- [ ] 识别卡点\n- [ ] 请求外部反馈',
+                },
+              ],
+            },
+          },
+        ],
+      },
+      path: '/api/shadow/commands/cards.compose',
+      permission: 'flash.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          boardId: { type: 'string', minLength: 1 },
+          clientMutationId: { type: 'string', minLength: 1, maxLength: 120 },
+          baseCursor: { type: 'integer', minimum: 0 },
+          intent: {
+            enum: [
+              'auto',
+              'card-showcase',
+              'study-deck',
+              'research-map',
+              'project-plan',
+              'argument-map',
+              'story-world',
+              'presentation',
+              'ruleset',
+              'brainstorm',
+            ],
+          },
+          title: { type: 'string', minLength: 1, maxLength: 160 },
+          material: { type: 'string', maxLength: 60000 },
+          instructions: { type: 'string', maxLength: 4000 },
+          preferredKinds: {
+            type: 'array',
+            maxItems: 24,
+            items: {
+              enum: [
+                'quote',
+                'summary',
+                'argument',
+                'data',
+                'table',
+                'image',
+                'code',
+                'chart',
+                'idea',
+                'text',
+                'audio',
+                'video',
+                'keypoint',
+                'definition',
+                'example',
+                'reference',
+                'inspiration',
+                'timeline',
+                'comparison',
+                'process',
+                'gif',
+                'qrcode',
+                'person',
+                'terminal',
+                'lottie',
+                'webpage',
+                'countdown',
+                'threed',
+                'live2d',
+                'link',
+                'file',
+                'math',
+                'todo',
+                'position',
+                'timestamp',
+                'color',
+                'event',
+                'voice',
+                'comment',
+                'story',
+                'social',
+                'poker',
+                'tarot',
+                'flash',
+                'rule',
+              ],
+            },
+          },
+          maxCards: { type: 'integer', minimum: 1, maximum: 40 },
+          placement: {
+            type: 'object',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+              columns: { type: 'integer', minimum: 1, maximum: 12 },
+              gapX: { type: 'number', exclusiveMinimum: 0, maximum: 1000 },
+              gapY: { type: 'number', exclusiveMinimum: 0, maximum: 1000 },
+              angleJitter: { type: 'number', minimum: 0, maximum: 0.4 },
+            },
+            additionalProperties: false,
+          },
+          drafts: {
+            type: 'array',
+            maxItems: 40,
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', minLength: 1, maxLength: 120 },
+                title: { type: 'string', minLength: 1, maxLength: 160 },
+                kind: {
+                  enum: [
+                    'quote',
+                    'summary',
+                    'argument',
+                    'data',
+                    'table',
+                    'image',
+                    'code',
+                    'chart',
+                    'idea',
+                    'text',
+                    'audio',
+                    'video',
+                    'keypoint',
+                    'definition',
+                    'example',
+                    'reference',
+                    'inspiration',
+                    'timeline',
+                    'comparison',
+                    'process',
+                    'gif',
+                    'qrcode',
+                    'person',
+                    'terminal',
+                    'lottie',
+                    'webpage',
+                    'countdown',
+                    'threed',
+                    'live2d',
+                    'link',
+                    'file',
+                    'math',
+                    'todo',
+                    'position',
+                    'timestamp',
+                    'color',
+                    'event',
+                    'voice',
+                    'comment',
+                    'story',
+                    'social',
+                    'poker',
+                    'tarot',
+                    'flash',
+                    'rule',
+                  ],
+                },
+                summary: { type: 'string', maxLength: 1000 },
+                content: { type: 'string', maxLength: 12000 },
+                thumbnail: { type: 'string', maxLength: 2000 },
+                sourceId: { type: ['string', 'null'], maxLength: 200 },
+                linkedCardIds: {
+                  type: 'array',
+                  maxItems: 80,
+                  items: { type: 'string', maxLength: 120 },
+                },
+                meta: { type: 'object' },
+                tags: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 40 } },
+                priority: { enum: ['high', 'medium', 'low'] },
+                autoGenerated: { type: 'boolean' },
+                rating: { type: 'integer', minimum: 0, maximum: 5 },
+                filePath: { type: 'string', maxLength: 2000 },
+                fileMime: { type: 'string', maxLength: 120 },
+                deckIds: { type: 'array', maxItems: 80, items: { type: 'string', maxLength: 120 } },
+              },
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'cards.create',
       title: 'Create card',
       description: 'Create any supported Flash card kind on the caller-owned board.',
@@ -181,7 +407,7 @@ export const shadowServerAppManifest = {
         usage:
           'shadowob app call shadow-flash cards.create --server "<server>" --channel-id "<channel>" --json-input \'{"kind":"image","title":"Sketch"}\' --file ./sketch.png --json',
         details:
-          'The kind field selects the renderer. Image cards can be created in one command by passing --file; the app uploads the image, stores a file-backed URL, and links it to the created card. For non-image cards, put kind-specific structured data in meta.',
+          'The kind field selects the renderer. For one card, the server normalizes content into kind-specific meta. For multiple cards or any Buddy-generated board, use cards.compose instead; do not put an entire brief into one cards.create content field. Image cards can be created in one command by passing --file.',
         examples: [
           {
             title: 'Create an image card from a local file',
@@ -226,6 +452,15 @@ export const shadowServerAppManifest = {
           boardId: {
             type: 'string',
             minLength: 1,
+          },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
           },
           title: {
             type: 'string',
@@ -278,6 +513,7 @@ export const shadowServerAppManifest = {
               'poker',
               'tarot',
               'flash',
+              'rule',
             ],
           },
           summary: {
@@ -404,7 +640,7 @@ export const shadowServerAppManifest = {
         usage:
           'shadowob app call shadow-flash cards.update --server "<server>" --json-input \'{"cardId":"<card>","x":320,"y":240}\' --json',
         details:
-          'Layout fields are server-authoritative snapshots. Realtime physics clients should debounce layout writes, attach a monotonic clientRevision, and ignore lower-revision remote echoes while a newer local layout is pending.',
+          'Layout fields are server-authoritative snapshots. Realtime physics clients should debounce layout writes, send the last known card revision as clientRevision, and ignore stale remote layout echoes while a local layout is pending.',
       },
       path: '/api/shadow/commands/cards.update',
       permission: 'flash.cards:write',
@@ -426,6 +662,15 @@ export const shadowServerAppManifest = {
             type: 'string',
             minLength: 1,
           },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -434,7 +679,7 @@ export const shadowServerAppManifest = {
             type: 'integer',
             minimum: 0,
             description:
-              'Client-local monotonic layout revision. Realtime clients use it to ignore stale card layout echoes.',
+              'Last known server card revision for optimistic layout/content updates. The server returns 409 on mismatch.',
           },
           kind: {
             enum: [
@@ -482,6 +727,7 @@ export const shadowServerAppManifest = {
               'poker',
               'tarot',
               'flash',
+              'rule',
             ],
           },
           title: {
@@ -604,6 +850,85 @@ export const shadowServerAppManifest = {
       },
     },
     {
+      name: 'cards.layout.update',
+      title: 'Commit card layout batch',
+      description:
+        'Atomically persist one or more final card transforms after local drag, stack, or scripted layout changes.',
+      help: {
+        summary:
+          'Use this for drag-end and stack commits. Layout conflicts default to merge-layout so stale drag revisions do not throw user-visible 409 errors.',
+        usage: `shadowob app call shadow-flash cards.layout.update --server "<server>" --json-input '{"updates":[{"cardId":"<card>","x":320,"y":240}]}' --json`,
+        details:
+          'The command writes all supplied transforms in one durable event. Use conflictPolicy=reject only for tools that require exact revision matching.',
+      },
+      path: '/api/shadow/commands/cards.layout.update',
+      permission: 'flash.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['updates'],
+        properties: {
+          boardId: {
+            type: 'string',
+            minLength: 1,
+          },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
+          },
+          conflictPolicy: {
+            enum: ['merge-layout', 'reject'],
+          },
+          updates: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 160,
+            items: {
+              type: 'object',
+              required: ['cardId'],
+              properties: {
+                cardId: {
+                  type: 'string',
+                  minLength: 1,
+                },
+                clientRevision: {
+                  type: 'integer',
+                  minimum: 0,
+                },
+                x: {
+                  type: 'number',
+                },
+                y: {
+                  type: 'number',
+                },
+                angle: {
+                  type: 'number',
+                },
+                flipped: {
+                  type: 'boolean',
+                },
+                hidden: {
+                  type: 'boolean',
+                },
+                locked: {
+                  type: 'boolean',
+                },
+              },
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'cards.delete',
       title: 'Delete card',
       description: 'Delete a card from the caller-owned board.',
@@ -619,6 +944,15 @@ export const shadowServerAppManifest = {
           boardId: {
             type: 'string',
             minLength: 1,
+          },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
           },
           cardId: {
             type: 'string',
@@ -659,6 +993,15 @@ export const shadowServerAppManifest = {
           boardId: {
             type: 'string',
             minLength: 1,
+          },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
           },
           upload: {
             type: 'object',
@@ -711,6 +1054,15 @@ export const shadowServerAppManifest = {
           boardId: {
             type: 'string',
             minLength: 1,
+          },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
           },
           command: {
             type: 'object',
@@ -800,6 +1152,15 @@ export const shadowServerAppManifest = {
             type: 'string',
             minLength: 1,
           },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
+          },
           kind: {
             enum: ['magic-circle', 'grid', 'custom'],
           },
@@ -819,6 +1180,10 @@ export const shadowServerAppManifest = {
           color: {
             type: 'string',
             maxLength: 40,
+          },
+          script: {
+            type: 'string',
+            maxLength: 20000,
           },
         },
         additionalProperties: false,
@@ -840,6 +1205,19 @@ export const shadowServerAppManifest = {
           boardId: {
             type: 'string',
             minLength: 1,
+          },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
+          },
+          clientRevision: {
+            type: 'integer',
+            minimum: 0,
           },
           arenaId: {
             type: 'string',
@@ -902,6 +1280,15 @@ export const shadowServerAppManifest = {
             type: 'string',
             minLength: 1,
           },
+          clientMutationId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          baseCursor: {
+            type: 'integer',
+            minimum: 0,
+          },
           selectedCardIds: {
             type: 'array',
             maxItems: 80,
@@ -927,10 +1314,11 @@ export const shadowServerAppManifest = {
     {
       name: 'shadow-flash-card-workspace',
       description:
-        "Use when a Buddy reads user-provided material, creates or edits any Flash card kind, uploads local images, reads the user's current selection, subscribes to board events, attaches to a card perspective, inspects nearby cards, or executes Flash board commands.",
+        "Use when a Buddy reads user-provided material, composes a semantic multi-card board, creates or edits any Flash card kind, uploads local images, reads the user's current selection, subscribes to board events, attaches to a card perspective, inspects nearby cards, or executes Flash board commands. For generated multi-card work, prefer cards.compose over repeated cards.create.",
       commandHints: [
         'shadow-flash boards.get',
         'shadow-flash selection.get',
+        'shadow-flash cards.compose',
         'shadow-flash cards.create',
         'shadow-flash cards.create --file ./image.png',
         'shadow-flash assets.upload --file ./image.png',
@@ -964,7 +1352,7 @@ export const shadowServerAppManifest = {
       model: 'frame-sync',
       authority: 'server',
       tickRate: 30,
-      help: 'Treat card layout as server-authoritative frames with client-side prediction during drag. Clients publish final transforms after pointer release, subscribe to ordered board events, discard frames at or below the local cursor, and reconcile from the server cursor.',
+      help: 'Treat card layout as server-authoritative frames with client-side prediction during drag. Clients publish final transforms with clientMutationId, baseCursor, and entity revision; consume board-local ordered events; buffer gaps; then reconcile from the authoritative cursor.',
     },
   },
   binary: {

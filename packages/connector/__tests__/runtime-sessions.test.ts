@@ -56,13 +56,15 @@ describe('runtime session scanning', () => {
   it('keeps Claude Code sessions active when the latest assistant turn is still using tools', async () => {
     const home = await mkdtemp(join(tmpdir(), 'shadow-runtime-sessions-running-'))
     const projectDir = join(home, '.claude/projects/test-project')
+    const startedAt = isoDateAgo(2_000)
+    const toolUseAt = isoDateAgo(1_000)
     await mkdir(projectDir, { recursive: true })
     await writeFile(
       join(projectDir, 'session-1.jsonl'),
       [
         JSON.stringify({
           sessionId: 'session-1',
-          timestamp: '2026-06-01T01:00:00.000Z',
+          timestamp: startedAt,
           cwd: '/tmp/example',
           type: 'user',
           message: {
@@ -72,7 +74,7 @@ describe('runtime session scanning', () => {
         }),
         JSON.stringify({
           sessionId: 'session-1',
-          timestamp: '2026-06-01T01:00:05.000Z',
+          timestamp: toolUseAt,
           type: 'assistant',
           message: {
             role: 'assistant',
@@ -89,21 +91,66 @@ describe('runtime session scanning', () => {
       env: { PATH: '' },
     })
 
-    expect(snapshot.sessions[0]?.state).toBe('running')
+    expect(snapshot.sessions[0]?.state).toBe('tool_call')
     expect(snapshot.sessions[0]?.petReaction).toBe('testing')
     expect(snapshot.sessions[0]?.petActivity).toEqual({ kind: 'testing', label: 'pnpm test' })
   })
 
-  it('classifies Claude Code edit tools for runtime pet reactions', async () => {
-    const home = await mkdtemp(join(tmpdir(), 'shadow-runtime-sessions-editing-'))
+  it('does not keep stale Claude Code tool-use transcripts active without a live process', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'shadow-runtime-sessions-stale-running-'))
     const projectDir = join(home, '.claude/projects/test-project')
+    const startedAt = isoDateAgo(11 * 60_000)
+    const toolUseAt = isoDateAgo(10 * 60_000)
     await mkdir(projectDir, { recursive: true })
     await writeFile(
       join(projectDir, 'session-1.jsonl'),
       [
         JSON.stringify({
           sessionId: 'session-1',
-          timestamp: '2026-06-01T01:00:00.000Z',
+          timestamp: startedAt,
+          cwd: '/tmp/example',
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: 'Run the tests' }],
+          },
+        }),
+        JSON.stringify({
+          sessionId: 'session-1',
+          timestamp: toolUseAt,
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'tool_use', name: 'Bash', input: { command: 'pnpm test' } }],
+            stop_reason: 'tool_use',
+          },
+        }),
+      ].join('\n'),
+    )
+
+    const snapshot = await scanRuntimeSessions({
+      runtimeId: 'claude-code',
+      homeDir: home,
+      env: { PATH: '' },
+    })
+
+    expect(snapshot.sessions[0]?.state).toBe('unknown')
+    expect(snapshot.sessions[0]?.petReaction).toBe('idle')
+    expect(snapshot.sessions[0]?.petActivity).toBeUndefined()
+  })
+
+  it('classifies Claude Code edit tools for runtime pet reactions', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'shadow-runtime-sessions-editing-'))
+    const projectDir = join(home, '.claude/projects/test-project')
+    const startedAt = isoDateAgo(2_000)
+    const toolUseAt = isoDateAgo(1_000)
+    await mkdir(projectDir, { recursive: true })
+    await writeFile(
+      join(projectDir, 'session-1.jsonl'),
+      [
+        JSON.stringify({
+          sessionId: 'session-1',
+          timestamp: startedAt,
           cwd: '/tmp/example',
           type: 'user',
           message: {
@@ -113,7 +160,7 @@ describe('runtime session scanning', () => {
         }),
         JSON.stringify({
           sessionId: 'session-1',
-          timestamp: '2026-06-01T01:00:05.000Z',
+          timestamp: toolUseAt,
           type: 'assistant',
           message: {
             role: 'assistant',
@@ -136,7 +183,7 @@ describe('runtime session scanning', () => {
       env: { PATH: '' },
     })
 
-    expect(snapshot.sessions[0]?.state).toBe('running')
+    expect(snapshot.sessions[0]?.state).toBe('tool_call')
     expect(snapshot.sessions[0]?.petReaction).toBe('editing')
     expect(snapshot.sessions[0]?.petActivity).toEqual({ kind: 'editing', label: 'app.ts' })
   })
@@ -237,12 +284,15 @@ describe('runtime session scanning', () => {
   it('classifies Codex command transcript events for runtime pet reactions', async () => {
     const home = await mkdtemp(join(tmpdir(), 'shadow-codex-testing-'))
     const sessionDir = join(home, '.codex/sessions/2026/06/01')
+    const startedAt = isoDateAgo(3_000)
+    const userAt = isoDateAgo(2_000)
+    const commandAt = isoDateAgo(1_000)
     await mkdir(sessionDir, { recursive: true })
     await writeFile(
       join(sessionDir, 'rollout-2026-06-01T01-00-00-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl'),
       [
         JSON.stringify({
-          timestamp: '2026-06-01T01:00:00.000Z',
+          timestamp: startedAt,
           type: 'session_meta',
           payload: {
             id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
@@ -250,7 +300,7 @@ describe('runtime session scanning', () => {
           },
         }),
         JSON.stringify({
-          timestamp: '2026-06-01T01:00:01.000Z',
+          timestamp: userAt,
           type: 'response_item',
           payload: {
             type: 'message',
@@ -259,7 +309,7 @@ describe('runtime session scanning', () => {
           },
         }),
         JSON.stringify({
-          timestamp: '2026-06-01T01:00:02.000Z',
+          timestamp: commandAt,
           type: 'event_msg',
           payload: {
             type: 'exec_command_begin',
@@ -285,6 +335,59 @@ describe('runtime session scanning', () => {
         label: 'pnpm test -- --runInBand',
       },
     })
+  })
+
+  it('does not keep stale Codex command transcripts active without a live process', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'shadow-codex-stale-testing-'))
+    const sessionDir = join(home, '.codex/sessions/2026/06/01')
+    const startedAt = isoDateAgo(12 * 60_000)
+    const userAt = isoDateAgo(11 * 60_000)
+    const commandAt = isoDateAgo(10 * 60_000)
+    await mkdir(sessionDir, { recursive: true })
+    await writeFile(
+      join(sessionDir, 'rollout-2026-06-01T01-00-00-bbbbbbbb-cccc-4ddd-8eee-ffffffffffff.jsonl'),
+      [
+        JSON.stringify({
+          timestamp: startedAt,
+          type: 'session_meta',
+          payload: {
+            id: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+            cwd: '/tmp/codex-project',
+          },
+        }),
+        JSON.stringify({
+          timestamp: userAt,
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Run checks' }],
+          },
+        }),
+        JSON.stringify({
+          timestamp: commandAt,
+          type: 'event_msg',
+          payload: {
+            type: 'exec_command_begin',
+            command: 'pnpm test -- --runInBand',
+          },
+        }),
+      ].join('\n'),
+    )
+
+    const snapshot = await scanRuntimeSessions({
+      runtimeId: 'codex',
+      homeDir: home,
+      env: { PATH: '' },
+    })
+
+    expect(snapshot.sessions[0]).toMatchObject({
+      runtimeId: 'codex',
+      sessionId: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+      state: 'unknown',
+      petReaction: 'idle',
+    })
+    expect(snapshot.sessions[0]?.petActivity).toBeUndefined()
   })
 
   it('sends a Codex session prompt through codex exec resume', async () => {
@@ -410,4 +513,8 @@ function snapshotWithState(state: 'idle' | 'running'): RuntimeSessionSnapshot {
       },
     ],
   }
+}
+
+function isoDateAgo(offsetMs: number): string {
+  return new Date(Date.now() - offsetMs).toISOString()
 }

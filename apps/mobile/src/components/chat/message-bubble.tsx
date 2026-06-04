@@ -5,9 +5,11 @@ import type {
   OAuthLinkCard,
   PaidFileCard,
   ServerAppMessageCard,
+  SlashCommandAction,
   TaskMessageCard,
 } from '@shadowob/shared'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { extractSlashCommandActions } from '@shadowob/shared'
+import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import * as Clipboard from 'expo-clipboard'
@@ -24,6 +26,7 @@ import {
   Check,
   CheckSquare,
   ChevronRight,
+  CornerDownRight,
   ExternalLink,
   FileArchive,
   FileCode,
@@ -56,6 +59,7 @@ import {
   Keyboard,
   Linking,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -86,6 +90,7 @@ import type {
   InteractiveBlock,
   InteractiveResponseMetadata,
   Message,
+  MessagesPage,
 } from '../../types/message'
 import { Avatar } from '../common/avatar'
 import { formatCommercePrice, PriceCompact } from '../common/price-display'
@@ -885,9 +890,82 @@ interface MessageBubbleProps {
   selectionMode?: boolean
   isSelected?: boolean
   selectionAnchorId?: string | null
+  enableSlashCommandActions?: boolean
   onToggleSelect?: (messageId: string) => void
   onEnterSelectionMode?: (messageId: string) => void
   onSelectRangeTo?: (messageId: string) => void
+}
+
+function appendCreatedChannelMessage(
+  queryClient: ReturnType<typeof useQueryClient>,
+  channelId: string,
+  created: Message,
+) {
+  queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
+    if (!old || old.pages.length === 0) return old
+    if (old.pages.some((page) => page.messages.some((item) => item.id === created.id))) return old
+    const pages = [...old.pages]
+    const firstPage = pages[0]!
+    pages[0] = { ...firstPage, messages: [...firstPage.messages, created] }
+    return { ...old, pages }
+  })
+}
+
+function appendCreatedThreadMessage(
+  queryClient: ReturnType<typeof useQueryClient>,
+  threadId: string,
+  created: Message,
+) {
+  queryClient.setQueryData<Message[]>(['thread-messages', threadId], (old) => {
+    const messages = old ?? []
+    if (messages.some((item) => item.id === created.id)) return messages
+    return [...messages, created]
+  })
+}
+
+function SlashCommandActionsMobile({
+  actions,
+  sendingCommand,
+  onSend,
+}: {
+  actions: SlashCommandAction[]
+  sendingCommand: string | null
+  onSend: (command: string) => void
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  if (actions.length === 0) return null
+
+  return (
+    <View style={styles.slashCommandActions}>
+      {actions.map((action) => (
+        <Pressable
+          key={action.id}
+          disabled={sendingCommand !== null}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.sendSlashCommand', { command: action.command })}
+          onPress={() => {
+            selectionHaptic()
+            onSend(action.command)
+          }}
+          style={({ pressed }) => [
+            styles.slashCommandChip,
+            {
+              borderColor: colors.primary,
+              backgroundColor: colors.inputBackground,
+              opacity: sendingCommand !== null ? 0.55 : 1,
+              transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }],
+            },
+          ]}
+        >
+          <CornerDownRight size={iconSize.sm} color={colors.primary} />
+          <Text style={[styles.slashCommandText, { color: colors.primary }]} numberOfLines={1}>
+            {action.command}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  )
 }
 
 function SignedAttachmentImage({ attachment }: { attachment: Attachment }) {
@@ -1108,6 +1186,7 @@ function MessageBubbleInner({
   selectionMode,
   isSelected,
   selectionAnchorId,
+  enableSlashCommandActions = false,
   onToggleSelect,
   onEnterSelectionMode,
   onSelectRangeTo,
@@ -1115,6 +1194,7 @@ function MessageBubbleInner({
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const bubbleRef = useRef<View>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -1130,6 +1210,7 @@ function MessageBubbleInner({
     url: string
     filename: string
   } | null>(null)
+  const [sendingSlashCommand, setSendingSlashCommand] = useState<string | null>(null)
   const buildLocalFileUri = useCallback((filename: string) => {
     const extMatch = filename.match(/\.[A-Za-z0-9]+$/)
     const ext = extMatch?.[0] ?? ''
@@ -1432,6 +1513,54 @@ function MessageBubbleInner({
     if (hasTaskCards) return ''
     return walletRecharge ? stripWalletRechargeMarker(message.content) : message.content
   }, [hasTaskCards, message.content, walletRecharge])
+  const slashCommandActions = useMemo(
+    () =>
+      enableSlashCommandActions && !isOwnMessage && !selectionMode
+        ? extractSlashCommandActions(displayContent)
+        : [],
+    [displayContent, enableSlashCommandActions, isOwnMessage, selectionMode],
+  )
+  const handleSendSlashCommand = useCallback(
+    async (command: string) => {
+      if (sendingSlashCommand) return
+      const targetChannelId = message.channelId ?? channelId
+      const threadId = message.threadId
+      if (!targetChannelId && !threadId) {
+        showToast(t('chat.sendSlashCommandFailed'), 'error')
+        return
+      }
+
+      setSendingSlashCommand(command)
+      try {
+        const created = await fetchApi<Message>(
+          threadId
+            ? `/api/threads/${threadId}/messages`
+            : `/api/channels/${targetChannelId}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ content: command }),
+          },
+        )
+        if (threadId) {
+          appendCreatedThreadMessage(queryClient, threadId, created)
+          queryClient.invalidateQueries({ queryKey: ['thread-messages', threadId] })
+        } else if (targetChannelId) {
+          appendCreatedChannelMessage(queryClient, targetChannelId, created)
+          queryClient.invalidateQueries({ queryKey: ['messages', targetChannelId] })
+        }
+        successHaptic()
+      } catch (error) {
+        errorHaptic()
+        showToast(
+          error instanceof Error ? error.message : t('chat.sendSlashCommandFailed'),
+          'error',
+        )
+      } finally {
+        setSendingSlashCommand(null)
+      }
+    },
+    [channelId, message.channelId, message.threadId, queryClient, sendingSlashCommand, t],
+  )
 
   const getAttachmentContentType = (att: Attachment) =>
     att.contentType ?? att.mimeType ?? 'application/octet-stream'
@@ -1662,6 +1791,11 @@ function MessageBubbleInner({
                 mentionMap={mentionMap}
                 mentions={message.metadata?.mentions}
                 selectable={!selectionMode}
+              />
+              <SlashCommandActionsMobile
+                actions={slashCommandActions}
+                sendingCommand={sendingSlashCommand}
+                onSend={handleSendSlashCommand}
               />
             </View>
           )}
@@ -2547,6 +2681,7 @@ export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
     prev.selectionMode === next.selectionMode &&
     prev.isSelected === next.isSelected &&
     prev.selectionAnchorId === next.selectionAnchorId &&
+    prev.enableSlashCommandActions === next.enableSlashCommandActions &&
     prev.onToggleSelect === next.onToggleSelect &&
     prev.onEnterSelectionMode === next.onEnterSelectionMode &&
     prev.onSelectRangeTo === next.onSelectRangeTo
@@ -2628,6 +2763,29 @@ const styles = StyleSheet.create({
   content: {
     fontSize: fontSize.md,
     lineHeight: lineHeight.md,
+  },
+  slashCommandActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  slashCommandChip: {
+    minHeight: size.controlSm,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    borderWidth: border.hairline,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+  },
+  slashCommandText: {
+    maxWidth: size.chipMaxWidth,
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
   },
   // Long-press popup overlay
   popupOverlay: {

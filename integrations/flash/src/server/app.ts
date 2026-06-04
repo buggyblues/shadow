@@ -10,6 +10,7 @@ import {
   FlashBoardDao,
   FlashCardDao,
   FlashCommandEventDao,
+  FlashMutationReceiptDao,
   FlashSelectionDao,
 } from '../dao/flash.dao.js'
 import { createDatabase } from '../db/client.js'
@@ -19,6 +20,7 @@ import { manifest, shadowApp } from '../manifest.js'
 import { errorMiddleware } from '../middleware/errors.js'
 import { FlashService } from '../service/flash.service.js'
 import { FlashRealtimeService } from '../service/realtime.service.js'
+import { FlashScriptEngine } from '../service/script-engine.js'
 import { shellPage } from '../ui.js'
 
 const FLASH_OAUTH_SESSION_COOKIE = 'flash_oauth_session'
@@ -311,14 +313,18 @@ export async function createFlashApp() {
   const cards = new FlashCardDao(db)
   const arenas = new FlashArenaDao(db)
   const events = new FlashCommandEventDao(db)
+  const receipts = new FlashMutationReceiptDao(db)
   const selections = new FlashSelectionDao(db)
+  const scripts = new FlashScriptEngine()
   const service = new FlashService({
     boards,
     cards,
     arenas,
     events,
+    receipts,
     selections,
     realtime,
+    scripts,
   })
   const commands = defineCommandHandlers(service)
   const app = new Hono()
@@ -354,7 +360,9 @@ export async function createFlashApp() {
 
   app.get('/shadow/oauth/start', (c) => {
     const returnTo = safeReturnTo(c.req.query('return_to'))
-    const authorizeUrl = oauthAuthorizeUrl(returnTo, { popup: c.req.query('popup') === '1' })
+    const authorizeUrl = oauthAuthorizeUrl(returnTo, {
+      popup: c.req.query('popup') === '1',
+    })
     if (!authorizeUrl) return c.text('Flash OAuth is not configured.', 503)
     return c.redirect(authorizeUrl, 302)
   })
@@ -362,9 +370,11 @@ export async function createFlashApp() {
   app.get('/shadow/oauth/callback', async (c) => {
     const code = c.req.query('code')
     const error = c.req.query('error')
-    const state = decodeSignedJson<{ returnTo?: string; expiresAt?: number; popup?: boolean }>(
-      c.req.query('state'),
-    )
+    const state = decodeSignedJson<{
+      returnTo?: string
+      expiresAt?: number
+      popup?: boolean
+    }>(c.req.query('state'))
     if (error) return c.text(`Authorization denied: ${error}`, 401)
     if (!state?.returnTo || !state.expiresAt || state.expiresAt <= Date.now()) {
       return c.text('Invalid OAuth state.', 400)
@@ -416,6 +426,8 @@ export async function createFlashApp() {
 
   app.get('/api/boards/:boardId/events', async (c) => {
     const boardId = c.req.param('boardId')
+    const after = Number.parseInt(c.req.query('after') ?? '0', 10)
+    const afterCursor = Number.isFinite(after) && after > 0 ? after : 0
     if (!localCommandsEnabled) {
       const launchToken = c.req.query('shadow_launch') ?? ''
       const launch = launchToken ? await introspectShadowLaunchToken(launchToken) : null
@@ -428,16 +440,72 @@ export async function createFlashApp() {
     }
 
     return streamSSE(c, async (stream) => {
-      const unsubscribe = await realtime.subscribe(boardId, async (event) => {
+      let sentCursor = afterCursor
+      let replaying = true
+      const liveQueue: unknown[] = []
+
+      const updateCursorFromRealtime = (event: unknown) => {
+        const payload = (
+          event as { payload?: { events?: Array<{ seq?: number }>; cursor?: number } }
+        ).payload
+        if (payload?.cursor) sentCursor = Math.max(sentCursor, payload.cursor)
+        for (const item of payload?.events ?? []) {
+          if (typeof item.seq === 'number') sentCursor = Math.max(sentCursor, item.seq)
+        }
+      }
+
+      const writeRealtime = async (event: unknown) => {
+        updateCursorFromRealtime(event)
         await stream.writeSSE({
-          event: event.type,
+          event: (event as { type?: string }).type ?? 'flash.events.appended',
           data: JSON.stringify(event),
         })
+      }
+
+      const writeReplay = async () => {
+        for (;;) {
+          const replay = await events.listAfter(boardId, sentCursor, 200)
+          if (replay.length === 0) break
+          const mapped = replay.map((row) => ({
+            ...row,
+            seq: row.boardSeq ?? row.seq,
+            createdAt: row.createdAt.getTime(),
+          }))
+          sentCursor = mapped.reduce((cursor, row) => Math.max(cursor, row.seq), sentCursor)
+          await stream.writeSSE({
+            event: 'flash.events.appended',
+            data: JSON.stringify({
+              type: 'flash.events.appended',
+              boardId,
+              at: Date.now(),
+              payload: {
+                events: mapped,
+                cursor: sentCursor,
+              },
+            }),
+          })
+          if (replay.length < 200) break
+        }
+      }
+
+      // Subscribe first and queue live events while durable replay catches up.
+      // The client applies board-local seq contiguously, so queued live events
+      // arriving ahead of replayed history are buffered instead of applied early.
+      const unsubscribe = await realtime.subscribe(boardId, async (event) => {
+        if (replaying) {
+          liveQueue.push(event)
+          return
+        }
+        await writeRealtime(event)
       })
-      await stream.writeSSE({ event: 'ready', data: '{}' })
+      await writeReplay()
+      replaying = false
+      for (const event of liveQueue.splice(0)) await writeRealtime(event)
+      await writeReplay()
+      await stream.writeSSE({ event: 'ready', data: JSON.stringify({ cursor: sentCursor }) })
       while (!stream.aborted) {
         await stream.sleep(15000)
-        await stream.writeSSE({ event: 'ping', data: '{}' })
+        await stream.writeSSE({ event: 'ping', data: JSON.stringify({ cursor: sentCursor }) })
       }
       await unsubscribe()
     })

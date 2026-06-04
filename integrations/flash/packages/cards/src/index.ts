@@ -139,7 +139,16 @@ export {
   type ResolvedImageAsset,
   resolveImageAssetSource,
 } from './resources/compressedTexturePipeline'
-export { type DeskInputCallbacks, DeskInputHandler } from './resources/deskInputHandler'
+export {
+  type CardTransformSnapshot,
+  type DeskInputCallbacks,
+  DeskInputHandler,
+} from './resources/deskInputHandler'
+export {
+  FrameGovernor,
+  type FrameGovernorOptions,
+  type FrameGovernorTick,
+} from './resources/frameGovernor'
 export {
   createGLContext,
   destroyGLContext,
@@ -170,6 +179,14 @@ export {
   resetSharedPixiRuntime,
   type SharedPixiRuntime,
 } from './resources/pixiRuntime'
+export {
+  type RenderBudgetFrameMetrics,
+  RenderBudgetGovernor,
+  type RenderBudgetRecommendation,
+  type RenderBudgetStats,
+  type RenderQualityTier,
+  renderBudgetGovernor,
+} from './resources/renderBudget'
 export {
   runtimeIsActive,
   runtimeIsPrewarm,

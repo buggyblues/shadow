@@ -107,6 +107,35 @@
   background-color: rgba(255, 255, 255, 0.02);
 }
 
+@keyframes thought-process-count-bump {
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+  }
+  18% {
+    transform: translateX(-2px) scale(1.08);
+  }
+  36% {
+    transform: translateX(2px) scale(1.08);
+  }
+  54% {
+    transform: translateX(-1px) scale(1.04);
+  }
+  72% {
+    transform: translateX(1px) scale(1.02);
+  }
+}
+
+.thought-process-count-bump {
+  animation: thought-process-count-bump 520ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thought-process-count-bump {
+    animation: none;
+  }
+}
+
 /* ─── Avatar online indicator pulse ─── */
 @keyframes online-pulse {
   0%,

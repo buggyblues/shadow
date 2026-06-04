@@ -66,6 +66,7 @@ export const KIND_COLORS: Record<string, string> = {
   poker: '#dc2626',
   tarot: '#7c3aed',
   flash: '#fbbf24',
+  rule: '#f59e0b',
 }
 
 export const KIND_LABELS: Record<string, string> = {
@@ -113,6 +114,7 @@ export const KIND_LABELS: Record<string, string> = {
   poker: 'Poker',
   tarot: 'Tarot',
   flash: 'Flash',
+  rule: 'Rule',
 }
 
 export const KIND_PIPS: Record<string, string> = {
@@ -160,6 +162,7 @@ export const KIND_PIPS: Record<string, string> = {
   poker: '♠♥',
   tarot: '☽',
   flash: '⚡',
+  rule: '⚙',
 }
 
 export const KIND_RANKS: Record<string, string> = {
@@ -207,6 +210,7 @@ export const KIND_RANKS: Record<string, string> = {
   poker: '♠',
   tarot: '☽',
   flash: '⚡',
+  rule: 'R',
 }
 
 /** Factory: resolve StyleData from a card kind string.

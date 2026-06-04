@@ -5,7 +5,9 @@ import type {
   FlashPatchEvent,
   FlashViewport,
 } from '@shadowob/flash-types/server-app'
+import { sql } from 'drizzle-orm'
 import {
+  bigint,
   bigserial,
   boolean,
   index,
@@ -63,6 +65,7 @@ export const flashCards = pgTable(
     flipped: boolean('flipped').default(false).notNull(),
     hidden: boolean('hidden').default(false).notNull(),
     locked: boolean('locked').default(false).notNull(),
+    revision: integer('revision').default(0).notNull(),
     createdBy: jsonb('created_by').$type<FlashActorRef | null>(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -88,6 +91,7 @@ export const flashArenas = pgTable(
     color: text('color').default('#7c3aed').notNull(),
     cardIds: jsonb('card_ids').$type<string[]>().default([]).notNull(),
     script: text('script'),
+    revision: integer('revision').default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -100,7 +104,10 @@ export const flashCommandEvents = pgTable(
   'flash_command_events',
   {
     id: text('id').primaryKey(),
+    /** Global append sequence retained for diagnostics and old migrations. */
     seq: bigserial('seq', { mode: 'number' }).notNull(),
+    /** Board-local authoritative cursor. Clients consume this value as FlashCommandEvent.seq. */
+    boardSeq: bigint('board_seq', { mode: 'number' }).default(0).notNull(),
     boardId: text('board_id')
       .notNull()
       .references(() => flashBoards.id, { onDelete: 'cascade' }),
@@ -109,13 +116,73 @@ export const flashCommandEvents = pgTable(
     command: jsonb('command').$type<unknown>(),
     result: jsonb('result').$type<unknown>(),
     patches: jsonb('patches').$type<FlashPatchEvent[]>().default([]).notNull(),
+    clientMutationId: text('client_mutation_id'),
+    baseCursor: bigint('base_cursor', { mode: 'number' }),
+    causalLag: bigint('causal_lag', { mode: 'number' }).default(0).notNull(),
     actor: jsonb('actor').$type<FlashActorRef | null>(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     flashCommandEventsBoardIdx: index('flash_command_events_board_idx').on(t.boardId),
-    flashCommandEventsSeqIdx: index('flash_command_events_seq_idx').on(t.seq),
-    flashCommandEventsBoardSeqIdx: index('flash_command_events_board_seq_idx').on(t.boardId, t.seq),
+    flashCommandEventsGlobalSeqIdx: index('flash_command_events_global_seq_idx').on(t.seq),
+    flashCommandEventsLegacyBoardSeqIdx: index('flash_command_events_legacy_board_seq_idx').on(
+      t.boardId,
+      t.seq,
+    ),
+    flashCommandEventsBoardSeqUnique: uniqueIndex('flash_command_events_board_seq_unique').on(
+      t.boardId,
+      t.boardSeq,
+    ),
+    flashCommandEventsMutationUnique: uniqueIndex('flash_command_events_mutation_unique')
+      .on(t.boardId, t.clientMutationId)
+      .where(sql`${t.clientMutationId} IS NOT NULL`),
+  }),
+)
+
+export const flashBoardSnapshots = pgTable(
+  'flash_board_snapshots',
+  {
+    id: text('id').primaryKey(),
+    boardId: text('board_id')
+      .notNull()
+      .references(() => flashBoards.id, { onDelete: 'cascade' }),
+    cursor: bigint('cursor', { mode: 'number' }).notNull(),
+    schemaVersion: integer('schema_version').default(1).notNull(),
+    snapshot: jsonb('snapshot').$type<unknown>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    flashBoardSnapshotsBoardCursorUnique: uniqueIndex(
+      'flash_board_snapshots_board_cursor_unique',
+    ).on(t.boardId, t.cursor),
+    flashBoardSnapshotsBoardIdx: index('flash_board_snapshots_board_idx').on(t.boardId),
+  }),
+)
+
+export const flashMutationReceipts = pgTable(
+  'flash_mutation_receipts',
+  {
+    boardId: text('board_id')
+      .notNull()
+      .references(() => flashBoards.id, { onDelete: 'cascade' }),
+    clientMutationId: text('client_mutation_id').notNull(),
+    status: text('status').$type<'pending' | 'completed' | 'failed'>().default('pending').notNull(),
+    eventId: text('event_id').references(() => flashCommandEvents.id, { onDelete: 'set null' }),
+    result: jsonb('result').$type<unknown>(),
+    error: text('error'),
+    actor: jsonb('actor').$type<FlashActorRef | null>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    flashMutationReceiptsUnique: uniqueIndex('flash_mutation_receipts_unique').on(
+      t.boardId,
+      t.clientMutationId,
+    ),
+    flashMutationReceiptsStatusIdx: index('flash_mutation_receipts_status_idx').on(
+      t.boardId,
+      t.status,
+    ),
   }),
 )
 

@@ -26,6 +26,26 @@ type CommunityAuthSyncReason =
   | 'settings'
   | 'revoked'
 
+function serializeRendererLogValue(value: unknown): unknown {
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack }
+  }
+  if (!value || typeof value !== 'object') return value
+  try {
+    return JSON.parse(JSON.stringify(value))
+  } catch {
+    return String(value)
+  }
+}
+
+contextBridge.exposeInMainWorld('desktopPetDebugLog', (scope: string, payload: unknown) => {
+  if (typeof scope !== 'string' || !scope.startsWith('[desktop-pet:')) return
+  ipcRenderer.send('desktop:rendererLog', {
+    scope,
+    payload: serializeRendererLogValue(payload),
+  })
+})
+
 function applyDesktopDocumentClasses(): void {
   const apply = () => {
     document.documentElement.classList.add(
@@ -805,6 +825,7 @@ const desktopAPI = {
               | 'idle'
               | 'running'
               | 'streaming'
+              | 'tool_call'
               | 'waiting_for_approval'
               | 'blocked'
               | 'completed'
@@ -835,6 +856,8 @@ const desktopAPI = {
                 | 'editing'
                 | 'running'
                 | 'testing'
+                | 'tool_call'
+                | 'approval'
                 | 'waiting'
                 | 'success'
                 | 'error'
@@ -875,6 +898,7 @@ const desktopAPI = {
               | 'idle'
               | 'running'
               | 'streaming'
+              | 'tool_call'
               | 'waiting_for_approval'
               | 'blocked'
               | 'completed'
@@ -901,6 +925,8 @@ const desktopAPI = {
                 | 'editing'
                 | 'running'
                 | 'testing'
+                | 'tool_call'
+                | 'approval'
                 | 'waiting'
                 | 'success'
                 | 'error'

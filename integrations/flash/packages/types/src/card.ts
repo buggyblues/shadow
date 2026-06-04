@@ -50,6 +50,7 @@ export type CardKind =
   | 'poker' // playing card
   | 'tarot' // tarot card
   | 'flash' // flash card (full-effect glow)
+  | 'rule' // executable rule card
 
 export type CardPriority = 'high' | 'medium' | 'low'
 
@@ -252,7 +253,10 @@ export interface PersonCardMeta {
   avatar?: string
   bio?: string
   tags?: string[]
-  contact?: { type: 'email' | 'twitter' | 'linkedin' | 'github' | 'phone'; value: string }[]
+  contact?: {
+    type: 'email' | 'twitter' | 'linkedin' | 'github' | 'phone'
+    value: string
+  }[]
 }
 
 export interface TerminalCardMeta {
@@ -393,7 +397,11 @@ export interface EventCardMeta {
   startAt: string
   endAt?: string
   location?: string
-  attendees?: { name: string; avatar?: string; status?: 'accepted' | 'declined' | 'pending' }[]
+  attendees?: {
+    name: string
+    avatar?: string
+    status?: 'accepted' | 'declined' | 'pending'
+  }[]
   recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom'
   description?: string
   color?: string
@@ -433,11 +441,21 @@ export interface StoryCardMeta {
 
 export interface SocialCardMeta {
   platform: 'twitter' | 'weibo' | 'linkedin' | 'instagram' | 'tiktok' | 'youtube' | 'other'
-  author: { name: string; handle?: string; avatar?: string; verified?: boolean }
+  author: {
+    name: string
+    handle?: string
+    avatar?: string
+    verified?: boolean
+  }
   content: string
   postedAt?: string
   media?: { type: 'image' | 'video'; url: string }[]
-  stats?: { likes?: number; reposts?: number; comments?: number; views?: number }
+  stats?: {
+    likes?: number
+    reposts?: number
+    comments?: number
+    views?: number
+  }
   url?: string
   hashtags?: string[]
 }
@@ -460,6 +478,50 @@ export interface TarotCardMeta {
   keywords?: string[]
   upright?: string
   reversedMeaning?: string
+}
+
+export type RuleTrigger =
+  | 'manual'
+  | 'onCommand'
+  | 'onArenaActivate'
+  | 'onCardEnter'
+  | 'onCardLeave'
+  | 'onTurnStart'
+  | 'onTurnEnd'
+  | 'onCardMove'
+  | 'onConflict'
+
+export type RuleCapability =
+  | 'cards.layout'
+  | 'cards.meta'
+  | 'cards.visibility'
+  | 'arena.layout'
+  | 'arena.membership'
+  | 'arena.script'
+
+export interface RuleCardMeta {
+  /** Whether this rule participates in board/arena rule evaluation. */
+  enabled?: boolean
+  /** Trigger that makes the rule eligible. Defaults to manual. */
+  trigger?: RuleTrigger
+  /** Lower numbers run first. Defaults to 100. */
+  priority?: number
+  /** Optional arena ids this rule is scoped to. Empty means same arena or whole board. */
+  arenaIds?: string[]
+  /** Optional command names this rule listens to when trigger is onCommand. */
+  commandNames?: string[]
+  /** Capability whitelist for script output. Omitted means cards.layout + arena.membership. */
+  capabilities?: RuleCapability[]
+  /** Rule scope. 'arena' limits card writes to the active arena; 'board' can see all board cards. */
+  scope?: 'arena' | 'board'
+  /** Human-facing rule/principle description. Used when the card is conceptual rather than executable. */
+  description?: string
+  /** Human-facing principles shown by the rule renderer. */
+  principles?: { label: string; detail: string }[]
+  /** Worker-executed JavaScript body. It returns a FlashScriptResult-like object. */
+  script?: string
+  /** Free-form rule configuration available to the script as rule.config. */
+  config?: Record<string, unknown>
 }
 
 /** Union type of all structured Meta types */
@@ -503,6 +565,7 @@ export type CardMeta =
   | SocialCardMeta
   | PokerCardMeta
   | TarotCardMeta
+  | RuleCardMeta
   | Record<string, unknown>
 
 /** CardKind → Meta type mapping */
@@ -551,4 +614,5 @@ export interface CardKindMetaMap {
   video: Record<string, unknown>
   idea: Record<string, unknown>
   flash: Record<string, unknown>
+  rule: RuleCardMeta
 }

@@ -37,6 +37,7 @@ export type {
   PlayParams,
   RotateParams,
   ScanParams,
+  StackParams,
   ToggleParams,
   TrashParams,
 } from './types'

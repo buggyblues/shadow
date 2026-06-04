@@ -76,6 +76,11 @@ const RENDER_CONFIG: RenderConfig = {
   tiltStrength: TILT_STRENGTH,
 }
 
+function devicePixelRatio(): number {
+  const value = (globalThis as { devicePixelRatio?: number }).devicePixelRatio
+  return typeof value === 'number' && Number.isFinite(value) ? value : 1
+}
+
 export type RenderBackend = 'webgpu' | 'webgl' | 'pending'
 export type RenderBackendPreference = 'webgl' | 'webgpu' | 'auto'
 
@@ -121,7 +126,7 @@ export class CardRenderer {
   private _destroyed = false
 
   constructor(canvas: HTMLCanvasElement, options: CardRendererOptions = {}) {
-    this.viewport = createViewport(Math.min(window.devicePixelRatio || 1, 4))
+    this.viewport = createViewport(Math.min(devicePixelRatio(), 4))
     if (options.assetUploadBudget) {
       cardAssetPipeline.configureTextureUploadBudget(options.assetUploadBudget)
     }
@@ -298,9 +303,10 @@ export class CardRenderer {
   // ═══════════════════════════════════════
 
   render(cards: Card[], bodiesMap: Map<string, Matter.Body>, width: number, height: number) {
+    if (width <= 0 || height <= 0) return
     const now = performance.now()
     const time = (now - this.startTime) / 1000
-    const dt = Math.min(1 / 20, time - this.lastTime)
+    const dt = this.lastTime === 0 ? 0 : Math.max(0, Math.min(1 / 20, time - this.lastTime))
     this.lastTime = time
 
     this.viewport.screenW = width
@@ -517,8 +523,9 @@ export class CardRenderer {
     _bodiesMap: Map<string, Matter.Body>,
   ): string | null {
     const world = viewportScreenToWorld(this.viewport, screenX, screenY)
-    if (this.spatialIndex.getStats().indexed === 0 && cards.length > 0) {
-      this.spatialIndex.rebuild(this.scene, cards, CARD_W, CARD_H, this.hiddenCardIds)
+    const safeCards = Array.isArray(cards) ? cards : []
+    if (this.spatialIndex.getStats().indexed === 0 && safeCards.length > 0) {
+      this.spatialIndex.rebuild(this.scene, safeCards, CARD_W, CARD_H, this.hiddenCardIds)
     }
     return this.spatialIndex.hitTestPoint(world.x, world.y, CARD_W, CARD_H)
   }
@@ -533,8 +540,9 @@ export class CardRenderer {
   ): Set<string> {
     const w1 = viewportScreenToWorld(this.viewport, Math.min(sx1, sx2), Math.min(sy1, sy2))
     const w2 = viewportScreenToWorld(this.viewport, Math.max(sx1, sx2), Math.max(sy1, sy2))
-    if (this.spatialIndex.getStats().indexed === 0 && cards.length > 0) {
-      this.spatialIndex.rebuild(this.scene, cards, CARD_W, CARD_H, this.hiddenCardIds)
+    const safeCards = Array.isArray(cards) ? cards : []
+    if (this.spatialIndex.getStats().indexed === 0 && safeCards.length > 0) {
+      this.spatialIndex.rebuild(this.scene, safeCards, CARD_W, CARD_H, this.hiddenCardIds)
     }
     return this.spatialIndex.hitTestRect(w1.x, w1.y, w2.x, w2.y)
   }

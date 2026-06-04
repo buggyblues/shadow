@@ -15,6 +15,7 @@ import type { ShadowRuntimeBinding } from './package-common.js'
 import {
   addShadowobCliAuth,
   addShadowobSkill,
+  addShadowServerAppSkill,
   buildIdentityWorkspaceFiles,
   envPlaceholder,
   HOME_DIR,
@@ -154,9 +155,13 @@ const hermesAdapter: RuntimeAdapter = {
       }),
       [`${HOME_DIR}/.hermes/.env`]: [
         `SHADOW_BASE_URL=${envPlaceholder(shadow.serverUrlEnvKey)}`,
+        `SHADOW_SERVER_URL=${envPlaceholder(shadow.serverUrlEnvKey)}`,
+        `SHADOWOB_SERVER_URL=${envPlaceholder(shadow.serverUrlEnvKey)}`,
         `SHADOW_TOKEN=${envPlaceholder(shadow.tokenEnvKey)}`,
+        `SHADOWOB_TOKEN=${envPlaceholder(shadow.tokenEnvKey)}`,
         'SHADOW_ALLOW_ALL_USERS=true',
         'GATEWAY_ALLOW_ALL_USERS=true',
+        'HERMES_YOLO_MODE=true',
         'SHADOW_HEARTBEAT_INTERVAL_SECONDS=30',
         ...modelProxy.envLines,
         '',
@@ -164,6 +169,7 @@ const hermesAdapter: RuntimeAdapter = {
       [SHADOW_SLASH_COMMANDS_PATH]: json(hermesSlashCommands),
     }
     addShadowobSkill(files, 'hermes', 'hermes')
+    addShadowServerAppSkill(files, 'hermes', 'hermes')
     addShadowobCliAuth(files, context.runtimeExtensions)
     appendTemplateRoutineFiles(
       files,

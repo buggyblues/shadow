@@ -11,6 +11,23 @@ if str(ROOT) not in sys.path:
 import adapter
 
 
+def clear_shadow_context_env(monkeypatch):
+    for key in (
+        'SHADOW_HOME_CHANNEL',
+        'SHADOW_HOME_THREAD_ID',
+        'SHADOW_CURRENT_CHANNEL',
+        'SHADOW_CURRENT_CHANNEL_ID',
+        'SHADOW_CURRENT_THREAD_ID',
+        'SHADOWOB_CHANNEL_ID',
+        'SHADOWOB_THREAD_ID',
+        'SHADOWOB_SERVER_ID',
+        'SHADOW_SERVER_ID',
+        'SHADOW_CURRENT_SERVER_ID',
+        'SHADOWOB_SERVER_SLUG',
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
 def test_env_enablement_is_flat(monkeypatch):
     monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com/api')
     monkeypatch.setenv('SHADOW_TOKEN', 'tok')
@@ -86,6 +103,54 @@ def test_remote_config_entries_filter_listen_policy():
 
     assert [entry[0] for entry in entries] == ['listen-1']
     assert entries[0][1]['serverId'] == 'server-1'
+
+
+def test_shadow_context_prompt_includes_channel_members_buddies_and_apps():
+    context = adapter._shadow_context_from_bootstrap(
+        {
+            'channel': {'id': 'channel-1', 'name': 'general', 'kind': 'server'},
+            'server': {'id': 'server-1', 'name': 'Shadow Lab', 'slug': 'shadow-lab'},
+            'channels': [{'id': 'channel-1', 'name': 'general'}],
+            'members': [
+                {
+                    'role': 'admin',
+                    'userId': 'user-1',
+                    'user': {
+                        'id': 'user-1',
+                        'username': 'admin',
+                        'displayName': 'Admin',
+                        'isBot': False,
+                    },
+                }
+            ],
+            'buddyInboxes': [
+                {
+                    'agentId': 'agent-2',
+                    'name': 'Research Buddy',
+                    'botUser': {'id': 'bot-2', 'username': 'research'},
+                }
+            ],
+            'appSummaries': [{'appKey': 'cards', 'name': 'Cards', 'commands': [{'name': 'get'}]}],
+            'slashCommands': {'commands': [{'name': 'ship', 'description': 'Ship it'}]},
+        },
+        channel_id='channel-1',
+        thread_id='thread-1',
+        agent_id='agent-1',
+        bot_user_id='bot-1',
+        bot_username='helper',
+    )
+
+    prompt = adapter._format_shadow_context_prompt(context)
+
+    assert context['current']['threadId'] == 'thread-1'
+    assert context['members'][0]['displayName'] == 'Admin'
+    assert context['buddies'][0]['name'] == 'Research Buddy'
+    assert context['serverApps'][0]['name'] == 'Cards'
+    assert context['slashCommands'][0]['name'] == 'ship'
+    assert 'Shadow Lab' in prompt
+    assert 'Admin' in prompt
+    assert 'Research Buddy' in prompt
+    assert 'Cards' in prompt
 
 
 def test_resolve_channels_creates_owner_dm_home_channel_when_empty():
@@ -246,7 +311,7 @@ def test_public_slash_commands_strip_runtime_only_fields():
 
 
 def test_sethome_is_handled_as_local_shadow_control_command(monkeypatch):
-    monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
+    clear_shadow_context_env(monkeypatch)
 
     class FakeClient:
         def __init__(self):
@@ -284,8 +349,7 @@ def test_sethome_is_handled_as_local_shadow_control_command(monkeypatch):
 
 
 def test_runtime_home_channel_sets_env_config_and_home_channel(monkeypatch):
-    monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
-    monkeypatch.delenv('SHADOW_HOME_THREAD_ID', raising=False)
+    clear_shadow_context_env(monkeypatch)
 
     instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
     instance.extra = {}
@@ -301,8 +365,29 @@ def test_runtime_home_channel_sets_env_config_and_home_channel(monkeypatch):
     assert instance.config.extra['home_channel']['thread_id'] == 'thread-1'
 
 
+def test_runtime_current_channel_sets_env_config_and_server_context(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.extra = {}
+    instance.config = type('Config', (), {'extra': {}})()
+
+    instance._set_runtime_current_channel(
+        'channel-1',
+        'thread-1',
+        {'name': 'general', 'serverId': 'server-1', 'serverSlug': 'server-slug'},
+    )
+
+    assert os.environ['SHADOW_CURRENT_CHANNEL'] == 'channel-1'
+    assert os.environ['SHADOW_CURRENT_THREAD_ID'] == 'thread-1'
+    assert os.environ['SHADOWOB_SERVER_ID'] == 'server-1'
+    assert os.environ['SHADOWOB_SERVER_SLUG'] == 'server-slug'
+    assert instance.extra['current_channel']['chat_id'] == 'channel-1'
+    assert instance.config.extra['current_channel']['server_id'] == 'server-1'
+
+
 def test_list_chats_includes_home_channel_when_not_joined(monkeypatch):
-    monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
+    clear_shadow_context_env(monkeypatch)
 
     instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
     instance.config = type('Config', (), {'extra': {'home_channel': {'chat_id': 'home-1'}}})()
@@ -333,6 +418,17 @@ def test_register_exposes_shadowob_send_message_tool():
     assert ctx.tools[0]['name'] == 'shadowob_send_message'
     assert ctx.tools[0]['toolset'] == 'shadowob'
     assert ctx.tools[0]['is_async'] is True
+    assert set(ctx.tools[0]['schema']['parameters']['properties']['action']['enum']) == {
+        'send',
+        'upload-file',
+        'send-voice',
+        'list',
+        'react',
+        'edit',
+        'delete',
+    }
+    assert ctx.tools[0]['schema']['parameters']['properties']['message_id']['type'] == 'string'
+    assert ctx.tools[0]['schema']['parameters']['properties']['emoji']['type'] == 'string'
     assert ctx.tools[0]['schema']['parameters']['properties']['attachments']['type'] == 'array'
     assert ctx.platforms[0]['name'] == 'shadowob'
 
@@ -350,7 +446,17 @@ def test_shadowob_send_message_tool_extracts_media_and_attachment_paths():
     ]
 
 
+def test_default_auto_skills_include_shadow_context_and_server_apps():
+    assert adapter._merge_auto_skills(None) == ['shadowob', 'shadow-server-app']
+    assert adapter._merge_auto_skills(['custom', 'shadowob']) == [
+        'custom',
+        'shadowob',
+        'shadow-server-app',
+    ]
+
+
 def test_shadowob_send_message_tool_sends_attachment_via_rest(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
     monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
     monkeypatch.setenv('SHADOW_TOKEN', 'tok')
     monkeypatch.setenv('SHADOW_HOME_CHANNEL', 'home-1')
@@ -391,6 +497,160 @@ def test_shadowob_send_message_tool_sends_attachment_via_rest(monkeypatch):
     assert result['message_id'] == 'message-1'
     assert FakeClient.sent == [('home-1', 'HTML attached', {'thread_id': None})]
     assert FakeClient.uploaded == [('/tmp/report.html', {'message_id': 'message-1', 'kind': None})]
+
+
+def test_shadowob_send_message_tool_defaults_to_current_channel(monkeypatch):
+    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOW_HOME_CHANNEL', 'home-1')
+    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
+    monkeypatch.setenv('SHADOW_CURRENT_THREAD_ID', 'thread-1')
+
+    class FakeClient:
+        sent = []
+
+        def __init__(self, base_url, token):
+            self.base_url = base_url
+            self.token = token
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+    monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+
+    result = json.loads(asyncio.run(adapter._shadowob_send_message_tool({'message': 'Current'})))
+
+    assert result['success'] is True
+    assert result['channel_id'] == 'channel-1'
+    assert result['thread_id'] == 'thread-1'
+    assert FakeClient.sent == [('channel-1', 'Current', {'thread_id': 'thread-1'})]
+
+
+def test_shadowob_send_message_tool_supports_openclaw_message_actions(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+
+    class FakeClient:
+        edited = []
+        deleted = []
+        reactions = []
+
+        def __init__(self, base_url, token):
+            self.base_url = base_url
+            self.token = token
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def edit_message(self, message_id, content):
+            self.edited.append((message_id, content))
+            return {'id': message_id, 'content': content}
+
+        async def delete_message(self, message_id):
+            self.deleted.append(message_id)
+
+        async def add_reaction(self, message_id, emoji):
+            self.reactions.append((message_id, emoji))
+
+    monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+
+    edit_result = json.loads(
+        asyncio.run(
+            adapter._shadowob_send_message_tool(
+                {'action': 'edit', 'message_id': 'message-1', 'message': 'Updated'}
+            )
+        )
+    )
+    react_result = json.loads(
+        asyncio.run(
+            adapter._shadowob_send_message_tool(
+                {'action': 'react', 'message_id': 'message-1', 'emoji': '+1'}
+            )
+        )
+    )
+    delete_result = json.loads(
+        asyncio.run(
+            adapter._shadowob_send_message_tool({'action': 'delete', 'message_id': 'message-1'})
+        )
+    )
+
+    assert edit_result['success'] is True
+    assert edit_result['action'] == 'edit'
+    assert react_result['success'] is True
+    assert react_result['action'] == 'react'
+    assert delete_result['success'] is True
+    assert delete_result['action'] == 'delete'
+    assert FakeClient.edited == [('message-1', 'Updated')]
+    assert FakeClient.reactions == [('message-1', '+1')]
+    assert FakeClient.deleted == ['message-1']
+
+
+def test_platform_file_send_uses_current_channel_when_chat_id_is_home(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+
+    class FakeSendResult:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class FakeClient:
+        def __init__(self):
+            self.sent = []
+            self.uploaded = []
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def upload_media_from_path(self, path, **kwargs):
+            self.uploaded.append((path, kwargs))
+            return {'id': 'attachment-1'}
+
+    monkeypatch.setattr(adapter, 'SendResult', FakeSendResult)
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance.socket = None
+    instance._activity_clear_tasks = {}
+    instance.config = type(
+        'Config',
+        (),
+        {
+            'extra': {
+                'home_channel': {'chat_id': 'home-1'},
+                'current_channel': {'chat_id': 'channel-1', 'thread_id': 'thread-1'},
+            }
+        },
+    )()
+
+    result = asyncio.run(instance._send_file('home-1', '/tmp/report.html', caption='Report'))
+
+    assert result.success is True
+    assert instance.client.sent == [('channel-1', 'Report', {'thread_id': 'thread-1', 'reply_to_id': None, 'metadata': None})]
+    assert instance.client.uploaded == [
+        (
+            '/tmp/report.html',
+            {
+                'message_id': 'message-1',
+                'kind': None,
+                'duration_ms': None,
+                'waveform_peaks': None,
+                'transcript_text': None,
+                'transcript_language': None,
+                'transcript_source': None,
+            },
+        )
+    ]
 
 
 def test_runner_readiness_file_is_written_after_shadow_transport_ready(tmp_path):

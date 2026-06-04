@@ -18,7 +18,7 @@ import type { CardRenderer } from '../renderer/CardRenderer'
 import { arenaEdgeHitTest } from '../systems/render/arenaRenderSystem'
 import type { Arena } from '../systems/scene/arenaSystem'
 import type { InteractionAction, InteractionEvent, MouseDownEvent } from './interactionFSM'
-import { InteractionFSM, TAP_DELAY_MS } from './interactionFSM'
+import { DRAG_THRESHOLD, InteractionFSM, TAP_DELAY_MS } from './interactionFSM'
 import type { PhysicsWorld } from './physicsWorld'
 
 // ─────────────────────────────────────────────────────────────
@@ -31,6 +31,13 @@ export interface ViewportSnapshot {
   zoom: number
 }
 
+export interface CardTransformSnapshot {
+  cardId: string
+  x: number
+  y: number
+  angle: number
+}
+
 export interface DeskInputCallbacks {
   /** Single-tap on a card (after TAP_DELAY, not a double-tap) */
   onCardTap?: (cardId: string) => void
@@ -38,6 +45,10 @@ export interface DeskInputCallbacks {
   onHoverChange?: (cardId: string | null) => void
   /** Drag started or ended for a card */
   onDragChange?: (cardId: string | null) => void
+  /** Cards currently under local pointer control. Used to suppress stale server echo. */
+  onLocalControlChange?: (cardIds: Set<string>) => void
+  /** Final transforms after a real card drag. Used by clients to persist one authoritative move. */
+  onCardTransformsCommit?: (transforms: CardTransformSnapshot[]) => void
   /** Card double-tapped → flip */
   onCardFlip?: (cardId: string) => void
   /** Marquee rect changed (null = ended) */
@@ -216,7 +227,13 @@ export class DeskInputHandler {
     const s = this.fsm.getState()
     if (s.tag !== 'ARENA_MOVE' && s.tag !== 'ARENA_RESIZE') return
     this.execute(
-      this.fsm.dispatch({ type: 'ARENA_POINTER_MOVE', worldX, worldY, screenX, screenY }),
+      this.fsm.dispatch({
+        type: 'ARENA_POINTER_MOVE',
+        worldX,
+        worldY,
+        screenX,
+        screenY,
+      }),
     )
   }
 
@@ -312,6 +329,70 @@ export class DeskInputHandler {
     window.removeEventListener('mouseup', this.handlerMouseUp)
   }
 
+  private snapshotTransforms(cardIds: Iterable<string>): CardTransformSnapshot[] {
+    const result: CardTransformSnapshot[] = []
+    for (const cardId of cardIds) {
+      const body = this.physicsWorld.bodiesMap.get(cardId)
+      if (!body) continue
+      result.push({
+        cardId,
+        x: body.position.x,
+        y: body.position.y,
+        angle: body.angle,
+      })
+    }
+    return result
+  }
+
+  private retargetMouseConstraint(body: Matter.Body): void {
+    const mc = this.physicsWorld.mouseConstraint
+    const mouse = this.mouse
+    if (!mc || !mouse) return
+    ;(mc as unknown as Record<string, Matter.Body | null>).body = body
+    ;(mc.constraint as unknown as Record<string, unknown>).bodyB = body
+    ;(mc.constraint as unknown as Record<string, unknown>).pointB = {
+      x: mouse.position.x - body.position.x,
+      y: mouse.position.y - body.position.y,
+    }
+  }
+
+  private clearMouseConstraintBody(): void {
+    const mc = this.physicsWorld.mouseConstraint
+    if (!mc) return
+    ;(mc as unknown as Record<string, null>).body = null
+    ;(mc.constraint as unknown as Record<string, unknown>).bodyB = null
+    ;(mc.constraint as unknown as Record<string, unknown>).pointB = { x: 0, y: 0 }
+  }
+
+  private applyFollowerPositions(
+    leaderId: string,
+    followers: ReadonlyMap<string, { dx: number; dy: number }>,
+  ): void {
+    if (followers.size === 0) return
+    const leader = this.physicsWorld.bodiesMap.get(leaderId)
+    if (!leader) return
+    for (const [id, off] of followers) {
+      const body = this.physicsWorld.bodiesMap.get(id)
+      if (!body) continue
+      Matter.Body.setPosition(body, {
+        x: leader.position.x + off.dx,
+        y: leader.position.y + off.dy,
+      })
+      Matter.Body.setVelocity(body, { x: 0, y: 0 })
+      Matter.Body.setAngularVelocity(body, 0)
+    }
+  }
+
+  private freezeBodies(cardIds: Iterable<string>): void {
+    for (const cardId of cardIds) {
+      const body = this.physicsWorld.bodiesMap.get(cardId)
+      if (!body) continue
+      Matter.Body.setVelocity(body, { x: 0, y: 0 })
+      Matter.Body.setAngularVelocity(body, 0)
+      Matter.Sleeping.set(body, true)
+    }
+  }
+
   // ── Matter drag events ────────────────────────────────────
 
   private attachMatterEvents(): void {
@@ -333,16 +414,26 @@ export class DeskInputHandler {
         return
       }
 
-      const leaderId = e.body.label as string
+      const leaderId = visualHit
+      const leaderBody = this.physicsWorld.bodiesMap.get(leaderId)
+      if (!leaderBody) {
+        this.execute(this.fsm.dispatch({ type: 'MATTER_INVALID_DRAG' }))
+        return
+      }
+
+      if (e.body !== leaderBody) this.retargetMouseConstraint(leaderBody)
+      Matter.Sleeping.set(leaderBody, false)
+
       const followers = new Map<string, { dx: number; dy: number }>()
       if (this.selectedCardIds.has(leaderId) && this.selectedCardIds.size > 1) {
         for (const id of this.selectedCardIds) {
           if (id === leaderId) continue
           const fb = this.physicsWorld.bodiesMap.get(id)
           if (!fb) continue
+          Matter.Sleeping.set(fb, false)
           followers.set(id, {
-            dx: fb.position.x - e.body.position.x,
-            dy: fb.position.y - e.body.position.y,
+            dx: fb.position.x - leaderBody.position.x,
+            dy: fb.position.y - leaderBody.position.y,
           })
         }
       }
@@ -352,11 +443,12 @@ export class DeskInputHandler {
         this.fsm.dispatch({
           type: 'MATTER_START_DRAG',
           bodyLabel: leaderId,
-          worldX: m ? m.position.x : e.body.position.x,
-          worldY: m ? m.position.y : e.body.position.y,
+          worldX: m ? m.position.x : leaderBody.position.x,
+          worldY: m ? m.position.y : leaderBody.position.y,
           followers,
         }),
       )
+      this.callbacks.onLocalControlChange?.(new Set([leaderId, ...followers.keys()]))
     })
 
     Matter.Events.on(mc, 'enddrag', (e: any) => {
@@ -366,6 +458,11 @@ export class DeskInputHandler {
       const m = this.mouse
       const ddx = m ? m.position.x - s.dragStartWorldX : 0
       const ddy = m ? m.position.y - s.dragStartWorldY : 0
+      const worldDeltaMag = Math.sqrt(ddx * ddx + ddy * ddy)
+      const controlledIds = new Set([s.leaderId, ...s.followers.keys()])
+      this.applyFollowerPositions(s.leaderId, s.followers)
+      this.freezeBodies(controlledIds)
+      const transforms = this.snapshotTransforms(controlledIds)
 
       if (this.pendingTapId !== null) {
         clearTimeout(this.pendingTapId)
@@ -375,13 +472,17 @@ export class DeskInputHandler {
       this.execute(
         this.fsm.dispatch({
           type: 'MATTER_END_DRAG',
-          bodyLabel: e.body.label,
-          worldDeltaMag: Math.sqrt(ddx * ddx + ddy * ddy),
+          bodyLabel: s.leaderId,
+          worldDeltaMag,
           now: performance.now(),
           lastTapCardId: this.lastTapCardId,
           lastTapTime: this.lastTapTime,
         }),
       )
+      if (worldDeltaMag >= DRAG_THRESHOLD && transforms.length > 0) {
+        this.callbacks.onCardTransformsCommit?.(transforms)
+      }
+      this.callbacks.onLocalControlChange?.(new Set())
     })
   }
 
@@ -605,8 +706,6 @@ export class DeskInputHandler {
   // ── Action executor ───────────────────────────────────────
 
   private execute(actions: InteractionAction[]): void {
-    const mc = this.physicsWorld.mouseConstraint
-
     for (const a of actions) {
       switch (a.do) {
         case 'PAN_BY':
@@ -636,11 +735,7 @@ export class DeskInputHandler {
           break
 
         case 'CANCEL_MATTER_DRAG':
-          if (mc) {
-            ;(mc as unknown as Record<string, null>).body = null
-            ;(mc.constraint as unknown as Record<string, unknown>).bodyB = null
-            ;(mc.constraint as unknown as Record<string, unknown>).pointB = { x: 0, y: 0 }
-          }
+          this.clearMouseConstraintBody()
           break
 
         case 'CARD_SET_ACTIVE':
@@ -679,8 +774,13 @@ export class DeskInputHandler {
           for (const [id, off] of a.followers) {
             const fb = this.physicsWorld.bodiesMap.get(id)
             if (!fb) continue
-            Matter.Body.setPosition(fb, { x: a.leaderX + off.dx, y: a.leaderY + off.dy })
+            Matter.Sleeping.set(fb, false)
+            Matter.Body.setPosition(fb, {
+              x: a.leaderX + off.dx,
+              y: a.leaderY + off.dy,
+            })
             Matter.Body.setVelocity(fb, { x: 0, y: 0 })
+            Matter.Body.setAngularVelocity(fb, 0)
           }
           break
 
@@ -717,12 +817,27 @@ export class DeskInputHandler {
 
         case 'MARQUEE_START':
           this.renderer.setMarqueeRect({ x1: a.x, y1: a.y, x2: a.x, y2: a.y })
-          this.callbacks.onMarqueeChange?.({ x1: a.x, y1: a.y, x2: a.x, y2: a.y })
+          this.callbacks.onMarqueeChange?.({
+            x1: a.x,
+            y1: a.y,
+            x2: a.x,
+            y2: a.y,
+          })
           break
 
         case 'MARQUEE_UPDATE': {
-          this.renderer.setMarqueeRect({ x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2 })
-          this.callbacks.onMarqueeChange?.({ x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2 })
+          this.renderer.setMarqueeRect({
+            x1: a.x1,
+            y1: a.y1,
+            x2: a.x2,
+            y2: a.y2,
+          })
+          this.callbacks.onMarqueeChange?.({
+            x1: a.x1,
+            y1: a.y1,
+            x2: a.x2,
+            y2: a.y2,
+          })
           const ids = this.renderer.hitTestRect(
             a.x1,
             a.y1,

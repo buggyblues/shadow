@@ -1,10 +1,11 @@
-import type { MessageMention } from '@shadowob/shared'
-import { segmentTextByMentions } from '@shadowob/shared'
+import type { MessageMention, SlashCommandAction } from '@shadowob/shared'
+import { extractSlashCommandActions, segmentTextByMentions } from '@shadowob/shared'
 import { Button, cn } from '@shadowob/ui'
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import {
+  BookOpen,
   Check,
   CheckSquare,
   ChevronRight,
@@ -12,18 +13,23 @@ import {
   CornerDownRight,
   ExternalLink,
   HandCoins,
+  ListChecks,
   MessageSquare,
   MoreHorizontal,
   Pencil,
   Reply,
   Smile,
+  Terminal,
   Trash2,
+  Wrench,
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { copyToClipboard } from '../../lib/clipboard'
+import { playSendSound } from '../../lib/sounds'
+import { showToast } from '../../lib/toast'
 import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { EmojiPicker } from '../common/emoji-picker'
@@ -96,6 +102,329 @@ function lowerText(value: unknown) {
 const MESSAGE_ACTIONS_ACTIVE_EVENT = 'shadow:message-actions-active'
 const BUDDY_INTRO_PROMPT_KEY = 'agentMgmt.buddyIntroPrompt'
 type MessageActionsActiveEvent = CustomEvent<{ messageId: string }>
+type HermesToolCallDisplay = {
+  id: string
+  name: string
+  value: string
+  kind: 'browser' | 'file' | 'skill' | 'terminal' | 'todo' | 'tool'
+  count: number
+}
+
+const HERMES_TOOL_CALL_RE =
+  /(?:^|[\s\n])(?:[^\w\s:"]+\s*)?([A-Za-z][A-Za-z0-9_.-]*)\s*:\s*"((?:\\.|[^"\\])*)"/g
+const KNOWN_HERMES_TOOL_PREFIX_RE =
+  /^(execute_code|terminal|shell|bash|python|node|skill|skill_view|todo|tool|mcp|shadowob|read|write|edit|file|browser)/i
+
+function decodeHermesToolValue(value: string): string {
+  return value.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\').trim()
+}
+
+function classifyHermesToolCall(name: string): HermesToolCallDisplay['kind'] {
+  if (/terminal|shell|bash|exec|execute_code|command|python|node/i.test(name)) return 'terminal'
+  if (/todo|plan|task/i.test(name)) return 'todo'
+  if (/skill/i.test(name)) return 'skill'
+  if (/browser|chrome|web/i.test(name)) return 'browser'
+  if (/read|write|edit|file/i.test(name)) return 'file'
+  return 'tool'
+}
+
+function getHermesToolIcon(kind: HermesToolCallDisplay['kind']) {
+  if (kind === 'terminal') return Terminal
+  if (kind === 'todo') return ListChecks
+  if (kind === 'skill') return BookOpen
+  return Wrench
+}
+
+function compactHermesToolText(value: string, fallback: string, maxLength = 72) {
+  const text = (value || fallback)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[`"'\s]+|[`"'\s]+$/g, '')
+    .trim()
+  if (!text) return fallback
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
+}
+
+function hasCompleteHermesToolValue(call: HermesToolCallDisplay) {
+  const value = call.value.trim()
+  if (!value) return false
+  return !/(?:\.{3}|…)\s*$/u.test(value)
+}
+
+function hasExpandableHermesToolValue(call: HermesToolCallDisplay) {
+  if (!hasCompleteHermesToolValue(call)) return false
+  return /[\r\n]/u.test(call.value) || call.value.length > 96
+}
+
+function appendHermesToolCall(toolCalls: HermesToolCallDisplay[], call: HermesToolCallDisplay) {
+  const duplicate = toolCalls.find((item) => item.name === call.name && item.value === call.value)
+  if (duplicate) {
+    duplicate.count += 1
+    return
+  }
+  toolCalls.push(call)
+}
+
+function splitHermesToolCalls(content: string): {
+  content: string
+  toolCalls: HermesToolCallDisplay[]
+} {
+  const matches = Array.from(content.matchAll(HERMES_TOOL_CALL_RE))
+  if (matches.length === 0) return { content, toolCalls: [] }
+  const recognized = matches.filter((match) => KNOWN_HERMES_TOOL_PREFIX_RE.test(match[1] ?? ''))
+  if (recognized.length === 0) return { content, toolCalls: [] }
+
+  const toolCalls: HermesToolCallDisplay[] = []
+  let cleaned = ''
+  let lastIndex = 0
+  matches.forEach((match, index) => {
+    const name = match[1] ?? 'tool'
+    if (!KNOWN_HERMES_TOOL_PREFIX_RE.test(name)) return
+
+    cleaned += content.slice(lastIndex, match.index)
+    lastIndex = (match.index ?? 0) + match[0].length
+    appendHermesToolCall(toolCalls, {
+      id: `${name}-${index}-${match.index}`,
+      name,
+      value: decodeHermesToolValue(match[2] ?? ''),
+      kind: classifyHermesToolCall(name),
+      count: 1,
+    })
+  })
+  cleaned += content.slice(lastIndex)
+
+  return {
+    content: cleaned
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim(),
+    toolCalls,
+  }
+}
+
+function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] }) {
+  const { t } = useTranslation()
+  const [expanded, setExpanded] = useState(toolCalls.length <= 1)
+  const [expandedCallIds, setExpandedCallIds] = useState<Set<string>>(() => new Set())
+  const [countBumpKey, setCountBumpKey] = useState(0)
+  const previousTotalRef = useRef(0)
+  const totalSteps = toolCalls.length
+
+  useEffect(() => {
+    setExpanded(toolCalls.length <= 1)
+  }, [toolCalls.length])
+
+  useEffect(() => {
+    setExpandedCallIds((previous) => {
+      const ids = new Set(
+        toolCalls.filter((call) => hasExpandableHermesToolValue(call)).map((call) => call.id),
+      )
+      const next = new Set([...previous].filter((id) => ids.has(id)))
+      if (toolCalls.length === 1 && hasExpandableHermesToolValue(toolCalls[0]!)) {
+        next.add(toolCalls[0]!.id)
+      }
+      return next
+    })
+  }, [toolCalls])
+
+  useEffect(() => {
+    const previousTotal = previousTotalRef.current
+    previousTotalRef.current = totalSteps
+    if (previousTotal > 0 && totalSteps !== previousTotal) {
+      setCountBumpKey((value) => value + 1)
+    }
+    return undefined
+  }, [totalSteps])
+
+  if (toolCalls.length === 0) return null
+  const latest = toolCalls[toolCalls.length - 1]!
+  const LatestIcon = getHermesToolIcon(latest.kind)
+  const latestText = compactHermesToolText(latest.value, latest.name)
+
+  return (
+    <div className="mt-2 max-w-full">
+      <button
+        type="button"
+        className="group/thought inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary/45 px-2 py-1 text-xs font-semibold leading-5 text-text-secondary transition hover:border-primary/30 hover:bg-bg-secondary/60 focus:outline-none focus:ring-2 focus:ring-primary/25"
+        aria-expanded={expanded}
+        aria-label={t('chat.thoughtProcessToggle', { count: totalSteps })}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <LatestIcon className="h-3 w-3" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 max-w-[min(34rem,calc(100vw-11rem))] truncate">
+          <span>{t('chat.thoughtProcessLabel')}</span>
+          <span className="mx-1 text-text-muted/70">·</span>
+          <span className="font-mono text-text-muted" title={latest.value || latest.name}>
+            {latestText}
+          </span>
+        </span>
+        <span
+          key={countBumpKey}
+          className={cn(
+            'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-border-subtle px-1.5 font-mono text-[10px] leading-none text-text-muted',
+            countBumpKey > 0 && 'thought-process-count-bump',
+          )}
+        >
+          {totalSteps}
+        </span>
+        <ChevronRight
+          className={cn(
+            'h-3.5 w-3.5 shrink-0 text-text-muted transition-transform group-hover/thought:text-primary',
+            expanded && 'rotate-90',
+          )}
+          aria-hidden="true"
+        />
+      </button>
+
+      {expanded && (
+        <ol className="mt-2 ml-2 flex max-w-[min(40rem,100%)] flex-col border-border-subtle/60 border-l pl-4">
+          {toolCalls.map((call, index) => {
+            const Icon = getHermesToolIcon(call.kind)
+            const text = compactHermesToolText(call.value, call.name, 88)
+            const isExpandable = hasExpandableHermesToolValue(call)
+            const isCallExpanded = expandedCallIds.has(call.id)
+            return (
+              <li key={call.id} className="relative pb-2 last:pb-0">
+                <span className="absolute -left-[1.65rem] top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-primary/35 bg-bg-primary px-1 font-mono text-[10px] font-semibold leading-none text-primary">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 rounded-md border border-border-subtle/55 bg-bg-secondary/25">
+                  {isExpandable ? (
+                    <button
+                      type="button"
+                      className="group/call flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left text-xs leading-5 transition hover:bg-bg-secondary/35 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      aria-expanded={isCallExpanded}
+                      aria-label={t('chat.thoughtProcessToggle', { count: index + 1 })}
+                      onClick={() =>
+                        setExpandedCallIds((previous) => {
+                          const next = new Set(previous)
+                          if (next.has(call.id)) {
+                            next.delete(call.id)
+                          } else {
+                            next.add(call.id)
+                          }
+                          return next
+                        })
+                      }
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0 text-primary/85" aria-hidden="true" />
+                      <span className="shrink-0 truncate font-mono font-semibold text-primary">
+                        {call.name}
+                      </span>
+                      {call.count > 1 && (
+                        <span className="shrink-0 rounded-full border border-border-subtle px-1.5 font-mono text-[10px] leading-4 text-text-muted">
+                          x{call.count}
+                        </span>
+                      )}
+                      <span
+                        className="min-w-0 flex-1 truncate font-mono text-text-muted"
+                        title={call.value}
+                      >
+                        {text}
+                      </span>
+                      <ChevronRight
+                        className={cn(
+                          'h-3.5 w-3.5 shrink-0 text-text-muted transition-transform group-hover/call:text-primary',
+                          isCallExpanded && 'rotate-90',
+                        )}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : (
+                    <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs leading-5">
+                      <Icon className="h-3.5 w-3.5 shrink-0 text-primary/85" aria-hidden="true" />
+                      <span className="shrink-0 truncate font-mono font-semibold text-primary">
+                        {call.name}
+                      </span>
+                      {call.count > 1 && (
+                        <span className="shrink-0 rounded-full border border-border-subtle px-1.5 font-mono text-[10px] leading-4 text-text-muted">
+                          x{call.count}
+                        </span>
+                      )}
+                      <span
+                        className="min-w-0 flex-1 truncate font-mono text-text-muted"
+                        title={call.value}
+                      >
+                        {text}
+                      </span>
+                    </div>
+                  )}
+                  {isExpandable && isCallExpanded && (
+                    <pre className="m-0 mr-2 mb-2 ml-7 max-h-80 overflow-auto rounded-md border border-border-subtle/60 bg-bg-primary/35 px-3 py-2 font-mono text-xs leading-5 text-text-secondary whitespace-pre-wrap break-words">
+                      {call.value}
+                    </pre>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+function SlashCommandActions({
+  actions,
+  sendingCommand,
+  onSend,
+}: {
+  actions: SlashCommandAction[]
+  sendingCommand: string | null
+  onSend: (command: string) => void
+}) {
+  const { t } = useTranslation()
+
+  if (actions.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {actions.map((action) => (
+        <button
+          key={action.id}
+          type="button"
+          disabled={sendingCommand !== null}
+          className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 font-mono text-[13px] font-semibold text-primary transition hover:border-primary/60 hover:bg-primary/18 disabled:cursor-wait disabled:opacity-60"
+          title={t('chat.sendSlashCommand', { command: action.command })}
+          aria-label={t('chat.sendSlashCommand', { command: action.command })}
+          onClick={() => onSend(action.command)}
+        >
+          <CornerDownRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{action.command}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function appendCreatedChannelMessage(
+  queryClient: ReturnType<typeof useQueryClient>,
+  channelId: string,
+  created: Message,
+) {
+  queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
+    if (!old || old.pages.length === 0) return old
+    if (old.pages.some((page) => page.messages.some((item) => item.id === created.id))) return old
+    const pages = [...old.pages]
+    const firstPage = pages[0]!
+    pages[0] = { ...firstPage, messages: [...firstPage.messages, created] }
+    return { ...old, pages }
+  })
+}
+
+function appendCreatedThreadMessage(
+  queryClient: ReturnType<typeof useQueryClient>,
+  threadId: string,
+  created: Message,
+) {
+  queryClient.setQueryData<Message[]>(['thread-messages', threadId], (old) => {
+    const messages = old ?? []
+    if (messages.some((item) => item.id === created.id)) return messages
+    return [...messages, created]
+  })
+}
 
 function MessageBubbleInner({
   message,
@@ -120,6 +449,7 @@ function MessageBubbleInner({
   isSelected,
   selectionAnchorId,
   submittedInteractiveResponse,
+  enableSlashCommandActions = false,
   onToggleSelect,
   onEnterSelectionMode,
   onSelectRangeTo,
@@ -257,6 +587,7 @@ function MessageBubbleInner({
     [],
   )
   const queryClient = useQueryClient()
+  const [sendingSlashCommand, setSendingSlashCommand] = useState<string | null>(null)
   const author = message.author
   const canSendEconomyAction = Boolean(author && !isOwn && !author.isBot)
   const handleEditContentChange = useCallback((value: string) => {
@@ -563,11 +894,58 @@ function MessageBubbleInner({
       ? t(BUDDY_INTRO_PROMPT_KEY, '你好，请介绍一下你自己，并告诉我你能帮我做什么。')
       : content
   }, [isTaskCardMessage, message.content, t, walletRecharge])
-  const markdownNode = useMemo(() => {
-    if (!markdownContent || markdownContent === '\u200B') return null
+  const { content: visibleMarkdownContent, toolCalls: hermesToolCalls } = useMemo(
+    () => splitHermesToolCalls(markdownContent),
+    [markdownContent],
+  )
+  const slashCommandActions = useMemo(
+    () =>
+      enableSlashCommandActions && !isOwn ? extractSlashCommandActions(visibleMarkdownContent) : [],
+    [enableSlashCommandActions, isOwn, visibleMarkdownContent],
+  )
+  const handleSendSlashCommand = useCallback(
+    async (command: string) => {
+      if (sendingSlashCommand) return
+      const channelId = message.channelId
+      const threadId = message.threadId
+      if (!channelId && !threadId) {
+        showToast(t('chat.sendSlashCommandFailed'), 'error')
+        return
+      }
 
-    return <MessageMarkdown content={markdownContent} renderMentions={renderMentions} />
-  }, [markdownContent, renderMentions])
+      setSendingSlashCommand(command)
+      try {
+        const created = await fetchApi<Message>(
+          threadId ? `/api/threads/${threadId}/messages` : `/api/channels/${channelId}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ content: command }),
+          },
+        )
+        if (threadId) {
+          appendCreatedThreadMessage(queryClient, threadId, created)
+          queryClient.invalidateQueries({ queryKey: ['thread-messages', threadId] })
+        } else if (channelId) {
+          appendCreatedChannelMessage(queryClient, channelId, created)
+          queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
+        }
+        playSendSound()
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : t('chat.sendSlashCommandFailed'),
+          'error',
+        )
+      } finally {
+        setSendingSlashCommand(null)
+      }
+    },
+    [message.channelId, message.threadId, queryClient, sendingSlashCommand, t],
+  )
+  const markdownNode = useMemo(() => {
+    if (!visibleMarkdownContent || visibleMarkdownContent === '\u200B') return null
+
+    return <MessageMarkdown content={visibleMarkdownContent} renderMentions={renderMentions} />
+  }, [visibleMarkdownContent, renderMentions])
 
   const handleImageContextMenu = useCallback((event: React.MouseEvent, attachment: Attachment) => {
     event.preventDefault()
@@ -778,6 +1156,14 @@ function MessageBubbleInner({
         ) : (
           markdownNode
         )}
+        {!isEditing && (
+          <SlashCommandActions
+            actions={slashCommandActions}
+            sendingCommand={sendingSlashCommand}
+            onSend={handleSendSlashCommand}
+          />
+        )}
+        {!isEditing && <HermesToolCallList toolCalls={hermesToolCalls} />}
 
         {walletRecharge && <WalletRechargeCard data={walletRecharge} />}
 
@@ -1324,6 +1710,7 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   if (prev.selectionMode !== next.selectionMode) return false
   if (prev.isSelected !== next.isSelected) return false
   if (prev.selectionAnchorId !== next.selectionAnchorId) return false
+  if (prev.enableSlashCommandActions !== next.enableSlashCommandActions) return false
   if (
     !interactiveResponseEqual(prev.submittedInteractiveResponse, next.submittedInteractiveResponse)
   ) {

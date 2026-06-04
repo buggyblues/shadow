@@ -75,6 +75,7 @@ describe('renderer pet game state', () => {
     expect(selectRuntimeAnimation(['streaming'])).toBe('review')
     expect(selectRuntimeAnimation(['thinking'])).toBe('review')
     expect(selectRuntimeAnimation(['running'])).toBe('running')
+    expect(selectRuntimeAnimation(['tool_call'])).toBe('running')
     expect(selectRuntimeAnimation(['editing'])).toBe('running')
     expect(selectRuntimeAnimation(['testing'])).toBe('waiting')
     expect(selectRuntimeAnimation(['waiting_for_approval'])).toBe('waiting')

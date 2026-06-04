@@ -3,6 +3,12 @@ import type { PetState } from './game'
 export type ChatRole = 'pet' | 'user'
 export type PetNoticeKind = 'runtime-busy' | 'runtime-terminal'
 
+export interface PetNoticeOptions {
+  noticeKind?: PetNoticeKind
+  debugSource?: string
+  debugContext?: Record<string, unknown>
+}
+
 export type ChatMessage = {
   id: string
   role: ChatRole

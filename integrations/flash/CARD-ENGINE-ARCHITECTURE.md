@@ -232,3 +232,17 @@ evicted states:
   upload through the same budgeted path.
 - Dynamic media layers follow the same direction: active cards get GPU
   residency, inactive cards fall back to poster/static card faces.
+
+
+## Systemic architecture documents
+
+The second-stage engine model is documented under `integrations/flash/docs/`:
+
+- `ENGINE_SYSTEM_ARCHITECTURE.md`
+- `NETWORK_SYNC_MODEL.md`
+- `RENDERING_PERFORMANCE_MODEL.md`
+- `RULE_SCRIPT_ENGINE.md`
+- `OPERATIONS_AND_MIGRATION.md`
+- `DRAG_LAYOUT_SYNC_HOTFIX.md`
+- `CLIENT_SYNC_COMPAT_HOTFIX.md`
+- `CARD_COMPOSITION_AND_RENDERING_MODEL.md`

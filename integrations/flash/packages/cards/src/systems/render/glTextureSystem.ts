@@ -11,6 +11,10 @@ import { removeCachedTexture } from '../../resources/textureCache'
 import { renderCardTexture } from '../../resources/textureRenderer'
 import { createTexture, updateTexture, zoomToLodScale } from '../../utils/glUtils'
 
+function debugGL(): boolean {
+  return (globalThis as { __FLASH_DEBUG_GL__?: boolean }).__FLASH_DEBUG_GL__ === true
+}
+
 export function glTextureSystem(
   eid: number,
   gl: WebGLRenderingContext,
@@ -64,14 +68,17 @@ export function glTextureSystem(
   if (!canUpload) return
 
   updateTexture(gl, glState.texture, texInfo.canvas as TexImageSource, glState.lastLod !== lodScale)
-  const glErr = gl.getError()
-  if (glErr !== gl.NO_ERROR) {
-    console.warn(`[GL] texture upload error ${glErr} for ${card.id.slice(-6)} (${card.kind})`)
-  } else {
-    glState.lastVersion = texInfo.cardVersion
-    glState.lastLod = lodScale
-    Asset.uploadPending[eid] = 0
-    Asset.gpuResident[eid] = 1
-    Asset.lastUploadedFrame[eid] = frame.frameId
+  if (debugGL()) {
+    const glErr = gl.getError()
+    if (glErr !== gl.NO_ERROR) {
+      console.warn(`[GL] texture upload error ${glErr} for ${card.id.slice(-6)} (${card.kind})`)
+      return
+    }
   }
+
+  glState.lastVersion = texInfo.cardVersion
+  glState.lastLod = lodScale
+  Asset.uploadPending[eid] = 0
+  Asset.gpuResident[eid] = 1
+  Asset.lastUploadedFrame[eid] = frame.frameId
 }

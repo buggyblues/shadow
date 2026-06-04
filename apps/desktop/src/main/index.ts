@@ -80,6 +80,15 @@ if (!hasSingleInstanceLock) {
   app.quit()
 }
 
+ipcMain.on('desktop:rendererLog', (_event, payload) => {
+  if (!payload || typeof payload !== 'object') return
+  const record = payload as { scope?: unknown; payload?: unknown }
+  if (typeof record.scope !== 'string' || !record.scope.startsWith('[desktop-pet:')) return
+  const printable =
+    typeof record.payload === 'string' ? record.payload : JSON.stringify(record.payload, null, 2)
+  console.log('[renderer]', record.scope, printable)
+})
+
 // Register desktop-owned local protocols before app.ready.
 protocol.registerSchemesAsPrivileged([
   {

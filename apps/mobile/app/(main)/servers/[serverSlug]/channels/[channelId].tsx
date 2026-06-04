@@ -858,6 +858,11 @@ export default function ChannelViewScreen() {
     [rawThreadMessages],
   )
 
+  const latestThreadMessageId = useMemo(() => {
+    const latest = threadMessages.at(-1)
+    return latest?.id ?? null
+  }, [threadMessages])
+
   const threadMessagesWithParent = useMemo(
     () => (activeThreadParent ? [activeThreadParent, ...threadMessages] : threadMessages),
     [activeThreadParent, threadMessages],
@@ -1091,6 +1096,16 @@ export default function ChannelViewScreen() {
       .flatMap((p) => p.messages)
       .reverse()
   }, [data])
+
+  const latestMessageId = useMemo(() => {
+    let latest: Message | null = null
+    for (const message of messages) {
+      if (!latest || new Date(message.createdAt).getTime() > new Date(latest.createdAt).getTime()) {
+        latest = message
+      }
+    }
+    return latest?.id ?? null
+  }, [messages])
 
   const taskCardMessageIds = useMemo(() => {
     const ids = new Set<string>()
@@ -2528,6 +2543,10 @@ export default function ChannelViewScreen() {
       if (activity === 'working') return t('member.activityWorking')
       if (activity === 'preparing') return t('member.activityPreparing')
       if (activity === 'ready') return t('member.activityReady')
+      if (activity === 'approval' || activity === 'waiting_for_approval') {
+        return t('member.activityApproval')
+      }
+      if (activity === 'tool_call') return t('member.activityWorking')
       return activity
     },
     [t],
@@ -2773,6 +2792,7 @@ export default function ChannelViewScreen() {
             selectionMode={selectionMode}
             isSelected={selectedMessageIds.has(item.data.id)}
             selectionAnchorId={selectionAnchorId}
+            enableSlashCommandActions={item.data.id === latestMessageId}
             onToggleSelect={handleToggleSelect}
             onEnterSelectionMode={handleEnterSelectionMode}
             onSelectRangeTo={handleSelectRangeTo}
@@ -2789,6 +2809,7 @@ export default function ChannelViewScreen() {
       openThreadForMessage,
       threadsByParentId,
       messages,
+      latestMessageId,
       taskRepliesByMessageId,
       timeline,
       highlightMessageId,
@@ -2824,11 +2845,18 @@ export default function ChannelViewScreen() {
             serverSlug={serverSlug}
             allMessages={threadMessagesWithParent}
             isGrouped={isGrouped}
+            enableSlashCommandActions={item.id === latestThreadMessageId}
           />
         </View>
       )
     },
-    [handleThreadRetry, serverSlug, threadMessages, threadMessagesWithParent],
+    [
+      handleThreadRetry,
+      latestThreadMessageId,
+      serverSlug,
+      threadMessages,
+      threadMessagesWithParent,
+    ],
   )
 
   const getItemKey = useCallback((item: TimelineItem) => {
