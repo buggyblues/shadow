@@ -1,26 +1,26 @@
 {
   "schemaVersion": "shadow.app/1",
-  "appKey": "shadow-answers",
-  "name": "问问",
-  "description": "A Q&A App for tagged questions, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.",
+  "appKey": "answers",
+  "name": "Answers",
+  "description": "A Q&A app for tagged questions, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4210/assets/icon.svg",
   "marketplace": {
     "tagline": "A server knowledge base where questions turn into reusable answers.",
-    "summary": "问问 helps a server collect tagged questions, Markdown answers, comments, images, search results, and Buddy participation. Use it for team FAQs, study groups, support communities, and long-lived knowledge that should stay searchable.",
-    "categories": ["知识", "协作", "工具"],
+    "summary": "Answers helps a server collect tagged questions, Markdown answers, comments, images, search results, and Buddy participation. Use it for team FAQs, study groups, support communities, and long-lived knowledge that should stay searchable.",
+    "categories": ["Knowledge", "Collaboration", "Tools"],
     "supportedLanguages": ["中文", "English"],
     "coverImageUrl": "http://localhost:4210/assets/cover.png",
     "gallery": [
       {
         "url": "http://localhost:4210/assets/cover.png",
         "type": "image",
-        "alt": "qna cover"
+        "alt": "Answers cover"
       }
     ],
     "links": [
       {
-        "label": "主页",
+        "label": "Home",
         "url": "http://localhost:4210/shadow/server",
         "type": "website"
       }
@@ -55,10 +55,23 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "query": { "type": "string", "maxLength": 120 },
-          "tag": { "type": "string", "maxLength": 80 },
-          "listId": { "type": "string", "maxLength": 120 },
-          "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+          "query": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "listId": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
         },
         "additionalProperties": false
       }
@@ -75,7 +88,10 @@
         "type": "object",
         "required": ["questionId"],
         "properties": {
-          "questionId": { "type": "string", "minLength": 1 }
+          "questionId": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "additionalProperties": false
       }
@@ -93,14 +109,28 @@
         "type": "object",
         "required": ["title"],
         "properties": {
-          "title": { "type": "string", "minLength": 1, "maxLength": 220 },
-          "body": { "type": "string", "maxLength": 12000 },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 220
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 12000
+          },
           "tags": {
             "type": "array",
             "maxItems": 10,
-            "items": { "type": "string", "minLength": 1, "maxLength": 40 }
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
           },
-          "listId": { "type": "string", "maxLength": 120 }
+          "listId": {
+            "type": "string",
+            "maxLength": 120
+          }
         },
         "additionalProperties": false
       }
@@ -118,8 +148,15 @@
         "type": "object",
         "required": ["questionId", "body"],
         "properties": {
-          "questionId": { "type": "string", "minLength": 1 },
-          "body": { "type": "string", "minLength": 1, "maxLength": 20000 }
+          "questionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          }
         },
         "additionalProperties": false
       }
@@ -137,7 +174,10 @@
         "type": "object",
         "required": ["questionId"],
         "properties": {
-          "questionId": { "type": "string", "minLength": 1 }
+          "questionId": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "additionalProperties": false
       }
@@ -155,7 +195,10 @@
         "type": "object",
         "required": ["answerId"],
         "properties": {
-          "answerId": { "type": "string", "minLength": 1 }
+          "answerId": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "additionalProperties": false
       }
@@ -173,9 +216,18 @@
         "type": "object",
         "required": ["targetType", "targetId", "body"],
         "properties": {
-          "targetType": { "enum": ["question", "answer"] },
-          "targetId": { "type": "string", "minLength": 1 },
-          "body": { "type": "string", "minLength": 1, "maxLength": 1200 }
+          "targetType": {
+            "enum": ["question", "answer"]
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          }
         },
         "additionalProperties": false
       }
@@ -211,8 +263,15 @@
         "type": "object",
         "required": ["title"],
         "properties": {
-          "title": { "type": "string", "minLength": 1, "maxLength": 120 },
-          "description": { "type": "string", "maxLength": 500 }
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          }
         },
         "additionalProperties": false
       }
@@ -230,8 +289,14 @@
         "type": "object",
         "required": ["listId", "questionId"],
         "properties": {
-          "listId": { "type": "string", "minLength": 1 },
-          "questionId": { "type": "string", "minLength": 1 }
+          "listId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "questionId": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "additionalProperties": false
       }
@@ -249,8 +314,14 @@
         "type": "object",
         "required": ["listId", "questionId"],
         "properties": {
-          "listId": { "type": "string", "minLength": 1 },
-          "questionId": { "type": "string", "minLength": 1 }
+          "listId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "questionId": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "additionalProperties": false
       }
@@ -261,7 +332,7 @@
       "description": "Upload an image that can be embedded in Markdown question context or answers.",
       "help": {
         "summary": "Upload an image and use the returned URL in Markdown.",
-        "usage": "shadowob app call shadow-answers images.upload --server \"<server>\" --file ./diagram.png --json",
+        "usage": "shadowob app call answers images.upload --server \"<server>\" --file ./diagram.png --json",
         "details": "Use the returned image.url as `![description](url)` inside a question or answer."
       },
       "path": "/api/shadow/commands/images.upload",
@@ -284,11 +355,29 @@
             "type": "object",
             "required": ["filename", "contentType", "size", "dataBase64"],
             "properties": {
-              "field": { "type": "string", "maxLength": 80 },
-              "filename": { "type": "string", "minLength": 1, "maxLength": 240 },
-              "contentType": { "type": "string", "minLength": 1, "maxLength": 160 },
-              "size": { "type": "integer", "minimum": 1, "maximum": 5242880 },
-              "dataBase64": { "type": "string", "minLength": 1 }
+              "field": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "filename": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "contentType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5242880
+              },
+              "dataBase64": {
+                "type": "string",
+                "minLength": 1
+              }
             },
             "additionalProperties": false
           }
@@ -299,24 +388,45 @@
   ],
   "skills": [
     {
-      "name": "shadow-answers-qna-ops",
+      "name": "answers-qna-ops",
       "description": "Use when a Buddy needs to search tagged questions, manage personal Q&A lists, ask a question, upload images, answer with Markdown, or comment.",
       "commandHints": [
-        "shadow-answers questions.list",
-        "shadow-answers questions.get",
-        "shadow-answers questions.ask",
-        "shadow-answers answers.create",
-        "shadow-answers questions.delete",
-        "shadow-answers answers.delete",
-        "shadow-answers comments.create",
-        "shadow-answers tags.list",
-        "shadow-answers lists.list",
-        "shadow-answers lists.create",
-        "shadow-answers lists.add_question",
-        "shadow-answers lists.remove_question",
-        "shadow-answers images.upload"
+        "answers questions.list",
+        "answers questions.get",
+        "answers questions.ask",
+        "answers answers.create",
+        "answers questions.delete",
+        "answers answers.delete",
+        "answers comments.create",
+        "answers tags.list",
+        "answers lists.list",
+        "answers lists.create",
+        "answers lists.add_question",
+        "answers lists.remove_question",
+        "answers images.upload"
       ]
     }
   ],
-  "events": ["qna.updated"]
+  "events": ["qna.updated"],
+  "i18n": {
+    "zh-CN": {
+      "name": "问问",
+      "description": "问答应用，支持标签问题、个人列表、Markdown 回答、评论、图片上传、搜索、删除和 Buddy 参与。",
+      "marketplace": {
+        "tagline": "把问题沉淀成可复用答案的服务器知识库。",
+        "summary": "问问帮助服务器收集带标签的问题、Markdown 回答、评论、图片、搜索结果和 Buddy 参与记录。适合团队 FAQ、学习小组、支持社区和需要长期可搜索的知识沉淀。",
+        "categories": ["知识", "协作", "工具"],
+        "gallery": [
+          {
+            "alt": "问问封面"
+          }
+        ],
+        "links": [
+          {
+            "label": "主页"
+          }
+        ]
+      }
+    }
+  }
 }

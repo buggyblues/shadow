@@ -4,29 +4,29 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
-  appKey: 'shadow-kanban',
-  name: 'Shadow Kanban',
+  appKey: 'kanban',
+  name: 'Kanban',
   description:
-    'A Trello-style task board where people and Buddies coordinate cards, lists, assignees, and comments.',
+    'A generic Kanban workspace where teams and Buddies manage task cards, links, status, and artifact references.',
   version: '1.0.0',
   iconUrl: 'http://localhost:4201/assets/icon.svg',
   marketplace: {
-    tagline: 'A shared board for moving server work from idea to done.',
+    tagline: 'A generic Kanban board for people and Buddies.',
     summary:
-      'Shadow Kanban gives people and Buddies a simple shared task board with lists, cards, assignees, comments, dispatch actions, and Buddy task handoff. It is built for teams that want project coordination directly inside the server.',
-    categories: ['协作', '效率', '管理工具'],
+      'Kanban is a generic task board for people and Buddies. Coordinators can create cards, update progress, attach artifacts, and keep execution traceable without hardcoding a business domain.',
+    categories: ['Collaboration', 'Productivity', 'Project Management'],
     supportedLanguages: ['English', '中文'],
     coverImageUrl: 'http://localhost:4201/assets/cover.png',
     gallery: [
       {
         url: 'http://localhost:4201/assets/cover.png',
         type: 'image',
-        alt: 'kanban cover',
+        alt: 'Kanban cover',
       },
     ],
     links: [
       {
-        label: '主页',
+        label: 'Home',
         url: 'http://localhost:4201/shadow/server',
         type: 'website',
       },
@@ -102,32 +102,69 @@ export const shadowServerAppManifest = {
             type: 'string',
             maxLength: 80,
           },
+          column: {
+            type: 'string',
+            maxLength: 80,
+          },
           description: {
             type: 'string',
             maxLength: 2000,
           },
+          prompt: {
+            type: 'string',
+            maxLength: 4000,
+          },
           label: {
             type: 'string',
             maxLength: 40,
+          },
+          labels: {
+            type: 'array',
+            maxItems: 8,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 40,
+            },
+          },
+          priority: {
+            enum: ['low', 'medium', 'high', 'urgent'],
+          },
+          progress: {
+            type: 'number',
+            minimum: 0,
+            maximum: 100,
+          },
+          status: {
+            enum: ['queued', 'running', 'review', 'done', 'failed'],
+          },
+          assignee: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
           },
         },
         additionalProperties: false,
       },
     },
     {
-      name: 'cards.create_and_dispatch',
-      title: 'Create and dispatch card',
+      name: 'cards.update',
+      title: 'Update card',
       description:
-        'Create a Kanban card, assign it to a Buddy label, and emit a Shadow Inbox task card for that Buddy.',
-      path: '/api/shadow/commands/cards.create_and_dispatch',
+        'Update card fields such as description, prompt, status, progress, priority, labels, or column.',
+      path: '/api/shadow/commands/cards.update',
       permission: 'kanban.cards:write',
       action: 'write',
       dataClass: 'server-private',
       approvalMode: 'first_time',
       inputSchema: {
         type: 'object',
-        required: ['title'],
+        required: ['cardId'],
         properties: {
+          cardId: {
+            type: 'string',
+            minLength: 1,
+          },
           title: {
             type: 'string',
             minLength: 1,
@@ -137,22 +174,37 @@ export const shadowServerAppManifest = {
             type: 'string',
             maxLength: 80,
           },
+          column: {
+            type: 'string',
+            maxLength: 80,
+          },
           description: {
             type: 'string',
             maxLength: 2000,
           },
-          label: {
+          prompt: {
             type: 'string',
-            maxLength: 40,
+            maxLength: 4000,
           },
-          assigneeLabel: {
-            type: 'string',
-            minLength: 1,
-            maxLength: 80,
+          labels: {
+            type: 'array',
+            maxItems: 8,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 40,
+            },
           },
-          reason: {
-            type: 'string',
-            maxLength: 1000,
+          priority: {
+            enum: ['low', 'medium', 'high', 'urgent'],
+          },
+          progress: {
+            type: 'number',
+            minimum: 0,
+            maximum: 100,
+          },
+          status: {
+            enum: ['queued', 'running', 'review', 'done', 'failed'],
           },
         },
         additionalProperties: false,
@@ -211,10 +263,151 @@ export const shadowServerAppManifest = {
       },
     },
     {
+      name: 'cards.dispatch',
+      title: 'Dispatch card to Buddy Inbox',
+      description:
+        'Assign a generic task card to a Buddy and enqueue the card context as a Buddy Inbox task. Domain execution remains with the target Buddy.',
+      path: '/api/shadow/commands/cards.dispatch',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['cardId', 'agentId'],
+        properties: {
+          cardId: {
+            type: 'string',
+            minLength: 1,
+          },
+          agentId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          agentUserId: {
+            type: 'string',
+            maxLength: 120,
+          },
+          assigneeLabel: {
+            type: 'string',
+            maxLength: 120,
+          },
+          assigneeAvatarUrl: {
+            type: 'string',
+            maxLength: 1000,
+          },
+          title: {
+            type: 'string',
+            maxLength: 180,
+          },
+          body: {
+            type: 'string',
+            maxLength: 8000,
+          },
+          priority: {
+            enum: ['low', 'normal', 'high', 'urgent'],
+          },
+          tags: {
+            type: 'array',
+            maxItems: 12,
+            items: {
+              oneOf: [
+                {
+                  type: 'string',
+                  minLength: 1,
+                  maxLength: 48,
+                },
+                {
+                  type: 'object',
+                  required: ['label'],
+                  properties: {
+                    id: {
+                      type: 'string',
+                      maxLength: 80,
+                    },
+                    label: {
+                      type: 'string',
+                      minLength: 1,
+                      maxLength: 48,
+                    },
+                    color: {
+                      type: 'string',
+                      maxLength: 40,
+                    },
+                  },
+                  additionalProperties: false,
+                },
+              ],
+            },
+          },
+          idempotencyKey: {
+            type: 'string',
+            maxLength: 240,
+          },
+          requirements: {
+            oneOf: [
+              {
+                type: 'object',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+          outputContract: {
+            oneOf: [
+              {
+                type: 'object',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+          privacy: {
+            oneOf: [
+              {
+                type: 'object',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+          data: {
+            oneOf: [
+              {
+                type: 'object',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+          kanbanCardRef: {
+            description:
+              'Optional external task-card reference kept by callers; Kanban uses cardId as source of truth.',
+            oneOf: [
+              {
+                type: 'object',
+              },
+              {
+                type: 'string',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'cards.comment',
       title: 'Comment on card',
-      description:
-        'Add a short update comment to a task card. A comment that mentions @Strategy Buddy emits an Inbox task card.',
+      description: 'Add an update comment to a task card.',
       path: '/api/shadow/commands/cards.comment',
       permission: 'kanban.cards:write',
       action: 'write',
@@ -231,18 +424,18 @@ export const shadowServerAppManifest = {
           body: {
             type: 'string',
             minLength: 1,
-            maxLength: 1000,
+            maxLength: 4000,
           },
         },
         additionalProperties: false,
       },
     },
     {
-      name: 'cards.dispatch',
-      title: 'Dispatch card to Buddy',
+      name: 'cards.complete',
+      title: 'Complete card',
       description:
-        'Assign a Kanban card to a Buddy and emit a Shadow Inbox task card for the Buddy runtime.',
-      path: '/api/shadow/commands/cards.dispatch',
+        'Atomically mark a card complete after Kanban validates dependencies and required workspace artifact contracts, then append an optional completion summary.',
+      path: '/api/shadow/commands/cards.complete',
       permission: 'kanban.cards:write',
       action: 'write',
       dataClass: 'server-private',
@@ -255,10 +448,71 @@ export const shadowServerAppManifest = {
             type: 'string',
             minLength: 1,
           },
-          assigneeLabel: {
+          summary: {
+            type: 'string',
+            maxLength: 4000,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'cards.link',
+      title: 'Link cards',
+      description:
+        'Create a typed relationship between two cards, such as dependency, parent-child, duplicate, or related.',
+      path: '/api/shadow/commands/cards.link',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['sourceCardId', 'targetCardId'],
+        properties: {
+          sourceCardId: {
             type: 'string',
             minLength: 1,
+          },
+          targetCardId: {
+            type: 'string',
+            minLength: 1,
+          },
+          kind: {
+            type: 'string',
             maxLength: 80,
+          },
+          label: {
+            type: 'string',
+            maxLength: 120,
+          },
+          metadata: {
+            type: 'object',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'cards.rerun',
+      title: 'Rerun card',
+      description: 'Reopen a card and optionally override the prompt kept on that card.',
+      path: '/api/shadow/commands/cards.rerun',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['cardId'],
+        properties: {
+          cardId: {
+            type: 'string',
+            minLength: 1,
+          },
+          prompt: {
+            type: 'string',
+            maxLength: 4000,
           },
           reason: {
             type: 'string',
@@ -268,8 +522,150 @@ export const shadowServerAppManifest = {
         additionalProperties: false,
       },
     },
+    {
+      name: 'cards.artifacts.add',
+      title: 'Add card artifacts',
+      description: 'Attach workspace artifact references to a card.',
+      path: '/api/shadow/commands/cards.artifacts.add',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['cardId', 'artifacts'],
+        properties: {
+          cardId: {
+            type: 'string',
+            minLength: 1,
+          },
+          kind: {
+            type: 'string',
+            maxLength: 120,
+          },
+          title: {
+            type: 'string',
+            maxLength: 180,
+          },
+          name: {
+            type: 'string',
+            maxLength: 180,
+          },
+          url: {
+            type: 'string',
+            maxLength: 1000,
+          },
+          path: {
+            type: 'string',
+            maxLength: 1000,
+          },
+          mimeType: {
+            type: 'string',
+            maxLength: 120,
+          },
+          sizeBytes: {
+            type: 'number',
+          },
+          summary: {
+            type: 'string',
+            maxLength: 1000,
+          },
+          description: {
+            type: 'string',
+            maxLength: 1000,
+          },
+          metadata: {
+            type: 'object',
+          },
+          artifacts: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 12,
+            items: {
+              type: 'object',
+              properties: {
+                id: {
+                  type: 'string',
+                  maxLength: 240,
+                },
+                workspaceFileId: {
+                  type: 'string',
+                  maxLength: 240,
+                },
+                workspaceNodeId: {
+                  type: 'string',
+                  maxLength: 240,
+                },
+                kind: {
+                  type: 'string',
+                  maxLength: 120,
+                },
+                title: {
+                  type: 'string',
+                  maxLength: 180,
+                },
+                name: {
+                  type: 'string',
+                  maxLength: 180,
+                },
+                url: {
+                  type: 'string',
+                  maxLength: 1000,
+                },
+                path: {
+                  type: 'string',
+                  maxLength: 1000,
+                },
+                mimeType: {
+                  type: 'string',
+                  maxLength: 120,
+                },
+                sizeBytes: {
+                  type: 'number',
+                },
+                summary: {
+                  type: 'string',
+                  maxLength: 1000,
+                },
+                description: {
+                  type: 'string',
+                  maxLength: 1000,
+                },
+                metadata: {
+                  type: 'object',
+                },
+              },
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
   ],
   events: ['board.updated'],
+  i18n: {
+    'zh-CN': {
+      name: '看板',
+      description: '通用任务看板，用于成员和 Buddy 管理任务卡片、状态、链接和 artifact 引用。',
+      marketplace: {
+        tagline: '面向成员和 Buddy 协作的通用看板。',
+        summary:
+          '看板提供通用任务卡片、状态流转、进度更新、artifact 引用和协作记录。协调者可以创建卡片、跟踪执行、分配给 Buddy，并保持流程可追踪，而不固化具体业务场景。',
+        categories: ['协作', '效率', '项目管理'],
+        gallery: [
+          {
+            alt: '看板封面',
+          },
+        ],
+        links: [
+          {
+            label: '主页',
+          },
+        ],
+      },
+    },
+  },
 } as const satisfies ShadowServerAppManifest
 
 export type ShadowServerAppManifestDefinition = typeof shadowServerAppManifest

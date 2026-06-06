@@ -4,7 +4,7 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
-  appKey: 'shadow-warbuddy',
+  appKey: 'warbuddy',
   name: 'WarBuddy Arena',
   description:
     'A squad-based pixel tank arena with ranked battles, live rooms, Buddy coaching, and frame-by-frame replay review.',
@@ -14,19 +14,19 @@ export const shadowServerAppManifest = {
     tagline: 'A pixel tank arena with ranked battles, live rooms, and Buddy coaching.',
     summary:
       'WarBuddy Arena gives a server a squad-based pixel tank battleground with rosters, strategy versions, ranked matches, realtime battle rooms, replay inspection, and Buddy coaching. It is built for competitive play where tactics and review matter.',
-    categories: ['游戏', '社交', '策略'],
+    categories: ['Games', 'Social', 'Strategy'],
     supportedLanguages: ['English', '中文'],
     coverImageUrl: 'http://localhost:4218/assets/cover.png',
     gallery: [
       {
         url: 'http://localhost:4218/assets/cover.png',
         type: 'image',
-        alt: 'warbuddy cover',
+        alt: 'WarBuddy cover',
       },
     ],
     links: [
       {
-        label: '主页',
+        label: 'Home',
         url: 'http://localhost:4218/shadow/server',
         type: 'website',
       },
@@ -623,17 +623,17 @@ export const shadowServerAppManifest = {
   ],
   skills: [
     {
-      name: 'shadow-warbuddy-playbook',
+      name: 'warbuddy-playbook',
       description:
         'Coach a WarBuddy squad: inspect replays, submit strategy versions, simulate opponents, and challenge server Buddies.',
       commandHints: [
-        'shadow-warbuddy teams.list',
-        'shadow-warbuddy battle.brief',
-        'shadow-warbuddy tanks.get',
-        'shadow-warbuddy tanks.saveCode',
-        'shadow-warbuddy matches.simulate',
-        'shadow-warbuddy matches.challenge',
-        'shadow-warbuddy matches.get',
+        'warbuddy teams.list',
+        'warbuddy battle.brief',
+        'warbuddy tanks.get',
+        'warbuddy tanks.saveCode',
+        'warbuddy matches.simulate',
+        'warbuddy matches.challenge',
+        'warbuddy matches.get',
       ],
     },
   ],
@@ -655,6 +655,28 @@ export const shadowServerAppManifest = {
       model: 'frame-sync',
       authority: 'server',
       tickRate: 6,
+    },
+  },
+  i18n: {
+    'zh-CN': {
+      name: 'WarBuddy 竞技场',
+      description: '小队制像素坦克竞技场，支持排位战、实时房间、Buddy 教练和逐帧回放复盘。',
+      marketplace: {
+        tagline: '带排位战、实时房间和 Buddy 教练的像素坦克竞技场。',
+        summary:
+          'WarBuddy 竞技场为服务器提供小队制像素坦克战场，包括阵容、策略版本、排位赛、实时战斗房间、回放检查和 Buddy 教练。它适合重视战术和复盘的竞技玩法。',
+        categories: ['游戏', '社交', '策略'],
+        gallery: [
+          {
+            alt: 'WarBuddy 封面',
+          },
+        ],
+        links: [
+          {
+            label: '主页',
+          },
+        ],
+      },
     },
   },
 } as const satisfies ShadowServerAppManifest

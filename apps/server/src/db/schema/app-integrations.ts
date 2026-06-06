@@ -12,6 +12,51 @@ import { agents } from './agents'
 import { servers } from './servers'
 import { users } from './users'
 
+export type ServerAppManifestHelp = {
+  overview?: string
+  usage?: string
+  details?: string
+  commandIndex?: string
+}
+
+export type ServerAppMarketplaceMetadata = {
+  tagline?: string
+  summary?: string
+  categories?: string[]
+  supportedLanguages?: string[]
+  coverImageUrl?: string
+  gallery?: Array<{
+    url: string
+    type?: 'image' | 'video'
+    alt?: string
+  }>
+  links?: Array<{
+    label: string
+    url: string
+    type?: 'website' | 'support' | 'docs' | 'terms' | 'privacy' | 'dashboard' | 'premium'
+  }>
+  publisher?: {
+    name?: string
+    websiteUrl?: string
+  }
+}
+
+export type ServerAppMarketplaceI18nMetadata = {
+  tagline?: string
+  summary?: string
+  categories?: string[]
+  supportedLanguages?: string[]
+  gallery?: Array<{
+    alt?: string
+  }>
+  links?: Array<{
+    label?: string
+  }>
+  publisher?: {
+    name?: string
+  }
+}
+
 export type ServerAppManifest = {
   schemaVersion: 'shadow.app/1'
   appKey: string
@@ -20,27 +65,16 @@ export type ServerAppManifest = {
   version?: string
   updatedAt?: string
   iconUrl?: string
-  marketplace?: {
-    tagline?: string
-    summary?: string
-    categories?: string[]
-    supportedLanguages?: string[]
-    coverImageUrl?: string
-    gallery?: Array<{
-      url: string
-      type?: 'image' | 'video'
-      alt?: string
-    }>
-    links?: Array<{
-      label: string
-      url: string
-      type?: 'website' | 'support' | 'docs' | 'terms' | 'privacy' | 'dashboard' | 'premium'
-    }>
-    publisher?: {
+  marketplace?: ServerAppMarketplaceMetadata
+  i18n?: Record<
+    string,
+    {
       name?: string
-      websiteUrl?: string
+      description?: string
+      marketplace?: ServerAppMarketplaceI18nMetadata
+      help?: ServerAppManifestHelp
     }
-  }
+  >
   iframe?: {
     entry: string
     allowedOrigins: string[]
@@ -97,12 +131,7 @@ export type ServerAppManifest = {
     commandHints?: string[]
   }>
   events?: string[]
-  help?: {
-    overview?: string
-    usage?: string
-    details?: string
-    commandIndex?: string
-  }
+  help?: ServerAppManifestHelp
   realtime?: {
     transports?: Array<'sse' | 'websocket'>
     subscribe?: {

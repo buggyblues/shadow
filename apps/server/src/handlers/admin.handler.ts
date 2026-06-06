@@ -517,7 +517,8 @@ export function createAdminHandler(container: AppContainer) {
 
   adminHandler.get('/server-app-catalog', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
-    const entries = await appIntegrationService.listAdminCatalog()
+    const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
+    const entries = await appIntegrationService.listAdminCatalog({ locale })
     return c.json(entries)
   })
 

@@ -49,6 +49,7 @@ import { InteractiveBlockRenderer } from './message-bubble/interactive-block'
 import { interactiveResponseEqual } from './message-bubble/interactive-equality'
 import { MessageMarkdown } from './message-bubble/markdown'
 import { EntityMentionSpan, MentionSpan } from './message-bubble/mentions'
+import { MessageReferenceCardsView } from './message-bubble/message-reference-card'
 import {
   AttachmentList,
   type AttachmentRenderProps,
@@ -1175,6 +1176,8 @@ function MessageBubbleInner({
         />
 
         <ServerAppCardsView cards={message.metadata?.cards} />
+
+        <MessageReferenceCardsView cards={message.metadata?.cards} />
 
         {message.metadata?.commerceCards && message.metadata.commerceCards.length > 0 && (
           <div className="flex flex-col gap-2 mt-2">

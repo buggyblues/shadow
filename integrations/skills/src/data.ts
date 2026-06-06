@@ -273,7 +273,7 @@ function defaultLibrary(): SkillLibraryState {
   const timestamp = now()
   return {
     id: 'default',
-    title: 'Shadow Skills',
+    title: 'Skills',
     updatedAt: timestamp,
     installs: [],
     skills: [],
@@ -610,7 +610,7 @@ function externalSkillFiles(entry: SkillsShEntry, external: SkillExternalMetadat
         `- Install command: \`${external.installCommand}\``,
         `- Directory URL: ${external.sourceUrl}`,
         '',
-        'When installing, prefer downloading the complete upstream skill package with the install command above. If the Shadow Skills app dispatches this as an Inbox task, report the installed path and any warnings back to the owner.',
+        'When installing, prefer downloading the complete upstream skill package with the install command above. If the Skills app dispatches this as an Inbox task, report the installed path and any warnings back to the owner.',
       ].join('\n'),
     },
     {
@@ -619,7 +619,7 @@ function externalSkillFiles(entry: SkillsShEntry, external: SkillExternalMetadat
       content: [
         '# Find skills guide',
         '',
-        `Shadow Skills follows the public find-skills guide at ${FIND_SKILLS_GUIDE_URL}.`,
+        `Skills follows the public find-skills guide at ${FIND_SKILLS_GUIDE_URL}.`,
         '',
         '- Search the local server library first.',
         '- Prefer higher install count, recent weekly installs, and trusted sources.',
@@ -821,9 +821,7 @@ export function startSkillDirectorySnapshotLoop() {
   if (snapshotTimer) return snapshotTimer
   const run = () => {
     void snapshotSkillDirectory().catch((error) => {
-      console.warn(
-        `Shadow Skills snapshot failed: ${error instanceof Error ? error.message : error}`,
-      )
+      console.warn(`Skills snapshot failed: ${error instanceof Error ? error.message : error}`)
     })
   }
   if (shouldRefreshSnapshot()) {

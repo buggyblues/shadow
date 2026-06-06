@@ -52,6 +52,8 @@ interface ShadowGreetingConfig {
 interface ShadowServerApp {
   id: string
   serverId: string
+  catalogEntryId?: string
+  catalogAppKey?: string
   manifestUrl?: string
   manifest?: Record<string, unknown>
   grants?: Array<{
@@ -92,8 +94,13 @@ interface ShadowobPluginConfig {
 const SHADOWOB_OPENCLAW_EXTENSION_ID = 'shadowob'
 const SHADOWOB_OPENCLAW_PLUGIN_ID = 'openclaw-shadowob'
 const SHADOWOB_OPENCLAW_EXTENSION_PATH = `/app/extensions/${SHADOWOB_OPENCLAW_EXTENSION_ID}`
-const SHADOWOB_CLI_SKILL_INTRO =
-  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, server App resources, or to send/manage Shadow content. For installed server Apps, use the CLI path only: run `shadowob app discover --server "$SHADOWOB_SERVER_ID" --json`, then `shadowob app call <app-key> <command> --server "$SHADOWOB_SERVER_ID" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for server App commands. Keep reads narrow and prefer `--json`.'
+const SHADOWOB_CLI_SKILL_INTRO = [
+  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, server App resources, or to send/manage Shadow content.',
+  'You are not statically bound to one server. Derive the active server from the current message, Inbox task, or server App command context before calling Shadow APIs.',
+  "For Buddy-to-Buddy work, use Buddy Inbox task cards: run `shadowob inbox list --server <active-server-id-or-slug> --json`, then `shadowob inbox enqueue --server <active-server-id-or-slug> --agent <target-agent-id> --title \"<task-title>\" --body \"<task-body>\" --requirements-json '<json>' --output-contract-json '<json>' --privacy-json '<json>' --json`; do not create ordinary channels as Inbox routes.",
+  "For installed server Apps, use the CLI path only: run `shadowob app discover --server <active-server-id-or-slug> --json`, then `shadowob app call <app-key> <command> --server <active-server-id-or-slug> --json-input '<raw-command-input-json>' --json`.",
+  'Prefer Workspace files for shared context and artifacts. Upload final artifacts to Workspace first and reference them with workspaceFileId, workspaceNodeId, or workspace:// URIs. Keep reads narrow and prefer `--json`.',
+].join(' ')
 
 function shadowEnvKey(prefix: string, id: string) {
   return `${prefix}_${id.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
@@ -290,6 +297,8 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
           .map((grant) => ({
             id: app.id,
             serverConfigId: app.serverId,
+            ...(app.catalogEntryId ? { catalogEntryId: app.catalogEntryId } : {}),
+            ...(app.catalogAppKey ? { catalogAppKey: app.catalogAppKey } : {}),
             ...(app.manifestUrl ? { manifestUrl: app.manifestUrl } : {}),
             serverId: shadowEnvRef(shadowEnvKey('SHADOW_SERVER_APP_SERVER', app.id)),
             serverAppId: shadowEnvRef(shadowEnvKey('SHADOW_SERVER_APP_ID', app.id)),
@@ -371,6 +380,8 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
                 .map((grant) => ({
                   id: app.id,
                   serverConfigId: app.serverId,
+                  ...(app.catalogEntryId ? { catalogEntryId: app.catalogEntryId } : {}),
+                  ...(app.catalogAppKey ? { catalogAppKey: app.catalogAppKey } : {}),
                   ...(app.manifestUrl ? { manifestUrl: app.manifestUrl } : {}),
                   appKeyEnvKey: shadowEnvKey('SHADOW_SERVER_APP_KEY', app.id),
                   serverIdEnvKey: shadowEnvKey('SHADOW_SERVER_APP_SERVER', app.id),
@@ -501,10 +512,10 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
           severity: 'error',
         })
       }
-      if (!app.manifestUrl && !app.manifest) {
+      if (!app.catalogEntryId && !app.catalogAppKey && !app.manifestUrl && !app.manifest) {
         errors.push({
           path: `serverApps.${app.id}`,
-          message: `Server App "${app.id}" must provide a manifestUrl or manifest`,
+          message: `Server App "${app.id}" must provide catalogEntryId, catalogAppKey, manifestUrl, or manifest`,
           severity: 'error',
         })
       }

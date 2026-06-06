@@ -59,16 +59,23 @@ h1 {
   background: rgba(34, 197, 94, 0.22);
 }
 
+button,
+input,
+textarea {
+  font: inherit;
+}
+
 button {
   border: 0;
   border-radius: 6px;
   padding: 8px 10px;
-  font: inherit;
   font-weight: 700;
   cursor: pointer;
 }
 
-button:disabled {
+button:disabled,
+input:disabled,
+textarea:disabled {
   cursor: not-allowed;
   opacity: 0.64;
 }
@@ -85,17 +92,224 @@ main {
   padding: 16px;
 }
 
+.requestBar {
+  width: min(960px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(180px, 260px) auto auto;
+  gap: 8px;
+  margin: 0 0 14px;
+  border-radius: 8px;
+  background: rgba(9, 30, 66, 0.18);
+  padding: 8px;
+  backdrop-filter: blur(14px);
+}
+
+.requestBar textarea,
+.reactSelectButton {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: #fbfcff;
+  color: #172b4d;
+  padding: 9px 10px;
+  outline: none;
+  resize: vertical;
+}
+
+.requestBar textarea:focus,
+.reactSelectButton:focus-visible {
+  border-color: #0079bf;
+  box-shadow: inset 0 0 0 1px #0079bf;
+}
+
+.reactSelect {
+  position: relative;
+  min-width: 0;
+}
+
+.reactSelect.open {
+  z-index: 30;
+}
+
+.reactSelectButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  text-align: left;
+  font-weight: 500;
+}
+
+.reactSelectButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.reactSelectValue,
+.reactSelectOptionText {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reactSelectLabel,
+.reactSelectOptionLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reactSelectLabel.placeholder {
+  color: #5e6c84;
+}
+
+.reactSelectChevron {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid #5e6c84;
+  border-bottom: 1.5px solid #5e6c84;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.reactSelectMenu {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + 4px);
+  display: grid;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #c9d2df;
+  border-radius: 8px;
+  background: #fbfcff;
+  padding: 4px;
+  box-shadow: 0 8px 12px rgba(9, 30, 66, 0.18);
+}
+
+.reactSelectOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  border-radius: 6px;
+  background: transparent;
+  color: #172b4d;
+  padding: 6px 8px;
+  text-align: left;
+  font-weight: 600;
+}
+
+.reactSelectOption:hover,
+.reactSelectOption:focus-visible,
+.reactSelectOption.active,
+.reactSelectOption.selected {
+  background: #e4f0f6;
+}
+
+.reactSelectOption.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.reactSelectOptionText {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.reactSelectOptionMeta {
+  color: #5e6c84;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.buddySelectAvatarWrap {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+
+.buddySelectAvatar {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #172b4d;
+  color: #f8fbff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.buddySelectAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.buddySelectPresence {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid #fbfcff;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.buddySelectPresence.status-busy {
+  background: #f59e0b;
+}
+
+.buddySelectPresence.status-idle {
+  background: #38bdf8;
+}
+
+.buddySelectPresence.status-dnd {
+  background: #ef4444;
+}
+
+.buddySelectPresence.status-offline {
+  background: #94a3b8;
+}
+
+.reactSelectEmpty {
+  padding: 10px;
+  color: #5e6c84;
+  font-size: 13px;
+}
+
+.requestSend {
+  background: #172b4d;
+  color: #f8fbff;
+}
+
+.requestBuddy {
+  background: rgba(255, 255, 255, 0.9);
+  color: #172b4d;
+}
+
 .board {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(260px, 310px);
   gap: 12px;
   align-items: start;
-  min-height: 100%;
+  min-height: calc(100% - 62px);
 }
 
 .list {
-  max-height: calc(100vh - 88px);
+  max-height: calc(100vh - 150px);
   display: flex;
   flex-direction: column;
   border-radius: 8px;
@@ -178,7 +392,8 @@ main {
   background: #f97316;
 }
 
-.label-planning {
+.label-planning,
+.label-issue {
   background: #a78bfa;
 }
 
@@ -197,8 +412,75 @@ main {
   overflow-wrap: anywhere;
 }
 
-.buddy-pill {
+.markdown {
+  overflow-wrap: anywhere;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre,
+.markdown table {
+  margin: 0 0 8px;
+}
+
+.markdown :last-child {
+  margin-bottom: 0;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 18px;
+}
+
+.markdown a {
+  color: #0c66e4;
+  text-decoration: none;
+}
+
+.markdown a:hover {
+  text-decoration: underline;
+}
+
+.markdown code {
+  border-radius: 4px;
+  background: #e9edf5;
+  padding: 1px 4px;
+  font-size: 0.92em;
+}
+
+.markdown pre {
+  overflow-x: auto;
+  border-radius: 6px;
+  background: #172b4d;
+  color: #f8fbff;
+  padding: 10px;
+}
+
+.markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.markdown-compact {
+  display: -webkit-box;
+  max-height: 4.4em;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.markdown-compact p,
+.markdown-compact ul,
+.markdown-compact ol {
+  margin-bottom: 3px;
+}
+
+.buddy-pill,
+.issueMeta {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   width: fit-content;
   min-height: 22px;
@@ -210,6 +492,13 @@ main {
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+  gap: 6px;
+}
+
+.issueMeta {
+  background: #ede9fe;
+  color: #5b21b6;
+  text-transform: none;
 }
 
 .buddy-completed {
@@ -259,6 +548,31 @@ main {
   display: block;
 }
 
+.assigneeSummary {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 180px;
+  gap: 6px;
+}
+
+.assigneeName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #5e6c84;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assigneeMore,
+.assigneeEmpty {
+  color: #5e6c84;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .meta {
   color: #5e6c84;
   font-size: 12px;
@@ -285,7 +599,6 @@ main {
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 8px 10px;
-  font: inherit;
   outline: none;
 }
 
@@ -424,9 +737,54 @@ main {
   overflow-wrap: anywhere;
 }
 
+.issueGrid {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 6px 10px;
+  border-radius: 8px;
+  background: #fbfcff;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.issueGrid span {
+  color: #5e6c84;
+}
+
+.artifactList,
 .comments {
   display: grid;
   gap: 10px;
+}
+
+.artifactRow {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: #fbfcff;
+  padding: 9px 10px;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.12);
+}
+
+.artifactRow:hover {
+  background: #f1f5fb;
+}
+
+.artifactRow strong,
+.artifactRow span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifactRow span {
+  color: #5e6c84;
+  font-size: 12px;
 }
 
 .comment-row {
@@ -465,11 +823,26 @@ main {
   gap: 8px;
 }
 
-.dispatch-row {
+.dispatchRow {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  align-items: center;
+}
+
+.dispatchRow .reactSelectButton {
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid #dfe3ec;
+  border-radius: 8px;
+  background: #fbfcff;
+  color: #172b4d;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.dispatchRow .reactSelectButton:focus-visible {
+  border-color: #0079bf;
+  box-shadow: inset 0 0 0 1px #0079bf;
 }
 
 .toast {
@@ -516,7 +889,16 @@ main {
     padding: 12px;
   }
 
+  .requestBar {
+    width: calc(100vw - 24px);
+    grid-template-columns: 1fr;
+  }
+
   .board {
     grid-auto-columns: minmax(240px, 82vw);
+  }
+
+  .list {
+    max-height: calc(100vh - 210px);
   }
 }

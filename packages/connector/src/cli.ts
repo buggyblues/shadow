@@ -690,10 +690,20 @@ function ensureNpxShim(options: {
   const target = resolve(localBin, options.command)
   if (commandExists(options.command) && existsSync(target)) return
   const pathPrefix = [localBin, nodeGlobalBinDir(), managedNodeBinDir()].map(shellQuote).join(':')
+  const delegateCandidates = [
+    '/usr/local/bin',
+    nodeGlobalBinDir(),
+    managedNodeBinDir(),
+    '/usr/bin',
+    '/bin',
+  ].map((dir) => resolve(dir, options.binaryName))
   const content = [
     '#!/usr/bin/env sh',
     `PATH=${pathPrefix}:$PATH`,
     'export PATH',
+    `for candidate in ${delegateCandidates.map(shellQuote).join(' ')}; do`,
+    '  if [ -x "$candidate" ] && [ "$candidate" != "$0" ]; then exec "$candidate" "$@"; fi',
+    'done',
     `if command -v ${options.binaryName} >/dev/null 2>&1; then`,
     `  resolved="$(command -v ${options.binaryName})"`,
     '  if [ "$resolved" != "$0" ]; then exec "$resolved" "$@"; fi',

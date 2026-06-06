@@ -308,6 +308,53 @@ describe('ShadowClient', () => {
         }),
       )
     })
+
+    it('downloads workspace files through signed media URLs', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              url: '/api/media/signed/workspace-file-token',
+              expiresAt: '2026-05-13T04:00:00.000Z',
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(new Uint8Array([7, 8, 9]), {
+            status: 200,
+            headers: {
+              'content-disposition': 'attachment; filename="brief.md"',
+              'content-type': 'text/markdown',
+            },
+          }),
+        )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      const result = await client.downloadWorkspaceFile('server-1', 'file-1')
+
+      expect(result.filename).toBe('brief.md')
+      expect(result.contentType).toBe('text/markdown')
+      expect(new Uint8Array(result.buffer)).toEqual(new Uint8Array([7, 8, 9]))
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/servers/server-1/workspace/files/file-1/media-url?disposition=attachment',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/media/signed/workspace-file-token',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token-123',
+          }),
+        }),
+      )
+    })
   })
 
   describe('OAuth commerce entitlement helpers', () => {
@@ -1641,6 +1688,9 @@ describe('ShadowClient', () => {
         defaultMode: 'allow',
         rules: [],
       })
+      await client.listBuddyInboxAdmissionPending('shadow-plays', 'agent-1')
+      await client.approveBuddyInboxAdmissionPending('shadow-plays', 'agent-1', 'pending-1')
+      await client.rejectBuddyInboxAdmissionPending('shadow-plays', 'agent-1', 'pending-2')
       await client.enqueueInboxTaskForAgent('shadow-plays', 'agent-1', {
         title: 'Install',
         idempotencyKey: 'skills:install:x',
@@ -1653,12 +1703,174 @@ describe('ShadowClient', () => {
         'https://api.example.com/api/servers/shadow-plays/inboxes',
         'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1',
         'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1/admission-policy',
+        'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1/admission-pending',
+        'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1/admission-pending/pending-1/approve',
+        'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1/admission-pending/pending-2/reject',
         'https://api.example.com/api/servers/shadow-plays/inboxes/agent-1/tasks',
         'https://api.example.com/api/channels/channel-1/inbox/tasks',
       ])
       expect(calls[3]?.[1]).toMatchObject({ method: 'PUT' })
-      expect(calls[4]?.[1]).toMatchObject({ method: 'POST' })
       expect(calls[5]?.[1]).toMatchObject({ method: 'POST' })
+      expect(calls[6]?.[1]).toMatchObject({ method: 'POST' })
+      expect(calls[7]?.[1]).toMatchObject({ method: 'POST' })
+      expect(calls[8]?.[1]).toMatchObject({ method: 'POST' })
+    })
+  })
+
+  describe('cloud deployment runtime helpers', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('creates cloud templates and deployments through typed helpers', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              slug: 'team-template',
+              name: 'Team Template',
+              content: { version: '1.0.0' },
+            }),
+            {
+              status: 201,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              id: 'deployment-1',
+              namespace: 'team-namespace',
+              name: 'Team Runtime',
+              status: 'pending',
+            }),
+            {
+              status: 201,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              id: 'deployment-1',
+              namespace: 'team-namespace',
+              name: 'Team Runtime',
+              status: 'deployed',
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        )
+
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.createCloudTemplate({
+        slug: 'team-template',
+        name: 'Team Template',
+        content: { version: '1.0.0' },
+      })
+      await client.createCloudDeployment({
+        namespace: 'team-namespace',
+        name: 'Team Runtime',
+        templateSlug: 'team-template',
+        resourceTier: 'lightweight',
+        agentCount: 1,
+        configSnapshot: { version: '1.0.0' },
+        runtimeContext: { locale: 'zh-CN', timezone: 'Asia/Shanghai' },
+      })
+      await client.getCloudDeployment('deployment-1')
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/cloud-saas/templates',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            slug: 'team-template',
+            name: 'Team Template',
+            content: { version: '1.0.0' },
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/cloud-saas/deployments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            namespace: 'team-namespace',
+            name: 'Team Runtime',
+            templateSlug: 'team-template',
+            resourceTier: 'lightweight',
+            agentCount: 1,
+            configSnapshot: { version: '1.0.0' },
+            runtimeContext: { locale: 'zh-CN', timezone: 'Asia/Shanghai' },
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/cloud-saas/deployments/deployment-1',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token-123',
+          }),
+        }),
+      )
+    })
+
+    it('lists cloud deployments with pagination parameters', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.listCloudDeployments({ includeHistory: true, limit: 20, offset: 40 })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/cloud-saas/deployments?includeHistory=1&limit=20&offset=40',
+        expect.any(Object),
+      )
+    })
+
+    it('queues cloud deployment destruction with DELETE', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true, taskId: 'deployment-1', status: 'destroying' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      const result = await client.destroyCloudDeployment('deployment-1')
+
+      expect(result).toMatchObject({
+        ok: true,
+        success: true,
+        taskId: 'deployment-1',
+        status: 'destroying',
+      })
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/cloud-saas/deployments/deployment-1',
+        expect.objectContaining({
+          method: 'DELETE',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token-123',
+          }),
+        }),
+      )
     })
   })
 })

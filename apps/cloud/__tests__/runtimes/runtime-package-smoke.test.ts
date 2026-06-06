@@ -54,6 +54,20 @@ function runtimeFiles(configData: Record<string, string>): Record<string, string
   return JSON.parse(configData['runtime-files.json'] ?? '{}') as Record<string, string>
 }
 
+function expectShadowCliInboxRouting(skill: string): void {
+  expect(skill).toContain('shadowob inbox list')
+  expect(skill).toContain('shadowob inbox enqueue')
+  expect(skill).toContain('requirements')
+  expect(skill).toContain('outputContract')
+  expect(skill).toContain('privacy')
+  expect(skill).toContain('not statically bound to one server')
+  expect(skill).toContain('current message, Inbox task, or server App command context')
+  expect(skill).toContain('prefer Workspace files for shared context and artifacts')
+  expect(skill).toContain('Cache Workspace folder and file ids')
+  expect(skill).toContain('Upload final artifacts to Workspace first')
+  expect(skill).not.toContain('SHADOWOB_SERVER_ID')
+}
+
 describe('runner runtime package smoke checks', () => {
   beforeEach(registerShadowobOnly)
 
@@ -75,9 +89,15 @@ describe('runner runtime package smoke checks', () => {
     )
     expect(openclawConfig.plugins.entries['openclaw-shadowob'].enabled).toBe(true)
     expect(openclawConfig.skills.load.extraDirs).toContain('/home/shadow/.openclaw/skills')
-    expect(
-      runtimeFiles(pkg.configData)['/home/shadow/.openclaw/skills/shadowob/SKILL.md'],
-    ).toContain('shadowob')
+    const shadowCliSkill = runtimeFiles(pkg.configData)[
+      '/home/shadow/.openclaw/skills/shadowob/SKILL.md'
+    ]
+    expect(shadowCliSkill).toContain('shadowob')
+    expectShadowCliInboxRouting(shadowCliSkill)
+    expect(pkg.configData['SOUL.md']).toContain('shadowob inbox list')
+    expect(pkg.configData['SOUL.md']).toContain('shadowob inbox enqueue')
+    expect(pkg.configData['SOUL.md']).toContain('not statically bound to one server')
+    expect(pkg.configData['SOUL.md']).not.toContain('SHADOWOB_SERVER_ID')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
   })
@@ -104,6 +124,7 @@ describe('runner runtime package smoke checks', () => {
     expect(() => parseToml(files['/home/shadow/.cc-connect/config.toml'] ?? '')).not.toThrow()
     expect(files['/workspace/AGENTS.md']).toContain(`${runtime} smoke`)
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('shadowob')
+    expectShadowCliInboxRouting(files['/workspace/.agents/skills/shadowob/SKILL.md'])
     const slashCommands = JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]') as Array<{
       name: string
       packId: string
@@ -192,6 +213,7 @@ describe('runner runtime package smoke checks', () => {
     expect(() => parseYaml(files['/home/shadow/.hermes/config.yaml'] ?? '')).not.toThrow()
     expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toContain('shadowob')
+    expectShadowCliInboxRouting(files['/home/shadow/.hermes/skills/shadowob/SKILL.md'])
     expect(files['/home/shadow/.hermes/skills/shadow-server-app/SKILL.md']).toContain(
       'shadowob app discover',
     )

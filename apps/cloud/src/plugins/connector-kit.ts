@@ -1,3 +1,4 @@
+import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import {
   buildRuntimeAssetK8sProvider,
   PLUGIN_RUNTIME_DEPS_ROOT,
@@ -134,28 +135,37 @@ export function commandCheck(
 export function attachConnectorRuntimeAssets(
   plugin: PluginDefinition,
   options: {
-    runtimeDependencies?: PluginRuntimeDependency[]
-    skillSources?: PluginRuntimeSource[]
-    subagentSources?: PluginRuntimeSource[]
+    runtimeDependencies?:
+      | PluginRuntimeDependency[]
+      | ((agent: AgentDeployment, config: CloudConfig) => PluginRuntimeDependency[])
+    skillSources?:
+      | PluginRuntimeSource[]
+      | ((agent: AgentDeployment, config: CloudConfig) => PluginRuntimeSource[])
+    subagentSources?:
+      | PluginRuntimeSource[]
+      | ((agent: AgentDeployment, config: CloudConfig) => PluginRuntimeSource[])
     runtimeImage?: string
     sanityCommands?: string[]
     runtimeMountPath?: string
     initRuntimeMountPath?: string
     skillsMountPath?: string
     subagentsMountPath?: string
+    isEnabled?: (agent: AgentDeployment, config: CloudConfig) => boolean
   },
 ): PluginDefinition {
   plugin.k8s = buildRuntimeAssetK8sProvider({
     pluginId: plugin.manifest.id,
-    isEnabled: (agent, config) => {
-      const agentEnabled = agent.use?.some((entry) => entry.plugin === plugin.manifest.id)
-      const globalEnabled =
-        Array.isArray(config.use) &&
-        config.use.some(
-          (entry) => entry && typeof entry === 'object' && entry.plugin === plugin.manifest.id,
-        )
-      return Boolean(agentEnabled || globalEnabled)
-    },
+    isEnabled:
+      options.isEnabled ??
+      ((agent, config) => {
+        const agentEnabled = agent.use?.some((entry) => entry.plugin === plugin.manifest.id)
+        const globalEnabled =
+          Array.isArray(config.use) &&
+          config.use.some(
+            (entry) => entry && typeof entry === 'object' && entry.plugin === plugin.manifest.id,
+          )
+        return Boolean(agentEnabled || globalEnabled)
+      }),
     runtimeMountPath: options.runtimeMountPath,
     initRuntimeMountPath: options.initRuntimeMountPath,
     runtimeImage: options.runtimeImage,

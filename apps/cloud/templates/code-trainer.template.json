@@ -13,7 +13,7 @@
       "schedule": {
         "interval": "15m"
       },
-      "prompt": "Open Code Trainer through the Shadow Server App CLI. Treat this run as #代码复盘. Fetch pending submissions, claim any Inbox task assigned to you, post a one-line acknowledgement before running cases, run sandbox review for assigned work, write analysis with shadow-trainer submissions.analyze, then read shadow-trainer learning.overview to confirm skills, wrong problems, recommendations, plan, and report state updated. Post only a short status summary to the channel."
+      "prompt": "Open Code Trainer through the Shadow Server App CLI. Treat this run as #代码复盘. Fetch pending submissions, claim any Inbox task assigned to you, post a one-line acknowledgement before running cases, run sandbox review for assigned work, write analysis with trainer submissions.analyze, then read trainer learning.overview to confirm skills, wrong problems, recommendations, plan, and report state updated. Post only a short status summary to the channel."
     },
     {
       "id": "recommend-next-problem",
@@ -24,7 +24,7 @@
         "cron": "0 18 * * *",
         "timezone": "Asia/Shanghai"
       },
-      "prompt": "Treat this run as #题目推荐. Call shadow-trainer learning.overview, inspect skills, wrong problems, recent submissions, current plan, and difficulty settings. Create a recommendation with shadow-trainer recommendations.create when a concrete next problem is clear. Post the recommendation reason, predicted ACK rate if available, and one lighter fallback to the channel."
+      "prompt": "Treat this run as #题目推荐. Call trainer learning.overview, inspect skills, wrong problems, recent submissions, current plan, and difficulty settings. Create a recommendation with trainer recommendations.create when a concrete next problem is clear. Post the recommendation reason, predicted ACK rate if available, and one lighter fallback to the channel."
     },
     {
       "id": "refresh-learning-plan",
@@ -35,7 +35,7 @@
         "cron": "0 8 * * *",
         "timezone": "Asia/Shanghai"
       },
-      "prompt": "Treat this run as #学习规划. Call shadow-trainer learning.overview, then create or adjust today's learning list with shadow-trainer learning.plan.upsert. If the learner has no plan yet, create a starter list with one main problem, one review task, and one small check. Use recent reviews, weak tags, wrong problems, and the current training stage. Post only the first concrete action."
+      "prompt": "Treat this run as #学习规划. Call trainer learning.overview, then create or adjust today's learning list with trainer learning.plan.upsert. If the learner has no plan yet, create a starter list with one main problem, one review task, and one small check. Use recent reviews, weak tags, wrong problems, and the current training stage. Post only the first concrete action."
     },
     {
       "id": "push-algorithm-tip",
@@ -46,7 +46,7 @@
         "cron": "30 8 * * *",
         "timezone": "Asia/Shanghai"
       },
-      "prompt": "Treat this run as #算法小技巧. Call shadow-trainer learning.overview, choose one weak or active tag, then create a tip with shadow-trainer tips.create and a short check with shadow-trainer checks.create. Include the pattern, one pitfall, and a short complexity reminder."
+      "prompt": "Treat this run as #算法小技巧. Call trainer learning.overview, choose one weak or active tag, then create a tip with trainer tips.create and a short check with trainer checks.create. Include the pattern, one pitfall, and a short complexity reminder."
     },
     {
       "id": "wrong-problem-review",
@@ -57,7 +57,7 @@
         "cron": "0 20 * * *",
         "timezone": "Asia/Shanghai"
       },
-      "prompt": "Treat this run as #错题回炉. Call shadow-trainer learning.overview. If a recent failed or incomplete review exists, schedule it with shadow-trainer wrongProblems.schedule and post the retry reason plus one similar variation. If nothing is due, stay quiet unless a due review exists."
+      "prompt": "Treat this run as #错题回炉. Call trainer learning.overview. If a recent failed or incomplete review exists, schedule it with trainer wrongProblems.schedule and post the retry reason plus one similar variation. If nothing is due, stay quiet unless a due review exists."
     },
     {
       "id": "generate-progress-report",
@@ -68,7 +68,7 @@
         "cron": "0 21 * * *",
         "timezone": "Asia/Shanghai"
       },
-      "prompt": "Treat this run as #助教资讯. Call shadow-trainer learning.overview. Create a daily report with shadow-trainer reports.create including completion signals, accepted-rate trend, weak tags, repeated error types, and one concrete next action. Post the same concise summary to 助教资讯."
+      "prompt": "Treat this run as #助教资讯. Call trainer learning.overview. Create a daily report with trainer reports.create including completion signals, accepted-rate trend, weak tags, repeated error types, and one concrete next action. Post the same concise summary to 助教资讯."
     },
     {
       "id": "detect-learning-risk",
@@ -79,7 +79,7 @@
         "cron": "30 21 * * *",
         "timezone": "Asia/Shanghai"
       },
-      "prompt": "Treat this run as #助教资讯. Call shadow-trainer learning.overview. If the learner is inactive, repeatedly failing the same tag, or drifting from the active plan, create a risk-focused report with shadow-trainer reports.create and post a short intervention note. If there is no risk, only post a one-line healthy status."
+      "prompt": "Treat this run as #助教资讯. Call trainer learning.overview. If the learner is inactive, repeatedly failing the same tag, or drifting from the active plan, create a risk-focused report with trainer reports.create and post a short intervention note. If there is no risk, only post a one-line healthy status."
     },
     {
       "id": "weekly-problem-quality-check",
@@ -90,7 +90,7 @@
         "cron": "0 10 * * 1",
         "timezone": "Asia/Shanghai"
       },
-      "prompt": "Treat this run as #算法小技巧. Audit Code Trainer problems that produced confusing reviews. Suggest tag fixes, missing tests, or difficulty calibration. Use shadow-trainer challenges.upsert only when the owner explicitly asks you to apply a change."
+      "prompt": "Treat this run as #算法小技巧. Audit Code Trainer problems that produced confusing reviews. Suggest tag fixes, missing tests, or difficulty calibration. Use trainer challenges.upsert only when the owner explicitly asks you to apply a change."
     }
   ],
   "use": [

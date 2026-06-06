@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '../stores/auth.store'
 import {
+  applyAuthenticatedSession,
   clearAuthenticatedSession,
   ensureAuthenticatedSession,
   installDesktopCommunityAuthStateListener,
@@ -123,6 +124,36 @@ describe('auth session', () => {
 
     expect(desktopAPI.syncCommunityAuthToken).not.toHaveBeenCalled()
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+
+  it('does not clear a login that appears while startup validation is pending', async () => {
+    let resolveDesktopTokens!: (tokens: { accessToken?: string; refreshToken?: string }) => void
+    setDesktopAPI({
+      getCommunityAuthTokens: vi.fn(() => {
+        return new Promise<{ accessToken?: string; refreshToken?: string }>((resolve) => {
+          resolveDesktopTokens = resolve
+        })
+      }),
+      syncCommunityAuthToken: vi.fn(),
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(user)))
+
+    const validation = ensureAuthenticatedSession()
+    applyAuthenticatedSession({
+      user,
+      accessToken: 'login-access',
+      refreshToken: 'login-refresh',
+    })
+    resolveDesktopTokens({ accessToken: '', refreshToken: '' })
+
+    await expect(validation).resolves.toEqual(user)
+    expect(testStorage().getItem('accessToken')).toBe('login-access')
+    expect(testStorage().getItem('refreshToken')).toBe('login-refresh')
+    expect(useAuthStore.getState()).toMatchObject({
+      user,
+      accessToken: 'login-access',
+      isAuthenticated: true,
+    })
   })
 
   it('refreshes an expired access token before marking the user authenticated', async () => {

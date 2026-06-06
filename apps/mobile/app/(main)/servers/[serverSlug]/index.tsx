@@ -31,6 +31,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import Reanimated, { FadeInDown } from 'react-native-reanimated'
+import { Avatar } from '../../../../src/components/common/avatar'
 import { ChannelCatSvg } from '../../../../src/components/common/cat-svg'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import {
@@ -125,6 +126,7 @@ interface BuddyInboxEntry {
       username: string
       displayName: string | null
       avatarUrl: string | null
+      status?: string | null
     }
   }
   channel: ServerChannel | null
@@ -148,6 +150,14 @@ function withLaunchParams(entry: string, launch: LaunchContext) {
   return url.toString()
 }
 
+function buddyInboxPresenceStatus(entry: BuddyInboxEntry, isOpening: boolean) {
+  if (isOpening) return 'busy'
+  const userStatus = entry.agent.user.status
+  if (userStatus === 'online' || userStatus === 'idle' || userStatus === 'dnd') return userStatus
+  if (entry.agent.status === 'running' || entry.agent.status === 'online') return 'online'
+  return 'offline'
+}
+
 function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
   const colors = useColors()
   const imageUrl = iconUrl ? getImageUrl(iconUrl) : null
@@ -167,7 +177,7 @@ function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
 
 export default function ServerHomeScreen() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const colors = useColors()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -244,7 +254,7 @@ export default function ServerHomeScreen() {
   })
 
   const { data: serverApps = [] } = useQuery({
-    queryKey: ['server-apps', serverSlug],
+    queryKey: ['server-apps', serverSlug, i18n.language],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
     enabled: !!serverSlug && isServerMember,
   })
@@ -720,10 +730,20 @@ export default function ServerHomeScreen() {
                     {inboxes.map((entry) => {
                       const label =
                         entry.agent.user.displayName ?? entry.agent.user.username ?? entry.agent.id
+                      const isOpening = ensureInboxMutation.variables?.agent.id === entry.agent.id
                       return (
                         <MenuItem
                           key={entry.agent.id}
-                          icon={InboxIcon}
+                          left={
+                            <Avatar
+                              uri={entry.agent.user.avatarUrl}
+                              name={label}
+                              userId={entry.agent.user.id}
+                              size={36}
+                              status={buddyInboxPresenceStatus(entry, isOpening)}
+                              showStatus
+                            />
+                          }
                           title={label}
                           subtitle={
                             entry.channel

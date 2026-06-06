@@ -11,6 +11,7 @@
     "dev:hot": "sh -c 'vite --host 0.0.0.0 --port ${KANBAN_VITE_PORT:-5169} & tsx watch src/server.ts'",
     "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/kanban-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm dev:hot'",
     "start": "tsx src/server.ts",
+    "test": "KANBAN_DATA_FILE=.tmp/kanban-test-board.json vitest run",
     "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -22,7 +23,9 @@
     "dotenv": "^17.3.1",
     "hono": "^4.12.17",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

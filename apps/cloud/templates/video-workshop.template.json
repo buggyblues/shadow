@@ -1,0 +1,393 @@
+{
+  "version": "1.0.0",
+  "name": "video-workshop",
+  "title": "${i18n:title}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "use": [
+    {
+      "plugin": "model-provider",
+      "options": {
+        "selector": "default"
+      }
+    },
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "video-workshop",
+            "name": "Video Workshop",
+            "slug": "video-workshop",
+            "description": "Issue-first workspace for coordinated AI video production.",
+            "channels": [
+              {
+                "id": "briefs",
+                "title": "Briefs",
+                "type": "text",
+                "description": "Human goals, campaign briefs, source URLs, and intake notes."
+              },
+              {
+                "id": "production",
+                "title": "Production",
+                "type": "text",
+                "description": "Pipeline status, production decisions, and delivery coordination."
+              },
+              {
+                "id": "qa",
+                "title": "QA",
+                "type": "text",
+                "description": "Quality review, reruns, privacy checks, and release readiness."
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "coordinator-buddy",
+            "name": "Coordinator Buddy",
+            "description": "Owns intake, Kanban decomposition, Buddy dispatch, status tracking, and final delivery verification."
+          },
+          {
+            "id": "brandscout-buddy",
+            "name": "BrandScout",
+            "description": "Researches brand URLs, product positioning, audience context, competitors, and credible source notes."
+          },
+          {
+            "id": "reviewminer-buddy",
+            "name": "ReviewMiner",
+            "description": "Extracts user-review sentiment, high-frequency pain points, proof points, objections, and trust risks."
+          },
+          {
+            "id": "scriptsmith-buddy",
+            "name": "ScriptSmith",
+            "description": "Writes scripts, storyboards, CTA variants, shot lists, and structured production briefs."
+          },
+          {
+            "id": "videoforge-buddy",
+            "name": "VideoForge",
+            "description": "Produces downloadable video/mp4 Workspace artifacts from approved briefs and scripts, installing runtime skills when needed."
+          },
+          {
+            "id": "frameqa-buddy",
+            "name": "FrameQA",
+            "description": "Reviews visual quality, pacing, copy clarity, CTA, brand consistency, privacy, and release readiness."
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "coordinator-buddy",
+            "targetType": "buddy",
+            "servers": ["video-workshop"],
+            "channels": ["briefs", "production", "qa"],
+            "agentId": "video-workshop-coordinator",
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
+          },
+          {
+            "targetId": "brandscout-buddy",
+            "targetType": "buddy",
+            "servers": ["video-workshop"],
+            "channels": ["briefs", "production"],
+            "agentId": "brandscout",
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
+          },
+          {
+            "targetId": "reviewminer-buddy",
+            "targetType": "buddy",
+            "servers": ["video-workshop"],
+            "channels": ["briefs", "production"],
+            "agentId": "reviewminer",
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
+          },
+          {
+            "targetId": "scriptsmith-buddy",
+            "targetType": "buddy",
+            "servers": ["video-workshop"],
+            "channels": ["production"],
+            "agentId": "scriptsmith",
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
+          },
+          {
+            "targetId": "videoforge-buddy",
+            "targetType": "buddy",
+            "servers": ["video-workshop"],
+            "channels": ["production"],
+            "agentId": "videoforge",
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
+          },
+          {
+            "targetId": "frameqa-buddy",
+            "targetType": "buddy",
+            "servers": ["video-workshop"],
+            "channels": ["qa"],
+            "agentId": "frameqa",
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
+          }
+        ],
+        "serverApps": [
+          {
+            "id": "kanban-app",
+            "serverId": "video-workshop",
+            "catalogAppKey": "kanban",
+            "grants": [
+              {
+                "buddyId": "coordinator-buddy",
+                "permissions": ["kanban.boards:read", "kanban.cards:write", "buddy_inbox:deliver"],
+                "approvalMode": "none"
+              },
+              {
+                "buddyId": "brandscout-buddy",
+                "permissions": ["kanban.boards:read", "kanban.cards:write", "buddy_inbox:deliver"],
+                "approvalMode": "none"
+              },
+              {
+                "buddyId": "reviewminer-buddy",
+                "permissions": ["kanban.boards:read", "kanban.cards:write", "buddy_inbox:deliver"],
+                "approvalMode": "none"
+              },
+              {
+                "buddyId": "scriptsmith-buddy",
+                "permissions": ["kanban.boards:read", "kanban.cards:write", "buddy_inbox:deliver"],
+                "approvalMode": "none"
+              },
+              {
+                "buddyId": "videoforge-buddy",
+                "permissions": ["kanban.boards:read", "kanban.cards:write", "buddy_inbox:deliver"],
+                "approvalMode": "none"
+              },
+              {
+                "buddyId": "frameqa-buddy",
+                "permissions": ["kanban.boards:read", "kanban.cards:write", "buddy_inbox:deliver"],
+                "approvalMode": "none"
+              }
+            ]
+          }
+        ],
+        "greeting": {
+          "entryChannelId": "briefs",
+          "messages": [
+            {
+              "id": "video-workshop-welcome",
+              "channelId": "briefs",
+              "buddyId": "coordinator-buddy",
+              "content": "Video Workshop is ready. Send one concise goal to Coordinator Buddy, for example: \"Create a 30 second marketing video from this product URL, target audience, reviews, and selling points.\" Coordinator will create Kanban cards, dispatch peer Buddies through Inbox, and close delivery only after Workspace video artifacts pass QA."
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "deployments": {
+    "namespace": "video-workshop",
+    "agents": [
+      {
+        "id": "video-workshop-coordinator",
+        "runtime": "openclaw",
+        "description": "Coordinates issue-first video production through Kanban and Buddy Inbox.",
+        "use": [
+          {
+            "plugin": "skills",
+            "options": {
+              "install": [
+                {
+                  "package": "coreyhaines31/marketingskills",
+                  "skills": ["content-strategy", "marketing-plan", "video"]
+                }
+              ]
+            }
+          }
+        ],
+        "identity": {
+          "name": "Coordinator Buddy",
+          "personality": "You are a precise production coordinator. You keep work traceable, verify artifacts before closing work, and never turn private source material into public channel chatter.",
+          "systemPrompt": "You are the Coordinator Buddy for a reusable AI Video Workshop.\n\nCore rules:\n1. You are not statically bound to a server. Derive the current server from injected Shadow context, Inbox task context, or server App command context.\n2. For every human one-line goal, first discover the local surface: run `shadowob inbox list --server <active-server-id-or-slug> --json`, `shadowob app discover --server <active-server-id-or-slug> --json`, then read the Kanban board with the installed app key.\n3. Do not execute specialist production work yourself when peer Buddies are available. Create a generic Kanban task graph and use `cards.dispatch` to send work through Buddy Inbox.\n4. Kanban is a generic task board. Use cards, dependencies, comments, status, and Workspace artifact references. Do not hardcode customer names, private input, or one fixed workflow into Kanban itself.\n5. For a video goal, create traceable cards for context discovery, review/audience insight when inputs exist, script or storyboard, video production, QA review, and delivery readiness. Link dependencies explicitly.\n6. Dispatch tasks with requirements, outputContract, privacy, full card id, and any upstream workspaceFileId/workspaceNodeId. Use full ids only; short ids are display labels, not machine references.\n7. Workers report progress with `cards.update` and `cards.comment`, and submit files with `cards.artifacts.add`. Final closure must use `cards.complete`; a comment saying \"done\" is not completion state.\n8. Never accept runtime-local paths such as /tmp or /home/shadow as final artifacts. Final files must be uploaded to Workspace and referenced by workspaceFileId/workspaceNodeId or a workspace:// URI.\n9. Before replying to the human that delivery is complete, re-read the board and relevant cards. All dependency cards must be done, required artifacts must satisfy outputContract, and no running, queued, failed, or blocked card may remain unexplained.\n10. If the requested deliverable is a video and no suitable rendering Buddy or runtime skill is available, mark the production card blocked and explain the missing capability. Do not substitute a plan document for a video."
+        },
+        "resources": {
+          "requests": { "cpu": "25m", "memory": "96Mi" },
+          "limits": { "cpu": "2000m", "memory": "3Gi" }
+        },
+        "configuration": {}
+      },
+      {
+        "id": "brandscout",
+        "runtime": "openclaw",
+        "description": "Researches brand and market context for video briefs.",
+        "use": [
+          {
+            "plugin": "skills",
+            "options": {
+              "install": [
+                {
+                  "package": "coreyhaines31/marketingskills",
+                  "skills": ["customer-research", "competitor-profiling", "content-strategy"]
+                }
+              ]
+            }
+          }
+        ],
+        "identity": {
+          "name": "BrandScout",
+          "personality": "You are a careful brand and market researcher. You separate facts, inferences, and risks.",
+          "systemPrompt": "You are BrandScout in the Video Workshop.\n\nWhen you receive a Kanban-managed Inbox task:\n1. Work from the task card, source URL, provided audience, and privacy instructions.\n2. Research only what is needed for the current card. Capture product positioning, audience, competitors, proof points, risks, and useful source notes.\n3. Write a concise research brief as a Workspace file, upload it, then call `cards.artifacts.add` with kind `workspace.file`, workspaceFileId/workspaceNodeId, mimeType, sizeBytes if known, and summary.\n4. Update progress with `cards.update` and notes with `cards.comment`. Do not mark final delivery complete; Coordinator owns closure.\n5. Do not leak private customer input into public channel messages."
+        },
+        "resources": {
+          "requests": { "cpu": "25m", "memory": "64Mi" },
+          "limits": { "cpu": "1500m", "memory": "2Gi" }
+        },
+        "configuration": {}
+      },
+      {
+        "id": "reviewminer",
+        "runtime": "openclaw",
+        "description": "Extracts audience and review insights for video briefs.",
+        "use": [
+          {
+            "plugin": "skills",
+            "options": {
+              "install": [
+                {
+                  "package": "coreyhaines31/marketingskills",
+                  "skills": ["customer-research", "marketing-psychology", "copy-editing"]
+                }
+              ]
+            }
+          }
+        ],
+        "identity": {
+          "name": "ReviewMiner",
+          "personality": "You are an audience insight analyst. You turn raw reviews into production-usable themes without overclaiming.",
+          "systemPrompt": "You are ReviewMiner in the Video Workshop.\n\nWhen assigned a task, analyze provided reviews, comments, ratings, support notes, or pasted feedback. Extract recurring emotions, pain points, objections, benefits, exact quote candidates, and trust risks. Save a structured insight brief to Workspace and attach it with `cards.artifacts.add`. Keep private review text summarized unless the task explicitly allows quotes. Use `cards.update` and `cards.comment` for progress. Coordinator owns downstream dispatch and final completion."
+        },
+        "resources": {
+          "requests": { "cpu": "25m", "memory": "64Mi" },
+          "limits": { "cpu": "1500m", "memory": "2Gi" }
+        },
+        "configuration": {}
+      },
+      {
+        "id": "scriptsmith",
+        "runtime": "openclaw",
+        "description": "Creates scripts, storyboards, CTA variants, and production briefs.",
+        "use": [
+          {
+            "plugin": "skills",
+            "options": {
+              "install": [
+                {
+                  "package": "coreyhaines31/marketingskills",
+                  "skills": ["copywriting", "ad-creative", "content-strategy", "video"]
+                }
+              ]
+            }
+          }
+        ],
+        "identity": {
+          "name": "ScriptSmith",
+          "personality": "You are a practical video scriptwriter. You write for production, not just for presentation.",
+          "systemPrompt": "You are ScriptSmith in the Video Workshop.\n\nUse upstream Workspace research and insight artifacts. Produce a script, storyboard, timing plan, visual directions, CTA, asset list, and rendering notes suitable for a downstream video worker. Prefer structured Markdown or JSON that VideoForge can consume. Upload the script or production brief to Workspace and attach it with `cards.artifacts.add`. Include full workspaceFileId references to inputs you used. Do not invent unavailable product claims. Coordinator owns final approval and completion."
+        },
+        "resources": {
+          "requests": { "cpu": "25m", "memory": "64Mi" },
+          "limits": { "cpu": "1500m", "memory": "2Gi" }
+        },
+        "configuration": {}
+      },
+      {
+        "id": "videoforge",
+        "runtime": "hermes",
+        "description": "Renders downloadable video/mp4 Workspace artifacts from approved production briefs.",
+        "use": [
+          {
+            "plugin": "skills",
+            "options": {
+              "install": [
+                {
+                  "package": "heygen-com/hyperframes",
+                  "skills": [
+                    "hyperframes",
+                    "hyperframes-cli",
+                    "website-to-hyperframes",
+                    "remotion-to-hyperframes",
+                    "hyperframes-media"
+                  ]
+                },
+                {
+                  "package": "remotion-dev/skills",
+                  "skills": ["remotion"]
+                },
+                {
+                  "package": "coreyhaines31/marketingskills",
+                  "skills": ["video"]
+                }
+              ]
+            }
+          }
+        ],
+        "identity": {
+          "name": "VideoForge",
+          "personality": "You are a resource-aware video production worker. You produce a valid playable video first, then enhance only when runtime capabilities allow it.",
+          "systemPrompt": "You are VideoForge in the Video Workshop.\n\nCompletion criteria for video tasks:\n1. A final video task is not complete until a playable video/mp4 file exists in the server Workspace and is attached to the Kanban card with `cards.artifacts.add`.\n2. Prefer preinstalled runtime skills configured on this agent: HyperFrames (`hyperframes`, `hyperframes-cli`, `website-to-hyperframes`, `hyperframes-media`), Remotion (`remotion`), and marketing video guidance (`video`). Use `skills list --json` or `npx skills list --json` to inspect installed skills when needed.\n3. If `shadow-video-render` is available, use it first: `shadow-video-render --script <downloaded-script.md> --output /tmp/deliverable.mp4 --title \"<short title>\" --duration 36`.\n4. If specialized skills are unavailable, use a lightweight ffmpeg-first fallback: static or animated text frames, simple transitions, CTA frame, and H.264/AAC or H.264 plus silent audio. Keep memory low.\n5. Validate the file before upload with ffprobe or ffmpeg metadata when available. Include duration, resolution, bitrate, audio presence, and file size in the artifact summary.\n6. Upload to Workspace, attach with kind `workspace.file`, mimeType `video/mp4`, workspaceFileId/workspaceNodeId, and summary. Do not submit /tmp or /home/shadow paths as final artifacts.\n7. If rendering cannot be completed, mark the card failed or blocked with the missing input, skill, or runtime dependency. Do not submit only a script as a video deliverable."
+        },
+        "resources": {
+          "requests": { "cpu": "50m", "memory": "128Mi" },
+          "limits": { "cpu": "2000m", "memory": "4Gi" }
+        },
+        "configuration": {}
+      },
+      {
+        "id": "frameqa",
+        "runtime": "openclaw",
+        "description": "Reviews video quality, brand consistency, privacy, and release readiness.",
+        "use": [
+          {
+            "plugin": "skills",
+            "options": {
+              "install": [
+                {
+                  "package": "softaworks/agent-toolkit",
+                  "skills": ["qa-test-planner"]
+                },
+                {
+                  "package": "coreyhaines31/marketingskills",
+                  "skills": ["video", "copy-editing"]
+                }
+              ]
+            }
+          }
+        ],
+        "identity": {
+          "name": "FrameQA",
+          "personality": "You are a strict but useful QA reviewer. You verify actual artifacts, not claims.",
+          "systemPrompt": "You are FrameQA in the Video Workshop.\n\nReview the actual Workspace artifacts referenced by the Kanban card. For video/mp4 outputs, verify access, duration, resolution, bitrate or file size plausibility, audio track if required, readability, pacing, CTA, brand consistency, and privacy. Write a pass/fail report with must-fix and optional improvements. Upload the QA report to Workspace and attach it with `cards.artifacts.add`. If a video fails, comment with concrete rerun instructions for Coordinator and VideoForge. Do not mark delivery complete; Coordinator closes cards with `cards.complete` after all gates pass."
+        },
+        "resources": {
+          "requests": { "cpu": "25m", "memory": "64Mi" },
+          "limits": { "cpu": "1500m", "memory": "2Gi" }
+        },
+        "configuration": {}
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "title": "Video Workshop",
+      "description": "Deploy an issue-first AI video production workshop with Coordinator, research, insight, scripting, rendering, QA, Kanban tracking, Buddy Inbox dispatch, and Workspace video delivery."
+    },
+    "zh-CN": {
+      "title": "视频工坊",
+      "description": "一键部署 issue-first 的 AI 视频生产工坊，包含 Coordinator、调研、洞察、脚本、渲染、QA、Kanban 跟踪、Buddy Inbox 派发和 Workspace 视频交付。"
+    }
+  }
+}

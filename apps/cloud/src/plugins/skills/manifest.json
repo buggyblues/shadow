@@ -1,0 +1,17 @@
+{
+  "id": "skills",
+  "name": "Skills",
+  "description": "Installs the skills CLI and mounts agent-declared skills into selected Buddy runtimes.",
+  "version": "1.0.0",
+  "category": "automation",
+  "icon": "search",
+  "website": "https://skills.sh",
+  "docs": "https://github.com/vercel-labs/skills",
+  "auth": {
+    "type": "none",
+    "fields": []
+  },
+  "capabilities": ["cli", "skill"],
+  "tags": ["skills", "community", "cli", "agent-skills"],
+  "popularity": 88
+}

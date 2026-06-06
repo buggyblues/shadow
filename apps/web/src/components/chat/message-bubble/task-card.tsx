@@ -17,7 +17,12 @@ import { MessageMarkdown } from './markdown'
 import type { Message } from './types'
 
 export function isTaskCard(card: MessageCard): card is TaskMessageCard {
-  return card.kind === 'task' && typeof card.id === 'string' && typeof card.title === 'string'
+  return (
+    card.kind === 'task' &&
+    typeof card.id === 'string' &&
+    typeof card.title === 'string' &&
+    asRecord(card.data)?.taskReplyNotification !== true
+  )
 }
 
 function renderNoMentions(children: ReactNode) {

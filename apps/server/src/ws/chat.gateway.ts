@@ -3,6 +3,7 @@ import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
 import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deployment-autoresume'
 import { logger } from '../lib/logger'
+import { sendMessageSchema } from '../validators/message.schema'
 
 type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
@@ -147,6 +148,18 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
         if (!userId) return
 
         try {
+          const parsed = sendMessageSchema.safeParse({
+            content: data.content,
+            threadId: data.threadId,
+            replyToId: data.replyToId,
+            mentions: data.mentions,
+            metadata: data.metadata,
+          })
+          if (!parsed.success) {
+            socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Invalid message' })
+            return
+          }
+
           // Verify channel membership before sending
           const allowed = await canUseChannelRoom(container, data.channelId, userId)
           if (!allowed) {
@@ -159,10 +172,10 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
           const commerceCardService = container.resolve('commerceCardService')
 
           const preparedInput = await mentionService.prepareMessageInput(data.channelId, userId, {
-            content: data.content,
-            replyToId: data.replyToId,
-            mentions: data.mentions,
-            metadata: data.metadata,
+            content: parsed.data.content,
+            replyToId: parsed.data.replyToId,
+            mentions: parsed.data.mentions,
+            metadata: parsed.data.metadata,
           })
           preparedInput.metadata = await commerceCardService.inferMessageMetadata({
             metadata: preparedInput.metadata as Record<string, unknown> | undefined,

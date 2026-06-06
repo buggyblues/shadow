@@ -171,6 +171,43 @@ describe('Message Validators', () => {
       expect(result.success).toBe(true)
     })
 
+    it('should accept bounded Copilot app metadata', () => {
+      const result = sendMessageSchema.safeParse({
+        content: 'current app context',
+        metadata: {
+          copilotContext: {
+            kind: 'server_app_copilot',
+            appKey: 'kanban',
+            serverAppId: 'server-app-1',
+            appName: 'Kanban',
+            serverId: 'server-1',
+            serverSlug: 'growth',
+            channelId: 'inbox-1',
+            channelKind: 'inbox',
+          },
+        },
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata?.copilotContext?.appKey).toBe('kanban')
+      }
+    })
+
+    it('should reject oversized Copilot app metadata', () => {
+      const result = sendMessageSchema.safeParse({
+        content: 'current app context',
+        metadata: {
+          copilotContext: {
+            kind: 'server_app_copilot',
+            appKey: 'x'.repeat(121),
+          },
+        },
+      })
+
+      expect(result.success).toBe(false)
+    })
+
     it('should accept a minimal commerce offer card from trusted Buddy tools', () => {
       const result = sendMessageSchema.safeParse({
         content: '这盒火柴给你。',

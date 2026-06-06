@@ -42,7 +42,7 @@ export interface BuddyInbox {
   canManage?: boolean
 }
 
-const bridge = new ShadowBridge({ appKey: 'shadow-skills' })
+const bridge = new ShadowBridge({ appKey: 'skills' })
 
 async function command<T>(commandName: string, input: unknown = {}): Promise<T> {
   if (bridge.isAvailable()) return bridge.command(commandName, input) as Promise<T>

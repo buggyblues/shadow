@@ -1,7 +1,16 @@
 import { Button } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, X } from 'lucide-react'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  memo,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../../lib/api'
 import { useChatStore } from '../../../stores/chat.store'
@@ -10,6 +19,180 @@ import type {
   InteractiveResponseMetadata,
   InteractiveStateMetadata,
 } from './types'
+
+interface InteractiveSelectChoice {
+  key: string
+  label: string
+  value: string
+}
+
+export function InteractiveSelect({
+  ariaLabel,
+  disabled,
+  onSelect,
+  options,
+  placeholder,
+  value,
+}: {
+  ariaLabel?: string
+  disabled?: boolean
+  onSelect: (choice: InteractiveSelectChoice) => void
+  options: InteractiveSelectChoice[]
+  placeholder: string
+  value: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const listboxId = useId()
+  const selectedIndex = options.findIndex((option) => option.key === value)
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : null
+  const isDisabled = disabled || options.length === 0
+
+  const clampIndex = useCallback(
+    (index: number) => {
+      if (options.length === 0) return 0
+      if (index < 0) return options.length - 1
+      if (index >= options.length) return 0
+      return index
+    },
+    [options.length],
+  )
+
+  const openAt = useCallback(
+    (index: number) => {
+      setActiveIndex(clampIndex(index))
+      setOpen(true)
+    },
+    [clampIndex],
+  )
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnPointerDown)
+    return () => document.removeEventListener('pointerdown', closeOnPointerDown)
+  }, [open])
+
+  useEffect(() => {
+    if (selectedIndex >= 0) {
+      setActiveIndex(selectedIndex)
+    }
+  }, [selectedIndex])
+
+  const choose = useCallback(
+    (choice: InteractiveSelectChoice) => {
+      if (isDisabled) return
+      onSelect(choice)
+      setOpen(false)
+    },
+    [isDisabled, onSelect],
+  )
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (isDisabled) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      if (!open) {
+        openAt(selectedIndex >= 0 ? selectedIndex : 0)
+        return
+      }
+      setActiveIndex((index) => clampIndex(index + 1))
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (!open) {
+        openAt(selectedIndex >= 0 ? selectedIndex : options.length - 1)
+        return
+      }
+      setActiveIndex((index) => clampIndex(index - 1))
+      return
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      if (!open) {
+        openAt(selectedIndex >= 0 ? selectedIndex : 0)
+        return
+      }
+      const choice = options[activeIndex]
+      if (choice) choose(choice)
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div className="relative min-w-0" ref={rootRef}>
+      <button
+        aria-activedescendant={
+          open && options[activeIndex] ? `${listboxId}-${activeIndex}` : undefined
+        }
+        aria-controls={listboxId}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={ariaLabel ?? placeholder}
+        className="flex min-h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border-subtle bg-background px-2.5 py-1.5 text-left text-sm font-medium text-text-primary outline-none transition-colors hover:bg-bg-secondary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isDisabled}
+        role="combobox"
+        type="button"
+        onClick={() => {
+          if (open) {
+            setOpen(false)
+          } else {
+            openAt(selectedIndex >= 0 ? selectedIndex : 0)
+          }
+        }}
+        onKeyDown={handleKeyDown}
+      >
+        <span className={selected ? 'truncate' : 'truncate text-text-muted'}>
+          {selected?.label ?? placeholder}
+        </span>
+        <span aria-hidden className="text-[11px] leading-none text-text-muted">
+          v
+        </span>
+      </button>
+      {open ? (
+        <div
+          className="absolute left-0 right-0 top-full z-[80] mt-1 max-h-60 overflow-y-auto rounded-md border border-border-subtle bg-bg-primary p-1 shadow-xl"
+          id={listboxId}
+          role="listbox"
+        >
+          {options.map((option, index) => {
+            const isSelected = option.key === selected?.key
+            const isActive = index === activeIndex
+            return (
+              <button
+                aria-selected={isSelected}
+                className={[
+                  'flex min-h-8 w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm text-text-primary outline-none',
+                  isActive ? 'bg-bg-secondary' : '',
+                  isSelected ? 'font-semibold' : 'font-medium',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                id={`${listboxId}-${index}`}
+                key={option.key}
+                role="option"
+                type="button"
+                onClick={() => choose(option)}
+                onMouseEnter={() => setActiveIndex(index)}
+              >
+                <span className="truncate">{option.label}</span>
+                {isSelected ? <Check size={14} className="shrink-0 text-primary" /> : null}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 /**
  * Phase 2 POC — renders interactive controls (buttons / select) attached to
@@ -163,26 +346,20 @@ function InteractiveBlockRendererBase({
       )}
 
       {block.kind === 'select' && block.options && (
-        <select
-          className="rounded-md border border-border-subtle bg-background px-2 py-1 text-sm"
+        <InteractiveSelect
+          ariaLabel={block.prompt ?? t('chat.interactiveChoose')}
           disabled={isLocked}
+          options={block.options.map((option, index) => ({
+            key: option.id || `option-${index}`,
+            label: option.label,
+            value: option.value,
+          }))}
+          placeholder={t('chat.interactiveChoose')}
           value={done ?? ''}
-          onChange={(e) => {
-            const id = e.target.value
-            if (!id) return
-            const opt = block.options?.find((o) => o.id === id)
-            if (opt) send(opt.id, opt.value, opt.label)
+          onSelect={(choice) => {
+            send(choice.key, choice.value, choice.label)
           }}
-        >
-          <option value="" disabled>
-            {t('chat.interactiveChoose')}
-          </option>
-          {block.options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        />
       )}
 
       {(block.kind === 'form' || block.kind === 'approval') && (
@@ -253,6 +430,15 @@ function InteractiveFormBody({
         {(block.fields ?? []).map((f) => {
           const v = values[f.id] ?? ''
           const showError = touched && f.required && !v.trim()
+          const selectOptions =
+            f.kind === 'select'
+              ? (f.options ?? []).map((option, index) => ({
+                  key: option.id || `${f.id}-${index}`,
+                  label: option.label,
+                  value: option.value,
+                }))
+              : []
+          const selectValue = selectOptions.find((option) => option.value === v)?.key ?? ''
           return (
             <label key={f.id} className="flex flex-col gap-1 text-sm">
               <span className="text-text-secondary">
@@ -269,21 +455,14 @@ function InteractiveFormBody({
                   onChange={(e) => setField(f.id, e.target.value)}
                 />
               ) : f.kind === 'select' ? (
-                <select
-                  className="rounded-md border border-border-subtle bg-background px-2 py-1 text-sm"
-                  value={v}
+                <InteractiveSelect
+                  ariaLabel={f.label}
                   disabled={isLocked}
-                  onChange={(e) => setField(f.id, e.target.value)}
-                >
-                  <option value="" disabled>
-                    {t('chat.interactiveChoose')}
-                  </option>
-                  {(f.options ?? []).map((o) => (
-                    <option key={o.id} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  options={selectOptions}
+                  placeholder={t('chat.interactiveChoose')}
+                  value={selectValue}
+                  onSelect={(choice) => setField(f.id, choice.value)}
+                />
               ) : f.kind === 'checkbox' ? (
                 <input
                   type="checkbox"

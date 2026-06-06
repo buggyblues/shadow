@@ -70,7 +70,16 @@ WORKDIR /app
 COPY --from=shadow-packages /shadow-pkgs /tmp/shadow-pkgs
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl tini xz-utils && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      ffmpeg \
+      fontconfig \
+      fonts-dejavu-core \
+      python3-pip \
+      python3-venv \
+      tini \
+      xz-utils && \
     rm -rf /var/lib/apt/lists/* && \
     arch="$(dpkg --print-architecture)" && \
     case "$arch" in \
@@ -118,6 +127,7 @@ ENV npm_config_cache=/tmp/npm-cache
 
 COPY --chown=1000:1000 packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin
 COPY --chown=1000:1000 apps/cloud/images/hermes-runner/entrypoint.mjs /app/entrypoint.mjs
+COPY apps/cloud/images/hermes-runner/shadow-video-render.mjs /usr/local/bin/shadow-video-render
 
 RUN shadowob-connector connect \
       --target hermes \
@@ -126,6 +136,7 @@ RUN shadowob-connector connect \
       --hermes-home /home/shadow/.hermes \
       --project-name shadow-buddy \
       --force && \
+    chmod +x /usr/local/bin/shadow-video-render && \
     chown -R 1000:1000 /home/shadow /etc/shadowob /var/log/shadowob \
       /workspace /tmp/npm-cache /app
 

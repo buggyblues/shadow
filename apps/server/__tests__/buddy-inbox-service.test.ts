@@ -106,6 +106,17 @@ function createService() {
       requireChannelRead: vi.fn().mockResolvedValue({ channel }),
     },
     serverDao: {
+      getMembers: vi.fn().mockResolvedValue([
+        {
+          user: {
+            id: botUserId,
+            username: 'code-trainer-assistant-buddy',
+            displayName: '算法助教',
+            avatarUrl: null,
+          },
+          agent,
+        },
+      ]),
       getMember: vi.fn().mockResolvedValue({ role: 'member' }),
       addMember: vi.fn(),
     },
@@ -151,6 +162,8 @@ describe('BuddyInboxService', () => {
           defaultMode: 'first_time',
           rules: [],
         },
+        maxBuddyChainDepth: 3,
+        replyToBuddy: true,
       },
     })
     expect(deps.io.to).toHaveBeenCalledWith(`user:${botUserId}`)
@@ -166,6 +179,8 @@ describe('BuddyInboxService', () => {
           defaultMode: 'first_time',
           rules: [],
         },
+        maxBuddyChainDepth: 3,
+        replyToBuddy: true,
       },
     })
   })
@@ -190,6 +205,15 @@ describe('BuddyInboxService', () => {
         title: 'Review Two Sum submission',
         body: 'Run the sandbox and reply with feedback.',
         tags: ['review', { label: '算法' }],
+        requirements: {
+          capabilities: ['workspace.write'],
+          skills: [{ kind: 'runtime-skill', package: '@shadow/skills-review' }],
+        },
+        outputContract: {
+          expectedArtifacts: [{ kind: 'workspace.file', mimeTypes: ['application/json'] }],
+          submitCommand: { appKey: 'kanban', command: 'cards.artifacts.add' },
+        },
+        privacy: { dataClass: 'server-private', redactionRequired: true },
         app: { appKey: 'judge', name: 'Judge', logoUrl: 'https://example.com/judge.png' },
       },
       { kind: 'user', userId: ownerUserId },
@@ -203,6 +227,10 @@ describe('BuddyInboxService', () => {
         listen: true,
         reply: true,
         mentionOnly: false,
+        config: expect.objectContaining({
+          maxBuddyChainDepth: 3,
+          replyToBuddy: true,
+        }),
       }),
     )
     expect(deps.agentPolicyDao.upsert.mock.invocationCallOrder[0]).toBeLessThan(
@@ -221,6 +249,94 @@ describe('BuddyInboxService', () => {
                 appKey: 'judge',
                 name: 'Judge',
                 iconUrl: 'https://example.com/judge.png',
+              }),
+              requirements: expect.objectContaining({
+                capabilities: ['workspace.write'],
+                skills: [
+                  expect.objectContaining({
+                    kind: 'runtime-skill',
+                    package: '@shadow/skills-review',
+                  }),
+                ],
+              }),
+              outputContract: expect.objectContaining({
+                submitCommand: { appKey: 'kanban', command: 'cards.artifacts.add' },
+              }),
+              privacy: { dataClass: 'server-private', redactionRequired: true },
+            }),
+          ]),
+        }),
+      }),
+    )
+  })
+
+  it('preserves task extensions while holding delivery for admission approval', async () => {
+    const { deps, service } = createService()
+    deps.agentPolicyDao.findByChannel.mockResolvedValue({
+      id: 'policy-1',
+      agentId,
+      serverId,
+      channelId,
+      listen: true,
+      reply: true,
+      mentionOnly: false,
+      config: {
+        inboxAdmission: {
+          defaultMode: 'every_time',
+          rules: [],
+        },
+        inboxAdmissionPending: [],
+      },
+    })
+
+    await expect(
+      service.enqueueTaskForAgent(
+        serverId,
+        agentId,
+        {
+          title: 'Render workspace artifact',
+          body: 'Use the runtime skill and upload the result to workspace.',
+          idempotencyKey: 'kanban:card:render-1',
+          source: {
+            kind: 'server_app',
+            id: 'app-kanban',
+            appId: 'app-kanban',
+            appKey: 'kanban',
+          },
+          requirements: {
+            capabilities: ['workspace.write'],
+            skills: [{ kind: 'runtime-skill', package: '@shadow/skills-media' }],
+          },
+          outputContract: {
+            expectedArtifacts: [{ kind: 'workspace.file', mimeTypes: ['video/mp4'] }],
+            submitCommand: { appKey: 'kanban', command: 'cards.artifacts.add' },
+          },
+          privacy: { dataClass: 'server-private', redactionRequired: true },
+        },
+        { kind: 'user', userId: ownerUserId },
+      ),
+    ).rejects.toThrow('Buddy Inbox task delivery requires approval')
+
+    expect(deps.messageService.send).not.toHaveBeenCalled()
+    expect(deps.agentPolicyDao.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          inboxAdmissionPending: expect.arrayContaining([
+            expect.objectContaining({
+              task: expect.objectContaining({
+                title: 'Render workspace artifact',
+                requirements: expect.objectContaining({
+                  skills: [
+                    expect.objectContaining({
+                      kind: 'runtime-skill',
+                      package: '@shadow/skills-media',
+                    }),
+                  ],
+                }),
+                outputContract: expect.objectContaining({
+                  submitCommand: { appKey: 'kanban', command: 'cards.artifacts.add' },
+                }),
+                privacy: { dataClass: 'server-private', redactionRequired: true },
               }),
             }),
           ]),
@@ -296,5 +412,158 @@ describe('BuddyInboxService', () => {
       'message:new',
       expect.objectContaining({ id: 'ack-message', channelId: visibleChannel.id }),
     )
+  })
+
+  it('does not claim legacy Inbox reply notification cards as tasks', async () => {
+    const { deps, service } = createService()
+    deps.messageDao.findByChannelId.mockResolvedValue({
+      messages: [
+        {
+          id: 'message-notification',
+          channelId,
+          metadata: {
+            cards: [
+              {
+                id: 'reply-notification-card',
+                kind: 'task',
+                version: 1,
+                title: 'Review reply: Render video',
+                status: 'queued',
+                assignee: {
+                  agentId,
+                  userId: botUserId,
+                  label: '算法助教',
+                },
+                data: {
+                  taskReplyNotification: true,
+                },
+                progress: [],
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          },
+        },
+      ],
+      hasMore: false,
+    })
+
+    const result = await service.claimNextTask(serverId, agentId, {
+      kind: 'agent',
+      userId: botUserId,
+      agentId,
+      ownerId: ownerUserId,
+      scopes: [],
+    })
+
+    expect(result.message).toBeNull()
+    expect(result.card).toBeNull()
+    expect(deps.messageService.updateMetadata).not.toHaveBeenCalled()
+  })
+
+  it('rejects direct claims against legacy Inbox reply notification cards', async () => {
+    const { deps, service } = createService()
+    deps.messageDao.findById.mockResolvedValue({
+      id: 'message-notification',
+      channelId,
+      metadata: {
+        cards: [
+          {
+            id: 'reply-notification-card',
+            kind: 'task',
+            version: 1,
+            title: 'Review reply: Render video',
+            status: 'queued',
+            assignee: {
+              agentId,
+              userId: botUserId,
+              label: '算法助教',
+            },
+            data: {
+              taskReplyNotification: true,
+            },
+            progress: [],
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    })
+
+    await expect(
+      service.claimTaskCard('message-notification', 'reply-notification-card', {
+        kind: 'agent',
+        userId: botUserId,
+        agentId,
+        ownerId: ownerUserId,
+        scopes: [],
+      }),
+    ).rejects.toThrow('Task card not found')
+  })
+
+  it('lets a server Buddy discover peer Buddy inboxes without manage access', async () => {
+    const { deps, service } = createService()
+    const peerAgentId = '00000000-0000-4000-8000-000000000008'
+    const peerUserId = '00000000-0000-4000-8000-000000000009'
+    const peerChannelId = '00000000-0000-4000-8000-000000000010'
+
+    deps.policyService.requireServerMember.mockResolvedValue({ serverId, role: 'member' })
+    deps.serverDao.getMembers.mockResolvedValue([
+      {
+        userId: botUserId,
+        user: {
+          id: botUserId,
+          username: 'coordinator-buddy',
+          displayName: 'Coordinator Buddy',
+          avatarUrl: null,
+        },
+        agent: {
+          id: agentId,
+          userId: botUserId,
+          ownerId: ownerUserId,
+          status: 'running',
+        },
+      },
+      {
+        userId: peerUserId,
+        user: {
+          id: peerUserId,
+          username: 'research-buddy',
+          displayName: 'Research Buddy',
+          avatarUrl: null,
+        },
+        agent: {
+          id: peerAgentId,
+          userId: peerUserId,
+          ownerId: '00000000-0000-4000-8000-000000000011',
+          status: 'running',
+        },
+      },
+    ])
+    deps.channelDao.findByServerId.mockResolvedValue([
+      {
+        id: channelId,
+        serverId,
+        name: 'inbox-coordinator-buddy',
+        type: 'text',
+        topic: `shadow:buddy-inbox:${agentId}`,
+        isPrivate: true,
+      },
+      {
+        id: peerChannelId,
+        serverId,
+        name: 'inbox-research-buddy',
+        type: 'text',
+        topic: `shadow:buddy-inbox:${peerAgentId}`,
+        isPrivate: true,
+      },
+    ])
+    deps.channelMemberDao.get.mockResolvedValue(null)
+
+    const rows = await service.listForServer(serverId, {
+      kind: 'user',
+      userId: botUserId,
+    })
+
+    expect(rows.map((row) => row.agent.id).sort()).toEqual([agentId, peerAgentId].sort())
+    expect(rows.every((row) => row.canManage === false)).toBe(true)
   })
 })

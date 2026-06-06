@@ -807,6 +807,8 @@
     "archivedComposerPlaceholder": "此頻道已歸檔，無法傳送訊息",
     "archivedComposerDesc": "取消歸檔後可以繼續傳送訊息。",
     "switchChannel": "切換頻道",
+    "copilotChannelSection": "頻道",
+    "copilotInboxSection": "Buddy 收件箱",
     "enterChannel": "進入頻道",
     "exitCopilot": "退出 Copilot",
     "resizeCopilot": "調整 Copilot 面板大小",
@@ -987,6 +989,10 @@
       "failed": "發貨異常"
     },
     "copyFailed": "複製失敗",
+    "messageReference": {
+      "defaultLabel": "引用訊息",
+      "open": "開啟訊息"
+    },
     "typing": "正在輸入..."
   },
   "workspace": {
@@ -1026,6 +1032,7 @@
   },
   "member": {
     "online": "線上",
+    "busy": "忙碌",
     "idle": "離開",
     "dnd": "請勿打擾",
     "offline": "離線",
@@ -3715,14 +3722,22 @@
       "user": "使用者",
       "system": "系統"
     },
+    "mode": {
+      "label": "Inbox 檢視模式",
+      "chat": "聊天",
+      "tasks": "任務"
+    },
     "filter": {
+      "label": "任務篩選",
       "all": "全部",
       "open": "進行中",
       "done": "已結束"
     },
     "empty": {
+      "chatTitle": "還沒有聊天訊息",
+      "chatHint": "在聊天模式下可以審查和 Buddy 的一般對話。",
       "allTitle": "還沒有任務",
-      "allHint": "從輸入框左側的 + 建立任務卡片，普通訊息仍然留在聊天裡。",
+      "allHint": "在輸入區切到任務模式建立任務卡片，普通訊息仍然留在聊天模式裡。",
       "filterTitle": "這個篩選下沒有任務",
       "filterHint": "切換篩選條件，或建立一個新的任務。"
     },
@@ -3750,7 +3765,16 @@
       "todoProgress": "{{done}}/{{total}} 完成",
       "showDetails": "展開詳情",
       "hideDetails": "收起詳情",
+      "priorityLabel": "優先級",
+      "tagsLabel": "標籤",
       "tagsPlaceholder": "標籤，用逗號分隔",
+      "tagPreset": {
+        "research": "調研",
+        "script": "腳本",
+        "render": "渲染",
+        "qa": "質檢",
+        "publish": "發布"
+      },
       "replies": "回覆",
       "noReplies": "暫無回覆",
       "replyPlaceholder": "輸入回覆內容...",

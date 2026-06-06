@@ -52,7 +52,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
     import('./paypal/index.js'),
     import('./agentmemory/index.js'),
     import('./agent-browser/index.js'),
-    import('./skill-discovery/index.js'),
+    import('./skills/index.js'),
     import('./text-to-cad/index.js'),
     import('./nature-skills/index.js'),
     import('./opencli/index.js'),

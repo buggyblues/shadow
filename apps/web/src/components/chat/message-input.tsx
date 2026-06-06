@@ -1,4 +1,5 @@
 import type {
+  BuddyInboxViewMode,
   CommerceProductCard,
   MentionSuggestion,
   MentionSuggestionTrigger,
@@ -6,12 +7,26 @@ import type {
   TaskMessageCardTag,
 } from '@shadowob/shared'
 import { assignMentionRanges, canonicalMentionToken } from '@shadowob/shared'
-import { Button, cn, InputValley } from '@shadowob/ui'
+import {
+  Button,
+  cn,
+  InputValley,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@shadowob/ui'
 import { type InfiniteData, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AppWindow,
+  ArrowUp,
   AtSign,
   Bot,
+  Check,
   Command as CommandIcon,
   FileText,
   FolderOpen,
@@ -19,6 +34,7 @@ import {
   Image as ImageIcon,
   ListTodo,
   Loader2,
+  MessageSquare,
   Mic,
   Plus,
   Search,
@@ -26,6 +42,7 @@ import {
   Server as ServerIcon,
   ShoppingBag,
   Smile,
+  Tag,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -55,6 +72,8 @@ interface MessageInputProps {
   externalFiles?: File[]
   onExternalFilesConsumed?: () => void
   enableTaskCards?: boolean
+  inboxViewMode?: BuddyInboxViewMode
+  onInboxViewModeChange?: (mode: BuddyInboxViewMode) => void
   onMessageSent?: (message: Record<string, unknown>) => void
 }
 
@@ -273,6 +292,7 @@ function mentionsForContent(content: string, mentions: MessageMention[]): Messag
 type TaskDraftPriority = 'low' | 'normal' | 'high' | 'urgent'
 
 const taskPriorityOptions: TaskDraftPriority[] = ['normal', 'high', 'urgent', 'low']
+const taskTagPresetOptions = ['research', 'script', 'render', 'qa', 'publish'] as const
 
 function taskDraftToInput(value: string): { title: string; body?: string } {
   const lines = value
@@ -302,6 +322,16 @@ function taskTagsToInput(value: string): TaskMessageCardTag[] | undefined {
   return unique.length > 0 ? unique : undefined
 }
 
+function taskTagsToValues(value: string): string[] {
+  return (taskTagsToInput(value) ?? [])
+    .map((tag) => (typeof tag === 'string' ? tag : tag.label))
+    .filter(Boolean)
+}
+
+function taskTagValuesToInput(values: string[]) {
+  return [...new Set(values.map((tag) => tag.trim()).filter(Boolean))].slice(0, 12).join(', ')
+}
+
 export function MessageInput({
   channelId,
   channelName,
@@ -315,6 +345,8 @@ export function MessageInput({
   externalFiles,
   onExternalFilesConsumed,
   enableTaskCards = false,
+  inboxViewMode,
+  onInboxViewModeChange,
   onMessageSent,
 }: MessageInputProps) {
   const { t, i18n } = useTranslation()
@@ -327,15 +359,16 @@ export function MessageInput({
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
-  const [showTaskComposer, setShowTaskComposer] = useState(false)
   const [taskDraft, setTaskDraft] = useState('')
   const [taskPriority, setTaskPriority] = useState<TaskDraftPriority>('normal')
   const [taskTags, setTaskTags] = useState('')
+  const [showTaskTagsMenu, setShowTaskTagsMenu] = useState(false)
   const [creatingTask, setCreatingTask] = useState(false)
   const [productQuery, setProductQuery] = useState('')
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
   const [viewingImage, setViewingImage] = useState<PendingFile | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const taskTextareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const historyBrowseIndexRef = useRef(-1)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -404,15 +437,34 @@ export function MessageInput({
       : t(useCompactPlaceholder ? 'chat.inputPlaceholderCompact' : 'chat.inputPlaceholder', {
           channelName: composerChannelName,
         }))
+  const showInboxComposerControls =
+    enableTaskCards && Boolean(inboxViewMode && onInboxViewModeChange)
+  const isInboxTaskComposer = showInboxComposerControls && inboxViewMode === 'tasks'
+  const taskTitleInput = taskDraftToInput(taskDraft)
+  const selectedTaskTags = useMemo(() => taskTagsToValues(taskTags), [taskTags])
+
+  const toggleTaskTagPreset = useCallback((tag: string) => {
+    setTaskTags((current) => {
+      const nextValues = taskTagsToValues(current)
+      if (nextValues.includes(tag)) {
+        return taskTagValuesToInput(nextValues.filter((item) => item !== tag))
+      }
+      return taskTagValuesToInput([...nextValues, tag])
+    })
+  }, [])
 
   const focusComposer = useCallback(() => {
+    if (isInboxTaskComposer) {
+      taskTextareaRef.current?.focus({ preventScroll: true })
+      return
+    }
     const textarea = textareaRef.current
     if (!textarea || textarea.disabled) return
     if (document.querySelector('[role="dialog"]')) return
     textarea.focus({ preventScroll: true })
     const cursor = textarea.value.length
     textarea.setSelectionRange(cursor, cursor)
-  }, [])
+  }, [isInboxTaskComposer])
 
   // Auto-focus textarea when channel changes
   useEffect(() => {
@@ -653,12 +705,6 @@ export function MessageInput({
     setShowWorkspacePicker(true)
   }, [])
 
-  const openTaskComposer = useCallback(() => {
-    setShowAttachMenu(false)
-    setShowTaskComposer(true)
-    setTaskDraft((current) => current || content)
-  }, [content])
-
   const stopVoiceTracks = useCallback(() => {
     voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
     voiceStreamRef.current = null
@@ -803,16 +849,20 @@ export function MessageInput({
       const base = dictationBaseContentRef.current
       const separator = base && transcript && !/\s$/u.test(base) ? ' ' : ''
       const next = transcript ? `${base}${separator}${transcript}` : base
-      setContent(next)
-      scheduleSave(next)
+      if (isInboxTaskComposer) {
+        setTaskDraft(next)
+      } else {
+        setContent(next)
+        scheduleSave(next)
+      }
       requestAnimationFrame(() => {
-        const el = textareaRef.current
+        const el = isInboxTaskComposer ? taskTextareaRef.current : textareaRef.current
         if (!el) return
         el.style.height = 'auto'
         el.style.height = `${Math.min(el.scrollHeight, 200)}px`
       })
     },
-    [scheduleSave],
+    [isInboxTaskComposer, scheduleSave],
   )
 
   const stopDictation = useCallback(() => {
@@ -835,7 +885,8 @@ export function MessageInput({
 
     setShowAttachMenu(false)
     setShowEmojiPicker(false)
-    dictationBaseContentRef.current = content
+    setShowTaskTagsMenu(false)
+    dictationBaseContentRef.current = isInboxTaskComposer ? taskDraft : content
 
     const recognition = new SpeechRecognition()
     recognition.lang = speechRecognitionLanguage
@@ -868,7 +919,13 @@ export function MessageInput({
         dictationRecognitionRef.current = null
       }
       setDictationListening(false)
-      requestAnimationFrame(() => textareaRef.current?.focus())
+      requestAnimationFrame(() => {
+        if (isInboxTaskComposer) {
+          taskTextareaRef.current?.focus()
+          return
+        }
+        textareaRef.current?.focus()
+      })
     }
 
     try {
@@ -880,7 +937,14 @@ export function MessageInput({
       setDictationListening(false)
       showToast(t('chat.voiceInputUnavailable'), 'error')
     }
-  }, [content, speechRecognitionLanguage, t, updateDictationContent])
+  }, [
+    content,
+    isInboxTaskComposer,
+    speechRecognitionLanguage,
+    t,
+    taskDraft,
+    updateDictationContent,
+  ])
 
   const toggleDictation = useCallback(() => {
     if (dictationListening) {
@@ -1142,15 +1206,29 @@ export function MessageInput({
       setTaskDraft('')
       setTaskPriority('normal')
       setTaskTags('')
-      setShowTaskComposer(false)
       showToast(t('inbox.task.created'), 'success')
     } catch (error) {
       showToast(error instanceof Error ? error.message : t('inbox.task.createFailed'), 'error')
     } finally {
       setCreatingTask(false)
-      requestAnimationFrame(() => textareaRef.current?.focus())
+      requestAnimationFrame(() => {
+        if (isInboxTaskComposer) {
+          taskTextareaRef.current?.focus()
+          return
+        }
+        textareaRef.current?.focus()
+      })
     }
-  }, [channelId, creatingTask, queryClient, t, taskDraft, taskPriority, taskTags])
+  }, [
+    channelId,
+    creatingTask,
+    isInboxTaskComposer,
+    queryClient,
+    t,
+    taskDraft,
+    taskPriority,
+    taskTags,
+  ])
 
   // Scroll active mention item into view
   useEffect(() => {
@@ -1799,9 +1877,181 @@ export function MessageInput({
     textareaRef.current?.focus()
   }, [])
 
+  const renderAttachMenu = () => (
+    <>
+      <button
+        type="button"
+        className="fixed inset-0 z-40 cursor-default"
+        aria-label={t('common.close')}
+        onClick={() => setShowAttachMenu(false)}
+      />
+      <div
+        className={cn(
+          'absolute bottom-12 left-0 z-50 rounded-2xl border border-border-subtle bg-bg-primary p-2 shadow-2xl',
+          isInboxTaskComposer ? 'w-[320px]' : 'w-[280px]',
+        )}
+      >
+        {isInboxTaskComposer && (
+          <div className="mb-1 grid gap-2 border-b border-border-subtle/70 p-2 pb-3">
+            <Select
+              value={taskPriority}
+              onValueChange={(priority) => setTaskPriority(priority as TaskDraftPriority)}
+            >
+              <SelectTrigger
+                className="h-10 rounded-xl border-border-subtle bg-bg-secondary/65 text-xs font-black text-text-primary shadow-none"
+                aria-label={t('inbox.task.priorityLabel')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" sideOffset={6}>
+                {taskPriorityOptions.map((priority) => (
+                  <SelectItem key={priority} value={priority}>
+                    {t(`inbox.task.priority.${priority}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Popover open={showTaskTagsMenu} onOpenChange={setShowTaskTagsMenu}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 justify-start rounded-xl border border-border-subtle bg-bg-secondary/65 px-3 text-xs font-black text-text-primary"
+                  title={t('inbox.task.tagsLabel')}
+                >
+                  <Tag size={14} />
+                  <span className="min-w-0 truncate">
+                    {selectedTaskTags.length > 0
+                      ? selectedTaskTags.join(', ')
+                      : t('inbox.task.tagsLabel')}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-72 p-2">
+                <div className="space-y-1">
+                  {taskTagPresetOptions.map((tag) => {
+                    const selected = selectedTaskTags.includes(tag)
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleTaskTagPreset(tag)}
+                        className={cn(
+                          'flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-bold transition',
+                          selected
+                            ? 'bg-primary/15 text-primary'
+                            : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
+                        )}
+                      >
+                        <span className="grid h-4 w-4 place-items-center">
+                          {selected && <Check size={14} />}
+                        </span>
+                        <span>{t(`inbox.task.tagPreset.${tag}`)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <input
+                  value={taskTags}
+                  onChange={(event) => setTaskTags(event.target.value)}
+                  placeholder={t('inbox.task.tagsPlaceholder')}
+                  className="mt-2 h-9 w-full rounded-lg border border-border-subtle bg-bg-secondary/70 px-2 text-sm font-semibold text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/55 focus:ring-2 focus:ring-primary/10"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+          onClick={() => openFileDialog()}
+        >
+          <FileText size={18} className="text-primary" />
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-text-primary">
+              {t('chat.uploadFile')}
+            </span>
+            <span className="block truncate text-xs text-text-muted">
+              {t('chat.addMenuUploadFileDesc')}
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+          onClick={() => openFileDialog('image/*')}
+        >
+          <ImageIcon size={18} className="text-primary" />
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-text-primary">
+              {t('chat.uploadImage')}
+            </span>
+            <span className="block truncate text-xs text-text-muted">
+              {t('chat.addMenuUploadImageDesc')}
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => void startVoiceRecording()}
+          disabled={uploading || voiceRecording}
+        >
+          <Mic size={18} className="text-primary" />
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-text-primary">
+              {t('chat.voiceRecord')}
+            </span>
+            <span className="block truncate text-xs text-text-muted">
+              {t('chat.addMenuVoiceMessageDesc')}
+            </span>
+          </span>
+        </button>
+        {activeServerId && (
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+            onClick={openWorkspacePicker}
+          >
+            <FolderOpen size={18} className="text-primary" />
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-text-primary">
+                {t('chat.selectWorkspaceFile')}
+              </span>
+              <span className="block truncate text-xs text-text-muted">
+                {t('chat.addMenuWorkspaceFileDesc')}
+              </span>
+            </span>
+          </button>
+        )}
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+          onClick={() => {
+            setShowAttachMenu(false)
+            setShowProductPicker(true)
+          }}
+        >
+          <ShoppingBag size={18} className="text-primary" />
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-text-primary">
+              {t('chat.productPicker')}
+            </span>
+            <span className="block truncate text-xs text-text-muted">
+              {t('chat.addMenuProductDesc')}
+            </span>
+          </span>
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <section
-      className="px-4 pb-4 mobile-safe-bottom relative"
+      className="relative z-20 px-4 pb-4 mobile-safe-bottom"
       aria-label={composerPlaceholder}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -1919,92 +2169,6 @@ export function MessageInput({
         </div>
       )}
 
-      {showTaskComposer && enableTaskCards && (
-        <div className="absolute bottom-[calc(100%+8px)] left-4 right-4 z-50 rounded-2xl border border-border-subtle bg-bg-primary p-3 shadow-2xl sm:left-6 sm:right-auto sm:w-[420px]">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
-                <ListTodo size={16} strokeWidth={2.4} />
-              </span>
-              <span className="truncate text-sm font-black text-text-primary">
-                {t('inbox.task.new')}
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 rounded-full"
-              onClick={() => setShowTaskComposer(false)}
-              title={t('common.close')}
-            >
-              <X size={14} />
-            </Button>
-          </div>
-          <textarea
-            value={taskDraft}
-            onChange={(event) => setTaskDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
-              event.preventDefault()
-              void createTaskCard()
-            }}
-            placeholder={t('inbox.task.quickPlaceholder')}
-            rows={4}
-            autoFocus
-            className="min-h-24 w-full resize-none rounded-xl border border-border-subtle bg-bg-secondary/70 px-3 py-2 text-sm font-semibold leading-5 text-text-primary outline-none transition focus:border-primary/55 focus:ring-2 focus:ring-primary/10"
-          />
-          <div className="mt-3 grid gap-2">
-            <div className="flex flex-wrap gap-1 rounded-xl border border-border-subtle bg-bg-secondary/55 p-1">
-              {taskPriorityOptions.map((priority) => (
-                <button
-                  key={priority}
-                  type="button"
-                  aria-pressed={taskPriority === priority}
-                  onClick={() => setTaskPriority(priority)}
-                  className={cn(
-                    'h-8 rounded-lg px-3 text-xs font-black transition focus:outline-none focus:ring-2 focus:ring-primary/35',
-                    taskPriority === priority
-                      ? 'bg-primary/15 text-primary'
-                      : 'text-text-muted hover:bg-white/5 hover:text-text-primary',
-                  )}
-                >
-                  {t(`inbox.task.priority.${priority}`)}
-                </button>
-              ))}
-            </div>
-            <input
-              value={taskTags}
-              onChange={(event) => setTaskTags(event.target.value)}
-              placeholder={t('inbox.task.tagsPlaceholder')}
-              className="h-10 w-full rounded-xl border border-border-subtle bg-bg-secondary/70 px-3 text-sm font-semibold text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/55 focus:ring-2 focus:ring-primary/10"
-            />
-          </div>
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowTaskComposer(false)}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => void createTaskCard()}
-              disabled={!taskDraft.trim() || creatingTask}
-            >
-              {creatingTask ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <ListTodo size={14} />
-              )}
-              {creatingTask ? t('common.loading') : t('inbox.task.create')}
-            </Button>
-          </div>
-        </div>
-      )}
       {/* Reply indicator */}
       {replyToId && !hideReplyIndicator && (
         <div className="flex items-center justify-between bg-primary/5 rounded-t-[20px] px-4 py-2 text-xs text-text-secondary border-l-2 border-primary animate-in slide-in-from-top-2 duration-200">
@@ -2166,206 +2330,282 @@ export function MessageInput({
       ) : (
         <InputValley
           className={cn(
-            'flex items-center gap-1.5 px-3 py-2 sm:gap-2 sm:px-4',
+            isInboxTaskComposer
+              ? 'grid min-h-[168px] gap-3 px-5 py-4 sm:min-h-[172px] sm:rounded-[34px] sm:px-6 sm:py-5'
+              : 'grid gap-2 px-3 py-2 sm:px-4',
             replyToId || pendingFiles.length > 0 || selectedCommerceCards.length > 0
-              ? 'rounded-b-[20px]'
-              : 'rounded-[20px]',
+              ? isInboxTaskComposer
+                ? 'rounded-b-[30px]'
+                : 'rounded-b-[20px]'
+              : isInboxTaskComposer
+                ? 'rounded-[34px]'
+                : 'rounded-[20px]',
           )}
+          style={
+            isInboxTaskComposer
+              ? {
+                  background: 'color-mix(in srgb, var(--color-bg-secondary) 88%, transparent)',
+                  border:
+                    '1px solid color-mix(in srgb, var(--color-border-subtle) 78%, transparent)',
+                  boxShadow: 'none',
+                }
+              : undefined
+          }
         >
-          <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                'h-8 w-8 sm:h-9 sm:w-9',
-                showAttachMenu && 'bg-primary/10 text-primary',
+          {isInboxTaskComposer ? (
+            <>
+              {showInboxComposerControls && (
+                <Select
+                  value={inboxViewMode}
+                  onValueChange={(mode) => {
+                    onInboxViewModeChange?.(mode as BuddyInboxViewMode)
+                    setShowAttachMenu(false)
+                    setShowEmojiPicker(false)
+                    setShowTaskTagsMenu(false)
+                  }}
+                >
+                  <SelectTrigger
+                    className="h-8 w-fit rounded-none border-0 bg-transparent px-0 py-0 text-[22px] font-medium leading-none text-text-primary shadow-none hover:text-text-primary focus:ring-0 sm:text-2xl"
+                    aria-label={t('inbox.mode.label')}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={6}>
+                    {(['chat', 'tasks'] as const).map((mode) => {
+                      const Icon = mode === 'chat' ? MessageSquare : ListTodo
+                      return (
+                        <SelectItem key={mode} value={mode}>
+                          <span className="inline-flex items-center gap-2">
+                            <Icon size={14} />
+                            {t(`inbox.mode.${mode}`)}
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
               )}
-              onClick={() => setShowAttachMenu((open) => !open)}
-              title={t('chat.addMenu')}
-              aria-label={t('chat.addMenu')}
-            >
-              <Plus size={18} />
-            </Button>
-            {showAttachMenu && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-40 cursor-default"
-                  aria-label={t('common.close')}
-                  onClick={() => setShowAttachMenu(false)}
-                />
-                <div className="absolute bottom-11 left-0 z-50 w-[280px] rounded-2xl border border-border-subtle bg-bg-primary p-2 shadow-2xl">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                    onClick={() => openFileDialog()}
+
+              <textarea
+                ref={taskTextareaRef}
+                value={taskDraft}
+                onChange={(event) => setTaskDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === 'Enter' &&
+                    (event.metaKey || event.ctrlKey) &&
+                    !event.nativeEvent.isComposing
+                  ) {
+                    event.preventDefault()
+                    void createTaskCard()
+                  }
+                }}
+                onPaste={handlePaste}
+                placeholder={t('inbox.task.quickPlaceholder')}
+                rows={4}
+                wrap="soft"
+                autoFocus
+                className="min-h-[52px] max-h-[50vh] w-full resize-none overflow-hidden bg-transparent px-0 py-0 text-[20px] font-medium leading-8 text-text-primary outline-none placeholder:text-text-muted sm:min-h-[56px] sm:text-[22px]"
+              />
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="relative shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-11 w-11 rounded-full text-text-primary hover:bg-bg-tertiary/55',
+                      showAttachMenu && 'bg-bg-tertiary/70 text-primary',
+                    )}
+                    onClick={() => setShowAttachMenu((open) => !open)}
+                    title={t('chat.addMenu')}
+                    aria-label={t('chat.addMenu')}
                   >
-                    <FileText size={18} className="text-primary" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-text-primary">
-                        {t('chat.uploadFile')}
-                      </span>
-                      <span className="block truncate text-xs text-text-muted">
-                        {t('chat.addMenuUploadFileDesc')}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                    onClick={() => openFileDialog('image/*')}
+                    <Plus size={28} strokeWidth={1.8} />
+                  </Button>
+                  {showAttachMenu && renderAttachMenu()}
+                </div>
+
+                <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                  <Select
+                    value={taskPriority}
+                    onValueChange={(priority) => setTaskPriority(priority as TaskDraftPriority)}
                   >
-                    <ImageIcon size={18} className="text-primary" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-text-primary">
-                        {t('chat.uploadImage')}
-                      </span>
-                      <span className="block truncate text-xs text-text-muted">
-                        {t('chat.addMenuUploadImageDesc')}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={() => void startVoiceRecording()}
+                    <SelectTrigger
+                      className="h-10 w-[5.75rem] shrink-0 rounded-full border-0 bg-transparent px-2 text-base font-medium text-text-secondary shadow-none hover:bg-bg-tertiary/45 hover:text-text-primary focus:ring-0 sm:w-[6.25rem]"
+                      aria-label={t('inbox.task.priorityLabel')}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper" sideOffset={6}>
+                      {taskPriorityOptions.map((priority) => (
+                        <SelectItem key={priority} value={priority}>
+                          {t(`inbox.task.priority.${priority}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-11 w-11 shrink-0 rounded-full text-text-primary hover:bg-bg-tertiary/55',
+                      dictationListening && 'bg-primary/12 text-primary',
+                    )}
+                    onClick={toggleDictation}
+                    title={
+                      dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                    }
+                    aria-label={
+                      dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                    }
+                    aria-pressed={dictationListening}
                     disabled={uploading || voiceRecording}
                   >
-                    <Mic size={18} className="text-primary" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-text-primary">
-                        {t('chat.voiceRecord')}
-                      </span>
-                      <span className="block truncate text-xs text-text-muted">
-                        {t('chat.addMenuVoiceMessageDesc')}
-                      </span>
-                    </span>
-                  </button>
-                  {activeServerId && (
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                      onClick={openWorkspacePicker}
-                    >
-                      <FolderOpen size={18} className="text-primary" />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-bold text-text-primary">
-                          {t('chat.selectWorkspaceFile')}
-                        </span>
-                        <span className="block truncate text-xs text-text-muted">
-                          {t('chat.addMenuWorkspaceFileDesc')}
-                        </span>
-                      </span>
-                    </button>
-                  )}
-                  {enableTaskCards && (
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                      onClick={openTaskComposer}
-                    >
-                      <ListTodo size={18} className="text-primary" />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-bold text-text-primary">
-                          {t('inbox.task.new')}
-                        </span>
-                        <span className="block truncate text-xs text-text-muted">
-                          {t('inbox.task.addMenuDesc')}
-                        </span>
-                      </span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                    onClick={() => {
-                      setShowAttachMenu(false)
-                      setShowProductPicker(true)
-                    }}
+                    <Mic size={24} strokeWidth={1.9} />
+                  </Button>
+
+                  <Button
+                    size="icon"
+                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-none bg-white text-[#050505] shadow-none transition-all duration-200 hover:bg-white/90 disabled:bg-white/35 disabled:text-[#050505]/45"
+                    onClick={() => void createTaskCard()}
+                    title={t('inbox.task.create')}
+                    aria-label={t('inbox.task.create')}
+                    disabled={!taskTitleInput.title || creatingTask || dictationListening}
                   >
-                    <ShoppingBag size={18} className="text-primary" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-text-primary">
-                        {t('chat.productPicker')}
-                      </span>
-                      <span className="block truncate text-xs text-text-muted">
-                        {t('chat.addMenuProductDesc')}
-                      </span>
-                    </span>
-                  </button>
+                    {creatingTask ? (
+                      <Loader2 size={22} className="animate-spin" />
+                    ) : (
+                      <ArrowUp size={30} strokeWidth={2.6} />
+                    )}
+                  </Button>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-end gap-1.5 sm:gap-2">
+              <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'h-8 w-8 sm:h-9 sm:w-9',
+                    showAttachMenu && 'bg-primary/10 text-primary',
+                  )}
+                  onClick={() => setShowAttachMenu((open) => !open)}
+                  title={t('chat.addMenu')}
+                  aria-label={t('chat.addMenu')}
+                >
+                  <Plus size={18} />
+                </Button>
+                {showAttachMenu && renderAttachMenu()}
+              </div>
 
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder={composerPlaceholder}
-            rows={1}
-            wrap={content ? 'soft' : 'off'}
-            autoFocus
-            className="min-w-0 flex-1 overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary placeholder:text-text-muted outline-none resize-none max-h-[50vh] min-h-[24px] sm:py-[7px]"
-          />
+              {showInboxComposerControls && (
+                <Select
+                  value={inboxViewMode}
+                  onValueChange={(mode) => {
+                    onInboxViewModeChange?.(mode as BuddyInboxViewMode)
+                    setShowAttachMenu(false)
+                    setShowEmojiPicker(false)
+                    setShowTaskTagsMenu(false)
+                  }}
+                >
+                  <SelectTrigger
+                    className="mb-[2px] h-8 w-[7.25rem] shrink-0 rounded-full border-border-subtle bg-bg-secondary/65 px-3 text-xs font-black text-text-primary shadow-none sm:mb-[3px] sm:h-9"
+                    aria-label={t('inbox.mode.label')}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={6}>
+                    {(['chat', 'tasks'] as const).map((mode) => {
+                      const Icon = mode === 'chat' ? MessageSquare : ListTodo
+                      return (
+                        <SelectItem key={mode} value={mode}>
+                          <span className="inline-flex items-center gap-2">
+                            <Icon size={14} />
+                            {t(`inbox.mode.${mode}`)}
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'mb-[2px] h-8 w-8 shrink-0 self-end sm:mb-[3px] sm:h-9 sm:w-9',
-              dictationListening && 'bg-primary/12 text-primary',
-            )}
-            onClick={toggleDictation}
-            title={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
-            aria-label={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
-            aria-pressed={dictationListening}
-            disabled={uploading || voiceRecording}
-          >
-            <Mic size={18} />
-          </Button>
-
-          <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 sm:h-9 sm:w-9"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              title={t('chat.addEmoji')}
-            >
-              <Smile size={18} />
-            </Button>
-            {showEmojiPicker && (
-              <EmojiPicker
-                onSelect={(emoji) => {
-                  setContent((prev) => prev + emoji)
-                  textareaRef.current?.focus()
-                }}
-                onClose={() => setShowEmojiPicker(false)}
-                position="top"
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={handleInput}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder={composerPlaceholder}
+                rows={1}
+                wrap={content ? 'soft' : 'off'}
+                autoFocus
+                className="max-h-[50vh] min-h-[24px] min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary outline-none placeholder:text-text-muted sm:py-[7px]"
               />
-            )}
-          </div>
 
-          <Button
-            size="icon"
-            className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
-            onClick={handleSend}
-            title={t('chat.sendMessage')}
-            aria-label={t('chat.sendMessage')}
-            disabled={
-              (!content.trim() &&
-                pendingFiles.length === 0 &&
-                selectedCommerceCards.length === 0) ||
-              uploading ||
-              voiceRecording ||
-              dictationListening
-            }
-          >
-            <Send size={16} className="text-white" />
-          </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'mb-[2px] h-8 w-8 shrink-0 self-end sm:mb-[3px] sm:h-9 sm:w-9',
+                  dictationListening && 'bg-primary/12 text-primary',
+                )}
+                onClick={toggleDictation}
+                title={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
+                aria-label={
+                  dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                }
+                aria-pressed={dictationListening}
+                disabled={uploading || voiceRecording}
+              >
+                <Mic size={18} />
+              </Button>
+
+              <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 sm:h-9 sm:w-9"
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  title={t('chat.addEmoji')}
+                >
+                  <Smile size={18} />
+                </Button>
+                {showEmojiPicker && (
+                  <EmojiPicker
+                    onSelect={(emoji) => {
+                      setContent((prev) => prev + emoji)
+                      textareaRef.current?.focus()
+                    }}
+                    onClose={() => setShowEmojiPicker(false)}
+                    position="top"
+                  />
+                )}
+              </div>
+
+              <Button
+                size="icon"
+                className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
+                onClick={handleSend}
+                title={t('chat.sendMessage')}
+                aria-label={t('chat.sendMessage')}
+                disabled={
+                  (!content.trim() &&
+                    pendingFiles.length === 0 &&
+                    selectedCommerceCards.length === 0) ||
+                  uploading ||
+                  voiceRecording ||
+                  dictationListening
+                }
+              >
+                <Send size={16} className="text-white" />
+              </Button>
+            </div>
+          )}
         </InputValley>
       )}
 

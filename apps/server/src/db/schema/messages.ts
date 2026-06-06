@@ -132,6 +132,60 @@ export interface MessageCardCapabilityMetadata {
   }
 }
 
+export interface TaskMessageRequirementSkillMetadata {
+  kind: 'runtime-skill'
+  package: string
+  version?: string
+  required?: boolean
+  [key: string]: unknown
+}
+
+export interface TaskMessageRequirementToolMetadata {
+  kind: string
+  name: string
+  required?: boolean
+  [key: string]: unknown
+}
+
+export interface TaskMessageRequirementsMetadata {
+  capabilities?: string[]
+  skills?: TaskMessageRequirementSkillMetadata[]
+  tools?: TaskMessageRequirementToolMetadata[]
+  [key: string]: unknown
+}
+
+export interface TaskMessageExpectedArtifactMetadata {
+  kind: string
+  mimeTypes?: string[]
+  maxBytes?: number
+  required?: boolean
+  [key: string]: unknown
+}
+
+export interface TaskMessageOutputContractMetadata {
+  expectedArtifacts?: TaskMessageExpectedArtifactMetadata[]
+  submitCommand?: {
+    appKey: string
+    command: string
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+export type TaskMessagePrivacyDataClassMetadata =
+  | 'public'
+  | 'server-private'
+  | 'channel-private'
+  | 'financial'
+  | 'secret'
+  | 'cloud-secret'
+
+export interface TaskMessagePrivacyMetadata {
+  dataClass: TaskMessagePrivacyDataClassMetadata
+  redactionRequired?: boolean
+  [key: string]: unknown
+}
+
 export interface TaskMessageCardMetadata {
   id: string
   kind: 'task'
@@ -148,6 +202,9 @@ export interface TaskMessageCardMetadata {
     label?: string
   }
   source?: MessageCardSourceMetadata
+  requirements?: TaskMessageRequirementsMetadata
+  outputContract?: TaskMessageOutputContractMetadata
+  privacy?: TaskMessagePrivacyMetadata
   claim?: MessageCardClaimMetadata
   capability?: MessageCardCapabilityMetadata
   progress?: Array<{

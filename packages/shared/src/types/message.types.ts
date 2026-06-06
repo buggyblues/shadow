@@ -64,8 +64,55 @@ export interface MessageMention {
   isPrivate?: boolean
 }
 
+export const MESSAGE_COPILOT_CONTEXT_METADATA_KEY = 'copilotContext' as const
+
+export interface MessageCopilotContext {
+  kind: 'server_app_copilot'
+  /** Server app install id when the current surface is an installed server app. */
+  serverAppId?: string | null
+  /** Catalog app id when available. */
+  appId?: string | null
+  /** Stable app key from the app route, e.g. kanban. */
+  appKey: string
+  appName?: string | null
+  serverId?: string | null
+  serverSlug?: string | null
+  /** Channel or Inbox currently opened in the Copilot panel. */
+  channelId?: string | null
+  channelKind?: string | null
+}
+
+function isBoundedMetadataString(value: unknown, maxLength: number, required = false) {
+  if (typeof value !== 'string') return !required && value == null
+  const trimmed = value.trim()
+  return trimmed.length > 0 && trimmed.length <= maxLength
+}
+
+export function isMessageCopilotContext(value: unknown): value is MessageCopilotContext {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return (
+    record.kind === 'server_app_copilot' &&
+    isBoundedMetadataString(record.appKey, 120, true) &&
+    isBoundedMetadataString(record.serverAppId, 160) &&
+    isBoundedMetadataString(record.appId, 160) &&
+    isBoundedMetadataString(record.appName, 160) &&
+    isBoundedMetadataString(record.serverId, 160) &&
+    isBoundedMetadataString(record.serverSlug, 160) &&
+    isBoundedMetadataString(record.channelId, 160) &&
+    isBoundedMetadataString(record.channelKind, 40)
+  )
+}
+
+export function buildMessageCopilotContextMetadata(
+  context: MessageCopilotContext | null | undefined,
+): { copilotContext: MessageCopilotContext } | undefined {
+  return context && isMessageCopilotContext(context) ? { copilotContext: context } : undefined
+}
+
 export interface MessageMetadata {
   mentions?: MessageMention[]
+  copilotContext?: MessageCopilotContext
   agentChain?: Record<string, unknown>
   interactive?: Record<string, unknown>
   interactiveResponse?: Record<string, unknown>
@@ -178,6 +225,62 @@ export interface MessageCardCapability {
   }
 }
 
+export interface TaskMessageRequirementSkill {
+  kind: 'runtime-skill'
+  package: string
+  version?: string
+  required?: boolean
+  [key: string]: unknown
+}
+
+export interface TaskMessageRequirementTool {
+  kind: string
+  name: string
+  required?: boolean
+  [key: string]: unknown
+}
+
+export interface TaskMessageRequirements {
+  capabilities?: string[]
+  skills?: TaskMessageRequirementSkill[]
+  tools?: TaskMessageRequirementTool[]
+  [key: string]: unknown
+}
+
+export interface TaskMessageExpectedArtifact {
+  kind: string
+  mimeTypes?: string[]
+  maxBytes?: number
+  required?: boolean
+  [key: string]: unknown
+}
+
+export interface TaskMessageSubmitCommand {
+  appKey: string
+  command: string
+  [key: string]: unknown
+}
+
+export interface TaskMessageOutputContract {
+  expectedArtifacts?: TaskMessageExpectedArtifact[]
+  submitCommand?: TaskMessageSubmitCommand
+  [key: string]: unknown
+}
+
+export type TaskMessagePrivacyDataClass =
+  | 'public'
+  | 'server-private'
+  | 'channel-private'
+  | 'financial'
+  | 'secret'
+  | 'cloud-secret'
+
+export interface TaskMessagePrivacy {
+  dataClass: TaskMessagePrivacyDataClass
+  redactionRequired?: boolean
+  [key: string]: unknown
+}
+
 export interface TaskMessageCard {
   id: string
   kind: 'task'
@@ -195,6 +298,9 @@ export interface TaskMessageCard {
     [key: string]: unknown
   }
   source?: MessageCardSource
+  requirements?: TaskMessageRequirements
+  outputContract?: TaskMessageOutputContract
+  privacy?: TaskMessagePrivacy
   claim?: MessageCardClaim
   capability?: MessageCardCapability
   progress?: Array<{
@@ -241,7 +347,32 @@ export interface ServerAppMessageCard {
   [key: string]: unknown
 }
 
-export type MessageCard = TaskMessageCard | ServerAppMessageCard | GenericMessageCard
+export interface MessageReferenceCard {
+  id?: string
+  kind: 'message_reference'
+  version?: number
+  title: string
+  description?: string
+  label?: string
+  target: {
+    serverId?: string | null
+    serverSlug?: string | null
+    channelId: string
+    messageId: string
+    taskCardId?: string | null
+    inboxAgentId?: string | null
+    kind?: 'channel_message' | 'inbox_message'
+  }
+  source?: MessageCardSource
+  data?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export type MessageCard =
+  | TaskMessageCard
+  | ServerAppMessageCard
+  | MessageReferenceCard
+  | GenericMessageCard
 
 export interface CommerceOfferCardInput {
   id?: string

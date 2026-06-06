@@ -807,6 +807,8 @@
     "archivedComposerPlaceholder": "このチャンネルはアーカイブされています。メッセージを送信できません。",
     "archivedComposerDesc": "アーカイブを解除すると、再びメッセージを送信できます。",
     "switchChannel": "チャンネルを切り替え",
+    "copilotChannelSection": "チャンネル",
+    "copilotInboxSection": "Buddy 受信箱",
     "enterChannel": "チャンネルへ移動",
     "exitCopilot": "Copilot を終了",
     "resizeCopilot": "Copilot パネルのサイズを変更",
@@ -987,6 +989,10 @@
       "failed": "配布エラー"
     },
     "copyFailed": "コピー失敗",
+    "messageReference": {
+      "defaultLabel": "参照メッセージ",
+      "open": "メッセージを開く"
+    },
     "typing": "入力中..."
   },
   "workspace": {
@@ -1026,6 +1032,7 @@
   },
   "member": {
     "online": "オンライン",
+    "busy": "ビジー",
     "idle": "退席中",
     "dnd": "取り込み中",
     "offline": "オフライン",
@@ -3715,14 +3722,22 @@
       "user": "ユーザー",
       "system": "システム"
     },
+    "mode": {
+      "label": "Inbox 表示モード",
+      "chat": "チャット",
+      "tasks": "タスク"
+    },
     "filter": {
+      "label": "タスクフィルター",
       "all": "すべて",
       "open": "進行中",
       "done": "完了"
     },
     "empty": {
+      "chatTitle": "チャットメッセージはまだありません",
+      "chatHint": "チャットモードでは、この Buddy との通常の会話を確認できます。",
       "allTitle": "タスクはまだありません",
-      "allHint": "入力欄左側の + からタスクカードを作成します。通常のメッセージはチャットに残ります。",
+      "allHint": "入力エリアでタスクモードに切り替えてタスクカードを作成します。通常のメッセージはチャットモードに残ります。",
       "filterTitle": "この条件のタスクはありません",
       "filterHint": "条件を切り替えるか、新しいタスクを作成してください。"
     },
@@ -3750,7 +3765,16 @@
       "todoProgress": "{{done}}/{{total}} 完了",
       "showDetails": "詳細を表示",
       "hideDetails": "詳細を隠す",
+      "priorityLabel": "優先度",
+      "tagsLabel": "タグ",
       "tagsPlaceholder": "タグをカンマで区切って入力",
+      "tagPreset": {
+        "research": "調査",
+        "script": "脚本",
+        "render": "レンダー",
+        "qa": "QA",
+        "publish": "公開"
+      },
       "replies": "返信",
       "noReplies": "返信はまだありません",
       "replyPlaceholder": "返信を入力...",

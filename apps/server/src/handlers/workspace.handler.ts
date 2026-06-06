@@ -50,6 +50,17 @@ function hiddenNotFound(): never {
   throw Object.assign(new Error('Node not found'), { status: 404 })
 }
 
+function invalidNodeId(): never {
+  throw Object.assign(new Error('Invalid workspace node id'), { status: 400 })
+}
+
+function normalizeOptionalNodeId(value: string | null | undefined): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed || trimmed === 'null') return null
+  if (!UUID_RE.test(trimmed)) invalidNodeId()
+  return trimmed
+}
+
 export function createWorkspaceHandler(container: AppContainer) {
   const handler = new Hono()
   handler.use('*', authMiddleware)
@@ -169,6 +180,7 @@ export function createWorkspaceHandler(container: AppContainer) {
     nodeId: string,
     access: WorkspaceAccessContext,
   ) {
+    if (!UUID_RE.test(nodeId)) invalidNodeId()
     const workspaceService = container.resolve('workspaceService')
     const node = await workspaceService.getNode(nodeId)
     if (!node || node.workspaceId !== workspaceId) hiddenNotFound()
@@ -430,17 +442,9 @@ export function createWorkspaceHandler(container: AppContainer) {
       c.req.param('serverId'),
       c.get('user').userId,
     )
-    const workspaceService = container.resolve('workspaceService')
     const fileId = c.req.param('fileId')
-    const file = await workspaceService.getFile(fileId)
-    if (
-      !file ||
-      file.workspaceId !== workspace.id ||
-      file.kind !== 'file' ||
-      !(await canAccessNode(file, access))
-    ) {
-      hiddenNotFound()
-    }
+    const file = await requireNodeAccess(workspace.id, fileId, access)
+    if (file.kind !== 'file') hiddenNotFound()
     return c.json(file)
   })
 
@@ -603,7 +607,7 @@ export function createWorkspaceHandler(container: AppContainer) {
 
     const formData = await c.req.formData()
     const file = formData.get('file') as File | null
-    const parentId = formData.get('parentId') as string | null
+    const parentId = normalizeOptionalNodeId(formData.get('parentId') as string | null)
 
     if (!file) {
       return c.json({ ok: false, error: 'No file provided' }, 400)
@@ -621,7 +625,7 @@ export function createWorkspaceHandler(container: AppContainer) {
 
     // Create file node
     const node = await workspaceService.createFile(workspace.id, {
-      parentId: parentId || null,
+      parentId,
       name: file.name,
       ext: file.name.includes('.') ? `.${file.name.split('.').pop()}` : null,
       mime: file.type || null,

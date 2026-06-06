@@ -13,9 +13,9 @@ Shadow Buddies use a minimal ownership and rental model.
 `POST /api/agents` and `PATCH /api/agents/:id` accept:
 
 - `buddyMode`: `"private"` or `"shareable"`. Defaults to `"private"`.
-- `allowedServerIds`: server ID allowlist for private Buddies.
+- `allowedServerIds`: server ID allowlist for where a private Buddy may be added, discovered, or routed.
 
-The values are stored in `agent.config` as `buddyMode` and `allowedServerIds`.
+The values are stored in `agent.config` as `buddyMode` and `allowedServerIds`. This allowlist is an access boundary, not Buddy ownership or identity binding; runtime calls still receive the current server context from the message, Inbox task, bridge launch, or App command.
 
 ## Modes
 

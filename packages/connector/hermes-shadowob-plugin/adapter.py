@@ -533,6 +533,43 @@ def _message_cards(message: dict[str, Any]) -> list[dict[str, Any]]:
     return [card for card in cards if isinstance(card, dict)]
 
 
+def _bounded_metadata_text(value: Any, max_length: int, *, required: bool = False) -> str | None:
+    if value in (None, ""):
+        return None if not required else None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or len(text) > max_length:
+        return None
+    return text
+
+
+def _message_copilot_context(message: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = message.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    raw = metadata.get("copilotContext")
+    if not isinstance(raw, dict) or raw.get("kind") != "server_app_copilot":
+        return None
+    app_key = _bounded_metadata_text(raw.get("appKey"), 120, required=True)
+    if not app_key:
+        return None
+    context: dict[str, Any] = {"kind": "server_app_copilot", "appKey": app_key}
+    for key, max_length in (
+        ("serverAppId", 160),
+        ("appId", 160),
+        ("appName", 160),
+        ("serverId", 160),
+        ("serverSlug", 160),
+        ("channelId", 160),
+        ("channelKind", 40),
+    ):
+        value = _bounded_metadata_text(raw.get(key), max_length)
+        if value:
+            context[key] = value
+    return context
+
+
 def _card_id(card: dict[str, Any]) -> str | None:
     value = card.get("id") or card.get("cardId") or card.get("card_id")
     return str(value) if value else None
@@ -851,6 +888,14 @@ def _format_shadow_context_prompt(context: dict[str, Any] | None) -> str | None:
     buddy = context.get("currentBuddy")
     if isinstance(buddy, dict) and buddy:
         lines.append("- Current Buddy identity: " + json.dumps(buddy, ensure_ascii=False, sort_keys=True))
+    copilot = context.get("copilotContext")
+    if isinstance(copilot, dict) and copilot:
+        lines.append("- Copilot app context: " + json.dumps(copilot, ensure_ascii=False, sort_keys=True))
+        app_key = _string_field(copilot, "appKey")
+        if app_key:
+            lines.append(
+                "- Treat this app as the active collaboration surface for the user message; use matching Shadow app commands through the normal Shadow command flow."
+            )
 
     for label, key in (
         ("Channels", "channels"),
@@ -2097,12 +2142,18 @@ class ShadowOBAdapter(BasePlatformAdapter):
     ) -> None:
         if self.client is None or not message_id or not card_id:
             return
+        status = "failed" if failed else "running"
+        default_note = (
+            "Hermes failed while processing this task."
+            if failed
+            else "Hermes delivered a reply; awaiting explicit task completion."
+        )
         try:
             await self.client.update_task_card(
                 message_id,
                 card_id,
-                status="failed" if failed else "completed",
-                note=(note or ("Hermes failed while processing this task." if failed else "Hermes finished processing this task."))[:4000],
+                status=status,
+                note=(note or default_note)[:4000],
             )
         except Exception as exc:
             logger.debug("[Shadow] Failed to update Inbox task card %s/%s completion: %s", message_id, card_id, exc)
@@ -2226,6 +2277,9 @@ class ShadowOBAdapter(BasePlatformAdapter):
         channel_kind = str(channel.get("kind") or channel.get("type") or "channel").lower()
         chat_type = "thread" if thread_id else ("dm" if channel_kind in {"dm", "direct"} else "group")
         shadow_context = await self._shadow_channel_context(channel_id, thread_id)
+        copilot_context = _message_copilot_context(message)
+        if copilot_context:
+            shadow_context = {**shadow_context, "copilotContext": copilot_context}
 
         source_obj = self.build_source(
             chat_id=channel_id,

@@ -69,6 +69,20 @@ function shadowobCliSkill(): string {
   return readFileSync(ROOT_SKILL_PATH, 'utf8')
 }
 
+function expectShadowCliInboxRouting(skill: string): void {
+  expect(skill).toContain('shadowob inbox list')
+  expect(skill).toContain('shadowob inbox enqueue')
+  expect(skill).toContain('requirements')
+  expect(skill).toContain('outputContract')
+  expect(skill).toContain('privacy')
+  expect(skill).toContain('not statically bound to one server')
+  expect(skill).toContain('current message, Inbox task, or server App command context')
+  expect(skill).toContain('prefer Workspace files for shared context and artifacts')
+  expect(skill).toContain('Cache Workspace folder and file ids')
+  expect(skill).toContain('Upload final artifacts to Workspace first')
+  expect(skill).not.toContain('SHADOWOB_SERVER_ID')
+}
+
 function expectShadowCliAuth(files: Record<string, string>): void {
   const raw = files['/home/shadow/.shadowob/shadowob.config.json']
   expect(raw).toBeTypeOf('string')
@@ -99,10 +113,16 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
     expect(openclawConfig.channels.shadowob.accounts['buddy-1'].token).toBe(
       '${env:SHADOW_TOKEN_BUDDY_1}',
     )
+    expect(pkg.configData['SOUL.md']).toContain('shadowob inbox list')
+    expect(pkg.configData['SOUL.md']).toContain('shadowob inbox enqueue')
+    expect(pkg.configData['SOUL.md']).toContain('not statically bound to one server')
+    expect(pkg.configData['SOUL.md']).toContain('do not create ordinary channels as Inbox routes')
+    expect(pkg.configData['SOUL.md']).not.toContain('SHADOWOB_SERVER_ID')
     expect(openclawConfig.plugins.entries['openclaw-shadowob'].enabled).toBe(true)
     expect(openclawConfig.skills.load.extraDirs).toContain('/home/shadow/.openclaw/skills')
     const files = runtimeFiles(pkg)
     expect(files['/home/shadow/.openclaw/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
+    expectShadowCliInboxRouting(files['/home/shadow/.openclaw/skills/shadowob/SKILL.md'] ?? '')
     expectShadowCliAuth(files)
     expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
       expect.arrayContaining([
@@ -148,6 +168,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
 
     const files = runtimeFiles(pkg)
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
+    expectShadowCliInboxRouting(files['/workspace/.agents/skills/shadowob/SKILL.md'] ?? '')
     expectShadowCliAuth(files)
     const runtimeExtensions = JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}')
     expect(runtimeExtensions.openclaw).toBeUndefined()
@@ -257,6 +278,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(hermesConfig).toContain('${SHADOW_TOKEN_BUDDY_1}')
     expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
+    expectShadowCliInboxRouting(files['/home/shadow/.hermes/skills/shadowob/SKILL.md'] ?? '')
     expectShadowCliAuth(files)
     expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
       expect.arrayContaining([

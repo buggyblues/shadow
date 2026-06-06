@@ -1,10 +1,12 @@
 import type {
+  ShadowBuddyInboxSummary,
   ShadowChannelPolicy,
   ShadowMessage,
   ShadowMessageCard,
+  ShadowMessageCopilotContext,
   ShadowServerAppIntegration,
 } from '@shadowob/sdk'
-import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
+import { isMessageCopilotContext, ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import type { ReplyPayload } from 'openclaw/plugin-sdk'
 import { createChannelReplyPipeline } from 'openclaw/plugin-sdk/channel-reply-pipeline'
 import type { OpenClawConfig, PluginRuntime } from 'openclaw/plugin-sdk/core'
@@ -37,6 +39,7 @@ import {
   matchShadowSlashCommand,
   sendSlashCommandInteractivePrompt,
 } from './slash-commands.js'
+import { taskCardTargetsBuddy } from './task-card-routing.js'
 import { upsertShadowThreadBinding } from './thread-bindings.js'
 import { createTypingCallbacks } from './typing.js'
 import { reportShadowUsageSnapshot } from './usage-reporting.js'
@@ -74,6 +77,16 @@ type RuntimeTaskCard = ShadowMessageCard & {
       label?: string
     }
     expiresAt?: string
+  }
+}
+
+export const OPENCLAW_RUNTIME_REPLY_PROGRESS_NOTE =
+  'OpenClaw runtime delivered a reply; awaiting explicit task completion'
+
+export function openClawRuntimeReplyProgressUpdate() {
+  return {
+    status: 'running' as const,
+    note: OPENCLAW_RUNTIME_REPLY_PROGRESS_NOTE,
   }
 }
 
@@ -115,14 +128,17 @@ function taskClaimExpired(card: RuntimeTaskCard) {
   return new Date(card.claim.expiresAt).getTime() <= Date.now()
 }
 
-function findRuntimeTaskCard(message: ShadowMessage, botUserId: string) {
+function findRuntimeTaskCard(
+  message: ShadowMessage,
+  identity: { botUserId: string; botAgentId?: string | null },
+) {
   const cards = message.metadata?.cards
   if (!Array.isArray(cards)) return null
   return (
     cards.find(
       (card): card is RuntimeTaskCard =>
         isRuntimeTaskCard(card) &&
-        card.assignee?.userId === botUserId &&
+        taskCardTargetsBuddy(card, identity) &&
         !isTerminalTaskStatus(card.status),
     ) ?? null
   )
@@ -190,9 +206,131 @@ type ServerAppPromptRef = {
   label: string
   app?: ShadowServerAppIntegration
   mentioned: boolean
+  copilot: boolean
 }
 
 const MAX_SERVER_APPS_IN_CONTEXT = 8
+const MAX_BUDDY_INBOXES_IN_CONTEXT = 12
+
+export type BuddyInboxDirectoryDescriptor = {
+  agentId: string
+  ownerId: string
+  displayName: string | null
+  username: string | null
+  status: string | null
+  channelId: string | null
+  channelName: string | null
+  canManage: boolean
+  current: boolean
+  serverId: string | null
+  serverSlug: string | null
+  serverName: string | null
+}
+
+function promptValue(value: string | null | undefined, fallback = 'unknown') {
+  const normalized = value?.replace(/\s+/g, ' ').trim()
+  return normalized ? normalized.slice(0, 160) : fallback
+}
+
+function buddyInboxDirectoryFields(entries: BuddyInboxDirectoryDescriptor[], truncated: boolean) {
+  if (entries.length === 0) return {}
+  return {
+    ServerBuddyInboxCount: entries.length,
+    ServerBuddyInboxDirectoryTruncated: truncated,
+    ServerBuddyInboxes: entries,
+    ServerBuddyInboxSummary: entries
+      .map((entry) => {
+        const label = entry.displayName || entry.username || entry.agentId
+        return `${label}(${entry.agentId}${entry.current ? ', current' : ''}, status=${entry.status ?? 'unknown'})`
+      })
+      .join(', '),
+  }
+}
+
+function toBuddyInboxDescriptor(
+  inbox: ShadowBuddyInboxSummary,
+  currentAgentId: string | null | undefined,
+): BuddyInboxDirectoryDescriptor | null {
+  if (!inbox.agent?.id) return null
+  return {
+    agentId: inbox.agent.id,
+    ownerId: inbox.agent.ownerId,
+    displayName: inbox.agent.user?.displayName ?? null,
+    username: inbox.agent.user?.username ?? null,
+    status: inbox.agent.status ?? null,
+    channelId: inbox.channel?.id ?? null,
+    channelName: inbox.channel?.name ?? null,
+    canManage: inbox.canManage,
+    current: Boolean(currentAgentId && inbox.agent.id === currentAgentId),
+    serverId: inbox.server?.id ?? null,
+    serverSlug: inbox.server?.slug ?? null,
+    serverName: inbox.server?.name ?? null,
+  }
+}
+
+function formatBuddyInboxDirectoryEntry(entry: BuddyInboxDirectoryDescriptor) {
+  const label = promptValue(entry.displayName || entry.username || entry.agentId)
+  const parts = [
+    `agentId=${entry.agentId}`,
+    `current=${entry.current ? 'true' : 'false'}`,
+    `status=${promptValue(entry.status)}`,
+    entry.channelId ? `inboxChannelId=${entry.channelId}` : 'inboxChannelId=none',
+    entry.channelName ? `inboxChannel=#${promptValue(entry.channelName)}` : '',
+    `canManage=${entry.canManage ? 'true' : 'false'}`,
+  ].filter(Boolean)
+  return `- ${label}: ${parts.join(', ')}`
+}
+
+export function formatBuddyInboxDirectoryContext(params: {
+  entries: BuddyInboxDirectoryDescriptor[]
+  serverRef: string
+  truncated?: boolean
+}) {
+  if (params.entries.length === 0) return ''
+  return [
+    'Shadow server Buddy Inbox directory:',
+    `Server reference: ${params.serverRef}`,
+    ...params.entries.map(formatBuddyInboxDirectoryEntry),
+    params.truncated ? `Only the first ${params.entries.length} Buddy Inboxes are listed.` : '',
+    '',
+    'These are descriptor-only Buddy Inbox entries for the current server. They do not include Inbox message content.',
+    'Remote config monitored channels describe this Buddy runtime, not the full server Buddy directory. Do not infer that only one Buddy exists from monitored channels.',
+    'Delegate work by enqueueing a task card through the mounted Shadow CLI, for example: `shadowob inbox enqueue --server "<current-server-id-or-slug>" --agent "<target-agent-id>" --title "<task-title>" --body "<task-body>" --json`.',
+    '`canManage` only means admin-management permission for the current actor. It is not the delivery/collaboration capability; use Inbox admission results from enqueue/pending commands to handle authorization.',
+    'For execution work, prefer peer Buddies with relevant status/capability when available, and keep coordination state in server apps or task cards instead of writing directly into peer Inbox channels.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+async function buildBuddyInboxDirectoryContext(params: {
+  client: ShadowClient
+  currentAgentId: string | null
+  runtime: ShadowRuntimeLogger
+  serverInfo: ChannelServerInfo | undefined
+}): Promise<{ prompt: string; fields: Record<string, unknown> }> {
+  if (!params.serverInfo) return { prompt: '', fields: {} }
+
+  const serverRef = params.serverInfo.serverSlug || params.serverInfo.serverId
+  try {
+    const inboxes = await params.client.listServerBuddyInboxes(serverRef)
+    if (!Array.isArray(inboxes) || inboxes.length === 0) return { prompt: '', fields: {} }
+    const entries = inboxes
+      .map((inbox) => toBuddyInboxDescriptor(inbox, params.currentAgentId))
+      .filter((entry): entry is BuddyInboxDirectoryDescriptor => entry !== null)
+    const limited = entries.slice(0, MAX_BUDDY_INBOXES_IN_CONTEXT)
+    const truncated = entries.length > limited.length
+    return {
+      prompt: formatBuddyInboxDirectoryContext({ entries: limited, serverRef, truncated }),
+      fields: buddyInboxDirectoryFields(limited, truncated),
+    }
+  } catch (err) {
+    params.runtime.error?.(
+      `[buddy-inbox] Failed listing Buddy Inboxes for ${params.serverInfo.serverId}: ${String(err)}`,
+    )
+    return { prompt: '', fields: {} }
+  }
+}
 
 function serverAppCommandSummary(app: ShadowServerAppIntegration) {
   return app.manifest.commands
@@ -205,12 +343,15 @@ function serverAppCommandSummary(app: ShadowServerAppIntegration) {
 }
 
 function formatInstalledServerAppSummary(ref: ServerAppPromptRef) {
+  const flags = [ref.mentioned ? 'mentioned=true' : '', ref.copilot ? 'copilot=true' : ''].filter(
+    Boolean,
+  )
   const app = ref.app
   if (!app) {
-    return `- ${ref.label}: appKey=${ref.appKey}, server=${ref.server}${ref.mentioned ? ', mentioned=true' : ''}`
+    return `- ${ref.label}: appKey=${ref.appKey}, server=${ref.server}${flags.length > 0 ? `, ${flags.join(', ')}` : ''}`
   }
   return [
-    `- ${app.name}: appKey=${app.appKey}, server=${ref.server}, defaultPermissions=${app.defaultPermissions.join(',') || 'none'}, defaultApproval=${app.defaultApprovalMode}`,
+    `- ${app.name}: appKey=${app.appKey}, server=${ref.server}, defaultPermissions=${app.defaultPermissions.join(',') || 'none'}, defaultApproval=${app.defaultApprovalMode}${flags.length > 0 ? `, ${flags.join(', ')}` : ''}`,
     app.description ? `  description=${app.description}` : '',
     `  commands=${serverAppCommandSummary(app)}`,
   ]
@@ -248,6 +389,7 @@ async function buildServerAppSkillsContext(params: {
   client: ShadowClient
   serverInfo: ChannelServerInfo | undefined
   runtime: ShadowRuntimeLogger
+  copilotContext?: ShadowMessageCopilotContext | null
 }): Promise<{ prompt: string; fields: Record<string, unknown> }> {
   const appRefs = new Map<string, ServerAppPromptRef>()
   const installedApps: ShadowServerAppIntegration[] = []
@@ -264,6 +406,7 @@ async function buildServerAppSkillsContext(params: {
           label: app.name,
           app,
           mentioned: false,
+          copilot: false,
         })
       }
     } catch (err) {
@@ -286,11 +429,43 @@ async function buildServerAppSkillsContext(params: {
       server,
       label: mention.label || mention.sourceToken || mention.token || appKey,
       mentioned: true,
+      copilot: existing?.copilot ?? false,
     })
+  }
+
+  const copilotContext = params.copilotContext
+  if (copilotContext?.appKey) {
+    const server =
+      params.serverInfo?.serverId ?? copilotContext.serverId ?? copilotContext.serverSlug
+    if (server) {
+      const serverLabel =
+        copilotContext.serverSlug ??
+        params.serverInfo?.serverSlug ??
+        copilotContext.serverId ??
+        params.serverInfo?.serverId ??
+        server
+      const key = `${server}:${copilotContext.appKey}`
+      const existing = appRefs.get(key)
+      const installedApp =
+        existing?.app ?? installedApps.find((app) => app.appKey === copilotContext.appKey)
+      appRefs.set(key, {
+        ...existing,
+        appKey: copilotContext.appKey,
+        server: existing?.server ?? serverLabel,
+        label: existing?.label ?? copilotContext.appName ?? copilotContext.appKey,
+        app: installedApp,
+        mentioned: existing?.mentioned ?? false,
+        copilot: true,
+      })
+    }
   }
   if (appRefs.size === 0) return { prompt: '', fields: {} }
 
-  const refs = Array.from(appRefs.values()).slice(0, MAX_SERVER_APPS_IN_CONTEXT)
+  const refs = Array.from(appRefs.values())
+    .sort(
+      (a, b) => Number(b.copilot) - Number(a.copilot) || Number(b.mentioned) - Number(a.mentioned),
+    )
+    .slice(0, MAX_SERVER_APPS_IN_CONTEXT)
   const documents = await Promise.all(
     refs.map(async (ref) => {
       try {
@@ -328,6 +503,45 @@ async function buildServerAppSkillsContext(params: {
   return { prompt, fields: serverAppContextFields(installedApps) }
 }
 
+function getMessageCopilotContext(message: ShadowMessage): ShadowMessageCopilotContext | null {
+  const context = message.metadata?.copilotContext
+  return isMessageCopilotContext(context) ? context : null
+}
+
+function formatCopilotContextForAgent(context: ShadowMessageCopilotContext | null) {
+  if (!context) return ''
+  const appLabel = promptValue(context.appName, context.appKey)
+  return [
+    'Shadow Copilot app context:',
+    `Current app: ${appLabel}`,
+    `App key: ${context.appKey}`,
+    context.serverAppId ? `Server app id: ${context.serverAppId}` : '',
+    context.appId ? `Catalog app id: ${context.appId}` : '',
+    context.serverSlug ? `Server slug: ${context.serverSlug}` : '',
+    context.serverId ? `Server id: ${context.serverId}` : '',
+    context.channelId ? `Copilot channel id: ${context.channelId}` : '',
+    context.channelKind ? `Copilot channel kind: ${context.channelKind}` : '',
+    'Treat this as the active app surface for the user message. Use injected Shadow Server App Skills and the Shadow CLI app command flow when the app capabilities match the request.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function copilotContextFields(context: ShadowMessageCopilotContext | null) {
+  if (!context) return {}
+  return {
+    CopilotMode: 'server_app',
+    CopilotAppKey: context.appKey,
+    CopilotAppName: context.appName ?? null,
+    CopilotServerAppId: context.serverAppId ?? null,
+    CopilotCatalogAppId: context.appId ?? null,
+    CopilotServerId: context.serverId ?? null,
+    CopilotServerSlug: context.serverSlug ?? null,
+    CopilotChannelId: context.channelId ?? null,
+    CopilotChannelKind: context.channelKind ?? null,
+  }
+}
+
 export async function processShadowMessage(params: {
   message: ShadowMessage
   account: ShadowAccountConfig
@@ -363,6 +577,7 @@ export async function processShadowMessage(params: {
   const preflight = evaluateShadowMessagePreflight({
     message,
     botUserId,
+    botAgentId: agentId,
     botUsername,
     channelPolicies,
     runtime,
@@ -396,7 +611,7 @@ export async function processShadowMessage(params: {
   runtime.log?.(`[routing] Resolved agent: ${route.agentId} (account ${accountId})`)
 
   const mediaClient = new ShadowClient(account.serverUrl, account.token)
-  let runtimeTaskCard = findRuntimeTaskCard(message, botUserId)
+  let runtimeTaskCard = findRuntimeTaskCard(message, { botUserId, botAgentId: agentId })
   if (
     runtimeTaskCard &&
     (runtimeTaskCard.status === 'queued' ||
@@ -485,6 +700,8 @@ export async function processShadowMessage(params: {
   const structuredMentions = getShadowMessageMentions(message)
   const mentionContext = formatShadowMentionsForAgent(structuredMentions)
   const serverInfo = channelServerMap.get(channelId)
+  const copilotContext = getMessageCopilotContext(message)
+  const copilotPrompt = formatCopilotContextForAgent(copilotContext)
   const channelLabel = serverInfo ? `#${serverInfo.channelName}` : `channel:${channelId}`
   const conversationLabel = serverInfo ? `${serverInfo.serverName} ${channelLabel}` : peerId
   const messageBodyForAgent = interactiveResponseContext.text || baseBodyForAgent
@@ -494,6 +711,13 @@ export async function processShadowMessage(params: {
     client,
     serverInfo,
     runtime,
+    copilotContext,
+  })
+  const buddyInboxContext = await buildBuddyInboxDirectoryContext({
+    client,
+    currentAgentId: agentId,
+    runtime,
+    serverInfo,
   })
   const viewerCommerceContext = await buildCommerceViewerContextForAgent({
     account,
@@ -505,6 +729,8 @@ export async function processShadowMessage(params: {
     buildCommerceContextForAgent(account),
     viewerCommerceContext,
     mentionContext,
+    copilotPrompt,
+    buddyInboxContext.prompt,
     serverAppContext.prompt,
     runtimeTaskCard ? taskCardPrompt(message, runtimeTaskCard) : '',
     messageBodyForAgent,
@@ -552,6 +778,8 @@ export async function processShadowMessage(params: {
     MessageSid: message.id,
     WasMentioned: wasMentioned,
     ...mentionContextFields(structuredMentions),
+    ...copilotContextFields(copilotContext),
+    ...buddyInboxContext.fields,
     ...serverAppContext.fields,
     OriginatingChannel: 'shadowob',
     OriginatingTo: `shadowob:channel:${channelId}`,
@@ -716,13 +944,10 @@ export async function processShadowMessage(params: {
 
     if (runtimeTaskCard) {
       await client
-        .updateTaskCard(message.id, runtimeTaskCard.id, {
-          status: 'completed',
-          note: 'OpenClaw runtime completed reply dispatch',
-        })
+        .updateTaskCard(message.id, runtimeTaskCard.id, openClawRuntimeReplyProgressUpdate())
         .catch((err) => {
           runtime.error?.(
-            `[task] Failed marking task card ${runtimeTaskCard?.id} completed: ${String(err)}`,
+            `[task] Failed recording task card ${runtimeTaskCard?.id} reply progress: ${String(err)}`,
           )
         })
     }

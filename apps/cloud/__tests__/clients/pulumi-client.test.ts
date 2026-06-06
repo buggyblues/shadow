@@ -1,6 +1,10 @@
 import { delimiter } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { ensurePulumiCliOnPath, resolvePulumiBackendUrl } from '../../src/clients/pulumi-client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  deployStack,
+  ensurePulumiCliOnPath,
+  resolvePulumiBackendUrl,
+} from '../../src/clients/pulumi-client'
 
 const originalPath = process.env.PATH
 const originalPulumiBackendUrl = process.env.PULUMI_BACKEND_URL
@@ -9,6 +13,7 @@ describe('ensurePulumiCliOnPath', () => {
   afterEach(() => {
     process.env.PATH = originalPath
     process.env.PULUMI_BACKEND_URL = originalPulumiBackendUrl
+    vi.restoreAllMocks()
   })
 
   it('prepends the Pulumi bin directory to PATH', () => {
@@ -41,5 +46,23 @@ describe('ensurePulumiCliOnPath', () => {
     process.env.PULUMI_BACKEND_URL = 'https://api.pulumi.example'
 
     expect(resolvePulumiBackendUrl('/tmp/shadow-pulumi-state')).toBe('https://api.pulumi.example')
+  })
+
+  it('signals stack cancellation when a deploy is cancelled', async () => {
+    let cancelled = false
+    const stack = {
+      up: vi.fn(() => new Promise(() => undefined)),
+      preview: vi.fn(),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const deployment = deployStack(stack as never, {
+      isCancelled: () => cancelled,
+      cancelPollMs: 1,
+    })
+    cancelled = true
+
+    await expect(deployment).rejects.toThrow('Deployment cancelled by user')
+    expect(stack.cancel).toHaveBeenCalledTimes(1)
   })
 })

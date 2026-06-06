@@ -78,6 +78,21 @@ export interface ShadowBridgeEnqueueInboxTaskInput {
   task: ShadowServerAppInboxTaskOutbox
 }
 
+export interface ShadowBridgeOpenCopilotInput {
+  delivery: ShadowServerAppInboxDelivery
+}
+
+export interface ShadowBridgeOpenWorkspaceResourceInput {
+  resource: {
+    uri?: string
+    workspaceFileId?: string
+    workspaceNodeId?: string
+    path?: string
+    name?: string
+    title?: string
+  }
+}
+
 export interface ShadowBridgeOpenBuddyCreatorInput {
   landing?: {
     title?: string
@@ -85,6 +100,18 @@ export interface ShadowBridgeOpenBuddyCreatorInput {
     source?: string
   }
 }
+
+export const SHADOW_BRIDGE_CAPABILITIES = [
+  'command.call',
+  'inbox.list',
+  'inbox.task.enqueue',
+  'copilot.open',
+  'workspace.open',
+  'buddy.create.open',
+  'route.navigate',
+] as const
+
+export type ShadowBridgeCapability = (typeof SHADOW_BRIDGE_CAPABILITIES)[number]
 
 export interface ShadowBridgeOptions {
   appKey: string
@@ -94,9 +121,12 @@ export interface ShadowBridgeOptions {
 }
 
 type BridgeResponseType =
+  | 'shadow.app.capabilities.response'
   | 'shadow.app.command.response'
   | 'shadow.app.inboxes.response'
   | 'shadow.app.inbox.enqueue.response'
+  | 'shadow.app.copilot.open.response'
+  | 'shadow.app.workspace.open.response'
   | 'shadow.app.buddy.create.response'
 
 type ReactNativeBridgeWindow = Window & {
@@ -107,12 +137,18 @@ type ReactNativeBridgeWindow = Window & {
 }
 
 export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridgeCommandMap> {
+  static readonly capabilitiesRequestType = 'shadow.app.capabilities.request'
+  static readonly capabilitiesResponseType = 'shadow.app.capabilities.response'
   static readonly commandRequestType = 'shadow.app.command.request'
   static readonly commandResponseType = 'shadow.app.command.response'
   static readonly inboxesRequestType = 'shadow.app.inboxes.request'
   static readonly inboxesResponseType = 'shadow.app.inboxes.response'
   static readonly enqueueInboxTaskRequestType = 'shadow.app.inbox.enqueue.request'
   static readonly enqueueInboxTaskResponseType = 'shadow.app.inbox.enqueue.response'
+  static readonly openCopilotRequestType = 'shadow.app.copilot.open.request'
+  static readonly openCopilotResponseType = 'shadow.app.copilot.open.response'
+  static readonly openWorkspaceResourceRequestType = 'shadow.app.workspace.open.request'
+  static readonly openWorkspaceResourceResponseType = 'shadow.app.workspace.open.response'
   static readonly openBuddyCreatorRequestType = 'shadow.app.buddy.create.request'
   static readonly openBuddyCreatorResponseType = 'shadow.app.buddy.create.response'
 
@@ -224,6 +260,15 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
     )
   }
 
+  capabilities(options: { timeoutMs?: number } = {}) {
+    return this.request<{ capabilities: ShadowBridgeCapability[] }>(
+      ShadowBridge.capabilitiesRequestType,
+      ShadowBridge.capabilitiesResponseType,
+      {},
+      options.timeoutMs ?? 15000,
+    )
+  }
+
   inboxes(options: { timeoutMs?: number } = {}) {
     return this.request<{ inboxes: ShadowBridgeBuddyInbox[] }>(
       ShadowBridge.inboxesRequestType,
@@ -239,6 +284,31 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
       ShadowBridge.enqueueInboxTaskResponseType,
       input,
       options.timeoutMs,
+    )
+  }
+
+  openCopilot(
+    deliveryOrInput: ShadowServerAppInboxDelivery | ShadowBridgeOpenCopilotInput,
+    options: { timeoutMs?: number } = {},
+  ) {
+    const input = 'delivery' in deliveryOrInput ? deliveryOrInput : { delivery: deliveryOrInput }
+    return this.request<{ opened: boolean }>(
+      ShadowBridge.openCopilotRequestType,
+      ShadowBridge.openCopilotResponseType,
+      input,
+      options.timeoutMs ?? 15000,
+    )
+  }
+
+  openWorkspaceResource(
+    input: ShadowBridgeOpenWorkspaceResourceInput,
+    options: { timeoutMs?: number } = {},
+  ) {
+    return this.request<{ opened: boolean }>(
+      ShadowBridge.openWorkspaceResourceRequestType,
+      ShadowBridge.openWorkspaceResourceResponseType,
+      input,
+      options.timeoutMs ?? 15000,
     )
   }
 

@@ -1427,8 +1427,8 @@ export class FlashService {
             '/arena custom script="return api.circle(activeCardIds, arena.x, arena.y, 220)"',
             '/move-to <card> <arenaId>',
             '/activate <arenaId>',
-            'shadowob app call shadow-flash cards.create --file ./image.png',
-            'shadowob app call shadow-flash selection.get',
+            'shadowob app call flash cards.create --file ./image.png',
+            'shadowob app call flash selection.get',
           ],
         },
       })

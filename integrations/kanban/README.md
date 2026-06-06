@@ -1,6 +1,6 @@
-# Shadow Kanban App
+# Kanban App
 
-Shadow Kanban is a standalone App. Run it as a separate process and connect it to Shadow through its manifest URL and command protocol.
+Kanban is a standalone App. Run it as a separate process and connect it to Shadow through its manifest URL and command protocol.
 
 ```bash
 cp integrations/kanban/.env.example integrations/kanban/.env
@@ -33,30 +33,34 @@ Environment:
 
 This integration is the reference App demo. It uses `@shadowob/sdk` for the modeled App runtime, typed command handlers generated from JSON Schema, Shadow OAuth command token introspection, input validation, actor profile display, and JSON persistence.
 
-## Buddy Inbox workflow
+## Buddy Inbox coordination
 
-Shadow Kanban demonstrates the Multica-style task flow without adding Kanban or issue concepts to Shadow core.
+Kanban is a generic task board. It does not execute domain work, own Skills, or send work to a default Buddy. People or coordinator Buddies use it to create cards, track state, and attach artifact references.
 
-- `cards.create_and_dispatch` creates a board card, assigns a Buddy label, and returns `shadow.outbox.inboxTasks`.
-- `cards.dispatch` assigns a board card to a Buddy label and returns `shadow.outbox.inboxTasks`.
-- `cards.comment` stores the comment and returns `shadow.outbox.inboxTasks` when the body mentions `@Strategy Buddy`.
+- `cards.create` creates a normal task card.
+- `cards.link` stores typed card relationships such as dependency or parent-child.
+- `cards.update` updates status, progress, prompt, labels, priority, and column state.
+- `cards.rerun` reopens a card for retry or revision.
+- `cards.artifacts.add` attaches workspace artifact references from Buddy/runtime work.
 
-Shadow Server consumes `shadow.protocol === "shadow.app/1"` plus `shadow.outbox.inboxTasks`, resolves the target Buddy in the current server, publishes a Task Card to the Buddy Inbox channel, and returns delivery receipts under `shadow.outbox.deliveries`.
-
-Kanban intentionally does not own Skills or scheduled Autopilot behavior. Skills live in the standalone `shadow-skills` App. Scheduled work should be modeled by an automation app or platform scheduler that enqueues ordinary Inbox task cards.
+Buddy assignment and real work routing happen outside the Kanban app through Buddy Inbox. A coordinator Buddy can discover server Buddies, create generic cards in Kanban, link those cards into larger work graphs when needed, enqueue work to the chosen Buddies through their Inbox, and submit summaries or artifact references back to Kanban.
 
 Local command smoke tests:
 
 ```bash
-curl -s http://localhost:4201/api/local/commands/cards.create_and_dispatch \
+curl -s http://localhost:4201/api/local/commands/cards.create \
   -H 'Content-Type: application/json' \
-  -d '{"input":{"title":"Review release risks","assigneeLabel":"Strategy Buddy"}}'
+  -d '{"input":{"id":"card_release_risks","title":"Review release risks","label":"Risk"}}'
 
-curl -s http://localhost:4201/api/local/commands/cards.dispatch \
+curl -s http://localhost:4201/api/local/commands/cards.create \
   -H 'Content-Type: application/json' \
-  -d '{"input":{"cardId":"card_bot","assigneeLabel":"Strategy Buddy"}}'
+  -d '{"input":{"id":"card_source_research","title":"Research source material","label":"Research","prompt":"Summarize reusable facts."}}'
+
+curl -s http://localhost:4201/api/local/commands/cards.link \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"sourceCardId":"card_release_risks","targetCardId":"card_source_research","kind":"related"}}'
 
 curl -s http://localhost:4201/api/local/commands/cards.comment \
   -H 'Content-Type: application/json' \
-  -d '{"input":{"cardId":"card_bot","body":"@Strategy Buddy please review launch risks"}}'
+  -d '{"input":{"cardId":"card_release_risks","body":"Ready for review."}}'
 ```

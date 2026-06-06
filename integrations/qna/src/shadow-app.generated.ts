@@ -4,29 +4,29 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
-  appKey: 'shadow-answers',
-  name: '问问',
+  appKey: 'answers',
+  name: 'Answers',
   description:
-    'A Q&A App for tagged questions, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.',
+    'A Q&A app for tagged questions, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.',
   version: '1.0.0',
   iconUrl: 'http://localhost:4210/assets/icon.svg',
   marketplace: {
     tagline: 'A server knowledge base where questions turn into reusable answers.',
     summary:
-      '问问 helps a server collect tagged questions, Markdown answers, comments, images, search results, and Buddy participation. Use it for team FAQs, study groups, support communities, and long-lived knowledge that should stay searchable.',
-    categories: ['知识', '协作', '工具'],
+      'Answers helps a server collect tagged questions, Markdown answers, comments, images, search results, and Buddy participation. Use it for team FAQs, study groups, support communities, and long-lived knowledge that should stay searchable.',
+    categories: ['Knowledge', 'Collaboration', 'Tools'],
     supportedLanguages: ['中文', 'English'],
     coverImageUrl: 'http://localhost:4210/assets/cover.png',
     gallery: [
       {
         url: 'http://localhost:4210/assets/cover.png',
         type: 'image',
-        alt: 'qna cover',
+        alt: 'Answers cover',
       },
     ],
     links: [
       {
-        label: '主页',
+        label: 'Home',
         url: 'http://localhost:4210/shadow/server',
         type: 'website',
       },
@@ -345,7 +345,7 @@ export const shadowServerAppManifest = {
       help: {
         summary: 'Upload an image and use the returned URL in Markdown.',
         usage:
-          'shadowob app call shadow-answers images.upload --server "<server>" --file ./diagram.png --json',
+          'shadowob app call answers images.upload --server "<server>" --file ./diagram.png --json',
         details: 'Use the returned image.url as `![description](url)` inside a question or answer.',
       },
       path: '/api/shadow/commands/images.upload',
@@ -401,27 +401,50 @@ export const shadowServerAppManifest = {
   ],
   skills: [
     {
-      name: 'shadow-answers-qna-ops',
+      name: 'answers-qna-ops',
       description:
         'Use when a Buddy needs to search tagged questions, manage personal Q&A lists, ask a question, upload images, answer with Markdown, or comment.',
       commandHints: [
-        'shadow-answers questions.list',
-        'shadow-answers questions.get',
-        'shadow-answers questions.ask',
-        'shadow-answers answers.create',
-        'shadow-answers questions.delete',
-        'shadow-answers answers.delete',
-        'shadow-answers comments.create',
-        'shadow-answers tags.list',
-        'shadow-answers lists.list',
-        'shadow-answers lists.create',
-        'shadow-answers lists.add_question',
-        'shadow-answers lists.remove_question',
-        'shadow-answers images.upload',
+        'answers questions.list',
+        'answers questions.get',
+        'answers questions.ask',
+        'answers answers.create',
+        'answers questions.delete',
+        'answers answers.delete',
+        'answers comments.create',
+        'answers tags.list',
+        'answers lists.list',
+        'answers lists.create',
+        'answers lists.add_question',
+        'answers lists.remove_question',
+        'answers images.upload',
       ],
     },
   ],
   events: ['qna.updated'],
+  i18n: {
+    'zh-CN': {
+      name: '问问',
+      description:
+        '问答应用，支持标签问题、个人列表、Markdown 回答、评论、图片上传、搜索、删除和 Buddy 参与。',
+      marketplace: {
+        tagline: '把问题沉淀成可复用答案的服务器知识库。',
+        summary:
+          '问问帮助服务器收集带标签的问题、Markdown 回答、评论、图片、搜索结果和 Buddy 参与记录。适合团队 FAQ、学习小组、支持社区和需要长期可搜索的知识沉淀。',
+        categories: ['知识', '协作', '工具'],
+        gallery: [
+          {
+            alt: '问问封面',
+          },
+        ],
+        links: [
+          {
+            label: '主页',
+          },
+        ],
+      },
+    },
+  },
 } as const satisfies ShadowServerAppManifest
 
 export type ShadowServerAppManifestDefinition = typeof shadowServerAppManifest

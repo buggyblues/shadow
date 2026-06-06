@@ -1,11 +1,19 @@
 import type {
+  BuddyInboxTaskFilter,
+  BuddyInboxViewMode,
   CommerceProductCard,
   MentionSuggestion,
   MentionSuggestionTrigger,
   MessageMention,
   TaskMessageCardTag,
 } from '@shadowob/shared'
-import { assignMentionRanges, canonicalMentionToken } from '@shadowob/shared'
+import {
+  assignMentionRanges,
+  buildBuddyInboxViewMessages,
+  canonicalMentionToken,
+  getBuddyInboxTaskMessageIds,
+  parseBuddyInboxAgentId,
+} from '@shadowob/shared'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   RecordingPresets,
@@ -138,8 +146,6 @@ type PendingChatFile = {
 
 type TaskDraftPriority = 'low' | 'normal' | 'high' | 'urgent'
 
-const taskPriorityOptions: TaskDraftPriority[] = ['normal', 'high', 'urgent', 'low']
-
 function taskDraftToInput(value: string) {
   const lines = value
     .split(/\r?\n/u)
@@ -201,18 +207,6 @@ interface NotificationEvent {
 function metaString(event: NotificationEvent, key: string) {
   const value = event.metadata?.[key]
   return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function hasTaskCard(message: Message) {
-  return (message.metadata?.cards ?? []).some(
-    (card) =>
-      card &&
-      typeof card === 'object' &&
-      'kind' in card &&
-      card.kind === 'task' &&
-      'id' in card &&
-      typeof card.id === 'string',
-  )
 }
 
 function getNotificationChannelId(event: NotificationEvent) {
@@ -334,11 +328,12 @@ export default function ChannelViewScreen() {
   const [pendingFiles, setPendingFiles] = useState<PendingChatFile[]>([])
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
   const [showProductPicker, setShowProductPicker] = useState(false)
-  const [showTaskComposer, setShowTaskComposer] = useState(false)
   const [taskDraft, setTaskDraft] = useState('')
   const [taskPriority, setTaskPriority] = useState<TaskDraftPriority>('normal')
   const [taskTags, setTaskTags] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
+  const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('tasks')
+  const [inboxTaskFilter, setInboxTaskFilter] = useState<BuddyInboxTaskFilter>('all')
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
@@ -692,6 +687,7 @@ export default function ChannelViewScreen() {
   const channel = bootstrap?.channel ?? channelFallback
   const isDirectChannel = channel?.kind === 'dm' || channel?.serverId === null
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
+  const isInboxTaskMode = isInboxChannel && inboxViewMode === 'tasks'
   const { data: accessFallback } = useQuery({
     queryKey: ['channel-access', channelId],
     queryFn: () =>
@@ -755,10 +751,34 @@ export default function ChannelViewScreen() {
       username: string
       displayName: string | null
       avatarUrl: string | null
+      status?: string | null
       isBot?: boolean
     }
+    agent?: {
+      id: string
+    } | null
     role: string
   }
+
+  const inboxAgentId = isInboxChannel ? parseBuddyInboxAgentId(channel?.topic) : null
+  const { data: inboxServerMembers = [] } = useQuery({
+    queryKey: ['server-members-for-inbox-buddy', channel?.serverId, inboxAgentId],
+    queryFn: () => fetchApi<ServerMemberEntry[]>(`/api/servers/${channel!.serverId}/members`),
+    enabled: Boolean(channel?.serverId && isInboxChannel && inboxAgentId),
+    staleTime: 30_000,
+  })
+
+  const inboxBuddyMember = useMemo(
+    () => inboxServerMembers.find((member) => member.agent?.id === inboxAgentId) ?? null,
+    [inboxAgentId, inboxServerMembers],
+  )
+  const inboxBuddy = inboxBuddyMember?.user ?? null
+  const inboxBuddyName = inboxBuddy?.displayName ?? inboxBuddy?.username ?? channel?.name ?? '...'
+  const inboxBuddyBusy = Boolean(
+    inboxBuddy?.id &&
+      (typingUsers.some((user) => user.userId === inboxBuddy.id) ||
+        activityUsers.some((user) => user.userId === inboxBuddy.id)),
+  )
 
   const { data: serverMemberData } = useQuery({
     queryKey: ['server-members-for-invite', channel?.serverId],
@@ -1108,11 +1128,7 @@ export default function ChannelViewScreen() {
   }, [messages])
 
   const taskCardMessageIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const message of messages) {
-      if (hasTaskCard(message)) ids.add(message.id)
-    }
-    return ids
+    return getBuddyInboxTaskMessageIds(messages)
   }, [messages])
 
   const taskRepliesByMessageId = useMemo(() => {
@@ -1128,10 +1144,12 @@ export default function ChannelViewScreen() {
   }, [messages, taskCardMessageIds])
 
   const timelineBaseMessages = useMemo(() => {
-    return messages.filter(
-      (message) => !message.replyToId || !taskCardMessageIds.has(message.replyToId),
-    )
-  }, [messages, taskCardMessageIds])
+    return buildBuddyInboxViewMessages(messages, {
+      isInboxChannel,
+      mode: inboxViewMode,
+      taskFilter: inboxTaskFilter,
+    })
+  }, [inboxTaskFilter, inboxViewMode, isInboxChannel, messages])
 
   const buildThreadName = useCallback(
     (message: Message) => {
@@ -2266,12 +2284,6 @@ export default function ChannelViewScreen() {
     }
   }
 
-  const openTaskComposer = useCallback(() => {
-    const draft = inputText.trim()
-    setTaskDraft((current) => current || draft)
-    setShowTaskComposer(true)
-  }, [inputText])
-
   const createTaskCard = useCallback(async () => {
     if (!channelId || creatingTask) return
     const input = taskDraftToInput(taskDraft)
@@ -2291,7 +2303,6 @@ export default function ChannelViewScreen() {
       setTaskDraft('')
       setTaskPriority('normal')
       setTaskTags('')
-      setShowTaskComposer(false)
       setInputText('')
       clearDraft()
       successHaptic()
@@ -2787,7 +2798,7 @@ export default function ChannelViewScreen() {
             channelId={channelId!}
             serverSlug={serverSlug}
             allMessages={messages}
-            taskReplies={taskRepliesByMessageId.get(item.data.id)}
+            taskReplies={isInboxTaskMode ? taskRepliesByMessageId.get(item.data.id) : undefined}
             isGrouped={isGrouped}
             selectionMode={selectionMode}
             isSelected={selectedMessageIds.has(item.data.id)}
@@ -2810,6 +2821,7 @@ export default function ChannelViewScreen() {
       threadsByParentId,
       messages,
       latestMessageId,
+      isInboxTaskMode,
       taskRepliesByMessageId,
       timeline,
       highlightMessageId,
@@ -2865,6 +2877,24 @@ export default function ChannelViewScreen() {
 
   const getMessageKey = useCallback((item: Message) => item.id, [])
   const canCreateTask = Boolean(taskDraftToInput(taskDraft).title) && !creatingTask
+  const channelNavTitle =
+    isInboxChannel && inboxBuddy ? (
+      <View style={styles.channelNavTitle}>
+        <Avatar
+          uri={inboxBuddy.avatarUrl}
+          name={inboxBuddyName}
+          userId={inboxBuddy.id}
+          size={30}
+          showStatus
+          status={inboxBuddyBusy ? 'busy' : inboxBuddy.status}
+        />
+        <Text style={[styles.channelNavTitleText, { color: colors.text }]} numberOfLines={1}>
+          {inboxBuddyName}
+        </Text>
+      </View>
+    ) : (
+      `# ${channel?.name ?? '...'}`
+    )
 
   if (access && !access.canAccess) {
     const gateChannel = access.channel ?? channel
@@ -2918,25 +2948,27 @@ export default function ChannelViewScreen() {
   return (
     <BackgroundSurface style={styles.container}>
       <MobileNavigationBar
-        title={`# ${channel?.name ?? '...'}`}
+        title={channelNavTitle}
         left={<MobileBackButton onPress={() => router.back()} />}
         right={
           <>
-            <ToolbarButton
-              icon={Users}
-              iconColor={colors.textMuted}
-              onPress={() => {
-                selectionHaptic()
-                if (serverSlug) {
-                  router.push(
-                    `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
-                  )
-                } else {
-                  setShowMemberList(true)
-                }
-              }}
-              variant="ghost"
-            />
+            {!isInboxChannel && (
+              <ToolbarButton
+                icon={Users}
+                iconColor={colors.textMuted}
+                onPress={() => {
+                  selectionHaptic()
+                  if (serverSlug) {
+                    router.push(
+                      `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
+                    )
+                  } else {
+                    setShowMemberList(true)
+                  }
+                }}
+                variant="ghost"
+              />
+            )}
             <ToolbarButton
               icon={Search}
               iconColor={colors.textMuted}
@@ -2959,11 +2991,27 @@ export default function ChannelViewScreen() {
       ) : timeline.length === 0 ? (
         <Pressable style={styles.emptyState} onPress={Keyboard.dismiss}>
           <EmptyState
-            icon={Hash}
-            title={t('chat.welcomeChannel', {
-              channelName: channel?.name ?? t('chat.channelFallback'),
-            })}
-            description={t('chat.welcomeStart')}
+            icon={isInboxChannel ? (isInboxTaskMode ? ListTodo : MessageSquare) : Hash}
+            title={
+              isInboxChannel
+                ? isInboxTaskMode
+                  ? inboxTaskFilter === 'all'
+                    ? t('inbox.empty.allTitle')
+                    : t('inbox.empty.filterTitle')
+                  : t('inbox.empty.chatTitle')
+                : t('chat.welcomeChannel', {
+                    channelName: channel?.name ?? t('chat.channelFallback'),
+                  })
+            }
+            description={
+              isInboxChannel
+                ? isInboxTaskMode
+                  ? inboxTaskFilter === 'all'
+                    ? t('inbox.empty.allHint')
+                    : t('inbox.empty.filterHint')
+                  : t('inbox.empty.chatHint')
+                : t('chat.welcomeStart')
+            }
           />
         </Pressable>
       ) : (
@@ -3191,7 +3239,19 @@ export default function ChannelViewScreen() {
           commerceCards={selectedCommerceCards}
           onOpenProductPicker={() => setShowProductPicker(true)}
           enableTaskCards={isInboxChannel}
-          onOpenTaskComposer={openTaskComposer}
+          inboxViewMode={inboxViewMode}
+          onInboxViewModeChange={setInboxViewMode}
+          inboxTaskFilter={inboxTaskFilter}
+          onInboxTaskFilterChange={setInboxTaskFilter}
+          taskDraft={taskDraft}
+          onTaskDraftChange={setTaskDraft}
+          taskPriority={taskPriority}
+          onTaskPriorityChange={setTaskPriority}
+          taskTags={taskTags}
+          onTaskTagsChange={setTaskTags}
+          creatingTask={creatingTask}
+          canCreateTask={canCreateTask}
+          onCreateTask={() => void createTaskCard()}
           onRemoveCommerceCard={(cardId) =>
             setSelectedCommerceCards((prev) => prev.filter((card) => card.id !== cardId))
           }
@@ -3257,107 +3317,6 @@ export default function ChannelViewScreen() {
             )}
           />
         )}
-      </Sheet>
-
-      <Sheet
-        visible={showTaskComposer && isInboxChannel}
-        onClose={() => setShowTaskComposer(false)}
-        title={t('inbox.task.new')}
-        action={
-          <Button
-            variant="ghost"
-            size="icon"
-            icon={X}
-            iconColor={colors.textMuted}
-            onPress={() => setShowTaskComposer(false)}
-          />
-        }
-      >
-        <View style={styles.taskComposerSheet}>
-          <TextInput
-            value={taskDraft}
-            onChangeText={setTaskDraft}
-            placeholder={t('inbox.task.quickPlaceholder')}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            autoFocus
-            style={[
-              styles.taskComposerInput,
-              {
-                color: colors.text,
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-              },
-            ]}
-          />
-
-          <View
-            style={[
-              styles.taskPriorityRow,
-              { backgroundColor: colors.inputBackground, borderColor: colors.border },
-            ]}
-          >
-            {taskPriorityOptions.map((priority) => {
-              const selected = taskPriority === priority
-              return (
-                <Pressable
-                  key={priority}
-                  onPress={() => {
-                    selectionHaptic()
-                    setTaskPriority(priority)
-                  }}
-                  style={[
-                    styles.taskPriorityButton,
-                    selected && { backgroundColor: colors.surfaceHover },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.taskPriorityButtonText,
-                      { color: selected ? colors.primary : colors.textMuted },
-                    ]}
-                  >
-                    {t(`inbox.task.priority.${priority}`)}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-
-          <TextInput
-            value={taskTags}
-            onChangeText={setTaskTags}
-            placeholder={t('inbox.task.tagsPlaceholder')}
-            placeholderTextColor={colors.textMuted}
-            style={[
-              styles.taskTagsInput,
-              {
-                color: colors.text,
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-              },
-            ]}
-          />
-
-          <View style={styles.taskComposerActions}>
-            <Button variant="glass" size="sm" onPress={() => setShowTaskComposer(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={ListTodo}
-              loading={creatingTask}
-              disabled={!canCreateTask}
-              onPress={() => {
-                selectionHaptic()
-                void createTaskCard()
-              }}
-            >
-              {t('inbox.task.create')}
-            </Button>
-          </View>
-        </View>
       </Sheet>
 
       <Modal
@@ -4005,6 +3964,20 @@ export default function ChannelViewScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   threadModal: { flex: 1 },
+  channelNavTitle: {
+    minWidth: 0,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  channelNavTitleText: {
+    minWidth: 0,
+    flexShrink: 1,
+    fontSize: fontSize.md,
+    fontWeight: '800',
+  },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   threadSource: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -4367,52 +4340,6 @@ const styles = StyleSheet.create({
     lineHeight: lineHeight.xs,
   },
   productPickerPrice: { fontSize: fontSize.sm, fontWeight: '800' },
-  taskComposerSheet: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    gap: spacing.md,
-  },
-  taskComposerInput: {
-    minHeight: size.textareaMin,
-    borderWidth: border.hairline,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
-    lineHeight: lineHeight.sm,
-    textAlignVertical: 'top',
-  },
-  taskPriorityRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    borderWidth: border.hairline,
-    borderRadius: radius.lg,
-    padding: spacing.xs,
-  },
-  taskPriorityButton: {
-    minHeight: size.controlSm,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  taskPriorityButtonText: {
-    fontSize: fontSize.xs,
-    fontWeight: '800',
-  },
-  taskTagsInput: {
-    height: size.controlLg,
-    borderWidth: border.hairline,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.sm,
-  },
-  taskComposerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-  },
   sheetSearchWrap: {
     flexDirection: 'row',
     alignItems: 'center',

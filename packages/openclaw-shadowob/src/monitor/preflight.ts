@@ -5,6 +5,7 @@ import {
   mentionTargetsBot,
 } from '../mentions.js'
 import type { AgentChainMetadata, ShadowPolicyConfig, ShadowRuntimeLogger } from '../types.js'
+import { isActiveTaskCardForBuddy, type ShadowBuddyTaskIdentity } from './task-card-routing.js'
 
 export type ShadowMessagePreflightOk = {
   ok: true
@@ -23,37 +24,21 @@ function normalizeTriggerUserIds(policyConfig: ShadowPolicyConfig | undefined): 
   return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
 }
 
-function messageHasActiveTaskForBot(message: ShadowMessage, botUserId: string) {
+function messageHasActiveTaskForBot(message: ShadowMessage, identity: ShadowBuddyTaskIdentity) {
   const cards = message.metadata?.cards
   if (!Array.isArray(cards)) return false
-  return cards.some((card) => {
-    if (!card || typeof card !== 'object' || Array.isArray(card)) return false
-    const record = card as Record<string, unknown>
-    if (record.kind !== 'task') return false
-    if (
-      record.status === 'completed' ||
-      record.status === 'failed' ||
-      record.status === 'canceled' ||
-      record.status === 'transferred'
-    ) {
-      return false
-    }
-    const assignee =
-      record.assignee && typeof record.assignee === 'object' && !Array.isArray(record.assignee)
-        ? (record.assignee as Record<string, unknown>)
-        : null
-    return assignee?.userId === botUserId
-  })
+  return cards.some((card) => isActiveTaskCardForBuddy(card, identity))
 }
 
 export function evaluateShadowMessagePreflight(params: {
   message: ShadowMessage
   botUserId: string
+  botAgentId?: string | null
   botUsername: string
   channelPolicies: Map<string, ShadowChannelPolicy>
   runtime: ShadowRuntimeLogger
 }): ShadowMessagePreflightResult {
-  const { message, botUserId, botUsername, channelPolicies, runtime } = params
+  const { message, botUserId, botAgentId, botUsername, channelPolicies, runtime } = params
   const senderLabel = message.author?.username ?? message.authorId
 
   if (message.authorId === botUserId) {
@@ -62,17 +47,18 @@ export function evaluateShadowMessagePreflight(params: {
 
   const policy = channelPolicies.get(message.channelId)
   const policyConfig = policy?.config as ShadowPolicyConfig | undefined
+  const hasActiveTaskForBot = messageHasActiveTaskForBot(message, { botUserId, botAgentId })
   let isProcessingBuddyMessage = false
 
   if (message.author?.isBot) {
-    if (!policyConfig?.replyToBuddy) {
+    if (!policyConfig?.replyToBuddy && !hasActiveTaskForBot) {
       return {
         ok: false,
         reason: `[msg] Skipping bot message from ${senderLabel} (replyToBuddy=false) (${message.id})`,
       }
     }
 
-    const maxDepth = policyConfig.maxBuddyChainDepth ?? 3
+    const maxDepth = policyConfig?.maxBuddyChainDepth ?? 3
     const chainMeta = (message as { metadata?: { agentChain?: AgentChainMetadata } }).metadata
       ?.agentChain
     if (chainMeta) {
@@ -91,7 +77,7 @@ export function evaluateShadowMessagePreflight(params: {
       }
 
       const senderAgentId = message.author?.id
-      if (senderAgentId && policyConfig.buddyBlacklist?.includes(senderAgentId)) {
+      if (senderAgentId && policyConfig?.buddyBlacklist?.includes(senderAgentId)) {
         return {
           ok: false,
           reason: `[msg] Sender agent ${senderAgentId} is in blacklist, skipping (${message.id})`,
@@ -100,7 +86,7 @@ export function evaluateShadowMessagePreflight(params: {
 
       if (
         senderAgentId &&
-        policyConfig.buddyWhitelist?.length &&
+        policyConfig?.buddyWhitelist?.length &&
         !policyConfig.buddyWhitelist.includes(senderAgentId)
       ) {
         return {
@@ -111,8 +97,9 @@ export function evaluateShadowMessagePreflight(params: {
     }
 
     isProcessingBuddyMessage = true
+    const triggerReason = policyConfig?.replyToBuddy ? 'replyToBuddy=true' : 'active task-card'
     runtime.log?.(
-      `[msg] Processing bot message from ${senderLabel} (replyToBuddy=true) (${message.id})`,
+      `[msg] Processing bot message from ${senderLabel} (${triggerReason}) (${message.id})`,
     )
   }
 
@@ -131,7 +118,7 @@ export function evaluateShadowMessagePreflight(params: {
   }
 
   const triggerUserIds = normalizeTriggerUserIds(policyConfig)
-  if (triggerUserIds && !triggerUserIds.includes(message.authorId)) {
+  if (triggerUserIds && !triggerUserIds.includes(message.authorId) && !hasActiveTaskForBot) {
     return {
       ok: false,
       reason: `[msg] Sender ${senderLabel} is not the Buddy owner or active tenant, skipping (${message.id})`,
@@ -144,7 +131,7 @@ export function evaluateShadowMessagePreflight(params: {
   const wasMentionedExplicitly =
     mentionTargetsBot({ mentions: structuredMentions, botUserId, botUsername }) ||
     mentionsTargetServerApp(structuredMentions) ||
-    messageHasActiveTaskForBot(message, botUserId) ||
+    hasActiveTaskForBot ||
     mentionRegex.test(message.content)
 
   if (policy?.mentionOnly && !wasMentionedExplicitly) {

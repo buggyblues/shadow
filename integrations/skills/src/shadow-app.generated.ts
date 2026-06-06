@@ -4,8 +4,8 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
-  appKey: 'shadow-skills',
-  name: 'Shadow Skills',
+  appKey: 'skills',
+  name: 'Skills',
   description:
     'A server-owned skill library where people and Buddies can publish, discover, export, and install reusable working skills.',
   version: '1.0.0',
@@ -13,26 +13,48 @@ export const shadowServerAppManifest = {
   marketplace: {
     tagline: 'A server-owned library for reusable working skills.',
     summary:
-      'Shadow Skills lets a server publish, discover, export, install, and refresh reusable skills. People and Buddies can keep operational know-how in a shared library instead of burying prompts, runbooks, and workflows across channels.',
-    categories: ['开发工具', '效率', '知识'],
+      'Skills lets a server publish, discover, export, install, and refresh reusable skills. People and Buddies can keep operational know-how in a shared library instead of burying prompts, runbooks, and workflows across channels.',
+    categories: ['Developer Tools', 'Productivity', 'Knowledge'],
     supportedLanguages: ['English', '中文'],
     coverImageUrl: 'http://localhost:4220/assets/cover.png',
     gallery: [
       {
         url: 'http://localhost:4220/assets/cover.png',
         type: 'image',
-        alt: 'skills cover',
+        alt: 'Skills cover',
       },
     ],
     links: [
       {
-        label: '主页',
+        label: 'Home',
         url: 'http://localhost:4220/shadow/server',
         type: 'website',
       },
     ],
     publisher: {
       name: 'Shadow',
+    },
+  },
+  i18n: {
+    'zh-CN': {
+      name: '技能库',
+      description: '服务器内的技能库，用于发布、发现、导出和安装可复用工作技能。',
+      marketplace: {
+        tagline: '服务器内的可复用工作技能库。',
+        summary:
+          '技能库让服务器可以发布、发现、导出、安装和刷新可复用技能。成员和 Buddy 可以把操作经验沉淀在共享库里，而不是散落在频道、提示词和运行手册中。',
+        categories: ['开发工具', '效率', '知识'],
+        gallery: [
+          {
+            alt: '技能库封面',
+          },
+        ],
+        links: [
+          {
+            label: '主页',
+          },
+        ],
+      },
     },
   },
   iframe: {
@@ -252,15 +274,15 @@ export const shadowServerAppManifest = {
     {
       name: 'shadow-skill-library',
       description:
-        'Use when a Buddy needs to discover reusable skills, download a complete skill zip, upload a skill package, or install a skill through the Shadow Skills App.',
+        'Use when a Buddy needs to discover reusable skills, download a complete skill zip, upload a skill package, or install a skill through the Skills App.',
       commandHints: [
-        'shadow-skills skills.list',
-        'shadow-skills skills.search',
-        'shadow-skills skills.get',
-        'shadow-skills skills.snapshot',
-        'shadow-skills skills.download',
-        'shadow-skills skills.upload',
-        'shadow-skills skills.install',
+        'skills skills.list',
+        'skills skills.search',
+        'skills skills.get',
+        'skills skills.snapshot',
+        'skills skills.download',
+        'skills skills.upload',
+        'skills skills.install',
       ],
     },
   ],

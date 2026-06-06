@@ -153,6 +153,37 @@ def test_shadow_context_prompt_includes_channel_members_buddies_and_apps():
     assert 'Cards' in prompt
 
 
+def test_shadow_copilot_metadata_is_added_to_context_prompt():
+    copilot = adapter._message_copilot_context(
+        {
+            'metadata': {
+                'copilotContext': {
+                    'kind': 'server_app_copilot',
+                    'appKey': 'kanban',
+                    'serverAppId': 'server-app-1',
+                    'appName': 'Kanban',
+                    'serverSlug': 'growth',
+                    'channelId': 'inbox-1',
+                    'channelKind': 'inbox',
+                    'ignoredSecret': 'do-not-forward',
+                }
+            }
+        }
+    )
+    prompt = adapter._format_shadow_context_prompt(
+        {
+            'current': {'channelId': 'inbox-1', 'name': 'Coordinator Inbox'},
+            'copilotContext': copilot,
+        }
+    )
+
+    assert copilot['appKey'] == 'kanban'
+    assert copilot['channelKind'] == 'inbox'
+    assert 'Copilot app context' in prompt
+    assert 'kanban' in prompt
+    assert 'do-not-forward' not in prompt
+
+
 def test_resolve_channels_creates_owner_dm_home_channel_when_empty():
     class FakeClient:
         async def get_agent_config(self, agent_id):
@@ -196,6 +227,66 @@ def test_resolve_channels_creates_owner_dm_home_channel_when_empty():
     assert instance._channel_ids == ['dm-owner']
     assert instance._channel_cache['dm-owner']['kind'] == 'dm'
     assert instance.socket.joined == ['dm-owner']
+
+
+def test_task_card_reply_progress_stays_running_until_explicit_completion():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def update_task_card(self, message_id, card_id, *, status, note):
+            self.calls.append(
+                {
+                    'message_id': message_id,
+                    'card_id': card_id,
+                    'status': status,
+                    'note': note,
+                }
+            )
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+
+    asyncio.run(instance._complete_task_card('message-1', 'card-1'))
+
+    assert instance.client.calls == [
+        {
+            'message_id': 'message-1',
+            'card_id': 'card-1',
+            'status': 'running',
+            'note': 'Hermes delivered a reply; awaiting explicit task completion.',
+        }
+    ]
+
+
+def test_task_card_failure_is_terminal():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def update_task_card(self, message_id, card_id, *, status, note):
+            self.calls.append(
+                {
+                    'message_id': message_id,
+                    'card_id': card_id,
+                    'status': status,
+                    'note': note,
+                }
+            )
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+
+    asyncio.run(instance._complete_task_card('message-1', 'card-1', failed=True, note='boom'))
+
+    assert instance.client.calls == [
+        {
+            'message_id': 'message-1',
+            'card_id': 'card-1',
+            'status': 'failed',
+            'note': 'boom',
+        }
+    ]
 
 
 def test_member_added_refreshes_remote_config_and_joins_channel():

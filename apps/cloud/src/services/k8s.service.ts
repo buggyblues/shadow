@@ -86,7 +86,7 @@ export class K8sService {
 
   async deployStack(
     stack: Awaited<ReturnType<typeof getOrCreateStack>>,
-    options?: { dryRun?: boolean; onOutput?: (out: string) => void },
+    options?: { dryRun?: boolean; onOutput?: (out: string) => void; isCancelled?: () => boolean },
   ) {
     return deployStack(stack, options)
   }
@@ -183,6 +183,7 @@ export class K8sService {
     kubeconfig?: string
     timeoutMs?: number
     intervalMs?: number
+    isCancelled?: () => boolean
   }) {
     return waitForAgentSandboxReady(options)
   }

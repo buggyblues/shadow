@@ -16,7 +16,7 @@ import type {
 } from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
-const bridge = new ShadowBridge({ appKey: 'shadow-warbuddy' })
+const bridge = new ShadowBridge({ appKey: 'warbuddy' })
 
 export type TankSummary = TankProfile & { winRate?: number; rank?: number }
 export type MatchSummary = Omit<MatchRecord, 'replay'> & {

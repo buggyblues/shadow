@@ -22,8 +22,12 @@ const shadowClientMocks = vi.hoisted(() => ({
   getManagedUserShop: vi.fn(),
   getServer: vi.fn(),
   getServerChannels: vi.fn(),
+  grantServerAppToBuddy: vi.fn(),
+  installServerApp: vi.fn(),
+  installServerAppFromCatalog: vi.fn(),
   listAgents: vi.fn(),
   listCommerceOffers: vi.fn(),
+  listServerAppCatalog: vi.fn(),
   listServers: vi.fn(),
   toggleListing: vi.fn(),
   updateAgent: vi.fn(),
@@ -114,6 +118,92 @@ describe('provisioning', () => {
         agentId: 'new-agent',
         userId: 'new-user',
         token: 'fresh-agent-token',
+      })
+    })
+
+    it('installs catalog Server Apps and grants them to provisioned buddies', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [{ id: 'video-workshop', name: 'Video Workshop' }],
+              buddies: [{ id: 'coordinator-buddy', name: 'Coordinator Buddy' }],
+              serverApps: [
+                {
+                  id: 'kanban-app',
+                  serverId: 'video-workshop',
+                  catalogAppKey: 'kanban',
+                  grants: [
+                    {
+                      buddyId: 'coordinator-buddy',
+                      permissions: [
+                        'kanban.boards:read',
+                        'kanban.cards:write',
+                        'buddy_inbox:deliver',
+                      ],
+                      approvalMode: 'none',
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      }
+
+      shadowClientMocks.listServers.mockResolvedValue([])
+      shadowClientMocks.createServer.mockResolvedValue({
+        id: 'server-real',
+        name: 'Video Workshop',
+      })
+      shadowClientMocks.createAgent.mockResolvedValue({
+        id: 'coordinator-agent-real',
+        userId: 'coordinator-user-real',
+      })
+      shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'coordinator-token' })
+      shadowClientMocks.listServerAppCatalog.mockResolvedValue([
+        { id: 'catalog-kanban', appKey: 'kanban' },
+      ])
+      shadowClientMocks.installServerAppFromCatalog.mockResolvedValue({
+        id: 'server-app-real',
+        appKey: 'kanban',
+      })
+      shadowClientMocks.grantServerAppToBuddy.mockResolvedValue({ ok: true })
+
+      const result = await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.listServerAppCatalog).toHaveBeenCalledWith('server-real')
+      expect(shadowClientMocks.installServerAppFromCatalog).toHaveBeenCalledWith(
+        'server-real',
+        'catalog-kanban',
+      )
+      expect(shadowClientMocks.grantServerAppToBuddy).toHaveBeenCalledWith(
+        'server-real',
+        'kanban',
+        {
+          buddyAgentId: 'coordinator-agent-real',
+          permissions: ['kanban.boards:read', 'kanban.cards:write', 'buddy_inbox:deliver'],
+          resourceRules: undefined,
+          approvalMode: 'none',
+        },
+      )
+      expect(result.serverApps.get('kanban-app')).toEqual({
+        serverAppId: 'server-app-real',
+        appKey: 'kanban',
+        serverId: 'server-real',
       })
     })
 

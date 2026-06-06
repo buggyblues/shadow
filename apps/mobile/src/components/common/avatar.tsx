@@ -105,7 +105,8 @@ export function Avatar({
 }
 
 function getStatusColor(colors: ReturnType<typeof useColors>, status?: string | null) {
-  if (status === 'online') return colors.statusOnline
+  if (status === 'online' || status === 'running') return colors.statusOnline
+  if (status === 'busy') return colors.primary
   if (status === 'idle') return colors.statusIdle
   if (status === 'dnd') return colors.statusDnd
   return colors.statusOffline

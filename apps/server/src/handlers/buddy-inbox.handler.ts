@@ -6,6 +6,76 @@ import type { TaskMessageCardMetadata } from '../db/schema/messages'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { messageCardStatusSchema } from '../validators/message.schema'
 
+const taskRequirementsSchema = z
+  .object({
+    capabilities: z.array(z.string().min(1).max(120)).max(40).optional(),
+    skills: z
+      .array(
+        z
+          .object({
+            kind: z.literal('runtime-skill'),
+            package: z.string().min(1).max(240),
+            version: z.string().min(1).max(80).optional(),
+            required: z.boolean().optional(),
+          })
+          .passthrough(),
+      )
+      .max(20)
+      .optional(),
+    tools: z
+      .array(
+        z
+          .object({
+            kind: z.string().min(1).max(120),
+            name: z.string().min(1).max(160),
+            required: z.boolean().optional(),
+          })
+          .passthrough(),
+      )
+      .max(40)
+      .optional(),
+  })
+  .passthrough()
+
+const taskOutputContractSchema = z
+  .object({
+    expectedArtifacts: z
+      .array(
+        z
+          .object({
+            kind: z.string().min(1).max(120),
+            mimeTypes: z.array(z.string().min(1).max(120)).max(20).optional(),
+            maxBytes: z.number().int().positive().max(5_000_000_000).optional(),
+            required: z.boolean().optional(),
+          })
+          .passthrough(),
+      )
+      .max(20)
+      .optional(),
+    submitCommand: z
+      .object({
+        appKey: z.string().min(1).max(120),
+        command: z.string().min(1).max(160),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough()
+
+const taskPrivacySchema = z
+  .object({
+    dataClass: z.enum([
+      'public',
+      'server-private',
+      'channel-private',
+      'financial',
+      'secret',
+      'cloud-secret',
+    ]),
+    redactionRequired: z.boolean().optional(),
+  })
+  .passthrough()
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const enqueueTaskSchema = z.object({
@@ -44,6 +114,9 @@ const enqueueTaskSchema = z.object({
     .optional(),
   idempotencyKey: z.string().min(1).max(240).optional(),
   source: z.record(z.string(), z.unknown()).optional(),
+  requirements: taskRequirementsSchema.optional(),
+  outputContract: taskOutputContractSchema.optional(),
+  privacy: taskPrivacySchema.optional(),
   data: z.record(z.string(), z.unknown()).optional(),
 })
 

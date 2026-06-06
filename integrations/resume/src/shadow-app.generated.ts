@@ -4,29 +4,29 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
-  appKey: 'shadow-resume',
-  name: 'Super Resume',
+  appKey: 'resume',
+  name: 'Resume',
   description:
-    'A resume App for CRUD, Buddy-guided profile collection, resume generation, and CSS style updates.',
+    'A resume app for CRUD, Buddy-guided profile collection, resume generation, and CSS style updates.',
   version: '1.0.0',
   iconUrl: 'http://localhost:4214/assets/icon.svg',
   marketplace: {
     tagline: 'Build polished resumes with structured facts, generation, and style controls.',
     summary:
-      'Super Resume helps people collect career facts, create resumes, update sections, delete stale drafts, and refine CSS styling with Buddy guidance. It keeps resume work structured enough for automation while still easy to edit by hand.',
-    categories: ['效率', '创作', '工具'],
+      'Resume helps people collect career facts, create resumes, update sections, delete stale drafts, and refine CSS styling with Buddy guidance. It keeps resume work structured enough for automation while still easy to edit by hand.',
+    categories: ['Productivity', 'Creation', 'Tools'],
     supportedLanguages: ['English', '中文'],
     coverImageUrl: 'http://localhost:4214/assets/cover.png',
     gallery: [
       {
         url: 'http://localhost:4214/assets/cover.png',
         type: 'image',
-        alt: 'resume cover',
+        alt: 'Resume cover',
       },
     ],
     links: [
       {
-        label: '主页',
+        label: 'Home',
         url: 'http://localhost:4214/shadow/server',
         type: 'website',
       },
@@ -232,20 +232,42 @@ export const shadowServerAppManifest = {
   ],
   skills: [
     {
-      name: 'shadow-resume-ops',
+      name: 'resume-ops',
       description:
         'Use when a Buddy needs to collect resume facts, generate or update a resume, delete stale resumes, or adjust resume CSS.',
       commandHints: [
-        'shadow-resume resumes.list',
-        'shadow-resume resumes.get',
-        'shadow-resume resumes.create',
-        'shadow-resume resumes.update',
-        'shadow-resume resumes.generate',
-        'shadow-resume resumes.style.update',
+        'resume resumes.list',
+        'resume resumes.get',
+        'resume resumes.create',
+        'resume resumes.update',
+        'resume resumes.generate',
+        'resume resumes.style.update',
       ],
     },
   ],
   events: ['resume.updated'],
+  i18n: {
+    'zh-CN': {
+      name: '简历',
+      description: '简历应用，支持结构化信息收集、简历生成、内容更新和样式调整。',
+      marketplace: {
+        tagline: '用结构化信息、生成能力和样式控制制作简历。',
+        summary:
+          '简历应用帮助用户收集职业经历、创建简历、更新章节、删除过期草稿，并在 Buddy 协助下调整 CSS 样式。它让简历制作既适合自动化，也方便人工编辑。',
+        categories: ['效率', '创作', '工具'],
+        gallery: [
+          {
+            alt: '简历封面',
+          },
+        ],
+        links: [
+          {
+            label: '主页',
+          },
+        ],
+      },
+    },
+  },
 } as const satisfies ShadowServerAppManifest
 
 export type ShadowServerAppManifestDefinition = typeof shadowServerAppManifest

@@ -2,6 +2,7 @@ import { getApiUrl } from './api-url'
 import { currentAppRedirect } from './auth-redirect'
 import { clearAuthenticatedSession } from './auth-session'
 import { syncDesktopCommunityAuthToken } from './desktop-community-auth'
+import i18n from './i18n'
 
 export class ApiError extends Error {
   status: number
@@ -171,6 +172,7 @@ export async function fetchApiResponse(path: string, options?: RequestInit): Pro
   const headers: Record<string, string> = {
     ...(options?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'Accept-Language': i18n.language || 'zh-CN',
     'x-shadow-device-name': deviceNameHeader(),
     ...((options?.headers as Record<string, string>) ?? {}),
   }

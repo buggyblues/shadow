@@ -24,7 +24,6 @@ import {
   Hash,
   HeadphoneOff,
   Headphones,
-  Inbox,
   Loader2,
   Lock,
   Megaphone,
@@ -68,6 +67,7 @@ import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
+import { normalizeBuddyAgentPresenceStatus, PresenceAvatar } from '../common/presence-avatar'
 import { ServerSettingsModal } from '../server/server-settings-modal'
 import { NetworkQualityIcon } from '../voice/network-quality-icon'
 import { useVoiceSession } from '../voice/voice-session-context'
@@ -200,6 +200,7 @@ export interface BuddyInboxEntry {
       username: string
       displayName: string | null
       avatarUrl: string | null
+      status?: string | null
       isBot?: boolean | null
     }
   }
@@ -259,6 +260,13 @@ const CHANNEL_NAVIGATION_STALE_MS = 5 * 60 * 1000
 const CHANNEL_NAVIGATION_GC_MS = 30 * 60 * 1000
 const BUDDY_INBOX_COLLAPSED_STORAGE_KEY = 'shadow:buddy-inbox-collapsed'
 
+function buddyInboxPresenceStatus(entry: BuddyInboxEntry) {
+  return normalizeBuddyAgentPresenceStatus({
+    userStatus: entry.agent.user.status,
+    agentStatus: entry.agent.status,
+  })
+}
+
 function readStoredBuddyInboxCollapsed() {
   if (typeof window === 'undefined') return false
   return window.localStorage.getItem(BUDDY_INBOX_COLLAPSED_STORAGE_KEY) === 'true'
@@ -273,7 +281,7 @@ export function ChannelSidebar({
   deferInitialQueries?: boolean
   onSelectChannel?: (channel: Channel) => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { appKey, channelId: routeChannelId } = useParams({ strict: false }) as {
     appKey?: string
@@ -384,7 +392,7 @@ export function ChannelSidebar({
   })
 
   const { data: serverApps = [] } = useQuery<ServerAppSummary[]>({
-    queryKey: ['server-app-summaries', serverSlug],
+    queryKey: ['server-app-summaries', serverSlug, i18n.language],
     queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps?summary=1`),
     enabled: !!serverSlug && loadApplications,
     staleTime: CHANNEL_NAVIGATION_STALE_MS,
@@ -463,6 +471,10 @@ export function ChannelSidebar({
     () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
     [buddyInboxes],
   )
+  const isActiveBuddyInboxChannel = Boolean(
+    activeChannelId && buddyInboxChannelIds.has(activeChannelId),
+  )
+  const isBuddyInboxSectionCollapsed = isBuddyInboxCollapsed && !isActiveBuddyInboxChannel
   const textChannels = useMemo(
     () =>
       visibleChannels.filter(
@@ -1442,6 +1454,7 @@ export function ChannelSidebar({
     const isUnread = !isActive && unreadCount > 0
     const displayName = entry.agent.user.displayName ?? entry.agent.user.username
     const isOpening = openingBuddyInboxAgentId === entry.agent.id
+    const presenceStatus = buddyInboxPresenceStatus(entry)
 
     return (
       <div key={entry.agent.id} className="group/inbox flex items-center gap-1">
@@ -1467,16 +1480,14 @@ export function ChannelSidebar({
             isUnread && 'font-bold text-text-primary',
           )}
         >
-          <div
-            className={cn(
-              'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-all duration-300',
-              isActive
-                ? 'bg-primary/20 text-primary'
-                : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
-            )}
-          >
-            <Inbox size={14} strokeWidth={2.6} />
-          </div>
+          <PresenceAvatar
+            userId={entry.agent.user.id}
+            avatarUrl={entry.agent.user.avatarUrl}
+            displayName={displayName}
+            status={presenceStatus}
+            busy={isOpening}
+            size="xs"
+          />
           <span className="min-w-0 flex-1 truncate">{displayName}</span>
           <span className="grid h-3 w-3 shrink-0 place-items-center">
             {isOpening && <Loader2 size={12} className="animate-spin text-text-muted" />}
@@ -1646,7 +1657,7 @@ export function ChannelSidebar({
           <div className="mb-3">
             <button
               type="button"
-              aria-expanded={!isBuddyInboxCollapsed}
+              aria-expanded={!isBuddyInboxSectionCollapsed}
               onClick={() => setBuddyInboxCollapsedPreference(!isBuddyInboxCollapsed)}
               className="flex w-full items-center justify-between px-3 py-1.5 text-left transition-colors hover:text-text-primary"
             >
@@ -1660,15 +1671,19 @@ export function ChannelSidebar({
                   strokeWidth={3}
                   className={cn(
                     'transition-transform duration-200',
-                    isBuddyInboxCollapsed && '-rotate-90',
+                    isBuddyInboxSectionCollapsed && '-rotate-90',
                   )}
                 />
               </span>
             </button>
-            {!isBuddyInboxCollapsed && (
+            {!isBuddyInboxSectionCollapsed && (
               <div className="px-2 space-y-0.5">{buddyInboxes.map(renderBuddyInboxItem)}</div>
             )}
           </div>
+        )}
+
+        {buddyInboxes.length > 0 && server?.id && (
+          <div className="mx-3 mb-3 border-t border-border-subtle/70" aria-hidden="true" />
         )}
 
         {/* Channel filter and sort bar */}

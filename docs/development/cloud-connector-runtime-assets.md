@@ -60,7 +60,7 @@ Current connector coverage:
 - CRM and lifecycle operations: `hubspot`, `klaviyo`, `salesforce`.
 - Project, product, and data operations: `airtable`, `linear`, `atlassian`, `sentry`, `posthog`.
 - Browser and web-data operations: `firecrawl`, `playwright`, `browserbase`.
-- Skills and agent tooling: `agent-browser`, `skill-discovery`, `inference-sh`, `inference-ai-image-generation`, `wonda`, `huggingface`.
+- Skills and agent tooling: `agent-browser`, `skills`, `inference-sh`, `inference-ai-image-generation`, `wonda`, `huggingface`.
 - China app-layer services: `lark`, `dingtalk`, `tencent-docs`, `wps`, `yuque`, `alipay`, `wechat-pay`, `amap`, `baidu-maps`, `tencent-maps`, `flyai`, `kuaidi100`, `oceanengine`, `tencent-ads`, `coze`, `taobao-aipaas`, `baidu-appbuilder`, `baidu-netdisk`, `wechat-miniprogram-skyline`, `douyin-miniprogram`, `baidu-smartprogram`, `miclaw`, `huawei-xiaoyi`, `gitee`, `tapd`, and `cnb`.
 
 Capability policy:
@@ -105,7 +105,7 @@ Connectors whose official documentation describes an MCP/CLI surface but does no
 The skills.sh connector batch keeps the same independent-plugin shape and focuses on reusable agent capabilities rather than templates.
 
 - Agent Browser: installs the verified `agent-browser` npm CLI and mounts the skill stub from `vercel-labs/agent-browser`, letting the runtime load current browser, Electron, Slack, QA, Vercel Sandbox, and AgentCore instructions from the CLI.
-- Skill Discovery: installs the verified `skills` npm CLI and mounts `vercel-labs/skills/skills/find-skills`, so a Buddy can search and recommend skills without silently installing untrusted sources.
+- Skills: installs the verified `skills` npm CLI and mounts only the per-agent configured community skills from `use[].options.install`.
 - inference.sh: installs the `belt` CLI through the official `https://cli.inference.sh` installer into the plugin runtime path and mounts `infsh-skills/skills/tools/infsh-cli`.
 - AI Image Generation: reuses the same `belt` installer and mounts the image-specific inference.sh skills under `tools/image`, including `ai-image-generation`, `gpt-image`, `flux-image`, `p-image`, image editing, upscaling, and background removal.
 - Wonda: installs the verified `@degausai/wonda` npm CLI and mounts `degausai/wonda/skills/wonda-cli` for media generation, editing, research, publishing, credential workflows, and mobile-device automation.

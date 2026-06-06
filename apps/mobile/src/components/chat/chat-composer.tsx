@@ -1,4 +1,8 @@
-import type { CommerceProductCard } from '@shadowob/shared'
+import type {
+  BuddyInboxTaskFilter,
+  BuddyInboxViewMode,
+  CommerceProductCard,
+} from '@shadowob/shared'
 import { Image } from 'expo-image'
 import {
   AtSign,
@@ -6,6 +10,7 @@ import {
   File,
   Image as ImageIcon,
   ListTodo,
+  MessageSquare,
   Mic,
   Paperclip,
   Plus,
@@ -32,7 +37,17 @@ import {
 } from 'react-native'
 import { selectionHaptic, successHaptic } from '../../lib/haptics'
 import { animateNextLayout } from '../../lib/layout-animation'
-import { border, fontSize, iconSize, palette, radius, size, spacing, useColors } from '../../theme'
+import {
+  border,
+  fontSize,
+  iconSize,
+  lineHeight,
+  palette,
+  radius,
+  size,
+  spacing,
+  useColors,
+} from '../../theme'
 import type { Message } from '../../types/message'
 import { formatCommercePrice } from '../common/price-display'
 import {
@@ -335,7 +350,19 @@ interface ChatComposerProps {
   commerceCards?: CommerceProductCard[]
   onOpenProductPicker?: () => void
   enableTaskCards?: boolean
-  onOpenTaskComposer?: () => void
+  inboxViewMode?: BuddyInboxViewMode
+  onInboxViewModeChange?: (mode: BuddyInboxViewMode) => void
+  inboxTaskFilter?: BuddyInboxTaskFilter
+  onInboxTaskFilterChange?: (filter: BuddyInboxTaskFilter) => void
+  taskDraft?: string
+  onTaskDraftChange?: (text: string) => void
+  taskPriority?: 'low' | 'normal' | 'high' | 'urgent'
+  onTaskPriorityChange?: (priority: 'low' | 'normal' | 'high' | 'urgent') => void
+  taskTags?: string
+  onTaskTagsChange?: (text: string) => void
+  creatingTask?: boolean
+  canCreateTask?: boolean
+  onCreateTask?: () => void
   onRemoveCommerceCard?: (cardId: string) => void
 }
 
@@ -411,6 +438,17 @@ const RECORDING_PREVIEW_PEAKS = [
   22, 36, 18, 44, 72, 30, 86, 58, 28, 64, 46, 24, 52, 34, 26, 42, 28, 36, 24, 32, 26, 30,
 ]
 
+type TaskDraftPriority = 'low' | 'normal' | 'high' | 'urgent'
+
+const taskPriorityOptions: TaskDraftPriority[] = ['normal', 'high', 'urgent', 'low']
+
+function getTaskDraftTitle(value: string) {
+  return value
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find(Boolean)
+}
+
 export const ChatComposer = memo(function ChatComposer({
   inputText,
   onInputChange,
@@ -446,7 +484,19 @@ export const ChatComposer = memo(function ChatComposer({
   commerceCards = [],
   onOpenProductPicker,
   enableTaskCards = false,
-  onOpenTaskComposer,
+  inboxViewMode,
+  onInboxViewModeChange,
+  inboxTaskFilter = 'all',
+  onInboxTaskFilterChange,
+  taskDraft = '',
+  onTaskDraftChange,
+  taskPriority = 'normal',
+  onTaskPriorityChange,
+  taskTags = '',
+  onTaskTagsChange,
+  creatingTask = false,
+  canCreateTask = false,
+  onCreateTask,
   onRemoveCommerceCard,
 }: ChatComposerProps) {
   const colors = useColors()
@@ -463,7 +513,11 @@ export const ChatComposer = memo(function ChatComposer({
   const keyboardUpRef = useRef(false)
   const bottomHeightAnim = useRef(new Animated.Value(insetsBottom)).current
   const lastTargetRef = useRef(insetsBottom)
-  const panelRequested = showPlusMenu || showEmojiPicker
+  const showInboxComposerControls =
+    enableTaskCards && Boolean(inboxViewMode && onInboxViewModeChange)
+  const isInboxTaskMode = showInboxComposerControls && inboxViewMode === 'tasks'
+  const taskTitle = getTaskDraftTitle(taskDraft)
+  const panelRequested = !isInboxTaskMode && (showPlusMenu || showEmojiPicker)
 
   const animateBottomTo = useCallback(
     (toValue: number, duration: number) => {
@@ -718,7 +772,181 @@ export const ChatComposer = memo(function ChatComposer({
         </GlassHeader>
       )}
 
-      {isVoiceMessageRecording && onFinishVoiceMessageRecording ? (
+      {showInboxComposerControls && (
+        <View
+          style={[
+            styles.inboxComposerBar,
+            { backgroundColor: colors.surface, borderTopColor: colors.border },
+          ]}
+        >
+          <View style={[styles.inboxSegment, { backgroundColor: colors.inputBackground }]}>
+            {(['chat', 'tasks'] as const).map((mode) => {
+              const selected = inboxViewMode === mode
+              const ModeIcon = mode === 'chat' ? MessageSquare : ListTodo
+              return (
+                <Pressable
+                  key={mode}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  style={[
+                    styles.inboxSegmentButton,
+                    selected && { backgroundColor: colors.primary },
+                  ]}
+                  onPress={() => {
+                    selectionHaptic()
+                    onInboxViewModeChange?.(mode)
+                    setShowPlusMenu(false)
+                    setShowEmojiPicker(false)
+                  }}
+                >
+                  <ModeIcon
+                    size={iconSize.sm}
+                    color={selected ? colors.background : colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.inboxSegmentText,
+                      { color: selected ? colors.background : colors.textMuted },
+                    ]}
+                  >
+                    {t(`inbox.mode.${mode}`)}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+          {isInboxTaskMode && onInboxTaskFilterChange && (
+            <View style={[styles.inboxSegment, { backgroundColor: colors.inputBackground }]}>
+              {(['all', 'open', 'done'] as const).map((filter) => {
+                const selected = inboxTaskFilter === filter
+                return (
+                  <Pressable
+                    key={filter}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={[
+                      styles.inboxFilterButton,
+                      selected && { backgroundColor: colors.primary },
+                    ]}
+                    onPress={() => {
+                      selectionHaptic()
+                      onInboxTaskFilterChange(filter)
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.inboxSegmentText,
+                        { color: selected ? colors.background : colors.textMuted },
+                      ]}
+                    >
+                      {t(`inbox.filter.${filter}`)}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          )}
+        </View>
+      )}
+
+      {isInboxTaskMode ? (
+        <View
+          style={[
+            styles.taskInputBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              paddingBottom: spacing.sm,
+              paddingTop: spacing.sm,
+            },
+          ]}
+        >
+          <View style={styles.taskInputHeader}>
+            <View style={[styles.taskInputIcon, { backgroundColor: colors.tonePrimarySurface }]}>
+              <ListTodo size={iconSize.lg} color={colors.primary} />
+            </View>
+            <AppText variant="label" style={styles.taskInputTitle} numberOfLines={1}>
+              {taskTitle || t('inbox.task.new')}
+            </AppText>
+          </View>
+          <TextInput
+            value={taskDraft}
+            onChangeText={onTaskDraftChange}
+            placeholder={t('inbox.task.quickPlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            multiline
+            style={[
+              styles.taskTextInput,
+              {
+                color: colors.text,
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border,
+              },
+            ]}
+          />
+          <View
+            style={[
+              styles.taskPriorityRow,
+              { backgroundColor: colors.inputBackground, borderColor: colors.border },
+            ]}
+          >
+            {taskPriorityOptions.map((priority) => {
+              const selected = taskPriority === priority
+              return (
+                <Pressable
+                  key={priority}
+                  onPress={() => {
+                    selectionHaptic()
+                    onTaskPriorityChange?.(priority)
+                  }}
+                  style={[
+                    styles.taskPriorityButton,
+                    selected && { backgroundColor: colors.surfaceHover },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.taskPriorityButtonText,
+                      { color: selected ? colors.primary : colors.textMuted },
+                    ]}
+                  >
+                    {t(`inbox.task.priority.${priority}`)}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+          <TextInput
+            value={taskTags}
+            onChangeText={onTaskTagsChange}
+            placeholder={t('inbox.task.tagsPlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.taskTagsInput,
+              {
+                color: colors.text,
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border,
+              },
+            ]}
+          />
+          <View style={styles.taskInputActions}>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={ListTodo}
+              loading={creatingTask}
+              disabled={!canCreateTask || creatingTask}
+              onPress={() => {
+                selectionHaptic()
+                onCreateTask?.()
+              }}
+            >
+              {t('inbox.task.create')}
+            </Button>
+          </View>
+        </View>
+      ) : isVoiceMessageRecording && onFinishVoiceMessageRecording ? (
         <View
           style={[
             styles.inputBar,
@@ -980,30 +1208,6 @@ export const ChatComposer = memo(function ChatComposer({
                     </Text>
                   </Pressable>
                 )}
-                {enableTaskCards && onOpenTaskComposer && (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.plusPanelItem,
-                      pressed && styles.plusPanelPressed,
-                    ]}
-                    onPress={() => {
-                      selectionHaptic()
-                      animateNextLayout()
-                      setShowPlusMenu(false)
-                      onOpenTaskComposer()
-                    }}
-                  >
-                    <IconBubble
-                      icon={ListTodo}
-                      tone="primary"
-                      size={iconSize['4xl']}
-                      style={styles.plusPanelIcon}
-                    />
-                    <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
-                      {t('inbox.task.new')}
-                    </Text>
-                  </Pressable>
-                )}
                 {onTakePhoto && (
                   <Pressable
                     style={({ pressed }) => [
@@ -1188,6 +1392,100 @@ const styles = StyleSheet.create({
   replyBarContent: { flex: 1 },
   replyBarLabel: { fontSize: fontSize.xs, fontWeight: '600' },
   replyBarPreview: { fontSize: fontSize.xs },
+  inboxComposerBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: border.hairline,
+  },
+  inboxSegment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.full,
+    padding: spacing.xxs,
+    gap: spacing.xxs,
+  },
+  inboxSegmentButton: {
+    minHeight: size.controlSm,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  inboxFilterButton: {
+    minHeight: size.controlSm,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inboxSegmentText: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  taskInputBar: {
+    paddingHorizontal: spacing.sm,
+    gap: spacing.sm,
+    borderTopWidth: border.hairline,
+  },
+  taskInputHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  taskInputIcon: {
+    width: size.iconBubble,
+    height: size.iconBubble,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskInputTitle: { flex: 1 },
+  taskTextInput: {
+    minHeight: size.textareaMin,
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
+    textAlignVertical: 'top',
+  },
+  taskPriorityRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    padding: spacing.xs,
+  },
+  taskPriorityButton: {
+    minHeight: size.controlSm,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskPriorityButtonText: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  taskTagsInput: {
+    height: size.controlLg,
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    fontSize: fontSize.sm,
+  },
+  taskInputActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
   voiceRecordingInputBar: {
     alignItems: 'center',
   },

@@ -286,6 +286,24 @@ class ShadowServerAppActor:
 
 
 @dataclass
+class ShadowServerAppBuddyContext:
+    agent_id: str
+    user_id: str
+    username: str | None = None
+    display_name: str | None = None
+    description: str | None = None
+    avatar_url: str | None = None
+    owner_id: str | None = None
+    status: str | None = None
+    agent_status: str | None = None
+
+
+@dataclass
+class ShadowServerAppResourceContext:
+    buddies: list[ShadowServerAppBuddyContext] | None = None
+
+
+@dataclass
 class ShadowServerAppCommandContext:
     protocol: str
     server_id: str
@@ -294,6 +312,7 @@ class ShadowServerAppCommandContext:
     actor: ShadowServerAppActor | dict[str, Any]
     command: str | None = None
     channel_id: str | None = None
+    resources: ShadowServerAppResourceContext | dict[str, Any] | None = None
     task: dict[str, Any] | None = None
     permission: str | None = None
     action: str | None = None
@@ -367,6 +386,39 @@ class ShadowMessageMention:
     avatar_url: str | None = None
     is_bot: bool | None = None
     is_private: bool | None = None
+
+
+@dataclass
+class ShadowMessageCopilotContext:
+    app_key: str
+    server_app_id: str | None = None
+    app_id: str | None = None
+    app_name: str | None = None
+    server_id: str | None = None
+    server_slug: str | None = None
+    channel_id: str | None = None
+    channel_kind: str | None = None
+    kind: str = "server_app_copilot"
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "kind": self.kind,
+            "appKey": self.app_key,
+        }
+        optional = {
+            "serverAppId": self.server_app_id,
+            "appId": self.app_id,
+            "appName": self.app_name,
+            "serverId": self.server_id,
+            "serverSlug": self.server_slug,
+            "channelId": self.channel_id,
+            "channelKind": self.channel_kind,
+        }
+        payload.update({key: value for key, value in optional.items() if value is not None})
+        return payload
+
+    def to_metadata(self) -> dict[str, Any]:
+        return {"copilotContext": self.to_dict()}
 
 
 @dataclass

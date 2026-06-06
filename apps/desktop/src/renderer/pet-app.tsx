@@ -999,7 +999,13 @@ export function PetApp() {
   }
 
   function updatePetBodyHover(event: PointerEvent<HTMLButtonElement>) {
-    if (isPointerOnPetBody(event)) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const isPointerInButtonBody =
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom
+    if (isPointerOnPetBody(event) || isPointerInButtonBody) {
       setWheelOpenImmediate(true)
       return
     }
@@ -1241,7 +1247,6 @@ export function PetApp() {
   }
 
   function handlePetPointerMove(event: PointerEvent<HTMLButtonElement>) {
-    updatePetBodyHover(event)
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     if (drag.voiceStarted) return
@@ -1255,8 +1260,14 @@ export function PetApp() {
     drag.lastScreenX = event.screenX
     drag.lastScreenY = event.screenY
     drag.travel += Math.abs(delta.x) + Math.abs(delta.y)
+    const isDraggingNow = drag.travel > 3
+    if (isDraggingNow) {
+      if (!dragging) setDragging(true)
+      setWheelOpenImmediate(false)
+    } else {
+      updatePetBodyHover(event)
+    }
     if (Math.abs(delta.x) >= 1) setDragDirection(delta.x >= 0 ? 'running-right' : 'running-left')
-    if (drag.travel > 3) setDragging(true)
     if (drag.travel >= 7) clearDragVoiceTimer(drag)
     void api?.pet?.moveWindow?.(delta)
   }
@@ -1266,13 +1277,16 @@ export function PetApp() {
     if (!drag || drag.pointerId !== event.pointerId) return
     clearDragVoiceTimer(drag)
     dragRef.current = null
-    setDragging(false)
     event.currentTarget.releasePointerCapture(event.pointerId)
     if (drag.voiceStarted) {
       finishVoiceCapture()
       return
     }
-    if (drag.travel < 7) activatePet()
+    if (drag.travel < 7) {
+      activatePet()
+    }
+    setDragging(false)
+    updatePetBodyHover(event)
   }
 
   function cancelPetPointer(event: PointerEvent<HTMLButtonElement>) {
@@ -1283,6 +1297,7 @@ export function PetApp() {
     }
     dragRef.current = null
     setDragging(false)
+    updatePetBodyHover(event)
     try {
       event.currentTarget.releasePointerCapture(event.pointerId)
     } catch {
@@ -1381,7 +1396,7 @@ export function PetApp() {
                 fallbackSrc={frameUrl}
               />
             </button>
-            {bubbleText ? (
+            {bubbleText && !dragging ? (
               <div
                 className={
                   bubbleMessage?.streaming

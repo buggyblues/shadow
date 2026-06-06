@@ -321,14 +321,18 @@ export function createAppIntegrationHandler(container: AppContainer) {
 
   handler.get('/servers/:serverId/apps', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
+    const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
     if (c.req.query('summary') === '1') {
       const apps = await appIntegrationService.listSummaries(
         c.req.param('serverId'),
         c.get('actor'),
+        { locale },
       )
       return c.json(apps)
     }
-    const apps = await appIntegrationService.list(c.req.param('serverId'), c.get('actor'))
+    const apps = await appIntegrationService.list(c.req.param('serverId'), c.get('actor'), {
+      locale,
+    })
     return c.json(apps)
   })
 
@@ -358,7 +362,12 @@ export function createAppIntegrationHandler(container: AppContainer) {
 
   handler.get('/servers/:serverId/apps/catalog', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
-    const catalog = await appIntegrationService.listCatalog(c.req.param('serverId'), c.get('actor'))
+    const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
+    const catalog = await appIntegrationService.listCatalog(
+      c.req.param('serverId'),
+      c.get('actor'),
+      { locale },
+    )
     return c.json(catalog)
   })
 
@@ -379,10 +388,12 @@ export function createAppIntegrationHandler(container: AppContainer) {
 
   handler.get('/servers/:serverId/apps/:appKey', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
+    const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
     const app = await appIntegrationService.get(
       c.req.param('serverId'),
       c.req.param('appKey'),
       c.get('actor'),
+      { locale },
     )
     return c.json(app)
   })

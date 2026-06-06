@@ -660,7 +660,7 @@ export function DiscoverPage() {
   })
 
   const { data: serverAppDirectoryData, isLoading: isServerAppsLoading } = useQuery({
-    queryKey: ['discover-server-apps', effectiveSearch],
+    queryKey: ['discover-server-apps', i18n.language, effectiveSearch],
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({ limit: '72' })
       if (effectiveSearch) params.set('q', effectiveSearch)

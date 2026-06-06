@@ -390,7 +390,7 @@ export function FlashApp() {
 
     const popup = window.open(
       authorizeUrl,
-      'shadow-flash-oauth',
+      'flash-oauth',
       'popup,width=520,height=760,menubar=no,toolbar=no,location=yes,status=no',
     )
     if (!popup) {

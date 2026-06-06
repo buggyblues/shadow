@@ -1,9 +1,11 @@
 import {
   buildShadowServerAppInboxDelivery,
   buildShadowServerAppInboxTaskRequest,
+  SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
   type ShadowBridgeEnqueueInboxTaskInput,
   type ShadowBridgeOpenBuddyCreatorInput,
+  type ShadowBridgeOpenCopilotInput,
 } from '@shadowob/sdk/bridge'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, X } from 'lucide-react-native'
@@ -15,6 +17,7 @@ import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/hea
 import { OAuthAuthorizationSheet } from '../../src/components/oauth/oauth-authorization-sheet'
 import { useShadowOAuthAuthorization } from '../../src/hooks/use-shadow-oauth-authorization'
 import { ApiError, fetchApi } from '../../src/lib/api'
+import { serverChannelHref } from '../../src/lib/routes'
 import { fontSize, palette, spacing, useColors } from '../../src/theme'
 
 interface AppCommandApproval {
@@ -33,6 +36,15 @@ interface BridgeRequest {
   commandName: string
   input?: unknown
   channelId?: string
+  task?: {
+    messageId: string
+    cardId: string
+    claimId?: string
+  }
+}
+
+interface BridgeCapabilitiesRequest {
+  requestId: string
 }
 
 interface BridgeInboxesRequest {
@@ -40,6 +52,8 @@ interface BridgeInboxesRequest {
 }
 
 type BridgeInboxEnqueueRequest = { requestId: string } & ShadowBridgeEnqueueInboxTaskInput
+
+type BridgeOpenCopilotRequest = { requestId: string } & ShadowBridgeOpenCopilotInput
 
 type BridgeOpenBuddyCreatorRequest = { requestId: string } & ShadowBridgeOpenBuddyCreatorInput
 
@@ -117,6 +131,17 @@ export default function WebViewPreviewScreen() {
     [postBridgeResponse, serverSlug],
   )
 
+  const callBridgeCapabilities = useCallback(
+    (request: BridgeCapabilitiesRequest) => {
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { capabilities: [...SHADOW_BRIDGE_CAPABILITIES] } },
+        ShadowBridge.capabilitiesResponseType,
+      )
+    },
+    [postBridgeResponse],
+  )
+
   const callBridgeInboxEnqueue = useCallback(
     async (request: BridgeInboxEnqueueRequest) => {
       if (!serverSlug || !appKey) return
@@ -158,6 +183,31 @@ export default function WebViewPreviewScreen() {
     [appKey, postBridgeResponse, serverSlug, title],
   )
 
+  const callBridgeOpenCopilot = useCallback(
+    (request: BridgeOpenCopilotRequest) => {
+      const channelId = request.delivery?.channelId
+      if (!serverSlug || !channelId) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing Copilot channel id' },
+          ShadowBridge.openCopilotResponseType,
+        )
+        return
+      }
+      router.push(
+        serverChannelHref(serverSlug, channelId, {
+          messageId: request.delivery.messageId,
+        }) as never,
+      )
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { opened: true } },
+        ShadowBridge.openCopilotResponseType,
+      )
+    },
+    [postBridgeResponse, router, serverSlug],
+  )
+
   const callBridgeOpenBuddyCreator = useCallback(
     (request: BridgeOpenBuddyCreatorRequest) => {
       const params = new URLSearchParams()
@@ -194,7 +244,11 @@ export default function WebViewPreviewScreen() {
           )}`,
           {
             method: 'POST',
-            body: JSON.stringify({ input: request.input ?? {}, channelId: request.channelId }),
+            body: JSON.stringify({
+              input: request.input ?? {},
+              channelId: request.channelId,
+              task: request.task,
+            }),
           },
         )
         postBridgeResponse(request.requestId, { ok: true, result })
@@ -249,7 +303,11 @@ export default function WebViewPreviewScreen() {
           )}`,
           {
             method: 'POST',
-            body: JSON.stringify({ input: request.input ?? {}, channelId: request.channelId }),
+            body: JSON.stringify({
+              input: request.input ?? {},
+              channelId: request.channelId,
+              task: request.task,
+            }),
           },
         )
         postBridgeResponse(request.requestId, { ok: true, result })
@@ -281,6 +339,11 @@ export default function WebViewPreviewScreen() {
       if (!data || typeof data !== 'object') return
       const message = data as Record<string, unknown>
       if (message.appKey && message.appKey !== appKey) return
+      if (message.type === ShadowBridge.capabilitiesRequestType) {
+        if (typeof message.requestId !== 'string') return
+        callBridgeCapabilities({ requestId: message.requestId })
+        return
+      }
       if (message.type === ShadowBridge.inboxesRequestType) {
         if (typeof message.requestId !== 'string') return
         void callBridgeInboxes({ requestId: message.requestId })
@@ -292,6 +355,17 @@ export default function WebViewPreviewScreen() {
           requestId: message.requestId,
           target: message.target as BridgeInboxEnqueueRequest['target'],
           task: message.task as BridgeInboxEnqueueRequest['task'],
+        })
+        return
+      }
+      if (message.type === ShadowBridge.openCopilotRequestType) {
+        if (typeof message.requestId !== 'string') return
+        callBridgeOpenCopilot({
+          requestId: message.requestId,
+          delivery:
+            message.delivery && typeof message.delivery === 'object'
+              ? (message.delivery as BridgeOpenCopilotRequest['delivery'])
+              : {},
         })
         return
       }
@@ -313,13 +387,19 @@ export default function WebViewPreviewScreen() {
         commandName: message.commandName,
         input: message.input,
         channelId: typeof message.channelId === 'string' ? message.channelId : undefined,
+        task:
+          message.task && typeof message.task === 'object'
+            ? (message.task as BridgeRequest['task'])
+            : undefined,
       })
     },
     [
       appKey,
+      callBridgeCapabilities,
       callBridgeCommand,
       callBridgeInboxes,
       callBridgeInboxEnqueue,
+      callBridgeOpenCopilot,
       callBridgeOpenBuddyCreator,
     ],
   )

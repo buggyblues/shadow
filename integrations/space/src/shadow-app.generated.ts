@@ -4,29 +4,29 @@ import type { ShadowServerAppManifest } from '@shadowob/sdk'
 
 export const shadowServerAppManifest = {
   schemaVersion: 'shadow.app/1',
-  appKey: 'shadow-space',
+  appKey: 'space',
   name: 'Space',
   description:
-    'A personal portfolio App for creator profiles, collected works, cover images, tags, responses, remakes, saved works, editions, restoration, and CDN-backed viewing.',
+    'A personal portfolio app for creator profiles, collected works, cover images, tags, responses, remakes, saved works, editions, restoration, and CDN-backed viewing.',
   version: '1.0.0',
   iconUrl: 'http://localhost:4217/assets/icon.svg',
   marketplace: {
     tagline: 'A creator space for profiles, works, covers, responses, and remakes.',
     summary:
       'Space gives creators a server-native portfolio with profile pages, uploaded works, cover images, tags, responses, remakes, saved works, editions, restoration, and CDN-backed viewing. It is designed for communities that make and discuss creative work together.',
-    categories: ['创作', '社区', '作品集'],
+    categories: ['Creation', 'Community', 'Portfolio'],
     supportedLanguages: ['English', '中文'],
     coverImageUrl: 'http://localhost:4217/assets/cover.png',
     gallery: [
       {
         url: 'http://localhost:4217/assets/cover.png',
         type: 'image',
-        alt: 'space cover',
+        alt: 'Space cover',
       },
     ],
     links: [
       {
-        label: '主页',
+        label: 'Home',
         url: 'http://localhost:4217/shadow/server',
         type: 'website',
       },
@@ -225,7 +225,7 @@ export const shadowServerAppManifest = {
       help: {
         summary: 'Create a new work or add a new edition from a local package.',
         usage:
-          'shadowob app call shadow-space artworks.upload --server "<server>" --file ./work-package --json-input \'{"title":"My piece","tags":["portfolio"],"visibility":"public"}\' --json',
+          'shadowob app call space artworks.upload --server "<server>" --file ./work-package --json-input \'{"title":"My piece","tags":["portfolio"],"visibility":"public"}\' --json',
         details:
           'Packages should include a clear entry piece. Space chooses the shortest valid entry when there are multiple candidates.',
       },
@@ -351,7 +351,7 @@ export const shadowServerAppManifest = {
       help: {
         summary: 'Attach a visual cover to the Space profile or a work card.',
         usage:
-          'shadowob app call shadow-space covers.upload --server "<server>" --file ./cover.png --json-input \'{"targetType":"artwork","artworkId":"art_123"}\' --json',
+          'shadowob app call space covers.upload --server "<server>" --file ./cover.png --json-input \'{"targetType":"artwork","artworkId":"art_123"}\' --json',
         details:
           'Use targetType=profile for the portfolio cover. Use targetType=artwork with artworkId for a work cover.',
       },
@@ -522,24 +522,47 @@ export const shadowServerAppManifest = {
   ],
   skills: [
     {
-      name: 'shadow-space-portfolio-ops',
+      name: 'space-portfolio-ops',
       description:
         'Use when a Buddy needs to inspect a Space portfolio, publish work, add notes, make responses, collect works, or restore an edition.',
       commandHints: [
-        'shadow-space profile.get',
-        'shadow-space artworks.list',
-        'shadow-space artworks.get',
-        'shadow-space artworks.upload',
-        'shadow-space covers.upload',
-        'shadow-space artworks.comment',
-        'shadow-space artworks.remix',
-        'shadow-space versions.rollback',
+        'space profile.get',
+        'space artworks.list',
+        'space artworks.get',
+        'space artworks.upload',
+        'space covers.upload',
+        'space artworks.comment',
+        'space artworks.remix',
+        'space versions.rollback',
       ],
     },
   ],
   events: ['space.updated'],
   binary: {
     supported: true,
+  },
+  i18n: {
+    'zh-CN': {
+      name: '空间',
+      description:
+        '创作者作品集应用，支持个人主页、作品、封面、标签、回应、改作、收藏、版本恢复和 CDN 浏览。',
+      marketplace: {
+        tagline: '面向创作者的主页、作品、封面、回应和改作空间。',
+        summary:
+          '空间为创作者提供服务器原生作品集，包括个人主页、上传作品、封面图、标签、回应、改作、收藏作品、版本恢复和 CDN 浏览。它适合一起创作和讨论作品的社区。',
+        categories: ['创作', '社区', '作品集'],
+        gallery: [
+          {
+            alt: '空间封面',
+          },
+        ],
+        links: [
+          {
+            label: '主页',
+          },
+        ],
+      },
+    },
   },
 } as const satisfies ShadowServerAppManifest
 

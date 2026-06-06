@@ -1,4 +1,12 @@
 import {
+  type BuddyInboxTaskFilter,
+  type BuddyInboxViewMode,
+  buildBuddyInboxViewMessages,
+  getBuddyInboxTaskMessageIds,
+  normalizeUserStatus,
+  parseBuddyInboxAgentId,
+} from '@shadowob/shared'
+import {
   Badge,
   Button,
   cn,
@@ -24,6 +32,7 @@ import {
   Copy,
   Hash,
   Inbox,
+  ListFilter,
   Loader2,
   LockKeyhole,
   LogIn,
@@ -67,8 +76,14 @@ import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { InvitePanel } from '../common/invite-panel'
+import { normalizeBuddyAgentPresenceStatus, PresenceAvatar } from '../common/presence-avatar'
 import { NotificationBell } from '../notification/notification-bell'
 import { type PickerResult, WorkspaceFilePicker } from '../workspace'
+import {
+  type ChannelSwitcherOption,
+  getChannelSwitcherSection,
+  groupChannelSwitcherOptions,
+} from './channel-switcher-options'
 import { buildChatTimeline, type ChatTimelineItem } from './chat-timeline'
 import {
   CHAT_SCROLLING_RESET_DELAY,
@@ -156,25 +171,7 @@ interface Channel {
   } | null
 }
 
-type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
-
-const directPeerStatusColors: Record<PresenceStatus, string> = {
-  online: 'bg-success',
-  idle: 'bg-warning',
-  dnd: 'bg-danger',
-  offline: 'bg-text-muted',
-}
-
-function normalizePresenceStatus(status?: string | null): PresenceStatus {
-  return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline'
-}
-
-export interface ChannelSwitcherOption {
-  id: string
-  name: string
-  type?: string
-  isArchived?: boolean
-}
+export type { ChannelSwitcherOption } from './channel-switcher-options'
 
 interface MemberEvent {
   serverId: string
@@ -226,6 +223,22 @@ interface MemberCacheEntry {
   }
 }
 
+interface ServerMemberEntry {
+  userId: string
+  user?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+    status?: string | null
+    isBot?: boolean
+  } | null
+  agent?: {
+    id: string
+    status?: string | null
+  } | null
+}
+
 interface BuddyAgentCacheEntry {
   botUser?: {
     id: string
@@ -250,35 +263,6 @@ type TimelineItem = ChatTimelineItem<Message, SystemEvent>
 type InteractiveResponse = NonNullable<
   NonNullable<BubbleMessage['metadata']>['interactiveResponse']
 >
-type InboxTaskFilter = 'all' | 'open' | 'done'
-
-const DONE_TASK_STATUSES = new Set(['completed', 'failed', 'canceled', 'transferred'])
-
-function getMessageTaskStatuses(message: Message): string[] {
-  const cards = message.metadata?.cards
-  if (!Array.isArray(cards)) return []
-  return cards.flatMap((card) => {
-    if (
-      card &&
-      typeof card === 'object' &&
-      'kind' in card &&
-      card.kind === 'task' &&
-      'status' in card &&
-      typeof card.status === 'string'
-    ) {
-      return [card.status]
-    }
-    return []
-  })
-}
-
-function messageMatchesInboxTaskFilter(message: Message, filter: InboxTaskFilter) {
-  if (filter === 'all') return true
-  const statuses = getMessageTaskStatuses(message)
-  if (statuses.length === 0) return false
-  if (filter === 'done') return statuses.every((status) => DONE_TASK_STATUSES.has(status))
-  return statuses.some((status) => !DONE_TASK_STATUSES.has(status))
-}
 
 function trimStatusEllipsis(label: string | null | undefined): string | null {
   const trimmed = label?.trim()
@@ -326,12 +310,14 @@ export function ChatArea({
   channelSwitcher,
   onEnterChannel,
   onExitCopilot,
+  messageMetadata,
 }: {
   channelId?: string
   serverId?: string | null
   initialMessages?: ChatInitialMessagesPage | null
   onBack?: () => void
   showMemberToggle?: boolean
+  messageMetadata?: Record<string, unknown>
   channelSwitcher?: {
     channels: ChannelSwitcherOption[]
     activeChannelId: string
@@ -363,7 +349,8 @@ export function ChatArea({
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
   const [selectionDragBox, setSelectionDragBox] = useState<SelectionDragBox | null>(null)
   const [showPageQr, setShowPageQr] = useState(false)
-  const [inboxTaskFilter, setInboxTaskFilter] = useState<InboxTaskFilter>('all')
+  const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('tasks')
+  const [inboxTaskFilter, setInboxTaskFilter] = useState<BuddyInboxTaskFilter>('all')
   const [activeThread, setActiveThread] = useState<Thread | null>(null)
   const [activeThreadParent, setActiveThreadParent] = useState<Message | null>(null)
   const pageShareUrl = window.location.href
@@ -592,12 +579,42 @@ export function ChatArea({
   )
   const directPeer = channel?.kind === 'dm' ? channel.otherUser : null
   const directPeerName = directPeer?.displayName ?? directPeer?.username ?? channel?.name ?? '...'
-  const directPeerStatus = normalizePresenceStatus(directPeer?.status)
   const directPeerIsPrivateBuddy = Boolean(
     directPeer?.isBot && privateBuddyUserIds.has(directPeer.id),
   )
-  const channelDisplayName = directPeer ? directPeerName : (channel?.name ?? '...')
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
+  const inboxAgentId = isInboxChannel ? parseBuddyInboxAgentId(channel?.topic) : null
+  const { data: inboxServerMembers = [] } = useQuery({
+    queryKey: ['members', activeServerId, 'inbox-buddy', inboxAgentId],
+    queryFn: () => fetchApi<ServerMemberEntry[]>(`/api/servers/${activeServerId}/members`),
+    enabled: Boolean(isInboxChannel && activeServerId && inboxAgentId),
+    staleTime: 30_000,
+    refetchOnMount: false,
+  })
+  const inboxBuddyMember = useMemo(
+    () => inboxServerMembers.find((member) => member.agent?.id === inboxAgentId) ?? null,
+    [inboxAgentId, inboxServerMembers],
+  )
+  const inboxBuddy = inboxBuddyMember?.user ?? null
+  const inboxBuddyName =
+    inboxBuddy?.displayName ?? inboxBuddy?.username ?? channel?.name ?? t('inbox.queueBadge')
+  const inboxBuddyBusy = Boolean(
+    inboxBuddy?.id &&
+      workStatuses.some(
+        (status) => status.userId === inboxBuddy.id && (status.typing || status.activity),
+      ),
+  )
+  const inboxBuddyPresenceStatus = normalizeBuddyAgentPresenceStatus({
+    userStatus: inboxBuddy?.status,
+    agentStatus: inboxBuddyMember?.agent?.status,
+    busy: inboxBuddyBusy,
+  })
+  const channelDisplayName = directPeer
+    ? directPeerName
+    : inboxBuddy
+      ? inboxBuddyName
+      : (channel?.name ?? '...')
+  const isInboxTaskMode = isInboxChannel && inboxViewMode === 'tasks'
   const visibleChannelTopic = isInboxChannel ? null : channel?.topic
   const normalizedSearchQuery = debouncedSearchQuery.trim()
   const syncChannelMutationResult = useCallback(
@@ -660,7 +677,7 @@ export function ChatArea({
           ...current,
           otherUser: {
             ...current.otherUser,
-            status: normalizePresenceStatus(status),
+            status: normalizeUserStatus(status),
           },
         }
       })
@@ -735,11 +752,7 @@ export function ChatArea({
   }, [data])
 
   const taskCardMessageIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const message of messages) {
-      if (getMessageTaskStatuses(message).length > 0) ids.add(message.id)
-    }
-    return ids
+    return getBuddyInboxTaskMessageIds(messages)
   }, [messages])
 
   const taskRepliesByMessageId = useMemo(() => {
@@ -754,19 +767,13 @@ export function ChatArea({
     return replies
   }, [messages, taskCardMessageIds])
 
-  const inboxTimelineBaseMessages = useMemo(() => {
-    if (!isInboxChannel) return messages
-    return messages.filter(
-      (message) => !message.replyToId || !taskCardMessageIds.has(message.replyToId),
-    )
-  }, [isInboxChannel, messages, taskCardMessageIds])
-
   const timelineMessages = useMemo(() => {
-    if (!isInboxChannel || inboxTaskFilter === 'all') return inboxTimelineBaseMessages
-    return inboxTimelineBaseMessages.filter((message) =>
-      messageMatchesInboxTaskFilter(message, inboxTaskFilter),
-    )
-  }, [inboxTaskFilter, inboxTimelineBaseMessages, isInboxChannel])
+    return buildBuddyInboxViewMessages(messages, {
+      isInboxChannel,
+      mode: inboxViewMode,
+      taskFilter: inboxTaskFilter,
+    })
+  }, [inboxTaskFilter, inboxViewMode, isInboxChannel, messages])
 
   // O(1) message lookup map — avoids O(n) .find() for replyToMessage
   const messageMap = useMemo(() => {
@@ -1265,13 +1272,13 @@ export function ChatArea({
     activityTimersRef.current.set(data.userId, timer)
   })
 
-  useSocketEvent('presence:change', (data: { userId: string; status: PresenceStatus }) => {
+  useSocketEvent('presence:change', (data: { userId: string; status: string }) => {
     updateDirectPeerPresence(data.userId, data.status)
   })
 
   useSocketEvent(
     'presence:snapshot',
-    (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
+    (data: { channelId: string; members: { userId: string; status: string }[] }) => {
       if (data.channelId !== activeChannelId || !directPeer) return
       const peer = data.members.find((member) => member.userId === directPeer.id)
       if (peer) updateDirectPeerPresence(peer.userId, peer.status)
@@ -1794,7 +1801,7 @@ export function ChatArea({
           replyToMessage={
             item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
           }
-          taskReplies={taskRepliesByMessageId.get(item.data.id)}
+          taskReplies={isInboxTaskMode ? taskRepliesByMessageId.get(item.data.id) : undefined}
           selectionMode={selectionMode}
           isSelected={selectedMessageIds.has(item.data.id)}
           selectionAnchorId={selectionAnchorId}
@@ -1821,10 +1828,53 @@ export function ChatArea({
   }
 
   const virtualItems = shouldVirtualize ? virtualizer.getVirtualItems() : []
-  const renderChannelSwitcherIcon = (type?: string) => {
+  const channelSwitcherGroups = channelSwitcher
+    ? groupChannelSwitcherOptions(channelSwitcher.channels)
+    : null
+  const hasChannelSwitcherItems = Boolean(
+    channelSwitcherGroups &&
+      (channelSwitcherGroups.channels.length > 0 || channelSwitcherGroups.inboxes.length > 0),
+  )
+
+  const renderChannelSwitcherIcon = (item: ChannelSwitcherOption) => {
+    if (getChannelSwitcherSection(item) === 'inbox') {
+      return (
+        <PresenceAvatar
+          userId={item.userId ?? undefined}
+          avatarUrl={item.avatarUrl}
+          displayName={item.name}
+          status={item.status}
+          size="xs"
+        />
+      )
+    }
+    const type = item.type
     const Icon = type === 'voice' ? Volume2 : type === 'announcement' ? Megaphone : Hash
     return <Icon size={14} className="shrink-0 text-text-muted" />
   }
+
+  const renderChannelSwitcherItems = (items: ChannelSwitcherOption[]) =>
+    items.map((item) => {
+      const isActive = item.id === channelSwitcher?.activeChannelId
+      return (
+        <button
+          key={item.id}
+          type="button"
+          onClick={() => channelSwitcher?.onSelectChannel(item.id)}
+          className={cn(
+            'flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-bold transition',
+            isActive
+              ? 'bg-primary/15 text-primary'
+              : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
+          )}
+        >
+          {renderChannelSwitcherIcon(item)}
+          <span className={cn('min-w-0 flex-1 truncate', item.isArchived && 'italic')}>
+            {item.name}
+          </span>
+        </button>
+      )
+    })
 
   return (
     <div className="relative flex-1 flex min-w-0 h-full">
@@ -1862,20 +1912,21 @@ export function ChatArea({
             <ArrowLeft size={20} />
           </Button>
           {directPeer ? (
-            <div className="relative shrink-0">
-              <UserAvatar
-                userId={directPeer.id}
-                avatarUrl={directPeer.avatarUrl}
-                displayName={directPeerName}
-                size="sm"
-              />
-              <span
-                className={cn(
-                  'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-deep',
-                  directPeerStatusColors[directPeerStatus],
-                )}
-              />
-            </div>
+            <PresenceAvatar
+              userId={directPeer.id}
+              avatarUrl={directPeer.avatarUrl}
+              displayName={directPeerName}
+              status={directPeer.status}
+              size="sm"
+            />
+          ) : inboxBuddy ? (
+            <PresenceAvatar
+              userId={inboxBuddy.id}
+              avatarUrl={inboxBuddy.avatarUrl}
+              displayName={inboxBuddyName}
+              status={inboxBuddyPresenceStatus}
+              size="sm"
+            />
           ) : (
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-tertiary/50 text-primary shadow-inner">
               {isInboxChannel ? (
@@ -1901,29 +1952,22 @@ export function ChatArea({
               </PopoverTrigger>
               <PopoverContent align="start" className="w-64 p-1.5">
                 <div className="max-h-72 overflow-y-auto pr-1">
-                  {channelSwitcher.channels.map((item) => {
-                    const isActive = item.id === channelSwitcher.activeChannelId
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => channelSwitcher.onSelectChannel(item.id)}
-                        className={cn(
-                          'flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-bold transition',
-                          isActive
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
-                        )}
-                      >
-                        {renderChannelSwitcherIcon(item.type)}
-                        <span
-                          className={cn('min-w-0 flex-1 truncate', item.isArchived && 'italic')}
-                        >
-                          {item.name}
-                        </span>
-                      </button>
-                    )
-                  })}
+                  {channelSwitcherGroups && channelSwitcherGroups.inboxes.length > 0 && (
+                    <div>
+                      <div className="px-2 pb-1 pt-1 text-[11px] font-black uppercase text-text-muted">
+                        {t('channel.copilotInboxSection')}
+                      </div>
+                      {renderChannelSwitcherItems(channelSwitcherGroups.inboxes)}
+                    </div>
+                  )}
+                  {channelSwitcherGroups && channelSwitcherGroups.channels.length > 0 && (
+                    <div className={cn(channelSwitcherGroups.inboxes.length > 0 && 'mt-1')}>
+                      <div className="px-2 pb-1 pt-1 text-[11px] font-black uppercase text-text-muted">
+                        {t('channel.copilotChannelSection')}
+                      </div>
+                      {renderChannelSwitcherItems(channelSwitcherGroups.channels)}
+                    </div>
+                  )}
                 </div>
               </PopoverContent>
             </Popover>
@@ -1956,7 +2000,7 @@ export function ChatArea({
               )}
             </div>
           )}
-          {channelSwitcher?.channels.length === 0 && (
+          {channelSwitcher && !hasChannelSwitcherItems && (
             <span className="sr-only">{t('channel.noChannels')}</span>
           )}
           {visibleChannelTopic && !channelSwitcher && (
@@ -1969,6 +2013,38 @@ export function ChatArea({
           )}
           {/* Right side: mobile QR + members toggle + notification bell */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {isInboxTaskMode && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full"
+                    title={t('inbox.filter.label')}
+                    aria-label={t('inbox.filter.label')}
+                  >
+                    <ListFilter size={18} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-40 p-1.5">
+                  {(['all', 'open', 'done'] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setInboxTaskFilter(filter)}
+                      className={cn(
+                        'flex h-9 w-full items-center rounded-lg px-2 text-left text-sm font-bold transition',
+                        inboxTaskFilter === filter
+                          ? 'bg-primary/15 text-primary'
+                          : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
+                      )}
+                    >
+                      {t(`inbox.filter.${filter}`)}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -2004,27 +2080,6 @@ export function ChatArea({
                 >
                   <X size={18} />
                 </Button>
-              </>
-            ) : isInboxChannel ? (
-              <>
-                <div className="hidden items-center rounded-full border border-border-subtle bg-bg-tertiary/45 p-0.5 sm:flex">
-                  {(['all', 'open', 'done'] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      type="button"
-                      onClick={() => setInboxTaskFilter(filter)}
-                      className={cn(
-                        'h-7 rounded-full px-3 text-xs font-black transition',
-                        inboxTaskFilter === filter
-                          ? 'bg-primary text-bg-primary shadow-[0_0_18px_rgba(0,229,255,0.22)]'
-                          : 'text-text-muted hover:bg-bg-modifier-hover hover:text-text-primary',
-                      )}
-                    >
-                      {t(`inbox.filter.${filter}`)}
-                    </button>
-                  ))}
-                </div>
-                <NotificationBell className="h-8 w-8" />
               </>
             ) : (
               <>
@@ -2134,7 +2189,11 @@ export function ChatArea({
             </div>
           ) : timelineMessages.length === 0 && systemEvents.length === 0 ? (
             isInboxChannel ? (
-              <InboxEmptyState filter={inboxTaskFilter} hasMessages={messages.length > 0} />
+              <InboxEmptyState
+                mode={inboxViewMode}
+                filter={inboxTaskFilter}
+                hasMessages={messages.length > 0}
+              />
             ) : (
               <EmptyChannelState
                 channelName={channel?.name}
@@ -2278,9 +2337,12 @@ export function ChatArea({
             channelName={channel?.name}
             replyToId={replyToId}
             onClearReply={() => setReplyToId(null)}
+            messageMetadata={messageMetadata}
             externalFiles={droppedFiles}
             onExternalFilesConsumed={() => setDroppedFiles([])}
             enableTaskCards={isInboxChannel}
+            inboxViewMode={inboxViewMode}
+            onInboxViewModeChange={setInboxViewMode}
           />
         )}
       </GlassPanel>
@@ -2508,14 +2570,17 @@ function HighlightedSearchText({ content, query }: { content: string; query: str
 }
 
 function InboxEmptyState({
+  mode,
   filter,
   hasMessages,
 }: {
-  filter: InboxTaskFilter
+  mode: BuddyInboxViewMode
+  filter: BuddyInboxTaskFilter
   hasMessages: boolean
 }) {
   const { t } = useTranslation()
-  const isFilteredEmpty = hasMessages && filter !== 'all'
+  const isChatMode = mode === 'chat'
+  const isFilteredEmpty = !isChatMode && hasMessages && filter !== 'all'
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-4 text-center text-text-muted">
@@ -2523,10 +2588,18 @@ function InboxEmptyState({
         <Inbox size={24} strokeWidth={2.4} />
       </div>
       <p className="mb-2 text-lg font-black text-text-primary">
-        {isFilteredEmpty ? t('inbox.empty.filterTitle') : t('inbox.empty.allTitle')}
+        {isChatMode
+          ? t('inbox.empty.chatTitle')
+          : isFilteredEmpty
+            ? t('inbox.empty.filterTitle')
+            : t('inbox.empty.allTitle')}
       </p>
       <p className="max-w-md text-sm font-semibold leading-6 text-text-muted">
-        {isFilteredEmpty ? t('inbox.empty.filterHint') : t('inbox.empty.allHint')}
+        {isChatMode
+          ? t('inbox.empty.chatHint')
+          : isFilteredEmpty
+            ? t('inbox.empty.filterHint')
+            : t('inbox.empty.allHint')}
       </p>
     </div>
   )

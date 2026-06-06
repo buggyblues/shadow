@@ -368,6 +368,394 @@ describe('MediaHandler', () => {
 })
 
 describe('MessageService', () => {
+  describe('Inbox task replies', () => {
+    it('records Buddy replies without completing the active task card', async () => {
+      const agentId = 'agent-1'
+      const botUserId = 'bot-user-1'
+      const channelId = 'inbox-channel-1'
+      const taskMessageId = 'task-message-1'
+      const replyMessage = {
+        id: 'reply-message-1',
+        content: 'I created the first research brief and will continue with the next step.',
+        channelId,
+        authorId: botUserId,
+        replyToId: taskMessageId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isEdited: false,
+        isPinned: false,
+      }
+      const taskMessage = {
+        id: taskMessageId,
+        content: 'Research this brand',
+        channelId,
+        authorId: 'human-user-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: {
+          cards: [
+            {
+              id: 'task-card-1',
+              kind: 'task',
+              version: 1,
+              title: 'Brand research',
+              status: 'claimed',
+              assignee: { agentId, userId: botUserId, label: 'BrandScout' },
+              claim: {
+                id: 'claim-1',
+                actor: { kind: 'agent', agentId, userId: botUserId },
+                claimedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 60_000).toISOString(),
+              },
+              capability: {
+                kind: 'task',
+                scope: ['workspace.write'],
+                issuedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 60_000).toISOString(),
+              },
+              progress: [
+                {
+                  at: new Date().toISOString(),
+                  status: 'claimed',
+                  note: 'Claimed',
+                },
+              ],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      }
+      const messageDao = createMockMessageDao({
+        create: vi.fn().mockResolvedValue(replyMessage),
+        findById: vi.fn(async (id: string) => (id === taskMessageId ? taskMessage : null)),
+        updateMetadata: vi.fn(async (id: string, metadata: Record<string, unknown> | null) => ({
+          ...taskMessage,
+          id,
+          metadata,
+        })),
+      })
+      const userDao = createMockUserDao({
+        findById: vi.fn(async (userId: string) => ({
+          id: userId,
+          username: userId === botUserId ? 'brandscout' : 'admin',
+          displayName: userId === botUserId ? 'BrandScout' : 'Admin',
+          avatarUrl: null,
+          isBot: userId === botUserId,
+        })),
+      })
+      const emit = vi.fn()
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: userDao as any,
+        channelDao: {
+          updateLastMessageAt: vi.fn(),
+          findById: vi.fn().mockResolvedValue({
+            id: channelId,
+            topic: `shadow:buddy-inbox:${agentId}`,
+          }),
+        } as any,
+        agentDao: {
+          findByUserId: vi.fn().mockResolvedValue(null),
+          findById: vi.fn().mockResolvedValue({ id: agentId, userId: botUserId }),
+        } as any,
+        agentDashboardDao: {
+          incrementMessageCount: vi.fn(),
+          incrementHourlyMessage: vi.fn(),
+          createEvent: vi.fn(),
+        } as any,
+        io: { to: vi.fn(() => ({ emit })) } as any,
+      })
+
+      await service.send(channelId, botUserId, {
+        content: replyMessage.content,
+        replyToId: taskMessageId,
+      })
+
+      expect(messageDao.updateMetadata).toHaveBeenCalledWith(
+        taskMessageId,
+        expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              id: 'task-card-1',
+              status: 'running',
+              claim: taskMessage.metadata.cards[0]?.claim,
+              capability: taskMessage.metadata.cards[0]?.capability,
+              replies: [
+                expect.objectContaining({
+                  messageId: replyMessage.id,
+                  cardId: 'task-card-1',
+                  authorId: botUserId,
+                  authorLabel: 'BrandScout',
+                  content: replyMessage.content,
+                }),
+              ],
+              progress: expect.arrayContaining([
+                expect.objectContaining({
+                  status: 'running',
+                  note: expect.stringContaining('Buddy replied:'),
+                }),
+              ]),
+            }),
+          ],
+        }),
+      )
+      expect(emit).toHaveBeenCalledWith(
+        'message:updated',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            cards: [
+              expect.objectContaining({
+                status: 'running',
+                claim: taskMessage.metadata.cards[0]?.claim,
+              }),
+            ],
+          }),
+        }),
+      )
+    })
+
+    it.each([
+      { taskStatus: 'running', sourceKind: 'server_app' },
+      { taskStatus: 'completed', sourceKind: 'server_app' },
+      { taskStatus: 'failed', sourceKind: 'server_app' },
+      { taskStatus: 'completed', sourceKind: 'agent' },
+    ] as const)('handles dispatching Buddy Inbox reply notifications for a delegated $sourceKind task with $taskStatus status', async ({
+      taskStatus,
+      sourceKind,
+    }) => {
+      const assigneeAgentId = 'agent-worker'
+      const assigneeUserId = 'bot-worker'
+      const dispatcherAgentId = 'agent-coordinator'
+      const dispatcherUserId = 'bot-coordinator'
+      const workerInboxId = 'worker-inbox'
+      const dispatcherInboxId = 'coordinator-inbox'
+      const taskMessageId = 'delegated-task-message'
+      const taskResource = { kind: 'kanban.card', id: 'card-script', label: 'Write script' }
+      const taskSource =
+        sourceKind === 'server_app'
+          ? {
+              kind: 'server_app',
+              appKey: 'kanban',
+              command: 'cards.dispatch',
+              resource: taskResource,
+            }
+          : {
+              kind: 'agent',
+              agentId: dispatcherAgentId,
+              userId: dispatcherUserId,
+              label: 'Coordinator Buddy',
+            }
+      const replyMessage = {
+        id: 'worker-reply-message',
+        content: 'Script is complete and saved to workspace.',
+        channelId: workerInboxId,
+        authorId: assigneeUserId,
+        replyToId: taskMessageId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isEdited: false,
+        isPinned: false,
+      }
+      const taskMessage = {
+        id: taskMessageId,
+        content: 'Write the script',
+        channelId: workerInboxId,
+        authorId: dispatcherUserId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: {
+          cards: [
+            {
+              id: 'task-card-worker',
+              kind: 'task',
+              version: 1,
+              title: 'Write script',
+              status: taskStatus,
+              assignee: { agentId: assigneeAgentId, userId: assigneeUserId, label: 'ScriptSmith' },
+              source: taskSource,
+              data: {
+                cardId: 'card-script',
+              },
+              progress: [],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      }
+      const createdMessages: any[] = []
+      const messageDao = createMockMessageDao({
+        create: vi.fn(async (data) => {
+          const created = {
+            id: data.channelId === dispatcherInboxId ? 'dispatcher-notification' : replyMessage.id,
+            ...data,
+            authorId: data.authorId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            isEdited: false,
+            isPinned: false,
+          }
+          createdMessages.push(created)
+          return created
+        }),
+        findById: vi.fn(async (id: string) => (id === taskMessageId ? taskMessage : null)),
+        findByChannelId: vi.fn(async (channelId: string) => ({
+          messages: channelId === dispatcherInboxId ? [] : [taskMessage],
+          hasMore: false,
+        })),
+        updateMetadata: vi.fn(async (id: string, metadata: Record<string, unknown> | null) => ({
+          ...taskMessage,
+          id,
+          metadata,
+        })),
+      })
+      const userDao = createMockUserDao({
+        findById: vi.fn(async (userId: string) => ({
+          id: userId,
+          username: userId === assigneeUserId ? 'scriptsmith' : 'coordinator',
+          displayName: userId === assigneeUserId ? 'ScriptSmith' : 'Coordinator',
+          avatarUrl: null,
+          isBot: true,
+        })),
+      })
+      const emit = vi.fn()
+      const channelDao = {
+        updateLastMessageAt: vi.fn(),
+        findById: vi.fn(async (channelId: string) =>
+          channelId === workerInboxId
+            ? {
+                id: workerInboxId,
+                serverId: 'server-1',
+                topic: `shadow:buddy-inbox:${assigneeAgentId}`,
+              }
+            : {
+                id: dispatcherInboxId,
+                serverId: 'server-1',
+                topic: `shadow:buddy-inbox:${dispatcherAgentId}`,
+              },
+        ),
+        findByServerId: vi.fn().mockResolvedValue([
+          {
+            id: workerInboxId,
+            serverId: 'server-1',
+            topic: `shadow:buddy-inbox:${assigneeAgentId}`,
+          },
+          {
+            id: dispatcherInboxId,
+            serverId: 'server-1',
+            topic: `shadow:buddy-inbox:${dispatcherAgentId}`,
+          },
+        ]),
+      }
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: userDao as any,
+        channelDao: channelDao as any,
+        agentDao: {
+          findById: vi.fn(async (agentId: string) =>
+            agentId === assigneeAgentId
+              ? { id: assigneeAgentId, userId: assigneeUserId }
+              : { id: dispatcherAgentId, userId: dispatcherUserId, name: 'Coordinator Buddy' },
+          ),
+          findByUserId: vi.fn(async (userId: string) =>
+            userId === dispatcherUserId
+              ? { id: dispatcherAgentId, userId: dispatcherUserId, name: 'Coordinator Buddy' }
+              : null,
+          ),
+        } as any,
+        agentDashboardDao: {
+          incrementMessageCount: vi.fn(),
+          incrementHourlyMessage: vi.fn(),
+          createEvent: vi.fn(),
+        } as any,
+        io: { to: vi.fn(() => ({ emit })) } as any,
+      })
+
+      await service.send(workerInboxId, assigneeUserId, {
+        content: replyMessage.content,
+        replyToId: taskMessageId,
+      })
+
+      expect(messageDao.updateMetadata).toHaveBeenCalledWith(
+        taskMessageId,
+        expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              id: 'task-card-worker',
+              status: taskStatus,
+              replies: [
+                expect.objectContaining({
+                  messageId: replyMessage.id,
+                  cardId: 'task-card-worker',
+                  authorId: assigneeUserId,
+                }),
+              ],
+            }),
+          ],
+        }),
+      )
+      const notification = createdMessages.find(
+        (message) => message.channelId === dispatcherInboxId,
+      )
+      if (taskStatus === 'running') {
+        expect(notification).toBeUndefined()
+        expect(emit).not.toHaveBeenCalledWith(
+          'message:new',
+          expect.objectContaining({ id: 'dispatcher-notification' }),
+        )
+        return
+      }
+      expect(notification).toBeTruthy()
+      expect(notification.authorId).toBe(assigneeUserId)
+      expect(notification.content).toContain(
+        'ScriptSmith replied to delegated Inbox task "Write script".',
+      )
+      expect(notification.content).toContain(
+        'Open the referenced message to review the full response in context.',
+      )
+      expect(notification.content).not.toContain('Script is complete and saved to workspace.')
+      expect(notification.metadata.cards).toEqual([
+        expect.objectContaining({
+          id: `ref-${replyMessage.id}`,
+          kind: 'message_reference',
+          title: 'Write script',
+          description: 'Script is complete and saved to workspace.',
+          label: 'ScriptSmith',
+          target: {
+            channelId: workerInboxId,
+            messageId: replyMessage.id,
+            taskCardId: 'task-card-worker',
+            inboxAgentId: assigneeAgentId,
+            kind: 'inbox_message',
+          },
+          source: expect.objectContaining({
+            kind: 'agent',
+            agentId: assigneeAgentId,
+            label: 'ScriptSmith',
+          }),
+        }),
+      ])
+      expect(notification.metadata.custom).toMatchObject({
+        inboxTaskReplyNotification: {
+          kind: 'inbox_task_reply_notification',
+          title: 'Review reply: Write script',
+          originalTaskStatus: taskStatus,
+          responderAgentId: assigneeAgentId,
+          replyMessageId: replyMessage.id,
+          originalTaskMessageId: taskMessageId,
+          originalTaskCardId: 'task-card-worker',
+          ...(sourceKind === 'server_app' ? { resource: taskResource } : {}),
+        },
+      })
+      if (sourceKind === 'agent') {
+        expect(notification.metadata.custom.inboxTaskReplyNotification.resource).toBeUndefined()
+      }
+      expect(emit).toHaveBeenCalledWith(
+        'message:new',
+        expect.objectContaining({ id: 'dispatcher-notification' }),
+      )
+    })
+  })
+
   describe('getById', () => {
     it('should return message when found', async () => {
       const mockMessage = { id: 'msg1', content: 'Hello', channelId: 'ch1' }

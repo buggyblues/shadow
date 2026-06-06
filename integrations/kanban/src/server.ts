@@ -1,20 +1,33 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import type { ShadowServerAppCommandContext, ShadowServerAppCommandName } from '@shadowob/sdk'
+import {
+  type ShadowServerAppCommandContext,
+  type ShadowServerAppCommandName,
+  ShadowServerAppOutbox,
+} from '@shadowob/sdk'
 import { Hono } from 'hono'
 import {
+  addCardArtifacts,
   assignCard,
   assignCardToPerson,
-  commentCardWithBuddyTask,
+  commentCard,
+  completeCard,
   createCard,
-  createCardAndDispatch,
-  dispatchCardToBuddy,
+  dispatchCard,
   getBoard,
   getCard,
+  linkCards,
   moveCard,
+  rerunCard,
+  updateCard,
 } from './data.js'
 import { manifest, shadowApp } from './manifest.js'
+import {
+  buildCardDispatchInboxTask,
+  enrichDispatchInputFromContext,
+  normalizeDispatchInput,
+} from './outbox.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 import { shellPage } from './ui.js'
 
@@ -36,13 +49,11 @@ const commands = shadowApp.defineCommands({
   'cards.create': (input, { actor }) => ({
     card: createCard({ ...input, createdBy: actor }),
   }),
-  'cards.create_and_dispatch': (input, { actor }) =>
-    createCardAndDispatch({
-      ...input,
-      createdBy: actor,
-      assigneeLabel: input.assigneeLabel,
-      reason: input.reason,
-    }),
+  'cards.update': (input) => {
+    const card = updateCard(input)
+    if (!card) throw shadowApp.error(404, 'card_not_found')
+    return { card }
+  },
   'cards.move': (input) => {
     const card = moveCard(input.cardId, input.columnId)
     if (!card) throw shadowApp.error(404, 'card_not_found')
@@ -55,16 +66,51 @@ const commands = shadowApp.defineCommands({
     if (!card) throw shadowApp.error(404, 'card_not_found')
     return { card }
   },
+  'cards.dispatch': (input, context) => {
+    const normalizedInput = enrichDispatchInputFromContext(
+      normalizeDispatchInput(input),
+      context.context,
+    )
+    const { actor } = context
+    const result = dispatchCard(normalizedInput, actor)
+    if (!result) throw shadowApp.error(404, 'card_not_found')
+    const { card, assignee } = result
+    if ('deferred' in result && result.deferred) {
+      return { card, deferred: result.deferred }
+    }
+    const outbox = new ShadowServerAppOutbox().enqueueInboxTask(
+      buildCardDispatchInboxTask({ dispatch: normalizedInput, card, assignee }),
+    )
+    return outbox.attachTo({ card })
+  },
   'cards.comment': (input, { actor }) => {
-    const result = commentCardWithBuddyTask(input.cardId, input.body, actor)
+    const card = commentCard(input.cardId, input.body, actor)
+    if (!card) throw shadowApp.error(404, 'card_not_found')
+    return { card }
+  },
+  'cards.complete': (input, { actor }) => {
+    const result = completeCard(input, actor)
+    if (!result) throw shadowApp.error(404, 'card_not_found')
+    if ('blocked' in result && result.blocked) {
+      throw shadowApp.error(409, 'card_completion_blocked', result.blocked)
+    }
+    return result
+  },
+  'cards.link': (input, { actor }) => {
+    const result = linkCards(input, actor)
     if (!result) throw shadowApp.error(404, 'card_not_found')
     return result
   },
-  'cards.dispatch': (input) => {
-    const result = dispatchCardToBuddy(input.cardId, {
-      assigneeLabel: input.assigneeLabel,
+  'cards.rerun': (input) => {
+    const result = rerunCard(input.cardId, {
+      prompt: input.prompt,
       reason: input.reason,
     })
+    if (!result) throw shadowApp.error(404, 'card_not_found')
+    return result
+  },
+  'cards.artifacts.add': (input, { actor }) => {
+    const result = addCardArtifacts(input, actor)
     if (!result) throw shadowApp.error(404, 'card_not_found')
     return result
   },
@@ -111,6 +157,7 @@ app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
 app.get('/assets/cover.png', serveStatic({ root: './public' }))
 app.get('/assets/*', serveStatic({ root: './dist/client' }))
+app.get('/artifacts/*', serveStatic({ root: './data' }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/board', (c) => c.json(getBoard()))
@@ -141,4 +188,4 @@ app.post('/api/shadow/commands/:commandName', async (c) => {
 
 serve({ fetch: app.fetch, port })
 
-console.log(`Shadow Kanban listening on http://localhost:${port}`)
+console.log(`Kanban listening on http://localhost:${port}`)

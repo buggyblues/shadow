@@ -122,26 +122,6 @@ async function main() {
     logger.warn({ err }, 'Cloud template seeding skipped')
   }
 
-  const serverAppManifestUrls = [
-    process.env.SHADOW_SERVER_APP_DEMO_MANIFEST_URL,
-    ...(process.env.SHADOW_SERVER_APP_CATALOG_MANIFEST_URLS ?? '').split(','),
-  ]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value))
-
-  for (const manifestUrl of serverAppManifestUrls) {
-    try {
-      const appIntegrationService = container.resolve('appIntegrationService')
-      const result = await appIntegrationService.seedCatalogEntry({
-        manifestUrl,
-        status: 'active',
-      })
-      logger.info({ result }, 'Server app catalog seeded')
-    } catch (err) {
-      logger.warn({ err }, 'Server app catalog seeding skipped')
-    }
-  }
-
   // Create Hono app with DI container
   const app = createApp(container)
 

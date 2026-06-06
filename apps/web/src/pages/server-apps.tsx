@@ -1,9 +1,12 @@
 import {
   buildShadowServerAppInboxDelivery,
   buildShadowServerAppInboxTaskRequest,
+  SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
   type ShadowBridgeEnqueueInboxTaskInput,
   type ShadowBridgeOpenBuddyCreatorInput,
+  type ShadowBridgeOpenCopilotInput,
+  type ShadowBridgeOpenWorkspaceResourceInput,
 } from '@shadowob/sdk/bridge'
 import {
   Button,
@@ -80,11 +83,23 @@ interface BridgeRequest {
   }
 }
 
+interface BridgeCapabilitiesRequest {
+  requestId: string
+}
+
 interface BridgeInboxesRequest {
   requestId: string
 }
 
 interface BridgeInboxEnqueueRequest extends ShadowBridgeEnqueueInboxTaskInput {
+  requestId: string
+}
+
+interface BridgeOpenCopilotRequest extends ShadowBridgeOpenCopilotInput {
+  requestId: string
+}
+
+interface BridgeOpenWorkspaceResourceRequest extends ShadowBridgeOpenWorkspaceResourceInput {
   requestId: string
 }
 
@@ -101,16 +116,6 @@ function getRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
-}
-
-function firstDeliveryChannelId(payload: unknown): string | null {
-  const record = getRecord(payload)
-  if (!record) return null
-  const deliveries = ShadowBridge.inboxDeliveries(record)
-  for (const item of deliveries) {
-    if (typeof item.channelId === 'string' && item.channelId) return item.channelId
-  }
-  return firstDeliveryChannelId(record.result)
 }
 
 function appPathFromSearch(search: RouteSearch | null | undefined) {
@@ -150,7 +155,7 @@ export function ServerAppsPageRoute({
   appKeyOverride,
   preserveActiveChannel = false,
 }: ServerAppsPageRouteProps = {}) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const routeSearch = useSearch({ strict: false }) as RouteSearch
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -192,7 +197,7 @@ export function ServerAppsPageRoute({
   const visibleAppKey = active ? effectiveAppKey : lastActiveAppKey
 
   const { data: apps = [], isLoading } = useQuery({
-    queryKey: ['server-apps', serverSlug],
+    queryKey: ['server-apps', serverSlug, i18n.language],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
     enabled: !!serverSlug && (active || !!lastActiveAppKey),
     staleTime: SERVER_APP_LIST_STALE_MS,
@@ -331,6 +336,17 @@ export function ServerAppsPageRoute({
     [postBridgeResponse, serverSlug],
   )
 
+  const callBridgeCapabilities = useCallback(
+    (request: BridgeCapabilitiesRequest) => {
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { capabilities: [...SHADOW_BRIDGE_CAPABILITIES] } },
+        ShadowBridge.capabilitiesResponseType,
+      )
+    },
+    [postBridgeResponse],
+  )
+
   const callBridgeInboxEnqueue = useCallback(
     async (request: BridgeInboxEnqueueRequest) => {
       if (!serverSlug || !activeApp) return
@@ -360,14 +376,6 @@ export function ServerAppsPageRoute({
           { ok: true, result: delivery },
           ShadowBridge.enqueueInboxTaskResponseType,
         )
-        if (delivery.channelId) {
-          navigate({
-            to: '/servers/$serverSlug/apps/$appKey',
-            params: { serverSlug, appKey: activeApp.appKey },
-            search: withCopilotChannelSearch(routeSearch, delivery.channelId),
-            replace: true,
-          })
-        }
       } catch (error) {
         postBridgeResponse(
           request.requestId,
@@ -379,7 +387,79 @@ export function ServerAppsPageRoute({
         )
       }
     },
-    [activeApp, navigate, postBridgeResponse, routeSearch, serverSlug],
+    [activeApp, postBridgeResponse, serverSlug],
+  )
+
+  const callBridgeOpenCopilot = useCallback(
+    (request: BridgeOpenCopilotRequest) => {
+      const channelId = request.delivery?.channelId
+      if (!serverSlug || !activeApp?.appKey || !channelId) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing Copilot channel id' },
+          ShadowBridge.openCopilotResponseType,
+        )
+        return
+      }
+      navigate({
+        to: '/servers/$serverSlug/apps/$appKey',
+        params: { serverSlug, appKey: activeApp.appKey },
+        search: withCopilotChannelSearch(routeSearch, channelId),
+        replace: true,
+      })
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { opened: true } },
+        ShadowBridge.openCopilotResponseType,
+      )
+    },
+    [activeApp?.appKey, navigate, postBridgeResponse, routeSearch, serverSlug],
+  )
+
+  const callBridgeOpenWorkspaceResource = useCallback(
+    (request: BridgeOpenWorkspaceResourceRequest) => {
+      if (!serverSlug) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing server context' },
+          ShadowBridge.openWorkspaceResourceResponseType,
+        )
+        return
+      }
+      const resource = getRecord(request.resource)
+      const workspaceNodeId =
+        typeof resource?.workspaceNodeId === 'string' && resource.workspaceNodeId.trim()
+          ? resource.workspaceNodeId.trim()
+          : typeof resource?.workspaceFileId === 'string' && resource.workspaceFileId.trim()
+            ? resource.workspaceFileId.trim()
+            : null
+      const rawUri = [
+        typeof resource?.uri === 'string' ? resource.uri.trim() : '',
+        typeof resource?.path === 'string' ? resource.path.trim() : '',
+      ].find((value) => value.startsWith('workspace://'))
+      const workspacePath =
+        typeof resource?.path === 'string' &&
+        resource.path.trim() &&
+        !resource.path.trim().startsWith('workspace://')
+          ? resource.path.trim()
+          : null
+      const workspaceUri = rawUri || null
+      navigate({
+        to: '/servers/$serverSlug/workspace',
+        params: { serverSlug },
+        search: {
+          ...(workspaceNodeId ? { workspaceNodeId } : {}),
+          ...(workspacePath ? { workspacePath } : {}),
+          ...(workspaceUri ? { workspaceUri } : {}),
+        },
+      })
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { opened: true } },
+        ShadowBridge.openWorkspaceResourceResponseType,
+      )
+    },
+    [navigate, postBridgeResponse, serverSlug],
   )
 
   const callBridgeOpenBuddyCreator = useCallback((request: BridgeOpenBuddyCreatorRequest) => {
@@ -404,15 +484,6 @@ export function ServerAppsPageRoute({
           },
         )
         postBridgeResponse(request.requestId, { ok: true, result })
-        const deliveredChannelId = firstDeliveryChannelId(result)
-        if (deliveredChannelId) {
-          navigate({
-            to: '/servers/$serverSlug/apps/$appKey',
-            params: { serverSlug, appKey: activeApp.appKey },
-            search: withCopilotChannelSearch(routeSearch, deliveredChannelId),
-            replace: true,
-          })
-        }
       } catch (error) {
         if (error instanceof ApiError && error.code === 'SERVER_APP_COMMAND_APPROVAL_REQUIRED') {
           const approval = (error.params?.approval ?? null) as AppCommandApproval | null
@@ -427,7 +498,7 @@ export function ServerAppsPageRoute({
         })
       }
     },
-    [activeApp?.appKey, navigate, postBridgeResponse, routeSearch, serverSlug],
+    [activeApp?.appKey, postBridgeResponse, serverSlug],
   )
 
   useEffect(() => {
@@ -447,6 +518,11 @@ export function ServerAppsPageRoute({
         routeAckHandlersRef.current.get(data.requestId)?.()
         return
       }
+      if (data.type === ShadowBridge.capabilitiesRequestType) {
+        if (typeof data.requestId !== 'string') return
+        callBridgeCapabilities({ requestId: data.requestId })
+        return
+      }
       if (data.type === ShadowBridge.inboxesRequestType) {
         if (typeof data.requestId !== 'string') return
         void callBridgeInboxes({ requestId: data.requestId })
@@ -458,6 +534,22 @@ export function ServerAppsPageRoute({
           requestId: data.requestId,
           target: data.target as BridgeInboxEnqueueRequest['target'],
           task: data.task as BridgeInboxEnqueueRequest['task'],
+        })
+        return
+      }
+      if (data.type === ShadowBridge.openCopilotRequestType) {
+        if (typeof data.requestId !== 'string') return
+        callBridgeOpenCopilot({
+          requestId: data.requestId,
+          delivery: getRecord(data.delivery) as BridgeOpenCopilotRequest['delivery'],
+        })
+        return
+      }
+      if (data.type === ShadowBridge.openWorkspaceResourceRequestType) {
+        if (typeof data.requestId !== 'string') return
+        callBridgeOpenWorkspaceResource({
+          requestId: data.requestId,
+          resource: getRecord(data.resource) as BridgeOpenWorkspaceResourceRequest['resource'],
         })
         return
       }
@@ -483,9 +575,12 @@ export function ServerAppsPageRoute({
     return () => window.removeEventListener('message', onMessage)
   }, [
     activeApp,
+    callBridgeCapabilities,
     callBridgeCommand,
     callBridgeInboxes,
     callBridgeInboxEnqueue,
+    callBridgeOpenCopilot,
+    callBridgeOpenWorkspaceResource,
     callBridgeOpenBuddyCreator,
   ])
 

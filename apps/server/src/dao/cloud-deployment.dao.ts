@@ -103,6 +103,20 @@ export class CloudDeploymentDao {
       .orderBy(cloudDeployments.createdAt)
   }
 
+  /**
+   * Deployments already claimed by a worker. If the server process restarts,
+   * advisory locks and in-memory cancellation tokens disappear while the row
+   * remains `deploying`; the processor can safely re-apply the same Pulumi
+   * stack under the per-deployment and namespace locks.
+   */
+  async listDeploying() {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(eq(cloudDeployments.status, 'deploying'))
+      .orderBy(cloudDeployments.createdAt)
+  }
+
   async listDestroying() {
     return this.db
       .select()

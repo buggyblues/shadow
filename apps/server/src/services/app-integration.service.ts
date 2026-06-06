@@ -12,6 +12,7 @@ import {
   type ShadowServerAppInboxTaskOutbox,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/server-app'
+import { BUDDY_INBOX_DELIVERY_PERMISSION, isBuddyInboxPlatformPermission } from '@shadowob/shared'
 import type { Logger } from 'pino'
 import type { Server as SocketIOServer } from 'socket.io'
 import { ZodError } from 'zod'
@@ -21,7 +22,11 @@ import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
-import type { ServerAppManifest } from '../db/schema/app-integrations'
+import type {
+  ServerAppManifest,
+  ServerAppMarketplaceI18nMetadata,
+  ServerAppMarketplaceMetadata,
+} from '../db/schema/app-integrations'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { validateJsonLimits } from '../lib/json-limits'
 import type { Actor } from '../security/actor'
@@ -124,17 +129,86 @@ function requireUserBoundActor(actor: Actor) {
   return actor.userId
 }
 
-function redactApp(row: Awaited<ReturnType<AppIntegrationDao['findById']>>) {
+function localeCandidates(locale?: string | null) {
+  const normalized = locale?.trim()
+  if (!normalized) return []
+  const language = normalized.split('-')[0]
+  return [
+    normalized,
+    normalized.replace('_', '-'),
+    normalized.toLowerCase(),
+    language,
+    language?.toLowerCase(),
+    'en',
+  ].filter(
+    (value, index, values): value is string => Boolean(value) && values.indexOf(value) === index,
+  )
+}
+
+function mergeMarketplaceI18n(
+  base: ServerAppMarketplaceMetadata | undefined,
+  override: ServerAppMarketplaceI18nMetadata | undefined,
+): ServerAppMarketplaceMetadata | undefined {
+  if (!base && !override) return undefined
+  const gallery = base?.gallery?.map((item, index) => ({
+    ...item,
+    ...(override?.gallery?.[index]?.alt ? { alt: override.gallery[index]!.alt } : {}),
+  }))
+  const links = base?.links?.map((link, index) => ({
+    ...link,
+    ...(override?.links?.[index]?.label ? { label: override.links[index]!.label } : {}),
+  }))
+  return {
+    ...(base ?? {}),
+    ...(override?.tagline ? { tagline: override.tagline } : {}),
+    ...(override?.summary ? { summary: override.summary } : {}),
+    ...(override?.categories ? { categories: override.categories } : {}),
+    ...(override?.supportedLanguages ? { supportedLanguages: override.supportedLanguages } : {}),
+    ...(gallery ? { gallery } : {}),
+    ...(links ? { links } : {}),
+    ...(base?.publisher || override?.publisher
+      ? {
+          publisher: {
+            ...(base?.publisher ?? {}),
+            ...(override?.publisher?.name ? { name: override.publisher.name } : {}),
+          },
+        }
+      : {}),
+  }
+}
+
+function localizeServerAppManifest<TManifest extends ServerAppManifestInput | ServerAppManifest>(
+  manifest: TManifest,
+  locale?: string | null,
+): TManifest {
+  const i18n = manifest.i18n ?? {}
+  const localized = localeCandidates(locale)
+    .map((candidate) => i18n[candidate])
+    .find(Boolean)
+  return {
+    ...manifest,
+    name: localized?.name ?? manifest.name,
+    description: localized?.description ?? manifest.description,
+    marketplace: mergeMarketplaceI18n(manifest.marketplace, localized?.marketplace),
+    help: localized?.help ? { ...(manifest.help ?? {}), ...localized.help } : manifest.help,
+  }
+}
+
+function redactApp(
+  row: Awaited<ReturnType<AppIntegrationDao['findById']>>,
+  locale?: string | null,
+) {
   if (!row) return null
+  const manifest = localizeServerAppManifest(row.manifest, locale)
   return {
     id: row.id,
     serverId: row.serverId,
     appKey: row.appKey,
-    name: row.name,
-    description: row.description,
+    name: manifest.name,
+    description: manifest.description ?? row.description,
     iconUrl: row.iconUrl,
     manifestUrl: row.manifestUrl,
-    manifest: row.manifest,
+    manifest,
     manifestVersion: row.manifestVersion ?? row.manifest.version ?? null,
     manifestUpdatedAt: row.manifestUpdatedAt,
     manifestFetchedAt: row.manifestFetchedAt,
@@ -150,16 +224,20 @@ function redactApp(row: Awaited<ReturnType<AppIntegrationDao['findById']>>) {
   }
 }
 
-function redactCatalogEntry(row: Awaited<ReturnType<AppIntegrationDao['findCatalogEntryById']>>) {
+function redactCatalogEntry(
+  row: Awaited<ReturnType<AppIntegrationDao['findCatalogEntryById']>>,
+  locale?: string | null,
+) {
   if (!row) return null
+  const manifest = localizeServerAppManifest(row.manifest, locale)
   return {
     id: row.id,
     appKey: row.appKey,
-    name: row.name,
-    description: row.description,
+    name: manifest.name,
+    description: manifest.description ?? row.description,
     iconUrl: row.iconUrl,
     manifestUrl: row.manifestUrl,
-    manifest: row.manifest,
+    manifest,
     status: row.status,
     createdByUserId: row.createdByUserId,
     createdAt: row.createdAt,
@@ -171,15 +249,19 @@ function compactStringList(values: string[] | undefined, limit = 12) {
   return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))].slice(0, limit)
 }
 
-function catalogEntryMetadata(manifest: ServerAppManifestInput | ServerAppManifest) {
-  const marketplace = manifest.marketplace
+function catalogEntryMetadata(
+  manifest: ServerAppManifestInput | ServerAppManifest,
+  locale?: string | null,
+) {
+  const localizedManifest = localizeServerAppManifest(manifest, locale)
+  const marketplace = localizedManifest.marketplace
   const gallery =
     marketplace?.gallery?.map((item) => ({
       url: item.url,
       type: item.type ?? 'image',
       alt: item.alt ?? null,
     })) ?? []
-  const coverImageUrl = marketplace?.coverImageUrl ?? gallery[0]?.url ?? manifest.iconUrl
+  const coverImageUrl = marketplace?.coverImageUrl ?? gallery[0]?.url ?? localizedManifest.iconUrl
   const links =
     marketplace?.links?.map((link) => ({
       label: link.label,
@@ -189,7 +271,11 @@ function catalogEntryMetadata(manifest: ServerAppManifestInput | ServerAppManife
 
   return {
     tagline: marketplace?.tagline ?? null,
-    summary: marketplace?.summary ?? manifest.help?.overview ?? manifest.description ?? null,
+    summary:
+      marketplace?.summary ??
+      localizedManifest.help?.overview ??
+      localizedManifest.description ??
+      null,
     categories: compactStringList(marketplace?.categories, 8),
     supportedLanguages: compactStringList(marketplace?.supportedLanguages, 24),
     coverImageUrl,
@@ -207,12 +293,14 @@ function catalogEntryMetadata(manifest: ServerAppManifestInput | ServerAppManife
 function catalogEntryResponse(
   row: NonNullable<Awaited<ReturnType<AppIntegrationDao['findCatalogEntryById']>>>,
   serverCount = 0,
+  locale?: string | null,
 ) {
+  const manifest = localizeServerAppManifest(row.manifest, locale)
   return {
-    ...redactCatalogEntry(row)!,
-    ...catalogEntryMetadata(row.manifest),
-    commandCount: row.manifest.commands.length,
-    skillCount: row.manifest.skills?.length ?? 0,
+    ...redactCatalogEntry(row, locale)!,
+    ...catalogEntryMetadata(manifest),
+    commandCount: manifest.commands.length,
+    skillCount: manifest.skills?.length ?? 0,
     serverCount,
   }
 }
@@ -220,14 +308,16 @@ function catalogEntryResponse(
 function catalogEntryMatchesQuery(
   row: NonNullable<Awaited<ReturnType<AppIntegrationDao['findCatalogEntryById']>>>,
   query: string,
+  locale?: string | null,
 ) {
   const normalized = query.trim().toLowerCase()
   if (!normalized) return true
-  const metadata = catalogEntryMetadata(row.manifest)
+  const manifest = localizeServerAppManifest(row.manifest, locale)
+  const metadata = catalogEntryMetadata(manifest)
   return [
     row.appKey,
-    row.name,
-    row.description,
+    manifest.name,
+    manifest.description,
     metadata.tagline,
     metadata.summary,
     metadata.publisher?.name,
@@ -291,6 +381,38 @@ function optionalInboxResource(value: unknown): InboxTaskOutbox['resource'] | un
   }
 }
 
+function optionalInboxTaskTags(value: unknown): InboxTaskOutbox['tags'] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const tags = value
+    .map((tag) => {
+      if (typeof tag === 'string') return optionalString(tag)
+      if (!isRecord(tag)) return null
+      const label = optionalString(tag.label)
+      if (!label) return null
+      return {
+        ...tag,
+        label,
+        ...(optionalString(tag.id) ? { id: optionalString(tag.id) } : {}),
+        ...(optionalString(tag.color) ? { color: optionalString(tag.color) } : {}),
+      }
+    })
+    .filter((tag): tag is NonNullable<InboxTaskOutbox['tags']>[number] => Boolean(tag))
+  return tags.length > 0 ? tags : undefined
+}
+
+function optionalInboxTaskPrivacy(value: unknown): InboxTaskOutbox['privacy'] | undefined {
+  if (!isRecord(value)) return undefined
+  const dataClass = optionalString(value.dataClass)
+  if (!dataClass) return undefined
+  return {
+    ...value,
+    dataClass: dataClass as NonNullable<InboxTaskOutbox['privacy']>['dataClass'],
+    ...(typeof value.redactionRequired === 'boolean'
+      ? { redactionRequired: value.redactionRequired }
+      : {}),
+  }
+}
+
 function parseInboxTaskOutbox(value: unknown): InboxTaskOutbox | null {
   if (!isRecord(value)) return null
   const title = optionalString(value.title)
@@ -312,8 +434,18 @@ function parseInboxTaskOutbox(value: unknown): InboxTaskOutbox | null {
     ...(optionalString(value.idempotencyKey)
       ? { idempotencyKey: optionalString(value.idempotencyKey) }
       : {}),
+    ...(optionalInboxTaskTags(value.tags) ? { tags: optionalInboxTaskTags(value.tags) } : {}),
     ...(optionalInboxResource(value.resource)
       ? { resource: optionalInboxResource(value.resource) }
+      : {}),
+    ...(optionalRecord(value.requirements)
+      ? { requirements: optionalRecord(value.requirements) }
+      : {}),
+    ...(optionalRecord(value.outputContract)
+      ? { outputContract: optionalRecord(value.outputContract) }
+      : {}),
+    ...(optionalInboxTaskPrivacy(value.privacy)
+      ? { privacy: optionalInboxTaskPrivacy(value.privacy) }
       : {}),
     ...(optionalRecord(value.data) ? { data: optionalRecord(value.data) } : {}),
     ...(value.required === true ? { required: true } : {}),
@@ -898,7 +1030,11 @@ export class AppIntegrationService {
     return catalogEntryResponse(updated ?? row)
   }
 
-  async listCatalog(serverIdOrSlug: string, actor: Actor) {
+  async listCatalog(
+    serverIdOrSlug: string,
+    actor: Actor,
+    options: { locale?: string | null } = {},
+  ) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)
     const [catalogRows, installedRows] = await Promise.all([
@@ -906,9 +1042,11 @@ export class AppIntegrationService {
       this.deps.appIntegrationDao.listByServer(serverId),
     ])
     const freshCatalogRows = await this.refreshCatalogEntries(catalogRows)
-    const installedByKey = new Map(installedRows.map((row) => [row.appKey, redactApp(row)!]))
+    const installedByKey = new Map(
+      installedRows.map((row) => [row.appKey, redactApp(row, options.locale)!]),
+    )
     return freshCatalogRows.map((row) => ({
-      ...redactCatalogEntry(row)!,
+      ...redactCatalogEntry(row, options.locale)!,
       installed: installedByKey.get(row.appKey) ?? null,
       permissions: row.manifest.commands.map((command) => ({
         name: command.name,
@@ -922,7 +1060,7 @@ export class AppIntegrationService {
     }))
   }
 
-  async listAdminCatalog() {
+  async listAdminCatalog(options: { locale?: string | null } = {}) {
     const rows = await this.deps.appIntegrationDao.listCatalogEntries({ includeInactive: true })
     const freshRows = await this.refreshCatalogEntries(rows)
     const installCounts = await this.deps.appIntegrationDao.countInstallationsByAppKeys(
@@ -930,16 +1068,18 @@ export class AppIntegrationService {
     )
     const serverCountByAppKey = new Map(installCounts.map((row) => [row.appKey, Number(row.count)]))
     return freshRows.map((row) =>
-      catalogEntryResponse(row, serverCountByAppKey.get(row.appKey) ?? 0),
+      catalogEntryResponse(row, serverCountByAppKey.get(row.appKey) ?? 0, options.locale),
     )
   }
 
-  async listDiscoverCatalog(input: { q?: string | null; limit?: number; offset?: number } = {}) {
+  async listDiscoverCatalog(
+    input: { q?: string | null; limit?: number; offset?: number; locale?: string | null } = {},
+  ) {
     const rows = await this.deps.appIntegrationDao.listCatalogEntries()
     const freshRows = await this.refreshCatalogEntries(rows)
     const query = input.q?.trim() ?? ''
     const matchedRows = query
-      ? freshRows.filter((row) => catalogEntryMatchesQuery(row, query))
+      ? freshRows.filter((row) => catalogEntryMatchesQuery(row, query, input.locale))
       : freshRows
     const installCounts = await this.deps.appIntegrationDao.countInstallationsByAppKeys(
       matchedRows.map((row) => row.appKey),
@@ -949,7 +1089,9 @@ export class AppIntegrationService {
     const offset = Math.max(0, input.offset ?? 0)
     const items = matchedRows
       .slice(offset, offset + limit)
-      .map((row) => catalogEntryResponse(row, serverCountByAppKey.get(row.appKey) ?? 0))
+      .map((row) =>
+        catalogEntryResponse(row, serverCountByAppKey.get(row.appKey) ?? 0, input.locale),
+      )
     return {
       apps: items,
       total: matchedRows.length,
@@ -957,7 +1099,7 @@ export class AppIntegrationService {
     }
   }
 
-  async getDiscoverCatalogEntry(appKey: string) {
+  async getDiscoverCatalogEntry(appKey: string, options: { locale?: string | null } = {}) {
     const existing = await this.deps.appIntegrationDao.findCatalogEntryByAppKey(appKey)
     if (!existing || existing.status !== 'active') {
       throw Object.assign(new Error('App catalog entry not found'), { status: 404 })
@@ -967,7 +1109,7 @@ export class AppIntegrationService {
       row.appKey,
     ])
     const serverCount = Number(installCounts[0]?.count ?? 0)
-    return catalogEntryResponse(row, serverCount)
+    return catalogEntryResponse(row, serverCount, options.locale)
   }
 
   async upsertCatalogEntry(actor: Actor, input: CreateServerAppCatalogEntryInput) {
@@ -986,25 +1128,6 @@ export class AppIntegrationService {
       ...catalogEntryResponse(row),
       permissions: preview.permissions,
     }
-  }
-
-  async seedCatalogEntry(input: CreateServerAppCatalogEntryInput) {
-    const preview = await this.buildCatalogPreview(input)
-    const existing = await this.deps.appIntegrationDao.findCatalogEntryByAppKey(
-      preview.manifest.appKey,
-    )
-    if (existing) return { seeded: false, entry: redactCatalogEntry(existing)! }
-    const row = await this.deps.appIntegrationDao.upsertCatalogEntry({
-      appKey: preview.manifest.appKey,
-      name: preview.manifest.name,
-      description: preview.manifest.description ?? null,
-      iconUrl: preview.manifest.iconUrl,
-      manifestUrl: preview.manifestUrl,
-      manifest: preview.manifest,
-      status: input.status ?? 'active',
-      createdByUserId: null,
-    })
-    return { seeded: true, entry: redactCatalogEntry(row)! }
   }
 
   async deleteCatalogEntry(id: string) {
@@ -1126,17 +1249,18 @@ export class AppIntegrationService {
     }
   }
 
-  async list(serverIdOrSlug: string, actor: Actor) {
+  async list(serverIdOrSlug: string, actor: Actor, options: { locale?: string | null } = {}) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)
     const rows = await this.deps.appIntegrationDao.listByServer(serverId)
-    return rows.map((row) => redactApp(row)!)
+    return rows.map((row) => redactApp(row, options.locale)!)
   }
 
   async listSummaries(
     serverIdOrSlug: string,
     actor: Actor,
     options?: {
+      locale?: string | null
       serverMember?: Awaited<ReturnType<PolicyService['requireServerMember']>> | null
     },
   ) {
@@ -1145,17 +1269,33 @@ export class AppIntegrationService {
     if (!verifiedMember || verifiedMember.serverId !== serverId) {
       await this.deps.policyService.requireServerMember(actor, serverId)
     }
-    return this.deps.appIntegrationDao.listSummariesByServer(serverId)
+    const rows = await this.deps.appIntegrationDao.listSummariesByServer(serverId)
+    return rows.map((row) => {
+      const manifest = localizeServerAppManifest(row.manifest, options?.locale)
+      return {
+        id: row.id,
+        serverId: row.serverId,
+        appKey: row.appKey,
+        name: manifest.name,
+        iconUrl: row.iconUrl,
+        status: row.status,
+      }
+    })
   }
 
-  async get(serverIdOrSlug: string, appKey: string, actor: Actor) {
+  async get(
+    serverIdOrSlug: string,
+    appKey: string,
+    actor: Actor,
+    options: { locale?: string | null } = {},
+  ) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)
     const app = await this.findFreshApp(serverId, appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     const grants = await this.deps.appIntegrationDao.listBuddyGrants(app.id)
     return {
-      ...redactApp(app)!,
+      ...redactApp(app, options.locale)!,
       grants,
     }
   }
@@ -1191,7 +1331,9 @@ export class AppIntegrationService {
       serverId,
     )
 
-    this.validateKnownPermissions(app, input.permissions)
+    this.validateKnownPermissions(app, input.permissions, {
+      allowBuddyInboxPlatformPermissions: true,
+    })
 
     return this.deps.appIntegrationDao.upsertBuddyGrant({
       serverAppId: app.id,
@@ -1207,12 +1349,18 @@ export class AppIntegrationService {
   private validateKnownPermissions(
     app: { manifest: { commands: Array<{ permission: string }> } },
     permissions: string[],
+    options: { allowBuddyInboxPlatformPermissions?: boolean } = {},
   ) {
     const allowedPermissions = new Set(app.manifest.commands.map((command) => command.permission))
     for (const permission of permissions) {
-      if (permission !== '*' && !allowedPermissions.has(permission)) {
-        throw Object.assign(new Error(`Unknown app permission: ${permission}`), { status: 422 })
+      if (permission === '*' || allowedPermissions.has(permission)) continue
+      if (
+        options.allowBuddyInboxPlatformPermissions &&
+        isBuddyInboxPlatformPermission(permission)
+      ) {
+        continue
       }
+      throw Object.assign(new Error(`Unknown app permission: ${permission}`), { status: 422 })
     }
   }
 
@@ -1342,6 +1490,31 @@ export class AppIntegrationService {
       (buddyAgentId ? await this.deps.agentDao.findById(buddyAgentId) : null) ??
       (await this.deps.agentDao.findByUserId(actor.userId))
     return agent?.ownerId ?? null
+  }
+
+  private async serverAppResourceContext(serverId: string) {
+    const members = await this.deps.serverDao.getMembers(serverId)
+    const buddies = members.flatMap((member) => {
+      if (!member.agent?.id || !member.user) return []
+      const config = isRecord(member.agent.config) ? member.agent.config : {}
+      const description = optionalString(config.description)
+      return [
+        {
+          agentId: member.agent.id,
+          userId: member.user.id,
+          username: member.user.username,
+          displayName: member.user.displayName ?? member.user.username ?? member.agent.id,
+          description: description ? description.slice(0, 1000) : null,
+          avatarUrl: this.deps.mediaService.resolveMediaUrl(member.user.avatarUrl, 'image/png', {
+            variant: 'avatar',
+          }),
+          ownerId: member.agent.ownerId ?? null,
+          status: member.user.status,
+          agentStatus: member.agent.status,
+        },
+      ]
+    })
+    return { buddies }
   }
 
   private async createCommandBearerToken(input: {
@@ -1633,6 +1806,35 @@ export class AppIntegrationService {
     return match?.agent ? await this.deps.agentDao.findById(match.agent.id) : null
   }
 
+  private async requireInboxTaskDeliveryGrant(input: { app: { id: string }; agentId: string }) {
+    const grant = await this.deps.appIntegrationDao.findBuddyGrant(input.app.id, input.agentId)
+    if (!grant) {
+      throw Object.assign(
+        new Error('Server App is not authorized to deliver Inbox tasks to this Buddy'),
+        {
+          status: 403,
+          code: 'SERVER_APP_BUDDY_GRANT_REQUIRED',
+        },
+      )
+    }
+    if (grant.expiresAt && new Date(grant.expiresAt).getTime() <= Date.now()) {
+      throw Object.assign(new Error('Server App Buddy grant expired'), {
+        status: 403,
+        code: 'SERVER_APP_BUDDY_GRANT_EXPIRED',
+      })
+    }
+    if (!this.permissionsInclude(grant.permissions, BUDDY_INBOX_DELIVERY_PERMISSION)) {
+      throw Object.assign(
+        new Error(`Server App Buddy grant is missing ${BUDDY_INBOX_DELIVERY_PERMISSION}`),
+        {
+          status: 403,
+          code: 'SERVER_APP_BUDDY_GRANT_PERMISSION_REQUIRED',
+        },
+      )
+    }
+    return grant
+  }
+
   private async attachInboxTaskDeliveries(input: {
     result: Record<string, unknown>
     serverId: string
@@ -1658,6 +1860,7 @@ export class AppIntegrationService {
         }
         targetAgentId = agent.id
         targetAgentUserId = agent.userId
+        await this.requireInboxTaskDeliveryGrant({ app: input.app, agentId: agent.id })
         const idempotencyKey =
           task.idempotencyKey ??
           [
@@ -1911,6 +2114,7 @@ export class AppIntegrationService {
 
     const buddyAgentId = await this.actorBuddyAgentId(input.actor)
     const ownerId = await this.actorOwnerUserId(input.actor, buddyAgentId)
+    const resources = await this.serverAppResourceContext(serverId)
     const context = {
       protocol: 'shadow.app/1',
       serverId,
@@ -1924,6 +2128,7 @@ export class AppIntegrationService {
         ownerId,
       },
       channelId: input.body.channelId ?? null,
+      resources,
       permission: command.permission,
       action: command.action,
       dataClass: command.dataClass,
@@ -2080,6 +2285,7 @@ export class AppIntegrationService {
     }
 
     const actorProfile = payload.userId ? await this.commandActorProfile(payload.userId) : null
+    const resources = await this.serverAppResourceContext(serverId)
 
     return {
       active: true,
@@ -2108,6 +2314,7 @@ export class AppIntegrationService {
           profile: actorProfile,
         },
         channelId: payload.channelId ?? null,
+        resources,
         ...(payload.taskMessageId && payload.taskCardId
           ? {
               task: {

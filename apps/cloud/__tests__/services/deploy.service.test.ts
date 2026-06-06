@@ -126,6 +126,71 @@ describe('DeployService', () => {
     )
   })
 
+  it('passes deployment cancellation through stack apply and sandbox readiness waits', async () => {
+    const filePath = join(tempDir, 'shadowob-cloud.json')
+    writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
+
+    const config: CloudConfig = {
+      version: '1.0.0',
+      deployments: {
+        namespace: 'cancelable-cloud',
+        agents: [
+          {
+            id: 'cancelable-buddy',
+            runtime: 'openclaw',
+            configuration: { openclaw: {} },
+          },
+        ],
+      },
+    } as CloudConfig
+    const isCancelled = vi.fn(() => false)
+    const stack = { cancel: vi.fn().mockResolvedValue(undefined) }
+    const k8s = {
+      isToolInstalled: vi.fn().mockReturnValue(true),
+      kindClusterExists: vi.fn().mockReturnValue(true),
+      createKindCluster: vi.fn(),
+      isKubeReachable: vi.fn().mockReturnValue(true),
+      getOrCreateStack: vi.fn().mockResolvedValue(stack),
+      deployStack: vi.fn().mockResolvedValue(undefined),
+      waitForAgentSandboxReady: vi.fn().mockResolvedValue({ runtimeState: 'running' }),
+      getStackOutputs: vi.fn().mockResolvedValue({}),
+      checkAgentSandboxPreflight: vi.fn().mockReturnValue({ ok: true, missing: [], warnings: [] }),
+    }
+    const logger = {
+      step: vi.fn(),
+      info: vi.fn(),
+      dim: vi.fn(),
+      warn: vi.fn(),
+      success: vi.fn(),
+    }
+    const service = new DeployService(
+      {
+        parseFile: vi.fn().mockResolvedValue(config),
+        resolve: vi.fn().mockResolvedValue(config),
+      } as never,
+      { build: vi.fn() } as never,
+      k8s as never,
+      logger as never,
+    )
+
+    await service.up({
+      filePath,
+      shadowUrl: 'http://server:3002',
+      shadowToken: 'pat_test',
+      skipProvision: true,
+      isCancelled,
+    })
+
+    expect(k8s.deployStack).toHaveBeenCalledWith(stack, expect.objectContaining({ isCancelled }))
+    expect(k8s.waitForAgentSandboxReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        namespace: 'cancelable-cloud',
+        agentName: 'cancelable-buddy',
+        isCancelled,
+      }),
+    )
+  })
+
   it('aborts the deployment when plugin provisioning fails', async () => {
     const filePath = join(tempDir, 'shadowob-cloud.json')
     writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')

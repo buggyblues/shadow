@@ -590,6 +590,7 @@ export class DeployService {
     await this.k8s.deployStack(stack, {
       dryRun: options.dryRun,
       onOutput: options.onOutput ?? ((out) => process.stdout.write(out)),
+      ...(options.isCancelled ? { isCancelled: options.isCancelled } : {}),
     })
 
     if (options.dryRun) {
@@ -619,6 +620,7 @@ export class DeployService {
           agentName: agent.id,
           kubeconfig: waitKubeconfig,
           timeoutMs: readyTimeoutMs,
+          ...(options.isCancelled ? { isCancelled: options.isCancelled } : {}),
         })
         this.logger.info(`Sandbox "${agent.id}" is Ready`)
         emit(`Sandbox "${agent.id}" is Ready\n`)
