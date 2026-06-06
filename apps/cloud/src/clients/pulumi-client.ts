@@ -210,7 +210,12 @@ export async function getOrCreateStack(options: StackOptions) {
  */
 export async function deployStack(
   stack: automation.Stack,
-  options?: { dryRun?: boolean; onOutput?: (out: string) => void },
+  options?: {
+    dryRun?: boolean
+    onOutput?: (out: string) => void
+    isCancelled?: () => boolean
+    cancelPollMs?: number
+  },
 ) {
   const run = () => {
     if (options?.dryRun) {
@@ -219,10 +224,39 @@ export async function deployStack(
     return stack.up({ onOutput: options?.onOutput, refresh: true })
   }
 
+  const runWithCancellation = async () => {
+    if (!options?.isCancelled) return await run()
+
+    let cancelTimer: NodeJS.Timeout | undefined
+    const operation = run()
+    const cancellation = new Promise<never>((_resolve, reject) => {
+      cancelTimer = setInterval(() => {
+        if (!options.isCancelled?.()) return
+        clearInterval(cancelTimer)
+        options.onOutput?.('\nCancellation requested; signaling Pulumi stack...\n')
+        void stack
+          .cancel()
+          .catch((err) => {
+            options.onOutput?.(
+              `Pulumi cancellation signal failed: ${err instanceof Error ? err.message : String(err)}\n`,
+            )
+          })
+          .finally(() => reject(new Error('Deployment cancelled by user')))
+      }, options.cancelPollMs ?? 1_000)
+    })
+
+    try {
+      return await Promise.race([operation, cancellation])
+    } finally {
+      if (cancelTimer) clearInterval(cancelTimer)
+    }
+  }
+
   try {
-    return await run()
+    return await runWithCancellation()
   } catch (err) {
     const msg = (err as Error).message ?? ''
+    if (msg === 'Deployment cancelled by user') throw err
     if (msg.includes('locked by') || msg.includes('locked')) {
       // Try to cancel and retry
       try {
@@ -230,7 +264,7 @@ export async function deployStack(
       } catch {
         /* ignore */
       }
-      return await run()
+      return await runWithCancellation()
     }
     throw err
   }

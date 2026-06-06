@@ -71,9 +71,9 @@ const commands = shadowApp.defineCommands({
       {
         title: `Install skill: ${result.skill.name}`,
         body: [
-          `Download the skill zip through the Shadow Skills App command.`,
+          `Download the skill zip through the Skills App command.`,
           '',
-          `Command: shadow-skills skills.download`,
+          `Command: skills skills.download`,
           `Input: {"skillId":"${result.skill.id}"}`,
           `Package: ${result.skill.slug}.skill.zip`,
           'If this task has a claim, call the command with the task binding flags shown in the Inbox task prompt.',
@@ -252,4 +252,4 @@ app.post('/api/shadow/commands/:commandName', async (c) => {
 serve({ fetch: app.fetch, port })
 startSkillDirectorySnapshotLoop()
 
-console.log(`Shadow Skills listening on http://localhost:${port}`)
+console.log(`Skills listening on http://localhost:${port}`)

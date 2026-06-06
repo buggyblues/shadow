@@ -206,6 +206,10 @@ export interface ShadowServerApp {
   id: string
   /** Server config id that should own the app. */
   serverId: string
+  /** Catalog entry id to install from the Shadow Server App catalog. */
+  catalogEntryId?: string
+  /** Catalog app key to resolve and install from the Shadow Server App catalog. */
+  catalogAppKey?: string
   /** Manifest URL reachable by the Shadow API server during provisioning. */
   manifestUrl?: string
   /** Inline manifest, useful for fully self-contained templates. */

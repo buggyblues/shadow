@@ -449,6 +449,15 @@ describe('Slash Commands', () => {
     }
   })
 
+  it('should keep runtime task cards running after a successful reply dispatch', async () => {
+    const { openClawRuntimeReplyProgressUpdate } = await import('../src/monitor/channel-message.js')
+
+    expect(openClawRuntimeReplyProgressUpdate()).toEqual({
+      status: 'running',
+      note: 'OpenClaw runtime delivered a reply; awaiting explicit task completion',
+    })
+  })
+
   it('should inject installed server app context for natural-language channel tasks', async () => {
     vi.useFakeTimers()
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
@@ -460,15 +469,15 @@ describe('Slash Commands', () => {
             {
               id: 'server-app-1',
               serverId: 'server-1',
-              appKey: 'shadow-kanban',
-              name: 'Shadow Kanban',
+              appKey: 'kanban',
+              name: 'Kanban',
               description: 'Trello-style task board for server collaboration.',
               iconUrl: null,
               manifestUrl: null,
               manifest: {
                 schemaVersion: 'shadow.app/1',
-                appKey: 'shadow-kanban',
-                name: 'Shadow Kanban',
+                appKey: 'kanban',
+                name: 'Kanban',
                 version: '0.1.0',
                 entry: '/app',
                 permissions: [],
@@ -500,12 +509,12 @@ describe('Slash Commands', () => {
           text: async () => '',
         }
       }
-      if (href.endsWith('/api/servers/shadow-plays/apps/shadow-kanban/skills')) {
+      if (href.endsWith('/api/servers/shadow-plays/apps/kanban/skills')) {
         return {
           ok: true,
           json: async () => ({
             markdown:
-              '# Shadow Kanban\nUse `shadowob app call "shadow-kanban" list-cards --json` to inspect the board.',
+              '# Kanban\nUse `shadowob app call "kanban" list-cards --json` to inspect the board.',
           }),
           text: async () => '',
         }
@@ -587,13 +596,337 @@ describe('Slash Commands', () => {
         ServerAppSummary?: string
       }
       expect(ctx.BodyForAgent).toContain('Shadow Server Apps available in this server')
-      expect(ctx.BodyForAgent).toContain('Shadow Kanban')
+      expect(ctx.BodyForAgent).toContain('Kanban')
       expect(ctx.BodyForAgent).toContain('Do not wait for the user to say a CLI command')
       expect(ctx.BodyForAgent).toContain('shadowob app call')
       expect(ctx.BodyForAgent).toContain('--channel-id "<current-channel-id>"')
       expect(ctx.BodyForAgent).toContain('not chat interactive dialogs')
-      expect(ctx.ServerApps?.[0]?.appKey).toBe('shadow-kanban')
-      expect(ctx.ServerAppSummary).toContain('Shadow Kanban (shadow-kanban)')
+      expect(ctx.ServerApps?.[0]?.appKey).toBe('kanban')
+      expect(ctx.ServerAppSummary).toContain('Kanban (kanban)')
+      vi.runOnlyPendingTimers()
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('should inject Copilot app metadata into inbound context', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url)
+      if (href.endsWith('/api/servers/server-1/apps')) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: 'server-app-1',
+              serverId: 'server-1',
+              appKey: 'kanban',
+              name: 'Kanban',
+              description: 'Trello-style task board for server collaboration.',
+              manifest: {
+                commands: [
+                  {
+                    name: 'cards.create',
+                    title: 'Create Card',
+                    description: 'Create a Kanban card.',
+                    permission: 'kanban.cards:write',
+                    action: 'write',
+                    dataClass: 'server-private',
+                  },
+                ],
+              },
+              defaultPermissions: ['kanban.cards:write'],
+              defaultApprovalMode: 'first_time',
+              status: 'active',
+            },
+          ],
+          text: async () => '',
+        }
+      }
+      if (href.endsWith('/api/servers/shadow-plays/apps/kanban/skills')) {
+        return {
+          ok: true,
+          json: async () => ({
+            markdown: '# Kanban\nUse Kanban app commands for cards.',
+          }),
+          text: async () => '',
+        }
+      }
+      return { ok: true, json: async () => ({}), text: async () => '' }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const dispatch = vi.fn(async () => undefined)
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: null,
+            sessionKey: null,
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      await processShadowMessage({
+        message: {
+          id: 'msg-copilot',
+          content: '把这个输入创建成一张卡片。',
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          createdAt: '2026-06-06T09:07:40.000Z',
+          updatedAt: '2026-06-06T09:07:40.000Z',
+          metadata: {
+            copilotContext: {
+              kind: 'server_app_copilot',
+              appKey: 'kanban',
+              serverAppId: 'server-app-1',
+              appName: 'Kanban',
+              serverId: 'server-1',
+              serverSlug: 'shadow-plays',
+              channelId: 'inbox-1',
+              channelKind: 'inbox',
+            },
+          },
+          author: {
+            id: 'user-1',
+            username: 'alice',
+            displayName: 'Alice',
+            isBot: false,
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime: {},
+        core,
+        botUserId: 'bot-1',
+        botUsername: 'strategy-buddy',
+        agentId: 'strategy-buddy',
+        channelPolicies: new Map(),
+        channelServerMap: new Map([
+          [
+            'ch-1',
+            {
+              serverId: 'server-1',
+              serverSlug: 'shadow-plays',
+              serverName: 'Shadow Plays',
+              channelName: 'general',
+            },
+          ],
+        ]),
+        slashCommands: [],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      const ctx = dispatch.mock.calls[0]?.[0]?.ctx as {
+        BodyForAgent?: string
+        CopilotAppKey?: string
+        CopilotChannelKind?: string
+        CopilotServerAppId?: string
+      }
+      expect(ctx.CopilotAppKey).toBe('kanban')
+      expect(ctx.CopilotChannelKind).toBe('inbox')
+      expect(ctx.CopilotServerAppId).toBe('server-app-1')
+      expect(ctx.BodyForAgent).toContain('Shadow Copilot app context')
+      expect(ctx.BodyForAgent).toContain('Copilot channel kind: inbox')
+      expect(ctx.BodyForAgent).toContain('copilot=true')
+      vi.runOnlyPendingTimers()
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('should inject descriptor-only server Buddy Inbox directory context', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url)
+      if (href.endsWith('/api/servers/shadow-plays/inboxes')) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              agent: {
+                id: 'coordinator-agent',
+                ownerId: 'coordinator-user',
+                status: 'busy',
+                user: {
+                  id: 'coordinator-user',
+                  username: 'coordinator',
+                  displayName: 'Coordinator Buddy',
+                  avatarUrl: null,
+                  isBot: true,
+                },
+              },
+              channel: {
+                id: 'inbox-coordinator',
+                name: 'inbox-coordinator',
+                type: 'text',
+                serverId: 'server-1',
+                topic: 'shadow:buddy-inbox:coordinator-agent',
+                position: 0,
+                isPrivate: true,
+                createdAt: '2026-06-05T00:00:00.000Z',
+                updatedAt: '2026-06-05T00:00:00.000Z',
+              },
+              canManage: false,
+              server: { id: 'server-1', name: 'Shadow Plays', slug: 'shadow-plays' },
+              messages: [{ content: 'private peer thread should not leak' }],
+            },
+            {
+              agent: {
+                id: 'brandscout-agent',
+                ownerId: 'brandscout-user',
+                status: 'idle',
+                user: {
+                  id: 'brandscout-user',
+                  username: 'brandscout',
+                  displayName: 'BrandScout',
+                  avatarUrl: null,
+                  isBot: true,
+                },
+              },
+              channel: {
+                id: 'inbox-brandscout',
+                name: 'inbox-brandscout',
+                type: 'text',
+                serverId: 'server-1',
+                topic: 'shadow:buddy-inbox:brandscout-agent',
+                position: 1,
+                isPrivate: true,
+                createdAt: '2026-06-05T00:00:00.000Z',
+                updatedAt: '2026-06-05T00:00:00.000Z',
+              },
+              canManage: false,
+              server: { id: 'server-1', name: 'Shadow Plays', slug: 'shadow-plays' },
+              messages: [{ content: 'private brand notes should not leak' }],
+            },
+          ],
+          text: async () => '',
+        }
+      }
+      if (href.endsWith('/api/servers/server-1/apps')) {
+        return { ok: true, json: async () => [], text: async () => '' }
+      }
+      return { ok: true, json: async () => ({}), text: async () => '' }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const dispatch = vi.fn(async () => undefined)
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: null,
+            sessionKey: null,
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      await processShadowMessage({
+        message: {
+          id: 'msg-buddy-directory',
+          content: '请协调同服 Buddy 完成这个任务。',
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          createdAt: '2026-06-05T09:07:40.000Z',
+          updatedAt: '2026-06-05T09:07:40.000Z',
+          author: {
+            id: 'user-1',
+            username: 'alice',
+            displayName: 'Alice',
+            isBot: false,
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime: {},
+        core,
+        botUserId: 'bot-1',
+        botUsername: 'coordinator',
+        agentId: 'coordinator-agent',
+        channelPolicies: new Map(),
+        channelServerMap: new Map([
+          [
+            'ch-1',
+            {
+              serverId: 'server-1',
+              serverSlug: 'shadow-plays',
+              serverName: 'Shadow Plays',
+              channelName: 'general',
+            },
+          ],
+        ]),
+        slashCommands: [],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      const ctx = dispatch.mock.calls[0]?.[0]?.ctx as {
+        BodyForAgent?: string
+        ServerBuddyInboxCount?: number
+        ServerBuddyInboxes?: Array<{ agentId: string; current: boolean; channelId: string | null }>
+        ServerBuddyInboxSummary?: string
+      }
+      expect(ctx.BodyForAgent).toContain('Shadow server Buddy Inbox directory')
+      expect(ctx.BodyForAgent).toContain('BrandScout')
+      expect(ctx.BodyForAgent).toContain('agentId=brandscout-agent')
+      expect(ctx.BodyForAgent).toContain('shadowob inbox enqueue --server')
+      expect(ctx.BodyForAgent).toContain('Remote config monitored channels')
+      expect(ctx.BodyForAgent).toContain('canManage')
+      expect(ctx.BodyForAgent).not.toContain('private peer thread should not leak')
+      expect(ctx.BodyForAgent).not.toContain('private brand notes should not leak')
+      expect(ctx.ServerBuddyInboxCount).toBe(2)
+      expect(ctx.ServerBuddyInboxSummary).toContain('BrandScout(brandscout-agent')
+      expect(ctx.ServerBuddyInboxes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            agentId: 'coordinator-agent',
+            current: true,
+            channelId: 'inbox-coordinator',
+          }),
+          expect.objectContaining({
+            agentId: 'brandscout-agent',
+            current: false,
+            channelId: 'inbox-brandscout',
+          }),
+        ]),
+      )
       vi.runOnlyPendingTimers()
     } finally {
       vi.useRealTimers()

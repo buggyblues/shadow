@@ -1,4 +1,30 @@
 export type UserStatus = 'online' | 'idle' | 'dnd' | 'offline'
+export type BuddyPresenceStatus = UserStatus | 'busy'
+
+export const USER_STATUSES = ['online', 'idle', 'dnd', 'offline'] as const
+export const BUDDY_PRESENCE_STATUSES = ['online', 'busy', 'idle', 'dnd', 'offline'] as const
+
+export function normalizeUserStatus(status?: string | null): UserStatus {
+  if (status === 'online' || status === 'idle' || status === 'dnd' || status === 'offline') {
+    return status
+  }
+  return 'offline'
+}
+
+export function normalizeBuddyPresenceStatus(
+  status?: string | null,
+  options?: { busy?: boolean },
+): BuddyPresenceStatus {
+  if (options?.busy) {
+    return 'busy'
+  }
+
+  if (status === 'busy') {
+    return 'busy'
+  }
+
+  return normalizeUserStatus(status)
+}
 
 export interface User {
   id: string

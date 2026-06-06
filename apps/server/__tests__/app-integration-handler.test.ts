@@ -71,6 +71,7 @@ describe('app integration handler', () => {
     expect(service.list).toHaveBeenCalledWith(
       'srv-1',
       expect.objectContaining({ kind: 'user', userId: 'user-1' }),
+      expect.objectContaining({ locale: undefined }),
     )
   })
 
@@ -95,6 +96,7 @@ describe('app integration handler', () => {
     expect(service.listSummaries).toHaveBeenCalledWith(
       'srv-1',
       expect.objectContaining({ kind: 'user', userId: 'user-1' }),
+      expect.objectContaining({ locale: undefined }),
     )
   })
 

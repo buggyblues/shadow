@@ -1,4 +1,4 @@
-import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, ShadowBridge } from '@shadowob/sdk/bridge'
+import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT } from '@shadowob/sdk/bridge'
 import {
   QueryClient,
   QueryClientProvider,
@@ -17,20 +17,150 @@ import {
 import type { DragEvent, FormEvent } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { BoardCard, BoardPerson, BoardState } from '../types.js'
+import type { BoardCard, BoardCardArtifact, BoardPerson, BoardState } from '../types.js'
 import {
   assignCard,
+  bridgeAvailable,
   commentCard,
-  createAndDispatchCard,
   createCard,
-  dispatchCard,
+  dispatchCardToBuddy,
   getBoard,
+  listBridgeInboxes,
   moveCard,
+  openBridgeBuddyCreator,
+  openWorkspaceArtifact,
+  rerunCard,
+  sendCoordinatorRequest,
+  updateCard,
 } from './api.js'
+import { MarkdownText } from './markdown.js'
+import { ReactSelect, type ReactSelectOption } from './react-select.js'
 import './styles.css'
 
 const queryClient = new QueryClient()
 const boardQueryKey = ['kanban', 'board'] as const
+const inboxQueryKey = ['kanban', 'bridge-inboxes'] as const
+type BridgeInbox = NonNullable<Awaited<ReturnType<typeof listBridgeInboxes>>>['inboxes'][number]
+
+type BuddySelectOption = ReactSelectOption & {
+  avatarUrl?: string | null
+  status?: string | null
+  userId?: string | null
+}
+
+function buddyLabel(inbox: BridgeInbox) {
+  return inbox.agent.user?.displayName?.trim() || inbox.agent.user?.username || inbox.agent.id
+}
+
+function requestTitle(body: string) {
+  const firstLine = body
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean)
+  return (firstLine ?? 'Kanban task').slice(0, 96)
+}
+
+function buddyOption(inbox: BridgeInbox): BuddySelectOption {
+  return {
+    value: inbox.agent.id,
+    label: buddyLabel(inbox),
+    avatarUrl: inbox.agent.user?.avatarUrl ?? null,
+    userId: inbox.agent.user?.id ?? inbox.agent.id,
+    status: inbox.agent.status ?? null,
+  }
+}
+
+function avatarColor(seed: string) {
+  const colors = ['#172b4d', '#0f766e', '#7c3aed', '#b45309', '#be123c', '#1d4ed8', '#15803d']
+  let hash = 0
+  for (const char of seed) hash = (hash * 33 + char.charCodeAt(0)) % 100_003
+  return colors[hash % colors.length]!
+}
+
+function normalizeBuddyStatus(status?: string | null) {
+  if (
+    status === 'online' ||
+    status === 'busy' ||
+    status === 'idle' ||
+    status === 'offline' ||
+    status === 'dnd'
+  ) {
+    return status
+  }
+  return 'offline'
+}
+
+export function BuddySelect(props: {
+  disabled?: boolean
+  loading?: boolean
+  onChange: (value: string) => void
+  options: BuddySelectOption[]
+  placeholder: string
+  value: string
+}) {
+  return (
+    <ReactSelect
+      className="buddySelect"
+      disabled={props.disabled}
+      emptyLabel="No Buddies available"
+      loading={props.loading}
+      loadingLabel="Loading Buddies"
+      onChange={(value) => props.onChange(value)}
+      options={props.options}
+      placeholder={props.placeholder}
+      renderOption={(option) => <BuddySelectOptionContent option={option} />}
+      renderValue={(option) => <BuddySelectValue option={option} />}
+      value={props.value}
+    />
+  )
+}
+
+function BuddySelectValue(props: { option: BuddySelectOption }) {
+  return (
+    <>
+      <BuddySelectAvatar option={props.option} />
+      <span className="reactSelectLabel">{props.option.label}</span>
+    </>
+  )
+}
+
+function BuddySelectOptionContent(props: { option: BuddySelectOption }) {
+  return (
+    <>
+      <BuddySelectAvatar option={props.option} />
+      <span className="reactSelectOptionText">
+        <span className="reactSelectOptionLabel">{props.option.label}</span>
+        <span className="reactSelectOptionMeta">{props.option.status ?? 'online'}</span>
+      </span>
+    </>
+  )
+}
+
+function BuddySelectAvatar(props: { option: BuddySelectOption }) {
+  const initial = labelInitials(props.option.label)
+  const status = normalizeBuddyStatus(props.option.status)
+  return (
+    <span className="buddySelectAvatarWrap">
+      <span
+        className="buddySelectAvatar"
+        style={{ background: avatarColor(props.option.userId ?? props.option.value) }}
+      >
+        {props.option.avatarUrl ? (
+          <AvatarImage alt="" fallback={initial} src={props.option.avatarUrl} />
+        ) : (
+          <span>{initial}</span>
+        )}
+      </span>
+      <span className={`buddySelectPresence status-${status}`} />
+    </span>
+  )
+}
+
+function AvatarImage(props: { alt: string; fallback: string; src: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <span>{props.fallback}</span>
+  return <img alt={props.alt} src={props.src} onError={() => setFailed(true)} />
+}
 
 function IndexRoutePage() {
   return <KanbanApp />
@@ -88,6 +218,7 @@ function KanbanApp(props: { selectedCardId?: string }) {
 
   const refresh = () => {
     void board.refetch().catch((error: Error) => showToast(error.message))
+    void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
   }
   const closeDetail = () => {
     void navigate({ to: '/' })
@@ -97,7 +228,7 @@ function KanbanApp(props: { selectedCardId?: string }) {
     <>
       <header>
         <div>
-          <h1>Shadow Kanban</h1>
+          <h1>Kanban</h1>
           <div className="subtitle">Shared board for people and Buddies</div>
         </div>
         <div className="toolbar">
@@ -108,10 +239,12 @@ function KanbanApp(props: { selectedCardId?: string }) {
         </div>
       </header>
       <main>
+        <CoordinatorRequestBar showToast={showToast} />
         {board.error ? <div className="emptyState">{board.error.message}</div> : null}
         {board.data ? <BoardView board={board.data} showToast={showToast} /> : null}
       </main>
       <CardDetail
+        board={board.data ?? null}
         card={selectedCard}
         open={!!props.selectedCardId}
         onClose={closeDetail}
@@ -119,6 +252,82 @@ function KanbanApp(props: { selectedCardId?: string }) {
       />
       <div className={toast ? 'toast show' : 'toast'}>{toast}</div>
     </>
+  )
+}
+
+function CoordinatorRequestBar(props: { showToast: (message: string) => void }) {
+  const queryClient = useQueryClient()
+  const [request, setRequest] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const inboxes = useQuery({
+    queryKey: inboxQueryKey,
+    queryFn: listBridgeInboxes,
+    enabled: bridgeAvailable(),
+  })
+  const send = useMutation({
+    mutationFn: sendCoordinatorRequest,
+    onSuccess: () => {
+      setRequest('')
+      void queryClient.invalidateQueries({ queryKey: boardQueryKey })
+      props.showToast('Task added to Kanban and dispatched')
+    },
+    onError: (error) => props.showToast(error.message),
+  })
+  const createBuddy = useMutation({
+    mutationFn: openBridgeBuddyCreator,
+    onError: (error) => props.showToast(error.message),
+  })
+  const options = inboxes.data?.inboxes ?? []
+  const selected = options.find((inbox) => inbox.agent.id === selectedAgentId)
+  const buddyOptions = options.map(buddyOption)
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const body = request.trim()
+    if (!selected || !body) return
+    send.mutate({
+      agentId: selected.agent.id,
+      channelId: selected.channel?.id ?? null,
+      assigneeLabel: buddyLabel(selected),
+      assigneeAvatarUrl: selected.agent.user?.avatarUrl ?? null,
+      title: requestTitle(body),
+      body,
+    })
+  }
+
+  return (
+    <form className="requestBar" onSubmit={submit}>
+      <textarea
+        maxLength={2000}
+        onChange={(event) => setRequest(event.target.value)}
+        placeholder={
+          bridgeAvailable()
+            ? 'Describe the work for a coordinator Buddy...'
+            : 'Open this board from Shadow to choose a server Buddy'
+        }
+        rows={1}
+        value={request}
+      />
+      <BuddySelect
+        disabled={!bridgeAvailable() || inboxes.isLoading}
+        loading={inboxes.isLoading}
+        onChange={setSelectedAgentId}
+        options={buddyOptions}
+        placeholder={bridgeAvailable() ? 'Select Buddy' : 'Open in Shadow'}
+        value={selectedAgentId}
+      />
+      <button className="requestSend" disabled={!selected || !request.trim() || send.isPending}>
+        Send
+      </button>
+      <button
+        className="requestBuddy"
+        disabled={!bridgeAvailable() || createBuddy.isPending}
+        type="button"
+        onClick={() => createBuddy.mutate()}
+      >
+        New Buddy
+      </button>
+    </form>
   )
 }
 
@@ -135,15 +344,6 @@ function BoardView(props: { board: BoardState; showToast: (message: string) => v
     onSuccess: reloadBoard,
     onError: (error) => props.showToast(error.message),
   })
-  const createDispatch = useMutation({
-    mutationFn: createAndDispatchCard,
-    onSuccess: (payload) => {
-      void reloadBoard()
-      const delivered = ShadowBridge.inboxDeliveries(payload).length > 0
-      props.showToast(delivered ? 'Card created and delivered to Inbox' : 'Card created')
-    },
-    onError: (error) => props.showToast(error.message),
-  })
 
   return (
     <section className="board">
@@ -154,9 +354,6 @@ function BoardView(props: { board: BoardState; showToast: (message: string) => v
             cards={cards}
             columnId={column.id}
             count={cards.length}
-            createAndDispatchCard={(input) =>
-              createDispatch.mutate({ ...input, columnId: column.id })
-            }
             createCard={(title) => create.mutate({ title, columnId: column.id })}
             key={column.id}
             moveCard={(cardId) => move.mutate({ cardId, columnId: column.id })}
@@ -172,29 +369,19 @@ function ColumnView(props: {
   cards: BoardCard[]
   columnId: string
   count: number
-  createAndDispatchCard: (input: { title: string; assigneeLabel?: string }) => void
   createCard: (title: string) => void
   moveCard: (cardId: string) => void
   title: string
 }) {
   const [isOver, setIsOver] = useState(false)
   const [title, setTitle] = useState('')
-  const [assigneeLabel, setAssigneeLabel] = useState('Strategy Buddy')
 
-  const nextTitle = () => title.trim()
-  const resetForm = () => setTitle('')
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const trimmed = nextTitle()
+    const trimmed = title.trim()
     if (!trimmed) return
     props.createCard(trimmed)
-    resetForm()
-  }
-  const handleCreateAndDispatch = () => {
-    const trimmed = nextTitle()
-    if (!trimmed) return
-    props.createAndDispatchCard({ title: trimmed, assigneeLabel })
-    resetForm()
+    setTitle('')
   }
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -231,17 +418,8 @@ function ColumnView(props: {
           placeholder="Add a card..."
           value={title}
         />
-        <input
-          maxLength={80}
-          onChange={(event) => setAssigneeLabel(event.target.value)}
-          placeholder="Buddy"
-          value={assigneeLabel}
-        />
         <div className="quick-add-actions">
           <button type="submit">Add card</button>
-          <button className="dispatch" type="button" onClick={handleCreateAndDispatch}>
-            Add & dispatch
-          </button>
         </div>
       </form>
     </div>
@@ -268,15 +446,25 @@ function CardTile(props: { card: BoardCard }) {
         ))}
       </div>
       <div className="card-title">{props.card.title}</div>
-      {props.card.description ? <div className="card-desc">{props.card.description}</div> : null}
+      {props.card.description ? (
+        <MarkdownText
+          compact
+          className="card-desc markdown markdown-compact"
+          content={props.card.description}
+        />
+      ) : null}
       {props.card.buddyStatus ? (
         <div className={`buddy-pill buddy-${props.card.buddyStatus}`}>{props.card.buddyStatus}</div>
       ) : null}
+      {props.card.issueStep ? (
+        <div className="issueMeta">
+          <span>{props.card.issueStep.status}</span>
+          <span>{props.card.issueStep.taskType}</span>
+        </div>
+      ) : null}
       <div className="card-footer">
         <div className="avatars">
-          {props.card.assignees.slice(0, 4).map((person) => (
-            <Avatar key={person.id} person={person} />
-          ))}
+          <AssigneeSummary assignees={props.card.assignees} />
         </div>
         <span className="meta">{props.card.comments.length} comments</span>
       </div>
@@ -285,6 +473,7 @@ function CardTile(props: { card: BoardCard }) {
 }
 
 function CardDetail(props: {
+  board: BoardState | null
   card: BoardCard | null
   open: boolean
   onClose: () => void
@@ -292,28 +481,74 @@ function CardDetail(props: {
 }) {
   const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
-  const [buddyLabel, setBuddyLabel] = useState('Strategy Buddy')
+  const [promptDraft, setPromptDraft] = useState('')
+  const [dispatchAgentId, setDispatchAgentId] = useState('')
   const reloadBoard = () => queryClient.invalidateQueries({ queryKey: boardQueryKey })
+  const inboxes = useQuery({
+    queryKey: inboxQueryKey,
+    queryFn: listBridgeInboxes,
+    enabled: props.open && bridgeAvailable(),
+  })
   const assign = useMutation({ mutationFn: assignCard, onSuccess: reloadBoard })
-  const dispatch = useMutation({
-    mutationFn: dispatchCard,
-    onSuccess: (payload) => {
+  const createComment = useMutation({
+    mutationFn: commentCard,
+    onSuccess: () => {
+      setComment('')
       void reloadBoard()
-      const delivered = ShadowBridge.inboxDeliveries(payload).length > 0
-      props.showToast(delivered ? 'Card delivered to Inbox' : 'Card dispatched')
     },
     onError: (error) => props.showToast(error.message),
   })
-  const createComment = useMutation({
-    mutationFn: commentCard,
-    onSuccess: (payload) => {
-      setComment('')
+  const rerun = useMutation({
+    mutationFn: rerunCard,
+    onSuccess: () => {
       void reloadBoard()
-      if (ShadowBridge.inboxDeliveries(payload).length > 0) {
-        props.showToast('Comment delivered to Inbox')
-      }
+      props.showToast('Card reopened')
     },
+    onError: (error) => props.showToast(error.message),
   })
+  const updatePrompt = useMutation({
+    mutationFn: updateCard,
+    onSuccess: () => {
+      void reloadBoard()
+      props.showToast('Prompt updated')
+    },
+    onError: (error) => props.showToast(error.message),
+  })
+  const markDone = useMutation({
+    mutationFn: updateCard,
+    onSuccess: () => {
+      void reloadBoard()
+      props.showToast('Card marked done')
+    },
+    onError: (error) => props.showToast(error.message),
+  })
+  const dispatchCard = useMutation({
+    mutationFn: async (input: {
+      card: BoardCard
+      agentId: string
+      channelId?: string | null
+      assigneeLabel?: string
+      assigneeAvatarUrl?: string | null
+    }) => {
+      const delivery = await dispatchCardToBuddy(input)
+      return delivery
+    },
+    onSuccess: () => {
+      setDispatchAgentId('')
+      void reloadBoard()
+      props.showToast('Task sent to Buddy Inbox')
+    },
+    onError: (error) => props.showToast(error.message),
+  })
+  const artifacts = issueArtifacts(props.board, props.card)
+  const dispatchOptions = inboxes.data?.inboxes ?? []
+  const selectedDispatchInbox = dispatchOptions.find((inbox) => inbox.agent.id === dispatchAgentId)
+  const dispatchBuddyOptions = dispatchOptions.map(buddyOption)
+
+  useEffect(() => {
+    setPromptDraft(props.card?.prompt ?? props.card?.issueStep?.prompt ?? '')
+    setDispatchAgentId('')
+  }, [props.card?.id, props.card?.issueStep?.prompt, props.card?.prompt])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -367,38 +602,111 @@ function CardDetail(props: {
                 </div>
               </section>
               <section className="section">
-                <div className="section-title">Description</div>
-                <p className="description">{props.card.description || 'No description'}</p>
-              </section>
-              <section className="section">
-                <div className="section-title">Buddy Inbox</div>
-                <div className="dispatch-row">
-                  <input
-                    maxLength={80}
-                    onChange={(event) => setBuddyLabel(event.target.value)}
-                    value={buddyLabel}
+                <div className="section-title">Dispatch</div>
+                <div className="dispatchRow">
+                  <BuddySelect
+                    disabled={!bridgeAvailable() || inboxes.isLoading}
+                    loading={inboxes.isLoading}
+                    onChange={setDispatchAgentId}
+                    options={dispatchBuddyOptions}
+                    placeholder={bridgeAvailable() ? 'Select Buddy' : 'Open in Shadow'}
+                    value={dispatchAgentId}
                   />
                   <button
                     className="primary"
-                    disabled={dispatch.isPending}
+                    disabled={!props.card || !selectedDispatchInbox || dispatchCard.isPending}
                     type="button"
-                    onClick={() =>
-                      dispatch.mutate({
-                        cardId: props.card!.id,
-                        assigneeLabel: buddyLabel,
-                        reason: 'Kanban card dispatched from the board detail panel.',
+                    onClick={() => {
+                      if (!props.card || !selectedDispatchInbox) return
+                      const label = buddyLabel(selectedDispatchInbox)
+                      dispatchCard.mutate({
+                        card: props.card,
+                        agentId: selectedDispatchInbox.agent.id,
+                        channelId: selectedDispatchInbox.channel?.id ?? null,
+                        assigneeLabel: label,
+                        assigneeAvatarUrl: selectedDispatchInbox.agent.user?.avatarUrl ?? null,
                       })
-                    }
+                    }}
                   >
                     Dispatch
                   </button>
                 </div>
-                {props.card.lastDispatchedAt ? (
-                  <div className="meta">
-                    Last dispatched {new Date(props.card.lastDispatchedAt).toLocaleString()}
-                  </div>
-                ) : null}
               </section>
+              <section className="section">
+                <div className="section-title">Description</div>
+                {props.card.description ? (
+                  <MarkdownText className="description markdown" content={props.card.description} />
+                ) : (
+                  <p className="description">No description</p>
+                )}
+              </section>
+              <section className="section">
+                <div className="section-title">Task context</div>
+                <div className="issueGrid">
+                  <span>Type</span>
+                  <strong>{props.card.issueStep?.taskType ?? 'card.task'}</strong>
+                  <span>Status</span>
+                  <strong>{props.card.status ?? props.card.issueStep?.status ?? 'queued'}</strong>
+                  <span>Attempt</span>
+                  <strong>{props.card.issueStep?.attempt ?? 1}</strong>
+                </div>
+                <textarea
+                  maxLength={4000}
+                  onChange={(event) => setPromptDraft(event.target.value)}
+                  rows={5}
+                  value={promptDraft}
+                />
+                <div className="actions">
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={updatePrompt.isPending}
+                    onClick={() =>
+                      updatePrompt.mutate({ cardId: props.card!.id, prompt: promptDraft })
+                    }
+                  >
+                    Save prompt
+                  </button>
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={rerun.isPending}
+                    onClick={() =>
+                      rerun.mutate({
+                        cardId: props.card!.id,
+                        prompt: promptDraft,
+                        reason: 'Reopened from Kanban detail.',
+                      })
+                    }
+                  >
+                    Reopen
+                  </button>
+                  <button
+                    className="primary"
+                    type="button"
+                    disabled={markDone.isPending}
+                    onClick={() =>
+                      markDone.mutate({
+                        cardId: props.card!.id,
+                        status: 'done',
+                        progress: 100,
+                      })
+                    }
+                  >
+                    Mark done
+                  </button>
+                </div>
+              </section>
+              {artifacts.length ? (
+                <section className="section">
+                  <div className="section-title">Artifacts</div>
+                  <div className="artifactList">
+                    {artifacts.map((artifact) => (
+                      <ArtifactRow artifact={artifact} key={artifact.id} />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
               <section className="section">
                 <div className="section-title">Created by</div>
                 <div className="people">
@@ -417,7 +725,7 @@ function CardDetail(props: {
                             <strong>{item.author.displayName || 'Unknown'}</strong>
                             <span>{new Date(item.createdAt).toLocaleString()}</span>
                           </div>
-                          <div className="comment-body">{item.body}</div>
+                          <MarkdownText className="comment-body markdown" content={item.body} />
                         </div>
                       </div>
                     ))
@@ -429,7 +737,7 @@ function CardDetail(props: {
               <form className="section" onSubmit={handleSubmit}>
                 <div className="section-title">Add comment</div>
                 <textarea
-                  maxLength={1000}
+                  maxLength={4000}
                   onChange={(event) => setComment(event.target.value)}
                   rows={4}
                   value={comment}
@@ -453,6 +761,66 @@ function CardDetail(props: {
         )}
       </aside>
     </div>
+  )
+}
+
+function issueArtifacts(board: BoardState | null, card: BoardCard | null) {
+  if (!board || !card) return []
+  const legacyIds = card.issueStep?.artifactIds ?? []
+  return [
+    ...(board.artifacts ?? []).filter((artifact) => artifact.cardId === card.id),
+    ...(board.issues.artifacts ?? []).filter((artifact) => legacyIds.includes(artifact.id)),
+  ].filter(
+    (artifact, index, artifacts) =>
+      artifacts.findIndex((candidate) => candidate.id === artifact.id) === index,
+  )
+}
+
+function ArtifactRow(props: { artifact: BoardCardArtifact }) {
+  const content = (
+    <>
+      <strong>{props.artifact.title}</strong>
+      <span>{artifactKindLabel(props.artifact)}</span>
+    </>
+  )
+  const workspaceTarget = artifactWorkspaceTarget(props.artifact)
+  if (workspaceTarget) {
+    return (
+      <button
+        className="artifactRow"
+        type="button"
+        onClick={() => {
+          void openWorkspaceArtifact(props.artifact)
+        }}
+      >
+        {content}
+      </button>
+    )
+  }
+  return props.artifact.url ? (
+    <a className="artifactRow" href={props.artifact.url} rel="noreferrer" target="_blank">
+      {content}
+    </a>
+  ) : (
+    <div className="artifactRow">{content}</div>
+  )
+}
+
+function artifactKindLabel(artifact: BoardCardArtifact) {
+  if (artifact.uri?.startsWith('workspace://')) return 'workspace.uri'
+  return artifact.kind
+}
+
+function artifactWorkspaceTarget(artifact: BoardCardArtifact) {
+  const metadata = artifact.metadata ?? {}
+  return Boolean(
+    artifact.uri?.startsWith('workspace://') ||
+      artifact.path?.startsWith('workspace://') ||
+      artifact.url?.startsWith('workspace://') ||
+      typeof metadata.workspaceFileId === 'string' ||
+      typeof metadata.workspaceNodeId === 'string' ||
+      (typeof metadata.workspaceUri === 'string' &&
+        metadata.workspaceUri.startsWith('workspace://')),
   )
 }
 
@@ -481,12 +849,28 @@ function useLiveEvents(onCommand: () => void) {
 function Avatar(props: { person?: BoardPerson | null }) {
   const name = props.person?.displayName || props.person?.id || 'Unknown'
   return (
-    <span className="avatar" title={name}>
+    <span
+      className="avatar"
+      title={name}
+      style={{ background: avatarColor(props.person?.buddyAgentId ?? props.person?.id ?? name) }}
+    >
       {props.person?.avatarUrl ? (
-        <img alt="" referrerPolicy="no-referrer" src={props.person.avatarUrl} />
+        <AvatarImage alt="" fallback={initials(props.person)} src={props.person.avatarUrl} />
       ) : (
         initials(props.person)
       )}
+    </span>
+  )
+}
+
+function AssigneeSummary(props: { assignees: BoardPerson[] }) {
+  const [first, ...rest] = props.assignees
+  if (!first) return <span className="assigneeEmpty">Unassigned</span>
+  return (
+    <span className="assigneeSummary">
+      <Avatar person={first} />
+      <span className="assigneeName">{first.displayName}</span>
+      {rest.length > 0 ? <span className="assigneeMore">+{rest.length}</span> : null}
     </span>
   )
 }
@@ -502,20 +886,36 @@ function PersonChip(props: { person: BoardPerson }) {
 
 function initials(person?: BoardPerson | null) {
   const value = person?.displayName || person?.id || '?'
-  return value
+  const result = value
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0])
     .join('')
     .toUpperCase()
+  return result || '?'
+}
+
+function labelInitials(label: string) {
+  const result = label
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+  return result || '?'
 }
 
 function labelClass(label: string) {
   return `label-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 }
 
-createRoot(document.getElementById('root') as HTMLElement).render(
-  <QueryClientProvider client={queryClient}>
-    <RouterProvider router={router} />
-  </QueryClientProvider>,
-)
+const rootElement = document.getElementById('root')
+
+if (rootElement) {
+  createRoot(rootElement).render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
+}

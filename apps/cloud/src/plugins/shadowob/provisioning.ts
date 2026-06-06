@@ -302,15 +302,20 @@ async function provisionServerApp(
     log.step(`Provisioning server App: ${appDef.id}`)
   }
 
-  if (!appDef.manifestUrl && !appDef.manifest) {
-    log.warn(`  Server App "${appDef.id}" skipped: manifestUrl or manifest is required`)
+  if (!appDef.catalogEntryId && !appDef.catalogAppKey && !appDef.manifestUrl && !appDef.manifest) {
+    log.warn(
+      `  Server App "${appDef.id}" skipped: catalogEntryId, catalogAppKey, manifestUrl, or manifest is required`,
+    )
     return null
   }
 
-  const installed = await client.installServerApp(serverId, {
-    manifestUrl: appDef.manifestUrl,
-    manifest: appDef.manifest as never,
-  })
+  const installed =
+    appDef.catalogEntryId || appDef.catalogAppKey
+      ? await installCatalogServerApp(client, serverId, appDef)
+      : await client.installServerApp(serverId, {
+          manifestUrl: appDef.manifestUrl,
+          manifest: appDef.manifest as never,
+        })
   log.success(`  Installed server App "${installed.appKey}" on server "${appDef.serverId}"`)
 
   for (const grant of appDef.grants ?? []) {
@@ -329,6 +334,34 @@ async function provisionServerApp(
   }
 
   return { serverAppId: installed.id, appKey: installed.appKey, serverId }
+}
+
+async function installCatalogServerApp(
+  client: ShadowClient,
+  serverId: string,
+  appDef: ShadowServerApp,
+) {
+  const catalogEntryId =
+    appDef.catalogEntryId ?? (await resolveCatalogEntryId(client, serverId, appDef))
+  return client.installServerAppFromCatalog(serverId, catalogEntryId)
+}
+
+async function resolveCatalogEntryId(
+  client: ShadowClient,
+  serverId: string,
+  appDef: ShadowServerApp,
+) {
+  const catalogAppKey = appDef.catalogAppKey?.trim()
+  if (!catalogAppKey) throw new Error(`Server App "${appDef.id}" catalogAppKey is empty`)
+  const catalog = await client.listServerAppCatalog(serverId)
+  const entry = catalog.find(
+    (item: { id?: string; appKey?: string }) =>
+      item.appKey === catalogAppKey || item.id === catalogAppKey,
+  )
+  if (!entry?.id) {
+    throw new Error(`Server App catalog entry not found for "${catalogAppKey}"`)
+  }
+  return entry.id
 }
 
 async function provisionPaidFileCommerce(

@@ -96,6 +96,7 @@ type CloudDeploymentProcessorRuntime = {
 
 export type CloudDeploymentProcessorTickResult = {
   pending: number
+  deploying: number
   destroying: number
   cancelling: number
   expired: number
@@ -806,6 +807,25 @@ async function processCloudDeploymentQueueTick(
     )
   }
 
+  const deploying = (await deploymentDao.listDeploying()).filter(includeDeployment)
+  for (const deployment of deploying) {
+    await withLockedDeployment(
+      deployment.id,
+      ['deploying'],
+      deploymentDao,
+      async (latestDeployment) => {
+        await processDeployment(
+          latestDeployment,
+          deploymentDao,
+          clusterDao,
+          container,
+          database,
+          appContainer,
+        )
+      },
+    )
+  }
+
   const destroying = (await deploymentDao.listDestroying()).filter(includeDeployment)
   for (const deployment of destroying) {
     await withLockedDeployment(
@@ -905,6 +925,7 @@ async function processCloudDeploymentQueueTick(
 
   return {
     pending: pending.length,
+    deploying: deploying.length,
     destroying: destroying.length,
     cancelling: cancelling.length,
     expired: expired.length,
@@ -1533,20 +1554,30 @@ async function processDeployment(
       return
     }
 
-    const deploying = await deploymentDao.updateStatusIfStatus(
-      deployment.id,
-      'pending',
-      'deploying',
-    )
-    if (!deploying) {
-      const latest = await deploymentDao.findByIdOnly(deployment.id).catch(() => null)
-      if (latest?.status === 'destroying') {
-        await deploymentDao.appendLog(
-          deployment.id,
-          '[destroy] Deploy task was interrupted before startup so destroy can proceed',
-          'warn',
-        )
+    if (deployment.status === 'pending') {
+      const deploying = await deploymentDao.updateStatusIfStatus(
+        deployment.id,
+        'pending',
+        'deploying',
+      )
+      if (!deploying) {
+        const latest = await deploymentDao.findByIdOnly(deployment.id).catch(() => null)
+        if (latest?.status === 'destroying') {
+          await deploymentDao.appendLog(
+            deployment.id,
+            '[destroy] Deploy task was interrupted before startup so destroy can proceed',
+            'warn',
+          )
+        }
+        return
       }
+    } else if (deployment.status === 'deploying') {
+      await deploymentDao.appendLog(
+        deployment.id,
+        '[queue] Recovered in-flight deployment after worker restart; reapplying stack',
+        'warn',
+      )
+    } else {
       return
     }
     await deploymentDao.appendLog(deployment.id, `Starting deployment: ${deployment.name}`, 'info')

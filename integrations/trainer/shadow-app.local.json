@@ -1,26 +1,26 @@
 {
   "schemaVersion": "shadow.app/1",
-  "appKey": "shadow-trainer",
+  "appKey": "trainer",
   "name": "Code Trainer",
-  "description": "A LeetCode-style App where learners submit code and Buddies fetch, execute, judge, and provide learning advice.",
+  "description": "A LeetCode-style app where learners submit code and Buddies fetch, execute, judge, and provide learning advice.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4213/assets/icon.svg",
   "marketplace": {
     "tagline": "Practice coding problems with Buddy review and persistent learning memory.",
     "summary": "Code Trainer lets learners submit code, import practice problems, run examples and edge cases, assign review work to Buddies, track weak tags, and build study plans. It turns coding practice into an ongoing server activity instead of a one-off chat thread.",
-    "categories": ["教育", "开发工具", "效率"],
+    "categories": ["Education", "Developer Tools", "Productivity"],
     "supportedLanguages": ["English", "中文"],
     "coverImageUrl": "http://localhost:4213/assets/cover.png",
     "gallery": [
       {
         "url": "http://localhost:4213/assets/cover.png",
         "type": "image",
-        "alt": "trainer cover"
+        "alt": "Code Trainer cover"
       }
     ],
     "links": [
       {
-        "label": "主页",
+        "label": "Home",
         "url": "http://localhost:4213/shadow/server",
         "type": "website"
       }
@@ -823,29 +823,50 @@
   ],
   "skills": [
     {
-      "name": "shadow-trainer-ops",
+      "name": "trainer-ops",
       "description": "Use when a Buddy needs to fetch programming challenges, collect learner code, execute pending submissions, or write review feedback.",
       "commandHints": [
-        "shadow-trainer challenges.list",
-        "shadow-trainer challenges.get",
-        "shadow-trainer challenges.upsert",
-        "shadow-trainer sources.search",
-        "shadow-trainer sources.import",
-        "shadow-trainer submissions.create",
-        "shadow-trainer submissions.pending",
-        "shadow-trainer submissions.get",
-        "shadow-trainer submissions.analyze",
-        "shadow-trainer learning.overview",
-        "shadow-trainer settings.upsert",
-        "shadow-trainer learning.plan.upsert",
-        "shadow-trainer skills.update",
-        "shadow-trainer recommendations.create",
-        "shadow-trainer tips.create",
-        "shadow-trainer checks.create",
-        "shadow-trainer reports.create",
-        "shadow-trainer wrongProblems.schedule"
+        "trainer challenges.list",
+        "trainer challenges.get",
+        "trainer challenges.upsert",
+        "trainer sources.search",
+        "trainer sources.import",
+        "trainer submissions.create",
+        "trainer submissions.pending",
+        "trainer submissions.get",
+        "trainer submissions.analyze",
+        "trainer learning.overview",
+        "trainer settings.upsert",
+        "trainer learning.plan.upsert",
+        "trainer skills.update",
+        "trainer recommendations.create",
+        "trainer tips.create",
+        "trainer checks.create",
+        "trainer reports.create",
+        "trainer wrongProblems.schedule"
       ]
     }
   ],
-  "events": ["trainer.updated"]
+  "events": ["trainer.updated"],
+  "i18n": {
+    "zh-CN": {
+      "name": "代码训练",
+      "description": "类 LeetCode 训练应用，学习者提交代码，Buddy 拉取、执行、判题并给出学习建议。",
+      "marketplace": {
+        "tagline": "通过 Buddy 评审和长期学习记忆练习编程题。",
+        "summary": "代码训练让学习者提交代码、导入练习题、运行样例和边界用例、把评审任务分配给 Buddy、跟踪薄弱标签并制定学习计划。它把刷题训练变成持续的服务器活动，而不是一次性的聊天线程。",
+        "categories": ["教育", "开发工具", "效率"],
+        "gallery": [
+          {
+            "alt": "代码训练封面"
+          }
+        ],
+        "links": [
+          {
+            "label": "主页"
+          }
+        ]
+      }
+    }
+  }
 }

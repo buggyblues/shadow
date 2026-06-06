@@ -587,7 +587,8 @@ export function createDiscoverHandler(container: AppContainer) {
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? '48'), 1), 96)
     const offset = Math.max(Number(c.req.query('offset') ?? '0'), 0)
     const q = c.req.query('q')?.trim() ?? ''
-    const result = await appIntegrationService.listDiscoverCatalog({ q, limit, offset })
+    const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
+    const result = await appIntegrationService.listDiscoverCatalog({ q, limit, offset, locale })
     return c.json(result)
   })
 
@@ -603,7 +604,8 @@ export function createDiscoverHandler(container: AppContainer) {
     if (!appKey) {
       return c.json({ error: 'appKey is required' }, 400)
     }
-    const app = await appIntegrationService.getDiscoverCatalogEntry(appKey)
+    const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
+    const app = await appIntegrationService.getDiscoverCatalogEntry(appKey, { locale })
     return c.json(app)
   })
 

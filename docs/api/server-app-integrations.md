@@ -9,12 +9,14 @@ This is intentionally not MCP. The integration contract is a small manifest plus
 ```txt
 Server
   Channels
-  Buddies
+  Buddy memberships/routes
   Apps
     Demo Desk
       iframe UI
       commands exposed through shadowob app call
 ```
+
+The `Buddy memberships/routes` entry is a server-scoped access and routing projection. Buddy identity and runtime capability are not owned by the Server; each command, bridge request, or Inbox delivery injects the current server context before Shadow resolves usable Buddy routes.
 
 Server Apps are independent services. Shadow must not package, launch, or depend on a Server App through `docker-compose` or any other server-side process manager. The only contract between Shadow and an App is the manifest, iframe URL, command URLs, event stream, and OAuth-style command token introspection protocol. The `integrations/docker-compose.yaml` file is a local developer harness for running demo Apps together; it is not part of the Shadow server runtime.
 
@@ -134,8 +136,10 @@ Grant a Buddy permission:
 shadowob app grant demo-desk \
   --server <server-id-or-slug> \
   --buddy <buddy-agent-id> \
-  --permissions demo.tickets:read,demo.tickets:write
+  --permissions demo.tickets:read,demo.tickets:write,buddy_inbox:deliver
 ```
+
+`buddy_inbox:deliver` is a Shadow platform permission, not a manifest command permission. Add it to a Buddy grant when the App is allowed to deliver `shadow.outbox.inboxTasks` to that Buddy. `*` also includes this permission.
 
 Set default permissions that members and Buddies can use without a prompt:
 
@@ -164,11 +168,11 @@ shadowob app discover --server <server-id-or-slug>
 shadowob app skills demo-desk --server <server-id-or-slug>
 ```
 
-Call as a Buddy:
+Call as a Buddy. In a live server App command, use the injected command context `serverId`;
+outside a live context, pass the server explicitly:
 
 ```bash
-SHADOWOB_SERVER_ID=<server-id-or-slug> \
-shadowob app call demo-desk tickets.list --server "$SHADOWOB_SERVER_ID" --json-input '{}'
+shadowob app call demo-desk tickets.list --server <server-id-or-slug> --json-input '{}'
 ```
 
 ## API Surface
@@ -182,7 +186,7 @@ Server-scoped endpoints:
 - `POST /api/servers/:serverId/apps/catalog/:catalogEntryId/install`: install a catalog App into the server; requires server admin.
 - `GET /api/servers/:serverId/apps/:appKey`: read manifest, iframe, and Buddy grants.
 - `DELETE /api/servers/:serverId/apps/:appKey`: uninstall from the server; requires server admin.
-- `POST /api/servers/:serverId/apps/:appKey/grants`: grant Buddy permissions; requires server admin.
+- `POST /api/servers/:serverId/apps/:appKey/grants`: grant Buddy command permissions and Shadow platform permissions such as `buddy_inbox:deliver`; requires server admin.
 - `PATCH /api/servers/:serverId/apps/:appKey/access-policy`: update default allowed permissions and default approval mode; requires server admin.
 - `POST /api/servers/:serverId/apps/:appKey/approvals`: approve a first-use or every-time command for a person or Buddy subject.
 - `POST /api/servers/:serverId/apps/:appKey/launch`: mint iframe launch metadata.
@@ -305,7 +309,7 @@ The app runtime returns:
 }
 ```
 
-Shadow Server consumes `result.shadow.outbox.inboxTasks`, resolves each target Buddy in the current server, publishes a Task Card to that Buddy's Inbox channel, and returns delivery receipts in the same protocol namespace:
+Shadow Server consumes `result.shadow.outbox.inboxTasks`, resolves each target Buddy in the current server, verifies the installed App has an active Buddy grant with `buddy_inbox:deliver` or `*`, publishes a Task Card to that Buddy's Inbox channel, and returns delivery receipts in the same protocol namespace:
 
 ```json
 {
@@ -351,10 +355,12 @@ Iframe clients use `ShadowBridge` instead of hand-rolled `postMessage` handlers.
 import { ShadowBridge, type ShadowBridgeCommandSpec } from '@shadowob/sdk/bridge'
 
 type KanbanBridgeCommands = {
-  'cards.dispatch': ShadowBridgeCommandSpec<
+  'cards.create': ShadowBridgeCommandSpec<
     {
-      cardId: string
-      assigneeLabel: string
+      title: string
+      description: string
+      prompt?: string
+      labels?: string[]
     },
     {
       card: {
@@ -366,28 +372,37 @@ type KanbanBridgeCommands = {
 }
 
 const bridge = new ShadowBridge<KanbanBridgeCommands>({
-  appKey: 'shadow-kanban',
+  appKey: 'kanban',
 })
 
-const result = await bridge.command('cards.dispatch', {
-  cardId: 'card-1',
-  assigneeLabel: 'Strategy Buddy',
+const result = await bridge.command('cards.create', {
+  title: 'Prepare launch review',
+  description: 'Track the reusable launch review work as Kanban cards.',
+  prompt: 'Identify missing owner, timing, and asset details.',
+  labels: ['Review'],
 })
 
 const deliveries = bridge.inboxDeliveries(result)
+const capabilities = await bridge.capabilities()
 const inboxes = await bridge.inboxes()
 
-await bridge.enqueueInboxTask({
+const delivery = await bridge.enqueueInboxTask({
   target: { agentId: inboxes.inboxes[0].agent.id },
   task: {
-    title: 'Review launch',
-    body: 'Inspect the launch checklist.',
-    assigneeLabel: 'Strategy Buddy',
+    title: 'Coordinate launch review',
+    body: 'Create and route the required Kanban work. Keep business logic in Buddy/runtime tools and use Kanban only for task state.',
+    assigneeLabel:
+      inboxes.inboxes[0].agent.user?.displayName ??
+      inboxes.inboxes[0].agent.user?.username ??
+      inboxes.inboxes[0].agent.id,
+    privacy: { dataClass: 'server-private', redactionRequired: true },
   },
 })
+
+await bridge.openCopilot(delivery)
 ```
 
-`ShadowBridge` is the only iframe-side bridge API. It covers command calls, Buddy Inbox discovery, direct task-card delivery, command payload unwrapping, and delivery/error extraction.
+`ShadowBridge` is the only iframe-side bridge API. It covers command calls, host capability discovery, Buddy Inbox discovery, direct task-card delivery, explicit Copilot opening, command payload unwrapping, and delivery/error extraction. Apps should call `bridge.capabilities()` before assuming optional host behavior; current hosts expose `command.call`, `inbox.list`, `inbox.task.enqueue`, `copilot.open`, `buddy.create.open`, and `route.navigate`.
 
 Buddy Inbox REST endpoints, admission policy, claim/update authorization, and retry semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md). Server App backends should prefer the outbox protocol below; iframe clients should use `ShadowBridge`.
 
@@ -404,6 +419,11 @@ return new ShadowServerAppOutbox().enqueueInboxTask(task).attachTo({
 ```
 
 The canonical namespace is `shadow.protocol === "shadow.app/1"` and `shadow.outbox`. New protocol extensions should be added under `shadow.outbox` or another documented `shadow.*` namespace, not as ad-hoc top-level response fields.
+
+Inbox task delivery has two authorization gates:
+
+1. Server App Buddy grant: `server_app_buddy_grants.permissions` must contain `buddy_inbox:deliver` or `*`, and the grant must not be expired.
+2. Buddy Inbox admission: the target Inbox policy still decides whether the delivery is accepted immediately, denied, or held for admin approval.
 
 ## Security Model
 
@@ -512,7 +532,7 @@ The `shadowob` Cloud plugin supports `serverApps` in template config:
       "grants": [
         {
           "buddyId": "demo-desk-buddy",
-          "permissions": ["demo.tickets:read", "demo.tickets:write"]
+          "permissions": ["demo.tickets:read", "demo.tickets:write", "buddy_inbox:deliver"]
         }
       ]
     }

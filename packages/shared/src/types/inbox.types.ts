@@ -1,6 +1,29 @@
-import type { MessageCardSource, MessageCardStatus } from './message.types'
+import type {
+  MessageCard,
+  MessageCardSource,
+  MessageCardStatus,
+  MessageMetadata,
+  MessageReferenceCard,
+  TaskMessageCard,
+  TaskMessageOutputContract,
+  TaskMessagePrivacy,
+  TaskMessageRequirements,
+} from './message.types'
 
 export const BUDDY_INBOX_TOPIC_PREFIX = 'shadow:buddy-inbox:' as const
+export const BUDDY_INBOX_DELIVERY_PERMISSION = 'buddy_inbox:deliver' as const
+export const BUDDY_INBOX_PLATFORM_PERMISSIONS = [BUDDY_INBOX_DELIVERY_PERMISSION] as const
+
+export type BuddyInboxPlatformPermission = (typeof BUDDY_INBOX_PLATFORM_PERMISSIONS)[number]
+
+export function isBuddyInboxPlatformPermission(
+  value: unknown,
+): value is BuddyInboxPlatformPermission {
+  return (
+    typeof value === 'string' &&
+    BUDDY_INBOX_PLATFORM_PERMISSIONS.includes(value as BuddyInboxPlatformPermission)
+  )
+}
 
 export function buddyInboxTopic(agentId: string) {
   return `${BUDDY_INBOX_TOPIC_PREFIX}${agentId}`
@@ -49,9 +72,107 @@ export function isTerminalTaskMessageCardStatus(status: MessageCardStatus) {
   )
 }
 
+export function isTaskMessageCardStatus(value: unknown): value is MessageCardStatus {
+  return (
+    typeof value === 'string' &&
+    TASK_MESSAGE_CARD_STATUSES.includes(value as (typeof TASK_MESSAGE_CARD_STATUSES)[number])
+  )
+}
+
 export function canTransitionTaskMessageCardStatus(from: MessageCardStatus, to: MessageCardStatus) {
   const allowed = TASK_MESSAGE_CARD_STATUS_TRANSITIONS[from] as readonly MessageCardStatus[]
   return allowed.includes(to)
+}
+
+export type BuddyInboxViewMode = 'chat' | 'tasks'
+export type BuddyInboxTaskFilter = 'all' | 'open' | 'done'
+
+export interface BuddyInboxViewMessage {
+  id: string
+  replyToId?: string | null
+  metadata?: Pick<MessageMetadata, 'cards'> | null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function isTaskReplyNotificationCard(card: MessageCard) {
+  return isRecord(card.data) && card.data.taskReplyNotification === true
+}
+
+export function isMessageReferenceCard(card: MessageCard): card is MessageReferenceCard {
+  return (
+    card?.kind === 'message_reference' &&
+    typeof card.title === 'string' &&
+    isRecord(card.target) &&
+    typeof card.target.channelId === 'string' &&
+    typeof card.target.messageId === 'string'
+  )
+}
+
+export function getBuddyInboxTaskCards(message: BuddyInboxViewMessage): TaskMessageCard[] {
+  const cards = message.metadata?.cards
+  if (!Array.isArray(cards)) return []
+  return cards.filter(
+    (card): card is TaskMessageCard =>
+      card?.kind === 'task' &&
+      typeof card.id === 'string' &&
+      isTaskMessageCardStatus(card.status) &&
+      !isTaskReplyNotificationCard(card),
+  )
+}
+
+export function hasBuddyInboxTaskCard(message: BuddyInboxViewMessage) {
+  return getBuddyInboxTaskCards(message).length > 0
+}
+
+export function getBuddyInboxTaskStatuses(message: BuddyInboxViewMessage): MessageCardStatus[] {
+  return getBuddyInboxTaskCards(message).map((card) => card.status)
+}
+
+export function buddyInboxMessageMatchesTaskFilter(
+  message: BuddyInboxViewMessage,
+  filter: BuddyInboxTaskFilter,
+) {
+  const statuses = getBuddyInboxTaskStatuses(message)
+  if (statuses.length === 0) return false
+  if (filter === 'all') return true
+  if (filter === 'done') return statuses.every((status) => isTerminalTaskMessageCardStatus(status))
+  return statuses.some((status) => !isTerminalTaskMessageCardStatus(status))
+}
+
+export function getBuddyInboxTaskMessageIds(messages: readonly BuddyInboxViewMessage[]) {
+  const ids = new Set<string>()
+  for (const message of messages) {
+    if (hasBuddyInboxTaskCard(message)) ids.add(message.id)
+  }
+  return ids
+}
+
+export function isBuddyInboxTaskReply(
+  message: BuddyInboxViewMessage,
+  taskMessageIds: ReadonlySet<string>,
+) {
+  return Boolean(message.replyToId && taskMessageIds.has(message.replyToId))
+}
+
+export function buildBuddyInboxViewMessages<TMessage extends BuddyInboxViewMessage>(
+  messages: readonly TMessage[],
+  options: {
+    isInboxChannel: boolean
+    mode: BuddyInboxViewMode
+    taskFilter?: BuddyInboxTaskFilter
+  },
+) {
+  if (!options.isInboxChannel || options.mode === 'chat') return [...messages]
+
+  const taskMessageIds = getBuddyInboxTaskMessageIds(messages)
+  return messages.filter(
+    (message) =>
+      !isBuddyInboxTaskReply(message, taskMessageIds) &&
+      buddyInboxMessageMatchesTaskFilter(message, options.taskFilter ?? 'all'),
+  )
 }
 
 export type BuddyInboxAdmissionMode = 'allow' | 'deny' | 'first_time' | 'every_time'
@@ -79,6 +200,9 @@ export interface BuddyInboxAdmissionPendingTask {
   priority?: 'low' | 'normal' | 'high' | 'urgent'
   idempotencyKey?: string
   source?: MessageCardSource
+  requirements?: TaskMessageRequirements
+  outputContract?: TaskMessageOutputContract
+  privacy?: TaskMessagePrivacy
   data?: Record<string, unknown>
 }
 
@@ -103,10 +227,6 @@ export interface BuddyInboxAdmissionPendingDelivery {
 export const DEFAULT_BUDDY_INBOX_ADMISSION_POLICY: BuddyInboxAdmissionPolicy = {
   defaultMode: 'allow',
   rules: [],
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
 function parseAdmissionMode(value: unknown, fallback: BuddyInboxAdmissionMode) {
@@ -179,6 +299,15 @@ function parsePendingTask(value: unknown): BuddyInboxAdmissionPendingTask {
   }
   const idempotencyKey = parseOptionalString(value.idempotencyKey, 'task.idempotencyKey', 240)
   const source = isRecord(value.source) ? (value.source as unknown as MessageCardSource) : undefined
+  const requirements = isRecord(value.requirements)
+    ? (value.requirements as unknown as TaskMessageRequirements)
+    : undefined
+  const outputContract = isRecord(value.outputContract)
+    ? (value.outputContract as unknown as TaskMessageOutputContract)
+    : undefined
+  const privacy = isRecord(value.privacy)
+    ? (value.privacy as unknown as TaskMessagePrivacy)
+    : undefined
   const data = isRecord(value.data) ? value.data : undefined
   return {
     title,
@@ -186,6 +315,9 @@ function parsePendingTask(value: unknown): BuddyInboxAdmissionPendingTask {
     ...(priority ? { priority } : {}),
     ...(idempotencyKey ? { idempotencyKey } : {}),
     ...(source ? { source } : {}),
+    ...(requirements ? { requirements } : {}),
+    ...(outputContract ? { outputContract } : {}),
+    ...(privacy ? { privacy } : {}),
     ...(data ? { data } : {}),
   }
 }

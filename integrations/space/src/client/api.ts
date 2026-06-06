@@ -9,7 +9,7 @@ import type {
 } from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
-const bridge = new ShadowBridge({ appKey: 'shadow-space' })
+const bridge = new ShadowBridge({ appKey: 'space' })
 
 export interface SpaceTagSummary {
   tag: string

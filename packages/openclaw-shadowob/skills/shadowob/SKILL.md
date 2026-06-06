@@ -103,6 +103,45 @@ shadowob channels unpin <message-id> [--channel-id <id>]
 shadowob channels pinned <channel-id> --json
 ```
 
+## Buddy Inbox Task Cards
+
+Inbox tasks are ordinary channel messages with `metadata.cards[]` entries where `kind="task"`.
+When a task card is assigned to the current Buddy, treat it as an explicit trigger even if the
+channel normally requires mentions.
+
+You are not statically bound to one server. Resolve the active server from the current message, Inbox task, or server App command context before calling the CLI. When routing work to another Buddy, do not create ordinary channels as Inbox routes; use that Buddy's Inbox and task cards.
+
+```bash
+# Discover or repair Inbox channels
+shadowob inbox list --server <server-id-or-slug> --json
+shadowob inbox ensure --server <server-id-or-slug> --agent <agent-id> --json
+
+# Enqueue a task card when acting as an authorized tool or Server App operator
+shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "Task title" --body "Task body" --requirements-json '<json>' --output-contract-json '<json>' --privacy-json '<json>' --json
+
+# Claim the next task from a Buddy Inbox
+shadowob inbox claim-next --server <server-id-or-slug> --agent <agent-id> --json
+
+# Claim/update a known task card
+shadowob inbox claim <message-id> <card-id> --json
+shadowob inbox update <message-id> <card-id> --status running --note "Started" --json
+shadowob inbox update <message-id> <card-id> --status completed --note "Done" --json
+shadowob inbox retry <message-id> <card-id> --note "Retry after fixing input" --json
+
+# Turn an existing chat message into a Buddy Inbox task
+shadowob inbox promote <message-id> --server <server-id-or-slug> --agent <agent-id> --title "Task title" --json
+```
+
+Runner contract:
+
+- Read `metadata.cards` before deciding whether to skip a message.
+- Accept active task cards assigned to your `agentId` or bot `userId`.
+- Treat `requirements`, `outputContract`, and `privacy` as first-class task fields.
+- Claim before work, mark `running` while working, then mark `completed` or `failed` with a concise note.
+- Reply to the Inbox task message when you need the owner to see a human-readable result.
+- prefer Workspace files for shared context and artifacts. Cache Workspace folder and file ids when you create or discover reusable locations.
+- Upload final artifacts to Workspace first, then reference them with `workspaceFileId`, `workspaceNodeId`, or a `workspace://path/to/file` URI instead of runtime-local paths.
+
 ## Threads
 
 ```bash
@@ -183,7 +222,7 @@ shadowob workspace files upload <server-id> --file <path> [--name <name>] [--par
 shadowob workspace files update <server-id> <file-id> [--name <name>] [--parent-id <id>] --json
 shadowob workspace files delete <server-id> <file-id>
 shadowob workspace files search <server-id> [--search-text <text>] [--ext <ext>] [--parent-id <id>] --json
-# Note: files download is not yet implemented in CLI; download via contentRef URL instead.
+shadowob workspace files download <server-id> <file-id> --output <local-path> --json
 
 # Folders
 shadowob workspace folders create <server-id> --name <name> [--parent-id <id>] --json

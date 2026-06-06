@@ -510,6 +510,23 @@
     "assignee": "Assigned to {{name}}",
     "unassigned": "Unassigned Buddy",
     "statusUpdated": "Task updated",
+    "mode": {
+      "chat": "Chat",
+      "tasks": "Tasks"
+    },
+    "filter": {
+      "all": "All",
+      "open": "Open",
+      "done": "Done"
+    },
+    "empty": {
+      "chatTitle": "No chat messages yet",
+      "chatHint": "Use chat mode to review the direct conversation with this Buddy.",
+      "allTitle": "No tasks yet",
+      "allHint": "Task cards appear here after they are created.",
+      "filterTitle": "No tasks match this filter",
+      "filterHint": "Switch filters or create a new task."
+    },
     "status": {
       "queued": "Queued",
       "claimed": "Claimed",
@@ -700,6 +717,7 @@
   "member": {
     "title": "Members",
     "online": "Online",
+    "busy": "Busy",
     "idle": "Idle",
     "dnd": "Do Not Disturb",
     "offline": "Offline",

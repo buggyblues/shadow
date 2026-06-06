@@ -1,6 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
-import type { ShadowServerAppCommand, ShadowServerAppManifest } from '@shadowob/sdk'
+import {
+  BUDDY_INBOX_DELIVERY_PERMISSION,
+  type ShadowServerAppCommand,
+  type ShadowServerAppManifest,
+} from '@shadowob/sdk'
 import { Command } from 'commander'
 import { getClient, resolveServerFlag } from '../utils/client.js'
 import { output, outputError, outputSuccess } from '../utils/output.js'
@@ -304,7 +308,10 @@ export function createAppCommand(): Command {
     .argument('<app-key>', 'App key')
     .requiredOption('--server <server>', 'Server ID or slug')
     .requiredOption('--buddy <buddy-id>', 'Buddy ID')
-    .requiredOption('--permissions <permissions>', 'Comma-separated permissions, or *')
+    .requiredOption(
+      '--permissions <permissions>',
+      `Comma-separated app permissions, ${BUDDY_INBOX_DELIVERY_PERMISSION}, or *`,
+    )
     .option('--approval-mode <mode>', 'none, first_time, every_time, or policy', 'none')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')

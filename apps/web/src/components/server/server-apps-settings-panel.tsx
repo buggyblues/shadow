@@ -175,7 +175,7 @@ function AppIcon({ app, size = 'md' }: { app: { iconUrl?: string | null }; size?
 }
 
 export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<PanelMode>('detail')
   const [addMode, setAddMode] = useState<AddMode>('catalog')
@@ -195,7 +195,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
   })
 
   const { data: apps = [], isLoading } = useQuery({
-    queryKey: ['server-apps', serverSlug],
+    queryKey: ['server-apps', serverSlug, i18n.language],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${serverSlug}/apps`),
     enabled: !!serverSlug,
     staleTime: SERVER_APP_SETTINGS_STALE_MS,
@@ -203,7 +203,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
   })
 
   const { data: catalog = [] } = useQuery({
-    queryKey: ['server-app-catalog', serverSlug],
+    queryKey: ['server-app-catalog', serverSlug, i18n.language],
     queryFn: () => fetchApi<ServerAppCatalogEntry[]>(`/api/servers/${serverSlug}/apps/catalog`),
     enabled: !!serverSlug && !!access?.canManage,
     staleTime: SERVER_APP_SETTINGS_STALE_MS,
@@ -216,7 +216,7 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
   )
 
   const { data: activeAppDetail } = useQuery({
-    queryKey: ['server-app-detail', serverSlug, activeApp?.appKey],
+    queryKey: ['server-app-detail', serverSlug, activeApp?.appKey, i18n.language],
     queryFn: () =>
       fetchApi<ServerAppIntegration>(`/api/servers/${serverSlug}/apps/${activeApp!.appKey}`),
     enabled: !!serverSlug && !!activeApp?.appKey && mode === 'detail',

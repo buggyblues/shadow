@@ -21,11 +21,56 @@ interface WorkspacePageProps {
   serverId: string
   onClose?: () => void
   embedded?: boolean
+  initialNodeId?: string | null
+  initialPath?: string | null
+  initialUri?: string | null
+}
+
+function pathFromWorkspaceUri(uri?: string | null) {
+  const trimmed = uri?.trim()
+  if (!trimmed?.startsWith('workspace://')) return null
+  const path = trimmed.slice('workspace://'.length)
+  if (!path) return null
+  return path.startsWith('/') ? path : `/${path}`
+}
+
+function normalizeWorkspacePath(path?: string | null) {
+  const trimmed = path?.trim()
+  if (!trimmed) return null
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+
+function findNodeByPath(nodes: WorkspaceNode[], path: string): WorkspaceNode | null {
+  for (const node of nodes) {
+    if (normalizeWorkspacePath(node.path) === path) return node
+    const child = findNodeByPath(node.children ?? [], path)
+    if (child) return child
+  }
+  return null
+}
+
+function findWorkspaceTargetNode(
+  nodes: WorkspaceNode[],
+  target: { nodeId?: string | null; path?: string | null; uri?: string | null },
+) {
+  if (target.nodeId) {
+    const node = findNodeById(nodes, target.nodeId)
+    if (node) return node
+  }
+  const path = normalizeWorkspacePath(target.path) ?? pathFromWorkspaceUri(target.uri)
+  return path ? findNodeByPath(nodes, path) : null
 }
 
 /* --- WorkspacePage --- */
 
-export function WorkspacePage({ serverId, onClose, embedded = false }: WorkspacePageProps) {
+export function WorkspacePage({
+  serverId,
+  onClose,
+  embedded = false,
+  initialNodeId,
+  initialPath,
+  initialUri,
+}: WorkspacePageProps) {
   const { t } = useTranslation()
   const {
     workspace,
@@ -59,6 +104,26 @@ export function WorkspacePage({ serverId, onClose, embedded = false }: Workspace
     if (!activeFileId) return null
     return findNodeById(tree, activeFileId)
   }, [tree, activeFileId])
+
+  useEffect(() => {
+    const target = findWorkspaceTargetNode(tree, {
+      nodeId: initialNodeId,
+      path: initialPath,
+      uri: initialUri,
+    })
+    if (!target) return
+    setSelectedNodeId(target.id)
+    clearSelection()
+    if (target.kind === 'file') setActiveFileId(target.id)
+  }, [
+    clearSelection,
+    initialNodeId,
+    initialPath,
+    initialUri,
+    setActiveFileId,
+    setSelectedNodeId,
+    tree,
+  ])
 
   /* Dropzone */
   const onDrop = useCallback(

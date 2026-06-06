@@ -44,6 +44,44 @@
       "greeting": {
         "type": "object",
         "description": "Greeting and entry-channel behavior for provisioned Shadow spaces"
+      },
+      "serverApps": {
+        "type": "array",
+        "description": "Server Apps to install from the catalog or manifest and grant to provisioned buddies",
+        "items": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Stable template id for this Server App installation"
+            },
+            "serverId": {
+              "type": "string",
+              "description": "Server config id that owns this app"
+            },
+            "catalogEntryId": {
+              "type": "string",
+              "description": "Shadow Server App catalog entry id"
+            },
+            "catalogAppKey": {
+              "type": "string",
+              "description": "Shadow Server App catalog app key to resolve and install"
+            },
+            "manifestUrl": {
+              "type": "string",
+              "description": "Manifest URL fallback when not installing from catalog"
+            },
+            "manifest": {
+              "type": "object",
+              "description": "Inline manifest fallback when not installing from catalog"
+            },
+            "grants": {
+              "type": "array",
+              "description": "Buddy grants applied after app installation"
+            }
+          }
+        }
       }
     }
   },

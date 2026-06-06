@@ -136,7 +136,7 @@ function DetailIconWithFallback({ imageUrl, label }: { imageUrl?: string | null;
 }
 
 export function ServerAppDirectoryDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { appKey } = useParams({ strict: false }) as { appKey: string }
@@ -145,7 +145,7 @@ export function ServerAppDirectoryDetailPage() {
   const [activeMediaIndex, setActiveMediaIndex] = useState(0)
 
   const { data: app, isLoading } = useQuery({
-    queryKey: ['discover-server-app-detail', appKey],
+    queryKey: ['discover-server-app-detail', appKey, i18n.language],
     queryFn: ({ signal }) =>
       fetchApi<ServerAppCatalogDetail>(`/api/discover/server-apps/${encodeURIComponent(appKey)}`, {
         signal,
@@ -172,7 +172,7 @@ export function ServerAppDirectoryDetailPage() {
   }, [manageableServers, myServers, selectedServerId])
 
   const { data: selectedServerCatalog = [] } = useQuery({
-    queryKey: ['server-app-catalog', selectedServerKey],
+    queryKey: ['server-app-catalog', selectedServerKey, i18n.language],
     queryFn: ({ signal }) =>
       fetchApi<ServerAppCatalogWithInstall[]>(
         `/api/servers/${encodeURIComponent(selectedServerKey)}/apps/catalog`,

@@ -510,6 +510,23 @@
     "assignee": "分配給 {{name}}",
     "unassigned": "未分配 Buddy",
     "statusUpdated": "任務已更新",
+    "mode": {
+      "chat": "聊天",
+      "tasks": "任務"
+    },
+    "filter": {
+      "all": "全部",
+      "open": "進行中",
+      "done": "已結束"
+    },
+    "empty": {
+      "chatTitle": "還沒有聊天訊息",
+      "chatHint": "在聊天模式下可以審查和 Buddy 的一般對話。",
+      "allTitle": "還沒有任務",
+      "allHint": "建立任務卡片後會出現在這裡。",
+      "filterTitle": "這個篩選下沒有任務",
+      "filterHint": "切換篩選條件，或建立一個新的任務。"
+    },
     "status": {
       "queued": "排隊中",
       "claimed": "已領取",
@@ -699,6 +716,7 @@
   "member": {
     "title": "成員",
     "online": "線上",
+    "busy": "忙碌",
     "idle": "離開",
     "dnd": "請勿打擾",
     "offline": "離線",

@@ -7,6 +7,8 @@ Buddy Inbox is the canonical Shadow task-delivery protocol for Buddies. It is bu
 - Server Apps enqueue work through the `shadow.app/1` outbox protocol or through `ShadowBridge`.
 - Runners claim and update Task Cards through the Inbox task-card API.
 
+Buddy identity is not server-owned. An Inbox is a server-scoped route for the current communication context: Shadow resolves `(serverId, agentId)` from the message, Task Card, bridge launch, or App command context, then checks visibility, grants, and admission before delivery.
+
 Shadow core owns delivery, status, claim, retry, and admission checks. Server Apps own domain data such as Kanban cards, issues, submissions, or skills packages.
 
 ## Task Card State Machine
@@ -49,7 +51,7 @@ Each Inbox can define an admission policy:
   "rules": [
     {
       "subjectKind": "server_app",
-      "appKey": "shadow-skills",
+      "appKey": "skills",
       "mode": "allow"
     },
     {
@@ -75,6 +77,7 @@ Current storage uses the Inbox channel-specific agent policy config under `confi
 - Listing Inbox entries requires server membership and channel visibility.
 - Ensuring or changing an Inbox requires Buddy owner or server admin.
 - Enqueue requires normal channel/server access plus the Inbox admission policy.
+- Server App outbox enqueue additionally requires an active Buddy grant whose permissions include `buddy_inbox:deliver` or `*`.
 - Claim is allowed for the target Buddy, Buddy owner, or server admin.
 - Status update is allowed for the active claim holder, target Buddy when unclaimed, Buddy owner, or server admin.
 - Retry is allowed for the target Buddy, Buddy owner, or server admin, and only from `failed`.
@@ -120,7 +123,7 @@ Body:
   "idempotencyKey": "kanban:card:card-1:dispatch:agent-1",
   "source": {
     "kind": "server_app",
-    "appKey": "shadow-kanban",
+    "appKey": "kanban",
     "resource": { "kind": "kanban.card", "id": "card-1" }
   },
   "data": {
@@ -145,6 +148,8 @@ TypeScript:
 const client = new ShadowClient(baseUrl, token)
 
 await client.ensureBuddyInbox('shadow-plays', agentId)
+await client.listBuddyInboxAdmissionPending('shadow-plays', agentId)
+await client.approveBuddyInboxAdmissionPending('shadow-plays', agentId, pendingId)
 await client.enqueueInboxTaskForAgent('shadow-plays', agentId, {
   title: 'Install skill',
   idempotencyKey: 'skills:install:grill-me',
@@ -157,6 +162,8 @@ Python:
 
 ```python
 client.ensure_buddy_inbox("shadow-plays", agent_id)
+client.list_buddy_inbox_admission_pending("shadow-plays", agent_id)
+client.approve_buddy_inbox_admission_pending("shadow-plays", agent_id, pending_id)
 client.enqueue_inbox_task_for_agent(
     "shadow-plays",
     agent_id,
@@ -172,6 +179,9 @@ CLI:
 ```bash
 shadowob inbox list --server shadow-plays --json
 shadowob inbox ensure --server shadow-plays --agent "$AGENT_ID"
+shadowob inbox pending list --server shadow-plays --agent "$AGENT_ID" --json
+shadowob inbox pending approve "$PENDING_ID" --server shadow-plays --agent "$AGENT_ID" --json
+shadowob inbox pending reject "$PENDING_ID" --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox enqueue --server shadow-plays --agent "$AGENT_ID" --title "Install skill"
 shadowob inbox claim-next --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox update "$MESSAGE_ID" "$CARD_ID" --status completed --note "Done"
@@ -179,12 +189,13 @@ shadowob inbox update "$MESSAGE_ID" "$CARD_ID" --status completed --note "Done"
 
 ## Server App Integration
 
-Server App command responses should not call these REST endpoints directly from app backends. They should return `shadow.protocol === "shadow.app/1"` with `shadow.outbox.inboxTasks`; Shadow Server resolves the target Buddy, enforces admission policy, creates the Task Card, and returns delivery receipts.
+Server App command responses should not call these REST endpoints directly from app backends. They should return `shadow.protocol === "shadow.app/1"` with `shadow.outbox.inboxTasks`; Shadow Server resolves the target Buddy, verifies the Server App Buddy grant, enforces admission policy, creates the Task Card, and returns delivery receipts.
 
 Iframe clients use `ShadowBridge`:
 
 ```ts
-const bridge = new ShadowBridge({ appKey: 'shadow-skills' })
+const bridge = new ShadowBridge({ appKey: 'skills' })
+const capabilities = await bridge.capabilities()
 const inboxes = await bridge.inboxes()
 await bridge.enqueueInboxTask({
   target: { agentId: inboxes.inboxes[0].agent.id },
@@ -201,7 +212,7 @@ await bridge.command('skills.download', { skillId }, {
 ```
 
 ```bash
-shadowob app call shadow-plays shadow-skills skills.download \
+shadowob app call shadow-plays skills skills.download \
   --input '{"skillId":"grill-me"}' \
   --task-message-id "$MESSAGE_ID" \
   --task-card-id "$CARD_ID" \

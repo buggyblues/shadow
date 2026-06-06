@@ -2,7 +2,7 @@ import { ShadowBridge } from '@shadowob/sdk/bridge'
 import type { QnaImageAsset, QnaList, QnaQuestion } from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
-const bridge = new ShadowBridge({ appKey: 'shadow-answers' })
+const bridge = new ShadowBridge({ appKey: 'answers' })
 
 export interface TagSummary {
   tag: string

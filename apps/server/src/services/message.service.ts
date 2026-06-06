@@ -77,6 +77,14 @@ function isActiveTaskCard(card: TaskMessageCardMetadata) {
   return card.status === 'queued' || card.status === 'claimed' || card.status === 'running'
 }
 
+function isReplyableTaskCard(card: TaskMessageCardMetadata) {
+  return isActiveTaskCard(card) || card.status === 'completed' || card.status === 'failed'
+}
+
+function taskCardDataRecord(card: TaskMessageCardMetadata) {
+  return card.data && typeof card.data === 'object' && !Array.isArray(card.data) ? card.data : null
+}
+
 function isVoiceRecordingLike(attachment: {
   filename?: string
   contentType: string
@@ -403,7 +411,7 @@ export class MessageService {
       }
     }
 
-    await this.completeInboxTaskFromBuddyReply({
+    await this.recordInboxTaskReplyFromBuddyReply({
       channelId,
       messageId: message.id,
       replyToId: input.replyToId,
@@ -439,7 +447,7 @@ export class MessageService {
       : responseMessage
   }
 
-  private async completeInboxTaskFromBuddyReply(input: {
+  private async recordInboxTaskReplyFromBuddyReply(input: {
     channelId: string
     messageId: string
     replyToId?: string
@@ -461,7 +469,7 @@ export class MessageService {
         const hasAssignableTask = cards.some(
           (card) =>
             isTaskCard(card) &&
-            isActiveTaskCard(card) &&
+            isReplyableTaskCard(card) &&
             (card.assignee?.userId === input.authorId || card.assignee?.agentId === agentId),
         )
         if (!hasAssignableTask) target = null
@@ -474,7 +482,7 @@ export class MessageService {
           const metadata = (message.metadata ?? {}) as MessageMetadata
           const cards = Array.isArray(metadata.cards) ? metadata.cards : []
           return cards.some((card) => {
-            if (!isTaskCard(card) || !isActiveTaskCard(card)) return false
+            if (!isTaskCard(card) || !isReplyableTaskCard(card)) return false
             return card.assignee?.userId === input.authorId || card.assignee?.agentId === agentId
           })
         })
@@ -486,35 +494,53 @@ export class MessageService {
       const cards = Array.isArray(metadata.cards) ? metadata.cards : []
       const now = new Date().toISOString()
       let changed = false
+      let matched = false
+      let repliedTaskCard: TaskMessageCardMetadata | null = null
       const nextCards = cards.map((card) => {
-        if (!isTaskCard(card) || changed || !isActiveTaskCard(card)) return card
+        if (!isTaskCard(card) || matched || !isReplyableTaskCard(card)) return card
         if (card.assignee?.userId !== input.authorId && card.assignee?.agentId !== agentId) {
           return card
         }
-        changed = true
-        const {
-          claim: _claim,
-          capability: _capability,
-          ...nextCard
-        } = {
+        matched = true
+        const existingReplies = Array.isArray(card.replies) ? card.replies : []
+        if (existingReplies.some((reply) => reply.messageId === input.messageId)) return card
+        const existingProgress = Array.isArray(card.progress) ? card.progress : []
+        const actor = {
+          kind: 'agent' as const,
+          agentId,
+          userId: input.authorId,
+          label: input.authorLabel,
+        }
+        const nextStatus =
+          card.status === 'queued' || card.status === 'claimed' ? ('running' as const) : card.status
+        const nextCard = {
           ...card,
-          status: 'completed' as const,
+          status: nextStatus,
           updatedAt: now,
+          replies: [
+            ...existingReplies,
+            {
+              messageId: input.messageId,
+              cardId: card.id,
+              authorId: input.authorId,
+              authorLabel: input.authorLabel,
+              content: input.content.slice(0, 4000),
+              createdAt: now,
+              source: actor,
+            },
+          ].slice(-100),
           progress: [
-            ...(Array.isArray(card.progress) ? card.progress : []),
+            ...existingProgress,
             {
               at: now,
-              status: 'completed' as const,
-              note: `Completed by Buddy reply: ${input.content.slice(0, 240)}`,
-              actor: {
-                kind: 'agent' as const,
-                agentId,
-                userId: input.authorId,
-                label: input.authorLabel,
-              },
+              status: nextStatus,
+              note: `Buddy replied: ${input.content.slice(0, 240)}`,
+              actor,
             },
-          ],
+          ].slice(-100),
         }
+        changed = true
+        repliedTaskCard = nextCard
         return nextCard
       })
       if (!changed) return
@@ -523,12 +549,134 @@ export class MessageService {
         cards: nextCards,
       })
       this.deps.io?.to(`channel:${input.channelId}`).emit('message:updated', updated)
+      if (repliedTaskCard) {
+        await this.notifyInboxTaskDispatcher({
+          serverId: channel?.serverId ?? null,
+          taskMessage: target,
+          taskCard: repliedTaskCard,
+          reply: input,
+          responderAgentId: agentId,
+        })
+      }
     } catch (err) {
       this.deps.logger?.warn?.(
         { err, channelId: input.channelId, messageId: input.messageId },
-        'Failed to complete Inbox task from Buddy reply',
+        'Failed to record Inbox task reply from Buddy reply',
       )
     }
+  }
+
+  private async notifyInboxTaskDispatcher(input: {
+    serverId: string | null
+    taskMessage: { id: string; channelId: string; authorId: string }
+    taskCard: TaskMessageCardMetadata
+    reply: {
+      channelId: string
+      messageId: string
+      authorId: string
+      authorLabel: string
+      content: string
+    }
+    responderAgentId: string
+  }) {
+    if (!input.serverId) return
+    if (input.taskMessage.authorId === input.reply.authorId) return
+    if (taskCardDataRecord(input.taskCard)?.taskReplyNotification === true) return
+    if (input.taskCard.status !== 'completed' && input.taskCard.status !== 'failed') return
+
+    const dispatcherAgent = await this.deps.agentDao.findByUserId(input.taskMessage.authorId)
+    if (!dispatcherAgent) return
+    const channels = await this.deps.channelDao.findByServerId(input.serverId)
+    const dispatcherInbox = channels.find(
+      (channel) => parseBuddyInboxAgentId(channel.topic) === dispatcherAgent.id,
+    )
+    if (!dispatcherInbox || dispatcherInbox.id === input.reply.channelId) return
+
+    const idempotencyKey = [
+      'inbox-task-reply',
+      input.taskMessage.id,
+      input.taskCard.id,
+      input.reply.messageId,
+    ].join(':')
+    const recent = await this.deps.messageDao.findByChannelId(dispatcherInbox.id, 25)
+    const alreadyNotified = recent.messages.some((message) => {
+      const metadata = (message.metadata ?? {}) as MessageMetadata
+      const custom = metadata.custom && typeof metadata.custom === 'object' ? metadata.custom : {}
+      const notification =
+        'inboxTaskReplyNotification' in custom &&
+        custom.inboxTaskReplyNotification &&
+        typeof custom.inboxTaskReplyNotification === 'object'
+          ? (custom.inboxTaskReplyNotification as Record<string, unknown>)
+          : null
+      if (notification?.idempotencyKey === idempotencyKey) return true
+      const cards = Array.isArray(metadata.cards) ? metadata.cards : []
+      return cards.some((card) => {
+        if (!isTaskCard(card)) return false
+        return taskCardDataRecord(card)?.idempotencyKey === idempotencyKey
+      })
+    })
+    if (alreadyNotified) return
+
+    const now = new Date().toISOString()
+    const resource =
+      input.taskCard.source &&
+      typeof input.taskCard.source === 'object' &&
+      'resource' in input.taskCard.source
+        ? input.taskCard.source.resource
+        : undefined
+    const taskTitle = `Review reply: ${input.taskCard.title}`
+    const taskBody = [
+      `${input.reply.authorLabel} replied to delegated Inbox task "${input.taskCard.title}".`,
+      'Open the referenced message to review the full response in context.',
+    ].join('\n')
+    const notification = await this.send(dispatcherInbox.id, input.reply.authorId, {
+      content: taskBody,
+      metadata: {
+        cards: [
+          {
+            id: `ref-${input.reply.messageId}`,
+            kind: 'message_reference',
+            version: 1,
+            title: input.taskCard.title,
+            description: input.reply.content.slice(0, 600),
+            label: input.reply.authorLabel,
+            target: {
+              channelId: input.reply.channelId,
+              messageId: input.reply.messageId,
+              taskCardId: input.taskCard.id,
+              inboxAgentId: input.responderAgentId,
+              kind: 'inbox_message',
+            },
+            source: {
+              kind: 'agent',
+              id: input.responderAgentId,
+              agentId: input.responderAgentId,
+              label: input.reply.authorLabel,
+              ...(resource ? { resource } : {}),
+            },
+            createdAt: now,
+          },
+        ],
+        custom: {
+          inboxTaskReplyNotification: {
+            kind: 'inbox_task_reply_notification',
+            idempotencyKey,
+            replyMessageId: input.reply.messageId,
+            replyChannelId: input.reply.channelId,
+            replyAuthorId: input.reply.authorId,
+            replyAuthorLabel: input.reply.authorLabel,
+            responderAgentId: input.responderAgentId,
+            originalTaskMessageId: input.taskMessage.id,
+            originalTaskCardId: input.taskCard.id,
+            originalTaskTitle: input.taskCard.title,
+            originalTaskStatus: input.taskCard.status,
+            title: taskTitle,
+            ...(resource ? { resource } : {}),
+          },
+        },
+      } as SendMessageInput['metadata'],
+    })
+    this.deps.io?.to(`channel:${dispatcherInbox.id}`).emit('message:new', notification)
   }
 
   async update(id: string, userId: string, input: UpdateMessageInput) {

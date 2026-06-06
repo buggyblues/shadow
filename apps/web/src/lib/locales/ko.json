@@ -807,6 +807,8 @@
     "archivedComposerPlaceholder": "이 채널은 보관되었습니다. 메시지를 보낼 수 없습니다.",
     "archivedComposerDesc": "보관을 해제하면 다시 메시지를 보낼 수 있습니다.",
     "switchChannel": "채널 전환",
+    "copilotChannelSection": "채널",
+    "copilotInboxSection": "Buddy 받은함",
     "enterChannel": "채널로 이동",
     "exitCopilot": "Copilot 종료",
     "resizeCopilot": "Copilot 패널 크기 조정",
@@ -987,6 +989,10 @@
       "failed": "배송 오류"
     },
     "copyFailed": "복사 실패",
+    "messageReference": {
+      "defaultLabel": "참조 메시지",
+      "open": "메시지 열기"
+    },
     "typing": "입력 중..."
   },
   "workspace": {
@@ -1026,6 +1032,7 @@
   },
   "member": {
     "online": "온라인",
+    "busy": "바쁨",
     "idle": "자리 비움",
     "dnd": "방해 금지",
     "offline": "오프라인",
@@ -3715,14 +3722,22 @@
       "user": "사용자",
       "system": "시스템"
     },
+    "mode": {
+      "label": "Inbox 보기 모드",
+      "chat": "채팅",
+      "tasks": "작업"
+    },
     "filter": {
+      "label": "작업 필터",
       "all": "전체",
       "open": "진행 중",
       "done": "완료"
     },
     "empty": {
+      "chatTitle": "아직 채팅 메시지가 없습니다",
+      "chatHint": "채팅 모드에서 이 Buddy와의 일반 대화를 검토할 수 있습니다.",
       "allTitle": "아직 작업이 없습니다",
-      "allHint": "입력창 왼쪽의 +에서 작업 카드를 만드세요. 일반 메시지는 채팅에 남습니다.",
+      "allHint": "입력 영역에서 작업 모드로 전환해 작업 카드를 만드세요. 일반 메시지는 채팅 모드에 남습니다.",
       "filterTitle": "이 필터에 맞는 작업이 없습니다",
       "filterHint": "필터를 바꾸거나 새 작업을 만드세요."
     },
@@ -3750,7 +3765,16 @@
       "todoProgress": "{{done}}/{{total}} 완료",
       "showDetails": "세부 정보 보기",
       "hideDetails": "세부 정보 접기",
+      "priorityLabel": "우선순위",
+      "tagsLabel": "태그",
       "tagsPlaceholder": "태그를 쉼표로 구분해 입력",
+      "tagPreset": {
+        "research": "리서치",
+        "script": "스크립트",
+        "render": "렌더",
+        "qa": "QA",
+        "publish": "게시"
+      },
       "replies": "답글",
       "noReplies": "아직 답글 없음",
       "replyPlaceholder": "답글 입력...",

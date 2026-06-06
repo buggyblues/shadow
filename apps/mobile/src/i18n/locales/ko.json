@@ -510,6 +510,23 @@
     "assignee": "{{name}}에게 할당됨",
     "unassigned": "할당되지 않은 Buddy",
     "statusUpdated": "작업이 업데이트되었습니다",
+    "mode": {
+      "chat": "채팅",
+      "tasks": "작업"
+    },
+    "filter": {
+      "all": "전체",
+      "open": "진행 중",
+      "done": "완료"
+    },
+    "empty": {
+      "chatTitle": "아직 채팅 메시지가 없습니다",
+      "chatHint": "채팅 모드에서 이 Buddy와의 일반 대화를 검토할 수 있습니다.",
+      "allTitle": "아직 작업이 없습니다",
+      "allHint": "작업 카드를 만들면 여기에 표시됩니다.",
+      "filterTitle": "이 필터에 맞는 작업이 없습니다",
+      "filterHint": "필터를 바꾸거나 새 작업을 만드세요."
+    },
     "status": {
       "queued": "대기 중",
       "claimed": "수락됨",
@@ -700,6 +717,7 @@
   "member": {
     "title": "멤버",
     "online": "온라인",
+    "busy": "바쁨",
     "idle": "자리 비움",
     "dnd": "방해 금지",
     "offline": "오프라인",

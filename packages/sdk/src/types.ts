@@ -11,9 +11,13 @@ import type {
   MessageCard as SharedMessageCard,
   MessageCardApp as SharedMessageCardApp,
   MessageCardSource as SharedMessageCardSource,
+  MessageCopilotContext as SharedMessageCopilotContext,
   MessageMention as SharedMessageMention,
   OAuthLinkCard as SharedOAuthLinkCard,
   TaskMessageCardTag as SharedTaskMessageCardTag,
+  TaskMessageOutputContract as SharedTaskMessageOutputContract,
+  TaskMessagePrivacy as SharedTaskMessagePrivacy,
+  TaskMessageRequirements as SharedTaskMessageRequirements,
 } from '@shadowob/shared'
 
 // ─── Unified API Response Types ────────────────────────────────────────────
@@ -155,6 +159,7 @@ export type ShadowInteractiveActionResult = ShadowMessage | ShadowInteractiveSub
 
 export interface ShadowMessageMetadata {
   mentions?: ShadowMessageMention[]
+  copilotContext?: ShadowMessageCopilotContext
   agentChain?: Record<string, unknown>
   interactive?: ShadowInteractiveBlock
   interactiveResponse?: ShadowInteractiveResponse
@@ -181,6 +186,7 @@ export interface ShadowCommerceOfferCardInput {
 }
 
 export type ShadowMessageMention = SharedMessageMention
+export type ShadowMessageCopilotContext = SharedMessageCopilotContext
 export type ShadowMessageCard = SharedMessageCard
 export type ShadowMessageCardApp = SharedMessageCardApp
 export type ShadowMessageCardSource = SharedMessageCardSource
@@ -188,6 +194,9 @@ export type ShadowOAuthLinkCard = SharedOAuthLinkCard
 export type ShadowMentionSuggestion = SharedMentionSuggestion
 export type ShadowMentionSuggestionTrigger = SharedMentionSuggestionTrigger
 export type ShadowTaskMessageCardTag = SharedTaskMessageCardTag
+export type ShadowTaskMessageRequirements = SharedTaskMessageRequirements
+export type ShadowTaskMessageOutputContract = SharedTaskMessageOutputContract
+export type ShadowTaskMessagePrivacy = SharedTaskMessagePrivacy
 export type ShadowBuddyInboxAdmissionMode = SharedBuddyInboxAdmissionMode
 export type ShadowBuddyInboxAdmissionSubjectKind = SharedBuddyInboxAdmissionSubjectKind
 export type ShadowBuddyInboxAdmissionRule = SharedBuddyInboxAdmissionRule
@@ -241,6 +250,9 @@ export interface ShadowInboxTaskInput {
   app?: ShadowMessageCardApp
   idempotencyKey?: string
   source?: ShadowMessageCardSource
+  requirements?: ShadowTaskMessageRequirements
+  outputContract?: ShadowTaskMessageOutputContract
+  privacy?: ShadowTaskMessagePrivacy
   data?: Record<string, unknown>
 }
 
@@ -481,6 +493,34 @@ export interface ShadowServerAppMarketplaceMetadata {
   }
 }
 
+export interface ShadowServerAppMarketplaceI18nMetadata {
+  tagline?: string
+  summary?: string
+  categories?: readonly string[]
+  supportedLanguages?: readonly string[]
+  gallery?: readonly {
+    alt?: string
+  }[]
+  links?: readonly {
+    label?: string
+  }[]
+  publisher?: {
+    name?: string
+  }
+}
+
+export interface ShadowServerAppManifestI18nEntry {
+  name?: string
+  description?: string
+  marketplace?: ShadowServerAppMarketplaceI18nMetadata
+  help?: {
+    overview?: string
+    usage?: string
+    details?: string
+    commandIndex?: string
+  }
+}
+
 export interface ShadowServerAppManifest {
   schemaVersion: 'shadow.app/1'
   appKey: string
@@ -490,6 +530,7 @@ export interface ShadowServerAppManifest {
   updatedAt?: string
   iconUrl: string
   marketplace?: ShadowServerAppMarketplaceMetadata
+  i18n?: Record<string, ShadowServerAppManifestI18nEntry>
   iframe?: {
     entry: string
     allowedOrigins: readonly string[]
@@ -657,6 +698,22 @@ export interface ShadowServerAppActorProfile {
   avatarUrl?: string | null
 }
 
+export interface ShadowServerAppBuddyContext {
+  agentId: string
+  userId: string
+  username?: string | null
+  displayName?: string | null
+  description?: string | null
+  avatarUrl?: string | null
+  ownerId?: string | null
+  status?: string | null
+  agentStatus?: string | null
+}
+
+export interface ShadowServerAppResourceContext {
+  buddies?: ShadowServerAppBuddyContext[]
+}
+
 export interface ShadowServerAppTokenIntrospection {
   active: boolean
   token_type?: 'Bearer'
@@ -681,6 +738,7 @@ export interface ShadowServerAppTokenIntrospection {
       profile?: ShadowServerAppActorProfile | null
     }
     channelId?: string | null
+    resources?: ShadowServerAppResourceContext | null
     task?: {
       messageId: string
       cardId: string
@@ -2230,6 +2288,70 @@ export interface ShadowCloudDeploymentRuntimeResponse {
   ok: boolean
   status: ShadowCloudDeploymentStatus
   deployment?: Record<string, unknown>
+}
+
+export interface ShadowCloudDeploymentDestroyResponse {
+  ok: boolean
+  taskId: string
+  status: ShadowCloudDeploymentStatus
+}
+
+export interface ShadowCloudTemplate {
+  id?: string
+  slug: string
+  name: string
+  description?: string | null
+  content: Record<string, unknown>
+  tags?: string[] | null
+  category?: string | null
+  baseCost?: number | null
+  status?: string | null
+  reviewStatus?: string | null
+  deployCount?: number | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  [key: string]: unknown
+}
+
+export interface ShadowCreateCloudTemplateInput {
+  slug: string
+  name: string
+  description?: string
+  content: Record<string, unknown>
+  tags?: string[]
+  category?: string
+  baseCost?: number
+  githubSource?: Record<string, unknown> | null
+}
+
+export interface ShadowCloudDeployment {
+  id: string
+  namespace: string
+  name: string
+  status: ShadowCloudDeploymentStatus
+  agentCount?: number | null
+  templateSlug?: string | null
+  resourceTier?: 'lightweight' | 'standard' | 'pro' | string | null
+  configSnapshot?: Record<string, unknown> | null
+  errorMessage?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  [key: string]: unknown
+}
+
+export interface ShadowCreateCloudDeploymentInput {
+  namespace: string
+  name: string
+  templateSlug: string
+  resourceTier: 'lightweight' | 'standard' | 'pro'
+  agentCount?: number
+  configSnapshot: Record<string, unknown>
+  envVars?: Record<string, string>
+  temporaryTtlMinutes?: number
+  runtimeContext: {
+    locale?: string
+    timezone?: string
+  }
 }
 
 export interface ShadowCloudDeploymentManifest {

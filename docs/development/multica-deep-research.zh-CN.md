@@ -267,7 +267,7 @@ skill-name/
 - `assets/` 适合放模板、图片、字体、示例资源。
 - 技能创建本身需要测试用例、baseline/with-skill 对比和人工评审闭环。
 
-对 Shadow Skills App 的约束：
+对 Skills App 的约束：
 
 - `skills.upload` 必须支持多文件 package。
 - `skills.download` 必须返回完整 zip package，而不是只返回 markdown。

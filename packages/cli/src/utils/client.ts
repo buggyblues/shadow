@@ -10,7 +10,16 @@ interface Config {
 
 export function resolveServerFlag(value?: string): string {
   const server = value ?? process.env.SHADOWOB_SERVER_ID
-  if (!server) throw new Error('Missing server. Pass --server or set SHADOWOB_SERVER_ID.')
+  if (!server) {
+    throw new Error(
+      'Missing server. Pass --server explicitly; scripts may also set SHADOWOB_SERVER_ID.',
+    )
+  }
+  if (/^https?:\/\//i.test(server)) {
+    throw new Error(
+      'Invalid server value: expected a Shadow server ID or slug, not a server URL. Configure server URLs with `shadowob auth login --server-url <url>` and pass `--server <server-id-or-slug>`.',
+    )
+  }
   return server
 }
 

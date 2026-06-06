@@ -114,6 +114,9 @@ export function createInboxCommand(): Command {
     .option('--agent <agent-id>', 'Buddy agent ID')
     .option('--channel <channel-id>', 'Buddy Inbox channel ID')
     .option('--source-json <json>', 'Task source JSON')
+    .option('--requirements-json <json>', 'Task runtime capability/skill/tool requirements JSON')
+    .option('--output-contract-json <json>', 'Task output contract JSON')
+    .option('--privacy-json <json>', 'Task privacy and data classification JSON')
     .option('--data-json <json>', 'Task data JSON')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
@@ -128,6 +131,9 @@ export function createInboxCommand(): Command {
         agent?: string
         channel?: string
         sourceJson?: string
+        requirementsJson?: string
+        outputContractJson?: string
+        privacyJson?: string
         dataJson?: string
         profile?: string
         json?: boolean
@@ -144,6 +150,14 @@ export function createInboxCommand(): Command {
           if (options.idempotencyKey) task.idempotencyKey = options.idempotencyKey
           const source = parseTaskSourceOption(options.sourceJson)
           if (source) task.source = source
+          const requirements = parseJsonOption(options.requirementsJson, 'requirements-json')
+          if (requirements) task.requirements = requirements as ShadowInboxTaskInput['requirements']
+          const outputContract = parseJsonOption(options.outputContractJson, 'output-contract-json')
+          if (outputContract) {
+            task.outputContract = outputContract as ShadowInboxTaskInput['outputContract']
+          }
+          const privacy = parseJsonOption(options.privacyJson, 'privacy-json')
+          if (privacy) task.privacy = privacy as ShadowInboxTaskInput['privacy']
           const data = parseJsonOption(options.dataJson, 'data-json')
           if (data) task.data = data
           const result = options.channel
@@ -210,6 +224,95 @@ export function createInboxCommand(): Command {
         }
       },
     )
+
+  const pending = new Command('pending').description('Buddy Inbox admission pending commands')
+
+  pending
+    .command('list')
+    .description('List pending Buddy Inbox deliveries')
+    .requiredOption('--server <server>', 'Server ID or slug')
+    .requiredOption('--agent <agent-id>', 'Buddy agent ID')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (options: { server: string; agent: string; profile?: string; json?: boolean }) => {
+        try {
+          const client = await getClient(options.profile)
+          const result = await client.listBuddyInboxAdmissionPending(
+            resolveServerFlag(options.server),
+            options.agent,
+          )
+          output(result, { json: options.json })
+        } catch (error) {
+          outputError(error instanceof Error ? error.message : String(error), {
+            json: options.json,
+          })
+          process.exit(1)
+        }
+      },
+    )
+
+  pending
+    .command('approve')
+    .description('Approve a pending Buddy Inbox delivery')
+    .argument('<pending-id>', 'Pending delivery ID')
+    .requiredOption('--server <server>', 'Server ID or slug')
+    .requiredOption('--agent <agent-id>', 'Buddy agent ID')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        pendingId: string,
+        options: { server: string; agent: string; profile?: string; json?: boolean },
+      ) => {
+        try {
+          const client = await getClient(options.profile)
+          const result = await client.approveBuddyInboxAdmissionPending(
+            resolveServerFlag(options.server),
+            options.agent,
+            pendingId,
+          )
+          output(result, { json: options.json })
+        } catch (error) {
+          outputError(error instanceof Error ? error.message : String(error), {
+            json: options.json,
+          })
+          process.exit(1)
+        }
+      },
+    )
+
+  pending
+    .command('reject')
+    .description('Reject a pending Buddy Inbox delivery')
+    .argument('<pending-id>', 'Pending delivery ID')
+    .requiredOption('--server <server>', 'Server ID or slug')
+    .requiredOption('--agent <agent-id>', 'Buddy agent ID')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        pendingId: string,
+        options: { server: string; agent: string; profile?: string; json?: boolean },
+      ) => {
+        try {
+          const client = await getClient(options.profile)
+          const result = await client.rejectBuddyInboxAdmissionPending(
+            resolveServerFlag(options.server),
+            options.agent,
+            pendingId,
+          )
+          output(result, { json: options.json })
+        } catch (error) {
+          outputError(error instanceof Error ? error.message : String(error), {
+            json: options.json,
+          })
+          process.exit(1)
+        }
+      },
+    )
+
+  inbox.addCommand(pending)
 
   inbox
     .command('claim')

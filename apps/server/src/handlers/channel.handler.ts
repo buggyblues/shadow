@@ -51,6 +51,8 @@ type ChannelAgentPolicyBody = {
     maxBuddyChainDepth?: number
     buddyBlacklist?: string[]
     buddyWhitelist?: string[]
+    allowedTriggerUserIds?: string[]
+    triggerUserIds?: string[]
     smartReply?: boolean
   }
 }
@@ -401,6 +403,7 @@ export function createChannelHandler(container: AppContainer) {
     const id = c.req.param('id')
     const userId = c.get('user').userId
     const limit = Math.min(Math.max(Number(c.req.query('messagesLimit') ?? '50') || 50, 1), 100)
+    const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
     const access = await getAccessStatus(id, userId)
 
     if (!access.canAccess) {
@@ -417,6 +420,7 @@ export function createChannelHandler(container: AppContainer) {
             serverMember: access.serverMember,
           }),
           appIntegrationService.listSummaries(access.channel.serverId, actor, {
+            locale,
             serverMember: access.serverMember,
           }),
         ])
@@ -503,6 +507,7 @@ export function createChannelHandler(container: AppContainer) {
       membersPromise,
       buddyInboxesPromise,
       appIntegrationService.listSummaries(serverId, actor, {
+        locale,
         serverMember: access.serverMember,
       }),
     ])
@@ -1151,6 +1156,12 @@ export function createChannelHandler(container: AppContainer) {
           }
           if (body.config?.buddyWhitelist?.length) {
             config.buddyWhitelist = body.config.buddyWhitelist
+          }
+          if (body.config?.allowedTriggerUserIds?.length) {
+            config.allowedTriggerUserIds = body.config.allowedTriggerUserIds
+          }
+          if (body.config?.triggerUserIds?.length) {
+            config.triggerUserIds = body.config.triggerUserIds
           }
           if (typeof body.config?.smartReply === 'boolean') {
             config.smartReply = body.config.smartReply

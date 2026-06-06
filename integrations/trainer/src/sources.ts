@@ -176,7 +176,7 @@ async function fetchOptionalText(url: string) {
     const response = await fetch(url, {
       headers: {
         Accept: 'text/plain',
-        'User-Agent': 'shadow-trainer',
+        'User-Agent': 'trainer',
       },
     })
     return response.ok ? response.text() : ''
@@ -190,7 +190,7 @@ async function fetchOptionalHtml(url: string) {
     const response = await fetch(url, {
       headers: {
         Accept: 'text/html',
-        'User-Agent': 'shadow-trainer',
+        'User-Agent': 'trainer',
       },
     })
     return response.ok ? response.text() : ''
@@ -203,7 +203,7 @@ async function fetchJson<T>(url: string) {
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json, application/json',
-      'User-Agent': 'shadow-trainer',
+      'User-Agent': 'trainer',
     },
   })
   if (!response.ok) throw new Error(`source_fetch_failed:${response.status}`)

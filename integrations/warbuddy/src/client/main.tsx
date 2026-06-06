@@ -1190,7 +1190,7 @@ function useWarbuddyAppModel() {
     if (!authorizeUrl) return
     const popup = window.open(
       authorizeUrl,
-      'shadow-warbuddy-oauth',
+      'warbuddy-oauth',
       'popup=yes,width=520,height=720,noopener=no,noreferrer=no',
     )
     if (!popup) {

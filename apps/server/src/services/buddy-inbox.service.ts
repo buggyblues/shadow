@@ -39,6 +39,9 @@ type EnqueueTaskInput = {
   app?: TaskMessageCardMetadata['app']
   idempotencyKey?: string
   source?: TaskMessageCardMetadata['source']
+  requirements?: TaskMessageCardMetadata['requirements']
+  outputContract?: TaskMessageCardMetadata['outputContract']
+  privacy?: TaskMessageCardMetadata['privacy']
   data?: Record<string, unknown>
 }
 
@@ -99,7 +102,9 @@ function taskContent(input: { title: string; body?: string }) {
 function isTaskCard(card: unknown): card is TaskMessageCardMetadata {
   if (!card || typeof card !== 'object' || Array.isArray(card)) return false
   const record = card as Record<string, unknown>
-  return record.kind === 'task' && typeof record.id === 'string'
+  if (record.kind !== 'task' || typeof record.id !== 'string') return false
+  const data = recordValue(record.data)
+  return data?.taskReplyNotification !== true
 }
 
 function claimExpired(card: TaskMessageCardMetadata) {
@@ -427,6 +432,12 @@ export class BuddyInboxService {
       string,
       unknown
     >
+    const runtimeConfig = {
+      ...config,
+      replyToBuddy: typeof config.replyToBuddy === 'boolean' ? config.replyToBuddy : true,
+      maxBuddyChainDepth:
+        typeof config.maxBuddyChainDepth === 'number' ? config.maxBuddyChainDepth : 3,
+    }
     return this.deps.agentPolicyDao.upsert({
       agentId: input.agentId,
       serverId: input.serverId,
@@ -434,7 +445,7 @@ export class BuddyInboxService {
       listen: true,
       reply: true,
       mentionOnly: false,
-      config,
+      config: runtimeConfig,
     })
   }
 
@@ -545,6 +556,9 @@ export class BuddyInboxService {
         ...(input.task.priority ? { priority: input.task.priority } : {}),
         ...(input.task.idempotencyKey ? { idempotencyKey: input.task.idempotencyKey } : {}),
         ...(input.task.source ? { source: input.task.source } : {}),
+        ...(input.task.requirements ? { requirements: input.task.requirements } : {}),
+        ...(input.task.outputContract ? { outputContract: input.task.outputContract } : {}),
+        ...(input.task.privacy ? { privacy: input.task.privacy } : {}),
         ...(input.task.data ? { data: input.task.data } : {}),
       },
       requestedBy: actorSource(input.actor, displayName(actorUser, actorUserId(input.actor))),
@@ -792,6 +806,10 @@ export class BuddyInboxService {
       options?.serverMembers ?? this.deps.serverDao.getMembers(serverId),
       this.findInboxChannels(serverId),
     ])
+    const actorServerAgent = members.find((member) => member.userId === userId && member.agent?.id)
+    const isAgentActor =
+      typeof actor !== 'string' && actor.kind === 'agent' && Boolean(actor.agentId)
+    const canDiscoverServerBuddies = isAgentActor || Boolean(actorServerAgent)
 
     const rows = []
     for (const member of members) {
@@ -801,7 +819,7 @@ export class BuddyInboxService {
       const isInboxMember = channel
         ? await this.deps.channelMemberDao.get(channel.id, userId)
         : null
-      if (!canSeeAll && !isOwner && !isInboxMember) continue
+      if (!canSeeAll && !isOwner && !isInboxMember && !canDiscoverServerBuddies) continue
       rows.push({
         agent: {
           id: member.agent.id,
@@ -1075,6 +1093,9 @@ export class BuddyInboxService {
         label: displayName(botUser, agent.id),
       },
       source: input.source ?? actorSource(actor, displayName(author, actorUserId(actor))),
+      ...(input.requirements ? { requirements: input.requirements } : {}),
+      ...(input.outputContract ? { outputContract: input.outputContract } : {}),
+      ...(input.privacy ? { privacy: input.privacy } : {}),
       progress: [
         {
           at: now,

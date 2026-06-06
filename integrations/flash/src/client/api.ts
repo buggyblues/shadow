@@ -33,7 +33,7 @@ export interface FlashCommandError extends Error {
   commandName?: string
 }
 
-const bridge = new ShadowBridge({ appKey: 'shadow-flash' })
+const bridge = new ShadowBridge({ appKey: 'flash' })
 
 const durableCommandNames = new Set([
   'assets.upload',

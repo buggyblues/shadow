@@ -427,4 +427,106 @@ describe('community pack template mounts', () => {
     )
     expect(grants).toHaveLength(1)
   })
+
+  it('video-workshop provisions a reusable multi-Buddy Kanban video team', () => {
+    const content = readFlatTemplate('video-workshop.template.json')
+    const shadowob = ((content.use as Array<Record<string, unknown>>).find(
+      (entry) => entry.plugin === 'shadowob',
+    )?.options ?? {}) as Record<string, unknown>
+    const server = ((shadowob.servers as Array<Record<string, unknown>>)[0] ?? {}) as Record<
+      string,
+      unknown
+    >
+    const channels = server.channels as Array<Record<string, unknown>>
+    const buddies = shadowob.buddies as Array<Record<string, unknown>>
+    const bindings = shadowob.bindings as Array<Record<string, unknown>>
+    const serverApp = (shadowob.serverApps as Array<Record<string, unknown>>)[0] as Record<
+      string,
+      unknown
+    >
+    const grants = serverApp.grants as Array<Record<string, unknown>>
+    const agents = (content.deployments as Record<string, unknown>).agents as Array<
+      Record<string, unknown>
+    >
+
+    expect(server).toMatchObject({
+      id: 'video-workshop',
+      slug: 'video-workshop',
+    })
+    expect(channels.map((channel) => channel.id)).toEqual(['briefs', 'production', 'qa'])
+    expect(buddies.map((buddy) => buddy.name)).toEqual([
+      'Coordinator Buddy',
+      'BrandScout',
+      'ReviewMiner',
+      'ScriptSmith',
+      'VideoForge',
+      'FrameQA',
+    ])
+    expect(bindings).toHaveLength(6)
+    expect(agents.map((agent) => agent.id)).toEqual([
+      'video-workshop-coordinator',
+      'brandscout',
+      'reviewminer',
+      'scriptsmith',
+      'videoforge',
+      'frameqa',
+    ])
+    expect(serverApp).toMatchObject({
+      id: 'kanban-app',
+      serverId: 'video-workshop',
+      catalogAppKey: 'kanban',
+    })
+    expect(grants.map((grant) => grant.buddyId)).toEqual([
+      'coordinator-buddy',
+      'brandscout-buddy',
+      'reviewminer-buddy',
+      'scriptsmith-buddy',
+      'videoforge-buddy',
+      'frameqa-buddy',
+    ])
+    expect(grants.find((grant) => grant.buddyId === 'coordinator-buddy')).toMatchObject({
+      permissions: expect.arrayContaining([
+        'kanban.boards:read',
+        'kanban.cards:write',
+        'buddy_inbox:deliver',
+      ]),
+      approvalMode: 'none',
+    })
+    expect(
+      grants.every((grant) => (grant.permissions as string[]).includes('buddy_inbox:deliver')),
+    ).toBe(true)
+    expect(
+      agents.every((agent) =>
+        (agent.use as Array<Record<string, unknown>>).some((entry) => entry.plugin === 'skills'),
+      ),
+    ).toBe(true)
+    const videoForgeSkills = (
+      (
+        agents.find((agent) => agent.id === 'videoforge')?.use as Array<Record<string, unknown>>
+      ).find((entry) => entry.plugin === 'skills')?.options as Record<string, unknown>
+    ).install as Array<Record<string, unknown>>
+    expect(videoForgeSkills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          package: 'heygen-com/hyperframes',
+          skills: expect.arrayContaining(['hyperframes', 'hyperframes-cli']),
+        }),
+        expect.objectContaining({
+          package: 'remotion-dev/skills',
+          skills: ['remotion'],
+        }),
+      ]),
+    )
+    expect(
+      agents.find((agent) => agent.id === 'video-workshop-coordinator')?.identity,
+    ).toMatchObject({
+      systemPrompt: expect.stringContaining('cards.complete'),
+    })
+    expect(agents.find((agent) => agent.id === 'videoforge')?.identity).toMatchObject({
+      systemPrompt: expect.stringContaining('shadow-video-render'),
+    })
+    expect(agents.find((agent) => agent.id === 'frameqa')?.identity).toMatchObject({
+      systemPrompt: expect.stringContaining('Review the actual Workspace artifacts'),
+    })
+  })
 })

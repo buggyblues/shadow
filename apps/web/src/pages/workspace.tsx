@@ -1,6 +1,6 @@
 import { Spinner } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams } from '@tanstack/react-router'
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useLayoutEffect } from 'react'
 import { WorkspacePage } from '../components/workspace/workspace-page'
 import { fetchApi } from '../lib/api'
@@ -9,6 +9,11 @@ import { useChatStore } from '../stores/chat.store'
 
 export function WorkspacePageRoute() {
   const { serverSlug } = useParams({ strict: false }) as { serverSlug: string }
+  const search = useSearch({ strict: false }) as {
+    workspaceNodeId?: unknown
+    workspacePath?: unknown
+    workspaceUri?: unknown
+  }
   const navigate = useNavigate()
 
   // Clear channel state when entering workspace
@@ -38,6 +43,9 @@ export function WorkspacePageRoute() {
   ) : (
     <WorkspacePage
       serverId={serverSlug}
+      initialNodeId={typeof search.workspaceNodeId === 'string' ? search.workspaceNodeId : null}
+      initialPath={typeof search.workspacePath === 'string' ? search.workspacePath : null}
+      initialUri={typeof search.workspaceUri === 'string' ? search.workspaceUri : null}
       onClose={() => navigate({ to: '/servers/$serverSlug', params: { serverSlug } })}
     />
   )

@@ -659,6 +659,13 @@
       "when": 1780487684877,
       "tag": "0093_server_app_manifest_marketplace_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1780750812223,
+      "tag": "0094_add_buddy_inbox_task_metadata_contracts",
+      "breakpoints": true
     }
   ]
 }

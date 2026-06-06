@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ShadowServerAppCommandContext } from '../src/server-app'
 import {
+  BUDDY_INBOX_DELIVERY_PERMISSION,
   buildShadowServerAppInboxDelivery,
   buildShadowServerAppInboxTaskRequest,
   createShadowServerAppManifest,
@@ -92,6 +93,10 @@ const commandContext: ShadowServerAppCommandContext = {
 }
 
 describe('server app helpers', () => {
+  it('exports the platform permission for Buddy Inbox task delivery', () => {
+    expect(BUDDY_INBOX_DELIVERY_PERMISSION).toBe('buddy_inbox:deliver')
+  })
+
   it('extracts bearer tokens', () => {
     expect(extractShadowServerAppBearerToken('Bearer sat_123')).toBe('sat_123')
     expect(extractShadowServerAppBearerToken('basic nope')).toBeNull()
@@ -227,13 +232,22 @@ describe('server app helpers', () => {
         body: 'Download the zip and install it.',
         idempotencyKey: 'skills:install:grill-me',
         resource: { kind: 'skill', id: 'grill-me' },
+        requirements: {
+          capabilities: ['workspace.write'],
+          skills: [{ kind: 'runtime-skill', package: '@shadow/skills-grill-me' }],
+        },
+        outputContract: {
+          expectedArtifacts: [{ kind: 'workspace.file', mimeTypes: ['application/zip'] }],
+          submitCommand: { appKey: 'skills', command: 'cards.artifacts.add' },
+        },
+        privacy: { dataClass: 'server-private', redactionRequired: true },
         data: { skillId: 'grill-me' },
       },
       app: {
         id: 'server-app-1',
-        appKey: 'shadow-skills',
+        appKey: 'skills',
         serverId: 'server-1',
-        name: 'Shadow Skills',
+        name: 'Skills',
       },
     })
 
@@ -242,18 +256,27 @@ describe('server app helpers', () => {
       title: 'Install grill-me',
       body: 'Download the zip and install it.',
       idempotencyKey: 'skills:install:grill-me',
+      requirements: {
+        capabilities: ['workspace.write'],
+        skills: [{ kind: 'runtime-skill', package: '@shadow/skills-grill-me' }],
+      },
+      outputContract: {
+        expectedArtifacts: [{ kind: 'workspace.file', mimeTypes: ['application/zip'] }],
+        submitCommand: { appKey: 'skills', command: 'cards.artifacts.add' },
+      },
+      privacy: { dataClass: 'server-private', redactionRequired: true },
       source: {
         kind: 'server_app',
         id: 'server-app-1',
         appId: 'server-app-1',
-        appKey: 'shadow-skills',
+        appKey: 'skills',
         serverId: 'server-1',
-        label: 'Shadow Skills',
+        label: 'Skills',
         resource: { kind: 'skill', id: 'grill-me' },
       },
       data: {
         skillId: 'grill-me',
-        serverApp: { appKey: 'shadow-skills' },
+        serverApp: { appKey: 'skills' },
       },
     })
 

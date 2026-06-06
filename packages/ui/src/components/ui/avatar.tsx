@@ -32,6 +32,7 @@ const Avatar = React.forwardRef<
   const statusColors: Record<string, string> = {
     online: 'bg-success shadow-[0_0_10px_rgba(0,230,118,0.6)]',
     running: 'bg-success shadow-[0_0_10px_rgba(0,230,118,0.6)]',
+    busy: 'bg-primary shadow-[0_0_10px_rgba(88,101,242,0.55)]',
     idle: 'bg-warning shadow-[0_0_10px_rgba(255,145,0,0.4)]',
     dnd: 'bg-danger shadow-[0_0_10px_rgba(255,42,85,0.4)]',
     error: 'bg-danger shadow-[0_0_10px_rgba(255,42,85,0.4)]',

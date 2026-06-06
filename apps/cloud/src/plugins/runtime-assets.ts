@@ -34,12 +34,27 @@ interface RuntimeAssetK8sOptions {
   runtimeVolumeName?: string
   skillsVolumeName?: string
   subagentsVolumeName?: string
-  runtimeDependencies?: PluginRuntimeDependency[]
-  skillSources?: PluginRuntimeSource[]
-  subagentSources?: PluginRuntimeSource[]
+  runtimeDependencies?:
+    | PluginRuntimeDependency[]
+    | ((agent: AgentDeployment, config: CloudConfig) => PluginRuntimeDependency[])
+  skillSources?:
+    | PluginRuntimeSource[]
+    | ((agent: AgentDeployment, config: CloudConfig) => PluginRuntimeSource[])
+  subagentSources?:
+    | PluginRuntimeSource[]
+    | ((agent: AgentDeployment, config: CloudConfig) => PluginRuntimeSource[])
   envVars?: PluginK8sEnvVar[]
   labels?: Record<string, string>
   sanityCommands?: string[]
+}
+
+function resolveRuntimeAssetList<T>(
+  value: T[] | ((agent: AgentDeployment, config: CloudConfig) => T[]) | undefined,
+  agent: AgentDeployment,
+  config: CloudConfig,
+): T[] {
+  if (!value) return []
+  return typeof value === 'function' ? value(agent, config) : value
 }
 
 function shQuote(value: string): string {
@@ -202,6 +217,14 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
     buildK8s(agent, ctx): PluginK8sResult | undefined {
       if (!options.isEnabled(agent, ctx.config)) return undefined
 
+      const runtimeDependencies = resolveRuntimeAssetList(
+        options.runtimeDependencies,
+        agent,
+        ctx.config,
+      )
+      const skillSources = resolveRuntimeAssetList(options.skillSources, agent, ctx.config)
+      const subagentSources = resolveRuntimeAssetList(options.subagentSources, agent, ctx.config)
+
       const runtimeVolumeName = options.runtimeVolumeName ?? `${options.pluginId}-runtime`
       const skillsVolumeName = options.skillsVolumeName ?? `${options.pluginId}-skills`
       const subagentsVolumeName = options.subagentsVolumeName ?? `${options.pluginId}-subagents`
@@ -210,8 +233,8 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
       const initRuntimeMountPath = options.initRuntimeMountPath ?? '/runtime-deps'
       const skillsMountPath = options.skillsMountPath
       const subagentsMountPath = options.subagentsMountPath
-      const hasSkillSources = Boolean(options.skillSources?.length && skillsMountPath)
-      const hasSubagentSources = Boolean(options.subagentSources?.length && subagentsMountPath)
+      const hasSkillSources = Boolean(skillSources.length && skillsMountPath)
+      const hasSubagentSources = Boolean(subagentSources.length && subagentsMountPath)
 
       const volumeMounts = [{ name: runtimeVolumeName, mountPath: initRuntimeMountPath }]
       const volumes = [{ name: runtimeVolumeName, spec: { emptyDir: {} } }]
@@ -247,16 +270,16 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
               'sh',
               '-lc',
               buildRuntimeAssetInstallScript({
-                runtimeDependencies: options.runtimeDependencies,
-                skillSources: options.skillSources,
-                subagentSources: options.subagentSources,
+                runtimeDependencies,
+                skillSources,
+                subagentSources,
                 runtimeRoot: initRuntimeMountPath,
                 sanityCommands: options.sanityCommands,
               }),
             ],
             volumeMounts,
             resources: {
-              requests: { cpu: '100m', memory: '128Mi' },
+              requests: { cpu: '50m', memory: '64Mi' },
               limits: { cpu: '1000m', memory: '512Mi' },
             },
             securityContext: {

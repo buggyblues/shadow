@@ -60,7 +60,7 @@ export interface TrainerRuntimeEvent {
   command?: string
 }
 
-const bridge = new ShadowBridge({ appKey: 'shadow-trainer' })
+const bridge = new ShadowBridge({ appKey: 'trainer' })
 
 function toCommandInput(value: unknown): unknown {
   if (value === undefined) return {}

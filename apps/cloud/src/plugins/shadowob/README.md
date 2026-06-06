@@ -24,6 +24,32 @@ Shadow connects deployed agents to Shadow chat servers, channels, buddy accounts
 - Loads the `openclaw-shadowob` channel extension.
 - Generates Shadow channel account config for each bound buddy.
 - Provisions server, channel, buddy, listing, and runtime token state when provisioning credentials are available.
+- Installs Server Apps declared in `serverApps` from either the Shadow app catalog
+  (`catalogEntryId` or `catalogAppKey`) or an explicit `manifestUrl` / inline `manifest`, then
+  applies scoped Buddy grants.
+
+## Server App Templates
+
+Use `serverApps` when a template needs a reusable app surface such as Kanban:
+
+```json
+{
+  "id": "kanban-app",
+  "serverId": "video-workshop",
+  "catalogAppKey": "kanban",
+  "grants": [
+    {
+      "buddyId": "coordinator-buddy",
+      "permissions": ["kanban.boards:read", "kanban.cards:write", "buddy_inbox:deliver"],
+      "approvalMode": "none"
+    }
+  ]
+}
+```
+
+When `catalogAppKey` is used, provisioning resolves the active catalog entry on the target Shadow
+server before installation. Use `manifestUrl` only for local development or private apps that are
+not published to the catalog.
 
 ## References
 

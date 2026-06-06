@@ -381,7 +381,7 @@ app.post('/api/shadow/commands/:commandName', async (c) => {
 const server = serve({ fetch: app.fetch, port })
 server.on('upgrade', handleLiveUpgrade)
 
-console.log(`Shadow WarBuddy listening on http://localhost:${port}`)
+console.log(`WarBuddy listening on http://localhost:${port}`)
 
 function handleLiveUpgrade(req: IncomingMessage, socket: Socket) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${port}`}`)

@@ -497,6 +497,7 @@ export async function waitForAgentSandboxReady(options: {
   kubeconfig?: string
   timeoutMs?: number
   intervalMs?: number
+  isCancelled?: () => boolean
 }): Promise<AgentSandboxStatus> {
   const timeoutMs = options.timeoutMs ?? 180_000
   const intervalMs = options.intervalMs ?? 2_000
@@ -504,6 +505,9 @@ export async function waitForAgentSandboxReady(options: {
   let lastStatus: AgentSandboxStatus | null = null
 
   while (Date.now() - startedAt < timeoutMs) {
+    if (options.isCancelled?.()) {
+      throw new Error('Deployment cancelled while waiting for sandbox readiness')
+    }
     lastStatus = await getAgentSandboxStatusAsync(
       options.namespace,
       options.agentName,

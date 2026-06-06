@@ -838,7 +838,7 @@ export function buildBattleBrief(input: {
     outbox.enqueueInboxTask({
       title: 'Enter the WarBuddy arena',
       body: [
-        'You are invited to fight in Shadow WarBuddy Arena.',
+        'You are invited to fight in WarBuddy Arena.',
         team
           ? `Squad: ${team.name}. Color: ${team.color}. Brief: ${team.description || 'No description.'}`
           : null,

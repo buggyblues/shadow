@@ -510,6 +510,23 @@
     "assignee": "{{name}} に割り当て",
     "unassigned": "Buddy 未割り当て",
     "statusUpdated": "タスクを更新しました",
+    "mode": {
+      "chat": "チャット",
+      "tasks": "タスク"
+    },
+    "filter": {
+      "all": "すべて",
+      "open": "進行中",
+      "done": "完了"
+    },
+    "empty": {
+      "chatTitle": "チャットメッセージはまだありません",
+      "chatHint": "チャットモードでは、この Buddy との通常の会話を確認できます。",
+      "allTitle": "タスクはまだありません",
+      "allHint": "タスクカードを作成するとここに表示されます。",
+      "filterTitle": "この条件のタスクはありません",
+      "filterHint": "条件を切り替えるか、新しいタスクを作成してください。"
+    },
     "status": {
       "queued": "待機中",
       "claimed": "取得済み",
@@ -700,6 +717,7 @@
   "member": {
     "title": "メンバー",
     "online": "オンライン",
+    "busy": "ビジー",
     "idle": "退席中",
     "dnd": "取り込み中",
     "offline": "オフライン",

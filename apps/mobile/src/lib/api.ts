@@ -1,6 +1,7 @@
 import Constants from 'expo-constants'
 import { router } from 'expo-router'
 import * as SecureStore from 'expo-secure-store'
+import i18n from '../i18n'
 import { queryClient } from './query-client'
 import { getApiBaseUrl, getCachedApiBaseUrl } from './server-url'
 
@@ -93,6 +94,7 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
   const headers: Record<string, string> = {
     ...(options?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'Accept-Language': i18n.language || 'zh-CN',
     'x-shadow-device-name': Constants.expoConfig?.name ?? 'Shadow Mobile',
     ...((options?.headers as Record<string, string>) ?? {}),
   }

@@ -5,13 +5,14 @@ export function Indicator({
   size = 'md',
   className = '',
 }: {
-  status?: 'online' | 'idle' | 'dnd' | 'offline' | 'running' | 'error' | string
+  status?: 'online' | 'busy' | 'idle' | 'dnd' | 'offline' | 'running' | 'error' | string
   size?: 'sm' | 'md' | 'lg'
   className?: string
 }) {
   const colors = {
     online: 'bg-success shadow-[0_0_10px_rgba(87,242,135,0.6)]',
     running: 'bg-success shadow-[0_0_10px_rgba(87,242,135,0.6)]',
+    busy: 'bg-primary shadow-[0_0_10px_rgba(88,101,242,0.55)]',
     idle: 'bg-warning shadow-[0_0_10px_rgba(250,176,5,0.4)]',
     dnd: 'bg-danger shadow-[0_0_10px_rgba(240,56,71,0.4)]',
     error: 'bg-danger shadow-[0_0_10px_rgba(240,56,71,0.4)]',

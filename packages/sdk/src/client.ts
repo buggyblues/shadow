@@ -16,13 +16,16 @@ import type {
   ShadowChannelJoinRequestResult,
   ShadowChannelJoinRequestStatus,
   ShadowChannelSlashCommand,
+  ShadowCloudDeployment,
   ShadowCloudDeploymentBackup,
+  ShadowCloudDeploymentDestroyResponse,
   ShadowCloudDeploymentManifest,
   ShadowCloudDeploymentRuntimeResponse,
   ShadowCloudDeploymentTemplateSyncResult,
   ShadowCloudProviderCatalog,
   ShadowCloudProviderModel,
   ShadowCloudProviderProfile,
+  ShadowCloudTemplate,
   ShadowCommerceCheckoutPreview,
   ShadowCommerceProductCard,
   ShadowCommerceProductContext,
@@ -40,6 +43,8 @@ import type {
   ShadowContentSubscriptionPreferences,
   ShadowContentSubscriptionStatus,
   ShadowContract,
+  ShadowCreateCloudDeploymentInput,
+  ShadowCreateCloudTemplateInput,
   ShadowDesktopReleaseInfo,
   ShadowDiyCloudGenerateInput,
   ShadowDiyCloudRun,
@@ -2066,6 +2071,18 @@ export class ShadowClient {
     return this.request(`/api/servers/${serverId}/workspace/files/${fileId}`)
   }
 
+  async downloadWorkspaceFile(
+    serverId: string,
+    fileId: string,
+    options?: { disposition?: 'inline' | 'attachment'; contentRef?: string },
+  ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+    const signed = await this.resolveWorkspaceMediaUrl(serverId, fileId, {
+      disposition: options?.disposition ?? 'attachment',
+      contentRef: options?.contentRef,
+    })
+    return this.downloadFile(signed.url)
+  }
+
   async updateWorkspaceFile(
     serverId: string,
     fileId: string,
@@ -3305,6 +3322,37 @@ export class ShadowClient {
 
   // ── Cloud SaaS Deployment Runtime ──────────────────────────────────
 
+  async createCloudTemplate(data: ShadowCreateCloudTemplateInput): Promise<ShadowCloudTemplate> {
+    return this.request('/api/cloud-saas/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listCloudDeployments(
+    params: { includeHistory?: boolean; limit?: number; offset?: number } = {},
+  ): Promise<ShadowCloudDeployment[] | { items: ShadowCloudDeployment[]; _orphans?: string[] }> {
+    const qs = new URLSearchParams()
+    if (params.includeHistory) qs.set('includeHistory', '1')
+    if (typeof params.limit === 'number') qs.set('limit', String(params.limit))
+    if (typeof params.offset === 'number') qs.set('offset', String(params.offset))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.request(`/api/cloud-saas/deployments${suffix}`)
+  }
+
+  async getCloudDeployment(deploymentId: string): Promise<ShadowCloudDeployment> {
+    return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}`)
+  }
+
+  async createCloudDeployment(
+    data: ShadowCreateCloudDeploymentInput,
+  ): Promise<ShadowCloudDeployment> {
+    return this.request('/api/cloud-saas/deployments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
   async getCloudDeploymentManifest(deploymentId: string): Promise<ShadowCloudDeploymentManifest> {
     return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/manifest`)
   }
@@ -3365,6 +3413,14 @@ export class ShadowClient {
     return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/resume`, {
       method: 'POST',
       body: JSON.stringify(data),
+    })
+  }
+
+  async destroyCloudDeployment(
+    deploymentId: string,
+  ): Promise<ShadowCloudDeploymentDestroyResponse> {
+    return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}`, {
+      method: 'DELETE',
     })
   }
 

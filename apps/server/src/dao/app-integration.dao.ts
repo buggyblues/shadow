@@ -32,6 +32,7 @@ export class AppIntegrationDao {
         appKey: serverAppIntegrations.appKey,
         name: serverAppIntegrations.name,
         iconUrl: serverAppIntegrations.iconUrl,
+        manifest: serverAppIntegrations.manifest,
         status: serverAppIntegrations.status,
       })
       .from(serverAppIntegrations)

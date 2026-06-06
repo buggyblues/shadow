@@ -2,14 +2,25 @@ import { GlassPanel } from '@shadowob/ui'
 import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useLocation, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
-import { type PointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   type BuddyInboxEntry,
   ChannelSidebar,
   type ServerAppSummary,
 } from '../components/channel/channel-sidebar'
-import { type ChatInitialMessagesPage } from '../components/chat/chat-area'
+import {
+  type ChannelSwitcherOption,
+  type ChatInitialMessagesPage,
+} from '../components/chat/chat-area'
 import { type MemberListInitialMember } from '../components/member/member-list'
 import { ServerLandingPanel } from '../components/server/server-landing'
 import { useAppStatus } from '../hooks/use-app-status'
@@ -21,6 +32,7 @@ import {
   seedServerChannelSnapshot,
   serverChannelCacheKeys,
 } from '../lib/channel-cache'
+import { buildCopilotMessageMetadata } from '../lib/copilot-message-metadata'
 import {
   getCopilotChannelIdFromSearch,
   type RouteSearch,
@@ -210,7 +222,7 @@ function useCopilotPanelResize() {
  * Children: ServerHomeView, ChannelView, ShopView, WorkspaceView, etc.
  */
 export function ServerLayout() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { serverSlug, channelId, appKey } = useParams({ strict: false }) as {
@@ -328,11 +340,13 @@ export function ServerLayout() {
         seedBuddyInboxSnapshot(queryClient, serverChannelKeys, channelBootstrap.buddyInboxes)
       }
       if (channelBootstrap.appSummaries) {
-        queryClient.setQueryData(['server-app-summaries', serverKey], channelBootstrap.appSummaries)
-        queryClient.setQueryData(
-          ['server-app-summaries', serverSlug],
-          channelBootstrap.appSummaries,
-        )
+        for (const key of [serverKey, serverSlug]) {
+          queryClient.setQueryData(['server-app-summaries', key], channelBootstrap.appSummaries)
+          queryClient.setQueryData(
+            ['server-app-summaries', key, i18n.language],
+            channelBootstrap.appSummaries,
+          )
+        }
       }
       queryClient.setQueryData(
         ['members', channelBootstrap.server.id, channelId],
@@ -485,6 +499,89 @@ export function ServerLayout() {
     staleTime: SERVER_ROUTE_STALE_MS,
     gcTime: SERVER_ROUTE_GC_MS,
   })
+
+  const { data: copilotInboxes = [] } = useQuery<BuddyInboxEntry[]>({
+    queryKey: ['buddy-inboxes', serverSlug],
+    queryFn: () => fetchApi<BuddyInboxEntry[]>(`/api/servers/${serverSlug}/inboxes`),
+    enabled: !!serverSlug && isCopilotMode && isServerMember,
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
+  })
+
+  const { data: copilotAppSummaries = [] } = useQuery<ServerAppSummary[]>({
+    queryKey: ['server-app-summaries', serverSlug, i18n.language],
+    queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps?summary=1`),
+    enabled: !!serverSlug && isCopilotMode && isServerMember && Boolean(routeAppKey),
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
+  })
+
+  const copilotSwitcherChannels = useMemo<ChannelSwitcherOption[]>(() => {
+    const inboxChannelIds = new Set(
+      copilotInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : [])),
+    )
+    const channels = copilotChannels
+      .filter((channel) => !inboxChannelIds.has(channel.id))
+      .map<ChannelSwitcherOption>((channel) => ({
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+        isArchived: channel.isArchived,
+        section: 'channel',
+      }))
+    const inboxes = copilotInboxes.flatMap<ChannelSwitcherOption>((entry) => {
+      if (!entry.channel) return []
+      const user = entry.agent.user
+      return [
+        {
+          id: entry.channel.id,
+          name: user.displayName?.trim() || user.username || entry.channel.name,
+          type: 'inbox',
+          isArchived: entry.channel.isArchived,
+          section: 'inbox',
+          userId: user.id,
+          avatarUrl: user.avatarUrl,
+          status: entry.agent.status || user.status || null,
+        },
+      ]
+    })
+    return [...inboxes, ...channels]
+  }, [copilotChannels, copilotInboxes])
+
+  const activeCopilotApp = useMemo(
+    () =>
+      routeAppKey
+        ? copilotAppSummaries.find((summary) => summary.appKey === routeAppKey)
+        : undefined,
+    [copilotAppSummaries, routeAppKey],
+  )
+  const activeCopilotSwitcherOption = useMemo(
+    () => copilotSwitcherChannels.find((option) => option.id === activeCopilotChannelId),
+    [activeCopilotChannelId, copilotSwitcherChannels],
+  )
+  const copilotMessageMetadata = useMemo(
+    () =>
+      routeAppKey
+        ? buildCopilotMessageMetadata({
+            appKey: routeAppKey,
+            serverAppId: activeCopilotApp?.id ?? null,
+            appName: activeCopilotApp?.name ?? null,
+            serverId: serverMeta?.id ?? null,
+            serverSlug: routeServerSlug,
+            channelId: activeCopilotChannelId ?? null,
+            channelKind: activeCopilotSwitcherOption?.section ?? null,
+          })
+        : undefined,
+    [
+      activeCopilotApp?.id,
+      activeCopilotApp?.name,
+      activeCopilotChannelId,
+      activeCopilotSwitcherOption?.section,
+      routeAppKey,
+      routeServerSlug,
+      serverMeta?.id,
+    ],
+  )
 
   useEffect(() => {
     if (!isServerAppsRoute || !routeCopilotChannelId) return
@@ -649,7 +746,8 @@ export function ServerLayout() {
                   channelId={activeCopilotChannelId}
                   serverSlug={serverSlug}
                   copilot={{
-                    channels: copilotChannels,
+                    channels: copilotSwitcherChannels,
+                    messageMetadata: copilotMessageMetadata,
                     onSelectChannel: (nextChannelId) => {
                       openCopilotChannel(serverSlug, nextChannelId)
                       navigateServerAppCopilot(nextChannelId)

@@ -1,6 +1,66 @@
 import { vi } from 'vitest'
 import { spacing } from './src/theme'
 
+vi.stubGlobal('__DEV__', false)
+
+type TestExpoListener = (...args: unknown[]) => void
+
+class TestExpoEventEmitter {
+  private listeners = new Map<string, Set<TestExpoListener>>()
+
+  addListener(eventName: string, listener: TestExpoListener) {
+    if (!this.listeners.has(eventName)) {
+      this.listeners.set(eventName, new Set())
+    }
+    this.listeners.get(eventName)?.add(listener)
+    return {
+      remove: () => {
+        this.removeListener(eventName, listener)
+      },
+    }
+  }
+
+  removeListener(eventName: string, listener: TestExpoListener) {
+    this.listeners.get(eventName)?.delete(listener)
+  }
+
+  removeAllListeners(eventName: string) {
+    this.listeners.get(eventName)?.clear()
+  }
+
+  emit(eventName: string, ...args: unknown[]) {
+    this.listeners.get(eventName)?.forEach((listener) => {
+      listener(...args)
+    })
+  }
+
+  listenerCount(eventName: string) {
+    return this.listeners.get(eventName)?.size ?? 0
+  }
+}
+
+class TestExpoNativeModule extends TestExpoEventEmitter {
+  [key: string]: unknown
+}
+
+class TestExpoSharedObject extends TestExpoEventEmitter {
+  release() {}
+}
+
+class TestExpoSharedRef extends TestExpoSharedObject {
+  nativeRefType = 'unknown'
+}
+
+Object.assign(globalThis, {
+  expo: {
+    EventEmitter: TestExpoEventEmitter,
+    NativeModule: TestExpoNativeModule,
+    SharedObject: TestExpoSharedObject,
+    SharedRef: TestExpoSharedRef,
+    modules: {},
+  },
+})
+
 // Mock react-native modules not available in jsdom
 vi.mock('react-native', () => {
   const React = require('react')
@@ -31,6 +91,11 @@ vi.mock('react-native', () => {
     SafeAreaView: 'SafeAreaView',
     Modal: 'Modal',
     Alert: { alert: vi.fn() },
+    NativeModules: {},
+    TurboModuleRegistry: {
+      get: vi.fn(() => null),
+      getEnforcing: vi.fn(() => ({})),
+    },
     AppState: {
       currentState: 'active',
       addEventListener: vi.fn(() => ({ remove: vi.fn() })),

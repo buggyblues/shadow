@@ -120,9 +120,10 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-connector-*.tgz')
     expect(dockerfile).not.toContain('@shadowob/connector@latest')
     expect(dockerfile).not.toContain('SHADOWOB_HERMES_PLUGIN_DIR')
-    expect(dockerfile).toContain(
-      'apt-get install -y --no-install-recommends ca-certificates curl tini xz-utils',
-    )
+    expect(dockerfile).toContain('apt-get install -y --no-install-recommends')
+    expect(dockerfile).toContain('python3-pip')
+    expect(dockerfile).toContain('python3-venv')
+    expect(dockerfile).toContain('ffmpeg')
     expect(dockerfile).toContain('ENTRYPOINT ["/usr/bin/tini", "--"]')
     expect(entrypoint).toContain('seedBundledShadowobPlugin')
     expect(entrypoint).toContain('/opt/shadowob/hermes-shadowob-plugin')

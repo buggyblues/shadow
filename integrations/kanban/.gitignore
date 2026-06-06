@@ -1,4 +1,5 @@
 .env
 data/*.json
+data/artifacts/
 dist/
 node_modules/

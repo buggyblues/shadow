@@ -2,8 +2,14 @@ import type {
   ShadowInboxTaskInput,
   ShadowServerAppActorProfile,
   ShadowServerAppManifest,
+  ShadowServerAppResourceContext,
   ShadowServerAppTokenIntrospection,
 } from './types'
+
+export {
+  BUDDY_INBOX_DELIVERY_PERMISSION,
+  type BuddyInboxPlatformPermission,
+} from '@shadowob/shared'
 
 export type ShadowServerAppFetch = typeof fetch
 
@@ -21,6 +27,7 @@ export interface ShadowServerAppCommandContext {
     profile?: ShadowServerAppActorProfile | null
   }
   channelId?: string | null
+  resources?: ShadowServerAppResourceContext | null
   task?: {
     messageId: string
     cardId: string
@@ -69,6 +76,9 @@ export interface ShadowServerAppInboxTaskOutbox {
   assigneeLabel?: string
   idempotencyKey?: string
   resource?: ShadowServerAppInboxTaskResource
+  requirements?: ShadowInboxTaskInput['requirements']
+  outputContract?: ShadowInboxTaskInput['outputContract']
+  privacy?: ShadowInboxTaskInput['privacy']
   data?: Record<string, unknown>
   required?: boolean
 }
@@ -186,10 +196,34 @@ export interface ShadowServerAppBridgeEnqueueInboxTaskRequest {
   task: ShadowServerAppInboxTaskOutbox
 }
 
+export interface ShadowServerAppBridgeOpenCopilotRequest {
+  type: 'shadow.app.copilot.open.request'
+  requestId: string
+  appKey?: string
+  delivery: ShadowServerAppInboxDelivery
+}
+
+export interface ShadowServerAppBridgeOpenWorkspaceResourceRequest {
+  type: 'shadow.app.workspace.open.request'
+  requestId: string
+  appKey?: string
+  resource: {
+    uri?: string
+    workspaceFileId?: string
+    workspaceNodeId?: string
+    path?: string
+    name?: string
+    title?: string
+  }
+}
+
 export type ShadowServerAppBridgeRequest =
+  | ShadowServerAppBridgeCapabilitiesRequest
   | ShadowServerAppBridgeCommandRequest
   | ShadowServerAppBridgeInboxesRequest
   | ShadowServerAppBridgeEnqueueInboxTaskRequest
+  | ShadowServerAppBridgeOpenCopilotRequest
+  | ShadowServerAppBridgeOpenWorkspaceResourceRequest
 
 export interface ShadowServerAppHostAppRef {
   id?: string | null
@@ -221,9 +255,18 @@ export interface ShadowServerAppInboxDeliveryFromMessageInput {
 }
 
 export type ShadowServerAppBridgeResponseType =
+  | 'shadow.app.capabilities.response'
   | 'shadow.app.command.response'
   | 'shadow.app.inboxes.response'
   | 'shadow.app.inbox.enqueue.response'
+  | 'shadow.app.copilot.open.response'
+  | 'shadow.app.workspace.open.response'
+
+export interface ShadowServerAppBridgeCapabilitiesRequest {
+  type: 'shadow.app.capabilities.request'
+  requestId: string
+  appKey?: string
+}
 
 export interface ShadowServerAppBridgeSuccessResponse<TResult = unknown> {
   type: ShadowServerAppBridgeResponseType
@@ -285,6 +328,9 @@ export function buildShadowServerAppInboxTaskRequest(
       priority: input.task.priority,
       tags: input.task.tags,
       idempotencyKey: input.task.idempotencyKey,
+      requirements: input.task.requirements,
+      outputContract: input.task.outputContract,
+      privacy: input.task.privacy,
       app: {
         id: appId,
         appId,

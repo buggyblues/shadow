@@ -9,7 +9,10 @@ import {
   collectRuntimeEnvRequirements,
 } from '../../src/application/runtime-env-requirements.js'
 import { extractRequiredEnvVars } from '../../src/application/template-env-refs.js'
-import { collectPluginBuildEnvVars } from '../../src/config/openclaw-builder.js'
+import {
+  collectPluginBuildEnvVars,
+  collectPluginRuntimeExtensions,
+} from '../../src/config/openclaw-builder.js'
 import { collectPluginK8sArtifacts } from '../../src/infra/plugin-k8s.js'
 import {
   mergePluginFragments,
@@ -240,7 +243,7 @@ describe('loadAllPlugins', () => {
       'shadowob',
       'sherlock',
       'shopify',
-      'skill-discovery',
+      'skills',
       'stripe',
       'supabase',
       'taobao-aipaas',
@@ -418,7 +421,7 @@ describe('loadAllPlugins', () => {
     await loadAllPlugins(registry)
 
     const agentBrowser = registry.get('agent-browser')
-    const skillDiscovery = registry.get('skill-discovery')
+    const skills = registry.get('skills')
     const textToCad = registry.get('text-to-cad')
     const natureSkills = registry.get('nature-skills')
     const opencli = registry.get('opencli')
@@ -437,15 +440,13 @@ describe('loadAllPlugins', () => {
       }),
     )
 
-    expect(skillDiscovery?.runtime?.runtimeDependencies).toContainEqual(
-      expect.objectContaining({ packages: ['skills'] }),
-    )
-    expect(skillDiscovery?.runtime?.skillSources).toContainEqual(
+    expect(skills?.cli).toContainEqual(
       expect.objectContaining({
-        id: 'find-skills-skill',
-        url: 'https://github.com/vercel-labs/skills.git',
+        name: 'skills',
+        command: 'skills',
       }),
     )
+    expect(skills?.runtime).toBeUndefined()
     expect(textToCad?.manifest.capabilities).toEqual(
       expect.arrayContaining(['skill', 'cli', 'tool']),
     )
@@ -564,6 +565,152 @@ describe('loadAllPlugins', () => {
         url: 'https://github.com/degausai/wonda.git',
       }),
     )
+  }, 30_000)
+
+  it('should mount configured skills only for agents using the skills plugin', async () => {
+    resetPluginRegistry()
+    const registry = getPluginRegistry()
+    await loadAllPlugins(registry)
+
+    const agent = {
+      id: 'worker',
+      runtime: 'hermes',
+      use: [
+        {
+          plugin: 'skills',
+          options: {
+            install: [
+              {
+                package: 'example-org/research-skills',
+                skills: ['research-brief', 'source-check'],
+              },
+              {
+                package: 'example-org/delivery-skills',
+                skills: ['delivery-check'],
+              },
+            ],
+          },
+        },
+      ],
+    } as PluginBuildContext['agent']
+    const config = {
+      namespace: 'test-ns',
+      use: [],
+      agents: [],
+    } as unknown as PluginBuildContext['config']
+
+    const runtime = collectPluginRuntimeExtensions(agent, config)
+    expect(runtime.skillSources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          url: 'https://github.com/example-org/research-skills.git',
+          include: ['research-brief', 'source-check'],
+        }),
+        expect.objectContaining({
+          url: 'https://github.com/example-org/delivery-skills.git',
+          include: ['delivery-check'],
+        }),
+      ]),
+    )
+
+    const artifacts = collectPluginK8sArtifacts(agent, config, 'test-ns')
+    const installScript = artifacts.initContainers
+      .flatMap((container) => container.command ?? [])
+      .join('\n')
+    expect(installScript).toContain('https://github.com/example-org/research-skills.git')
+    expect(installScript).toContain('https://github.com/example-org/delivery-skills.git')
+  }, 30_000)
+
+  it('should keep skills plugin runtime assets scoped to agent use', async () => {
+    resetPluginRegistry()
+    const registry = getPluginRegistry()
+    await loadAllPlugins(registry)
+
+    const agent = {
+      id: 'agent-without-skills',
+      runtime: 'openclaw',
+      use: [],
+    } as PluginBuildContext['agent']
+    const config = {
+      namespace: 'test-ns',
+      use: [
+        {
+          plugin: 'skills',
+          options: {
+            install: [{ package: 'example-org/delivery-skills', skills: ['delivery-check'] }],
+          },
+        },
+      ],
+      agents: [],
+    } as unknown as PluginBuildContext['config']
+
+    const runtime = collectPluginRuntimeExtensions(agent, config)
+    expect(runtime.runtimeDependencies).toBeUndefined()
+    expect(runtime.skillSources).toBeUndefined()
+
+    const artifacts = collectPluginK8sArtifacts(agent, config, 'test-ns')
+    expect(artifacts.initContainers).toHaveLength(0)
+    expect(artifacts.volumeMounts).toHaveLength(0)
+
+    const skillsPlugin = registry.get('skills')
+    const validationErrors =
+      skillsPlugin?._hooks.validate.flatMap((fn) => {
+        const result = fn(
+          makeBuildContext({
+            agent,
+            config,
+            agentConfig: {},
+            pluginRegistry: registry,
+          }),
+        )
+        return result?.errors ?? []
+      }) ?? []
+    expect(validationErrors).toContainEqual(
+      expect.objectContaining({
+        path: 'use',
+        severity: 'error',
+      }),
+    )
+  }, 30_000)
+
+  it('should not mount default community skills when only the skills plugin is enabled', async () => {
+    resetPluginRegistry()
+    const registry = getPluginRegistry()
+    await loadAllPlugins(registry)
+
+    const agent = {
+      id: 'agent-with-skills-cli',
+      runtime: 'openclaw',
+      use: [{ plugin: 'skills' }],
+    } as PluginBuildContext['agent']
+    const config = {
+      namespace: 'test-ns',
+      use: [],
+      agents: [],
+    } as unknown as PluginBuildContext['config']
+
+    const runtime = collectPluginRuntimeExtensions(agent, config)
+    expect(runtime.runtimeDependencies).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'skills', packages: ['skills'] })]),
+    )
+    expect(runtime.skillSources).toBeUndefined()
+
+    const skillsPlugin = registry.get('skills')
+    const fragment = skillsPlugin?._hooks.buildConfig[0]?.(
+      makeBuildContext({
+        agent,
+        config,
+        agentConfig: {},
+        pluginRegistry: registry,
+      }),
+    )
+    expect(fragment).toBeUndefined()
+
+    const artifacts = collectPluginK8sArtifacts(agent, config, 'test-ns')
+    expect(artifacts.initContainers).toHaveLength(1)
+    expect(
+      artifacts.initContainers.flatMap((container) => container.volumeMounts ?? []),
+    ).not.toContainEqual(expect.objectContaining({ mountPath: '/plugin-skills' }))
   }, 30_000)
 
   it('should load AgentMemory as an MCP-backed memory plugin', async () => {

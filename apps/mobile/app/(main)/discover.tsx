@@ -400,7 +400,7 @@ export default function DiscoverScreen() {
   })
 
   const { data: serverAppDirectoryData, isLoading: isServerAppsLoading } = useQuery({
-    queryKey: ['discover-server-apps', effectiveSearch],
+    queryKey: ['discover-server-apps', i18n.language, effectiveSearch],
     queryFn: () => {
       const params = new URLSearchParams({ limit: '72' })
       if (effectiveSearch) params.set('q', effectiveSearch)

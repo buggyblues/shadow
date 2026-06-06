@@ -658,6 +658,14 @@ describe('Error handling', () => {
     expect(res.status).toBe(404)
   })
 
+  it('should reject file lookup with a non-UUID node id', async () => {
+    const res = await req('GET', `/api/servers/${serverId}/workspace/files/not-a-node-id`, {
+      token: userToken,
+    })
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ error: 'Invalid workspace node id' })
+  })
+
   it('should 404 for delete on non-existent folder', async () => {
     const fakeId = '00000000-0000-0000-0000-000000000000'
     const res = await req('DELETE', `/api/servers/${serverId}/workspace/folders/${fakeId}`, {
@@ -680,6 +688,21 @@ describe('Error handling', () => {
       body: {},
     })
     expect(res.status).toBeGreaterThanOrEqual(400)
+  })
+
+  it('should reject multipart upload with a non-UUID parent id', async () => {
+    const formData = new FormData()
+    formData.set('file', new File(['hello'], 'hello.txt', { type: 'text/plain' }))
+    formData.set('parentId', 'task_not_a_workspace_node')
+
+    const res = await app.request(`http://localhost/api/servers/${serverId}/workspace/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${userToken}` },
+      body: formData,
+    })
+
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ error: 'Invalid workspace node id' })
   })
 
   it('should 404 when cloning non-existent file', async () => {

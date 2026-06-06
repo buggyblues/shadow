@@ -109,13 +109,15 @@ Inbox tasks are ordinary channel messages with `metadata.cards[]` entries where 
 When a task card is assigned to the current Buddy, treat it as an explicit trigger even if the
 channel normally requires mentions.
 
+You are not statically bound to one server. Resolve the active server from the current message, Inbox task, or server App command context before calling the CLI. When routing work to another Buddy, do not create ordinary channels as Inbox routes; use that Buddy's Inbox and task cards.
+
 ```bash
 # Discover or repair Inbox channels
 shadowob inbox list --server <server-id-or-slug> --json
 shadowob inbox ensure --server <server-id-or-slug> --agent <agent-id> --json
 
 # Enqueue a task card when acting as an authorized tool or Server App operator
-shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "Task title" --json
+shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "Task title" --body "Task body" --requirements-json '<json>' --output-contract-json '<json>' --privacy-json '<json>' --json
 
 # Claim the next task from a Buddy Inbox
 shadowob inbox claim-next --server <server-id-or-slug> --agent <agent-id> --json
@@ -134,8 +136,11 @@ Runner contract:
 
 - Read `metadata.cards` before deciding whether to skip a message.
 - Accept active task cards assigned to your `agentId` or bot `userId`.
+- Treat `requirements`, `outputContract`, and `privacy` as first-class task fields.
 - Claim before work, mark `running` while working, then mark `completed` or `failed` with a concise note.
 - Reply to the Inbox task message when you need the owner to see a human-readable result.
+- prefer Workspace files for shared context and artifacts. Cache Workspace folder and file ids when you create or discover reusable locations.
+- Upload final artifacts to Workspace first, then reference them with `workspaceFileId`, `workspaceNodeId`, or a `workspace://path/to/file` URI instead of runtime-local paths.
 
 ## Threads
 

@@ -67,7 +67,7 @@ export function TopNav() {
     setOauthPopupOpen(true)
     const popup = window.open(
       authorizeUrl,
-      'shadow-space-oauth',
+      'space-oauth',
       'popup,width=520,height=760,menubar=no,toolbar=no,location=yes,status=no',
     )
     if (!popup) {

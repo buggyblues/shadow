@@ -288,9 +288,13 @@ export function MobileNavigationBar({
     >
       <View style={styles.mobileNavigationContent}>
         <View style={styles.mobileNavigationSide}>{left}</View>
-        <AppText variant="title" numberOfLines={1} style={styles.mobileNavigationTitle}>
-          {title}
-        </AppText>
+        {typeof title === 'string' || typeof title === 'number' ? (
+          <AppText variant="title" numberOfLines={1} style={styles.mobileNavigationTitle}>
+            {title}
+          </AppText>
+        ) : (
+          <View style={styles.mobileNavigationTitleContent}>{title}</View>
+        )}
         <View style={[styles.mobileNavigationSide, styles.mobileNavigationSideRight]}>{right}</View>
       </View>
     </View>
@@ -1086,7 +1090,7 @@ export function Indicator({
   size = 'md',
   style,
 }: {
-  status?: 'online' | 'idle' | 'dnd' | 'offline' | 'running' | 'error' | string
+  status?: 'online' | 'busy' | 'idle' | 'dnd' | 'offline' | 'running' | 'error' | string
   size?: 'sm' | 'md' | 'lg'
   style?: StyleProp<ViewStyle>
 }) {
@@ -1094,11 +1098,13 @@ export function Indicator({
   const color =
     status === 'online' || status === 'running'
       ? colors.success
-      : status === 'idle'
-        ? colors.warning
-        : status === 'dnd' || status === 'error'
-          ? colors.error
-          : colors.statusOffline
+      : status === 'busy'
+        ? colors.primary
+        : status === 'idle'
+          ? colors.warning
+          : status === 'dnd' || status === 'error'
+            ? colors.error
+            : colors.statusOffline
   const dimension = size === 'lg' ? 16 : size === 'sm' ? 10 : 12
   return (
     <View
@@ -2239,6 +2245,12 @@ const styles = StyleSheet.create({
   mobileNavigationTitle: {
     flex: 1,
     textAlign: 'center',
+  },
+  mobileNavigationTitleContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0,
   },
   glassList: {
     borderRadius: radius['2xl'],

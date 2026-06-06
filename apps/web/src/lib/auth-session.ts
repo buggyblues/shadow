@@ -140,12 +140,23 @@ async function readStoredOrDesktopTokens(): Promise<StoredTokens> {
     storage?.setItem('accessToken', desktopTokens.accessToken)
     if (desktopTokens.refreshToken) storage?.setItem('refreshToken', desktopTokens.refreshToken)
   }
-  return desktopTokens
+  if (desktopTokens.accessToken) return desktopTokens
+
+  // A login can complete while an earlier route guard is waiting on the desktop bridge.
+  // Re-read browser storage before reporting an empty session so that stale guards do not
+  // clear a newly-applied login.
+  return {
+    accessToken: storage?.getItem('accessToken') ?? '',
+    refreshToken: storage?.getItem('refreshToken') ?? '',
+  }
 }
 
 async function validateStoredSession(): Promise<AuthenticatedUser | null> {
   const { accessToken } = await readStoredOrDesktopTokens()
   if (!accessToken) {
+    const state = useAuthStore.getState()
+    const currentAccessToken = authStorage()?.getItem('accessToken') ?? state.accessToken ?? ''
+    if (currentAccessToken) return state.user
     clearAuthenticatedSession()
     return null
   }

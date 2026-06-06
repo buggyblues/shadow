@@ -1005,6 +1005,8 @@
     "archivedComposerPlaceholder": "This channel is archived. Messages cannot be sent.",
     "archivedComposerDesc": "Unarchive the channel to send messages again.",
     "switchChannel": "Switch channel",
+    "copilotChannelSection": "Channels",
+    "copilotInboxSection": "Buddy Inboxes",
     "enterChannel": "Enter channel",
     "exitCopilot": "Exit Copilot",
     "resizeCopilot": "Resize Copilot panels",
@@ -1173,6 +1175,10 @@
       "failed": "Delivery issue"
     },
     "copyFailed": "Copy failed",
+    "messageReference": {
+      "defaultLabel": "Referenced message",
+      "open": "Open message"
+    },
     "typing": "is typing..."
   },
   "workspace": {
@@ -1212,6 +1218,7 @@
   },
   "member": {
     "online": "Online",
+    "busy": "Busy",
     "idle": "Idle",
     "dnd": "Do Not Disturb",
     "offline": "Offline",
@@ -3718,14 +3725,22 @@
       "user": "User",
       "system": "System"
     },
+    "mode": {
+      "label": "Inbox view mode",
+      "chat": "Chat",
+      "tasks": "Tasks"
+    },
     "filter": {
+      "label": "Task filter",
       "all": "All",
       "open": "Open",
       "done": "Done"
     },
     "empty": {
+      "chatTitle": "No chat messages yet",
+      "chatHint": "Use chat mode to review the direct conversation with this Buddy.",
       "allTitle": "No tasks yet",
-      "allHint": "Create task cards from the + menu. Regular messages stay in the chat.",
+      "allHint": "Switch to task mode in the composer to create task cards. Regular messages stay in chat mode.",
       "filterTitle": "No tasks match this filter",
       "filterHint": "Switch filters or create a new task."
     },
@@ -3753,7 +3768,16 @@
       "todoProgress": "{{done}}/{{total}} done",
       "showDetails": "Show details",
       "hideDetails": "Hide details",
+      "priorityLabel": "Priority",
+      "tagsLabel": "Tags",
       "tagsPlaceholder": "Tags, separated by commas",
+      "tagPreset": {
+        "research": "Research",
+        "script": "Script",
+        "render": "Render",
+        "qa": "QA",
+        "publish": "Publish"
+      },
       "replies": "Replies",
       "noReplies": "No replies yet",
       "replyPlaceholder": "Type a reply...",

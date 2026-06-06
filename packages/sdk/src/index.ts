@@ -1,30 +1,36 @@
 // Client
 
+// Constants & room helpers
 export {
+  buildMessageCopilotContextMetadata,
+  isMessageCopilotContext,
+  MESSAGE_COPILOT_CONTEXT_METADATA_KEY,
+} from '@shadowob/shared'
+export {
+  SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
   type ShadowBridgeBuddyInbox,
+  type ShadowBridgeCapability,
   type ShadowBridgeCommandMap,
   type ShadowBridgeCommandSpec,
   type ShadowBridgeEnqueueInboxTaskInput,
+  type ShadowBridgeOpenBuddyCreatorInput,
+  type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOptions,
 } from './bridge'
 export { ShadowClient } from './client'
 export type { ClientEvent, ServerEvent } from './constants'
-// Constants & room helpers
-export {
-  CLIENT_EVENTS,
-  channelRoom,
-  SERVER_EVENTS,
-  threadRoom,
-  userRoom,
-} from './constants'
+export { CLIENT_EVENTS, channelRoom, SERVER_EVENTS, threadRoom, userRoom } from './constants'
 export type {
+  BuddyInboxPlatformPermission,
   JsonSchemaToType,
   ShadowServerAppActorRef,
+  ShadowServerAppBridgeCapabilitiesRequest,
   ShadowServerAppBridgeCommandRequest,
   ShadowServerAppBridgeEnqueueInboxTaskRequest,
   ShadowServerAppBridgeFailureResponse,
   ShadowServerAppBridgeInboxesRequest,
+  ShadowServerAppBridgeOpenCopilotRequest,
   ShadowServerAppBridgeRequest,
   ShadowServerAppBridgeResponse,
   ShadowServerAppBridgeResponseType,
@@ -71,6 +77,7 @@ export type {
 } from './server-app'
 // App helpers
 export {
+  BUDDY_INBOX_DELIVERY_PERMISSION,
   buildShadowServerAppInboxDelivery,
   buildShadowServerAppInboxTaskRequest,
   createShadowServerAppManifest,
@@ -135,13 +142,16 @@ export type {
   ShadowChannelJoinRequestStatus,
   ShadowChannelPolicy,
   ShadowChannelSlashCommand,
+  ShadowCloudDeployment,
   ShadowCloudDeploymentBackup,
+  ShadowCloudDeploymentDestroyResponse,
   ShadowCloudDeploymentRuntimeResponse,
   ShadowCloudDeploymentStatus,
   ShadowCloudProviderCatalog,
   ShadowCloudProviderEnvVar,
   ShadowCloudProviderModel,
   ShadowCloudProviderProfile,
+  ShadowCloudTemplate,
   ShadowCommerceCheckoutPreview,
   ShadowCommerceProductCard,
   ShadowCommerceProductContext,
@@ -154,6 +164,8 @@ export type {
   ShadowConnectorComputer,
   ShadowConnectorRuntimeInfo,
   ShadowContract,
+  ShadowCreateCloudDeploymentInput,
+  ShadowCreateCloudTemplateInput,
   ShadowDesktopReleaseDownload,
   ShadowDesktopReleaseInfo,
   ShadowDiyCloudRun,
@@ -181,7 +193,9 @@ export type {
   ShadowMessage,
   ShadowMessageCard,
   ShadowMessageCardSource,
+  ShadowMessageCopilotContext,
   ShadowMessageMention,
+  ShadowMessageMetadata,
   ShadowModelProxyBilling,
   ShadowModelProxyChatCompletionRequest,
   ShadowModelProxyChatCompletionResponse,

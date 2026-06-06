@@ -1005,6 +1005,8 @@
     "archivedComposerPlaceholder": "此频道已归档，无法发送消息",
     "archivedComposerDesc": "取消归档后可以继续发送消息。",
     "switchChannel": "切换频道",
+    "copilotChannelSection": "频道",
+    "copilotInboxSection": "Buddy 收件箱",
     "enterChannel": "进入频道",
     "exitCopilot": "退出 Copilot",
     "resizeCopilot": "调整 Copilot 面板大小",
@@ -1173,6 +1175,10 @@
       "failed": "发货异常"
     },
     "copyFailed": "复制失败",
+    "messageReference": {
+      "defaultLabel": "引用消息",
+      "open": "打开消息"
+    },
     "typing": "正在输入..."
   },
   "workspace": {
@@ -1212,6 +1218,7 @@
   },
   "member": {
     "online": "在线",
+    "busy": "忙碌",
     "idle": "离开",
     "dnd": "请勿打扰",
     "offline": "离线",
@@ -3718,14 +3725,22 @@
       "user": "用户",
       "system": "系统"
     },
+    "mode": {
+      "label": "Inbox 视图模式",
+      "chat": "聊天",
+      "tasks": "任务"
+    },
     "filter": {
+      "label": "任务筛选",
       "all": "全部",
       "open": "进行中",
       "done": "已结束"
     },
     "empty": {
+      "chatTitle": "还没有聊天消息",
+      "chatHint": "在聊天模式下可以审查和 Buddy 的普通对话。",
       "allTitle": "还没有任务",
-      "allHint": "从输入框左侧的 + 创建任务卡片，普通消息仍然留在聊天里。",
+      "allHint": "在输入区切到任务模式创建任务卡片，普通消息仍然留在聊天模式里。",
       "filterTitle": "这个筛选下没有任务",
       "filterHint": "切换筛选条件，或创建一个新的任务。"
     },
@@ -3753,7 +3768,16 @@
       "todoProgress": "{{done}}/{{total}} 完成",
       "showDetails": "展开详情",
       "hideDetails": "收起详情",
+      "priorityLabel": "优先级",
+      "tagsLabel": "标签",
       "tagsPlaceholder": "标签，用逗号分隔",
+      "tagPreset": {
+        "research": "调研",
+        "script": "脚本",
+        "render": "渲染",
+        "qa": "质检",
+        "publish": "发布"
+      },
       "replies": "回复",
       "noReplies": "暂无回复",
       "replyPlaceholder": "输入回复内容...",

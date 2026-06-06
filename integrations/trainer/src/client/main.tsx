@@ -110,10 +110,10 @@ const languageOptions: LanguageOption[] = [
   { value: 'typescript', label: 'TypeScript', monaco: 'typescript' },
   { value: 'python', label: 'Python', monaco: 'python' },
 ]
-const reviewerStorageKey = 'shadow-trainer:preferred-reviewer'
-const reviewFocusStorageKey = 'shadow-trainer:review-focus'
-const coachingFocusStorageKey = 'shadow-trainer:coaching-focuses'
-const reviewDispatchStoragePrefix = 'shadow-trainer:review-dispatch:'
+const reviewerStorageKey = 'trainer:preferred-reviewer'
+const reviewFocusStorageKey = 'trainer:review-focus'
+const coachingFocusStorageKey = 'trainer:coaching-focuses'
+const reviewDispatchStoragePrefix = 'trainer:review-dispatch:'
 const hostNavigationRequestType = 'shadow.app.navigate'
 const hostNavigationAckType = 'shadow.app.navigate.ack'
 const reviewFocusOptions: ReviewFocusOption[] = [

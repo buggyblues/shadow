@@ -2,7 +2,7 @@ import { ShadowBridge } from '@shadowob/sdk/bridge'
 import type { Quiz, QuizAnswerValue, QuizQuestion, QuizSubmission } from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
-const bridge = new ShadowBridge({ appKey: 'shadow-quiz' })
+const bridge = new ShadowBridge({ appKey: 'quiz' })
 
 function canUseBridge() {
   return bridge.isAvailable()

@@ -249,9 +249,9 @@ function reviewTaskBody(submission: CodeSubmission, challenge: Challenge) {
       immediateFeedbackProtocol(submission, locale),
       '',
       '工作流：',
-      `1. 使用 shadow-trainer submissions.get 和 {"submissionId":"${submission.id}"} 获取提交。`,
+      `1. 使用 trainer submissions.get 和 {"submissionId":"${submission.id}"} 获取提交。`,
       '2. 在你的沙箱里运行可见示例、隐藏用例和必要边界用例。不要把判题委托给在线评测平台。',
-      '3. 使用 shadow-trainer submissions.analyze 写回评审结果。',
+      '3. 使用 trainer submissions.analyze 写回评审结果。',
       '',
       '反馈要求：',
       '- 给出结论、分数和简洁的问题诊断。',
@@ -280,9 +280,9 @@ function reviewTaskBody(submission: CodeSubmission, challenge: Challenge) {
     immediateFeedbackProtocol(submission, locale),
     '',
     'Workflow:',
-    `1. Fetch the submission with shadow-trainer submissions.get using {"submissionId":"${submission.id}"}.`,
+    `1. Fetch the submission with trainer submissions.get using {"submissionId":"${submission.id}"}.`,
     '2. Run the visible examples plus hidden and edge cases in your sandbox. Do not delegate judging to an online judge.',
-    '3. Write the result back with shadow-trainer submissions.analyze.',
+    '3. Write the result back with trainer submissions.analyze.',
     '',
     'Feedback requirements:',
     '- Give a verdict, score, and concise bug diagnosis.',
@@ -467,7 +467,7 @@ function recommendationCard(recommendation: Recommendation, locale: TaskLocale) 
   return {
     kind: 'server_app',
     version: 1,
-    appKey: 'shadow-trainer',
+    appKey: 'trainer',
     title:
       locale === 'zh'
         ? `下一题：${recommendation.challengeTitle}`

@@ -98,6 +98,46 @@ const marketplaceMetadataSchema = z
   })
   .optional()
 
+const marketplaceI18nMetadataSchema = z
+  .object({
+    tagline: z.string().max(160).optional(),
+    summary: z.string().max(4000).optional(),
+    categories: z.array(z.string().min(1).max(64)).max(8).optional(),
+    supportedLanguages: z.array(z.string().min(2).max(48)).max(24).optional(),
+    gallery: z
+      .array(
+        z.object({
+          alt: z.string().max(240).optional(),
+        }),
+      )
+      .max(12)
+      .optional(),
+    links: z
+      .array(
+        z.object({
+          label: z.string().min(1).max(80).optional(),
+        }),
+      )
+      .max(12)
+      .optional(),
+    publisher: z
+      .object({
+        name: z.string().min(1).max(120).optional(),
+      })
+      .optional(),
+  })
+  .optional()
+
+const manifestI18nSchema = z.record(
+  z.string().min(2).max(32),
+  z.object({
+    name: z.string().min(1).max(128).optional(),
+    description: z.string().max(2000).optional(),
+    marketplace: marketplaceI18nMetadataSchema,
+    help: manifestHelpSchema,
+  }),
+)
+
 const realtimeSpecSchema = z
   .object({
     transports: z
@@ -176,6 +216,7 @@ export const serverAppManifestSchema = z.object({
   updatedAt: z.string().datetime().optional(),
   iconUrl: httpUrlSchema,
   marketplace: marketplaceMetadataSchema,
+  i18n: manifestI18nSchema.optional(),
   iframe: z
     .object({
       entry: httpUrlSchema,

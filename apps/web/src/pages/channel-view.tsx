@@ -68,6 +68,7 @@ interface ChannelViewProps {
   routeAccessFallbackLoading?: boolean
   copilot?: {
     channels: ChannelSwitcherOption[]
+    messageMetadata?: Record<string, unknown>
     onSelectChannel: (channelId: string) => void
     onEnter: () => void
     onExit: () => void
@@ -319,6 +320,7 @@ export function ChannelView({
           activeChannelId: channelId,
           onSelectChannel: copilot.onSelectChannel,
         }}
+        messageMetadata={copilot.messageMetadata}
         onEnterChannel={copilot.onEnter}
         onExitCopilot={copilot.onExit}
       />

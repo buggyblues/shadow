@@ -50,7 +50,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 | [HubSpot](./hubspot/README.md) | `HUBSPOT_ACCESS_TOKEN` | HubSpot MCP and private apps |
 | [Hugging Face](./huggingface/README.md) | `HF_TOKEN`, `HF_ORG` | Hugging Face agent skills, CLI, MCP |
 | [AI Image Generation](./inference-ai-image-generation/README.md) | `INFSH_API_KEY` | inference.sh image skills |
-| [Skill Discovery](./skill-discovery/README.md) | None | skills.sh and `skills` CLI |
+| [Skills](./skills/README.md) | None | skills.sh, `skills` CLI, and per-agent community skill mounts |
 | [inference.sh](./inference-sh/README.md) | `INFSH_API_KEY` | inference.sh CLI and auth docs |
 | [Klaviyo](./klaviyo/README.md) | `KLAVIYO_API_KEY` | Klaviyo MCP |
 | [Kuaidi100](./kuaidi100/README.md) | `KUAIDI100_KEY`, `KUAIDI100_CUSTOMER` | Kuaidi100 MCP |

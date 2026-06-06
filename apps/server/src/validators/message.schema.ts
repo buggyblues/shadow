@@ -189,6 +189,20 @@ const greetingSchema = z.union([
   }),
 ])
 
+const copilotContextSchema = z
+  .object({
+    kind: z.literal('server_app_copilot'),
+    serverAppId: z.string().min(1).max(160).nullable().optional(),
+    appId: z.string().min(1).max(160).nullable().optional(),
+    appKey: z.string().min(1).max(120),
+    appName: z.string().max(160).nullable().optional(),
+    serverId: z.string().min(1).max(160).nullable().optional(),
+    serverSlug: z.string().max(160).nullable().optional(),
+    channelId: z.string().min(1).max(160).nullable().optional(),
+    channelKind: z.string().max(40).nullable().optional(),
+  })
+  .strict()
+
 export const messageCardStatusSchema = z.enum([
   'queued',
   'claimed',
@@ -343,6 +357,7 @@ export const messageCardSchema = z.union([taskMessageCardSchema, genericMessageC
 
 export const metadataSchema = z.object({
   agentChain: agentChainSchema.optional(),
+  copilotContext: copilotContextSchema.optional(),
   interactive: interactiveBlockSchema.optional(),
   interactiveResponse: interactiveResponseSchema.optional(),
   mentions: messageMentionsSchema.optional(),

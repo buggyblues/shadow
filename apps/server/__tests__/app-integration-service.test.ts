@@ -1,3 +1,4 @@
+import { BUDDY_INBOX_DELIVERY_PERMISSION } from '@shadowob/shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppIntegrationService } from '../src/services/app-integration.service'
 import type { ServerAppManifestInput } from '../src/validators/app-integration.schema'
@@ -86,13 +87,24 @@ function createService(overrides: Record<string, unknown> = {}) {
     appIntegrationDao: {
       upsert: vi.fn().mockResolvedValue(appRow),
       listByServer: vi.fn().mockResolvedValue([appRow]),
+      listSummariesByServer: vi.fn().mockResolvedValue([
+        {
+          id: 'app-1',
+          serverId: 'srv-1',
+          appKey: 'demo-desk',
+          name: 'Demo Desk',
+          iconUrl: manifest.iconUrl,
+          manifest,
+          status: 'active',
+        },
+      ]),
       findById: vi.fn().mockResolvedValue(appRow),
       findByServerAndKey: vi.fn().mockResolvedValue(appRow),
       countInstallationsByAppKeys: vi.fn().mockResolvedValue([{ appKey: 'demo-desk', count: 3 }]),
       listBuddyGrants: vi.fn().mockResolvedValue([]),
       findBuddyGrant: vi.fn().mockResolvedValue({
         id: 'grant-1',
-        permissions: ['demo.tickets:read'],
+        permissions: ['demo.tickets:read', BUDDY_INBOX_DELIVERY_PERMISSION],
         approvalMode: 'none',
         expiresAt: null,
       }),
@@ -275,6 +287,7 @@ function createService(overrides: Record<string, unknown> = {}) {
     },
     serverDao: {
       findBySlug: vi.fn().mockResolvedValue({ id: 'srv-1' }),
+      getMembers: vi.fn().mockResolvedValue([]),
     },
     policyService: {
       requireServerRole: vi.fn().mockResolvedValue({ role: 'admin' }),
@@ -495,6 +508,29 @@ describe('AppIntegrationService', () => {
         },
       ),
     ).rejects.toThrow('Unknown app permission')
+  })
+
+  it('allows grants for the platform Inbox delivery permission', async () => {
+    const { service, deps } = createService()
+
+    await service.grant(
+      'srv-1',
+      'demo-desk',
+      { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      {
+        buddyAgentId: 'agent-1',
+        permissions: [BUDDY_INBOX_DELIVERY_PERMISSION],
+        approvalMode: 'none',
+      },
+    )
+
+    expect(deps.appIntegrationDao.upsertBuddyGrant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverAppId: 'app-1',
+        buddyAgentId: 'agent-1',
+        permissions: [BUDDY_INBOX_DELIVERY_PERMISSION],
+      }),
+    )
   })
 
   it('lets a default-allowed member call a read command without a Buddy grant', async () => {
@@ -727,6 +763,87 @@ describe('AppIntegrationService', () => {
     })
   })
 
+  it('injects server Buddy directory into app command context', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { tickets: [] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService()
+    deps.serverDao.getMembers.mockResolvedValue([
+      {
+        id: 'member-1',
+        userId: 'buddy-user-1',
+        user: {
+          id: 'buddy-user-1',
+          username: 'brandscout',
+          displayName: 'BrandScout',
+          avatarUrl: '/shadow/uploads/brandscout.png',
+          status: 'online',
+        },
+        agent: {
+          id: 'agent-brandscout',
+          ownerId: 'owner-1',
+          status: 'running',
+          config: { description: 'Researches source material and uploads workspace files.' },
+          totalOnlineSeconds: 12,
+        },
+      },
+      {
+        id: 'member-2',
+        userId: 'human-user-1',
+        user: {
+          id: 'human-user-1',
+          username: 'human',
+          displayName: 'Human Member',
+          avatarUrl: null,
+          status: 'online',
+        },
+        agent: null,
+      },
+    ])
+
+    await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: {
+        kind: 'agent',
+        userId: 'bot-1',
+        agentId: 'agent-1',
+        ownerId: 'user-1',
+        scopes: [],
+      },
+      body: { input: {} },
+    })
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(init.body))
+    expect(body.context.resources.buddies).toEqual([
+      {
+        agentId: 'agent-brandscout',
+        userId: 'buddy-user-1',
+        username: 'brandscout',
+        displayName: 'BrandScout',
+        description: 'Researches source material and uploads workspace files.',
+        avatarUrl: '/api/media/signed/avatar-token',
+        ownerId: 'owner-1',
+        status: 'online',
+        agentStatus: 'running',
+      },
+    ])
+
+    const headers = init.headers as Record<string, string>
+    const introspection = await service.introspectCommandToken(
+      'srv-1',
+      'demo-desk',
+      headers.Authorization.replace(/^Bearer /, ''),
+    )
+    expect(introspection.shadow.resources.buddies).toEqual(body.context.resources.buddies)
+  })
+
   it('respects a Buddy grant approval override when the command defaults to approval', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true, result: { ticket: { id: 'ticket-1' } } }), {
@@ -868,6 +985,216 @@ describe('AppIntegrationService', () => {
     })
   })
 
+  it('delivers Server App Inbox task outbox cards with an active Buddy grant', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            ticket: { id: 'ticket-1' },
+            shadow: {
+              protocol: 'shadow.app/1',
+              outbox: {
+                inboxTasks: [
+                  {
+                    agentId: 'agent-1',
+                    title: 'Review launch ticket',
+                    body: 'Inspect the generated launch ticket.',
+                    idempotencyKey: 'demo:ticket-1:review',
+                    tags: ['review', { label: 'Launch', color: '#60a5fa' }],
+                    resource: { kind: 'ticket', id: 'ticket-1', label: 'Launch ticket' },
+                    requirements: {
+                      capabilities: ['workspace.write'],
+                      tools: [{ kind: 'shadow-app-command', name: 'tickets.create' }],
+                    },
+                    outputContract: {
+                      expectedArtifacts: [{ kind: 'workspace.reference', required: false }],
+                      submitCommand: { appKey: 'demo-desk', command: 'tickets.create' },
+                    },
+                    privacy: { dataClass: 'server-private', redactionRequired: true },
+                    data: { ticketId: 'ticket-1' },
+                  },
+                ],
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const base = createService()
+    const { service, deps } = createService({
+      serverDao: {
+        ...base.deps.serverDao,
+        getMember: vi.fn().mockResolvedValue({ role: 'member' }),
+      },
+    })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+    })
+
+    expect(deps.appIntegrationDao.findBuddyGrant).toHaveBeenCalledWith('app-1', 'agent-1')
+    expect(deps.buddyInboxService.enqueueTaskForAgent).toHaveBeenCalledWith(
+      'srv-1',
+      'agent-1',
+      expect.objectContaining({
+        title: 'Review launch ticket',
+        idempotencyKey: 'demo:ticket-1:review',
+        tags: ['review', { label: 'Launch', color: '#60a5fa' }],
+        requirements: {
+          capabilities: ['workspace.write'],
+          tools: [{ kind: 'shadow-app-command', name: 'tickets.create' }],
+        },
+        outputContract: {
+          expectedArtifacts: [{ kind: 'workspace.reference', required: false }],
+          submitCommand: { appKey: 'demo-desk', command: 'tickets.create' },
+        },
+        privacy: { dataClass: 'server-private', redactionRequired: true },
+        source: expect.objectContaining({
+          kind: 'server_app',
+          appKey: 'demo-desk',
+          command: 'tickets.list',
+          resource: { kind: 'ticket', id: 'ticket-1', label: 'Launch ticket' },
+        }),
+        data: expect.objectContaining({
+          ticketId: 'ticket-1',
+          serverApp: expect.objectContaining({ appKey: 'demo-desk' }),
+        }),
+      }),
+      expect.objectContaining({ kind: 'user', userId: 'user-1' }),
+    )
+    expect(result).toMatchObject({
+      result: {
+        shadow: {
+          outbox: {
+            deliveries: [
+              {
+                agentId: 'agent-1',
+                agentUserId: 'bot-1',
+                channelId: 'inbox-1',
+                messageId: 'message-1',
+                cardId: 'task-card-1',
+                idempotencyKey: 'demo:ticket-1:review',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('records optional Inbox task outbox errors when the Buddy grant is missing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            shadow: {
+              protocol: 'shadow.app/1',
+              outbox: {
+                inboxTasks: [{ agentId: 'agent-1', title: 'Optional review' }],
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const base = createService()
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...base.deps.appIntegrationDao,
+        findBuddyGrant: vi.fn().mockResolvedValue(null),
+      },
+      serverDao: {
+        ...base.deps.serverDao,
+        getMember: vi.fn().mockResolvedValue({ role: 'member' }),
+      },
+    })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+    })
+
+    expect(deps.buddyInboxService.enqueueTaskForAgent).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      result: {
+        shadow: {
+          outbox: {
+            errors: [
+              {
+                title: 'Optional review',
+                agentId: 'agent-1',
+                error: 'Server App is not authorized to deliver Inbox tasks to this Buddy',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('rejects required Inbox task outbox delivery without the platform grant permission', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            shadow: {
+              protocol: 'shadow.app/1',
+              outbox: {
+                inboxTasks: [{ agentId: 'agent-1', title: 'Required review', required: true }],
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const base = createService()
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...base.deps.appIntegrationDao,
+        findBuddyGrant: vi.fn().mockResolvedValue({
+          id: 'grant-1',
+          permissions: ['demo.tickets:read'],
+          approvalMode: 'none',
+          expiresAt: null,
+        }),
+      },
+      serverDao: {
+        ...base.deps.serverDao,
+        getMember: vi.fn().mockResolvedValue({ role: 'member' }),
+      },
+    })
+
+    await expect(
+      service.callCommand({
+        serverIdOrSlug: 'srv-1',
+        appKey: 'demo-desk',
+        commandName: 'tickets.list',
+        actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+        body: { input: {} },
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: 'SERVER_APP_BUDDY_GRANT_PERMISSION_REQUIRED',
+    })
+    expect(deps.buddyInboxService.enqueueTaskForAgent).not.toHaveBeenCalled()
+  })
+
   it('deduplicates Server App channel messages by idempotency key', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -993,6 +1320,106 @@ describe('AppIntegrationService', () => {
       appKey: 'demo-desk',
       installed: expect.objectContaining({ id: 'app-1' }),
     })
+  })
+
+  it('uses manifest display names for server app summaries', async () => {
+    const { service, deps } = createService()
+    deps.appIntegrationDao.listSummariesByServer.mockResolvedValueOnce([
+      {
+        id: 'app-skills',
+        serverId: 'srv-1',
+        appKey: 'skills',
+        name: 'skills',
+        iconUrl: manifest.iconUrl,
+        manifest: { ...manifest, appKey: 'skills', name: 'Skills' },
+        status: 'active',
+      },
+    ])
+
+    const summaries = await service.listSummaries('srv-1', {
+      kind: 'user',
+      userId: 'user-1',
+      authMethod: 'jwt',
+      scopes: [],
+    })
+
+    expect(summaries[0]).toMatchObject({
+      appKey: 'skills',
+      name: 'Skills',
+    })
+  })
+
+  it('localizes catalog metadata from manifest i18n', async () => {
+    const skillsManifest: ServerAppManifestInput = {
+      ...manifest,
+      appKey: 'skills',
+      name: 'Skills',
+      description: 'Skills default description.',
+      marketplace: {
+        ...manifest.marketplace,
+        tagline: 'Skills default tagline.',
+        summary: 'Skills default summary.',
+        categories: ['Productivity'],
+        gallery: [
+          {
+            url: 'http://localhost:4199/assets/cover.png',
+            type: 'image',
+            alt: 'skills cover',
+          },
+        ],
+        links: [{ label: 'Home', url: 'http://localhost:4199/home', type: 'website' }],
+        publisher: { name: 'Shadow' },
+      },
+      i18n: {
+        'zh-CN': {
+          name: '技能库',
+          description: '服务器技能库。',
+          marketplace: {
+            tagline: '复用工作技能。',
+            summary: '沉淀、发现和安装可复用技能。',
+            categories: ['技能'],
+            gallery: [{ alt: '技能封面' }],
+            links: [{ label: '主页' }],
+            publisher: { name: '技能团队' },
+          },
+        },
+      },
+    }
+    const row = {
+      id: 'catalog-skills',
+      appKey: 'skills',
+      name: 'skills',
+      description: null,
+      iconUrl: skillsManifest.iconUrl,
+      manifestUrl: null,
+      manifest: skillsManifest,
+      status: 'active',
+      createdByUserId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    const { service, deps } = createService()
+    deps.appIntegrationDao.listCatalogEntries.mockResolvedValueOnce([row])
+
+    const localized = await service.listDiscoverCatalog({ locale: 'zh-CN' })
+
+    expect(localized.apps[0]).toMatchObject({
+      appKey: 'skills',
+      name: '技能库',
+      description: '服务器技能库。',
+      tagline: '复用工作技能。',
+      summary: '沉淀、发现和安装可复用技能。',
+      categories: ['技能'],
+      publisher: { name: '技能团队', websiteUrl: null },
+    })
+    expect(localized.apps[0]?.gallery[0]?.alt).toBe('技能封面')
+    expect(localized.apps[0]?.links[0]?.label).toBe('主页')
+
+    deps.appIntegrationDao.listCatalogEntries.mockResolvedValueOnce([row])
+    const fallback = await service.listDiscoverCatalog()
+
+    expect(fallback.apps[0]?.name).toBe('Skills')
+    expect(fallback.apps[0]?.tagline).toBe('Skills default tagline.')
   })
 
   it('installs an app from a catalog entry', async () => {

@@ -1006,6 +1006,63 @@ describe('Cloud SaaS — deployment state consistency', () => {
     }
   })
 
+  it('recovers a deploying task after the worker process restarts', async () => {
+    const namespace = uniqueName('e2e-state-recover-deploying')
+
+    try {
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: `${namespace}-agent`,
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: makeConfigSnapshot('state-recover-deploying-secret'),
+      })
+      expect(createRes.status).toBe(201)
+      const created = (await createRes.json()) as {
+        id: string
+        namespace: string
+        status: string
+      }
+      expect(created).toMatchObject({ namespace, status: 'pending' })
+
+      await db
+        .update(schema.cloudDeployments)
+        .set({ status: 'deploying', updatedAt: new Date() })
+        .where(eq(schema.cloudDeployments.id, created.id))
+
+      const tick = await processCloudDeploymentQueueOnce({
+        database: db,
+        container: createFakeCloudWorkerContainer(),
+        reconcile: false,
+        deploymentIds: [created.id],
+      })
+      expect(tick).toMatchObject({ pending: 0, deploying: 1 })
+
+      const detailRes = await req('GET', `/api/cloud-saas/deployments/${created.id}`)
+      expect(detailRes.status).toBe(200)
+      const detail = (await detailRes.json()) as {
+        status: string
+        agentCount: number
+      }
+      expect(detail).toMatchObject({ status: 'deployed', agentCount: 1 })
+
+      const logs = await db
+        .select()
+        .from(schema.cloudDeploymentLogs)
+        .where(eq(schema.cloudDeploymentLogs.deploymentId, created.id))
+      expect(
+        logs.some((log) =>
+          log.message.includes('Recovered in-flight deployment after worker restart'),
+        ),
+      ).toBe(true)
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
   it('interrupts an active deploy when DELETE queues destroy for the same deployment', async () => {
     const namespace = uniqueName('e2e-state-destroy-active')
     let resolveDeployStarted: (() => void) | undefined
