@@ -1,4 +1,5 @@
 export * from './constants'
+export * from './desktop-ipc'
 export * from './play-catalog'
 export * from './types'
 export * from './utils'

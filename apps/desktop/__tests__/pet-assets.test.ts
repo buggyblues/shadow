@@ -30,11 +30,11 @@ vi.mock('electron', () => ({
   },
 }))
 
-vi.mock('../src/main/connector-daemon', () => ({
+vi.mock('../src/main/services/connector-daemon.service', () => ({
   readCommunityAccessToken: vi.fn(async () => 'token'),
 }))
 
-vi.mock('../src/main/desktop-settings', () => ({
+vi.mock('../src/main/services/desktop-settings.service', () => ({
   broadcastDesktopSettings: vi.fn(),
   getDesktopServerBaseUrl: vi.fn(() => 'http://localhost'),
   readDesktopSettings: vi.fn(() => ({
@@ -109,7 +109,7 @@ describe('desktop pet asset pack import', () => {
   })
 
   it('imports a marketplace archive and records source ids', async () => {
-    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
 
     const pack = await __desktopPetAssetTestHooks.importPetPackFromArchive(await packArchive(), {
       source: 'marketplace',
@@ -136,7 +136,7 @@ describe('desktop pet asset pack import', () => {
   })
 
   it('accepts archives with a single top-level pack folder', async () => {
-    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
 
     const pack = await __desktopPetAssetTestHooks.importPetPackFromArchive(
       await packArchive('pet-pack/'),
@@ -147,7 +147,7 @@ describe('desktop pet asset pack import', () => {
   })
 
   it('imports manifests with slug and name aliases', async () => {
-    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
 
     const pack = await __desktopPetAssetTestHooks.importPetPackFromArchive(
       await slugNamePackArchive(),
@@ -165,7 +165,7 @@ describe('desktop pet asset pack import', () => {
   })
 
   it('imports a local codex-pet zip path without requiring manual extraction', async () => {
-    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
     const archivePath = join(testRoot, 'lazy.codex-pet.zip')
     writeFileSync(archivePath, await packArchive())
 
@@ -183,7 +183,7 @@ describe('desktop pet asset pack import', () => {
   })
 
   it('imports a dropped codex-pet zip from archive bytes when no file path is available', async () => {
-    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
 
     const pack = await __desktopPetAssetTestHooks.importPetPackFromArchiveData({
       name: 'lazy.codex-pet.zip',
@@ -199,7 +199,7 @@ describe('desktop pet asset pack import', () => {
   })
 
   it('rejects unsafe archive paths before writing outside the temp folder', async () => {
-    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
     const zip = new JSZip()
     zip.file('C:/pet.json', JSON.stringify(petManifest()))
 
@@ -212,7 +212,7 @@ describe('desktop pet asset pack import', () => {
   })
 
   it('rejects executable files in archives', async () => {
-    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
     const zip = new JSZip()
     zip.file('pet.json', JSON.stringify(petManifest()))
     zip.file('spritesheet.webp', codexVp8lSpritesheetHeader())
@@ -227,7 +227,7 @@ describe('desktop pet asset pack import', () => {
   })
 
   it('rejects archives with unreadable spritesheet bytes', async () => {
-    const { __desktopPetAssetTestHooks } = await import('../src/main/pet-assets')
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
     const zip = new JSZip()
     zip.file('pet.json', JSON.stringify(petManifest()))
     zip.file('spritesheet.webp', 'not a webp image')

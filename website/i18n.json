@@ -39,6 +39,54 @@
     "en": "Invite code could not be redeemed. Check the code and try again.",
     "zh": "邀请码兑换失败，请检查后重试。"
   },
+  "inviteCodeGate.title": {
+    "en": "Invite code required",
+    "zh": "需要邀请码"
+  },
+  "inviteCodeGate.description": {
+    "en": "Enter an invite code to unlock this action. We will continue after the code is redeemed.",
+    "zh": "输入邀请码解锁这个操作，兑换成功后会继续执行。"
+  },
+  "inviteCodeGate.codeLabel": {
+    "en": "Invite code",
+    "zh": "邀请码"
+  },
+  "inviteCodeGate.codePlaceholder": {
+    "en": "Enter invite code",
+    "zh": "输入邀请码"
+  },
+  "inviteCodeGate.submit": {
+    "en": "Redeem invite",
+    "zh": "兑换邀请码"
+  },
+  "inviteCodeGate.submitting": {
+    "en": "Redeeming...",
+    "zh": "兑换中..."
+  },
+  "inviteCodeGate.required": {
+    "en": "Enter an invite code.",
+    "zh": "请输入邀请码。"
+  },
+  "inviteCodeGate.cancel": {
+    "en": "Cancel",
+    "zh": "取消"
+  },
+  "inviteCodeGate.success": {
+    "en": "Invite code redeemed.",
+    "zh": "邀请码已兑换。"
+  },
+  "inviteCodeGate.failed": {
+    "en": "Invite code could not be redeemed. Check the code and try again.",
+    "zh": "邀请码兑换失败，请检查后重试。"
+  },
+  "inviteCodeGate.invalid": {
+    "en": "That invite code is invalid or has already been used.",
+    "zh": "邀请码无效或已被使用。"
+  },
+  "inviteCodeGate.capability": {
+    "en": "Required capability: {capability}",
+    "zh": "所需能力：{capability}"
+  },
   "loginModal.google": {
     "en": "Continue with Google",
     "zh": "使用 Google"

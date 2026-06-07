@@ -21,6 +21,13 @@ export async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> 
 
 // ── Shared Types ────────────────────────────────────────────────────────────
 
+export interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface Stats {
   totalUsers: number
   onlineUsers: number
@@ -78,6 +85,11 @@ export interface Message {
   authorId: string
   createdAt: string
   author?: { username: string; displayName: string | null } | null
+}
+
+export interface MessageListResponse {
+  messages: Message[]
+  hasMore: boolean
 }
 
 export interface AdminAgent {

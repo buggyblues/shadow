@@ -7,6 +7,7 @@ import { getApiErrorMessage } from '../../lib/api-errors'
 import {
   authenticatedRouterPathFromRedirect,
   currentAppRedirect,
+  isDesktopAuthContinuationPath,
   webRedirectFromRouterPath,
 } from '../../lib/auth-redirect'
 import { type AuthenticatedSession, applyAuthenticatedSession } from '../../lib/auth-session'
@@ -103,6 +104,10 @@ export function LoginPanel({ variant, redirect, onClose, onComplete }: LoginPane
       onAuthenticated={(session) => {
         applyAuthenticatedSession(session as AuthenticatedSession)
         onComplete?.()
+        if (isDesktopAuthContinuationPath(routerRedirect)) {
+          window.location.assign(webRedirectFromRouterPath(routerRedirect))
+          return
+        }
         navigate({ to: routerRedirect })
       }}
       onClose={onClose}

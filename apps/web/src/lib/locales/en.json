@@ -166,6 +166,18 @@
     "passwordResetSent": "If this email is registered, we sent a password reset link. Open it within 30 minutes to continue.",
     "passwordResetEmailRequired": "Enter your email first."
   },
+  "inviteCodeGate": {
+    "title": "Invite code required",
+    "description": "This action needs member access. Enter an invite code and we will continue the action automatically.",
+    "codeLabel": "Invite code",
+    "codePlaceholder": "Invite code",
+    "submit": "Redeem invite",
+    "submitting": "Redeeming...",
+    "required": "Enter an invite code.",
+    "success": "Invite code redeemed.",
+    "failed": "Unable to redeem invite code",
+    "capability": "Required capability: {{capability}}"
+  },
   "playLaunch": {
     "title": "Launch play",
     "subtitle": "Preview the play, then enter your space in one click.",
@@ -4400,6 +4412,10 @@
     "upToDate": "You are up to date.",
     "actions": "Actions",
     "restart": "Restart app",
+    "exportLogs": "Export logs",
+    "exportLogsDesc": "Save the local desktop log file for troubleshooting.",
+    "exportLogsAction": "Export",
+    "exportingLogs": "Exporting...",
     "connectorTitle": "Connector",
     "tabGeneral": "General",
     "tabConnector": "Connector",

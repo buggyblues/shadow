@@ -13,8 +13,17 @@ import {
   Trash2,
   UploadCloud,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { apiFetch, type ServerAppCatalogEntry, type ServerAppIntegration } from '../lib/admin-api'
+
+interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  limit: number
+  offset: number
+}
+
+const PAGE_SIZE = 100
 
 function statusClass(status: string) {
   if (status === 'active') return 'bg-green-500/20 text-green-300'
@@ -78,7 +87,11 @@ function metadataGaps(
 
 export function ServerAppsTab() {
   const [apps, setApps] = useState<ServerAppIntegration[]>([])
+  const [appTotal, setAppTotal] = useState(0)
+  const [appPage, setAppPage] = useState(1)
   const [catalog, setCatalog] = useState<ServerAppCatalogEntry[]>([])
+  const [catalogTotal, setCatalogTotal] = useState(0)
+  const [catalogPage, setCatalogPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -92,12 +105,28 @@ export function ServerAppsTab() {
   const load = async () => {
     setLoading(true)
     try {
+      const buildParams = (page: number) => {
+        const params = new URLSearchParams({
+          includeTotal: '1',
+          limit: String(PAGE_SIZE),
+          offset: String((page - 1) * PAGE_SIZE),
+        })
+        const search = query.trim()
+        if (search) params.set('search', search)
+        return params
+      }
       const [nextApps, nextCatalog] = await Promise.all([
-        apiFetch<ServerAppIntegration[]>('/server-apps'),
-        apiFetch<ServerAppCatalogEntry[]>('/server-app-catalog'),
+        apiFetch<PaginatedResponse<ServerAppIntegration>>(
+          `/server-apps?${buildParams(appPage).toString()}`,
+        ),
+        apiFetch<PaginatedResponse<ServerAppCatalogEntry>>(
+          `/server-app-catalog?${buildParams(catalogPage).toString()}`,
+        ),
       ])
-      setApps(nextApps.map(normalizeApp))
-      setCatalog(nextCatalog.map(normalizeCatalogEntry))
+      setApps(nextApps.items.map(normalizeApp))
+      setAppTotal(nextApps.total)
+      setCatalog(nextCatalog.items.map(normalizeCatalogEntry))
+      setCatalogTotal(nextCatalog.total)
     } catch {
       /* */
     } finally {
@@ -106,42 +135,31 @@ export function ServerAppsTab() {
   }
 
   useEffect(() => {
-    load()
-  }, [])
+    setAppPage(1)
+    setCatalogPage(1)
+  }, [query])
 
-  const filteredApps = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    if (!needle) return apps
-    return apps.filter((app) =>
-      [app.name, app.appKey, app.serverName, app.serverSlug ?? '', app.apiBaseUrl]
-        .join(' ')
-        .toLowerCase()
-        .includes(needle),
-    )
-  }, [apps, query])
+  useEffect(() => {
+    load()
+  }, [appPage, catalogPage, query])
 
   const totalCommands = apps.reduce((sum, app) => sum + app.commandCount, 0)
   const totalGrants = apps.reduce((sum, app) => sum + app.grantCount, 0)
   const activeCatalogCount = catalog.filter((entry) => entry.status === 'active').length
-  const unlistedApps = filteredApps.filter((app) => !app.inCatalog)
+  const unlistedApps = apps.filter((app) => !app.inCatalog)
   const metadataGapCount = apps.filter((app) => metadataGaps(app).length > 0).length
 
   const addCatalogEntry = async () => {
     setCatalogError('')
     setCatalogSaving(true)
     try {
-      const entry = normalizeCatalogEntry(
-        await apiFetch<ServerAppCatalogEntry>('/server-app-catalog', {
-          method: 'POST',
-          body: JSON.stringify({
-            manifestUrl: catalogManifestUrl.trim(),
-          }),
+      await apiFetch<ServerAppCatalogEntry>('/server-app-catalog', {
+        method: 'POST',
+        body: JSON.stringify({
+          manifestUrl: catalogManifestUrl.trim(),
         }),
-      )
-      setCatalog((current) => {
-        const withoutExisting = current.filter((item) => item.appKey !== entry.appKey)
-        return [...withoutExisting, entry].sort((a, b) => a.name.localeCompare(b.name))
       })
+      await load()
       setCatalogManifestUrl('')
     } catch (error) {
       setCatalogError(error instanceof Error ? error.message : String(error))
@@ -154,27 +172,10 @@ export function ServerAppsTab() {
     setCatalogError('')
     setPublishingId(app.id)
     try {
-      const entry = normalizeCatalogEntry(
-        await apiFetch<ServerAppCatalogEntry>(`/server-apps/${app.id}/catalog`, {
-          method: 'POST',
-        }),
-      )
-      setCatalog((current) => {
-        const withoutExisting = current.filter((item) => item.appKey !== entry.appKey)
-        return [...withoutExisting, entry].sort((a, b) => a.name.localeCompare(b.name))
+      await apiFetch<ServerAppCatalogEntry>(`/server-apps/${app.id}/catalog`, {
+        method: 'POST',
       })
-      setApps((current) =>
-        current.map((item) =>
-          item.appKey === app.appKey
-            ? {
-                ...item,
-                inCatalog: true,
-                catalogEntryId: entry.id,
-                catalogStatus: entry.status,
-              }
-            : item,
-        ),
-      )
+      await load()
     } catch (error) {
       setCatalogError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -211,13 +212,13 @@ export function ServerAppsTab() {
   const deleteCatalogEntry = async (entry: ServerAppCatalogEntry) => {
     if (!confirm(`确定要从应用商店删除 ${entry.name} 吗？已安装的应用不会被卸载。`)) return
     await apiFetch(`/server-app-catalog/${entry.id}`, { method: 'DELETE' })
-    setCatalog((current) => current.filter((item) => item.id !== entry.id))
+    await load()
   }
 
   const uninstall = async (app: ServerAppIntegration) => {
     if (!confirm(`确定要从服务器「${app.serverName}」卸载 ${app.name} 吗？`)) return
     await apiFetch(`/server-apps/${app.id}`, { method: 'DELETE' })
-    setApps((current) => current.filter((item) => item.id !== app.id))
+    await load()
   }
 
   const copyCli = async (app: ServerAppIntegration) => {
@@ -273,9 +274,9 @@ export function ServerAppsTab() {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <MetricCard label="已安装" value={apps.length} />
+        <MetricCard label="已安装" value={appTotal} />
         <MetricCard label="待收录" value={unlistedApps.length} tone="amber" />
-        <MetricCard label="已上架" value={activeCatalogCount} tone="green" />
+        <MetricCard label="已上架" value={catalogTotal || activeCatalogCount} tone="green" />
         <MetricCard label="命令" value={totalCommands} tone="indigo" />
         <MetricCard label="授权" value={totalGrants} tone="green" />
         <MetricCard label="缺元数据" value={metadataGapCount} tone="red" />
@@ -339,7 +340,7 @@ export function ServerAppsTab() {
             官方市场
           </h3>
           <span className="rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-400">
-            {catalog.length}
+            {catalogTotal}
           </span>
         </div>
         {catalog.length ? (
@@ -357,6 +358,7 @@ export function ServerAppsTab() {
         ) : (
           <EmptyPanel text="暂无官方市场条目。" />
         )}
+        <ListPager page={catalogPage} total={catalogTotal} onPageChange={setCatalogPage} />
       </section>
 
       <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900">
@@ -373,7 +375,7 @@ export function ServerAppsTab() {
             </tr>
           </thead>
           <tbody>
-            {filteredApps.map((app) => (
+            {apps.map((app) => (
               <tr key={app.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
                 <td className="px-4 py-3 align-top">
                   <div className="flex items-start gap-3">
@@ -512,7 +514,7 @@ export function ServerAppsTab() {
                 </td>
               </tr>
             ))}
-            {filteredApps.length === 0 && (
+            {apps.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-zinc-500">
                   {loading ? '加载中…' : '暂无已安装应用'}
@@ -522,6 +524,7 @@ export function ServerAppsTab() {
           </tbody>
         </table>
       </div>
+      <ListPager page={appPage} total={appTotal} onPageChange={setAppPage} />
     </div>
   )
 }
@@ -554,6 +557,44 @@ function EmptyPanel({ text }: { text: string }) {
   return (
     <div className="rounded-lg border border-dashed border-zinc-800 p-6 text-center text-sm text-zinc-500">
       {text}
+    </div>
+  )
+}
+
+function ListPager({
+  page,
+  total,
+  onPageChange,
+}: {
+  page: number
+  total: number
+  onPageChange: (page: number) => void
+}) {
+  if (total <= PAGE_SIZE) return null
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 text-xs text-zinc-500">
+      <span>
+        第 {page} / {totalPages} 页，共 {total} 条
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          className="rounded-lg border border-zinc-800 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+        >
+          上一页
+        </button>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          className="rounded-lg border border-zinc-800 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+        >
+          下一页
+        </button>
+      </div>
     </div>
   )
 }

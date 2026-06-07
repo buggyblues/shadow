@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   authenticatedRouterPathFromRedirect,
   currentAppRedirect,
+  isDesktopAuthContinuationPath,
   routerPathFromRedirect,
   webRedirectFromRouterPath,
 } from './auth-redirect'
@@ -25,6 +26,16 @@ describe('auth redirect helpers', () => {
   it('does not loop authenticated users back to auth routes', () => {
     expect(authenticatedRouterPathFromRedirect('/app/login?redirect=/app/cloud')).toBe('/discover')
     expect(authenticatedRouterPathFromRedirect('/register')).toBe('/discover')
+  })
+
+  it('detects desktop auth continuation redirects after web login', () => {
+    expect(isDesktopAuthContinuationPath('/app/desktop-auth-callback?redirect=/app/discover')).toBe(
+      true,
+    )
+    expect(isDesktopAuthContinuationPath('/desktop-auth-callback?redirect=/app/discover')).toBe(
+      true,
+    )
+    expect(isDesktopAuthContinuationPath('/app/discover')).toBe(false)
   })
 
   it('accepts same-origin absolute redirects but rejects unsafe targets', () => {

@@ -39,24 +39,28 @@ vi.mock('electron', () => ({
   },
 }))
 
-vi.mock('../src/main/desktop-settings', () => ({
-  readDesktopSettings: vi.fn(() => ({
-    serverBaseUrl: desktopSettingsState.serverBaseUrl,
-  })),
-  resolveDesktopServerBaseUrl: vi.fn((settings?: { serverBaseUrl?: string }) => {
-    const value = settings?.serverBaseUrl ?? desktopSettingsState.serverBaseUrl
-    try {
-      const url = new URL(value || 'https://shadowob.com')
-      return url.origin
-    } catch {
-      return 'https://shadowob.com'
-    }
-  }),
+vi.mock('../src/main/services/desktop-settings.service', () => ({
+  desktopSettingsService: {
+    readSettingsSync: vi.fn(() => ({
+      serverBaseUrl: desktopSettingsState.serverBaseUrl,
+    })),
+    resolveDesktopServerBaseUrl: vi.fn((settings?: { serverBaseUrl?: string }) => {
+      const value = settings?.serverBaseUrl ?? desktopSettingsState.serverBaseUrl
+      try {
+        const url = new URL(value || 'https://shadowob.com')
+        return url.origin
+      } catch {
+        return 'https://shadowob.com'
+      }
+    }),
+  },
 }))
 
-vi.mock('../src/main/window', () => ({
-  getConnectorAuthWindow: vi.fn(() => null),
-  getMainWindow: vi.fn(() => null),
+vi.mock('../src/main/services/window.service', () => ({
+  windowService: {
+    getConnectorAuthWindow: vi.fn(() => null),
+    getMainWindow: vi.fn(() => null),
+  },
 }))
 
 function response(body: unknown, init?: ResponseInit) {
@@ -90,8 +94,8 @@ function executedAuthUpdateScript(win: ReturnType<typeof createWindow>): string 
 }
 
 async function loadCommunitySession() {
-  const module = await import('../src/main/community-session')
-  module.resetCommunityAuthStoreForTests()
+  const module = await import('../src/main/services/community-session.service')
+  module.communitySessionService.resetForTests()
   return module
 }
 
@@ -111,16 +115,16 @@ describe('desktop community session', () => {
   it('keeps passive blank startup snapshots from clearing a valid session', async () => {
     const session = await loadCommunitySession()
 
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'access-1', refreshToken: 'refresh-1' },
       { reason: 'login' },
     )
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: '', refreshToken: '' },
       { reason: 'startup' },
     )
 
-    await expect(session.readCommunityAuthTokens()).resolves.toEqual({
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: 'access-1',
       refreshToken: 'refresh-1',
     })
@@ -130,17 +134,17 @@ describe('desktop community session', () => {
     const win = createWindow()
     electronState.windows = [win]
     const session = await loadCommunitySession()
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'access-1', refreshToken: 'refresh-1' },
       { reason: 'login' },
     )
 
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: '', refreshToken: '' },
       { reason: 'logout' },
     )
 
-    await expect(session.readCommunityAuthTokens()).resolves.toEqual({
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: '',
       refreshToken: '',
     })
@@ -150,21 +154,21 @@ describe('desktop community session', () => {
 
   it('does not let stale passive window snapshots restore a logged-out session', async () => {
     const session = await loadCommunitySession()
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'access-1', refreshToken: 'refresh-1' },
       { reason: 'login' },
     )
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: '', refreshToken: '' },
       { reason: 'logout' },
     )
 
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'access-1', refreshToken: 'refresh-1' },
       { reason: 'startup' },
     )
 
-    await expect(session.readCommunityAuthTokens()).resolves.toEqual({
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: '',
       refreshToken: '',
     })
@@ -172,26 +176,26 @@ describe('desktop community session', () => {
 
   it('persists sessions by configured server origin', async () => {
     let session = await loadCommunitySession()
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'hosted-access', refreshToken: 'hosted-refresh' },
       { reason: 'login' },
     )
 
     desktopSettingsState.serverBaseUrl = 'https://self-hosted.example'
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'self-access', refreshToken: 'self-refresh' },
       { reason: 'login' },
     )
 
-    session.resetCommunityAuthStoreForTests()
+    session.communitySessionService.resetForTests()
     session = await loadCommunitySession()
 
-    await expect(session.readCommunityAuthTokens()).resolves.toEqual({
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: 'self-access',
       refreshToken: 'self-refresh',
     })
     desktopSettingsState.serverBaseUrl = 'https://shadowob.com'
-    await expect(session.readCommunityAuthTokens()).resolves.toEqual({
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: 'hosted-access',
       refreshToken: 'hosted-refresh',
     })
@@ -201,20 +205,20 @@ describe('desktop community session', () => {
     const win = createWindow()
     electronState.windows = [win]
     const session = await loadCommunitySession()
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'hosted-access', refreshToken: 'hosted-refresh' },
       { reason: 'login' },
     )
 
     desktopSettingsState.serverBaseUrl = 'https://self-hosted.example'
-    await session.syncCommunityAuthStateToOpenWindows('settings')
+    await session.communitySessionService.syncAuthStateToOpenWindows('settings')
 
     expect(executedAuthUpdateScript(win)).toContain("localStorage.removeItem('accessToken')")
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'self-access', refreshToken: 'self-refresh' },
       { reason: 'login' },
     )
-    await session.syncCommunityAuthStateToOpenWindows('settings')
+    await session.communitySessionService.syncAuthStateToOpenWindows('settings')
 
     expect(executedAuthUpdateScript(win)).toContain('self-access')
     expect(executedAuthUpdateScript(win)).toContain('settings')
@@ -222,7 +226,7 @@ describe('desktop community session', () => {
 
   it('rotates tickets once and retries a request after access-token expiry', async () => {
     const session = await loadCommunitySession()
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'expired-access', refreshToken: 'refresh-1' },
       { reason: 'login' },
     )
@@ -231,7 +235,7 @@ describe('desktop community session', () => {
       .mockResolvedValueOnce(response({ accessToken: 'access-2', refreshToken: 'refresh-2' }))
       .mockResolvedValueOnce(response({ ok: true }))
 
-    const result = await session.fetchCommunityWithAuth('/api/ping')
+    const result = await session.communitySessionService.fetchWithAuth('/api/ping')
 
     expect(result.status).toBe(200)
     expect(electronState.fetch).toHaveBeenCalledTimes(3)
@@ -239,7 +243,7 @@ describe('desktop community session', () => {
       'Bearer expired-access',
     )
     expect(electronState.fetch.mock.calls[2][1]?.headers.Authorization).toBe('Bearer access-2')
-    await expect(session.readCommunityAuthTokens()).resolves.toEqual({
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: 'access-2',
       refreshToken: 'refresh-2',
     })
@@ -247,7 +251,7 @@ describe('desktop community session', () => {
 
   it('serializes concurrent ticket refreshes', async () => {
     const session = await loadCommunitySession()
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: '', refreshToken: 'refresh-1' },
       { reason: 'login' },
     )
@@ -256,10 +260,13 @@ describe('desktop community session', () => {
     )
 
     await expect(
-      Promise.all([session.refreshCommunityAccessToken(), session.refreshCommunityAccessToken()]),
+      Promise.all([
+        session.communitySessionService.refreshAccessToken(),
+        session.communitySessionService.refreshAccessToken(),
+      ]),
     ).resolves.toEqual(['access-2', 'access-2'])
     expect(electronState.fetch).toHaveBeenCalledTimes(1)
-    await expect(session.readCommunityAuthTokens()).resolves.toEqual({
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: 'access-2',
       refreshToken: 'refresh-2',
     })
@@ -269,7 +276,7 @@ describe('desktop community session', () => {
     const win = createWindow()
     electronState.windows = [win]
     const session = await loadCommunitySession()
-    session.rememberCommunityAuthSnapshot(
+    session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'expired-access', refreshToken: 'refresh-1' },
       { reason: 'login' },
     )
@@ -277,8 +284,10 @@ describe('desktop community session', () => {
       .mockResolvedValueOnce(response({ error: 'expired' }, { status: 401 }))
       .mockResolvedValueOnce(response({ error: 'revoked' }, { status: 403 }))
 
-    await expect(session.fetchCommunityWithAuth('/api/ping')).rejects.toThrow('AUTH_REQUIRED')
-    await expect(session.readCommunityAuthTokens()).resolves.toEqual({
+    await expect(session.communitySessionService.fetchWithAuth('/api/ping')).rejects.toThrow(
+      'AUTH_REQUIRED',
+    )
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: '',
       refreshToken: '',
     })

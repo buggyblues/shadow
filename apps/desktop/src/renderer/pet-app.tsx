@@ -1216,6 +1216,7 @@ export function PetApp() {
     if (!drag) return
     clearDragVoiceTimer(drag)
     if (drag.voiceStarted) finishVoiceCapture()
+    void api?.pet?.endWindowDrag?.(drag.pointerId)
     dragRef.current = null
     setDragging(false)
   }
@@ -1243,6 +1244,11 @@ export function PetApp() {
       voiceTimer,
       voiceStarted: false,
     }
+    void api?.pet?.beginWindowDrag?.({
+      pointerId,
+      screenX: event.screenX,
+      screenY: event.screenY,
+    })
     setDragging(false)
   }
 
@@ -1269,7 +1275,12 @@ export function PetApp() {
     }
     if (Math.abs(delta.x) >= 1) setDragDirection(delta.x >= 0 ? 'running-right' : 'running-left')
     if (drag.travel >= 7) clearDragVoiceTimer(drag)
-    void api?.pet?.moveWindow?.(delta)
+    void api?.pet?.moveWindow?.({
+      ...delta,
+      pointerId: drag.pointerId,
+      screenX: event.screenX,
+      screenY: event.screenY,
+    })
   }
 
   function handlePetPointerUp(event: PointerEvent<HTMLButtonElement>) {
@@ -1277,6 +1288,7 @@ export function PetApp() {
     if (!drag || drag.pointerId !== event.pointerId) return
     clearDragVoiceTimer(drag)
     dragRef.current = null
+    void api?.pet?.endWindowDrag?.(drag.pointerId)
     event.currentTarget.releasePointerCapture(event.pointerId)
     if (drag.voiceStarted) {
       finishVoiceCapture()
@@ -1294,6 +1306,7 @@ export function PetApp() {
     if (drag) {
       clearDragVoiceTimer(drag)
       if (drag.voiceStarted) finishVoiceCapture()
+      void api?.pet?.endWindowDrag?.(drag.pointerId)
     }
     dragRef.current = null
     setDragging(false)

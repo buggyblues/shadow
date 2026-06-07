@@ -1,22 +1,33 @@
 import { useEffect, useState } from 'react'
-import { apiFetch, type User } from '../lib/admin-api'
+import { apiFetch, type PaginatedResponse, type User } from '../lib/admin-api'
+
+const PAGE_SIZE = 50
 
 export function UsersTab() {
   const [users, setUsers] = useState<User[]>([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
 
-  const load = () =>
-    apiFetch<User[]>('/users')
-      .then(setUsers)
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const load = (nextPage = page) =>
+    apiFetch<PaginatedResponse<User>>(
+      `/users?includeTotal=1&limit=${PAGE_SIZE}&offset=${(nextPage - 1) * PAGE_SIZE}`,
+    )
+      .then((data) => {
+        setUsers(data.items)
+        setTotal(data.total)
+      })
       .catch(() => {})
 
   useEffect(() => {
-    load()
-  }, [])
+    load(page)
+  }, [page])
 
   const del = async (id: string) => {
     if (!confirm('确定要删除该用户吗？')) return
     await apiFetch(`/users/${id}`, { method: 'DELETE' })
-    load()
+    load(page)
   }
 
   return (
@@ -96,6 +107,27 @@ export function UsersTab() {
             )}
           </tbody>
         </table>
+      </div>
+      <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
+        <span>
+          共 {total} 条，第 {page} / {totalPages} 页
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="rounded bg-zinc-800 px-3 py-1 text-zinc-200 disabled:opacity-50"
+          >
+            上一页
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="rounded bg-zinc-800 px-3 py-1 text-zinc-200 disabled:opacity-50"
+          >
+            下一页
+          </button>
+        </div>
       </div>
     </div>
   )

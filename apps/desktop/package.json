@@ -30,10 +30,13 @@
     "@shadowob/ui": "workspace:*",
     "@tanstack/react-query": "^5.100.14",
     "@tanstack/react-router": "^1.168.2",
+    "awilix": "^13.0.3",
+    "electron-log": "^5.4.4",
     "jszip": "^3.10.1",
     "pinyin-pro": "^3.28.1",
     "sherpa-onnx-node": "1.13.2",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",

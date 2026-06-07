@@ -4,7 +4,7 @@ import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { PasswordChangeLogDao } from '../dao/password-change-log.dao'
 import type { ServerDao } from '../dao/server.dao'
-import type { UserDao } from '../dao/user.dao'
+import type { AdminUserListOptions, UserDao } from '../dao/user.dao'
 import type { AccessService } from '../security/access.service'
 import type { AuditLogService } from '../services/audit-log.service'
 import type { SecureUseCaseInput } from './_security-usecase'
@@ -37,9 +37,9 @@ export class AdminUseCase {
     })
   }
 
-  async getUsers(input: SecureUseCaseInput & { limit?: number; offset?: number }) {
+  async getUsers(input: SecureUseCaseInput & AdminUserListOptions) {
     await this.deps.accessService.requirePlatformAdmin(input.ctx.actor)
-    return this.deps.userDao.findAll(input.limit ?? 50, input.offset ?? 0)
+    return this.deps.userDao.listForAdmin(input)
   }
 
   async updateUser(
@@ -115,9 +115,15 @@ export class AdminUseCase {
     })
   }
 
-  async getServerChannels(input: SecureUseCaseInput & { serverId: string }) {
+  async getServerChannels(
+    input: SecureUseCaseInput & { serverId: string; limit?: number; offset?: number },
+  ) {
     await this.deps.accessService.requirePlatformAdmin(input.ctx.actor)
-    return this.deps.channelDao.findByServerId(input.serverId)
+    return this.deps.channelDao.findByServerId(
+      input.serverId,
+      input.limit ?? 100,
+      input.offset ?? 0,
+    )
   }
 
   async getChannelMessages(

@@ -1,5 +1,5 @@
 import { useSearch } from '@tanstack/react-router'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LoginPanel } from '../components/auth/login-panel'
 import { useAppStatus } from '../hooks/use-app-status'
@@ -19,10 +19,14 @@ export function LoginPage() {
   const searchParams = useSearch({ strict: false }) as { redirect?: string }
   const desktopAPI = desktopLoginBridge()
   const isDesktopLogin = Boolean(desktopAPI?.isDesktop && desktopAPI.openCommunityLogin)
+  const openedDesktopLoginRef = useRef<string | null>(null)
   useAppStatus({ title: t('auth.loginTitle'), variant: 'auth' })
 
   useEffect(() => {
     if (!isDesktopLogin) return
+    const key = searchParams.redirect ?? ''
+    if (openedDesktopLoginRef.current === key) return
+    openedDesktopLoginRef.current = key
     void desktopAPI?.openCommunityLogin?.(searchParams.redirect)
   }, [desktopAPI, isDesktopLogin, searchParams.redirect])
 

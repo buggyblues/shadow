@@ -109,7 +109,19 @@ export type DesktopPetApi = {
   pet?: {
     hide?: () => Promise<void>
     setPanelMode?: (mode: 'compact' | 'expanded') => Promise<DesktopPetPanelModeLayout>
-    moveWindow?: (delta: { x: number; y: number }) => Promise<void>
+    beginWindowDrag?: (input: {
+      pointerId?: number
+      screenX: number
+      screenY: number
+    }) => Promise<void>
+    moveWindow?: (delta: {
+      x?: number
+      y?: number
+      pointerId?: number
+      screenX?: number
+      screenY?: number
+    }) => Promise<void>
+    endWindowDrag?: (pointerId?: number) => Promise<void>
     modelProxyStream?: (
       input: { requestId: string; body: Record<string, unknown> },
       onDelta: (delta: string) => void,

@@ -179,6 +179,32 @@ describe('auth session', () => {
     })
   })
 
+  it('refreshes from a desktop refresh token when the renderer has no access token', async () => {
+    setDesktopAPI({
+      getCommunityAuthTokens: vi
+        .fn()
+        .mockResolvedValue({ accessToken: '', refreshToken: 'desktop-refresh' }),
+      syncCommunityAuthToken: vi.fn(),
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ accessToken: 'new-access', refreshToken: 'new-refresh' }),
+      )
+      .mockResolvedValueOnce(jsonResponse(user))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(ensureAuthenticatedSession()).resolves.toEqual(user)
+
+    expect(testStorage().getItem('accessToken')).toBe('new-access')
+    expect(testStorage().getItem('refreshToken')).toBe('new-refresh')
+    expect(useAuthStore.getState()).toMatchObject({
+      user,
+      accessToken: 'new-access',
+      isAuthenticated: true,
+    })
+  })
+
   it('clears all auth state on explicit session clear', () => {
     testStorage().setItem('accessToken', 'access')
     testStorage().setItem('refreshToken', 'refresh')
@@ -280,5 +306,32 @@ describe('auth session', () => {
       isAuthenticated: false,
     })
     expect(disconnectSocket).toHaveBeenCalled()
+  })
+
+  it('ignores passive empty desktop auth snapshots', () => {
+    installDesktopCommunityAuthStateListener()
+    testStorage().setItem('accessToken', 'access')
+    testStorage().setItem('refreshToken', 'refresh')
+    useAuthStore.setState({ user, accessToken: 'access', isAuthenticated: true })
+
+    window.dispatchEvent(
+      new CustomEvent(DESKTOP_COMMUNITY_AUTH_UPDATED_EVENT, {
+        detail: {
+          accessToken: '',
+          refreshToken: '',
+          authenticated: false,
+          reason: 'startup',
+        },
+      }),
+    )
+
+    expect(testStorage().getItem('accessToken')).toBe('access')
+    expect(testStorage().getItem('refreshToken')).toBe('refresh')
+    expect(useAuthStore.getState()).toMatchObject({
+      user,
+      accessToken: 'access',
+      isAuthenticated: true,
+    })
+    expect(disconnectSocket).not.toHaveBeenCalled()
   })
 })

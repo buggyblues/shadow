@@ -1,11 +1,32 @@
+import { InviteCodeDialog, type InviteCodeDialogText } from '@shadowob/views/invite-code'
 import type React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Helmet, useI18n, useLang, useLocation, usePageData } from 'rspress/runtime'
 import Theme from 'rspress/theme'
 import { HomeContent } from '../components/HomeContent'
 import { PublicFooter } from '../components/Layout'
 import { LoginModal } from '../components/LoginModal'
+import {
+  InviteCodeRequestCancelled,
+  redeemInviteCode,
+  ShadowApiError,
+  WEBSITE_INVITE_CODE_REQUIRED_EVENT,
+  type WebsiteInviteCodeRequiredDetail,
+} from '../lib/shadow-api'
 import './index.css'
+
+declare const __SHADOW_APP_BASE_URL__: string | undefined
+
+function configuredAppBase() {
+  return (typeof __SHADOW_APP_BASE_URL__ !== 'undefined' ? __SHADOW_APP_BASE_URL__ : '').replace(
+    /\/$/,
+    '',
+  )
+}
+
+function formatI18n(template: string, values: Record<string, string | number>) {
+  return template.replace(/\{(\w+)\}/g, (match, key) => String(values[key] ?? match))
+}
 
 /**
  * Background orbs — injected only on the homepage to avoid showing on doc pages.
@@ -229,6 +250,82 @@ function GlobalFooter() {
   return <PublicFooter lang={isZh ? 'zh' : 'en'} />
 }
 
+function WebsiteInviteCodeGate({ apiBase }: { apiBase: string }) {
+  const t = useI18n()
+  const [activeRequest, setActiveRequest] = useState<WebsiteInviteCodeRequiredDetail | null>(null)
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const text = useMemo(
+    () =>
+      ({
+        title: t('inviteCodeGate.title'),
+        description: t('inviteCodeGate.description'),
+        codeLabel: t('inviteCodeGate.codeLabel'),
+        codePlaceholder: t('inviteCodeGate.codePlaceholder'),
+        submit: t('inviteCodeGate.submit'),
+        submitting: t('inviteCodeGate.submitting'),
+        required: t('inviteCodeGate.required'),
+        cancel: t('inviteCodeGate.cancel'),
+        close: t('loginModal.close'),
+        success: t('inviteCodeGate.success'),
+        failed: t('inviteCodeGate.failed'),
+        capability: (capability: string) =>
+          formatI18n(t('inviteCodeGate.capability'), { capability }),
+      }) satisfies InviteCodeDialogText,
+    [t],
+  )
+
+  useEffect(() => {
+    const handleInviteRequest = (event: Event) => {
+      const detail = (event as CustomEvent<WebsiteInviteCodeRequiredDetail>).detail
+      if (!detail?.error) return
+      detail.handled = true
+      setError('')
+      setActiveRequest(detail)
+    }
+    window.addEventListener(WEBSITE_INVITE_CODE_REQUIRED_EVENT, handleInviteRequest)
+    return () => window.removeEventListener(WEBSITE_INVITE_CODE_REQUIRED_EVENT, handleInviteRequest)
+  }, [])
+
+  const close = () => {
+    if (!activeRequest) return
+    activeRequest.reject(new InviteCodeRequestCancelled())
+    setActiveRequest(null)
+    setError('')
+  }
+
+  const submitInviteCode = async (code: string) => {
+    if (!activeRequest || submitting) return
+    setSubmitting(true)
+    setError('')
+    try {
+      await redeemInviteCode(apiBase, code)
+      activeRequest.resolve()
+      setActiveRequest(null)
+    } catch (err) {
+      if (err instanceof ShadowApiError && err.code === 'INVALID_INVITE_CODE') {
+        setError(t('inviteCodeGate.invalid'))
+      } else {
+        setError(err instanceof Error ? err.message : text.failed)
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <InviteCodeDialog
+      open={Boolean(activeRequest)}
+      text={text}
+      capability={activeRequest?.error.capability}
+      error={error}
+      submitting={submitting}
+      onSubmit={submitInviteCode}
+      onClose={close}
+    />
+  )
+}
+
 const Layout = () => {
   const { page, siteData } = usePageData()
   const { pathname } = useLocation()
@@ -288,6 +385,7 @@ const Layout = () => {
           redirect={loginRedirect}
           onClose={() => setLoginOpen(false)}
         />
+        <WebsiteInviteCodeGate apiBase={configuredAppBase()} />
       </div>
     )
   }
@@ -295,7 +393,12 @@ const Layout = () => {
   // Doc pages — full-width rspress nav with custom logo text + Launch button
   // (.translation lang switcher hidden via CSS; lang in footer only)
   const footer = page.pageType === 'custom' ? undefined : <GlobalFooter />
-  return <Theme.Layout navTitle={<DocNavTitle />} afterNavMenu={<LaunchButton />} bottom={footer} />
+  return (
+    <>
+      <Theme.Layout navTitle={<DocNavTitle />} afterNavMenu={<LaunchButton />} bottom={footer} />
+      <WebsiteInviteCodeGate apiBase={configuredAppBase()} />
+    </>
+  )
 }
 
 export default {

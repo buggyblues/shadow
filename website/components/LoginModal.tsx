@@ -1,6 +1,7 @@
 import { type LoginSession, LoginView, type LoginViewText } from '@shadowob/views/login'
 import { useMemo } from 'react'
 import { useI18n } from 'rspress/runtime'
+import { requestJson } from '../lib/shadow-api'
 
 declare const __SHADOW_APP_BASE_URL__: string | undefined
 declare const __SHADOW_GOOGLE_CLIENT_ID__: string | undefined
@@ -44,27 +45,6 @@ function safeAppRedirect(value: string) {
 
 function formatI18n(template: string, values: Record<string, string | number>) {
   return template.replace(/\{(\w+)\}/g, (match, key) => String(values[key] ?? match))
-}
-
-async function requestJson<T>(apiBase: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => null)
-    const message =
-      body && typeof body === 'object'
-        ? ((body as { detail?: unknown; error?: unknown; message?: unknown }).detail ??
-          (body as { detail?: unknown; error?: unknown; message?: unknown }).error ??
-          (body as { detail?: unknown; error?: unknown; message?: unknown }).message)
-        : null
-    throw new Error(typeof message === 'string' ? message : 'Login failed. Try again later.')
-  }
-  return (await response.json()) as T
 }
 
 function loginText(t: (key: string) => string): LoginViewText {

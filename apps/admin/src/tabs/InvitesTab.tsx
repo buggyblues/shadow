@@ -1,20 +1,31 @@
 import { useEffect, useState } from 'react'
-import { apiFetch, type InviteCode } from '../lib/admin-api'
+import { apiFetch, type InviteCode, type PaginatedResponse } from '../lib/admin-api'
+
+const PAGE_SIZE = 50
 
 export function InvitesTab() {
   const [invites, setInvites] = useState<InviteCode[]>([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const [genCount, setGenCount] = useState(1)
   const [genNote, setGenNote] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const load = () =>
-    apiFetch<InviteCode[]>('/invite-codes')
-      .then(setInvites)
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const load = (nextPage = page) =>
+    apiFetch<PaginatedResponse<InviteCode>>(
+      `/invite-codes?includeTotal=1&limit=${PAGE_SIZE}&offset=${(nextPage - 1) * PAGE_SIZE}`,
+    )
+      .then((data) => {
+        setInvites(data.items)
+        setTotal(data.total)
+      })
       .catch(() => {})
 
   useEffect(() => {
-    load()
-  }, [])
+    load(page)
+  }, [page])
 
   const generate = async () => {
     setLoading(true)
@@ -24,7 +35,7 @@ export function InvitesTab() {
         body: JSON.stringify({ count: genCount, note: genNote || undefined }),
       })
       setGenNote('')
-      load()
+      load(page)
     } catch {
       /* */
     } finally {
@@ -34,7 +45,7 @@ export function InvitesTab() {
 
   const del = async (id: string) => {
     await apiFetch(`/invite-codes/${id}`, { method: 'DELETE' })
-    load()
+    load(page)
   }
 
   return (
@@ -131,6 +142,27 @@ export function InvitesTab() {
             )}
           </tbody>
         </table>
+      </div>
+      <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
+        <span>
+          共 {total} 条，第 {page} / {totalPages} 页
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="rounded bg-zinc-800 px-3 py-1 text-zinc-200 disabled:opacity-50"
+          >
+            上一页
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="rounded bg-zinc-800 px-3 py-1 text-zinc-200 disabled:opacity-50"
+          >
+            下一页
+          </button>
+        </div>
       </div>
     </div>
   )

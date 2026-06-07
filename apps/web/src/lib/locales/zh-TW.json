@@ -166,6 +166,18 @@
     "passwordResetSent": "如果該電子郵箱已註冊，我們已傳送重設密碼郵件。請在 30 分鐘內開啟連結完成設定。",
     "passwordResetEmailRequired": "請先輸入電子郵箱。"
   },
+  "inviteCodeGate": {
+    "title": "需要邀請碼",
+    "description": "這個操作需要正式會員能力。輸入邀請碼後，我們會自動繼續剛才的操作。",
+    "codeLabel": "邀請碼",
+    "codePlaceholder": "輸入邀請碼",
+    "submit": "兌換邀請碼",
+    "submitting": "兌換中...",
+    "required": "請輸入邀請碼。",
+    "success": "邀請碼已兌換。",
+    "failed": "邀請碼兌換失敗",
+    "capability": "所需能力：{{capability}}"
+  },
   "playLaunch": {
     "title": "啟動玩法",
     "subtitle": "先了解玩法，再一鍵進入你的空間。",
@@ -4400,6 +4412,10 @@
     "upToDate": "已是最新版本。",
     "actions": "操作",
     "restart": "重新啟動應用程式",
+    "exportLogs": "匯出日誌",
+    "exportLogsDesc": "儲存本機桌面端日誌檔，方便排查問題。",
+    "exportLogsAction": "匯出",
+    "exportingLogs": "匯出中...",
     "connectorTitle": "連接器",
     "tabGeneral": "通用",
     "tabConnector": "連接器",

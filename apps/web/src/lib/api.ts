@@ -1,8 +1,12 @@
 import { getApiUrl } from './api-url'
 import { currentAppRedirect } from './auth-redirect'
 import { clearAuthenticatedSession } from './auth-session'
-import { syncDesktopCommunityAuthToken } from './desktop-community-auth'
+import {
+  readDesktopCommunityAuthTokens,
+  syncDesktopCommunityAuthToken,
+} from './desktop-community-auth'
 import i18n from './i18n'
+import { requestInviteCodeForApiError } from './invite-code-gate'
 
 export class ApiError extends Error {
   status: number
@@ -66,21 +70,25 @@ function isAuthEntryEndpoint(path: string) {
   )
 }
 
+function isInviteRedeemEndpoint(path: string) {
+  return path.endsWith('/membership/redeem-invite')
+}
+
 function deviceNameHeader() {
   return typeof navigator !== 'undefined' ? navigator.platform || 'Shadow Web' : 'Shadow Web'
 }
 
-function clearAuthState() {
+function clearAuthState(options: { syncDesktop?: boolean } = {}) {
   clearAuthenticatedSession({
     redirectToLogin: true,
     redirect: currentAppRedirect(),
-    syncDesktop: true,
+    syncDesktop: options.syncDesktop ?? true,
     desktopReason: 'revoked',
   })
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem('refreshToken')
+  const refreshToken = await readRefreshTokenForRefresh()
   if (!refreshToken) return null
   try {
     const res = await fetch(getApiUrl('/api/auth/refresh'), {
@@ -100,6 +108,16 @@ async function refreshAccessToken(): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+async function readRefreshTokenForRefresh(): Promise<string> {
+  const storedRefreshToken = localStorage.getItem('refreshToken') ?? ''
+  if (storedRefreshToken) return storedRefreshToken
+
+  const desktopTokens = await readDesktopCommunityAuthTokens()
+  if (desktopTokens.accessToken) localStorage.setItem('accessToken', desktopTokens.accessToken)
+  if (desktopTokens.refreshToken) localStorage.setItem('refreshToken', desktopTokens.refreshToken)
+  return desktopTokens.refreshToken
 }
 
 function buildApiError(response: Response, body: unknown) {
@@ -157,7 +175,11 @@ function buildApiError(response: Response, body: unknown) {
   })
 }
 
-export async function fetchApiResponse(path: string, options?: RequestInit): Promise<Response> {
+async function fetchApiResponseInternal(
+  path: string,
+  options: RequestInit | undefined,
+  context: { inviteRetry?: boolean } = {},
+): Promise<Response> {
   const testMock = getTestFetchApiMock()
   if (testMock) {
     const payload = await testMock(path, options)
@@ -214,10 +236,31 @@ export async function fetchApiResponse(path: string, options?: RequestInit): Pro
     const body = contentType.includes('application/json')
       ? await response.json().catch(() => ({}))
       : await response.text().catch(() => '')
-    throw buildApiError(response, body)
+    const apiError = buildApiError(response, body)
+    if (
+      apiError.code === 'INVITE_REQUIRED' &&
+      !context.inviteRetry &&
+      !isInviteRedeemEndpoint(path)
+    ) {
+      try {
+        await requestInviteCodeForApiError({
+          error: apiError,
+          path,
+          method: options?.method?.toUpperCase() ?? 'GET',
+        })
+        return fetchApiResponseInternal(path, options, { inviteRetry: true })
+      } catch {
+        throw apiError
+      }
+    }
+    throw apiError
   }
 
   return response
+}
+
+export async function fetchApiResponse(path: string, options?: RequestInit): Promise<Response> {
+  return fetchApiResponseInternal(path, options)
 }
 
 // Generic fetch helper

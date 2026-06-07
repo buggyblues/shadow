@@ -166,6 +166,18 @@
     "passwordResetSent": "如果该邮箱已注册，我们已发送重设密码邮件。请在 30 分钟内打开链接完成设置。",
     "passwordResetEmailRequired": "请先输入邮箱地址。"
   },
+  "inviteCodeGate": {
+    "title": "需要邀请码",
+    "description": "这个操作需要正式会员能力。输入邀请码后，我们会自动继续刚才的操作。",
+    "codeLabel": "邀请码",
+    "codePlaceholder": "输入邀请码",
+    "submit": "兑换邀请码",
+    "submitting": "兑换中...",
+    "required": "请输入邀请码。",
+    "success": "邀请码已兑换。",
+    "failed": "邀请码兑换失败",
+    "capability": "所需能力：{{capability}}"
+  },
   "playLaunch": {
     "title": "启动玩法",
     "subtitle": "先了解玩法，再一键进入你的空间。",
@@ -4400,6 +4412,10 @@
     "upToDate": "已是最新版本。",
     "actions": "操作",
     "restart": "重启应用",
+    "exportLogs": "导出日志",
+    "exportLogsDesc": "保存本地桌面端日志文件，便于排查问题。",
+    "exportLogsAction": "导出",
+    "exportingLogs": "导出中...",
     "connectorTitle": "连接器",
     "tabGeneral": "通用",
     "tabConnector": "连接器",

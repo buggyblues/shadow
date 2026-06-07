@@ -11,12 +11,34 @@ export type DesktopCommunityAuthSyncReason =
   | 'revoked'
 
 type DesktopCommunityAuthBridge = {
+  isDesktop?: boolean
   getCommunityAuthTokens?: () => Promise<{ accessToken?: string; refreshToken?: string }>
   syncCommunityAuthToken?: (
     accessToken?: string | null,
     refreshToken?: string | null,
     reason?: DesktopCommunityAuthSyncReason,
   ) => void
+}
+
+const DESKTOP_AUTH_EMPTY_RETRY_MS = 120
+
+function normalizeDesktopAuthTokens(
+  tokens: {
+    accessToken?: unknown
+    refreshToken?: unknown
+  } | null,
+): {
+  accessToken: string
+  refreshToken: string
+} {
+  return {
+    accessToken: typeof tokens?.accessToken === 'string' ? tokens.accessToken.trim() : '',
+    refreshToken: typeof tokens?.refreshToken === 'string' ? tokens.refreshToken.trim() : '',
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 export function syncDesktopCommunityAuthToken(
@@ -35,9 +57,11 @@ export async function readDesktopCommunityAuthTokens(): Promise<{
 }> {
   if (typeof window === 'undefined') return { accessToken: '', refreshToken: '' }
   const desktopAPI = (window as Window & { desktopAPI?: DesktopCommunityAuthBridge }).desktopAPI
-  const tokens = await desktopAPI?.getCommunityAuthTokens?.().catch(() => null)
-  return {
-    accessToken: typeof tokens?.accessToken === 'string' ? tokens.accessToken : '',
-    refreshToken: typeof tokens?.refreshToken === 'string' ? tokens.refreshToken : '',
-  }
+  if (!desktopAPI?.getCommunityAuthTokens) return { accessToken: '', refreshToken: '' }
+  const tokens = normalizeDesktopAuthTokens(
+    await desktopAPI.getCommunityAuthTokens().catch(() => null),
+  )
+  if (tokens.accessToken || tokens.refreshToken || !desktopAPI.isDesktop) return tokens
+  await delay(DESKTOP_AUTH_EMPTY_RETRY_MS)
+  return normalizeDesktopAuthTokens(await desktopAPI.getCommunityAuthTokens().catch(() => null))
 }
