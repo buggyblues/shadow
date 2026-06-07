@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import { existsSync, statSync } from 'node:fs'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { basename, extname, join, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { basename, extname, isAbsolute, join, resolve, sep } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   app,
   BrowserWindow,
@@ -50,9 +51,11 @@ import { setupNotificationHandler } from './notifications'
 import { resolveDesktopPetAssetPath, setupDesktopPetAssetHandlers } from './pet-assets'
 import { killAllAgents, setupProcessManager } from './process-manager'
 import { registerGlobalShortcuts, setupShortcutHandlers, unregisterAllShortcuts } from './shortcuts'
+import { handleSquirrelStartupEvent, windowsSquirrelAppUserModelId } from './squirrel'
 import { createTray, showDesktopContextMenu } from './tray'
 import { cancelDesktopSpeech, setupPetVoiceHandlers, speakWithDesktopVoice } from './voice-engine'
 import {
+  allowMainWindowClose,
   allowPetWindowClose,
   createPetWindow,
   createWindow,
@@ -70,14 +73,14 @@ import {
   showReaderWindow,
 } from './window'
 
-// Handle Squirrel events on Windows install/uninstall
-if (process.platform === 'win32' && process.argv.some((a) => a.startsWith('--squirrel'))) {
-  app.quit()
+if (handleSquirrelStartupEvent()) {
+  app.exit(0)
 }
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock()
+const initialLaunchPayload = createLaunchPayload()
+const hasSingleInstanceLock = app.requestSingleInstanceLock(initialLaunchPayload)
 if (!hasSingleInstanceLock) {
-  app.quit()
+  app.exit(0)
 }
 
 ipcMain.on('desktop:rendererLog', (_event, payload) => {
@@ -146,9 +149,23 @@ const staticFileLookupCache = new Map<string, string | null>()
 const staticResponseCache = new Map<string, StaticResponseCacheEntry>()
 let activeReaderResourceId: string | null = null
 let pendingDesktopDeepLink: string | null = null
+let pendingReaderFilePaths: string[] = []
+let lastDesktopDeepLink: { key: string; handledAt: number } | null = null
 let staticResponseCacheBytes = 0
 
 const STATIC_RESPONSE_CACHE_MAX_BYTES = 32 * 1024 * 1024
+const DESKTOP_DEEP_LINK_DEDUP_MS = 2000
+const DESKTOP_AUTH_TOKEN_MAX_LENGTH = 8192
+
+type LaunchPayload = {
+  argv: string[]
+  cwd: string
+}
+
+type LaunchTargets = {
+  deepLink: string | null
+  filePaths: string[]
+}
 
 type StaticResponseCacheEntry = {
   body: ArrayBuffer
@@ -446,9 +463,26 @@ function handleDesktopDeepLink(rawUrl: string): boolean {
     url.hostname === 'oauth-callback' || url.pathname.includes('oauth-callback')
   if (!isAuthCallback) return false
 
+  const linkKey = url.toString()
+  const now = Date.now()
+  if (
+    lastDesktopDeepLink?.key === linkKey &&
+    now - lastDesktopDeepLink.handledAt < DESKTOP_DEEP_LINK_DEDUP_MS
+  ) {
+    return true
+  }
+
   const params = collectDeepLinkSearchParams(rawUrl)
   const accessToken = params.get('access_token') ?? params.get('accessToken') ?? ''
   const refreshToken = params.get('refresh_token') ?? params.get('refreshToken') ?? ''
+  if (!accessToken && !refreshToken) return false
+  if (
+    accessToken.length > DESKTOP_AUTH_TOKEN_MAX_LENGTH ||
+    refreshToken.length > DESKTOP_AUTH_TOKEN_MAX_LENGTH
+  ) {
+    return false
+  }
+  lastDesktopDeepLink = { key: linkKey, handledAt: now }
   rememberCommunityAuthSnapshot({ accessToken, refreshToken }, { reason: 'login' })
   void syncCommunityAuthStateToOpenWindows('login')
   showCommunityWindow(normalizeDesktopRouterPath(params.get('redirect')))
@@ -456,12 +490,141 @@ function handleDesktopDeepLink(rawUrl: string): boolean {
 }
 
 function findDesktopDeepLink(argv: readonly string[]): string | null {
-  return argv.find((value) => value.startsWith('shadow://')) ?? null
+  return (
+    argv.find((value) => {
+      try {
+        return new URL(value).protocol === 'shadow:'
+      } catch {
+        return false
+      }
+    }) ?? null
+  )
+}
+
+function createLaunchPayload(
+  argv: readonly string[] = process.argv,
+  cwd = process.cwd(),
+): LaunchPayload {
+  return {
+    argv: [...argv],
+    cwd,
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function launchPayloadFromAdditionalData(
+  argv: readonly string[],
+  cwd: string,
+  additionalData: unknown,
+): LaunchPayload {
+  if (!isRecord(additionalData)) return createLaunchPayload(argv, cwd)
+  const forwardedArgv = Array.isArray(additionalData.argv)
+    ? additionalData.argv.filter((value): value is string => typeof value === 'string')
+    : null
+  const forwardedCwd = typeof additionalData.cwd === 'string' ? additionalData.cwd : cwd
+  return createLaunchPayload(forwardedArgv?.length ? forwardedArgv : argv, forwardedCwd)
+}
+
+function sameLaunchPath(left: string, right: string): boolean {
+  const normalize = (value: string) =>
+    process.platform === 'win32' ? resolve(value).toLowerCase() : resolve(value)
+  return normalize(left) === normalize(right)
+}
+
+function isRuntimeLaunchPath(candidate: string): boolean {
+  if (sameLaunchPath(candidate, process.execPath)) return true
+  if (process.defaultApp && process.argv[1] && sameLaunchPath(candidate, process.argv[1])) {
+    return true
+  }
+  return false
+}
+
+function launchFilePathFromArg(value: string, cwd: string): string | null {
+  const input = value.trim()
+  if (!input || input.startsWith('-') || input.startsWith('shadow://')) return null
+
+  let candidate: string
+  const isWindowsDrivePath = /^[a-zA-Z]:[\\/]/.test(input)
+  if (isWindowsDrivePath) {
+    candidate = isAbsolute(input) ? input : resolve(cwd, input)
+  } else {
+    try {
+      const url = new URL(input)
+      if (url.protocol === 'file:') candidate = fileURLToPath(url)
+      else return null
+    } catch {
+      if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(input)) return null
+      candidate = isAbsolute(input) ? input : resolve(cwd, input)
+    }
+  }
+
+  if (isRuntimeLaunchPath(candidate)) return null
+  try {
+    return existsSync(candidate) && statSync(candidate).isFile() ? candidate : null
+  } catch {
+    return null
+  }
+}
+
+function collectLaunchTargets(payload: LaunchPayload): LaunchTargets {
+  const filePaths = payload.argv
+    .map((value) => launchFilePathFromArg(value, payload.cwd))
+    .filter((value): value is string => Boolean(value))
+
+  return {
+    deepLink: findDesktopDeepLink(payload.argv),
+    filePaths: [...new Set(filePaths)],
+  }
 }
 
 function handleDesktopDeepLinkWhenReady(rawUrl: string): boolean {
   if (app.isReady()) return handleDesktopDeepLink(rawUrl)
   pendingDesktopDeepLink = rawUrl
+  return true
+}
+
+async function openReaderFilePath(filePath: string): Promise<boolean> {
+  const resource = await fetchReaderResource(pathToFileURL(filePath).toString(), basename(filePath))
+  activeReaderResourceId = resource.id
+  showReaderWindow(resource.title)
+  publishReaderState()
+  return true
+}
+
+function handleLaunchFileWhenReady(filePath: string): boolean {
+  const normalized = launchFilePathFromArg(filePath, process.cwd())
+  if (!normalized) return false
+  if (!app.isReady()) {
+    pendingReaderFilePaths = [...new Set([...pendingReaderFilePaths, normalized])]
+    return true
+  }
+  void openReaderFilePath(normalized).catch((error) => {
+    console.warn('[launch] failed to open launch file', error)
+  })
+  return true
+}
+
+function handleLaunchPayloadWhenReady(payload: LaunchPayload): boolean {
+  const targets = collectLaunchTargets(payload)
+  let handled = false
+  if (targets.deepLink) {
+    handled = handleDesktopDeepLinkWhenReady(targets.deepLink) || handled
+  }
+  for (const filePath of targets.filePaths) {
+    handled = handleLaunchFileWhenReady(filePath) || handled
+  }
+  return handled
+}
+
+function focusExistingMainWindow(): boolean {
+  const mainWindow = getMainWindow()
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
   return true
 }
 
@@ -486,10 +649,16 @@ app.on('open-url', (event, rawUrl) => {
   handleDesktopDeepLinkWhenReady(rawUrl)
 })
 
-app.on('second-instance', (_event, argv) => {
-  const deepLink = findDesktopDeepLink(argv)
-  if (deepLink && handleDesktopDeepLinkWhenReady(deepLink)) return
-  showCommunityWindow()
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  handleLaunchFileWhenReady(filePath)
+})
+
+app.on('second-instance', (_event, argv, cwd, additionalData) => {
+  const hadMainWindow = focusExistingMainWindow()
+  const payload = launchPayloadFromAdditionalData(argv, cwd, additionalData)
+  if (handleLaunchPayloadWhenReady(payload)) return
+  if (!hadMainWindow && app.isReady()) showCommunityWindow()
 })
 
 function sanitizeFileName(value: string): string {
@@ -669,7 +838,9 @@ async function openReaderResourceWithDefaultApp(resource: ReaderResource): Promi
 
 app.on('ready', async () => {
   app.setName(desktopAppName())
-  app.setAppUserModelId('com.shadowob.app')
+  app.setAppUserModelId(
+    process.platform === 'win32' ? windowsSquirrelAppUserModelId() : 'com.shadowob.app',
+  )
   registerDesktopDeepLinkProtocol()
   ensureDesktopDockIcon()
 
@@ -797,9 +968,17 @@ app.on('ready', async () => {
   await applyDesktopNetworkSettings()
 
   const mainWindow = createWindow()
-  const startupDeepLink = pendingDesktopDeepLink ?? findDesktopDeepLink(process.argv)
+  const startupTargets = collectLaunchTargets(initialLaunchPayload)
+  const startupDeepLink = pendingDesktopDeepLink ?? startupTargets.deepLink
   pendingDesktopDeepLink = null
   if (startupDeepLink) handleDesktopDeepLink(startupDeepLink)
+  const startupFilePaths = [...new Set([...pendingReaderFilePaths, ...startupTargets.filePaths])]
+  pendingReaderFilePaths = []
+  for (const filePath of startupFilePaths) {
+    void openReaderFilePath(filePath).catch((error) => {
+      console.warn('[launch] failed to open startup file', error)
+    })
+  }
   mainWindow.webContents.once('did-finish-load', () => {
     void readCommunityAuthTokens()
       .then((tokens) => {
@@ -1075,6 +1254,7 @@ app.on('activate', () => {
 })
 
 app.on('before-quit', () => {
+  allowMainWindowClose()
   allowPetWindowClose()
 })
 

@@ -19,6 +19,11 @@ function releaseResponse() {
           browser_download_url:
             'https://github.com/buggyblues/shadow/releases/download/desktop-v1.2.3/Shadow-1.2.3-windows-x64-setup.exe',
         },
+        {
+          name: 'Shadow-1.2.3-windows-x64.msi',
+          browser_download_url:
+            'https://github.com/buggyblues/shadow/releases/download/desktop-v1.2.3/Shadow-1.2.3-windows-x64.msi',
+        },
       ],
     },
     {
@@ -49,6 +54,19 @@ describe('desktop release handler', () => {
     expect(response.headers.get('Location')).toContain('Shadow-1.2.3-macos-arm64.dmg')
   })
 
+  it('prefers the explicit Windows MSI over the retained Squirrel setup executable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json(releaseResponse())),
+    )
+    const app = createDesktopReleaseHandler()
+
+    const response = await app.request('/desktop/download/windows-x64')
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('Location')).toContain('Shadow-1.2.3-windows-x64.msi')
+  })
+
   it('exposes stable platform URLs without returning beta release assets', async () => {
     vi.stubGlobal(
       'fetch',
@@ -68,6 +86,11 @@ describe('desktop release handler', () => {
           id: 'macos-arm64',
           url: '/desktop/download/macos-arm64',
           assetName: 'Shadow-1.2.3-macos-arm64.dmg',
+        }),
+        expect.objectContaining({
+          id: 'windows-x64',
+          url: '/desktop/download/windows-x64',
+          assetName: 'Shadow-1.2.3-windows-x64.msi',
         }),
       ]),
     )

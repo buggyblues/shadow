@@ -29,6 +29,12 @@ const PLATFORM_LABELS: Record<DesktopDownloadPlatform, string> = {
   'windows-x64': 'Windows x64',
   'linux-x64': 'Linux x64',
 }
+const PLATFORM_ASSET_EXTENSIONS: Record<DesktopDownloadPlatform, string[]> = {
+  'macos-arm64': ['.dmg'],
+  'macos-x64': ['.dmg'],
+  'windows-x64': ['.msi', '.exe'],
+  'linux-x64': ['.zip', '.appimage', '.deb'],
+}
 
 let latestDesktopReleaseCache: DesktopReleaseCache | null = null
 
@@ -41,9 +47,15 @@ function desktopReleaseRepo(): string {
 function assetMatchesPlatform(assetName: string, platform: DesktopDownloadPlatform): boolean {
   const name = assetName.toLowerCase()
   if (!name.includes(platform)) return false
-  if (platform.startsWith('macos')) return name.endsWith('.dmg')
-  if (platform === 'windows-x64') return name.endsWith('.exe')
-  return name.endsWith('.zip') || name.endsWith('.appimage') || name.endsWith('.deb')
+  return PLATFORM_ASSET_EXTENSIONS[platform].some((extension) => name.endsWith(extension))
+}
+
+function assetPriority(assetName: string, platform: DesktopDownloadPlatform): number {
+  const name = assetName.toLowerCase()
+  const priority = PLATFORM_ASSET_EXTENSIONS[platform].findIndex((extension) =>
+    name.endsWith(extension),
+  )
+  return priority === -1 ? Number.MAX_SAFE_INTEGER : priority
 }
 
 function selectDesktopAsset(
@@ -51,7 +63,14 @@ function selectDesktopAsset(
   platform: DesktopDownloadPlatform,
 ): GithubReleaseAsset | null {
   const assets = release.assets ?? []
-  return assets.find((asset) => assetMatchesPlatform(asset.name, platform)) ?? null
+  return (
+    assets
+      .filter((asset) => assetMatchesPlatform(asset.name, platform))
+      .sort(
+        (left, right) => assetPriority(left.name, platform) - assetPriority(right.name, platform),
+      )
+      .at(0) ?? null
+  )
 }
 
 function platformFromUserAgent(userAgent: string): DesktopDownloadPlatform {

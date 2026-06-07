@@ -146,6 +146,14 @@ jobs:
   build-cross-platform:
     name: ${{ matrix.platform }} ${{ inputs.channel }}
     runs-on: ${{ matrix.runner }}
+    env:
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      WINDOWS_SIGNTOOL_PATH: ${{ secrets.WINDOWS_SIGNTOOL_PATH }}
+      WINDOWS_SIGN_WITH_PARAMS: ${{ secrets.WINDOWS_SIGN_WITH_PARAMS }}
+      WINDOWS_SIGN_HOOK_MODULE_PATH: ${{ secrets.WINDOWS_SIGN_HOOK_MODULE_PATH }}
+      WINDOWS_TIMESTAMP_SERVER: ${{ secrets.WINDOWS_TIMESTAMP_SERVER }}
+      WINDOWS_SIGN_DESCRIPTION: Shadow
+      WINDOWS_SIGN_WEBSITE: https://shadowob.com
     strategy:
       fail-fast: false
       matrix:
@@ -179,6 +187,41 @@ jobs:
       - name: Install dependencies
         run: pnpm i --frozen-lockfile
 
+      - name: Install WiX Toolset
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          choco install wixtoolset --version=3.14.0 -y --no-progress
+          $wixBin = Join-Path ${env:ProgramFiles(x86)} 'WiX Toolset v3.14\bin'
+          if (-not (Test-Path $wixBin)) {
+            throw "WiX Toolset binary directory not found: $wixBin"
+          }
+          $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Prepare Windows signing
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+        run: |
+          $hasPfx = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)
+          $hasPfxPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+          $hasCustomSigning = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGN_WITH_PARAMS) -or -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGN_HOOK_MODULE_PATH)
+
+          if ($hasPfx) {
+            if (-not $hasPfxPassword) {
+              throw 'WINDOWS_CERTIFICATE_PASSWORD is required when WINDOWS_CERTIFICATE_PFX_BASE64 is provided.'
+            }
+            $certificatePath = Join-Path $env:RUNNER_TEMP 'shadow-windows-codesign.pfx'
+            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
+            "WINDOWS_CERTIFICATE_FILE=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "WINDOWS_REQUIRE_SIGNED=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } elseif ($hasCustomSigning) {
+            "WINDOWS_REQUIRE_SIGNED=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            Write-Warning 'Windows signing is not configured; continuing with unsigned artifacts for gradual rollout.'
+          }
+
       - name: Generate icons
         run: pnpm --dir ./apps/desktop generate-icons
 
@@ -206,7 +249,7 @@ jobs:
             extension="${filename##*.}"
             stem="${filename%.*}"
             cp "$file" "$upload_dir/${stem}-${{ matrix.platform }}-x64.${extension}"
-          done < <(find apps/desktop/out/make -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \))
+          done < <(find apps/desktop/out/make -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \))
 
           find "$upload_dir" -type f
 
@@ -304,6 +347,7 @@ jobs:
           files: |
             release-assets/**/*.dmg
             release-assets/**/*.exe
+            release-assets/**/*.msi
             release-assets/**/*.zip
             release-assets/**/*.AppImage
             release-assets/**/*.deb
